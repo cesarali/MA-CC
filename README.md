@@ -1,0 +1,97 @@
+# LLM Naming Game benchmark
+
+This repository compares two different binary Naming Game dynamics with equal
+pair-interaction budgets:
+
+- `sequential`: one ordered pair is called and updated immediately;
+- `synchronous_parallel`: disjoint ordered pairs read one immutable round
+  snapshot, run concurrently, and update together at a barrier.
+
+For `N` agents and `R` synchronous rounds, both matched runs execute
+`M = floor(N / 2) * R` pair interactions and expect `2 * M` LLM calls. The
+benchmark does not treat the two dynamics as equivalent.
+
+## Setup
+
+Use the repository's Conda environment and install the package in editable
+mode:
+
+```bash
+conda env update -n MA-CC -f environment.yml
+conda run -n MA-CC python -m pip install -e .
+```
+
+Copy `.env.example` only when a repository-root `.env` is not already present.
+The real client reads `POTSDAM_API_KEY` and `BASE_POTSDAM_LLM_URL`, validates
+the requested model against the live `/models` endpoint, and never logs the
+key. The existing `.env` must not be committed.
+
+## Commands
+
+Run the complete offline matrix with deterministic mock responses:
+
+```bash
+conda run -n MA-CC python -m naming_game.cli benchmark --mock
+```
+
+Run one sequential trajectory:
+
+```bash
+conda run -n MA-CC python -m naming_game.cli run \
+  --update-mode sequential --num-agents 10 --num-interactions 50 \
+  --reasoning-fraction 0 --seed 1
+```
+
+Run one synchronous trajectory:
+
+```bash
+conda run -n MA-CC python -m naming_game.cli run \
+  --update-mode synchronous_parallel --num-agents 10 --rounds 10 \
+  --reasoning-fraction 0 --concurrency 20 --seed 1
+```
+
+Run the required real matched matrix from `configs/speed_test.yaml`:
+
+```bash
+conda run -n MA-CC python -m naming_game.cli benchmark
+```
+
+The configured model identifiers are exactly:
+
+```text
+gwdg/qwen3-30b-a3b-instruct-2507
+microsoft/gpt-4o
+```
+
+The real command stops clearly if either identifier is not currently exposed
+by the University proxy. It does not silently substitute another model.
+
+## Reasoning interface
+
+The speed benchmark uses `reasoning_fraction: 0`. A positive value requires an
+explicit YAML or JSON task supplied with `--reasoning-task`. The file must
+contain a non-empty `task`, `claims` for `A` and `B`, and either
+`evidence_by_agent` or `default_evidence`. Reasoning still uses one speaker and
+one listener API request, but listener state is determined from its reasoning
+response instead of the deterministic basic-game update.
+
+## Results
+
+Every run writes an interaction JSONL log, a sequential-state CSV, a
+synchronous-round CSV, and an exact JSON run config under `results/`.
+`results/benchmark_summary.csv` records normalized timing, request latency,
+retry, token, success/failure, population, and consensus metrics. Non-applicable
+CSV files contain a header and no data rows, which keeps artifact discovery
+uniform without conflating steps with rounds.
+
+Evaluator logs and private histories are never placed in later prompts. The
+real API client is stateless with respect to conversations; the shared client
+contains only HTTP pooling, endpoint, semaphore, and aggregate request metrics.
+
+## Tests
+
+```bash
+conda run -n MA-CC pytest
+```
+
+All tests use the mock client and make no real API requests.

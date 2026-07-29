@@ -1,0 +1,2 @@
+[console_scripts]
+naming-game = naming_game.cli:main
