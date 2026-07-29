@@ -8,7 +8,13 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from .api_client import AsyncLLMClient, LLMAPIError, MockAsyncLLMClient
+from .analysis.empowerment import AnalysisConfig, analyze_histories
+from .api_client import (
+    AsyncLLMClient,
+    LLMAPIError,
+    MockAsyncLLMClient,
+    OpenAIAsyncLLMClient,
+)
 from .benchmark import (
     BenchmarkConfig,
     load_benchmark_config,
@@ -16,6 +22,7 @@ from .benchmark import (
     run_matched_benchmark,
 )
 from .models import ConfigurationError, RunSpec, UpdateMode
+from .empowerment_experiment import load_experiment_config, run_experiment
 from .reasoning_game import load_reasoning_task
 from .runner import run_single
 
@@ -61,6 +68,24 @@ def _parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--mock", action="store_true")
     benchmark.add_argument("--mock-latency", type=float, default=0.001)
     benchmark.add_argument("--output-dir", type=Path, default=Path("results"))
+
+    experiment = subparsers.add_parser(
+        "experiment", help="Run committee-empowerment episodes from YAML."
+    )
+    experiment.add_argument("--config", type=Path, required=True)
+    experiment.add_argument("--output-dir", type=Path, default=Path("results/empowerment"))
+    experiment.add_argument("--mock", action="store_true")
+    experiment.add_argument("--no-resume", action="store_true")
+
+    analyze = subparsers.add_parser(
+        "analyze-empowerment", help="Analyze existing empowerment Parquet histories."
+    )
+    analyze.add_argument("--history-dir", type=Path, required=True)
+    analyze.add_argument("--output-dir", type=Path, default=Path("results/empowerment_analysis"))
+    analyze.add_argument("--horizons", nargs="+", type=int, default=[1, 3, 5, 10])
+    analyze.add_argument("--bootstrap-resamples", type=int, default=1000)
+    analyze.add_argument("--null-permutations", type=int, default=1000)
+    analyze.add_argument("--seed", type=int, default=1)
     return parser
 
 
@@ -198,13 +223,80 @@ async def _run_benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
+def _provider_for(config, provider: str, model: str):
+    common = {
+        "model": model,
+        "concurrency": config.request_concurrency,
+        "timeout_seconds": config.timeout_seconds,
+        "max_retries": config.max_retries,
+    }
+    if provider == "university":
+        return AsyncLLMClient(**common)
+    if provider == "openai":
+        return OpenAIAsyncLLMClient(**common)
+    raise ConfigurationError(f"Unknown provider: {provider!r}.")
+
+
+async def _run_empowerment_experiment(args: argparse.Namespace) -> int:
+    config = load_experiment_config(args.config)
+    if args.mock:
+        client = MockAsyncLLMClient(
+            model=config.model,
+            concurrency=config.request_concurrency,
+            artificial_latency=0,
+            seed=config.seed,
+        )
+    else:
+        client = _provider_for(config, config.provider, config.model)
+        validate = getattr(client, "validate_model", None)
+        try:
+            if callable(validate):
+                await validate()
+        except (ConfigurationError, LLMAPIError):
+            client.close()
+            if not config.allow_fallback:
+                raise
+            fallback_model = config.fallback_model or config.model
+            client = _provider_for(config, config.fallback_provider, fallback_model)
+            fallback_validate = getattr(client, "validate_model", None)
+            if callable(fallback_validate):
+                await fallback_validate()
+    try:
+        result = await run_experiment(
+            config, client, args.output_dir, resume=not args.no_resume
+        )
+    finally:
+        client.close()
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def _analyze_empowerment(args: argparse.Namespace) -> int:
+    result = analyze_histories(
+        args.history_dir,
+        args.output_dir,
+        AnalysisConfig(
+            horizons_population_rounds=tuple(args.horizons),
+            bootstrap_resamples=args.bootstrap_resamples,
+            null_permutations=args.null_permutations,
+            seed=args.seed,
+        ),
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "run":
             return asyncio.run(_run_one(args))
-        return asyncio.run(_run_benchmark(args))
+        if args.command == "benchmark":
+            return asyncio.run(_run_benchmark(args))
+        if args.command == "experiment":
+            return asyncio.run(_run_empowerment_experiment(args))
+        return _analyze_empowerment(args)
     except (ConfigurationError, LLMAPIError, ValueError) as exc:
         parser.error(str(exc))
     return 2
@@ -212,4 +304,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

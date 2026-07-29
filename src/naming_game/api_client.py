@@ -11,6 +11,7 @@ import os
 import random
 import threading
 import time
+import warnings
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -29,6 +30,7 @@ LatencyFactory = Callable[[Sequence[Message]], float]
 class LLMClient(Protocol):
     model: str
     concurrency: int
+    provider_name: str
 
     async def complete(
         self,
@@ -36,11 +38,14 @@ class LLMClient(Protocol):
         *,
         temperature: float,
         max_tokens: int,
+        seed: int | None = None,
     ) -> LLMResponse: ...
+
+    def close(self) -> None: ...
 
 
 class LLMAPIError(RuntimeError):
-    """A safe proxy error that never includes authorization data."""
+    """A safe provider error that never includes authorization data."""
 
 
 class _RequestStats:
@@ -111,7 +116,7 @@ def _find_repository_env(start: Path | None = None) -> Path:
 
 
 class AsyncLLMClient:
-    """OpenAI-compatible proxy adapter following docs/university_llm_api.md.
+    """OpenAI-compatible asynchronous provider adapter.
 
     The client owns connection-pool and request-accounting state only. It never
     stores messages, conversations, agent IDs, or provider session IDs.
@@ -128,6 +133,7 @@ class AsyncLLMClient:
         base_url: str | None = None,
         env_path: Path | None = None,
         backoff_base_seconds: float = 0.5,
+        provider_name: str = "university",
     ) -> None:
         if concurrency < 1:
             raise ConfigurationError("concurrency must be at least 1.")
@@ -146,6 +152,7 @@ class AsyncLLMClient:
             raise ConfigurationError("BASE_POTSDAM_LLM_URL is not configured.")
 
         self.model = model
+        self.provider_name = provider_name
         self.concurrency = concurrency
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
@@ -199,17 +206,17 @@ class AsyncLLMClient:
 
             if response.status_code in (401, 403):
                 raise LLMAPIError(
-                    f"University LLM proxy authentication failed with HTTP {response.status_code}."
+                    f"{self.provider_name} authentication failed with HTTP {response.status_code}."
                 )
             try:
                 response.raise_for_status()
                 payload = response.json()
             except requests.RequestException as exc:
                 raise LLMAPIError(
-                    f"Could not list University LLM proxy models (HTTP {response.status_code})."
+                    f"Could not list {self.provider_name} models (HTTP {response.status_code})."
                 ) from exc
             except ValueError as exc:
-                raise LLMAPIError("The proxy model-list response was not valid JSON.") from exc
+                raise LLMAPIError(f"The {self.provider_name} model-list response was not valid JSON.") from exc
 
             entries = payload.get("data", []) if isinstance(payload, dict) else []
             available = sorted(
@@ -230,6 +237,7 @@ class AsyncLLMClient:
         *,
         temperature: float,
         max_tokens: int,
+        seed: int | None = None,
     ) -> LLMResponse:
         await self._ensure_endpoint_and_model()
         if not messages or any(set(message) != {"role", "content"} for message in messages):
@@ -243,6 +251,8 @@ class AsyncLLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if seed is not None:
+            payload["seed"] = seed
 
         async with self._semaphore:
             started = time.perf_counter()
@@ -274,7 +284,11 @@ class AsyncLLMClient:
                     self._stats.success(latency, usage)
                     return LLMResponse(
                         content=content,
-                        model=self.model,
+                        model=(
+                            body.get("model", self.model)
+                            if isinstance(body, dict)
+                            else self.model
+                        ),
                         latency_seconds=latency,
                         retries=retry_index,
                         status_code=response.status_code,
@@ -287,7 +301,7 @@ class AsyncLLMClient:
                         await asyncio.sleep(self._retry_delay(response, retry_index))
                         continue
                     raise LLMAPIError(
-                        "University LLM proxy request failed after bounded retries."
+                        f"{self.provider_name} request failed after bounded retries."
                     ) from exc
                 except requests.HTTPError as exc:
                     # 400/401/403 and other permanent HTTP failures are not retried.
@@ -297,12 +311,12 @@ class AsyncLLMClient:
                         self._stats.failure()
                     status = response.status_code if response is not None else "unknown"
                     raise LLMAPIError(
-                        f"University LLM proxy chat request failed with HTTP {status}."
+                        f"{self.provider_name} chat request failed with HTTP {status}."
                     ) from exc
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     self._stats.failure()
                     raise LLMAPIError(
-                        "The proxy chat response did not match the documented response schema."
+                        f"The {self.provider_name} response did not match the expected chat schema."
                     ) from exc
 
         raise AssertionError("unreachable")
@@ -324,6 +338,41 @@ class AsyncLLMClient:
         self._session.close()
 
 
+class OpenAIAsyncLLMClient(AsyncLLMClient):
+    """Official OpenAI chat-completions provider using repository credentials."""
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        concurrency: int = 20,
+        timeout_seconds: float = 60.0,
+        max_retries: int = 2,
+        api_key: str | None = None,
+        env_path: Path | None = None,
+    ) -> None:
+        load_dotenv(env_path or _find_repository_env())
+        configured_key = api_key or os.getenv("OPENAI_API_KEY")
+        if configured_key is None and os.getenv("OPEN_API_KEY"):
+            configured_key = os.getenv("OPEN_API_KEY")
+            warnings.warn(
+                "OPEN_API_KEY is deprecated; rename it to OPENAI_API_KEY.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if not configured_key:
+            raise ConfigurationError("OPENAI_API_KEY is not configured.")
+        super().__init__(
+            model=model,
+            concurrency=concurrency,
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+            api_key=configured_key,
+            base_url="https://api.openai.com/v1",
+            provider_name="openai",
+        )
+
+
 class MockAsyncLLMClient:
     """Deterministic, latency-configurable client used by tests and benchmarks."""
 
@@ -340,6 +389,7 @@ class MockAsyncLLMClient:
         if concurrency < 1:
             raise ConfigurationError("concurrency must be at least 1.")
         self.model = model
+        self.provider_name = "mock"
         self.concurrency = concurrency
         self.artificial_latency = artificial_latency
         self.seed = seed
@@ -360,8 +410,9 @@ class MockAsyncLLMClient:
         *,
         temperature: float,
         max_tokens: int,
+        seed: int | None = None,
     ) -> LLMResponse:
-        del temperature, max_tokens
+        del temperature, max_tokens, seed
         request_messages = copy.deepcopy(messages)
         if self.request_observer is not None:
             observed = self.request_observer(copy.deepcopy(request_messages))

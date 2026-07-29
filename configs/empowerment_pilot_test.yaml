@@ -1,0 +1,43 @@
+# Minimal end-to-end smoke test.
+#
+# This produces exactly one episode:
+# - 5 agents
+# - 5 population rounds = 25 pair interactions
+# - 1 committee member
+# - neutral start
+# - always_A committee policy
+#
+# Run with --mock first so no paid API calls are made.
+population_size: 5
+names: [A, B]
+memory_length: 5
+max_population_rounds: 5
+committee_sizes: [1]
+regimes: [neutral]
+
+# `per_stratum: 1` selects the first neutral policy (`always_A`) once,
+# resulting in exactly one episode rather than one episode per policy.
+replications:
+  unit: per_stratum
+  count: 1
+
+temperature: 0.5
+max_tokens: 15
+seed: 1
+
+# Three times the population size. Events cannot trigger before this full
+# 15-interaction rolling window is available.
+window_interactions: 15
+resolution_threshold: 0.95
+
+# These fields are ignored when the CLI is run with --mock. Without --mock,
+# this configuration uses the official OpenAI API.
+provider: openai
+model: gpt-4o-mini
+fallback_provider: openai
+allow_fallback: false
+
+request_concurrency: 2
+episode_concurrency: 1
+timeout_seconds: 60
+max_retries: 2

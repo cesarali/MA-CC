@@ -95,3 +95,34 @@ conda run -n MA-CC pytest
 ```
 
 All tests use the mock client and make no real API requests.
+
+## Committee empowerment probe
+
+The committee probe is a separate path around the repeated convention game.
+Agent memory, temporary interventions, stored observations, derived states, and
+statistical analysis remain separate layers. Run the small configuration with
+the deterministic provider first:
+
+For the game intuition, complete configuration reference, provider selection,
+commands, and result-file guide, see
+[`docs/committee_empowerment_guide.md`](docs/committee_empowerment_guide.md).
+
+```bash
+python -m naming_game.cli experiment \
+  --config configs/empowerment_pilot.yaml --mock \
+  --output-dir results/empowerment_pilot
+```
+
+Analyze only the stored Parquet histories (no model access is used):
+
+```bash
+python -m naming_game.cli analyze-empowerment \
+  --history-dir results/empowerment_pilot \
+  --output-dir results/empowerment_pilot_analysis \
+  --bootstrap-resamples 1000 --null-permutations 1000
+```
+
+`configs/empowerment.yaml` is the full 100-replication-per-policy grid and is
+expensive. Episode shards under `.episode_shards/` are checkpoints; rerunning
+the same command resumes completed episodes and compacts them into
+`interactions.parquet` and `episodes.parquet`.

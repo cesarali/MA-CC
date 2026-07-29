@@ -22,7 +22,7 @@ import time
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from .api_client import LLMClient
 from .models import ConfigurationError, LLMResponse
@@ -30,6 +30,14 @@ from .models import ConfigurationError, LLMResponse
 
 class InvalidConventionResponse(RuntimeError):
     """Raised when an agent never returns an action from the configured pool."""
+
+
+class ConventionIntervention(Protocol):
+    """External action policy; it owns no agent memory."""
+
+    def action_for(self, agent_id: int, interaction_index: int) -> str | None: ...
+
+    def window_active(self, interaction_index: int) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -166,6 +174,7 @@ class ConventionDecision:
     response: LLMResponse | None
     responses: tuple[LLMResponse, ...]
     committed: bool = False
+    forced: bool = False
 
 
 @dataclass(frozen=True)
@@ -181,6 +190,8 @@ class ConventionInteraction:
     success: bool
     player_1_score_after: int
     player_2_score_after: int
+    player_1_memory_before: tuple[ConventionHistoryEntry, ...]
+    player_2_memory_before: tuple[ConventionHistoryEntry, ...]
     player_1_decision: ConventionDecision
     player_2_decision: ConventionDecision
     wall_seconds: float
@@ -193,6 +204,7 @@ class ConventionInteraction:
                 "reason": decision.reason,
                 "action_order": list(decision.action_order),
                 "committed": decision.committed,
+                "forced": decision.forced,
                 "response": response.content if response is not None else None,
                 "model": response.model if response is not None else None,
                 "latency_seconds": (
@@ -210,6 +222,10 @@ class ConventionInteraction:
             "payoff": self.payoff,
             "success": self.success,
             "scores_after": [self.player_1_score_after, self.player_2_score_after],
+            "memory_before": [
+                [asdict(entry) for entry in self.player_1_memory_before],
+                [asdict(entry) for entry in self.player_2_memory_before],
+            ],
             "player_1_decision": decision_fields(self.player_1_decision),
             "player_2_decision": decision_fields(self.player_2_decision),
             "wall_seconds": self.wall_seconds,
@@ -358,6 +374,8 @@ class NamingConventionGame:
         config: ConventionGameConfig | None = None,
         seed: int = 1,
         adjacency: Mapping[int, Sequence[int]] | None = None,
+        intervention: ConventionIntervention | None = None,
+        request_seed_base: int | None = None,
     ) -> None:
         self.client = client
         self.config = config or ConventionGameConfig()
@@ -370,6 +388,8 @@ class NamingConventionGame:
         }
         self.neighbors = self._build_neighbors(adjacency)
         self.interactions: list[ConventionInteraction] = []
+        self.intervention = intervention
+        self.request_seed_base = request_seed_base
 
     @property
     def convergence_window(self) -> int:
@@ -510,8 +530,23 @@ class NamingConventionGame:
         return tuple(actions)
 
     async def _request_decision(
-        self, agent: ConventionAgent, action_order: tuple[str, ...]
+        self,
+        agent: ConventionAgent,
+        action_order: tuple[str, ...],
+        *,
+        forced_action: str | None = None,
+        request_seed: int | None = None,
     ) -> ConventionDecision:
+        if forced_action is not None:
+            self._validate_action(forced_action)
+            return ConventionDecision(
+                action=forced_action,
+                reason="committee intervention action",
+                action_order=action_order,
+                response=None,
+                responses=(),
+                forced=True,
+            )
         if agent.committed_action is not None:
             return ConventionDecision(
                 action=agent.committed_action,
@@ -537,6 +572,7 @@ class NamingConventionGame:
                 messages,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
+                seed=request_seed,
             )
             responses.append(response)
             try:
@@ -564,11 +600,33 @@ class NamingConventionGame:
         order_1 = self._random_action_order()
         order_2 = self._random_action_order()
         interaction_index = len(self.interactions) + 1
+        memory_1_before = _visible_history(player_1, self.config.memory_size)
+        memory_2_before = _visible_history(player_2, self.config.memory_size)
+        forced_1 = (
+            self.intervention.action_for(player_1.agent_id, interaction_index)
+            if self.intervention is not None
+            else None
+        )
+        forced_2 = (
+            self.intervention.action_for(player_2.agent_id, interaction_index)
+            if self.intervention is not None
+            else None
+        )
+        request_seed_1 = (
+            self.request_seed_base + interaction_index * 2
+            if self.request_seed_base is not None
+            else None
+        )
+        request_seed_2 = request_seed_1 + 1 if request_seed_1 is not None else None
         started = time.perf_counter()
 
         decision_1, decision_2 = await asyncio.gather(
-            self._request_decision(player_1, order_1),
-            self._request_decision(player_2, order_2),
+            self._request_decision(
+                player_1, order_1, forced_action=forced_1, request_seed=request_seed_1
+            ),
+            self._request_decision(
+                player_2, order_2, forced_action=forced_2, request_seed=request_seed_2
+            ),
         )
         payoff = self._payoff(decision_1.action, decision_2.action)
         player_1.remember(
@@ -595,6 +653,8 @@ class NamingConventionGame:
             success=decision_1.action == decision_2.action,
             player_1_score_after=player_1.score,
             player_2_score_after=player_2.score,
+            player_1_memory_before=memory_1_before,
+            player_2_memory_before=memory_2_before,
             player_1_decision=decision_1,
             player_2_decision=decision_2,
             wall_seconds=time.perf_counter() - started,
@@ -737,6 +797,7 @@ __all__ = [
     "ConventionGameResult",
     "ConventionHistoryEntry",
     "ConventionInteraction",
+    "ConventionIntervention",
     "InvalidConventionResponse",
     "NamingConventionGame",
     "build_convention_messages",
