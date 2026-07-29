@@ -20,7 +20,7 @@ import random
 import re
 import time
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -714,6 +714,7 @@ class NamingConventionGame:
         target_action: str | None = None,
         convergence_window: int | None = None,
         convergence_threshold: float | None = None,
+        population_round_callback: Callable[[int], None] | None = None,
     ) -> ConventionGameResult:
         """Run a bounded stage without ever issuing requests at import time.
 
@@ -758,6 +759,11 @@ class NamingConventionGame:
 
         for _ in range(max_interactions):
             stage_records.append(await self.play_interaction())
+            if (
+                population_round_callback is not None
+                and len(stage_records) % len(self.agents) == 0
+            ):
+                population_round_callback(len(stage_records) // len(self.agents))
             converged, success_rate, convention = self._window_status(
                 stage_records,
                 target_action=target_action,

@@ -16,6 +16,7 @@ dependencies = [
   "pandas>=2.2",
   "pyarrow>=17.0",
   "matplotlib>=3.9",
+  "tqdm>=4.66",
 ]
 
 [project.optional-dependencies]

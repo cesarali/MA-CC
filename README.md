@@ -108,10 +108,23 @@ commands, and result-file guide, see
 [`docs/committee_empowerment_guide.md`](docs/committee_empowerment_guide.md).
 
 ```bash
-python -m naming_game.cli experiment \
+conda run --live-stream -n MA-CC naming-game experiment \
   --config configs/empowerment_pilot.yaml --mock \
   --output-dir results/empowerment_pilot
 ```
+
+Run the guarded one-episode test against the real OpenAI API:
+
+```bash
+conda run --live-stream -n MA-CC naming-game experiment \
+  --config configs/empowerment_pilot_test.yaml \
+  --no-resume \
+  --output-dir results/empowerment_openai_pilot_test
+```
+
+`--live-stream` (equivalent to `--no-capture-output`) is important for these
+commands because ordinary `conda run` buffers stdout and stderr, hiding the
+logs and progress bars until the process finishes.
 
 The supplied configs set `auto_analyze: true`, so a completed command also
 creates `results/empowerment_pilot/analysis/summary.md` and the compact summary
@@ -120,7 +133,7 @@ plots. `--analyze` forces the same behavior when a config disables it.
 Rerun analysis from the stored Parquet histories only (no model access is used):
 
 ```bash
-python -m naming_game.cli analyze-empowerment \
+conda run --live-stream -n MA-CC naming-game analyze-empowerment \
   --history-dir results/empowerment_pilot \
   --bootstrap-resamples 1000 --null-permutations 1000
 ```
@@ -129,6 +142,11 @@ With no explicit `--output-dir`, this writes to
 `results/empowerment_pilot/analysis`. Automatic analysis uses the quick
 resample counts from YAML and never changes a completed simulation's status if
 plotting fails.
+
+Experiment commands print a concise grid header and live `tqdm` bars for
+completed episodes and population rounds. Analysis logs its current stage and
+shows null-permutation progress; the final JSON remains on stdout while progress
+and logs use stderr.
 
 `configs/empowerment.yaml` is the full 100-replication-per-policy grid and is
 expensive. Episode shards under `.episode_shards/` are checkpoints; rerunning

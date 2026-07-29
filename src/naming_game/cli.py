@@ -251,6 +251,10 @@ def _provider_for(config, provider: str, model: str):
 
 async def _run_empowerment_experiment(args: argparse.Namespace) -> int:
     config = load_experiment_config(args.config)
+    if args.mock and config.require_live_provider:
+        raise ConfigurationError(
+            "This experiment requires the configured live provider; remove --mock."
+        )
     if args.mock:
         client = MockAsyncLLMClient(
             model=config.model,
@@ -275,13 +279,22 @@ async def _run_empowerment_experiment(args: argparse.Namespace) -> int:
                 await fallback_validate()
     try:
         result = await run_experiment(
-            config, client, args.output_dir, resume=not args.no_resume
+            config,
+            client,
+            args.output_dir,
+            resume=not args.no_resume,
+            show_progress=True,
         )
     finally:
         client.close()
     analysis_output = args.output_dir / "analysis"
     if config.auto_analyze or args.analyze:
         try:
+            LOGGER.info(
+                "Starting offline analysis: %d bootstrap resamples, %d null permutations.",
+                config.quick_bootstrap_resamples,
+                config.quick_null_permutations,
+            )
             analysis = analyze_histories(
                 args.output_dir,
                 analysis_output,
@@ -289,8 +302,10 @@ async def _run_empowerment_experiment(args: argparse.Namespace) -> int:
                     bootstrap_resamples=config.quick_bootstrap_resamples,
                     null_permutations=config.quick_null_permutations,
                     seed=config.seed,
+                    show_progress=True,
                 ),
             )
+            LOGGER.info("Automatic analysis complete: %s", analysis_output)
             result["analysis"] = {"status": "completed", **analysis}
         except Exception as exc:  # Analysis must never invalidate a completed run.
             LOGGER.exception(
@@ -321,6 +336,7 @@ def _analyze_empowerment(args: argparse.Namespace) -> int:
             bootstrap_resamples=args.bootstrap_resamples,
             null_permutations=args.null_permutations,
             seed=args.seed,
+            show_progress=True,
         ),
     )
     print(json.dumps(result, indent=2, sort_keys=True))
@@ -328,6 +344,7 @@ def _analyze_empowerment(args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
     parser = _parser()
     args = parser.parse_args(argv)
     try:

@@ -114,6 +114,7 @@ starting point is
 | `auto_analyze` | Run disk-based analysis after successful Parquet compaction. Defaults to `true`. |
 | `quick_bootstrap_resamples` | Episode-bootstrap count for automatic post-run analysis. Defaults to `200`. |
 | `quick_null_permutations` | Shuffle/circular-shift permutation count for automatic post-run analysis. Defaults to `200`. |
+| `require_live_provider` | Reject `--mock` for configurations intended to verify a real provider. The one-episode OpenAI test enables this guard. |
 
 ### Replication fields
 
@@ -225,10 +226,10 @@ conda env update -n MA-CC -f environment.yml
 conda run -n MA-CC python -m pip install -e .
 ```
 
-### Step 1: run an offline mock pilot
+### Step 1: run the live one-episode OpenAI test
 
-The mock provider makes no external API calls and is the safest way to verify
-the grid, Parquet output, and analysis pipeline:
+Ensure the repository-root `.env` contains `OPENAI_API_KEY`. The smallest test
+is deliberately guarded against `--mock` and makes real OpenAI API calls:
 
 For the smallest possible smoke test—one episode, five agents, and five
 population rounds—run:
@@ -236,14 +237,15 @@ population rounds—run:
 ```bash
 conda run -n MA-CC python -m naming_game.cli experiment \
   --config configs/empowerment_pilot_test.yaml \
-  --mock \
-  --output-dir results/empowerment_pilot_test
+  --no-resume \
+  --output-dir results/empowerment_openai_pilot_test
 ```
 
 This performs exactly 25 pair interactions and still creates descriptive
 plots. Its report says `empowerment not estimable from this run` because only
-one policy episode is present. After it succeeds, the more
-representative multi-condition pilot is:
+one policy episode is present. `--no-resume` prevents a prior checkpoint from
+being reused. After it succeeds, an offline multi-condition pilot can still be
+run with `configs/empowerment_pilot.yaml --mock`:
 
 ```bash
 conda run -n MA-CC python -m naming_game.cli experiment \
@@ -268,6 +270,15 @@ you intentionally want to rerun and replace all episodes in that grid.
 Automatic analysis begins only after both compacted Parquets have been written
 and validated. Use `experiment --analyze` to force it when `auto_analyze` is
 false. Analysis errors are logged but do not invalidate the completed run.
+
+While an experiment is running, a header reports the selected provider/model,
+regimes, committee sizes, policies, concurrency, total planned episodes,
+population rounds, interactions, and resumed checkpoints. Two live progress
+bars report completed episodes and population rounds, including the currently
+active regime, committee size, policy, and within-episode round. Parquet
+compaction and each automatic-analysis stage are logged separately. Progress
+and logs are written to stderr so the final JSON on stdout remains reusable by
+scripts.
 
 ### Step 3: analyze the stored histories
 

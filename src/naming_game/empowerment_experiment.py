@@ -9,12 +9,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import math
 import shutil
 from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal, Sequence
+from typing import Any, Callable, Literal, Sequence
 
 import pandas as pd
 import yaml
@@ -31,6 +32,7 @@ from .naming_convention_game import (
 SCHEMA_VERSION = 2
 PROMPT_VERSION = "convention-answer-first-v1"
 Regime = Literal["neutral", "consensus_attack", "pulse"]
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,7 @@ class EmpowermentExperimentConfig:
     quick_bootstrap_resamples: int = 200
     quick_null_permutations: int = 200
     convention_roles: ConventionRolesConfig | None = None
+    require_live_provider: bool = False
     temperature: float = 0.5
     max_tokens: int = 15
     seed: int = 1
@@ -126,6 +129,8 @@ class EmpowermentExperimentConfig:
             raise ConfigurationError("Quick analysis resample counts cannot be negative.")
         if not isinstance(self.auto_analyze, bool):
             raise ConfigurationError("auto_analyze must be true or false.")
+        if not isinstance(self.require_live_provider, bool):
+            raise ConfigurationError("require_live_provider must be true or false.")
         if self.convention_roles is not None and {
             self.convention_roles.strong_name,
             self.convention_roles.weak_name,
@@ -489,6 +494,8 @@ async def run_episode(
     spec: EpisodeSpec,
     config: EmpowermentExperimentConfig,
     client: LLMClient,
+    *,
+    population_round_callback: Callable[[int], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     schedule = _schedule_for(spec, config)
     game = NamingConventionGame(
@@ -506,7 +513,11 @@ async def run_episode(
     )
     if spec.incumbent is not None:
         game.seed_consensus_history(spec.incumbent)
-    result = await game.run(config.max_interactions, stop_on_convergence=False)
+    result = await game.run(
+        config.max_interactions,
+        stop_on_convergence=False,
+        population_round_callback=population_round_callback,
+    )
     prompt_hash = _prompt_hash(config)
     provider = getattr(client, "provider_name", client.__class__.__name__)
     actual_models = [
@@ -565,6 +576,7 @@ async def run_experiment(
     output_dir: str | Path,
     *,
     resume: bool = True,
+    show_progress: bool = False,
 ) -> dict[str, Any]:
     destination = Path(output_dir)
     fingerprint = _experiment_fingerprint(config)
@@ -572,6 +584,76 @@ async def run_experiment(
     shards.mkdir(parents=True, exist_ok=True)
     specs = build_episode_specs(config)
     semaphore = asyncio.Semaphore(config.episode_concurrency)
+    completed_at_start = sum(
+        1
+        for spec in specs
+        if resume
+        and (shards / f"{spec.episode_id}.interactions.parquet").exists()
+        and (shards / f"{spec.episode_id}.episode.parquet").exists()
+    )
+    provider = getattr(client, "provider_name", client.__class__.__name__)
+    policies = sorted({spec.committee_policy for spec in specs})
+    directions = sorted(
+        {
+            str(metadata["attack_direction"])
+            for spec in specs
+            if (metadata := _direction_metadata(spec, config))["attack_direction"]
+            is not None
+        }
+    )
+    total_rounds = len(specs) * config.max_population_rounds
+    LOGGER.info("Committee-empowerment experiment")
+    LOGGER.info("  Output directory: %s", destination)
+    LOGGER.info("  Provider/model: %s / %s", provider, client.model)
+    LOGGER.info("  Regimes: %s", ", ".join(config.regimes))
+    LOGGER.info("  Committee sizes: %s", ", ".join(map(str, config.committee_sizes)))
+    LOGGER.info("  Policies: %s", ", ".join(policies))
+    if directions:
+        LOGGER.info("  Attack directions: %s", ", ".join(directions))
+    if "pulse" in config.regimes:
+        LOGGER.info("  Pulse durations: %s population round(s)", ", ".join(map(str, config.pulse_rounds)))
+    LOGGER.info(
+        "  Episode design: N=%d, %d round(s)/episode, %s=%d replication(s)",
+        config.population_size,
+        config.max_population_rounds,
+        config.replications.unit,
+        config.replications.count,
+    )
+    LOGGER.info(
+        "  Planned work: %d episodes, %d population rounds, %d pair interactions",
+        len(specs),
+        total_rounds,
+        len(specs) * config.max_interactions,
+    )
+    LOGGER.info(
+        "  Concurrency: %d episode(s), %d request(s); resumable checkpoints: %d",
+        config.episode_concurrency,
+        config.request_concurrency,
+        completed_at_start,
+    )
+    episode_progress = None
+    round_progress = None
+    if show_progress:
+        from tqdm.auto import tqdm
+
+        episode_progress = tqdm(
+            total=len(specs),
+            initial=completed_at_start,
+            desc="Episodes",
+            unit="episode",
+            dynamic_ncols=True,
+            position=0,
+            mininterval=0.25,
+        )
+        round_progress = tqdm(
+            total=total_rounds,
+            initial=completed_at_start * config.max_population_rounds,
+            desc="Population rounds",
+            unit="round",
+            dynamic_ncols=True,
+            position=1,
+            mininterval=0.25,
+        )
 
     async def execute(spec: EpisodeSpec) -> None:
         interactions_path = shards / f"{spec.episode_id}.interactions.parquet"
@@ -579,15 +661,43 @@ async def run_experiment(
         if resume and interactions_path.exists() and summary_path.exists():
             return
         async with semaphore:
-            rows, summary = await run_episode(spec, config, client)
+            def population_round_completed(population_round: int) -> None:
+                if round_progress is not None:
+                    round_progress.set_postfix_str(
+                        f"{spec.regime} | k={spec.committee_size} | "
+                        f"{spec.committee_policy} | round "
+                        f"{population_round}/{config.max_population_rounds}",
+                        refresh=False,
+                    )
+                    round_progress.update(1)
+
+            rows, summary = await run_episode(
+                spec,
+                config,
+                client,
+                population_round_callback=population_round_completed,
+            )
             temp_interactions = interactions_path.with_suffix(".tmp.parquet")
             temp_summary = summary_path.with_suffix(".tmp.parquet")
             pd.DataFrame(rows).to_parquet(temp_interactions, index=False)
             pd.DataFrame([summary]).to_parquet(temp_summary, index=False)
             temp_interactions.replace(interactions_path)
             temp_summary.replace(summary_path)
+            if episode_progress is not None:
+                episode_progress.set_postfix_str(
+                    f"{spec.regime} | k={spec.committee_size} | {spec.committee_policy}",
+                    refresh=False,
+                )
+                episode_progress.update(1)
 
-    await asyncio.gather(*(execute(spec) for spec in specs))
+    try:
+        await asyncio.gather(*(execute(spec) for spec in specs))
+    finally:
+        if round_progress is not None:
+            round_progress.close()
+        if episode_progress is not None:
+            episode_progress.close()
+    LOGGER.info("All requested episodes are checkpointed; compacting Parquet histories.")
     interaction_frames = [pd.read_parquet(path) for path in sorted(shards.glob("*.interactions.parquet"))]
     episode_frames = [pd.read_parquet(path) for path in sorted(shards.glob("*.episode.parquet"))]
     interactions = pd.concat(interaction_frames, ignore_index=True) if interaction_frames else pd.DataFrame()
@@ -625,12 +735,18 @@ async def run_experiment(
         interactions_temp.unlink(missing_ok=True)
         episodes_temp.unlink(missing_ok=True)
         config_temp.unlink(missing_ok=True)
+    LOGGER.info(
+        "Parquet compaction complete: %d episodes and %d interactions.",
+        len(episodes),
+        len(interactions),
+    )
     return {
         "episodes": len(episodes),
         "interactions": len(interactions),
         "interactions_path": str(interactions_path),
         "episodes_path": str(episodes_path),
         "experiment_fingerprint": fingerprint,
+        "episodes_resumed": completed_at_start,
     }
 
 

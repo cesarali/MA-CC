@@ -93,7 +93,7 @@ python -m naming_game.cli analyze-empowerment
 
 | Configuration | Purpose |
 |---|---|
-| `configs/empowerment_pilot_test.yaml` | One episode, 5 agents, 5 population rounds, and 25 pair interactions. Intended only as an end-to-end smoke test. |
+| `configs/empowerment_pilot_test.yaml` | One live OpenAI episode, 5 agents, 5 population rounds, and 25 pair interactions. It rejects `--mock`. |
 | `configs/empowerment_pilot.yaml` | Small multi-condition pilot for checking behavior before a full run. |
 | `configs/empowerment.yaml` | Canonical 100-episodes-per-policy experiment grid. |
 
@@ -142,13 +142,16 @@ and plots.
 
 ## How to run
 
-### 1. One-episode offline smoke test
+### 1. One-episode live OpenAI smoke test
+
+Configure `OPENAI_API_KEY` and use a fresh run (`--no-resume`) so no earlier
+mock checkpoint can be reused:
 
 ```bash
 conda run -n MA-CC python -m naming_game.cli experiment \
   --config configs/empowerment_pilot_test.yaml \
-  --mock \
-  --output-dir results/empowerment_pilot_test
+  --no-resume \
+  --output-dir results/empowerment_openai_pilot_test
 ```
 
 Expected result: exactly one episode and 25 interaction rows. This verifies the

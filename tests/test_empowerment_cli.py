@@ -1,5 +1,8 @@
+import asyncio
 import json
 from argparse import Namespace
+
+import pytest
 
 from naming_game import cli
 from naming_game.analysis import empowerment as empowerment_analysis
@@ -108,3 +111,19 @@ def test_standalone_analysis_defaults_inside_history_directory(tmp_path, monkeyp
     )
     assert cli._analyze_empowerment(args) == 0
     assert calls == [(tmp_path / "history", tmp_path / "history" / "analysis")]
+
+
+def test_live_provider_config_rejects_mock_override(tmp_path):
+    config = tmp_path / "live.yaml"
+    _write_config(config, auto_analyze=False)
+    with config.open("a", encoding="utf-8") as stream:
+        stream.write("require_live_provider: true\n")
+    args = Namespace(
+        config=config,
+        output_dir=tmp_path / "run",
+        mock=True,
+        no_resume=False,
+        analyze=False,
+    )
+    with pytest.raises(Exception, match="requires the configured live provider"):
+        asyncio.run(cli._run_empowerment_experiment(args))

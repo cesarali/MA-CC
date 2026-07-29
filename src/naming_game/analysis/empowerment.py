@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ from .reporting import (
 from .surrogates import circular_shift_trajectories, shuffle_episode_labels, swap_labels_half
 
 STRATA_COLUMNS = [column for column in GROUP_COLUMNS if column != "committee_policy"]
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,7 @@ class AnalysisConfig:
     seed: int = 1
     minimum_episodes_per_policy: int = 5
     normal_reporting_episodes: int = 10
+    show_progress: bool = False
 
     def __post_init__(self) -> None:
         if any(value < 1 for value in self.horizons_population_rounds):
@@ -53,6 +56,8 @@ class AnalysisConfig:
             raise ValueError(
                 "normal_reporting_episodes cannot be below the estimation minimum."
             )
+        if not isinstance(self.show_progress, bool):
+            raise ValueError("show_progress must be true or false.")
 
 
 def _estimate_fields(estimate: Estimate) -> dict[str, Any]:
@@ -274,7 +279,19 @@ def estimate_nulls(
         "regime", "committee_size", "pulse_rounds", "provider", "model",
         "prompt_version", "initial_condition",
     ]
-    for permutation in range(config.null_permutations):
+    permutations: Any = range(config.null_permutations)
+    if config.show_progress:
+        from tqdm.auto import tqdm
+
+        permutations = tqdm(
+            permutations,
+            total=config.null_permutations,
+            desc="Null permutations",
+            unit="permutation",
+            dynamic_ncols=True,
+            mininterval=0.25,
+        )
+    for permutation in permutations:
         seed = config.seed + 10_000 + permutation
         shuffled = shuffle_episode_labels(episodes, strata=shuffle_strata, seed=seed)
         mapping = shuffled.set_index("episode_id")["committee_policy"]
@@ -312,14 +329,21 @@ def analyze_histories(
     source = Path(history_dir)
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
+    LOGGER.info("Loading stored histories from %s", source)
     interactions = pd.read_parquet(source / "interactions.parquet")
     episodes = pd.read_parquet(source / "episodes.parquet")
+    LOGGER.info(
+        "Loaded %d completed episodes and %d interaction rows.",
+        episodes["episode_id"].nunique(),
+        len(interactions),
+    )
     if column_mapping:
         interactions = interactions.rename(columns=column_mapping)
         episodes = episodes.rename(columns=column_mapping)
     interactions, episodes, normalization_warnings = normalize_histories(
         interactions, episodes
     )
+    LOGGER.info("Estimating terminal and lagged empowerment.")
     terminal_all = estimate_terminal(episodes, settings)
     terminal_resolved = estimate_terminal(episodes, settings, resolved_only=True)
     lagged_binary = estimate_lagged(interactions, settings)
@@ -333,6 +357,7 @@ def analyze_histories(
     estimates = pd.concat(
         [terminal_all, terminal_resolved, lagged_binary, lagged_three], ignore_index=True
     )
+    LOGGER.info("Computing episode-level outcome and recovery metrics.")
     metrics = summarize_episode_metrics(
         episodes,
         confidence=settings.confidence,
@@ -340,6 +365,7 @@ def analyze_histories(
         seed=settings.seed,
     )
     estimates = add_efficiency(metrics, estimates)
+    LOGGER.info("Running episode-policy-shuffle and temporal null analyses.")
     nulls = estimate_nulls(interactions, episodes, settings)
     estimates = attach_null_summary(estimates, nulls)
     swapped_interactions, swapped_episodes = swap_labels_half(interactions, episodes, seed=settings.seed)
@@ -371,10 +397,12 @@ def analyze_histories(
         baseline["near_zero_baseline"] = baseline["jeffreys"] <= baseline["shuffle_95pct"].fillna(0.05).clip(lower=0.05)
     baseline.to_parquet(destination / "no_committee_baseline.parquet", index=False)
     warnings = normalization_warnings + collect_warnings(episodes, estimates, nulls)
+    LOGGER.info("Writing analysis tables and Markdown summary to %s", destination)
     write_summary_markdown(
         episodes, metrics, estimates, warnings, destination / "summary.md"
     )
     plots_dir = destination / "plots"
+    LOGGER.info("Rendering experiment summary plots from stored histories.")
     make_experiment_summary(
         interactions,
         metrics,
@@ -393,6 +421,7 @@ def analyze_histories(
         seed=settings.seed,
     )
     (destination / "analysis_config.json").write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
+    LOGGER.info("Analysis artifacts are complete: %s", destination)
     return {
         "estimates": len(estimates), "metric_rows": len(metrics), "null_rows": len(nulls),
         "output_dir": str(destination),

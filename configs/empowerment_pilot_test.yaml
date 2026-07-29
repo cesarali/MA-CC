@@ -1,4 +1,4 @@
-# Minimal end-to-end smoke test.
+# Minimal live OpenAI end-to-end smoke test.
 #
 # This produces exactly one episode:
 # - 5 agents
@@ -7,7 +7,8 @@
 # - neutral start
 # - always_A committee policy
 #
-# Run with --mock first so no paid API calls are made.
+# This file deliberately requires a live provider. The CLI rejects --mock so
+# the episode cannot silently use synthetic responses.
 population_size: 5
 names: [A, B]
 memory_length: 5
@@ -30,7 +31,7 @@ convention_roles:
   source: calibration
 
 temperature: 0.5
-max_tokens: 15
+max_tokens: 1000
 seed: 1
 
 # Three times the population size. Events cannot trigger before this full
@@ -38,12 +39,12 @@ seed: 1
 window_interactions: 15
 resolution_threshold: 0.95
 
-# These fields are ignored when the CLI is run with --mock. Without --mock,
-# this configuration uses the official OpenAI API.
+# Use the official OpenAI API with no provider fallback.
 provider: openai
 model: gpt-4o-mini
 fallback_provider: openai
 allow_fallback: false
+require_live_provider: true
 
 request_concurrency: 2
 episode_concurrency: 1

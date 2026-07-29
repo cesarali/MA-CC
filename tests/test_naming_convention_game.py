@@ -137,6 +137,24 @@ def test_each_run_uses_a_fresh_stage_convergence_window():
     assert second.end_interaction_index == 7
 
 
+def test_population_round_callback_reports_completed_rounds():
+    client = MockAsyncLLMClient(artificial_latency=0, response_factory=always("Q"))
+    game = NamingConventionGame(
+        client=client,
+        config=ConventionGameConfig(num_agents=2, actions=("Q", "M")),
+    )
+    completed_rounds = []
+    result = asyncio.run(
+        game.run(
+            5,
+            stop_on_convergence=False,
+            population_round_callback=completed_rounds.append,
+        )
+    )
+    assert len(result.interactions) == 5
+    assert completed_rounds == [1, 2]
+
+
 def test_committed_agents_skip_api_requests():
     client = MockAsyncLLMClient(artificial_latency=0, response_factory=always("Q"))
     game = NamingConventionGame(
