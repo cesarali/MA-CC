@@ -28,7 +28,7 @@ from .naming_convention_game import (
     NamingConventionGame,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PROMPT_VERSION = "convention-answer-first-v1"
 Regime = Literal["neutral", "consensus_attack", "pulse"]
 
@@ -46,6 +46,26 @@ class ReplicationConfig:
 
 
 @dataclass(frozen=True)
+class ConventionRolesConfig:
+    """Experiment-supplied convention roles; never inferred from outcomes."""
+
+    strong_name: str
+    weak_name: str
+    source: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(value, str)
+            for value in (self.strong_name, self.weak_name, self.source)
+        ):
+            raise ConfigurationError("convention_roles values must be strings.")
+        if self.strong_name == self.weak_name:
+            raise ConfigurationError("strong_name and weak_name must be distinct.")
+        if not self.source.strip():
+            raise ConfigurationError("convention_roles.source must be non-empty.")
+
+
+@dataclass(frozen=True)
 class EmpowermentExperimentConfig:
     population_size: int = 24
     names: tuple[str, str] = ("A", "B")
@@ -55,6 +75,10 @@ class EmpowermentExperimentConfig:
     pulse_rounds: tuple[int, ...] = (1, 3, 5, 10)
     regimes: tuple[Regime, ...] = ("neutral", "consensus_attack", "pulse")
     replications: ReplicationConfig = ReplicationConfig()
+    auto_analyze: bool = True
+    quick_bootstrap_resamples: int = 200
+    quick_null_permutations: int = 200
+    convention_roles: ConventionRolesConfig | None = None
     temperature: float = 0.5
     max_tokens: int = 15
     seed: int = 1
@@ -90,6 +114,25 @@ class EmpowermentExperimentConfig:
             raise ConfigurationError("concurrency settings must be positive.")
         if not set(self.regimes) <= {"neutral", "consensus_attack", "pulse"}:
             raise ConfigurationError("Unknown experiment regime.")
+        if not all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in (
+                self.quick_bootstrap_resamples,
+                self.quick_null_permutations,
+            )
+        ):
+            raise ConfigurationError("Quick analysis resample counts must be integers.")
+        if self.quick_bootstrap_resamples < 0 or self.quick_null_permutations < 0:
+            raise ConfigurationError("Quick analysis resample counts cannot be negative.")
+        if not isinstance(self.auto_analyze, bool):
+            raise ConfigurationError("auto_analyze must be true or false.")
+        if self.convention_roles is not None and {
+            self.convention_roles.strong_name,
+            self.convention_roles.weak_name,
+        } != set(self.names):
+            raise ConfigurationError(
+                "convention_roles strong_name and weak_name must match names."
+            )
 
     @property
     def rolling_window(self) -> int:
@@ -143,6 +186,9 @@ def load_experiment_config(path: str | Path) -> EmpowermentExperimentConfig:
     replication_raw = raw.get("replications", {})
     if not isinstance(replication_raw, dict):
         raise ConfigurationError("replications must be a mapping.")
+    roles_raw = raw.get("convention_roles")
+    if roles_raw is not None and not isinstance(roles_raw, dict):
+        raise ConfigurationError("convention_roles must be a mapping or null.")
     try:
         values = dict(raw)
         values["names"] = tuple(str(value) for value in raw.get("names", ("A", "B")))
@@ -150,6 +196,9 @@ def load_experiment_config(path: str | Path) -> EmpowermentExperimentConfig:
         values["pulse_rounds"] = tuple(int(value) for value in raw.get("pulse_rounds", (1, 3, 5, 10)))
         values["regimes"] = tuple(raw.get("regimes", ("neutral", "consensus_attack", "pulse")))
         values["replications"] = ReplicationConfig(**replication_raw)
+        values["convention_roles"] = (
+            ConventionRolesConfig(**roles_raw) if roles_raw is not None else None
+        )
         return EmpowermentExperimentConfig(**values)
     except (TypeError, ValueError) as exc:
         raise ConfigurationError("Experiment configuration has invalid fields.") from exc
@@ -250,6 +299,34 @@ def _prompt_hash(config: EmpowermentExperimentConfig) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
 
 
+def _direction_metadata(
+    spec: EpisodeSpec, config: EmpowermentExperimentConfig
+) -> dict[str, str | None]:
+    roles = config.convention_roles
+    direction: str | None = None
+    if spec.incumbent is not None and spec.alternative is not None:
+        if roles is None:
+            direction = f"{spec.incumbent}_to_{spec.alternative}"
+        elif (
+            spec.incumbent == roles.strong_name
+            and spec.alternative == roles.weak_name
+        ):
+            direction = "strong_to_weak"
+        elif (
+            spec.incumbent == roles.weak_name
+            and spec.alternative == roles.strong_name
+        ):
+            direction = "weak_to_strong"
+    return {
+        "strong_name": roles.strong_name if roles is not None else None,
+        "weak_name": roles.weak_name if roles is not None else None,
+        "convention_role_source": roles.source if roles is not None else None,
+        "incumbent_name": spec.incumbent,
+        "promoted_name": spec.alternative,
+        "attack_direction": direction,
+    }
+
+
 def _experiment_fingerprint(config: EmpowermentExperimentConfig) -> str:
     """Hash data-generating settings while allowing grid/concurrency expansion."""
 
@@ -267,6 +344,11 @@ def _experiment_fingerprint(config: EmpowermentExperimentConfig) -> str:
         "provider": config.provider,
         "model": config.model,
         "prompt_hash": _prompt_hash(config),
+        "convention_roles": (
+            asdict(config.convention_roles)
+            if config.convention_roles is not None
+            else None
+        ),
     }
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -313,7 +395,11 @@ def derive_episode(
         )
         if resolved in config.names and first_consensus_row is None:
             first_consensus_row = row
-        if spec.alternative == resolved and takeover_row is None:
+        if (
+            spec.alternative is not None
+            and spec.alternative == resolved
+            and takeover_row is None
+        ):
             takeover_row = row
 
     terminal = rows[-1]
@@ -358,6 +444,7 @@ def derive_episode(
     summary = {
         "schema_version": SCHEMA_VERSION,
         **asdict(spec),
+        **_direction_metadata(spec, config),
         "provider": terminal["provider"],
         "model": terminal["model"],
         "prompt_version": PROMPT_VERSION,
@@ -373,6 +460,13 @@ def derive_episode(
         "terminal_share_A": terminal["rolling_share_A"],
         "unresolved": terminal_outcome == "unresolved",
         "takeover": takeover_row is not None,
+        "ever_crossed": takeover_row is not None,
+        "terminal_takeover": (
+            spec.alternative is not None and terminal_outcome == spec.alternative
+        ),
+        "incumbent_survives": (
+            spec.incumbent is not None and terminal_outcome == spec.incumbent
+        ),
         "takeover_interaction": takeover_row["interaction_index"] if takeover_row else None,
         "takeover_population_round": takeover_row["population_round"] if takeover_row else None,
         "recovery_time_interactions": recovery_time,
@@ -423,6 +517,7 @@ async def run_episode(
     ]
     actual_model = actual_models[-1] if actual_models else client.model
     rows: list[dict[str, Any]] = []
+    direction_metadata = _direction_metadata(spec, config)
     for record in result.interactions:
         rows.append(
             {
@@ -443,6 +538,7 @@ async def run_episode(
                 "initial_condition": spec.initial_condition,
                 "incumbent": spec.incumbent,
                 "alternative": spec.alternative,
+                **direction_metadata,
                 "pulse_rounds": spec.pulse_rounds,
                 "pulse_active": schedule.window_active(record.interaction_index) and schedule.action is not None,
                 "interaction_index": record.interaction_index,
@@ -497,16 +593,43 @@ async def run_experiment(
     interactions = pd.concat(interaction_frames, ignore_index=True) if interaction_frames else pd.DataFrame()
     episodes = pd.concat(episode_frames, ignore_index=True) if episode_frames else pd.DataFrame()
     destination.mkdir(parents=True, exist_ok=True)
-    interactions.to_parquet(destination / "interactions.parquet", index=False)
-    episodes.to_parquet(destination / "episodes.parquet", index=False)
-    (destination / "experiment_config.json").write_text(
-        json.dumps(asdict(config), indent=2, sort_keys=True), encoding="utf-8"
-    )
+    interactions_path = destination / "interactions.parquet"
+    episodes_path = destination / "episodes.parquet"
+    interactions_temp = destination / "interactions.compacting.parquet"
+    episodes_temp = destination / "episodes.compacting.parquet"
+    config_path = destination / "experiment_config.json"
+    config_temp = destination / "experiment_config.compacting.json"
+    try:
+        interactions.to_parquet(interactions_temp, index=False)
+        episodes.to_parquet(episodes_temp, index=False)
+        compacted_interactions = pd.read_parquet(interactions_temp)
+        compacted_episodes = pd.read_parquet(episodes_temp)
+        if len(compacted_interactions) != len(interactions):
+            raise RuntimeError("Interaction Parquet compaction row-count mismatch.")
+        if len(compacted_episodes) != len(episodes):
+            raise RuntimeError("Episode Parquet compaction row-count mismatch.")
+        interaction_ids = set(compacted_interactions.get("episode_id", ()))
+        episode_ids = set(compacted_episodes.get("episode_id", ()))
+        if interaction_ids != episode_ids:
+            raise RuntimeError("Compacted interaction and episode IDs do not match.")
+        expected_ids = {spec.episode_id for spec in specs}
+        if not expected_ids <= episode_ids:
+            raise RuntimeError("Compacted histories are missing completed episodes.")
+        config_temp.write_text(
+            json.dumps(asdict(config), indent=2, sort_keys=True), encoding="utf-8"
+        )
+        interactions_temp.replace(interactions_path)
+        episodes_temp.replace(episodes_path)
+        config_temp.replace(config_path)
+    finally:
+        interactions_temp.unlink(missing_ok=True)
+        episodes_temp.unlink(missing_ok=True)
+        config_temp.unlink(missing_ok=True)
     return {
         "episodes": len(episodes),
         "interactions": len(interactions),
-        "interactions_path": str(destination / "interactions.parquet"),
-        "episodes_path": str(destination / "episodes.parquet"),
+        "interactions_path": str(interactions_path),
+        "episodes_path": str(episodes_path),
         "experiment_fingerprint": fingerprint,
     }
 
@@ -521,6 +644,7 @@ def clear_completed_shards(output_dir: str | Path) -> None:
 
 __all__ = [
     "CommitteeSchedule",
+    "ConventionRolesConfig",
     "EmpowermentExperimentConfig",
     "EpisodeSpec",
     "ReplicationConfig",

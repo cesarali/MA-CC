@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Sequence
 
@@ -25,6 +26,8 @@ from .models import ConfigurationError, RunSpec, UpdateMode
 from .empowerment_experiment import load_experiment_config, run_experiment
 from .reasoning_game import load_reasoning_task
 from .runner import run_single
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -76,12 +79,21 @@ def _parser() -> argparse.ArgumentParser:
     experiment.add_argument("--output-dir", type=Path, default=Path("results/empowerment"))
     experiment.add_argument("--mock", action="store_true")
     experiment.add_argument("--no-resume", action="store_true")
+    experiment.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Run offline analysis after successful Parquet compaction.",
+    )
 
     analyze = subparsers.add_parser(
         "analyze-empowerment", help="Analyze existing empowerment Parquet histories."
     )
     analyze.add_argument("--history-dir", type=Path, required=True)
-    analyze.add_argument("--output-dir", type=Path, default=Path("results/empowerment_analysis"))
+    analyze.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Analysis destination (default: <history-dir>/analysis).",
+    )
     analyze.add_argument("--horizons", nargs="+", type=int, default=[1, 3, 5, 10])
     analyze.add_argument("--bootstrap-resamples", type=int, default=1000)
     analyze.add_argument("--null-permutations", type=int, default=1000)
@@ -267,14 +279,43 @@ async def _run_empowerment_experiment(args: argparse.Namespace) -> int:
         )
     finally:
         client.close()
+    analysis_output = args.output_dir / "analysis"
+    if config.auto_analyze or args.analyze:
+        try:
+            analysis = analyze_histories(
+                args.output_dir,
+                analysis_output,
+                AnalysisConfig(
+                    bootstrap_resamples=config.quick_bootstrap_resamples,
+                    null_permutations=config.quick_null_permutations,
+                    seed=config.seed,
+                ),
+            )
+            result["analysis"] = {"status": "completed", **analysis}
+        except Exception as exc:  # Analysis must never invalidate a completed run.
+            LOGGER.exception(
+                "Automatic empowerment analysis failed after simulation compaction; "
+                "rerun naming-game analyze-empowerment later."
+            )
+            result["analysis"] = {
+                "status": "failed",
+                "output_dir": str(analysis_output),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+    else:
+        result["analysis"] = {
+            "status": "disabled",
+            "output_dir": str(analysis_output),
+        }
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
 
 def _analyze_empowerment(args: argparse.Namespace) -> int:
+    output_dir = args.output_dir or args.history_dir / "analysis"
     result = analyze_histories(
         args.history_dir,
-        args.output_dir,
+        output_dir,
         AnalysisConfig(
             horizons_population_rounds=tuple(args.horizons),
             bootstrap_resamples=args.bootstrap_resamples,

@@ -67,13 +67,19 @@ def swap_labels_half(
             "A": "B", "B": "A", "resolved_A": "resolved_B", "resolved_B": "resolved_A",
             "always_A": "always_B", "always_B": "always_A", "consensus_A": "consensus_B",
             "consensus_B": "consensus_A", "A_dominant": "B_dominant", "B_dominant": "A_dominant",
+            "A_to_B": "B_to_A", "B_to_A": "A_to_B",
         }
         return mapping.get(value, value)
 
     trajectory_mask = trajectory["episode_id"].isin(selected)
     summary_mask = summaries["episode_id"].isin(selected)
     for frame, mask in ((trajectory, trajectory_mask), (summaries, summary_mask)):
-        for column in ("output_i", "output_j", "resolved_state", "terminal_outcome", "final_convention", "incumbent", "alternative", "initial_condition", "committee_policy", "macrostate_three"):
+        for column in (
+            "output_i", "output_j", "resolved_state", "terminal_outcome",
+            "final_convention", "incumbent", "alternative", "incumbent_name",
+            "promoted_name", "strong_name", "weak_name", "initial_condition",
+            "committee_policy", "macrostate_three", "attack_direction",
+        ):
             if column in frame:
                 frame.loc[mask, column] = frame.loc[mask, column].map(swap_scalar)
         for column in ("rolling_share_A", "terminal_share_A"):

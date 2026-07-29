@@ -3,6 +3,7 @@ import math
 import pandas as pd
 import pytest
 
+from naming_game.analysis.empowerment import AnalysisConfig, estimate_terminal
 from naming_game.analysis.estimators import (
     conditional_mutual_information,
     mutual_information,
@@ -94,3 +95,58 @@ def test_half_episode_label_swap_preserves_a_symmetric_channel():
         swapped.committee_policy.tolist(), swapped.final_convention.tolist()
     )
     assert after.jeffreys == pytest.approx(before.jeffreys)
+
+
+def _terminal_history(episodes_per_policy, policies=("left", "right")):
+    rows = []
+    for policy_index, policy in enumerate(policies):
+        for replicate in range(episodes_per_policy):
+            row = {
+                "episode_id": f"{policy}-{replicate}",
+                "committee_policy": policy,
+                "final_convention": "A" if (replicate + policy_index) % 2 == 0 else "B",
+            }
+            defaults = {
+                "regime": "neutral",
+                "N": 10,
+                "committee_size": 1,
+                "initial_condition": "empty",
+                "provider": "mock",
+                "model": "mock/model",
+                "prompt_version": "test",
+                "pulse_rounds": None,
+                "attack_direction": None,
+                "incumbent_name": None,
+                "promoted_name": None,
+                "strong_name": None,
+                "weak_name": None,
+                "convention_role_source": None,
+            }
+            row.update(defaults)
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+@pytest.mark.parametrize(
+    ("episodes_per_policy", "expected_status"),
+    [(4, "non_estimable"), (5, "exploratory"), (9, "exploratory"), (10, "estimable")],
+)
+def test_terminal_empowerment_small_sample_statuses(episodes_per_policy, expected_status):
+    result = estimate_terminal(
+        _terminal_history(episodes_per_policy),
+        AnalysisConfig((1,), bootstrap_resamples=2, null_permutations=0),
+    )
+    assert result.iloc[0]["estimate_status"] == expected_status
+    if expected_status == "non_estimable":
+        assert math.isnan(result.iloc[0]["jeffreys"])
+    else:
+        assert math.isfinite(result.iloc[0]["jeffreys"])
+
+
+def test_terminal_empowerment_requires_more_than_one_policy():
+    result = estimate_terminal(
+        _terminal_history(20, policies=("only",)),
+        AnalysisConfig((1,), bootstrap_resamples=2, null_permutations=0),
+    )
+    assert result.iloc[0]["estimate_status"] == "non_estimable"
+    assert "only one" in result.iloc[0]["status_reason"]

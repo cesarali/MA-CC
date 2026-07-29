@@ -2,11 +2,13 @@ import asyncio
 import json
 
 import pandas as pd
+import pytest
 
 from naming_game.analysis.empowerment import AnalysisConfig, analyze_histories
 from naming_game.api_client import MockAsyncLLMClient, OpenAIAsyncLLMClient
 from naming_game.empowerment_experiment import (
     CommitteeSchedule,
+    ConventionRolesConfig,
     EmpowermentExperimentConfig,
     EpisodeSpec,
     ReplicationConfig,
@@ -69,6 +71,18 @@ def test_replication_unit_supports_per_policy_and_split_strata():
     }
 
 
+def test_convention_roles_are_validated_against_configured_names():
+    config = EmpowermentExperimentConfig(
+        convention_roles=ConventionRolesConfig("A", "B", "calibration")
+    )
+    assert config.convention_roles is not None
+    assert config.convention_roles.strong_name == "A"
+    with pytest.raises(Exception, match="must match names"):
+        EmpowermentExperimentConfig(
+            convention_roles=ConventionRolesConfig("A", "C", "calibration")
+        )
+
+
 def test_rolling_window_events_and_censored_fields_are_derived():
     config = EmpowermentExperimentConfig(
         population_size=2,
@@ -106,6 +120,38 @@ def test_rolling_window_events_and_censored_fields_are_derived():
     assert summary["recovery_time_interactions"] == 2
     assert summary["recovery_censored"] is False
     assert summary["final_convention"] == "A"
+
+
+def test_neutral_episode_without_promoted_name_is_never_a_takeover():
+    config = EmpowermentExperimentConfig(
+        population_size=2,
+        max_population_rounds=1,
+        committee_sizes=(0,),
+        regimes=("neutral",),
+        window_interactions=2,
+    )
+    spec = EpisodeSpec(
+        "episode", 1, "neutral", 0, "no_committee", "empty", None, None, None, 0
+    )
+    rows = [
+        {
+            "interaction_index": index,
+            "output_i": "A",
+            "output_j": "A",
+            "forced_i": False,
+            "forced_j": False,
+            "provider": "mock",
+            "model": "mock/model",
+            "prompt_hash": "hash",
+            "committee_ids": "[]",
+            "population_round": (index + 1) // 2,
+        }
+        for index in range(1, 3)
+    ]
+    _, summary = derive_episode(rows, spec, config)
+    assert summary["takeover"] is False
+    assert summary["ever_crossed"] is False
+    assert summary["terminal_takeover"] is False
 
 
 def test_recovery_is_immediate_or_censored_after_pulse_removal():
@@ -149,6 +195,7 @@ def test_mock_parquet_experiment_and_offline_analysis(tmp_path):
         window_interactions=2,
         episode_concurrency=2,
         model="mock/model",
+        convention_roles=ConventionRolesConfig("A", "B", "calibration"),
     )
     result = asyncio.run(
         run_experiment(
@@ -162,7 +209,18 @@ def test_mock_parquet_experiment_and_offline_analysis(tmp_path):
     episodes = pd.read_parquet(history / "episodes.parquet")
     assert len(interactions) == 32
     assert len(episodes) == 8
-    assert {"memory_i_before", "rolling_share_A", "macrostate_binary"} <= set(interactions)
+    assert {
+        "memory_i_before",
+        "rolling_share_A",
+        "macrostate_binary",
+        "strong_name",
+        "weak_name",
+        "incumbent_name",
+        "promoted_name",
+        "attack_direction",
+    } <= set(interactions)
+    assert {"terminal_takeover", "ever_crossed", "incumbent_survives"} <= set(episodes)
+    assert set(episodes["attack_direction"]) == {"strong_to_weak", "weak_to_strong"}
     analysis = analyze_histories(
         history,
         tmp_path / "analysis",
@@ -170,3 +228,6 @@ def test_mock_parquet_experiment_and_offline_analysis(tmp_path):
     )
     assert analysis["estimates"] > 0
     assert (tmp_path / "analysis" / "empowerment_estimates.parquet").exists()
+    assert (tmp_path / "analysis" / "summary.md").exists()
+    assert (tmp_path / "analysis" / "plots" / "experiment_summary.png").stat().st_size > 0
+    assert (tmp_path / "analysis" / "plots" / "pulse_summary.png").stat().st_size > 0

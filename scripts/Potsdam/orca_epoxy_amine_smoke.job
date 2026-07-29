@@ -1,0 +1,126 @@
+#!/bin/bash
+###############################################################################
+# orca_epoxy_amine_smoke.job - run the minimum epoxy-amine ORCA EnGrad fixture
+###############################################################################
+#SBATCH --job-name=orca-epoxy-amine-smoke
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=24G
+#SBATCH --time=0-00:30:00
+#SBATCH --chdir=/home/ojedamarin/Projects/Polymerization/kUPS
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/home/ojedamarin/Projects/Polymerization/kUPS/slurm-%A_%a.out
+#SBATCH --error=/home/ojedamarin/Projects/Polymerization/kUPS/slurm-%A_%a.err
+#SBATCH --array=0-0
+###############################################################################
+
+set -euo pipefail
+
+# Proxies are harmless for this ORCA-only job and match the cluster convention.
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+
+if [[ -f /etc/profile.d/modules.sh ]]; then
+  source /etc/profile.d/modules.sh
+fi
+
+REPO_ROOT="${REPO_ROOT:-/home/ojedamarin/Projects/Polymerization/kUPS}"
+ORCA_SETUP="${ORCA_SETUP:-/work/ojedamarin/Projects/Polymerization/setup_orca.sh}"
+ORCA_BIN="${ORCA_BIN:-/work/ojedamarin/Projects/Polymerization/orca_6_1_0_linux_x86-64_shared_openmpi418/orca}"
+SMOKE_ROOT="${SMOKE_ROOT:-${REPO_ROOT}/test/polymerization/fixtures/epoxy_amine_orca}"
+RESULTS_ROOT="${RESULTS_ROOT:-/work/ojedamarin/Projects/Polymerization/Results}"
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+if [[ -f "${ORCA_SETUP}" ]]; then
+  set +u
+  source "${ORCA_SETUP}"
+  set -u
+else
+  echo "[env] ORCA setup script not found: ${ORCA_SETUP}" >&2
+  exit 1
+fi
+
+if [[ ! -x "${ORCA_BIN}" ]]; then
+  echo "[env] ORCA executable not found or not executable: ${ORCA_BIN}" >&2
+  exit 1
+fi
+
+cd "${REPO_ROOT}"
+
+SLURM_ARRAY_TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
+SLURM_JOB_ID="${SLURM_JOB_ID:-manual}"
+mapfile -t JOB_DIRS < <(find "${SMOKE_ROOT}" -mindepth 1 -maxdepth 1 -type d | sort)
+if [[ "${#JOB_DIRS[@]}" -eq 0 ]]; then
+  echo "[smoke] no job directories found under ${SMOKE_ROOT}" >&2
+  exit 1
+fi
+if (( SLURM_ARRAY_TASK_ID >= ${#JOB_DIRS[@]} )); then
+  echo "[smoke] array index ${SLURM_ARRAY_TASK_ID} out of range for ${#JOB_DIRS[@]} job directories" >&2
+  exit 1
+fi
+
+JOB_DIR="${JOB_DIRS[$SLURM_ARRAY_TASK_ID]}"
+JOB_NAME="$(basename "${JOB_DIR}")"
+RUN_ID="${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+RUN_DIR="${RESULTS_ROOT}/${JOB_NAME}/${RUN_ID}"
+
+mkdir -p "${RUN_DIR}"
+cp "${JOB_DIR}"/*.inp "${RUN_DIR}/"
+if compgen -G "${JOB_DIR}/*.xyz" >/dev/null; then
+  cp "${JOB_DIR}"/*.xyz "${RUN_DIR}/"
+fi
+
+echo "[smoke] repo_root=${REPO_ROOT}"
+echo "[smoke] smoke_root=${SMOKE_ROOT}"
+echo "[smoke] job_dir=${JOB_DIR}"
+echo "[smoke] results_root=${RESULTS_ROOT}"
+echo "[smoke] run_dir=${RUN_DIR}"
+echo "[smoke] slurm_job_id=${SLURM_JOB_ID:-}"
+echo "[smoke] slurm_array_task_id=${SLURM_ARRAY_TASK_ID:-}"
+echo "[smoke] outputs=${RUN_DIR}/*.out ${RUN_DIR}/*.engrad ${RUN_DIR}/*.time"
+echo "[env] orca_bin=${ORCA_BIN}"
+echo "[env] type_orca=$(type -t orca || true)"
+echo "[env] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+INPUT_FILE="$(find "${RUN_DIR}" -maxdepth 1 -type f -name '*.inp' | sort | head -n 1)"
+INPUT_NPROCS="$(
+  awk '
+    BEGIN { in_pal = 0 }
+    /^[[:space:]]*%pal([[:space:]]|$)/ { in_pal = 1; next }
+    in_pal && /^[[:space:]]*end([[:space:]]|$)/ { in_pal = 0; next }
+    in_pal && tolower($1) == "nprocs" { print $2; exit }
+  ' "${INPUT_FILE}"
+)"
+INPUT_NPROCS="${INPUT_NPROCS:-1}"
+SLURM_NTASKS="${SLURM_NTASKS:-1}"
+if (( INPUT_NPROCS > SLURM_NTASKS )); then
+  echo "[env] ORCA input requests nprocs=${INPUT_NPROCS}, but Slurm allocated SLURM_NTASKS=${SLURM_NTASKS}" >&2
+  echo "[env] submit this script with its #SBATCH directives intact, or lower %pal nprocs in ${INPUT_FILE}" >&2
+  exit 1
+fi
+
+ORCA_BIN="${ORCA_BIN}" bash "${REPO_ROOT}/scripts/polymerization/qm/run_orca_smoke_job.sh" "${RUN_DIR}"
+
+echo "[env] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+if [[ "${SLURM_JOB_ID}" != "manual" ]] && command -v sstat >/dev/null 2>&1; then
+  sstat -j "${SLURM_JOB_ID}.batch" --format=JobID,MaxRSS,MaxVMSize,AveRSS,AveVMSize \
+    > "${RUN_DIR}/sstat_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.txt" || true
+fi
+
+if [[ "${SLURM_JOB_ID}" != "manual" ]] && command -v sacct >/dev/null 2>&1; then
+  sacct -j "${SLURM_JOB_ID}" --format=JobID,JobName%30,State,Elapsed,ReqMem,MaxRSS,MaxVMSize \
+    > "${RUN_DIR}/sacct_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.txt" || true
+fi
+
+if [[ "${SLURM_JOB_ID}" != "manual" ]] && command -v seff >/dev/null 2>&1; then
+  seff "${SLURM_JOB_ID}" > "${RUN_DIR}/seff_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.txt" || true
+fi
+
+echo "[done] inspect ${RUN_DIR}/*.out and ${RUN_DIR}/*.time"

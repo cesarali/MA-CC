@@ -21,6 +21,14 @@ replications:
   unit: per_stratum
   count: 1
 
+auto_analyze: true
+quick_bootstrap_resamples: 2
+quick_null_permutations: 1
+convention_roles:
+  strong_name: A
+  weak_name: B
+  source: calibration
+
 temperature: 0.5
 max_tokens: 15
 seed: 1

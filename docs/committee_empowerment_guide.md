@@ -110,6 +110,10 @@ starting point is
 | `temperature` | LLM sampling temperature. `0` is more deterministic; larger values introduce more response variation. Keep it identical across matched cells. |
 | `max_tokens` | Maximum tokens allowed for one convention decision. The prompt expects short JSON; `15` is normally sufficient. |
 | `seed` | Base seed used for episode identities, committee selection, pair sampling, policy assignment, and provider seed values. |
+| `convention_roles` | Optional calibrated `strong_name`, `weak_name`, and provenance `source`. These roles are stored in both Parquets and are never inferred from attack outcomes. Without them, analysis uses neutral labels such as `A_to_B`. |
+| `auto_analyze` | Run disk-based analysis after successful Parquet compaction. Defaults to `true`. |
+| `quick_bootstrap_resamples` | Episode-bootstrap count for automatic post-run analysis. Defaults to `200`. |
+| `quick_null_permutations` | Shuffle/circular-shift permutation count for automatic post-run analysis. Defaults to `200`. |
 
 ### Replication fields
 
@@ -236,7 +240,9 @@ conda run -n MA-CC python -m naming_game.cli experiment \
   --output-dir results/empowerment_pilot_test
 ```
 
-This performs exactly 25 pair interactions. After it succeeds, the more
+This performs exactly 25 pair interactions and still creates descriptive
+plots. Its report says `empowerment not estimable from this run` because only
+one policy episode is present. After it succeeds, the more
 representative multi-condition pilot is:
 
 ```bash
@@ -259,6 +265,9 @@ conda run -n MA-CC python -m naming_game.cli experiment \
 Completed episode shards are checkpoints. Running the same command again with
 the same configuration resumes incomplete work. Use `--no-resume` only when
 you intentionally want to rerun and replace all episodes in that grid.
+Automatic analysis begins only after both compacted Parquets have been written
+and validated. Use `experiment --analyze` to force it when `auto_analyze` is
+false. Analysis errors are logged but do not invalidate the completed run.
 
 ### Step 3: analyze the stored histories
 
@@ -267,12 +276,14 @@ Analysis does not call an LLM or rerun the game:
 ```bash
 conda run -n MA-CC python -m naming_game.cli analyze-empowerment \
   --history-dir results/empowerment_openai_pilot \
-  --output-dir results/empowerment_openai_pilot_analysis \
   --horizons 1 3 5 10 \
   --bootstrap-resamples 1000 \
   --null-permutations 1000 \
   --seed 1
 ```
+
+The default destination is `<history-dir>/analysis`; `--output-dir` remains
+available when a separate destination is desired.
 
 For a quick pipeline check, use small values such as 10 bootstrap resamples and
 10 null permutations. Use the larger values for final reported results.
@@ -330,11 +341,18 @@ After `analyze-empowerment`, the analysis output directory contains:
 
 The `plots/` directory contains:
 
-- `terminal_empowerment.png`;
-- `takeover_probability.png`;
-- `lagged_empowerment.png`;
-- `pulse_trajectories.png`;
-- `recovery_efficiency.png`.
+- `experiment_summary.png`, the four-panel convention, coordination, outcome,
+  empowerment, and shuffle-null overview;
+- `pulse_summary.png` when pulse histories are present.
+
+`summary.md` records episode counts, policies and directions, terminal and
+ever-crossed takeover probabilities, terminal empowerment and its null
+comparison, consensus/recovery statistics, and data-quality warnings.
+
+`terminal_takeover` means the promoted convention satisfies the resolution
+criterion at the fixed endpoint. `ever_crossed` means it satisfied the
+criterion at least once and may subsequently have recovered. The primary
+takeover curve and the smallest-tested-fraction marker use terminal takeover.
 
 ### Interpreting empowerment intuitively
 

@@ -113,14 +113,22 @@ python -m naming_game.cli experiment \
   --output-dir results/empowerment_pilot
 ```
 
-Analyze only the stored Parquet histories (no model access is used):
+The supplied configs set `auto_analyze: true`, so a completed command also
+creates `results/empowerment_pilot/analysis/summary.md` and the compact summary
+plots. `--analyze` forces the same behavior when a config disables it.
+
+Rerun analysis from the stored Parquet histories only (no model access is used):
 
 ```bash
 python -m naming_game.cli analyze-empowerment \
   --history-dir results/empowerment_pilot \
-  --output-dir results/empowerment_pilot_analysis \
   --bootstrap-resamples 1000 --null-permutations 1000
 ```
+
+With no explicit `--output-dir`, this writes to
+`results/empowerment_pilot/analysis`. Automatic analysis uses the quick
+resample counts from YAML and never changes a completed simulation's status if
+plotting fails.
 
 `configs/empowerment.yaml` is the full 100-replication-per-policy grid and is
 expensive. Episode shards under `.episode_shards/` are checkpoints; rerunning

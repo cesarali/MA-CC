@@ -8,6 +8,13 @@ regimes: [neutral, consensus_attack, pulse]
 replications:
   unit: per_policy
   count: 100
+auto_analyze: true
+quick_bootstrap_resamples: 200
+quick_null_permutations: 200
+convention_roles:
+  strong_name: A
+  weak_name: B
+  source: calibration
 temperature: 0.5
 max_tokens: 15
 seed: 1

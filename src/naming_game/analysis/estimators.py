@@ -57,6 +57,15 @@ def mutual_information(
     for left, right in zip(x, y, strict=True):
         if left in x_index and right in y_index:
             counts[x_index[left], y_index[right]] += 1
+    return mutual_information_from_counts(counts)
+
+
+def mutual_information_from_counts(counts: np.ndarray) -> Estimate:
+    """Estimate MI from a complete X-by-Y contingency table."""
+
+    counts = np.asarray(counts, dtype=float)
+    if counts.ndim != 2 or np.any(counts < 0):
+        raise ValueError("MI counts must be a nonnegative two-dimensional table.")
     if counts.sum() == 0:
         return Estimate(math.nan, math.nan, math.nan, 0)
     return Estimate(
@@ -98,6 +107,15 @@ def conditional_mutual_information(
     for left, future, current in zip(x, y, z, strict=True):
         if left in xi and future in yi and current in zi:
             counts[xi[left], zi[current], yi[future]] += 1
+    return conditional_mutual_information_from_counts(counts)
+
+
+def conditional_mutual_information_from_counts(counts: np.ndarray) -> Estimate:
+    """Estimate conditional MI from a complete X-by-Z-by-Y table."""
+
+    counts = np.asarray(counts, dtype=float)
+    if counts.ndim != 3 or np.any(counts < 0):
+        raise ValueError("Conditional-MI counts must be a nonnegative three-dimensional table.")
     if counts.sum() == 0:
         return Estimate(math.nan, math.nan, math.nan, 0)
     return Estimate(
@@ -114,4 +132,11 @@ def complete_cells(*levels: Iterable[Hashable]) -> tuple[tuple[Hashable, ...], .
     return tuple(product(*(tuple(level) for level in levels)))
 
 
-__all__ = ["Estimate", "complete_cells", "conditional_mutual_information", "mutual_information"]
+__all__ = [
+    "Estimate",
+    "complete_cells",
+    "conditional_mutual_information",
+    "conditional_mutual_information_from_counts",
+    "mutual_information",
+    "mutual_information_from_counts",
+]
