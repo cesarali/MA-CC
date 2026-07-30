@@ -42,14 +42,18 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--reasoning-fraction", type=float, default=0.0)
     run.add_argument("--reasoning-task", type=Path)
     run.add_argument("--seed", type=int, default=1)
-    run.add_argument("--concurrency", type=int, default=20)
+    run.add_argument("--concurrency", type=int)
     run.add_argument("--temperature", type=float, default=0.0)
     run.add_argument("--max-tokens-speaker", type=int, default=20)
     run.add_argument("--max-tokens-listener", type=int, default=20)
     run.add_argument("--timeout-seconds", type=float, default=60.0)
     run.add_argument("--max-retries", type=int, default=2)
-    run.add_argument("--model", default="gwdg/qwen3-30b-a3b-instruct-2507")
+    run.add_argument("--model")
     run.add_argument("--mock", action="store_true")
+    run.add_argument("--provider", choices=("university", "openai", "gemma_local"), default="university")
+    run.add_argument("--local-dtype", choices=("bfloat16", "float16", "float32"), default="bfloat16")
+    run.add_argument("--local-device-map", choices=("auto", "cpu"), default="auto")
+    run.add_argument("--allow-cpu", action="store_true", help="Explicitly permit very slow local CPU loading.")
     run.add_argument("--mock-latency", type=float, default=0.001)
     run.add_argument("--output-dir", type=Path, default=Path("results"))
 
@@ -102,6 +106,14 @@ def _parser() -> argparse.ArgumentParser:
 
 
 async def _run_one(args: argparse.Namespace) -> int:
+    if args.concurrency is None:
+        args.concurrency = 1 if args.provider == "gemma_local" else 20
+    if args.model is None:
+        args.model = "google/gemma-4-12B-it" if args.provider == "gemma_local" else "gwdg/qwen3-30b-a3b-instruct-2507"
+    if args.mock and args.provider != "university":
+        raise ConfigurationError("--mock cannot be combined with an explicit non-university --provider.")
+    if args.provider == "gemma_local" and args.concurrency != 1:
+        raise ConfigurationError("gemma_local requires --concurrency 1.")
     mode = UpdateMode(args.update_mode)
     pairs_per_round = args.num_agents // 2
     if mode == UpdateMode.SEQUENTIAL:
@@ -146,12 +158,7 @@ async def _run_one(args: argparse.Namespace) -> int:
             seed=args.seed,
         )
         if args.mock
-        else AsyncLLMClient(
-            model=args.model,
-            concurrency=args.concurrency,
-            timeout_seconds=args.timeout_seconds,
-            max_retries=args.max_retries,
-        )
+        else _run_provider(args)
     )
     try:
         completed = await run_single(
@@ -164,6 +171,20 @@ async def _run_one(args: argparse.Namespace) -> int:
         client.close()
     print(json.dumps(completed.summary.to_dict(), indent=2, sort_keys=True))
     return 0
+
+
+def _run_provider(args: argparse.Namespace):
+    if args.provider == "gemma_local":
+        from .gemma_local_client import GemmaLocalAsyncLLMClient
+        return GemmaLocalAsyncLLMClient(model=args.model, dtype=args.local_dtype,
+                                        device_map=args.local_device_map, allow_cpu=args.allow_cpu)
+    client_type = OpenAIAsyncLLMClient if args.provider == "openai" else AsyncLLMClient
+    return client_type(
+            model=args.model,
+            concurrency=args.concurrency,
+            timeout_seconds=args.timeout_seconds,
+            max_retries=args.max_retries,
+        )
 
 
 async def _run_benchmark(args: argparse.Namespace) -> int:
@@ -246,6 +267,12 @@ def _provider_for(config, provider: str, model: str):
         return AsyncLLMClient(**common)
     if provider == "openai":
         return OpenAIAsyncLLMClient(**common)
+    if provider == "gemma_local":
+        if config.request_concurrency != 1:
+            raise ConfigurationError("gemma_local requires request_concurrency: 1.")
+        from .gemma_local_client import GemmaLocalAsyncLLMClient
+
+        return GemmaLocalAsyncLLMClient(model=model)
     raise ConfigurationError(f"Unknown provider: {provider!r}.")
 
 

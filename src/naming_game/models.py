@@ -132,6 +132,12 @@ class InteractionResult:
     listener_validation_error: str | None
     reason: str | None
     pair_wall_seconds: float
+    decision_method: str = "generated"
+    allowed_choices: tuple[str, ...] | None = None
+    choice_log_likelihoods: dict[str, float] | None = None
+    choice_probabilities: dict[str, float] | None = None
+    selected_choice_probability: float | None = None
+    choice_entropy: float | None = None
 
     def to_log_dict(self) -> dict[str, Any]:
         return {
@@ -165,6 +171,12 @@ class InteractionResult:
             "listener_status": self.listener_response.status_code,
             "speaker_token_usage": asdict(self.speaker_response.usage),
             "listener_token_usage": asdict(self.listener_response.usage),
+            "decision_method": self.decision_method,
+            "allowed_choices": self.allowed_choices,
+            "choice_log_likelihoods": self.choice_log_likelihoods,
+            "choice_probabilities": self.choice_probabilities,
+            "selected_choice_probability": self.selected_choice_probability,
+            "choice_entropy": self.choice_entropy,
         }
 
 
