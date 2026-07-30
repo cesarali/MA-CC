@@ -12,6 +12,7 @@ import inspect
 import logging
 import math
 import os
+import random
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -21,7 +22,8 @@ from typing import Any, Protocol
 from dotenv import load_dotenv
 
 from .api_client import _RequestStats
-from .local_model_types import ChoiceScore, ConstrainedLLMResponse
+from .local_model_types import (ChoiceScore, ConstrainedDecisionResponse,
+                                ConstrainedLLMResponse)
 from .models import ConfigurationError, LLMResponse, TokenUsage
 
 MODEL_ID = "google/gemma-4-12B-it"
@@ -154,6 +156,78 @@ class GemmaLocalAsyncLLMClient:
             latency = time.perf_counter() - started
             response = ConstrainedLLMResponse(scores[selected].choice, scores, self.model, latency, usage, temperature)
             self._stats.success(latency, usage); return response
+        except BaseException:
+            self._stats.failure(); raise
+
+    async def complete_decision(
+        self, messages: list[dict[str, str]], *, choices: Sequence[str],
+        output_format: str, choice_temperature: float = 1.0,
+        selection_policy: str = "argmax", generation_temperature: float = 0.0,
+        max_reason_tokens: int = 32, seed: int | None = None,
+    ) -> ConstrainedDecisionResponse:
+        """Score, select, and optionally explain in one logical request.
+
+        ``usage`` reports scoring prompt work plus candidate and generated reason
+        tokens; it is not a claim that every counted token was autoregressively emitted.
+        """
+        _validate_messages(messages)
+        choice_tuple = tuple(choices)
+        if output_format not in {"choice_reason", "choice_only"}:
+            raise ValueError("output_format must be choice_reason or choice_only.")
+        if selection_policy not in {"argmax", "sample"}:
+            raise ValueError("selection_policy must be argmax or sample.")
+        if not choice_tuple or any(not isinstance(c, str) or not c.strip() for c in choice_tuple):
+            raise ValueError("choices must contain non-blank strings.")
+        if len(set(choice_tuple)) != len(choice_tuple):
+            raise ValueError("choices must not contain duplicates.")
+        if not math.isfinite(choice_temperature) or choice_temperature <= 0:
+            raise ValueError("choice_temperature must be finite and positive.")
+        if not math.isfinite(generation_temperature) or generation_temperature < 0:
+            raise ValueError("generation_temperature must be finite and non-negative.")
+        if max_reason_tokens < 1:
+            raise ValueError("max_reason_tokens must be positive.")
+        self._stats.attempt(); started = time.perf_counter()
+        try:
+            async with self._semaphore:
+                runtime = await self._get_runtime()
+                scored = await asyncio.to_thread(runtime.score, messages, choice_tuple)
+                if len(scored.token_ids) != len(choice_tuple) or len(scored.log_likelihoods) != len(choice_tuple):
+                    raise RuntimeError("Runtime returned the wrong number of candidate scores.")
+                if any(not ids for ids in scored.token_ids):
+                    raise ValueError("A choice tokenized to an empty sequence.")
+                if any(not math.isfinite(v) for v in scored.log_likelihoods):
+                    raise FloatingPointError("Runtime returned a non-finite sequence score.")
+                scaled = [v / choice_temperature for v in scored.log_likelihoods]
+                peak = max(scaled); weights = [math.exp(v - peak) for v in scaled]
+                total = math.fsum(weights); probabilities = [w / total for w in weights]
+                scores = tuple(ChoiceScore(c, tuple(ids), ll, p) for c, ids, ll, p in
+                    zip(choice_tuple, scored.token_ids, scored.log_likelihoods, probabilities))
+                if selection_policy == "argmax":
+                    selected_index = max(range(len(scores)), key=lambda i: scores[i].probability)
+                else:
+                    selected_index = random.Random(seed).choices(range(len(scores)), weights=probabilities, k=1)[0]
+                selected = scores[selected_index].choice
+                reason = None; reason_valid = None; reason_tokens = 0
+                if output_format == "choice_reason":
+                    reason_messages = messages + [{"role": "assistant", "content": f"{selected}\nReason: "}]
+                    generated = await asyncio.to_thread(runtime.generate, reason_messages,
+                        temperature=generation_temperature, max_tokens=max_reason_tokens, seed=seed)
+                    reason = generated.content.strip() or None
+                    reason_valid = reason is not None
+                    reason_tokens = generated.completion_tokens
+                    content = f"{selected}\nReason: {reason or ''}"
+                else:
+                    content = selected
+            candidate_tokens = sum(len(ids) for ids in scored.token_ids)
+            prompt_work = scored.prompt_tokens * len(choice_tuple)
+            usage = TokenUsage(prompt_work, candidate_tokens + reason_tokens,
+                               prompt_work + candidate_tokens + reason_tokens)
+            latency = time.perf_counter() - started
+            response = ConstrainedDecisionResponse(selected, scores, content, reason,
+                reason_valid, output_format, self.model, latency, usage,
+                choice_temperature, selection_policy)
+            self._stats.success(latency, usage)
+            return response
         except BaseException:
             self._stats.failure(); raise
 

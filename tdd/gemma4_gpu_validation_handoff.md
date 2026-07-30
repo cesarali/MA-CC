@@ -1,58 +1,58 @@
 # Gemma 4 GPU validation handoff
 
-CPU implementation is complete and live checkpoint validation is pending. The commit
-contains the dependency-free API types, lazy client/runtime, CLI/provider metadata,
-fake tests, and `scripts/gemma4_api_test/` diagnostic. Begin from a clean worktree.
+The CPU implementation removed the JSON-prompt/bare-choice mismatch. The three modes
+are `json_reason` (legacy/default), `choice_reason` (action then reason in one public
+call), and `choice_only` (bare action, with no rationale generation). Deterministic fake
+tests and the full CPU suite pass. **Real assistant-boundary tokenization, logits,
+combined generation, and CUDA behavior remain unvalidated.** Begin with a clean tree.
 
-## Host assumptions
-
-Use the same environment as `scripts/gemma4_logits_test/README.md`: accepted access to
-`google/gemma-4-12B-it`, repository `.env` containing `HF_HOME` on high-capacity
-storage, compatible Transformers (5.5+), PyTorch/torchvision/accelerate, and an
-A100-class CUDA GPU. The known BF16 `device_map="auto"` load used about 22.3 GiB for
-weights and 22.4 GiB peak. Do not print tokens or credentials.
-
-## Commands
+## Before loading a model
 
 ```bash
-pytest tests/test_constrained_client_contract.py tests/test_gemma_local_client_unit.py tests/test_gemma_language_game_integration.py
+pytest tests/test_convention_output_formats.py tests/test_constrained_client_contract.py tests/test_gemma_local_client_unit.py tests/test_gemma_language_game_integration.py tests/test_empowerment_experiment.py
 pytest
-python scripts/gemma4_api_test/test_internal_api.py
-python -m naming_game.cli run --provider gemma_local --model google/gemma-4-12B-it --update-mode sequential --num-agents 2 --num-interactions 2 --reasoning-fraction 0 --temperature 0 --concurrency 1 --seed 7 --output-dir results/gemma4_live_tiny
+python -c "import naming_game; import naming_game.gemma_local_client"
+python -m naming_game.cli --help
 git status --short
 ```
 
-Compare observations to `scripts/gemma4_logits_test/test_gemma4_logits.py`; do not
-rewrite its known-good behavior unnecessarily. Do not redesign the public API for a
-narrow compatibility issue. Narrow fixes supported by observed behavior are allowed;
-report material API or experiment-semantics changes instead.
+If the first test file is absent on the branch, run the remaining focused files. CPU
+tests use injected runtimes only; they cannot establish whether the boundary rendering
+is `"A"`, `" A"`, or something else.
 
-## Questions and observations to record
+## Live GPU sequence
 
-- Is `"A"` or `" A"` the correct continuation at the real answer boundary?
-- Does separate candidate encoding equal contextual continuation tokenization?
-- Which processor fields beyond `input_ids`/`attention_mask` need extension?
-- Record tokenizer and model vocabulary sizes (the reference observed 262,144).
-- Validate one- and multi-token alignment, prompt exclusion, and exact token counts.
-- Validate seeded sampling and whether `generator=` is accepted by this version.
-- Record device map, input device, actual dtype, generated-token slicing/stops.
-- Confirm a second request reuses the runtime and record startup/post-request/peak CUDA memory.
+Use the known-good environment facts in `scripts/gemma4_logits_test/README.md` (A100,
+BF16, `device_map=auto`, Transformers 5.5+, roughly 22.3 GiB weights), and first run:
 
-Expected: focused and full tests pass; A wins the diagnostic; probabilities are finite
-and normalized; ordinary output is non-empty; runtime identity is stable. Record:
-`transformers=___`, `torch=___`, `vocab=___`, `device=___`, `dtype=___`,
-`prompt/completion=___`, `allocated/peak=___`, `boundary IDs=___`.
+```bash
+python scripts/gemma4_logits_test/test_gemma4_logits.py
+python scripts/gemma4_api_test/test_internal_api.py
+python -m naming_game.cli empowerment --config configs/empowerment_gemma4_gpu_smoke.yaml --output-dir results/gemma4_empowerment_smoke
+```
 
-## Failure triage
+The public API diagnostic must verify `choice_only` returns exact content, performs no
+rationale generation, and increments attempts/successes once. It must then verify
+`choice_reason` returns one action-first response, normalized probabilities, a non-empty
+reason, and exactly one additional logical request. Inspect raw token IDs for every
+displayed choice at the real assistant boundary. Confirm the A/B single-token fast path
+and teacher-forced multi-token fallback using at least one multi-token choice.
 
-Authentication/gating means model terms or host credentials/cache require attention;
-do not copy credentials. A missing cache must be handled according to host policy.
-For Transformers signature or processor-field errors, compare the reference script
-and make the smallest version-supported correction. For torchvision import errors,
-repair the GPU environment rather than adding eager imports. For missing CUDA stop;
-do not fake success with CPU. For OOM, verify no competing process, BF16, and the
-device map before changing code.
+Also verify first-in-displayed-order argmax ties and repeatable seeded categorical
+sampling (including a seed that changes the selection without changing probabilities).
+Confirm reason generation never changes the authoritative selected action. Record
+tokenizer/model vocabulary, boundary token IDs/renderings, dtype, device map, input
+device, runtime reuse, prompt/generated usage, CUDA allocated/peak memory, stop behavior,
+and safe `close()` behavior.
 
-After any fix rerun the complete regression suite. Finally inspect `git status --short`
-and prove no `.env`, credential/token, cache, tokenizer, config, snapshot, or model
-weight artifacts were added; remove generated live outputs before committing.
+The tiny empowerment run—not merely the basic Naming Game—must be inspected. Check its
+primary Parquet rows for both players' output format/method, reason validity, displayed
+allowed-choice order, log likelihoods, normalized probabilities, selected probability,
+and entropy. Reconstruct sampled audit prompts from pre-interaction memory and confirm
+their actual mode and order.
+
+Make only narrow tokenizer/generation compatibility fixes supported by observations.
+Report rather than silently introducing material output-semantics, selection-policy, or
+scientific-fingerprint changes. After fixes run `pytest` again. Finally prove that no
+`.env`, credential/token, cache, tokenizer, configuration snapshot, model weights, or
+generated live results enter Git; remove live output before committing.

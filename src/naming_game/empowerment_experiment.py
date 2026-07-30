@@ -31,8 +31,8 @@ from .naming_convention_game import (
     build_convention_messages,
 )
 
-SCHEMA_VERSION = 2
-PROMPT_VERSION = "convention-answer-first-v1"
+SCHEMA_VERSION = 3
+PROMPT_VERSION = "convention-answer-first-v2"
 Regime = Literal["neutral", "consensus_attack", "pulse"]
 LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +85,9 @@ class EmpowermentExperimentConfig:
     convention_roles: ConventionRolesConfig | None = None
     require_live_provider: bool = False
     temperature: float = 0.5
+    decision_output_format: Literal["json_reason", "choice_reason", "choice_only"] = "json_reason"
+    choice_selection_policy: Literal["argmax", "sample"] = "argmax"
+    choice_temperature: float = 1.0
     max_tokens: int = 15
     seed: int = 1
     window_interactions: int | None = None
@@ -134,6 +137,12 @@ class EmpowermentExperimentConfig:
             raise ConfigurationError("auto_analyze must be true or false.")
         if not isinstance(self.require_live_provider, bool):
             raise ConfigurationError("require_live_provider must be true or false.")
+        if self.decision_output_format not in {"json_reason", "choice_reason", "choice_only"}:
+            raise ConfigurationError("Unknown decision_output_format.")
+        if self.choice_selection_policy not in {"argmax", "sample"}:
+            raise ConfigurationError("Unknown choice_selection_policy.")
+        if not math.isfinite(self.choice_temperature) or self.choice_temperature <= 0:
+            raise ConfigurationError("choice_temperature must be finite and positive.")
         if self.convention_roles is not None and {
             self.convention_roles.strong_name,
             self.convention_roles.weak_name,
@@ -315,6 +324,9 @@ def _prompt_hash(config: EmpowermentExperimentConfig) -> str:
         "names": config.names,
         "memory_length": config.memory_length,
         "temperature": config.temperature,
+        "decision_output_format": config.decision_output_format,
+        "choice_selection_policy": config.choice_selection_policy,
+        "choice_temperature": config.choice_temperature,
         "max_tokens": config.max_tokens,
         "success_reward": 100,
         "failure_payoff": -50,
@@ -360,6 +372,9 @@ def _experiment_fingerprint(config: EmpowermentExperimentConfig) -> str:
         "memory_length": config.memory_length,
         "max_population_rounds": config.max_population_rounds,
         "temperature": config.temperature,
+        "decision_output_format": config.decision_output_format,
+        "choice_selection_policy": config.choice_selection_policy,
+        "choice_temperature": config.choice_temperature,
         "max_tokens": config.max_tokens,
         "seed": config.seed,
         "window_interactions": config.rolling_window,
@@ -525,6 +540,9 @@ async def run_episode(
             memory_size=config.memory_length,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
+            decision_output_format=config.decision_output_format,
+            choice_selection_policy=config.choice_selection_policy,
+            choice_temperature=config.choice_temperature,
         ),
         seed=spec.seed,
         intervention=schedule,
@@ -557,10 +575,10 @@ async def run_episode(
                 messages = build_convention_messages(agent=game.agents[agent_id], action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50)
                 # Reconstruct against the immutable pre-interaction memory, not updated state.
                 temp_agent = game.agents[agent_id].__class__(agent_id=agent_id, history=list(before))
-                messages = build_convention_messages(agent=temp_agent, action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50)
+                messages = build_convention_messages(agent=temp_agent, action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50, output_format=config.decision_output_format)
                 response = decision.response
                 cfg = audit_logger.config.audit_traces
-                audit_logger.append_trace({"timestamp": utc_timestamp(), "run_id": audit_logger.run_id, "episode_id": spec.episode_id, "population_round": population_round, "interaction_index": record.interaction_index, "call_id": call_id, "attempt_number": attempt, "agent_id": agent_id, "partner_id": partner_id, "provider": provider, "requested_model": client.model, "returned_model": response.model, "committee_policy": spec.committee_policy, "forced_action": None, "system_message": messages[0]["content"] if cfg.include_request else None, "user_message": messages[1]["content"] if cfg.include_request else None, "messages": messages if cfg.include_request else None, "model_parameters": {"temperature": config.temperature, "seed": spec.seed * 1_000_000 + record.interaction_index * 2 + slot, "max_tokens": config.max_tokens}, "agent_memory_before": memory_dict(before) if cfg.include_agent_memory else None, "raw_provider_response": (response.raw_response if response.raw_response is not None else response.content) if cfg.include_raw_response else None, "parsed_model_output": {"action": decision.action, "reason": decision.reason} if cfg.include_parsed_response else None, "selected_convention": decision.action, "partner_output": partner_output, "interaction_success": record.success, "payoff": record.payoff, "agent_memory_after": memory_dict(game.agents[agent_id].history[-config.memory_length:]) if cfg.include_agent_memory else None, "status": "success", "latency_seconds": response.latency_seconds, "token_usage": asdict(response.usage), "finish_reason": response.finish_reason, "retries": response.retries})
+                audit_logger.append_trace({"timestamp": utc_timestamp(), "run_id": audit_logger.run_id, "episode_id": spec.episode_id, "population_round": population_round, "interaction_index": record.interaction_index, "call_id": call_id, "attempt_number": attempt, "agent_id": agent_id, "partner_id": partner_id, "provider": provider, "requested_model": client.model, "returned_model": response.model, "committee_policy": spec.committee_policy, "forced_action": None, "system_message": messages[0]["content"] if cfg.include_request else None, "user_message": messages[1]["content"] if cfg.include_request else None, "messages": messages if cfg.include_request else None, "model_parameters": {"temperature": config.temperature, "choice_temperature": config.choice_temperature, "choice_selection_policy": config.choice_selection_policy, "decision_output_format": config.decision_output_format, "seed": spec.seed * 1_000_000 + record.interaction_index * 2 + slot, "max_tokens": config.max_tokens}, "agent_memory_before": memory_dict(before) if cfg.include_agent_memory else None, "raw_provider_response": (response.raw_response if response.raw_response is not None else response.content) if cfg.include_raw_response else None, "parsed_model_output": {"action": decision.action, "reason": decision.reason, "reason_valid": decision.reason_valid, "output_format": decision.output_format, "allowed_choices": list(decision.action_order), "choice_scores": [asdict(score) for score in decision.constrained_scores] if decision.constrained_scores else None} if cfg.include_parsed_response else None, "selected_convention": decision.action, "partner_output": partner_output, "interaction_success": record.success, "payoff": record.payoff, "agent_memory_after": memory_dict(game.agents[agent_id].history[-config.memory_length:]) if cfg.include_agent_memory else None, "status": "success", "latency_seconds": response.latency_seconds, "token_usage": asdict(response.usage), "finish_reason": response.finish_reason, "retries": response.retries})
 
     result = await game.run(
         config.max_interactions,
@@ -579,6 +597,23 @@ async def run_episode(
     actual_model = actual_models[-1] if actual_models else client.model
     rows: list[dict[str, Any]] = []
     direction_metadata = _direction_metadata(spec, config)
+    def persisted_decision(decision: Any, suffix: str) -> dict[str, Any]:
+        scores = decision.constrained_scores
+        probabilities = ({score.choice: score.probability for score in scores} if scores else None)
+        log_likelihoods = ({score.choice: score.log_likelihood for score in scores} if scores else None)
+        entropy = (-math.fsum(p * math.log(p) for p in probabilities.values() if p > 0)
+                   if probabilities else None)
+        return {
+            f"decision_output_format_{suffix}": decision.output_format,
+            f"decision_method_{suffix}": decision.decision_method if not (decision.forced or decision.committed) else ("forced" if decision.forced else "committed"),
+            f"reason_{suffix}": None if (decision.forced or decision.committed) else decision.reason,
+            f"reason_valid_{suffix}": None if (decision.forced or decision.committed) else decision.reason_valid,
+            f"allowed_choices_{suffix}": json.dumps(list(decision.action_order), ensure_ascii=False, separators=(",", ":")) if scores else None,
+            f"choice_log_likelihoods_{suffix}": json.dumps(log_likelihoods, ensure_ascii=False, separators=(",", ":")) if log_likelihoods else None,
+            f"choice_probabilities_{suffix}": json.dumps(probabilities, ensure_ascii=False, separators=(",", ":")) if probabilities else None,
+            f"selected_choice_probability_{suffix}": probabilities.get(decision.action) if probabilities else None,
+            f"choice_entropy_{suffix}": entropy,
+        }
     for record in result.interactions:
         rows.append(
             {
@@ -615,6 +650,8 @@ async def run_episode(
                 "payoff_j": record.payoff,
                 "memory_i_before": _memory_json(record.player_1_memory_before),
                 "memory_j_before": _memory_json(record.player_2_memory_before),
+                **persisted_decision(record.player_1_decision, "i"),
+                **persisted_decision(record.player_2_decision, "j"),
             }
         )
     return derive_episode(rows, spec, config)
