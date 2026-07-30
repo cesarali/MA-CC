@@ -715,6 +715,7 @@ class NamingConventionGame:
         convergence_window: int | None = None,
         convergence_threshold: float | None = None,
         population_round_callback: Callable[[int], None] | None = None,
+        interaction_callback: Callable[[ConventionInteraction], None] | None = None,
     ) -> ConventionGameResult:
         """Run a bounded stage without ever issuing requests at import time.
 
@@ -759,6 +760,8 @@ class NamingConventionGame:
 
         for _ in range(max_interactions):
             stage_records.append(await self.play_interaction())
+            if interaction_callback is not None:
+                interaction_callback(stage_records[-1])
             if (
                 population_round_callback is not None
                 and len(stage_records) % len(self.agents) == 0

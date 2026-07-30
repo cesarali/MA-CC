@@ -50,3 +50,17 @@ request_concurrency: 2
 episode_concurrency: 1
 timeout_seconds: 60
 max_retries: 2
+
+logging:
+  enabled: true
+  level: INFO
+  api_status_log: true
+  audit_traces:
+    enabled: true
+    inspect_every_percent: 10
+    examples_per_selected_round: 3
+    seed: 1
+    include_request: true
+    include_raw_response: true
+    include_parsed_response: true
+    include_agent_memory: true
