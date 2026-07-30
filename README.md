@@ -103,6 +103,10 @@ Agent memory, temporary interventions, stored observations, derived states, and
 statistical analysis remain separate layers. Run the small configuration with
 the deterministic provider first:
 
+For the local GPU-backed Gemma 4 API, direct Python usage, diagnostics, and
+small-game commands, see
+[`docs/gemma4_local_api.md`](docs/gemma4_local_api.md).
+
 For the game intuition, complete configuration reference, provider selection,
 commands, and result-file guide, see
 [`docs/committee_empowerment_guide.md`](docs/committee_empowerment_guide.md).
