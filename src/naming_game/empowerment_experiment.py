@@ -21,12 +21,14 @@ import pandas as pd
 import yaml
 
 from .api_client import LLMClient
+from .audit_logging import AuditTraceConfig, ExperimentAuditLogger, LoggingConfig, memory_dict, utc_timestamp
 from .models import ConfigurationError
 from .naming_convention_game import (
     ConventionGameConfig,
     ConventionHistoryEntry,
     ConventionIntervention,
     NamingConventionGame,
+    build_convention_messages,
 )
 
 SCHEMA_VERSION = 2
@@ -96,6 +98,7 @@ class EmpowermentExperimentConfig:
     episode_concurrency: int = 1
     timeout_seconds: float = 60.0
     max_retries: int = 2
+    logging: LoggingConfig = LoggingConfig()
 
     def __post_init__(self) -> None:
         if self.population_size < 2:
@@ -204,6 +207,16 @@ def load_experiment_config(path: str | Path) -> EmpowermentExperimentConfig:
         values["convention_roles"] = (
             ConventionRolesConfig(**roles_raw) if roles_raw is not None else None
         )
+        logging_raw = raw.get("logging", {})
+        if not isinstance(logging_raw, dict):
+            raise ConfigurationError("logging must be a mapping.")
+        audit_raw = logging_raw.get("audit_traces", {})
+        if not isinstance(audit_raw, dict):
+            raise ConfigurationError("logging.audit_traces must be a mapping.")
+        values["logging"] = LoggingConfig(
+            **{k: v for k, v in logging_raw.items() if k != "audit_traces"},
+            audit_traces=AuditTraceConfig(**audit_raw),
+        )
         return EmpowermentExperimentConfig(**values)
     except (TypeError, ValueError) as exc:
         raise ConfigurationError("Experiment configuration has invalid fields.") from exc
@@ -289,6 +302,11 @@ def _schedule_for(spec: EpisodeSpec, config: EmpowermentExperimentConfig) -> Com
 
 def _memory_json(memory: Sequence[ConventionHistoryEntry]) -> str:
     return json.dumps([asdict(entry) for entry in memory], sort_keys=True, separators=(",", ":"))
+
+
+def _status_row(logger: ExperimentAuditLogger, spec: EpisodeSpec, record: Any, agent_id: int, partner_id: int, call_id: str, attempt: int, provider: str, requested_model: str, response: Any, status: str, error_type: str | None, error_message: str | None) -> dict[str, Any]:
+    finished = utc_timestamp()
+    return {"timestamp": finished, "run_id": logger.run_id, "episode_id": spec.episode_id, "population_round": math.ceil(record.interaction_index / logger.population_size), "interaction_index": record.interaction_index, "call_id": call_id, "attempt_number": attempt, "agent_id": agent_id, "partner_id": partner_id, "provider": provider, "requested_model": requested_model, "returned_model": response.model, "committee_policy": spec.committee_policy, "forced_action": None, "request_started": None, "request_finished": finished, "status": status, "http_status": response.status_code, "latency_seconds": response.latency_seconds, "token_usage": asdict(response.usage), "finish_reason": response.finish_reason, "error_type": error_type, "error_message": error_message}
 
 
 def _prompt_hash(config: EmpowermentExperimentConfig) -> str:
@@ -496,6 +514,7 @@ async def run_episode(
     client: LLMClient,
     *,
     population_round_callback: Callable[[int], None] | None = None,
+    audit_logger: ExperimentAuditLogger | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     schedule = _schedule_for(spec, config)
     game = NamingConventionGame(
@@ -513,10 +532,41 @@ async def run_episode(
     )
     if spec.incumbent is not None:
         game.seed_consensus_history(spec.incumbent)
+    def log_interaction(record: Any) -> None:
+        population_round = math.ceil(record.interaction_index / config.population_size)
+        provider = getattr(client, "provider_name", client.__class__.__name__)
+        players = ((record.player_1_id, record.player_2_id, record.player_1_decision, record.player_1_memory_before, 0, record.player_2_action), (record.player_2_id, record.player_1_id, record.player_2_decision, record.player_2_memory_before, 1, record.player_1_action))
+        for agent_id, partner_id, decision, before, slot, partner_output in players:
+            call_id = f"{spec.episode_id}:{record.interaction_index}:{agent_id}"
+            responses = decision.responses
+            if not responses:
+                status = "forced_no_api_call" if decision.forced or decision.committed else "skipped"
+                audit_logger and audit_logger.append_status({"timestamp": utc_timestamp(), "run_id": audit_logger.run_id, "episode_id": spec.episode_id, "population_round": population_round, "interaction_index": record.interaction_index, "call_id": call_id, "attempt_number": 0, "agent_id": agent_id, "partner_id": partner_id, "provider": provider, "requested_model": client.model, "returned_model": None, "committee_policy": spec.committee_policy, "forced_action": decision.action, "request_started": None, "request_finished": None, "status": status, "http_status": None, "latency_seconds": 0.0, "token_usage": None, "finish_reason": None, "error_type": None, "error_message": None})
+                continue
+            attempt = 0
+            for validation_response in responses:
+                for retry in range(validation_response.retries):
+                    attempt += 1
+                    audit_logger and audit_logger.append_status(_status_row(audit_logger, spec, record, agent_id, partner_id, call_id, attempt, provider, client.model, validation_response, "retry", "ProviderRetry", "Transient provider failure"))
+                attempt += 1
+                final_status = "success" if validation_response is decision.response else "retry"
+                error_type = None if final_status == "success" else "InvalidConventionResponse"
+                error_message = None if final_status == "success" else "Response parsing failed; requesting a replacement."
+                audit_logger and audit_logger.append_status(_status_row(audit_logger, spec, record, agent_id, partner_id, call_id, attempt, provider, client.model, validation_response, final_status, error_type, error_message))
+            if audit_logger and audit_logger.selected(spec.episode_id, population_round, record.interaction_index, slot):
+                messages = build_convention_messages(agent=game.agents[agent_id], action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50)
+                # Reconstruct against the immutable pre-interaction memory, not updated state.
+                temp_agent = game.agents[agent_id].__class__(agent_id=agent_id, history=list(before))
+                messages = build_convention_messages(agent=temp_agent, action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50)
+                response = decision.response
+                cfg = audit_logger.config.audit_traces
+                audit_logger.append_trace({"timestamp": utc_timestamp(), "run_id": audit_logger.run_id, "episode_id": spec.episode_id, "population_round": population_round, "interaction_index": record.interaction_index, "call_id": call_id, "attempt_number": attempt, "agent_id": agent_id, "partner_id": partner_id, "provider": provider, "requested_model": client.model, "returned_model": response.model, "committee_policy": spec.committee_policy, "forced_action": None, "system_message": messages[0]["content"] if cfg.include_request else None, "user_message": messages[1]["content"] if cfg.include_request else None, "messages": messages if cfg.include_request else None, "model_parameters": {"temperature": config.temperature, "seed": spec.seed * 1_000_000 + record.interaction_index * 2 + slot, "max_tokens": config.max_tokens}, "agent_memory_before": memory_dict(before) if cfg.include_agent_memory else None, "raw_provider_response": (response.raw_response if response.raw_response is not None else response.content) if cfg.include_raw_response else None, "parsed_model_output": {"action": decision.action, "reason": decision.reason} if cfg.include_parsed_response else None, "selected_convention": decision.action, "partner_output": partner_output, "interaction_success": record.success, "payoff": record.payoff, "agent_memory_after": memory_dict(game.agents[agent_id].history[-config.memory_length:]) if cfg.include_agent_memory else None, "status": "success", "latency_seconds": response.latency_seconds, "token_usage": asdict(response.usage), "finish_reason": response.finish_reason, "retries": response.retries})
+
     result = await game.run(
         config.max_interactions,
         stop_on_convergence=False,
         population_round_callback=population_round_callback,
+        interaction_callback=log_interaction if audit_logger is not None else None,
     )
     prompt_hash = _prompt_hash(config)
     provider = getattr(client, "provider_name", client.__class__.__name__)
@@ -580,6 +630,16 @@ async def run_experiment(
 ) -> dict[str, Any]:
     destination = Path(output_dir)
     fingerprint = _experiment_fingerprint(config)
+    run_id = f"{destination.name}-{fingerprint}"
+    audit_logger: ExperimentAuditLogger | None = None
+    if config.logging.enabled:
+        logs_dir = destination / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(logs_dir / "experiment.log", mode="a", encoding="utf-8")
+        file_handler.setLevel(getattr(logging, config.logging.level.upper(), logging.INFO))
+        file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
+        logging.getLogger().addHandler(file_handler)
+        audit_logger = ExperimentAuditLogger(logs_dir, config.logging, run_id, config.population_size, config.max_population_rounds)
     shards = destination / ".episode_shards" / fingerprint
     shards.mkdir(parents=True, exist_ok=True)
     specs = build_episode_specs(config)
@@ -676,6 +736,7 @@ async def run_experiment(
                 config,
                 client,
                 population_round_callback=population_round_completed,
+                audit_logger=audit_logger,
             )
             temp_interactions = interactions_path.with_suffix(".tmp.parquet")
             temp_summary = summary_path.with_suffix(".tmp.parquet")

@@ -293,6 +293,11 @@ class AsyncLLMClient:
                         retries=retry_index,
                         status_code=response.status_code,
                         usage=usage,
+                        raw_response=body,
+                        finish_reason=(
+                            body.get("choices", [{}])[0].get("finish_reason")
+                            if isinstance(body, dict) else None
+                        ),
                     )
                 except (requests.Timeout, requests.ConnectionError) as exc:
                     self._stats.failure()
@@ -351,7 +356,8 @@ class OpenAIAsyncLLMClient(AsyncLLMClient):
         api_key: str | None = None,
         env_path: Path | None = None,
     ) -> None:
-        load_dotenv(env_path or _find_repository_env())
+        if api_key is None:
+            load_dotenv(env_path or _find_repository_env())
         configured_key = api_key or os.getenv("OPENAI_API_KEY")
         if configured_key is None and os.getenv("OPEN_API_KEY"):
             configured_key = os.getenv("OPEN_API_KEY")

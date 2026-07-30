@@ -100,6 +100,8 @@ class LLMResponse:
     retries: int = 0
     status_code: int | None = 200
     usage: TokenUsage = field(default_factory=TokenUsage)
+    raw_response: Any = None
+    finish_reason: str | None = None
 
     @property
     def attempts(self) -> int:
