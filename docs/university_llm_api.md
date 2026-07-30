@@ -76,6 +76,63 @@ available_models = sorted(
 )
 ```
 
+## Available models
+
+On 2026-07-30, `GET /models` returned the following 45 entries:
+
+```text
+all-proxy-models
+gwdg/openai-gpt-oss-120b
+gwdg/qwen3-30b-a3b-instruct-2507
+gwdg/qwen3.5-397b-a17b
+microsoft/Kimi-K2.6
+microsoft/Mistral-Codestral-2501
+microsoft/Mistral-Large-3
+microsoft/claude-fable-5
+microsoft/claude-haiku-4-5
+microsoft/claude-opus-4-5
+microsoft/claude-opus-4-6
+microsoft/claude-opus-4-7
+microsoft/claude-opus-4-8
+microsoft/claude-opus-5
+microsoft/claude-sonnet-4-5
+microsoft/claude-sonnet-4-6
+microsoft/claude-sonnet-5
+microsoft/gpt-4.1
+microsoft/gpt-4o
+microsoft/gpt-5
+microsoft/gpt-5-codex
+microsoft/gpt-5-mini
+microsoft/gpt-5.1
+microsoft/gpt-5.1-codex-max
+microsoft/gpt-5.2
+microsoft/gpt-5.2-codex
+microsoft/gpt-5.3-codex
+microsoft/gpt-5.4
+microsoft/gpt-5.4-mini
+microsoft/gpt-5.4-nano
+microsoft/gpt-5.4-pro
+microsoft/gpt-5.5
+microsoft/gpt-5.6-luna
+microsoft/gpt-5.6-sol
+microsoft/gpt-5.6-terra
+microsoft/gpt-chat-latest
+microsoft/gpt-image-1.5
+microsoft/gpt-image-2
+microsoft/sora-2
+microsoft/text-embedding-3-large
+up/e5-mistral-7b
+up/gemma4-31b
+up/minimax-m2-5
+up/qwen3-6-35b
+up/translategemma-27b-it
+```
+
+This is a dated snapshot, not a permanent allowlist. Query `/models` before a
+run because the proxy's available deployments can change. The list includes
+the `all-proxy-models` routing alias as well as image, video, and embedding
+models; those entries are not concrete chat models.
+
 ## Recommended test model
 
 For inexpensive parallel connectivity tests, prefer:

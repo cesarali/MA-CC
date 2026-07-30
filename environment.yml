@@ -12,6 +12,9 @@ dependencies:
   - pyyaml
   - pytest
   - numpy
+  - pytorch
+  - sentence-transformers
+  - scikit-learn
   - pandas
   - pyarrow
   - matplotlib
