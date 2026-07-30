@@ -24,6 +24,13 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+gemma4 = [
+  "accelerate>=1.0",
+  "huggingface-hub>=0.30",
+  "safetensors>=0.4",
+  "transformers>=5.5",
+  "torchvision",
+]
 
 [project.scripts]
 naming-game = "naming_game.cli:main"

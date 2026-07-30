@@ -1,6 +1,11 @@
 python-dotenv>=1.0
 PyYAML>=6.0
 requests>=2.31
+numpy>=2.0
+pandas>=2.2
+pyarrow>=17.0
+matplotlib>=3.9
+tqdm>=4.66
 
 [test]
 pytest>=8.0

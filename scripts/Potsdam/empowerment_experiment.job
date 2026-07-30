@@ -1,0 +1,98 @@
+#!/bin/bash
+###############################################################################
+# Run a live committee-empowerment smoke test or the resumable pilot on Slurm.
+#
+# Submit the University smoke test (default):
+#   sbatch scripts/Potsdam/empowerment_experiment.job
+#
+# Submit another mode:
+#   sbatch --export=ALL,RUN_MODE=smoke-openai scripts/Potsdam/empowerment_experiment.job
+#   sbatch --export=ALL,RUN_MODE=pilot-university scripts/Potsdam/empowerment_experiment.job
+#
+# RUN_MODE values: smoke-university, smoke-openai, pilot-university, pilot-openai
+# The pilot always resumes its stable output directory after interruption.
+###############################################################################
+#SBATCH --job-name=empowerment
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+#SBATCH --time=4-00:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/slurm-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/slurm-%j.err
+###############################################################################
+
+set -euo pipefail
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly RESULTS_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly RUN_MODE="${RUN_MODE:-smoke-university}"
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+case "${RUN_MODE}" in
+  smoke-university)
+    CONFIG=configs/empowerment_pilot_test_university.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/empowerment_university_pilot_test
+    RESUME_ARGS=(--no-resume)
+    ;;
+  smoke-openai)
+    CONFIG=configs/empowerment_pilot_test.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/empowerment_openai_pilot_test
+    RESUME_ARGS=(--no-resume)
+    ;;
+  pilot-university)
+    CONFIG=configs/empowerment_pilot_university.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/empowerment_pilot_university
+    RESUME_ARGS=()
+    ;;
+  pilot-openai)
+    CONFIG=configs/empowerment_pilot.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/empowerment_pilot_openai
+    RESUME_ARGS=()
+    ;;
+  *)
+    echo "[error] RUN_MODE must be smoke-university, smoke-openai, pilot-university, or pilot-openai; got: ${RUN_MODE}" >&2
+    exit 2
+    ;;
+esac
+
+if [[ ! -x "${CONDA_BIN}" ]]; then
+  echo "[error] Conda is unavailable at ${CONDA_BIN}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/${CONFIG}" ]]; then
+  echo "[error] Experiment config is missing: ${REPO_ROOT}/${CONFIG}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/.env" ]]; then
+  echo "[error] Repository credential file is missing: ${REPO_ROOT}/.env" >&2
+  exit 1
+fi
+
+mkdir -p "${RESULTS_ROOT}" "${OUTPUT_DIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] mode=${RUN_MODE}"
+echo "[run] config=${REPO_ROOT}/${CONFIG}"
+echo "[run] output_dir=${OUTPUT_DIR}"
+echo "[run] slurm_job_id=${SLURM_JOB_ID:-manual}"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${CONDA_BIN}" run --live-stream -n MA-CC naming-game experiment \
+  --config "${CONFIG}" \
+  "${RESUME_ARGS[@]}" \
+  --output-dir "${OUTPUT_DIR}"
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "[done] results=${OUTPUT_DIR}"

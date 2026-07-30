@@ -1,0 +1,37 @@
+# Minimal live University of Potsdam proxy end-to-end smoke test.
+# This mirrors empowerment_pilot_test.yaml but selects the University provider.
+population_size: 5
+names: [A, B]
+memory_length: 5
+max_population_rounds: 5
+committee_sizes: [1]
+regimes: [neutral]
+
+replications:
+  unit: per_stratum
+  count: 1
+
+auto_analyze: true
+quick_bootstrap_resamples: 2
+quick_null_permutations: 1
+convention_roles:
+  strong_name: A
+  weak_name: B
+  source: calibration
+
+temperature: 0.5
+max_tokens: 1000
+seed: 1
+window_interactions: 15
+resolution_threshold: 0.95
+
+provider: university
+model: microsoft/gpt-4o
+fallback_provider: university
+allow_fallback: false
+require_live_provider: true
+
+request_concurrency: 2
+episode_concurrency: 1
+timeout_seconds: 60
+max_retries: 2

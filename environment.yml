@@ -13,6 +13,11 @@ dependencies:
   - pytest
   - numpy
   - pytorch
+  - torchvision
+  - accelerate
+  - huggingface_hub
+  - safetensors
+  - transformers>=5.5
   - sentence-transformers
   - scikit-learn
   - pandas

@@ -1,0 +1,525 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+API_TOKEN	external/AI-norms/real_player_meta_prompting.py	/^API_TOKEN = '<YOUR_TOKEN_HERE>'   $/;"	v
+API_TOKEN	external/AI-norms/run_API.py	/^API_TOKEN = config.model.API_TOKEN   $/;"	v
+API_URL	external/AI-norms/real_player_meta_prompting.py	/^API_URL = "https:\/\/api-inference.huggingface.co\/models\/meta-llama\/Meta-Llama-3.1-70B-Instruct"$/;"	v
+API_URL	external/AI-norms/run_API.py	/^API_URL = "https:\/\/api-inference.huggingface.co\/models\/"+config.model.model_name$/;"	v
+Agent	src/naming_game/agent.py	/^class Agent:$/;"	c
+AgentSnapshot	src/naming_game/models.py	/^class AgentSnapshot:$/;"	c
+AnalysisConfig	src/naming_game/analysis/empowerment.py	/^class AnalysisConfig:$/;"	c
+AsyncLLMClient	src/naming_game/api_client.py	/^class AsyncLLMClient:$/;"	c
+BenchmarkConfig	src/naming_game/benchmark.py	/^class BenchmarkConfig:$/;"	c
+BenchmarkResult	src/naming_game/benchmark.py	/^class BenchmarkResult:$/;"	c
+BenchmarkRunSummary	src/naming_game/models.py	/^class BenchmarkRunSummary:$/;"	c
+CB_color_cycle	external/AI-norms/analyse_individual_bias.py	/^CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',$/;"	v
+CommitteeSchedule	src/naming_game/empowerment_experiment.py	/^class CommitteeSchedule(ConventionIntervention):$/;"	c
+CompletedRun	src/naming_game/runner.py	/^class CompletedRun:$/;"	c
+ConfigurationError	src/naming_game/models.py	/^class ConfigurationError(ValueError):$/;"	c
+ConventionAgent	src/naming_game/naming_convention_game.py	/^class ConventionAgent:$/;"	c
+ConventionAgentState	src/naming_game/naming_convention_game.py	/^class ConventionAgentState:$/;"	c
+ConventionDecision	src/naming_game/naming_convention_game.py	/^class ConventionDecision:$/;"	c
+ConventionGameConfig	src/naming_game/naming_convention_game.py	/^class ConventionGameConfig:$/;"	c
+ConventionGameResult	src/naming_game/naming_convention_game.py	/^class ConventionGameResult:$/;"	c
+ConventionHistoryEntry	src/naming_game/naming_convention_game.py	/^class ConventionHistoryEntry:$/;"	c
+ConventionInteraction	src/naming_game/naming_convention_game.py	/^class ConventionInteraction:$/;"	c
+ConventionIntervention	src/naming_game/naming_convention_game.py	/^class ConventionIntervention(Protocol):$/;"	c
+ConventionRolesConfig	src/naming_game/empowerment_experiment.py	/^class ConventionRolesConfig:$/;"	c
+DEFAULT_MODEL	scripts/embedding_model_tests/_common.py	/^DEFAULT_MODEL = SUPPORTED_MODELS[0]$/;"	v
+E5_TASK	scripts/embedding_model_tests/_common.py	/^E5_TASK = "Represent this agent trajectory for behavioral analysis."$/;"	v
+EXPECTED_POLICIES	src/naming_game/analysis/reporting.py	/^EXPECTED_POLICIES = {$/;"	v
+EmpowermentExperimentConfig	src/naming_game/empowerment_experiment.py	/^class EmpowermentExperimentConfig:$/;"	c
+EpisodeSpec	src/naming_game/empowerment_experiment.py	/^class EpisodeSpec:$/;"	c
+Estimate	src/naming_game/analysis/estimators.py	/^class Estimate:$/;"	c
+GROUP_COLUMNS	src/naming_game/analysis/metrics.py	/^GROUP_COLUMNS = [$/;"	v
+GameResult	src/naming_game/models.py	/^class GameResult:$/;"	c
+InteractionResult	src/naming_game/models.py	/^class InteractionResult:$/;"	c
+InvalidConventionResponse	src/naming_game/naming_convention_game.py	/^class InvalidConventionResponse(RuntimeError):$/;"	c
+Inventory	src/naming_game/models.py	/^Inventory = frozenset[Name]$/;"	v
+LABELED_TRAJECTORIES	scripts/embedding_model_tests/test_classification.py	/^LABELED_TRAJECTORIES = ($/;"	v
+LLMAPIError	src/naming_game/api_client.py	/^class LLMAPIError(RuntimeError):$/;"	c
+LLMClient	src/naming_game/api_client.py	/^class LLMClient(Protocol):$/;"	c
+LLMResponse	src/naming_game/models.py	/^class LLMResponse:$/;"	c
+LOGGER	src/naming_game/analysis/empowerment.py	/^LOGGER = logging.getLogger(__name__)$/;"	v
+LOGGER	src/naming_game/cli.py	/^LOGGER = logging.getLogger(__name__)$/;"	v
+LOGGER	src/naming_game/empowerment_experiment.py	/^LOGGER = logging.getLogger(__name__)$/;"	v
+LatencyFactory	src/naming_game/api_client.py	/^LatencyFactory = Callable[[Sequence[Message]], float]$/;"	v
+MATCHED_PAIRS	scripts/embedding_model_tests/test_info_nce.py	/^MATCHED_PAIRS = ($/;"	v
+Message	src/naming_game/api_client.py	/^Message = dict[str, str]$/;"	v
+MockAsyncLLMClient	src/naming_game/api_client.py	/^class MockAsyncLLMClient:$/;"	c
+N	external/AI-norms/run_NG.py	/^N = 24$/;"	v
+N	external/AI-norms/runner.py	/^N = config.params.N$/;"	v
+N	external/AI-norms/simulation_module.py	/^N = config.params.N$/;"	v
+N	external/AI-norms/utils.py	/^N = config.params.N$/;"	v
+NON_ESTIMABLE_MESSAGE	src/naming_game/analysis/reporting.py	/^NON_ESTIMABLE_MESSAGE = "empowerment not estimable from this run"$/;"	v
+Name	src/naming_game/models.py	/^Name = Literal["A", "B"]$/;"	v
+NamingConventionGame	src/naming_game/naming_convention_game.py	/^class NamingConventionGame:$/;"	c
+NamingGame	external/AI-norms/NG_module.py	/^class NamingGame():$/;"	c
+OpenAIAsyncLLMClient	src/naming_game/api_client.py	/^class OpenAIAsyncLLMClient(AsyncLLMClient):$/;"	c
+P1	external/AI-norms/analyse_individual_bias.py	/^P1 = [['Q', 'M'], ['M', 'Q'], ['Q', 'M'], ['M', 'Q'], ['Q', 'Q'], ['M', 'M'], ['M', 'M'], ['Q', 'Q']]$/;"	v
+P1	external/AI-norms/analyse_individual_bias.py	/^P1 = [['Q'], ['Q'], ['M'], ['M']]$/;"	v
+P2	external/AI-norms/analyse_individual_bias.py	/^P2 = [['M', 'Q'], ['Q', 'M'], ['M', 'M'], ['Q', 'Q'], ['Q', 'M'], ['M', 'Q'], ['M', 'M'], ['Q', 'Q']]$/;"	v
+P2	external/AI-norms/analyse_individual_bias.py	/^P2 = [['Q'], ['M'], ['M'], ['Q']]$/;"	v
+PROMPT_VERSION	src/naming_game/empowerment_experiment.py	/^PROMPT_VERSION = "convention-answer-first-v1"$/;"	v
+ProjectionMLP	scripts/embedding_model_tests/test_info_nce.py	/^class ProjectionMLP(nn.Module):$/;"	c
+REPOSITORY_ROOT	scripts/embedding_model_tests/_common.py	/^REPOSITORY_ROOT = Path(__file__).resolve().parents[2]$/;"	v
+REQUIRED_BENCHMARK_MODELS	src/naming_game/benchmark.py	/^REQUIRED_BENCHMARK_MODELS = ($/;"	v
+ReasoningTask	src/naming_game/reasoning_game.py	/^class ReasoningTask:$/;"	c
+Regime	src/naming_game/empowerment_experiment.py	/^Regime = Literal["neutral", "consensus_attack", "pulse"]$/;"	v
+ReplicationConfig	src/naming_game/empowerment_experiment.py	/^class ReplicationConfig:$/;"	c
+RequestObserver	src/naming_game/api_client.py	/^RequestObserver = Callable[[Sequence[Message]], None | Awaitable[None]]$/;"	v
+ResponseFactory	src/naming_game/api_client.py	/^ResponseFactory = Callable[[Sequence[Message]], str | Awaitable[str]]$/;"	v
+RoundRecord	src/naming_game/models.py	/^class RoundRecord:$/;"	c
+RunSpec	src/naming_game/models.py	/^class RunSpec:$/;"	c
+SCHEMA_VERSION	src/naming_game/empowerment_experiment.py	/^SCHEMA_VERSION = 2$/;"	v
+SEQUENTIAL	src/naming_game/models.py	/^    SEQUENTIAL = "sequential"$/;"	v	class:UpdateMode
+SUPPORTED_MODELS	scripts/embedding_model_tests/_common.py	/^SUPPORTED_MODELS = ($/;"	v
+SYNCHRONOUS_PARALLEL	src/naming_game/models.py	/^    SYNCHRONOUS_PARALLEL = "synchronous_parallel"$/;"	v	class:UpdateMode
+SequentialNamingGame	src/naming_game/sequential_game.py	/^class SequentialNamingGame:$/;"	c
+StateRecord	src/naming_game/models.py	/^class StateRecord:$/;"	c
+SynchronousParallelNamingGame	src/naming_game/synchronous_game.py	/^class SynchronousParallelNamingGame:$/;"	c
+TRAJECTORIES	scripts/embedding_model_tests/test_embeddings.py	/^TRAJECTORIES = ($/;"	v
+TokenUsage	src/naming_game/models.py	/^class TokenUsage:$/;"	c
+UpdateMode	src/naming_game/models.py	/^class UpdateMode(str, Enum):$/;"	c
+_RequestStats	src/naming_game/api_client.py	/^class _RequestStats:$/;"	c
+__all__	src/naming_game/__init__.py	/^__all__ = [$/;"	v
+__all__	src/naming_game/analysis/__init__.py	/^__all__ = [$/;"	v
+__all__	src/naming_game/analysis/empowerment.py	/^__all__ = ["AnalysisConfig", "analyze_histories", "estimate_lagged", "estimate_nulls", "estimate_terminal"]$/;"	v
+__all__	src/naming_game/analysis/estimators.py	/^__all__ = [$/;"	v
+__all__	src/naming_game/analysis/metrics.py	/^__all__ = ["GROUP_COLUMNS", "add_efficiency", "summarize_episode_metrics"]$/;"	v
+__all__	src/naming_game/analysis/reporting.py	/^__all__ = [$/;"	v
+__all__	src/naming_game/analysis/surrogates.py	/^__all__ = ["circular_shift_trajectories", "shuffle_episode_labels", "swap_labels_half"]$/;"	v
+__all__	src/naming_game/empowerment_experiment.py	/^__all__ = [$/;"	v
+__all__	src/naming_game/naming_convention_game.py	/^__all__ = [$/;"	v
+__init__	external/AI-norms/NG_module.py	/^    def __init__(self, params):$/;"	m	class:NamingGame
+__init__	scripts/embedding_model_tests/test_info_nce.py	/^    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int) -> None:$/;"	m	class:ProjectionMLP
+__init__	src/naming_game/api_client.py	/^    def __init__($/;"	m	class:AsyncLLMClient
+__init__	src/naming_game/api_client.py	/^    def __init__($/;"	m	class:MockAsyncLLMClient
+__init__	src/naming_game/api_client.py	/^    def __init__($/;"	m	class:OpenAIAsyncLLMClient
+__init__	src/naming_game/api_client.py	/^    def __init__(self) -> None:$/;"	m	class:_RequestStats
+__init__	src/naming_game/naming_convention_game.py	/^    def __init__($/;"	m	class:NamingConventionGame
+__init__	src/naming_game/sequential_game.py	/^    def __init__($/;"	m	class:SequentialNamingGame
+__init__	src/naming_game/synchronous_game.py	/^    def __init__($/;"	m	class:SynchronousParallelNamingGame
+__post_init__	src/naming_game/agent.py	/^    def __post_init__(self) -> None:$/;"	m	class:Agent	file:
+__post_init__	src/naming_game/analysis/empowerment.py	/^    def __post_init__(self) -> None:$/;"	m	class:AnalysisConfig	file:
+__post_init__	src/naming_game/benchmark.py	/^    def __post_init__(self) -> None:$/;"	m	class:BenchmarkConfig	file:
+__post_init__	src/naming_game/empowerment_experiment.py	/^    def __post_init__(self) -> None:$/;"	m	class:ConventionRolesConfig	file:
+__post_init__	src/naming_game/empowerment_experiment.py	/^    def __post_init__(self) -> None:$/;"	m	class:EmpowermentExperimentConfig	file:
+__post_init__	src/naming_game/empowerment_experiment.py	/^    def __post_init__(self) -> None:$/;"	m	class:ReplicationConfig	file:
+__post_init__	src/naming_game/models.py	/^    def __post_init__(self) -> None:$/;"	m	class:RunSpec	file:
+__post_init__	src/naming_game/naming_convention_game.py	/^    def __post_init__(self) -> None:$/;"	m	class:ConventionGameConfig	file:
+__post_init__	src/naming_game/reasoning_game.py	/^    def __post_init__(self) -> None:$/;"	m	class:ReasoningTask	file:
+_agent_states	src/naming_game/naming_convention_game.py	/^    def _agent_states(self) -> dict[int, ConventionAgentState]:$/;"	m	class:NamingConventionGame
+_analyze_empowerment	src/naming_game/cli.py	/^def _analyze_empowerment(args: argparse.Namespace) -> int:$/;"	f
+_assert_pristine_histories	src/naming_game/naming_convention_game.py	/^    def _assert_pristine_histories(self) -> None:$/;"	m	class:NamingConventionGame
+_atomic_save	src/naming_game/analysis/reporting.py	/^def _atomic_save(fig: Any, path: Path) -> None:$/;"	f
+_bootstrap_interval	src/naming_game/analysis/empowerment.py	/^def _bootstrap_interval($/;"	f
+_bootstrap_median	src/naming_game/analysis/metrics.py	/^def _bootstrap_median($/;"	f
+_build_neighbors	src/naming_game/naming_convention_game.py	/^    def _build_neighbors($/;"	m	class:NamingConventionGame
+_cmi_from_counts	src/naming_game/analysis/estimators.py	/^def _cmi_from_counts(counts: np.ndarray, *, miller_madow: bool = False) -> float:$/;"	f
+_default_response	src/naming_game/api_client.py	/^    def _default_response(self, messages: Sequence[Message]) -> str:$/;"	m	class:MockAsyncLLMClient
+_derive_direction	src/naming_game/analysis/reporting.py	/^def _derive_direction(row: pd.Series) -> str | None:$/;"	f
+_direction_metadata	src/naming_game/empowerment_experiment.py	/^def _direction_metadata($/;"	f
+_direction_values	src/naming_game/analysis/reporting.py	/^def _direction_values(frame: pd.DataFrame) -> list[str]:$/;"	f
+_ensure_endpoint_and_model	src/naming_game/api_client.py	/^    async def _ensure_endpoint_and_model(self) -> None:$/;"	m	class:AsyncLLMClient
+_entropy	src/naming_game/analysis/estimators.py	/^def _entropy(counts: np.ndarray, *, miller_madow: bool = False) -> float:$/;"	f
+_estimate_fields	src/naming_game/analysis/empowerment.py	/^def _estimate_fields(estimate: Estimate) -> dict[str, Any]:$/;"	f
+_estimation_status	src/naming_game/analysis/empowerment.py	/^def _estimation_status($/;"	f
+_experiment_fingerprint	src/naming_game/empowerment_experiment.py	/^def _experiment_fingerprint(config: EmpowermentExperimentConfig) -> str:$/;"	f
+_find_repository_env	src/naming_game/api_client.py	/^def _find_repository_env(start: Path | None = None) -> Path:$/;"	f
+_format_direction	src/naming_game/analysis/reporting.py	/^def _format_direction(value: str) -> str:$/;"	f
+_format_value	src/naming_game/analysis/reporting.py	/^def _format_value(value: Any) -> str:$/;"	f
+_interaction_kind	src/naming_game/sequential_game.py	/^    def _interaction_kind(self) -> str:$/;"	m	class:SequentialNamingGame
+_interaction_kind	src/naming_game/synchronous_game.py	/^    def _interaction_kind(self) -> str:$/;"	m	class:SynchronousParallelNamingGame
+_label_from_share	src/naming_game/empowerment_experiment.py	/^def _label_from_share(share: float, threshold: float, full_window: bool) -> str | None:$/;"	f
+_lag_pairs	src/naming_game/analysis/empowerment.py	/^def _lag_pairs(group: pd.DataFrame, lag: int, state_column: str) -> pd.DataFrame:$/;"	f
+_markdown_table	src/naming_game/analysis/reporting.py	/^def _markdown_table(frame: pd.DataFrame, columns: list[str]) -> list[str]:$/;"	f
+_memory_json	src/naming_game/empowerment_experiment.py	/^def _memory_json(memory: Sequence[ConventionHistoryEntry]) -> str:$/;"	f
+_metric_for_regime	src/naming_game/analysis/reporting.py	/^def _metric_for_regime(metrics: pd.DataFrame, regime: str) -> pd.DataFrame:$/;"	f
+_mi_from_counts	src/naming_game/analysis/estimators.py	/^def _mi_from_counts(counts: np.ndarray, *, miller_madow: bool = False) -> float:$/;"	f
+_missing_series	src/naming_game/analysis/reporting.py	/^def _missing_series(frame: pd.DataFrame, value: Any = None) -> pd.Series:$/;"	f
+_parse_json_object	src/naming_game/interaction.py	/^def _parse_json_object(content: str) -> dict[str, Any]:$/;"	f
+_parse_mapping	src/naming_game/naming_convention_game.py	/^def _parse_mapping(content: str) -> dict[str, Any]:$/;"	f
+_parser	src/naming_game/cli.py	/^def _parser() -> argparse.ArgumentParser:$/;"	f
+_payoff	src/naming_game/naming_convention_game.py	/^    def _payoff(self, first: str, second: str) -> int:$/;"	m	class:NamingConventionGame
+_percentile	src/naming_game/runner.py	/^def _percentile(values: Sequence[float], fraction: float) -> float | None:$/;"	f
+_plot_trajectory_axis	src/naming_game/analysis/reporting.py	/^def _plot_trajectory_axis($/;"	f
+_policy_replicates	src/naming_game/empowerment_experiment.py	/^def _policy_replicates(policies: Sequence[str], replications: ReplicationConfig) -> list[tuple[str, int]]:$/;"	f
+_probability_fields	src/naming_game/analysis/metrics.py	/^def _probability_fields($/;"	f
+_prompt_hash	src/naming_game/empowerment_experiment.py	/^def _prompt_hash(config: EmpowermentExperimentConfig) -> str:$/;"	f
+_provider_for	src/naming_game/cli.py	/^def _provider_for(config, provider: str, model: str):$/;"	f
+_random_action_order	src/naming_game/naming_convention_game.py	/^    def _random_action_order(self) -> tuple[str, ...]:$/;"	m	class:NamingConventionGame
+_repair_speaker_selection	src/naming_game/interaction.py	/^def _repair_speaker_selection(inventory: Inventory, choice_seed: int) -> Name:$/;"	f
+_request_decision	src/naming_game/naming_convention_game.py	/^    async def _request_decision($/;"	m	class:NamingConventionGame
+_retry_delay	src/naming_game/api_client.py	/^    def _retry_delay($/;"	m	class:AsyncLLMClient
+_rolling_success	src/naming_game/analysis/reporting.py	/^def _rolling_success(frame: pd.DataFrame) -> pd.Series:$/;"	f
+_run_benchmark	src/naming_game/cli.py	/^async def _run_benchmark(args: argparse.Namespace) -> int:$/;"	f
+_run_empowerment_experiment	src/naming_game/cli.py	/^async def _run_empowerment_experiment(args: argparse.Namespace) -> int:$/;"	f
+_run_one	src/naming_game/cli.py	/^async def _run_one(args: argparse.Namespace) -> int:$/;"	f
+_sample_pair	src/naming_game/naming_convention_game.py	/^    def _sample_pair(self) -> tuple[ConventionAgent, ConventionAgent]:$/;"	m	class:NamingConventionGame
+_schedule_for	src/naming_game/empowerment_experiment.py	/^def _schedule_for(spec: EpisodeSpec, config: EmpowermentExperimentConfig) -> CommitteeSchedule:$/;"	f
+_sum_episode_counts	src/naming_game/analysis/empowerment.py	/^def _sum_episode_counts($/;"	f
+_terminal_history	tests/test_empowerment_estimators.py	/^def _terminal_history(episodes_per_policy, policies=("left", "right")):$/;"	f
+_trajectory_summary	src/naming_game/analysis/reporting.py	/^def _trajectory_summary($/;"	f
+_unavailable_estimate	src/naming_game/analysis/empowerment.py	/^def _unavailable_estimate(observations: int) -> Estimate:$/;"	f
+_validate_action	src/naming_game/naming_convention_game.py	/^    def _validate_action(self, action: str) -> None:$/;"	m	class:NamingConventionGame
+_validate_basic_listener	src/naming_game/interaction.py	/^def _validate_basic_listener($/;"	f
+_validate_speaker	src/naming_game/interaction.py	/^def _validate_speaker($/;"	f
+_visible_history	src/naming_game/naming_convention_game.py	/^def _visible_history($/;"	f
+_wilson_interval	src/naming_game/analysis/metrics.py	/^def _wilson_interval(successes: int, total: int, confidence: float) -> tuple[float, float]:$/;"	f
+_window_status	src/naming_game/naming_convention_game.py	/^    def _window_status($/;"	m	class:NamingConventionGame
+_write_config	tests/test_empowerment_cli.py	/^def _write_config(path, *, auto_analyze):$/;"	f
+_write_csv	src/naming_game/runner.py	/^def _write_csv(path: Path, fieldnames: list[str], rows: Sequence[dict[str, Any]]) -> None:$/;"	f
+action_for	src/naming_game/empowerment_experiment.py	/^    def action_for(self, agent_id: int, interaction_index: int) -> str | None:$/;"	m	class:CommitteeSchedule
+action_for	src/naming_game/naming_convention_game.py	/^    def action_for(self, agent_id: int, interaction_index: int) -> str | None: ...$/;"	m	class:ConventionIntervention
+add_committed	external/AI-norms/utils.py	/^def add_committed(df, minority_size):$/;"	f
+add_efficiency	src/naming_game/analysis/metrics.py	/^def add_efficiency(metrics: pd.DataFrame, terminal: pd.DataFrame) -> pd.DataFrame:$/;"	f
+alpha	external/AI-norms/utils.py	/^alpha = config.network.alpha$/;"	v
+always	tests/test_naming_convention_game.py	/^def always(action):$/;"	f
+always_a	tests/test_empowerment_experiment.py	/^def always_a(messages):$/;"	f
+analyze_dice_rolls	external/AI-norms/analyse_individual_bias.py	/^def analyze_dice_rolls(rolls, n):$/;"	f
+analyze_histories	src/naming_game/analysis/empowerment.py	/^def analyze_histories($/;"	f
+answers	external/AI-norms/analyse_individual_bias.py	/^answers = sum(counts)$/;"	v
+assert_finite_gradients	scripts/embedding_model_tests/test_info_nce.py	/^def assert_finite_gradients(modules: Sequence[nn.Module]) -> None:$/;"	f
+attach_null_summary	src/naming_game/analysis/reporting.py	/^def attach_null_summary(estimates: pd.DataFrame, nulls: pd.DataFrame) -> pd.DataFrame:$/;"	f
+attempt	src/naming_game/api_client.py	/^    def attempt(self) -> None:$/;"	m	class:_RequestStats
+attempts	src/naming_game/models.py	/^    def attempts(self) -> int:$/;"	m	class:LLMResponse
+available_models	src/naming_game/api_client.py	/^    def available_models(self) -> tuple[str, ...] | None:$/;"	m	class:AsyncLLMClient
+average_bins	external/AI-norms/run_NG.py	/^average_bins = [theory_dataframe[k]['tracker']['outcome'] for k in range(len(theory_dataframe))]$/;"	v
+basic_naming_update	src/naming_game/interaction.py	/^def basic_naming_update($/;"	f
+beta	external/AI-norms/utils.py	/^beta = config.network.beta$/;"	v
+bias_list	external/AI-norms/run_NG.py	/^bias_list = [0]$/;"	v
+bias_runner	external/AI-norms/runner.py	/^def bias_runner():$/;"	f
+binary_choice	external/AI-norms/NG_module.py	/^    binary_choice = list(range(10))#[0,1,2,3,4,5,6,7,8,9]$/;"	v	class:NamingGame
+bnb_config	external/AI-norms/run_local.py	/^    bnb_config = transformers.BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4', bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=bfloat16)$/;"	v
+bootstrap	external/AI-norms/analyse_individual_bias.py	/^def bootstrap(count, num_bootstrap_samples=10000):$/;"	f
+build_basic_listener_messages	src/naming_game/interaction.py	/^def build_basic_listener_messages($/;"	f
+build_basic_speaker_messages	src/naming_game/interaction.py	/^def build_basic_speaker_messages(speaker: AgentSnapshot) -> list[dict[str, str]]:$/;"	f
+build_convention_messages	src/naming_game/naming_convention_game.py	/^def build_convention_messages($/;"	f
+build_episode_specs	src/naming_game/empowerment_experiment.py	/^def build_episode_specs(config: EmpowermentExperimentConfig) -> tuple[EpisodeSpec, ...]:$/;"	f
+build_reasoning_listener_messages	src/naming_game/reasoning_game.py	/^def build_reasoning_listener_messages($/;"	f
+build_reasoning_speaker_messages	src/naming_game/reasoning_game.py	/^def build_reasoning_speaker_messages($/;"	f
+calculate_observed_mean	external/AI-norms/analyse_individual_bias.py	/^def calculate_observed_mean(count):$/;"	f
+chi_squared_test	external/AI-norms/analyse_individual_bias.py	/^def chi_squared_test(observed, expected):$/;"	f
+circular_shift_trajectories	src/naming_game/analysis/surrogates.py	/^def circular_shift_trajectories($/;"	f
+clear_completed_shards	src/naming_game/empowerment_experiment.py	/^def clear_completed_shards(output_dir: str | Path) -> None:$/;"	f
+client_factory	src/naming_game/cli.py	/^        def client_factory(model: str, seed: int) -> AsyncLLMClient:$/;"	f	function:_run_benchmark
+client_factory	src/naming_game/cli.py	/^        def client_factory(model: str, seed: int) -> MockAsyncLLMClient:$/;"	f	function:_run_benchmark
+close	src/naming_game/api_client.py	/^    def close(self) -> None: ...$/;"	m	class:LLMClient
+close	src/naming_game/api_client.py	/^    def close(self) -> None:$/;"	m	class:AsyncLLMClient
+close	src/naming_game/api_client.py	/^    def close(self) -> None:$/;"	m	class:MockAsyncLLMClient
+cm_list	external/AI-norms/run_NG.py	/^cm_list = [0]$/;"	v
+collect_warnings	src/naming_game/analysis/reporting.py	/^def collect_warnings($/;"	f
+committed	external/AI-norms/simulation_module.py	/^def committed(dataframe, run, memory_size, rewards, options, fname, total_interactions = total_interactions):$/;"	f
+committed	src/naming_game/naming_convention_game.py	/^    def committed(self) -> bool:$/;"	m	class:ConventionAgent
+committed_runner	external/AI-norms/runner.py	/^def committed_runner():$/;"	f
+committment_index	external/AI-norms/runner.py	/^committment_index = config.minority.committment_index$/;"	v
+complete	src/naming_game/api_client.py	/^    async def complete($/;"	m	class:AsyncLLMClient
+complete	src/naming_game/api_client.py	/^    async def complete($/;"	m	class:LLMClient
+complete	src/naming_game/api_client.py	/^    async def complete($/;"	m	class:MockAsyncLLMClient
+complete_cells	src/naming_game/analysis/estimators.py	/^def complete_cells(*levels: Iterable[Hashable]) -> tuple[tuple[Hashable, ...], ...]:$/;"	f
+conditional_mutual_information	src/naming_game/analysis/estimators.py	/^def conditional_mutual_information($/;"	f
+conditional_mutual_information_from_counts	src/naming_game/analysis/estimators.py	/^def conditional_mutual_information_from_counts(counts: np.ndarray) -> Estimate:$/;"	f
+config	external/AI-norms/meta_prompting_runner.py	/^config = munchify(doc)$/;"	v
+config	external/AI-norms/real_player_meta_prompting.py	/^config = munchify(doc)$/;"	v
+config	external/AI-norms/run_API.py	/^config = munchify(doc)$/;"	v
+config	external/AI-norms/run_local.py	/^config = munchify(doc)$/;"	v
+config	external/AI-norms/runner.py	/^config = munchify(doc)$/;"	v
+config	external/AI-norms/simulation_module.py	/^config = munchify(doc)$/;"	v
+config	external/AI-norms/utils.py	/^config = munchify(doc)$/;"	v
+continue_evolution	external/AI-norms/runner.py	/^continue_evolution = config.sim.continue_evolution$/;"	v
+convergence_threshold	external/AI-norms/runner.py	/^convergence_threshold = config.params.convergence_threshold$/;"	v
+convergence_time	external/AI-norms/runner.py	/^convergence_time = config.params.convergence_time$/;"	v
+convergence_window	src/naming_game/naming_convention_game.py	/^    def convergence_window(self) -> int:$/;"	m	class:NamingConventionGame
+counts	external/AI-norms/analyse_individual_bias.py	/^    counts = [dataframe['tracker']['answers'].count(option) for option in options]$/;"	v
+counts	external/AI-norms/analyse_individual_bias.py	/^    counts = np.array(counts)$/;"	v
+counts	external/AI-norms/analyse_individual_bias.py	/^counts = [dataframe['tracker']['answers'].count(option) for option in options]$/;"	v
+counts	external/AI-norms/analyse_individual_bias.py	/^counts = np.array(counts)$/;"	v
+create_agents	src/naming_game/agent.py	/^def create_agents($/;"	f
+dataframe	external/AI-norms/analyse_individual_bias.py	/^    dataframe = load_dataframe(fname = mainfname)$/;"	v
+dataframe	external/AI-norms/analyse_individual_bias.py	/^dataframe = load_dataframe(fname = fname)$/;"	v
+dataframe	external/AI-norms/run_real_player_metaprompting.py	/^    dataframe = pickle.load(open(fname, 'rb'))$/;"	v
+dataframes	external/AI-norms/run_NG.py	/^            dataframes = pool.map(do_run, params)$/;"	v
+dataframes	external/AI-norms/run_NG.py	/^dataframes = []$/;"	v
+decision_fields	src/naming_game/naming_convention_game.py	/^        def decision_fields(decision: ConventionDecision) -> dict[str, Any]:$/;"	f	function:ConventionInteraction.to_log_dict
+degree	external/AI-norms/utils.py	/^degree = config.network.degree$/;"	v
+delayed_response	tests/test_synchronous_game.py	/^    async def delayed_response(messages):$/;"	f	function:test_no_live_update_is_visible_before_round_barrier
+derive_episode	src/naming_game/empowerment_experiment.py	/^def derive_episode($/;"	f
+do_run	external/AI-norms/run_NG.py	/^def do_run(params):$/;"	f
+doc	external/AI-norms/meta_prompting_runner.py	/^    doc = yaml.safe_load(f)$/;"	v
+doc	external/AI-norms/real_player_meta_prompting.py	/^    doc = yaml.safe_load(f)$/;"	v
+doc	external/AI-norms/run_API.py	/^    doc = yaml.safe_load(f)$/;"	v
+doc	external/AI-norms/run_local.py	/^    doc = yaml.safe_load(f)$/;"	v
+doc	external/AI-norms/runner.py	/^    doc = yaml.safe_load(f)$/;"	v
+doc	external/AI-norms/simulation_module.py	/^    doc = yaml.safe_load(f)$/;"	v
+doc	external/AI-norms/utils.py	/^    doc = yaml.safe_load(f)$/;"	v
+encode_normalized	scripts/embedding_model_tests/_common.py	/^def encode_normalized($/;"	f
+erdos_p	external/AI-norms/utils.py	/^erdos_p = config.network.erdos_p$/;"	v
+estimate_lagged	src/naming_game/analysis/empowerment.py	/^def estimate_lagged($/;"	f
+estimate_nulls	src/naming_game/analysis/empowerment.py	/^def estimate_nulls($/;"	f
+estimate_terminal	src/naming_game/analysis/empowerment.py	/^def estimate_terminal($/;"	f
+evidence_for	src/naming_game/reasoning_game.py	/^    def evidence_for(self, agent_id: int) -> str:$/;"	m	class:ReasoningTask
+exact_binomial_test	external/AI-norms/analyse_individual_bias.py	/^def exact_binomial_test(counts, null_mean = 0.5):$/;"	f
+execute	src/naming_game/empowerment_experiment.py	/^    async def execute(spec: EpisodeSpec) -> None:$/;"	f	function:run_experiment
+execute	tests/test_synchronous_game.py	/^    async def execute(latency):$/;"	f	function:test_completion_order_does_not_change_seeded_result
+execute_pair_interaction	src/naming_game/interaction.py	/^async def execute_pair_interaction($/;"	f
+expected	external/AI-norms/analyse_individual_bias.py	/^expected = [answers\/len(counts)]*len(counts)$/;"	v
+f	external/AI-norms/meta_prompting_runner.py	/^f = open(mp_fname, 'wb')$/;"	v
+f	external/AI-norms/run_NG.py	/^f = open("NG_theoretical_10.pkl", 'wb')$/;"	v
+f	external/AI-norms/run_real_player_metaprompting.py	/^    f = open(fname, 'wb')$/;"	v
+fail_analysis	tests/test_empowerment_cli.py	/^    def fail_analysis(*args, **kwargs):$/;"	f	function:test_automatic_analysis_failure_does_not_fail_completed_experiment
+failure	src/naming_game/api_client.py	/^    def failure(self) -> None:$/;"	m	class:_RequestStats
+fake_analysis	tests/test_empowerment_cli.py	/^    def fake_analysis(history_dir, output_dir, settings):$/;"	f	function:test_experiment_analyze_flag_overrides_disabled_yaml
+fake_analysis	tests/test_empowerment_cli.py	/^    def fake_analysis(history_dir, output_dir, settings):$/;"	f	function:test_standalone_analysis_defaults_inside_history_directory
+fname	external/AI-norms/analyse_individual_bias.py	/^fname = f"data\/llama31_data\/llama31_no_memory_bias_test_{''.join([str(m) for m in options])}_0mem.pkl"$/;"	v
+fname	external/AI-norms/run_real_player_metaprompting.py	/^fname = "llama31_70b_converged_baseline_Q_M_-50_100_5mem_complete_24ps_0.5tmp.pkl"$/;"	v
+fname	external/AI-norms/run_real_player_metaprompting.py	/^fname = "llama31_meta_test_final.pkl"$/;"	v
+forward	scripts/embedding_model_tests/test_info_nce.py	/^    def forward(self, inputs: torch.Tensor) -> torch.Tensor:$/;"	m	class:ProjectionMLP
+from_mapping	src/naming_game/models.py	/^    def from_mapping(cls, value: Mapping[str, Any] | None) -> "TokenUsage":$/;"	m	class:TokenUsage
+get_dataframe	external/AI-norms/NG_module.py	/^    def get_dataframe(self):$/;"	m	class:NamingGame
+get_empty_dataframe	external/AI-norms/NG_module.py	/^    def get_empty_dataframe(self):$/;"	m	class:NamingGame
+get_empty_population	external/AI-norms/utils.py	/^def get_empty_population(fname):$/;"	f
+get_interaction_network	external/AI-norms/NG_module.py	/^    def get_interaction_network(self, minority_size):$/;"	m	class:NamingGame
+get_interaction_network	external/AI-norms/utils.py	/^def get_interaction_network(network_type, minority_size, network_dict = None, degree=degree, alpha = alpha, beta = beta, erdos_p = erdos_p):$/;"	f
+get_llama_response	external/AI-norms/real_player_meta_prompting.py	/^def get_llama_response(chat):$/;"	f
+get_meta_prompt	external/AI-norms/prompting.py	/^def get_meta_prompt(player, rules, question):$/;"	f
+get_meta_prompt_list	external/AI-norms/meta_prompting.py	/^def get_meta_prompt_list(some_player, rules, options):$/;"	f
+get_meta_prompts	external/AI-norms/real_player_meta_prompting.py	/^def get_meta_prompts(some_player, memory_size, rules, options):$/;"	f
+get_meta_response	external/AI-norms/run_API.py	/^def get_meta_response(chat):$/;"	f
+get_meta_response	external/AI-norms/run_local.py	/^def get_meta_response(chat):$/;"	f
+get_outcome	external/AI-norms/real_player_meta_prompting.py	/^def get_outcome(my_answer, partner_answer, rewards, options):$/;"	f
+get_outcome	external/AI-norms/utils.py	/^def get_outcome(my_answer, partner_answer, rewards):$/;"	f
+get_player	external/AI-norms/utils.py	/^def get_player():$/;"	f
+get_prepared_population	external/AI-norms/utils.py	/^def get_prepared_population(fname, rewards, options, minority_size, memory_size):$/;"	f
+get_prompt	external/AI-norms/prompting.py	/^def get_prompt(player, memory_size, rules):$/;"	f
+get_prompt	external/AI-norms/real_player_meta_prompting.py	/^def get_prompt(player, rules, question):$/;"	f
+get_question	external/AI-norms/meta_prompting.py	/^def get_question(q, i, options):$/;"	f
+get_question	external/AI-norms/real_player_meta_prompting.py	/^def get_question(q, i, options):$/;"	f
+get_random_prepared_player	external/AI-norms/utils.py	/^def get_random_prepared_player(history, rewards):$/;"	f
+get_response	external/AI-norms/run_API.py	/^def get_response(chat, options):$/;"	f
+get_response	external/AI-norms/run_local.py	/^def get_response(chat, options):$/;"	f
+get_rules	external/AI-norms/prompting.py	/^def get_rules(rewards, options):$/;"	f
+get_rules	external/AI-norms/real_player_meta_prompting.py	/^def get_rules(rewards, options):$/;"	f
+get_signal	external/AI-norms/NG_module.py	/^    def get_signal(self, player):$/;"	m	class:NamingGame
+gold_sim	external/AI-norms/meta_prompting.py	/^def gold_sim(q, question, running_player, i, options):$/;"	f
+gold_sim	external/AI-norms/real_player_meta_prompting.py	/^def gold_sim(q, question, running_player, i, options):$/;"	f
+has_consensus	src/naming_game/models.py	/^def has_consensus(inventories: Sequence[Inventory]) -> bool:$/;"	f
+has_tracker_converged	external/AI-norms/NG_module.py	/^    def has_tracker_converged(self, tracker):$/;"	m	class:NamingGame
+has_tracker_converged	external/AI-norms/utils.py	/^def has_tracker_converged(tracker, threshold = config.params.convergence_threshold):$/;"	f
+headers	external/AI-norms/real_player_meta_prompting.py	/^headers = {"Authorization": f"Bearer {API_TOKEN}"}$/;"	v
+headers	external/AI-norms/run_API.py	/^headers = {"Authorization": f"Bearer {API_TOKEN}"}$/;"	v
+individual	external/AI-norms/simulation_module.py	/^def individual(dataframe, memory_size, rewards, options, fname, repeats):$/;"	f
+initial	external/AI-norms/runner.py	/^initial = config.params.initial$/;"	v
+initial	external/AI-norms/utils.py	/^initial = config.params.initial$/;"	v
+initial_composition	external/AI-norms/runner.py	/^initial_composition = config.params.initial_composition$/;"	v
+initial_inventories	src/naming_game/agent.py	/^def initial_inventories(num_agents: int, seed: int) -> tuple[Inventory, ...]:$/;"	f
+interactions	external/AI-norms/run_NG.py	/^interactions = 1000$/;"	v
+introduce_committed_minority	src/naming_game/naming_convention_game.py	/^    def introduce_committed_minority($/;"	m	class:NamingConventionGame
+inventory_label	src/naming_game/models.py	/^def inventory_label(inventory: Inventory) -> str:$/;"	f
+inventory_values	src/naming_game/models.py	/^def inventory_values(inventory: Inventory) -> list[Name]:$/;"	f
+latency_forward	tests/test_synchronous_game.py	/^    def latency_forward(messages):$/;"	f	function:test_completion_order_does_not_change_seeded_result
+latency_reverse	tests/test_synchronous_game.py	/^    def latency_reverse(messages):$/;"	f	function:test_completion_order_does_not_change_seeded_result
+llm_params	external/AI-norms/real_player_meta_prompting.py	/^    llm_params = {"do_sample": False,$/;"	v
+llm_params	external/AI-norms/real_player_meta_prompting.py	/^    llm_params = {"do_sample": True,$/;"	v
+llm_params	external/AI-norms/run_API.py	/^    llm_params = {"do_sample": False,$/;"	v
+llm_params	external/AI-norms/run_API.py	/^    llm_params = {"do_sample": True,$/;"	v
+load_benchmark_config	src/naming_game/benchmark.py	/^def load_benchmark_config(path: str | Path) -> BenchmarkConfig:$/;"	f
+load_dataframe	external/AI-norms/analyse_individual_bias.py	/^def load_dataframe(fname):$/;"	f
+load_experiment_config	src/naming_game/empowerment_experiment.py	/^def load_experiment_config(path: str | Path) -> EmpowermentExperimentConfig:$/;"	f
+load_frozen_encoder	scripts/embedding_model_tests/_common.py	/^def load_frozen_encoder(model_name: str, device: torch.device) -> SentenceTransformer:$/;"	f
+load_mainframe	external/AI-norms/utils.py	/^def load_mainframe(fname):$/;"	f
+load_reasoning_task	src/naming_game/reasoning_game.py	/^def load_reasoning_task(path: str | Path) -> ReasoningTask:$/;"	f
+main	scripts/embedding_model_tests/test_classification.py	/^def main() -> None:$/;"	f
+main	scripts/embedding_model_tests/test_embeddings.py	/^def main() -> None:$/;"	f
+main	scripts/embedding_model_tests/test_info_nce.py	/^def main() -> None:$/;"	f
+main	src/naming_game/cli.py	/^def main(argv: Sequence[str] | None = None) -> int:$/;"	f
+mainfname	external/AI-norms/analyse_individual_bias.py	/^    mainfname = f"{model}_bias_test_{''.join([str(m) for m in my_history])}_{''.join([str(m) for m in partner_history])}.pkl"$/;"	v
+mainfname	external/AI-norms/run_NG.py	/^        mainfname = "NG_10.pkl"#f"theoretical_data_files\/10_NG_{N}ps_{cm}cm_{b}bias.pkl"$/;"	v
+mainframe	external/AI-norms/run_NG.py	/^            mainframe = dict()$/;"	v
+mainframe	external/AI-norms/run_NG.py	/^            mainframe = pickle.load(open(mainfname, 'rb'))$/;"	v
+make_experiment_summary	src/naming_game/analysis/reporting.py	/^def make_experiment_summary($/;"	f
+make_pulse_summary	src/naming_game/analysis/reporting.py	/^def make_pulse_summary($/;"	f
+make_rows	tests/test_empowerment_experiment.py	/^    def make_rows(action):$/;"	f	function:test_recovery_is_immediate_or_censored_after_pulse_removal
+make_run_id	src/naming_game/runner.py	/^def make_run_id(spec: RunSpec) -> str:$/;"	f
+matched_interaction_budget	src/naming_game/benchmark.py	/^def matched_interaction_budget(num_agents: int, synchronous_rounds: int) -> int:$/;"	f
+max_interactions	src/naming_game/empowerment_experiment.py	/^    def max_interactions(self) -> int:$/;"	m	class:EmpowermentExperimentConfig
+measured_prob	external/AI-norms/analyse_individual_bias.py	/^    measured_prob = counts[1]\/sum(counts)$/;"	v
+measured_prob	external/AI-norms/analyse_individual_bias.py	/^measured_prob = counts[1]\/sum(counts)$/;"	v
+memory_size_set	external/AI-norms/meta_prompting_runner.py	/^memory_size_set = config.params.memory_size_set$/;"	v
+memory_size_set	external/AI-norms/runner.py	/^memory_size_set = config.params.memory_size_set$/;"	v
+minority_size_set	external/AI-norms/meta_prompting_runner.py	/^minority_size_set = config.minority.minority_size_set$/;"	v
+minority_size_set	external/AI-norms/runner.py	/^minority_size_set = config.minority.minority_size_set$/;"	v
+model	external/AI-norms/analyse_individual_bias.py	/^model = "data\/llama31_data\/llama31"$/;"	v
+model	external/AI-norms/run_local.py	/^    model = AutoModelForCausalLM.from_pretrained(model_name, resume_download = True, device_map='cuda:0', quantization_config=bnb_config)#, local_files_only = True)$/;"	v
+model	external/AI-norms/run_local.py	/^    model = AutoModelForCausalLM.from_pretrained(model_name, resume_download = True,token=config.model.API_TOKEN)#, local_files_only = True)$/;"	v
+model	external/AI-norms/run_local.py	/^    model = model.to('cuda')$/;"	v
+model_name	external/AI-norms/run_local.py	/^model_name = config.model.model_name$/;"	v
+mp_fname	external/AI-norms/meta_prompting_runner.py	/^mp_fname = f"data\/{shorthand}_meta_test.pkl"$/;"	v
+mutual_information	src/naming_game/analysis/estimators.py	/^def mutual_information($/;"	f
+mutual_information_from_counts	src/naming_game/analysis/estimators.py	/^def mutual_information_from_counts(counts: np.ndarray) -> Estimate:$/;"	f
+network_type	external/AI-norms/runner.py	/^network_type = config.network.network_type$/;"	v
+network_type	external/AI-norms/utils.py	/^network_type = config.network.network_type$/;"	v
+normalize_histories	src/naming_game/analysis/reporting.py	/^def normalize_histories($/;"	f
+normalize_inventory	src/naming_game/models.py	/^def normalize_inventory(value: Any) -> Inventory:$/;"	f
+observer	tests/test_naming_convention_game.py	/^    def observer(messages):$/;"	f	function:test_pair_choices_are_simultaneous_and_history_is_updated_after_both_calls
+observer	tests/test_synchronous_game.py	/^    def observer(messages):$/;"	f	function:test_pair_prompts_contain_only_pair_local_state
+one_tailed_test	external/AI-norms/analyse_individual_bias.py	/^def one_tailed_test(count, null_mean=0.5, num_bootstrap_samples=10000, alpha=0.05):$/;"	f
+optional_int	src/naming_game/models.py	/^        def optional_int(key: str) -> int | None:$/;"	f	function:TokenUsage.from_mapping
+options	external/AI-norms/analyse_individual_bias.py	/^options = ['Q', 'M', 'X', 'Y', 'F', 'J', 'P', 'R', 'C', 'D']$/;"	v
+options	external/AI-norms/analyse_individual_bias.py	/^options = ['Q', 'M']$/;"	v
+options	external/AI-norms/run_real_player_metaprompting.py	/^options = ['Q', 'M']$/;"	v
+options_set	external/AI-norms/meta_prompting_runner.py	/^options_set = config.params.options_set$/;"	v
+options_set	external/AI-norms/runner.py	/^options_set = config.params.options_set$/;"	v
+override_config	src/naming_game/benchmark.py	/^def override_config(config: BenchmarkConfig, **updates: Any) -> BenchmarkConfig:$/;"	f
+pairwise_similarity	scripts/embedding_model_tests/test_info_nce.py	/^def pairwise_similarity($/;"	f
+params	external/AI-norms/run_NG.py	/^        params = []$/;"	v
+params	external/AI-norms/run_NG.py	/^params = {'interactions': interactions,$/;"	v
+parse_args	scripts/embedding_model_tests/test_classification.py	/^def parse_args() -> argparse.Namespace:$/;"	f
+parse_args	scripts/embedding_model_tests/test_embeddings.py	/^def parse_args() -> argparse.Namespace:$/;"	f
+parse_args	scripts/embedding_model_tests/test_info_nce.py	/^def parse_args() -> argparse.Namespace:$/;"	f
+parse_convention_decision	src/naming_game/naming_convention_game.py	/^def parse_convention_decision($/;"	f
+play	external/AI-norms/NG_module.py	/^    def play(self, speaker, listener, tracker):$/;"	m	class:NamingGame
+play_interaction	src/naming_game/naming_convention_game.py	/^    async def play_interaction(self) -> ConventionInteraction:$/;"	m	class:NamingConventionGame
+plot_bootstrap_distribution	external/AI-norms/analyse_individual_bias.py	/^def plot_bootstrap_distribution(boot_means, observed_mean):$/;"	f
+pool	external/AI-norms/run_NG.py	/^            pool = multiprocessing.Pool(5)$/;"	v
+population	external/AI-norms/simulation_module.py	/^def population(dataframe, run, memory_size, rewards, options, fname):$/;"	f
+population_counts	src/naming_game/models.py	/^def population_counts(inventories: Sequence[Inventory]) -> dict[str, int]:$/;"	f
+population_round_completed	src/naming_game/empowerment_experiment.py	/^            def population_round_completed(population_round: int) -> None:$/;"	f	function:run_experiment.execute
+prepare_texts	scripts/embedding_model_tests/_common.py	/^def prepare_texts($/;"	f
+quantized	external/AI-norms/run_local.py	/^quantized = config.model.quantized$/;"	v
+query	external/AI-norms/real_player_meta_prompting.py	/^def query(payload):$/;"	f
+query	external/AI-norms/run_API.py	/^def query(payload):$/;"	f
+query	external/AI-norms/run_local.py	/^def query(text, temperature = config.params.temperature, max_new_tokens = 15):$/;"	f
+record	src/naming_game/agent.py	/^    def record(self, event: dict[str, Any]) -> None:$/;"	m	class:Agent
+rects	external/AI-norms/analyse_individual_bias.py	/^rects = ax.bar(range(len(options)), counts, color = ['tab:red', 'tab:blue'])$/;"	v
+remember	src/naming_game/naming_convention_game.py	/^    def remember($/;"	m	class:ConventionAgent
+responses	tests/test_interaction.py	/^    def responses(messages):$/;"	f	function:test_listener_disagreement_is_invalid_and_engine_remains_authoritative
+retry	src/naming_game/api_client.py	/^    def retry(self) -> None:$/;"	m	class:_RequestStats
+rewards	external/AI-norms/run_real_player_metaprompting.py	/^rewards = [-50, +100]$/;"	v
+rewards_set	external/AI-norms/meta_prompting_runner.py	/^rewards_set = config.params.rewards_set$/;"	v
+rewards_set	external/AI-norms/runner.py	/^rewards_set = config.params.rewards_set$/;"	v
+rolling_window	src/naming_game/empowerment_experiment.py	/^    def rolling_window(self) -> int:$/;"	m	class:EmpowermentExperimentConfig
+roulette_wheel	external/AI-norms/NG_module.py	/^def roulette_wheel(normedprobs):$/;"	f
+round_end_trajectories	src/naming_game/analysis/reporting.py	/^def round_end_trajectories(interactions: pd.DataFrame) -> pd.DataFrame:$/;"	f
+run	external/AI-norms/real_player_meta_prompting.py	/^def run(dataframe, tracker, run, p, memory_size, rewards, options, fname):$/;"	f
+run	src/naming_game/naming_convention_game.py	/^    async def run($/;"	m	class:NamingConventionGame
+run	src/naming_game/sequential_game.py	/^    async def run(self, num_interactions: int) -> GameResult:$/;"	m	class:SequentialNamingGame
+run	src/naming_game/synchronous_game.py	/^    async def run(self, rounds: int) -> GameResult:$/;"	m	class:SynchronousParallelNamingGame
+run	tests/test_interaction.py	/^def run(coroutine):$/;"	f
+run_episode	src/naming_game/empowerment_experiment.py	/^async def run_episode($/;"	f
+run_experiment	src/naming_game/empowerment_experiment.py	/^async def run_experiment($/;"	f
+run_game	tests/test_sequential_game.py	/^def run_game(num_agents=5, interactions=10, seed=7, latency=0):$/;"	f
+run_game	tests/test_synchronous_game.py	/^def run_game(num_agents=5, rounds=4, seed=7, latency=0):$/;"	f
+run_matched_benchmark	src/naming_game/benchmark.py	/^async def run_matched_benchmark($/;"	f
+run_model_test	scripts/embedding_model_tests/test_embeddings.py	/^def run_model_test(model_name: str, device: torch.device) -> None:$/;"	f
+run_single	src/naming_game/runner.py	/^async def run_single($/;"	f
+running_player	external/AI-norms/meta_prompting.py	/^def running_player(options, memory_size, rewards):$/;"	f
+runs	external/AI-norms/run_NG.py	/^runs = 10000$/;"	v
+runs	external/AI-norms/runner.py	/^runs = config.params.runs$/;"	v
+sampled	src/naming_game/analysis/empowerment.py	/^            def sampled(sampled_ids: np.ndarray) -> float:$/;"	f	function:estimate_lagged
+sampled	src/naming_game/analysis/empowerment.py	/^        def sampled(sampled_ids: np.ndarray) -> float:$/;"	f	function:estimate_terminal
+scenario	tests/test_synchronous_game.py	/^    async def scenario():$/;"	f	function:test_no_live_update_is_visible_before_round_barrier
+seed_consensus_history	src/naming_game/naming_convention_game.py	/^    def seed_consensus_history($/;"	m	class:NamingConventionGame
+seed_random_history	src/naming_game/naming_convention_game.py	/^    def seed_random_history(self, *, repetitions: int | None = None) -> None:$/;"	m	class:NamingConventionGame
+set_deterministic_seed	scripts/embedding_model_tests/_common.py	/^def set_deterministic_seed(seed: int) -> None:$/;"	f
+set_initial_state	external/AI-norms/utils.py	/^def set_initial_state(network_dict, rewards, options, memory_size):$/;"	f
+set_inventory	src/naming_game/agent.py	/^    def set_inventory(self, inventory: Inventory) -> None:$/;"	m	class:Agent
+shorthand	external/AI-norms/meta_prompting_runner.py	/^shorthand = config.model.shorthand$/;"	v
+shorthand	external/AI-norms/runner.py	/^shorthand = config.model.shorthand$/;"	v
+shuffle_episode_labels	src/naming_game/analysis/surrogates.py	/^def shuffle_episode_labels($/;"	f
+simulate	external/AI-norms/NG_module.py	/^    def simulate(self):$/;"	m	class:NamingGame
+simulate_meta_prompting	external/AI-norms/simulation_module.py	/^def simulate_meta_prompting(memory_size, rewards, options, fname):$/;"	f
+snapshot	src/naming_game/agent.py	/^    def snapshot(self, *, evidence: str | None = None) -> AgentSnapshot:$/;"	m	class:Agent
+snapshot	src/naming_game/api_client.py	/^    def snapshot(self) -> dict[str, Any]:$/;"	m	class:_RequestStats
+stats	src/naming_game/api_client.py	/^    def stats(self) -> dict[str, Any]:$/;"	m	class:AsyncLLMClient
+stats	src/naming_game/api_client.py	/^    def stats(self) -> dict[str, Any]:$/;"	m	class:MockAsyncLLMClient
+success	src/naming_game/api_client.py	/^    def success(self, latency: float, usage: TokenUsage) -> None:$/;"	m	class:_RequestStats
+summarize_episode_metrics	src/naming_game/analysis/metrics.py	/^def summarize_episode_metrics($/;"	f
+summarize_run	src/naming_game/runner.py	/^def summarize_run($/;"	f
+swap_committed	external/AI-norms/utils.py	/^def swap_committed(df, minority_size):$/;"	f
+swap_labels_half	src/naming_game/analysis/surrogates.py	/^def swap_labels_half($/;"	f
+swap_scalar	src/naming_game/analysis/surrogates.py	/^    def swap_scalar(value: object) -> object:$/;"	f	function:swap_labels_half
+symmetric_info_nce	scripts/embedding_model_tests/test_info_nce.py	/^def symmetric_info_nce(similarities: torch.Tensor, temperature: float) -> torch.Tensor:$/;"	f
+temperature	external/AI-norms/real_player_meta_prompting.py	/^temperature = config.params.temperature$/;"	v
+temperature	external/AI-norms/run_API.py	/^temperature = config.params.temperature$/;"	v
+temperature	external/AI-norms/runner.py	/^temperature = config.params.temperature$/;"	v
+test_agents_never_share_mutable_histories	tests/test_mock_api.py	/^def test_agents_never_share_mutable_histories():$/;"	f
+test_all_pairs_read_one_start_of_round_snapshot	tests/test_synchronous_game.py	/^def test_all_pairs_read_one_start_of_round_snapshot():$/;"	f
+test_automatic_analysis_failure_does_not_fail_completed_experiment	tests/test_empowerment_cli.py	/^def test_automatic_analysis_failure_does_not_fail_completed_experiment($/;"	f
+test_committed_agents_skip_api_requests	tests/test_naming_convention_game.py	/^def test_committed_agents_skip_api_requests():$/;"	f
+test_completion_order_does_not_change_seeded_result	tests/test_synchronous_game.py	/^def test_completion_order_does_not_change_seeded_result():$/;"	f
+test_conditional_channel_and_miller_madow_are_reported	tests/test_empowerment_estimators.py	/^def test_conditional_channel_and_miller_madow_are_reported():$/;"	f
+test_consensus_initialization_is_memory_only_not_a_tracked_interaction	tests/test_naming_convention_game.py	/^def test_consensus_initialization_is_memory_only_not_a_tracked_interaction():$/;"	f
+test_convention_roles_are_validated_against_configured_names	tests/test_empowerment_experiment.py	/^def test_convention_roles_are_validated_against_configured_names():$/;"	f
+test_direct_counting_known_channels	tests/test_empowerment_estimators.py	/^def test_direct_counting_known_channels():$/;"	f
+test_each_interaction_makes_exactly_two_logical_api_calls	tests/test_interaction.py	/^def test_each_interaction_makes_exactly_two_logical_api_calls():$/;"	f
+test_each_run_uses_a_fresh_stage_convergence_window	tests/test_naming_convention_game.py	/^def test_each_run_uses_a_fresh_stage_convergence_window():$/;"	f
+test_evaluator_history_is_never_inserted_into_later_prompts	tests/test_mock_api.py	/^def test_evaluator_history_is_never_inserted_into_later_prompts():$/;"	f
+test_exact_interaction_budget_and_no_internal_concurrency	tests/test_sequential_game.py	/^def test_exact_interaction_budget_and_no_internal_concurrency():$/;"	f
+test_existing_default_mock_client_supports_convention_prompts	tests/test_naming_convention_game.py	/^def test_existing_default_mock_client_supports_convention_prompts():$/;"	f
+test_experiment_analyze_flag_overrides_disabled_yaml	tests/test_empowerment_cli.py	/^def test_experiment_analyze_flag_overrides_disabled_yaml(tmp_path, monkeypatch, capsys):$/;"	f
+test_failure_update_changes_only_listener	tests/test_interaction.py	/^def test_failure_update_changes_only_listener():$/;"	f
+test_forced_actions_update_memory_then_release_to_ordinary_policy	tests/test_empowerment_experiment.py	/^def test_forced_actions_update_memory_then_release_to_ordinary_policy():$/;"	f
+test_half_episode_label_swap_preserves_a_symmetric_channel	tests/test_empowerment_estimators.py	/^def test_half_episode_label_swap_preserves_a_symmetric_channel():$/;"	f
+test_if_initialisation_worked	external/AI-norms/utils.py	/^def test_if_initialisation_worked(dataframe, memory_size, options):$/;"	f
+test_independent_replicates_get_fresh_instances_and_no_provider_sessions	tests/test_mock_api.py	/^def test_independent_replicates_get_fresh_instances_and_no_provider_sessions():$/;"	f
+test_invalid_inventories_are_rejected	tests/test_interaction.py	/^def test_invalid_inventories_are_rejected(value):$/;"	f
+test_invalid_responses_are_retried_but_never_silently_repaired	tests/test_naming_convention_game.py	/^def test_invalid_responses_are_retried_but_never_silently_repaired():$/;"	f
+test_listener_disagreement_is_invalid_and_engine_remains_authoritative	tests/test_interaction.py	/^def test_listener_disagreement_is_invalid_and_engine_remains_authoritative():$/;"	f
+test_live_provider_config_rejects_mock_override	tests/test_empowerment_cli.py	/^def test_live_provider_config_rejects_mock_override(tmp_path):$/;"	f
+test_malformed_json_is_logged_and_repaired_locally	tests/test_interaction.py	/^def test_malformed_json_is_logged_and_repaired_locally():$/;"	f
+test_matched_interaction_budget_examples	tests/test_benchmark.py	/^def test_matched_interaction_budget_examples():$/;"	f
+test_matched_modes_use_same_interactions_and_expected_calls	tests/test_benchmark.py	/^def test_matched_modes_use_same_interactions_and_expected_calls(tmp_path):$/;"	f
+test_mock_benchmark_creates_every_required_result_file	tests/test_benchmark.py	/^def test_mock_benchmark_creates_every_required_result_file(tmp_path):$/;"	f
+test_mock_parquet_experiment_and_offline_analysis	tests/test_empowerment_experiment.py	/^def test_mock_parquet_experiment_and_offline_analysis(tmp_path):$/;"	f
+test_neutral_episode_without_promoted_name_is_never_a_takeover	tests/test_empowerment_experiment.py	/^def test_neutral_episode_without_promoted_name_is_never_a_takeover():$/;"	f
+test_no_live_update_is_visible_before_round_barrier	tests/test_synchronous_game.py	/^def test_no_live_update_is_visible_before_round_barrier():$/;"	f
+test_only_participants_receive_private_history_entries	tests/test_sequential_game.py	/^def test_only_participants_receive_private_history_entries():$/;"	f
+test_only_three_inventories_are_valid	tests/test_interaction.py	/^def test_only_three_inventories_are_valid(value):$/;"	f
+test_openai_provider_has_explicit_identity_without_network_access	tests/test_empowerment_experiment.py	/^def test_openai_provider_has_explicit_identity_without_network_access():$/;"	f
+test_pair_choices_are_simultaneous_and_history_is_updated_after_both_calls	tests/test_naming_convention_game.py	/^def test_pair_choices_are_simultaneous_and_history_is_updated_after_both_calls():$/;"	f
+test_pair_prompts_contain_only_pair_local_state	tests/test_synchronous_game.py	/^def test_pair_prompts_contain_only_pair_local_state():$/;"	f
+test_pairs_are_disjoint_and_odd_population_has_one_idle_agent	tests/test_synchronous_game.py	/^def test_pairs_are_disjoint_and_odd_population_has_one_idle_agent():$/;"	f
+test_parser_accepts_json_and_original_python_mapping_shape	tests/test_naming_convention_game.py	/^def test_parser_accepts_json_and_original_python_mapping_shape():$/;"	f
+test_population_round_callback_reports_completed_rounds	tests/test_naming_convention_game.py	/^def test_population_round_callback_reports_completed_rounds():$/;"	f
+test_prompt_uses_only_bounded_private_history_and_local_score	tests/test_naming_convention_game.py	/^def test_prompt_uses_only_bounded_private_history_and_local_score():$/;"	f
+test_reasoning_fraction_requires_explicit_task	tests/test_benchmark.py	/^def test_reasoning_fraction_requires_explicit_task(tmp_path):$/;"	f
+test_recovery_is_immediate_or_censored_after_pulse_removal	tests/test_empowerment_experiment.py	/^def test_recovery_is_immediate_or_censored_after_pulse_removal():$/;"	f
+test_replication_unit_supports_per_policy_and_split_strata	tests/test_empowerment_experiment.py	/^def test_replication_unit_supports_per_policy_and_split_strata():$/;"	f
+test_rolling_window_events_and_censored_fields_are_derived	tests/test_empowerment_experiment.py	/^def test_rolling_window_events_and_censored_fields_are_derived():$/;"	f
+test_run_stops_after_reference_three_n_success_window	tests/test_naming_convention_game.py	/^def test_run_stops_after_reference_three_n_success_window():$/;"	f
+test_seeded_ordered_pair_sampling_is_reproducible	tests/test_sequential_game.py	/^def test_seeded_ordered_pair_sampling_is_reproducible():$/;"	f
+test_seeded_pairing_is_reproducible	tests/test_synchronous_game.py	/^def test_seeded_pairing_is_reproducible():$/;"	f
+test_session_ids_are_unique_when_explicitly_used	tests/test_mock_api.py	/^def test_session_ids_are_unique_when_explicitly_used():$/;"	f
+test_shared_clients_do_not_have_message_history	tests/test_mock_api.py	/^def test_shared_clients_do_not_have_message_history(monkeypatch):$/;"	f
+test_standalone_analysis_defaults_inside_history_directory	tests/test_empowerment_cli.py	/^def test_standalone_analysis_defaults_inside_history_directory(tmp_path, monkeypatch):$/;"	f
+test_success_update_collapses_both_inventories	tests/test_interaction.py	/^def test_success_update_collapses_both_inventories():$/;"	f
+test_surrogates_preserve_episode_units_and_are_deterministic	tests/test_empowerment_estimators.py	/^def test_surrogates_preserve_episode_units_and_are_deterministic():$/;"	f
+test_terminal_empowerment_requires_more_than_one_policy	tests/test_empowerment_estimators.py	/^def test_terminal_empowerment_requires_more_than_one_policy():$/;"	f
+test_terminal_empowerment_small_sample_statuses	tests/test_empowerment_estimators.py	/^def test_terminal_empowerment_small_sample_statuses(episodes_per_policy, expected_status):$/;"	f
+test_updates_are_immediate_and_each_next_pair_sees_live_state	tests/test_sequential_game.py	/^def test_updates_are_immediate_and_each_next_pair_sees_live_state():$/;"	f
+theory_avg_outcome	external/AI-norms/run_NG.py	/^theory_avg_outcome = pd.DataFrame(average_bins).mean(axis = 0)#np.mean(average_bins, axis = 0)$/;"	v
+theory_dataframe	external/AI-norms/run_NG.py	/^theory_dataframe = dataframes#mainframe$/;"	v
+theory_steps	external/AI-norms/run_NG.py	/^theory_steps = np.array(range(len(theory_avg_outcome)))$/;"	v
+to_dict	src/naming_game/models.py	/^    def to_dict(self) -> dict[str, Any]:$/;"	m	class:BenchmarkRunSummary
+to_log_dict	src/naming_game/models.py	/^    def to_log_dict(self) -> dict[str, Any]:$/;"	m	class:InteractionResult
+to_log_dict	src/naming_game/naming_convention_game.py	/^    def to_log_dict(self) -> dict[str, Any]:$/;"	m	class:ConventionInteraction
+token_sum	src/naming_game/runner.py	/^    def token_sum(field: str) -> int | None:$/;"	f	function:summarize_run
+tokenizer	external/AI-norms/run_local.py	/^tokenizer = AutoTokenizer.from_pretrained(model_name, token=config.model.API_TOKEN)$/;"	v
+total_interactions	external/AI-norms/runner.py	/^total_interactions = config.params.total_interactions$/;"	v
+total_interactions	external/AI-norms/simulation_module.py	/^total_interactions = config.params.total_interactions$/;"	v
+tracker	external/AI-norms/meta_prompting_runner.py	/^tracker = sm.simulate_meta_prompting(memory_size=memory_size_set[0], rewards=rewards_set[0], options=options_set[0], fname = mp_fname)$/;"	v
+tracker	external/AI-norms/run_real_player_metaprompting.py	/^tracker = {p+1: {} for p in range(8)}$/;"	v
+update_dict	external/AI-norms/utils.py	/^def update_dict(player, my_answer, partner_answer, outcome):$/;"	f
+update_tracker	external/AI-norms/NG_module.py	/^    def update_tracker(self, tracker, output, outcome):$/;"	m	class:NamingGame
+update_tracker	external/AI-norms/utils.py	/^def update_tracker(tracker, p1, p2, p1_answer, p2_answer, outcome):$/;"	f
+validate_model	src/naming_game/api_client.py	/^    async def validate_model(self) -> tuple[str, ...]:$/;"	m	class:AsyncLLMClient
+version	external/AI-norms/runner.py	/^version = config.sim.version$/;"	v
+window_active	src/naming_game/empowerment_experiment.py	/^    def window_active(self, interaction_index: int) -> bool:$/;"	m	class:CommitteeSchedule
+window_active	src/naming_game/naming_convention_game.py	/^    def window_active(self, interaction_index: int) -> bool: ...$/;"	m	class:ConventionIntervention
+write_benchmark_summary	src/naming_game/runner.py	/^def write_benchmark_summary($/;"	f
+write_run_outputs	src/naming_game/runner.py	/^def write_run_outputs($/;"	f
+write_summary_markdown	src/naming_game/analysis/reporting.py	/^def write_summary_markdown($/;"	f
