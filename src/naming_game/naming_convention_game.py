@@ -19,6 +19,7 @@ import json
 import random
 import re
 import time
+import math
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -26,6 +27,7 @@ from typing import Any, Literal, Protocol
 
 from .api_client import LLMClient
 from .models import ConfigurationError, LLMResponse
+from .local_model_types import ChoiceSelectionPolicy, DecisionOutputFormat
 
 
 class InvalidConventionResponse(RuntimeError):
@@ -61,6 +63,9 @@ class ConventionGameConfig:
     convergence_window: int | None = None
     convergence_threshold: float = 1.0
     invalid_response_retries: int = 2
+    decision_output_format: DecisionOutputFormat = "json_reason"
+    choice_selection_policy: ChoiceSelectionPolicy = "argmax"
+    choice_temperature: float = 1.0
 
     def __post_init__(self) -> None:
         normalized_actions = tuple(str(action) for action in self.actions)
@@ -94,6 +99,12 @@ class ConventionGameConfig:
             )
         if self.invalid_response_retries < 0:
             raise ConfigurationError("invalid_response_retries cannot be negative.")
+        if self.decision_output_format not in {"json_reason", "choice_reason", "choice_only"}:
+            raise ConfigurationError("Unknown decision_output_format.")
+        if self.choice_selection_policy not in {"argmax", "sample"}:
+            raise ConfigurationError("Unknown choice_selection_policy.")
+        if not math.isfinite(self.choice_temperature) or self.choice_temperature <= 0:
+            raise ConfigurationError("choice_temperature must be finite and positive.")
 
 
 @dataclass(frozen=True)
@@ -176,6 +187,9 @@ class ConventionDecision:
     committed: bool = False
     forced: bool = False
     constrained_scores: tuple[Any, ...] | None = None
+    output_format: DecisionOutputFormat = "json_reason"
+    reason_valid: bool | None = None
+    decision_method: str = "generated"
 
 
 @dataclass(frozen=True)
@@ -203,6 +217,8 @@ class ConventionInteraction:
             return {
                 "action": decision.action,
                 "reason": decision.reason,
+                "reason_valid": decision.reason_valid,
+                "decision_output_format": decision.output_format,
                 "action_order": list(decision.action_order),
                 "committed": decision.committed,
                 "forced": decision.forced,
@@ -214,7 +230,7 @@ class ConventionInteraction:
                 "retries": response.retries if response is not None else None,
                 "validation_attempts": len(decision.responses),
                 "token_usage": asdict(response.usage) if response is not None else None,
-                "decision_method": "constrained_sequence" if decision.constrained_scores else "generated",
+                "decision_method": decision.decision_method,
                 "allowed_choices": list(decision.action_order) if decision.constrained_scores else None,
                 "choice_log_likelihoods": ({score.choice: score.log_likelihood for score in decision.constrained_scores} if decision.constrained_scores else None),
                 "choice_probabilities": ({score.choice: score.probability for score in decision.constrained_scores} if decision.constrained_scores else None),
@@ -262,7 +278,7 @@ def _visible_history(
     return tuple(agent.history[-memory_size:])
 
 
-def build_convention_messages(
+def build_convention_context(
     *,
     agent: ConventionAgent,
     action_order: Sequence[str],
@@ -270,7 +286,7 @@ def build_convention_messages(
     success_reward: int,
     failure_payoff: int,
     advertised_rounds: int = 100,
-) -> list[dict[str, str]]:
+) -> str:
     """Build the answer-first prompt used by the reference experiment.
 
     Partner IDs, population state, global interaction number, and histories of
@@ -313,14 +329,36 @@ def build_convention_messages(
 
     sections.append(
         f"It is now round {len(visible) + 1}. The current score of Player 1 is "
-        f"{local_score}. Answer saying which value Player 1 should pick. Please "
-        "think step by step before making a decision. Remember, examining history "
-        "explicitly is important. Put the decision before the explanation and "
-        "return only JSON using this format: "
-        '{"value":"<VALUE_OF_PLAYER_1>","reason":"<YOUR_REASON>"}.'
+        f"{local_score}. Answer saying which value Player 1 should pick."
     )
+    return "\n".join(sections)
+
+
+def build_convention_response_instruction(output_format: DecisionOutputFormat, action_order: Sequence[str]) -> str:
+    displayed = json.dumps(list(action_order), ensure_ascii=False)
+    if output_format == "json_reason":
+        return ("Please think step by step before making a decision. Remember, examining history explicitly is important. "
+                "Put the decision before the explanation and return only JSON using this format: "
+                '{"value":"<VALUE_OF_PLAYER_1>","reason":"<YOUR_REASON>"}.')
+    if output_format == "choice_reason":
+        return (f"The first line must be exactly one displayed legal action from {displayed}. No text, whitespace-only "
+                "preamble, JSON, Markdown fence, bullet, or label may precede the action. After the action, write a newline. "
+                "The second line must begin exactly with `Reason:` followed by a short, non-blank reason. Put the decision before the explanation.")
+    if output_format == "choice_only":
+        return (f"Return exactly one displayed legal action from {displayed}. Do not return JSON, an explanation, "
+                "punctuation, a label, or Markdown. Return only the action.")
+    raise ValueError(f"Unknown decision output format: {output_format!r}")
+
+
+def build_convention_messages(
+    *, agent: ConventionAgent, action_order: Sequence[str], memory_size: int,
+    success_reward: int, failure_payoff: int, advertised_rounds: int = 100,
+    output_format: DecisionOutputFormat = "json_reason",
+) -> list[dict[str, str]]:
+    context = build_convention_context(agent=agent, action_order=action_order, memory_size=memory_size,
+        success_reward=success_reward, failure_payoff=failure_payoff, advertised_rounds=advertised_rounds)
     return [
-        {"role": "system", "content": "\n".join(sections)},
+        {"role": "system", "content": context + "\n" + build_convention_response_instruction(output_format, action_order)},
         {"role": "user", "content": "Answer saying which action Player 1 should play."},
     ]
 
@@ -350,10 +388,27 @@ def _parse_mapping(content: str) -> dict[str, Any]:
 
 
 def parse_convention_decision(
-    content: str, actions: Sequence[str]
+    content: str, actions: Sequence[str], output_format: DecisionOutputFormat = "json_reason"
 ) -> tuple[str, str | None]:
     """Extract a valid action without inferring one from free-form reasoning."""
 
+    if output_format == "choice_only":
+        candidate = content.strip()
+        if candidate not in actions:
+            raise ValueError("response must be exactly one configured action")
+        return candidate, None
+    if output_format == "choice_reason":
+        lines = content.strip().splitlines()
+        if not lines or lines[0].strip() not in actions:
+            raise ValueError("first non-blank line must be exactly one configured action")
+        candidate = lines[0].strip()
+        remainder = "\n".join(lines[1:]).strip()
+        if not remainder.startswith("Reason:"):
+            raise ValueError("response is missing the exact Reason: marker")
+        reason = remainder[len("Reason:"):].strip()
+        if not reason:
+            raise ValueError("reason must be non-blank")
+        return candidate, reason
     body = _parse_mapping(content)
     candidate = body.get("value", body.get("action"))
     if not isinstance(candidate, str) or candidate not in actions:
@@ -569,21 +624,30 @@ class NamingConventionGame:
             success_reward=self.config.success_reward,
             failure_payoff=self.config.failure_payoff,
             advertised_rounds=self.config.advertised_rounds,
+            output_format=self.config.decision_output_format,
         )
-        constrained = getattr(self.client, "complete_constrained", None)
-        if getattr(self.client, "provider_name", None) == "gemma_local" and callable(constrained):
-            decision = await constrained(
-                messages, choices=self.config.actions,
-                temperature=max(self.config.temperature, 1.0), seed=request_seed,
+        combined = getattr(self.client, "complete_decision", None)
+        if self.config.decision_output_format != "json_reason" and callable(combined):
+            decision = await combined(
+                messages, choices=action_order,
+                output_format=self.config.decision_output_format,
+                choice_temperature=self.config.choice_temperature,
+                selection_policy=self.config.choice_selection_policy,
+                generation_temperature=self.config.temperature,
+                max_reason_tokens=self.config.max_tokens,
+                seed=request_seed,
             )
             response = LLMResponse(
-                content=json.dumps({"action": decision.selected_choice}), model=decision.model,
+                content=decision.content, model=decision.model,
                 latency_seconds=decision.latency_seconds, usage=decision.usage,
             )
             return ConventionDecision(
-                action=decision.selected_choice, reason=None,
-                action_order=tuple(self.config.actions), response=response,
+                action=decision.selected_choice, reason=decision.reason,
+                action_order=action_order, response=response,
                 responses=(response,), constrained_scores=decision.scores,
+                output_format=self.config.decision_output_format,
+                reason_valid=decision.reason_valid,
+                decision_method="constrained_decision",
             )
         responses: list[LLMResponse] = []
         last_error = "unknown validation error"
@@ -597,7 +661,8 @@ class NamingConventionGame:
             responses.append(response)
             try:
                 action, reason = parse_convention_decision(
-                    response.content, self.config.actions
+                    response.content, self.config.actions,
+                    self.config.decision_output_format,
                 )
                 return ConventionDecision(
                     action=action,
@@ -605,6 +670,8 @@ class NamingConventionGame:
                     action_order=action_order,
                     response=response,
                     responses=tuple(responses),
+                    output_format=self.config.decision_output_format,
+                    reason_valid=(bool(reason) if self.config.decision_output_format != "choice_only" else None),
                 )
             except ValueError as exc:
                 last_error = str(exc)
