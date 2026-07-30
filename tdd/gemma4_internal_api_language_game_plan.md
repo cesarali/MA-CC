@@ -1,31 +1,80 @@
-# Plan: Internal Gemma 4 API for Language Games and Constrained Choices
+# CPU-Only Implementation Task: Internal Gemma 4 API for Language Games
 
-## 1. Outcome
+## 1. Task and execution boundary
 
-Build a repository-internal Python API that loads `google/gemma-4-12B-it` once
-from the existing `HF_HOME`, serves the same stateless asynchronous completion
-contract already used by the language games, and additionally exposes normalized
-scores for an explicit set of allowed answers.
+Implement the repository code, tests, CLI integration, and live-test scripts for an
+internal `google/gemma-4-12B-it` client **without downloading, loading, or running the
+real model**. This task is intentionally assigned to an environment that may have no
+GPU, no cached checkpoint, and no Hugging Face authentication.
 
-The first end-to-end milestone is deliberately small:
+The implementation agent must treat the existing successful smoke test as the runtime
+reference:
 
-1. load the cached Gemma checkpoint once on the A100;
-2. answer a simple reasoning question through the internal API;
-3. request allowed answers `A`, `B`, and `C` through that same API;
-4. verify that callers can inspect raw sequence log-likelihoods and normalized
-   constrained probabilities;
-5. run a small existing Naming Game with `provider=gemma_local` without changing
-   the game engine's provider-independent behavior.
+```text
+scripts/gemma4_logits_test/test_gemma4_logits.py
+scripts/gemma4_logits_test/README.md
+```
 
-This is an internal Python API in phase 1, not a network service. Keeping the
-model in the same process avoids authentication, serialization, and deployment
-work while the contract is still being validated. A local HTTP service can be
-added later behind the same client interface if multiple processes must share one
-GPU-resident model.
+Extract and adapt the established behavior; do not import the smoke-test script as a
+library and do not try to reproduce its live result locally.
 
-## 2. Existing repository boundary to preserve
+### Non-negotiable restrictions for this task
 
-The games already depend on `LLMClient` in `src/naming_game/api_client.py`:
+The CPU-only implementation agent must **not**:
+
+- call `AutoProcessor.from_pretrained()` or any model/tokenizer `from_pretrained()`;
+- run `scripts/gemma4_logits_test/test_gemma4_logits.py`, including with `--cpu`;
+- run the future live internal-API test or a live `gemma_local` game;
+- download Gemma weights, tokenizer files, configuration files, or snapshots;
+- authenticate with Hugging Face or inspect/copy another user's credentials;
+- run `huggingface-cli login`, `hf download`, `git lfs`, `snapshot_download`, `curl`,
+  or equivalent model-fetching commands;
+- install or upgrade CUDA, PyTorch, Transformers, torchvision, or other packages merely
+  to perform the live test;
+- modify `.env`, create a new model cache, or copy model artifacts into the repository;
+- weaken or remove CUDA/model validation just to make an unvalidated live path appear
+  successful on CPU;
+- claim that Gemma compatibility, tokenization, generation, numerical output, memory
+  use, or model reuse has been live-validated.
+
+If an optional dependency is unavailable in the active shell, keep imports lazy and
+continue with the repository tests and pure/fake-runtime tests that can run. Record any
+unexecuted CPU tensor tests in the handoff. Do not solve a missing package by downloading
+the model or changing the machine's ML stack.
+
+### What the CPU-only agent is expected to finish
+
+The CPU-only agent should implement all normal application code and as much automated
+verification as possible using dependency injection, tiny deterministic fakes, and
+CPU tensors where an already-configured CPU PyTorch environment is available. It must
+also write the live scripts but must not execute them.
+
+The later GPU agent should be left with validation and small compatibility corrections,
+not an unwritten feature.
+
+## 2. Definition of done for the CPU-only agent
+
+The CPU-only task is complete when:
+
+1. the typed constrained-choice API exists;
+2. `GemmaLocalAsyncLLMClient` implements the existing ordinary completion contract;
+3. the real runtime is lazy and cannot initialize during ordinary imports or fake tests;
+4. fake-runtime tests cover lifecycle, concurrency, scoring behavior, statistics, and
+   failures;
+5. provider selection and artifact metadata understand `gemma_local`;
+6. the language games can use fake constrained decisions and log their distributions;
+7. opt-in live scripts are implemented but have not been run;
+8. existing mock, University, and OpenAI behavior still passes its regression tests;
+9. `tdd/gemma4_gpu_validation_handoff.md` is created with exact commands and unresolved
+   live questions for a GPU-enabled agent; and
+10. no model, cache, credential, or generated live output appears in Git status.
+
+“Done” in this document always means **CPU implementation complete, live Gemma
+validation pending**.
+
+## 3. Existing repository boundary to preserve
+
+The games depend on `LLMClient` in `src/naming_game/api_client.py`:
 
 ```python
 async def complete(
@@ -38,57 +87,80 @@ async def complete(
     ...
 ```
 
-`SequentialNamingGame`, `SynchronousParallelNamingGame`, the reasoning game,
-the convention game, the benchmark runner, and the empowerment experiment all
-receive a client rather than constructing a provider directly. Provider creation
-is concentrated in `src/naming_game/cli.py`. The Gemma implementation should use
-these boundaries instead of introducing a separate game framework.
+`SequentialNamingGame`, `SynchronousParallelNamingGame`, the reasoning game, the
+convention game, the benchmark runner, and the empowerment experiment receive a client
+instead of constructing a provider. Preserve that dependency direction.
 
-The successful smoke test in `scripts/gemma4_logits_test/` establishes the
-working implementation details:
+Provider creation is partly centralized in `src/naming_game/cli.py`, but the current
+repository has two gaps that this task must fix:
 
-- Python 3.11.15;
-- PyTorch 2.13.0 with CUDA 12.9;
-- torchvision 0.28.0 from the matching conda-forge CUDA build;
-- Transformers 5.14.1 and accelerate 1.14.0;
-- `AutoProcessor` and `AutoModelForMultimodalLM`;
-- BF16 and `device_map="auto"` on the A100;
-- text-only chat templates with `enable_thinking=False`;
-- a 262,144-token vocabulary;
-- approximately 22.3 GiB allocated for model weights and 22.4 GiB peak for the
-  smoke-test prompt;
-- correct single-token and teacher-forced sequence scoring;
-- checkpoint storage under `/work/ojedamarin/hf_models` through the existing
-  ignored `.env`, never through a repository-local cache.
+- the `run` subcommand currently has `--mock` but no general `--provider` option; and
+- `src/naming_game/runner.py` currently labels every non-mock backend as
+  `university_proxy` instead of using `client.provider_name`.
 
-## 3. Proposed API contract
+The current run option is `--num-interactions`, not `--interactions`. All new docs and
+scripts must use the implemented option name.
 
-### 3.1 Preserve ordinary completions
+## 4. Runtime facts already established by the reference smoke test
 
-Add `GemmaLocalAsyncLLMClient`, implementing the existing `LLMClient` protocol.
-Its `complete()` method returns the existing `LLMResponse`, so current games can
-use Gemma without knowing it is local.
+Use these as implementation inputs, not as an invitation to rerun the model:
+
+- model ID: `google/gemma-4-12B-it`;
+- text-only loading uses `AutoProcessor` and `AutoModelForMultimodalLM`;
+- the validated setup used BF16 and `device_map="auto"` on an A100;
+- the checkpoint chat template accepted text messages with
+  `enable_thinking=False`;
+- the smoke test observed a 262,144-token vocabulary;
+- weights used approximately 22.3 GiB and peak allocated memory was approximately
+  22.4 GiB for the diagnostic prompt;
+- ordinary generation, next-token logits, and teacher-forced sequence scoring worked;
+- checkpoint storage came from `HF_HOME` in the ignored repository `.env`.
+
+Do not hard-code the observed vocabulary size as the only accepted value. The real
+runtime should check tokenizer/model consistency and report the observed size. The GPU
+agent will confirm the value for the installed checkpoint and library versions.
+
+## 5. Public API contract
+
+### 5.1 Preserve ordinary completions
+
+Add `GemmaLocalAsyncLLMClient`, structurally compatible with the existing `LLMClient`
+protocol. Its `complete()` method returns the existing `LLMResponse`.
 
 Required behavior:
 
-- `model == "google/gemma-4-12B-it"` by default;
+- default `model == "google/gemma-4-12B-it"`;
 - `provider_name == "gemma_local"`;
-- stateless requests: no agent histories or conversation state in the client;
-- model and processor loaded exactly once per client/service lifetime;
-- deterministic generation when `temperature == 0`;
-- seeded sampling when sampling is requested and supported;
-- decode only newly generated tokens;
-- populate prompt, completion, and total token usage;
-- reuse the repository's request statistics and safe error conventions;
-- `close()` releases references and optionally clears GPU resources only at
-  process shutdown, never between requests.
+- `concurrency == 1` for the initial implementation;
+- requests remain stateless;
+- the runtime factory is invoked at most once per client lifetime, including when
+  multiple first requests race;
+- `temperature == 0` requests deterministic generation;
+- `temperature > 0` requests sampling and uses the supplied seed when the installed
+  Transformers version safely supports it;
+- only newly generated tokens are decoded;
+- prompt, completion, and total token usage are populated;
+- request statistics follow the existing repository conventions;
+- `close()` is idempotent and does not clear CUDA memory between requests.
 
-### 3.2 Add constrained-choice scoring explicitly
+Seeded real generation is a live compatibility item. Implement the most conservative
+version justified by the working script and Transformers interface, cover argument
+forwarding with a fake runtime, and list the real seeded-generation check in the GPU
+handoff. Do not manipulate process-global RNG state outside a serialized inference
+section.
 
-Do not overload `complete()` with an untyped response dictionary. Introduce a
-second capability protocol and typed response objects:
+### 5.2 Add constrained-choice scoring as a separate capability
+
+Add immutable shared types, preferably in `src/naming_game/local_model_types.py`:
 
 ```python
+from dataclasses import dataclass
+from collections.abc import Sequence
+from typing import Protocol
+
+from .models import TokenUsage
+
+
 @dataclass(frozen=True)
 class ChoiceScore:
     choice: str
@@ -119,74 +191,106 @@ class ConstrainedLLMClient(Protocol):
         ...
 ```
 
-The returned `scores` must preserve the caller's choice order. Probabilities are
-normalized only over the supplied choices and sum to one. `selected_choice` is
-the highest-probability choice for deterministic use; a later optional sampling
-policy may sample from this constrained distribution using `seed`.
+Inspect provider identity through `client.provider_name`; it does not need to be
+duplicated in every response.
 
-Expose sequence log-likelihoods as the stable public primitive. Single-token
-next-logit scores are a diagnostic optimization and may also be returned in a
-separate optional field later, but they must not be the only implementation
-because valid answers can contain multiple tokens.
+Required semantics:
 
-### 3.3 Validation rules
+- returned scores preserve caller choice order;
+- probabilities are normalized only over the supplied choices;
+- probabilities are finite and sum to one within `1e-5`;
+- `selected_choice` is the deterministic highest-probability choice;
+- ties use caller order, so selection is reproducible;
+- sequence log-likelihood is the stable scoring primitive;
+- multi-token choices are supported;
+- `seed` is reserved for a later explicitly selected constrained-sampling policy and
+  must not silently change deterministic argmax behavior now.
 
-Both API methods must reject:
+Do not expose a full 262,144-element logit tensor through the public response.
 
-- empty or malformed messages;
-- empty, blank, or duplicate choices;
+### 5.3 Validation
+
+Reject clearly:
+
+- empty messages;
+- message objects whose keys are not exactly `role` and `content`;
+- non-string or blank roles/content where the existing client contract requires text;
+- `max_tokens < 1`;
+- non-finite or negative generation temperature;
+- empty, blank, or exactly duplicated choices;
 - non-finite or non-positive constrained temperature;
-- unavailable CUDA unless CPU use was explicitly enabled;
-- non-finite logits, log-probabilities, or normalized probabilities;
-- inconsistent tokenizer/model vocabulary sizes;
-- unsupported model IDs or Transformers versions.
+- candidates that tokenize to an empty sequence;
+- non-finite logits, log-probabilities, scores, or normalized probabilities;
+- tokenizer/model vocabulary inconsistencies;
+- unsupported model IDs and unsupported Transformers versions;
+- unavailable CUDA unless CPU loading was explicitly requested by a human caller.
 
-The API must never print tokens or copy model weights into the repository.
+The implementation must never log prompt contents, generated token contents, access
+tokens, or full logits by default.
 
-## 4. Proposed source layout
+## 6. Source layout and dependency isolation
+
+Target layout:
 
 ```text
 src/naming_game/
-├── api_client.py                 # existing protocols/remote/mock clients
-├── local_model_types.py          # ChoiceScore and ConstrainedLLMResponse
-└── gemma_local_client.py         # GemmaLocalAsyncLLMClient
+├── api_client.py
+├── local_model_types.py
+└── gemma_local_client.py
 
 scripts/gemma4_api_test/
 ├── README.md
-└── test_internal_api.py          # live A100 reasoning/API smoke test
+└── test_internal_api.py
 
 tests/
-├── test_gemma_local_client_unit.py
 ├── test_constrained_client_contract.py
+├── test_gemma_local_client_unit.py
 └── test_gemma_language_game_integration.py
+
+tdd/
+└── gemma4_gpu_validation_handoff.md
 ```
 
-Keep heavyweight imports (`torch`, `transformers`, `torchvision`) inside
-`gemma_local_client.py` and preferably behind initialization. Importing
-`naming_game`, running mock tests, or using a remote provider must not initialize
-CUDA or require the Gemma optional dependencies.
+Heavy or optional imports (`torch`, `transformers`, `torchvision`, and related Hugging
+Face components) must be behind real-runtime initialization. These operations must not
+happen when:
 
-## 5. Gemma runtime design
+- importing `naming_game`;
+- importing `GemmaLocalAsyncLLMClient`;
+- constructing a client with an injected fake runtime/factory;
+- using mock, University, or OpenAI providers;
+- collecting ordinary tests; or
+- displaying CLI help.
 
-### 5.1 Initialization
+Add a small internal runtime protocol or equivalent dependency-injection boundary.
+Fake runtimes should return deterministic generated tokens and deterministic candidate
+scores without importing Transformers or touching CUDA. Test the public client through
+that boundary rather than creating a second fake-only implementation of the client.
 
-Extract reusable, tested helpers from the smoke-test script rather than importing
-the script itself:
+## 7. Real Gemma runtime implementation to write but not execute
+
+### 7.1 Initialization
+
+Adapt the already-working helpers from
+`scripts/gemma4_logits_test/test_gemma4_logits.py`:
 
 1. find and load the repository-root `.env` before Hugging Face imports;
-2. validate and create `HF_HOME`;
-3. check disk space and CUDA visibility;
-4. report the model ID, GPU, dtype, device map, and memory once at startup;
-5. instantiate the processor and model once;
+2. validate `HF_HOME` without printing credentials;
+3. check CUDA visibility unless explicit CPU loading was requested;
+4. load `AutoProcessor` and `AutoModelForMultimodalLM` once;
+5. select `dtype` versus `torch_dtype` according to the installed Transformers API;
 6. call `model.eval()`;
-7. retain a single runtime object for all requests.
+7. derive the input device from `hf_device_map`, not a hard-coded `cuda:0`;
+8. retain the runtime for all requests; and
+9. report model/device/dtype/memory metadata once at startup.
 
-Use dependency injection for unit tests: permit a fake processor/model runtime to
-be passed to the client without touching CUDA or Hugging Face.
+The CPU-only agent writes this path by following the reference implementation but must
+not cause it to run. Isolate model construction in a factory that tests can replace and
+assert is invoked once.
 
-### 5.2 Message formatting
+### 7.2 Message formatting
 
-Use the checkpoint's chat template for all calls:
+Use the known text-only template call:
 
 ```python
 processor.apply_chat_template(
@@ -199,116 +303,143 @@ processor.apply_chat_template(
 )
 ```
 
-Retry without `enable_thinking` only for a documented compatibility exception.
-Keep the request text-only. Move tensors to the model's input device derived from
-`hf_device_map`, not from a hard-coded `cuda:0` assumption.
+Only retry without `enable_thinking` for the narrow documented compatibility exception
+already handled by the smoke test. Preserve the processor's returned attention mask and
+any other required text input fields rather than replacing them indiscriminately.
 
-### 5.3 Ordinary generation
+### 7.3 Ordinary generation
 
-Run `model.generate()` inside `torch.inference_mode()`:
+Inside `torch.inference_mode()`:
 
-- `temperature == 0`: `do_sample=False`;
-- `temperature > 0`: `do_sample=True`, pass temperature, and use a local seeded
-  `torch.Generator` where Transformers supports it;
+- use `do_sample=False` for `temperature == 0`;
+- use `do_sample=True` and pass temperature for `temperature > 0`;
 - set `max_new_tokens=max_tokens`;
-- decode only tokens after the prompt length;
-- return the raw decoded content and exact token counts.
+- keep inference serialized;
+- slice output tokens after the input prompt length; and
+- decode only the new tokens.
 
-Do not reload or quantize the model per request.
+The GPU agent must validate real seeded sampling, exact decode behavior, stop tokens,
+and token counts.
 
-### 5.4 Constrained sequence scoring
+### 7.4 Teacher-forced choice scoring
 
-For every choice:
+Implement the algorithm demonstrated by the smoke test:
 
-1. tokenize the complete candidate without special tokens;
-2. append those candidate IDs to the already templated prompt IDs;
-3. teacher-force one forward pass;
-4. take logits from `prompt_length - 1` through the token before the final
+1. format and tokenize the prompt once;
+2. tokenize each candidate without special tokens;
+3. append candidate IDs to prompt IDs;
+4. extend the original attention mask for the appended candidate tokens;
+5. preserve or deliberately extend other model input fields where applicable;
+6. teacher-force a forward pass for each candidate;
+7. select logits from `prompt_length - 1` through the position before the final
    candidate token;
-5. compute `log_softmax(..., dtype=float32)`;
-6. gather only the candidate token log-probabilities;
-7. sum them to obtain `log p(choice | prompt)`;
-8. normalize all candidate scores with
-   `softmax(sequence_log_likelihoods / temperature)` in float32.
+8. compute `log_softmax` in float32;
+9. gather the candidate token log-probabilities;
+10. sum them into `log p(choice | prompt)`; and
+11. normalize candidate sequence scores with
+    `softmax(sequence_log_likelihoods / temperature)` in float32.
 
-Assert finite values and an approximately unit probability sum. Preserve the
-token IDs for auditability. Do not expose full 262,144-element logit tensors by
-default; they are large and callers need choice scores. A debug-only method may
-return top-k token records or CPU logits later if a research use case requires
-them.
+Use the smoke test's current candidate rendering—encoding the supplied choice exactly,
+without silently adding a leading space—as the initial implementation. Mark the answer
+boundary as a live-validation item. The CPU-only agent must test the generic alignment
+algorithm with a tiny tokenizer/model but must not claim that fake tokenization proves
+Gemma's exact boundary behavior.
 
-### 5.5 Concurrency and GPU safety
+The later GPU agent must inspect and, if necessary, correct:
 
-The current games can issue concurrent requests, but one 40 GB A100 has limited
-headroom above a 22.3 GiB model. Begin with an `asyncio.Semaphore(1)` around GPU
-inference and move blocking model work into `asyncio.to_thread()` so the event
-loop remains responsive. Advertise `concurrency=1` for this provider.
+- whether `"A"` or `" A"` is the correct rendered continuation after the real chat
+  template;
+- whether tokenizing a candidate separately produces the same continuation IDs as
+  contextual tokenization;
+- which processor fields besides `input_ids` and `attention_mask` must be extended for
+  text-only Gemma;
+- tokenizer/model vocabulary agreement; and
+- one-token versus multi-token behavior with the real tokenizer.
 
-Do not launch simultaneous forward passes during phase 1. Record queue time and
-inference time separately if performance analysis needs them. Dynamic batching
-is a later optimization only after correctness and peak-memory tests pass.
+Do not hide these questions by stripping choices or changing their public values.
 
-## 6. Language-game integration
+### 7.5 Concurrency and lifecycle
 
-### 6.1 Provider selection
+Use an `asyncio.Semaphore(1)` around all local inference and run blocking inference via
+`asyncio.to_thread()`. Ensure concurrent first calls cannot create two runtimes. Do not
+launch simultaneous forward passes in phase 1.
 
-Extend the centralized provider factory in `src/naming_game/cli.py`:
+For ordinary generation, token usage is the prompt length plus newly generated tokens.
+For constrained scoring, document and test usage as actual unbatched scoring work:
 
 ```text
-provider: gemma_local
-model: google/gemma-4-12B-it
-request_concurrency: 1
+prompt_tokens     = prompt_length * number_of_choices
+completion_tokens = sum(candidate_token_lengths)
+total_tokens      = prompt_tokens + completion_tokens
 ```
 
-Add `gemma_local` to configuration validation and exports in
-`src/naming_game/__init__.py`. Remote and mock provider behavior must remain
-unchanged. The model should be created once per experiment process and shared by
-all agents, consistent with the repository's stateless-client design.
+One public `complete_constrained()` invocation counts as one request attempt even though
+the initial runtime performs one model forward pass per candidate.
 
-### 6.2 First compatibility milestone
+## 8. Provider and CLI integration
 
-Run the existing game unchanged through `GemmaLocalAsyncLLMClient.complete()`.
-This proves that prompts, JSON validation/repair, interaction accounting, logs,
-and summaries work with a local provider.
+Add `gemma_local` without changing remote/mock behavior.
 
-Use a tiny deterministic run first:
+For the `run` subcommand:
+
+- add `--provider` with supported values such as `university`, `openai`, and
+  `gemma_local`;
+- retain `--mock` for backward compatibility, but reject or clearly resolve conflicting
+  `--mock`/`--provider` combinations;
+- use `--num-interactions`, the repository's existing option;
+- default local concurrency to or require it to equal `1`;
+- support only the local dtype/device-map flags that the implementation actually uses;
+- do not instantiate the real runtime while parsing arguments or displaying help.
+
+Extend the centralized provider factory used by configured experiments. Validate
+`gemma_local` configuration and fallback combinations. A local provider must not be used
+as an automatic fallback that unexpectedly downloads or loads a model.
+
+Update `src/naming_game/runner.py` to derive artifact backend/provider identity from
+`client.provider_name`, with a stable compatibility mapping only if existing artifact
+formats require it. Assert that fake-backed local runs record `gemma_local`, not
+`university_proxy`.
+
+Export the new public client and types from `src/naming_game/__init__.py` only if doing so
+does not trigger heavy imports.
+
+## 9. Language-game integration
+
+### 9.1 Ordinary compatibility
+
+First prove with an injected fake runtime that the existing game can call
+`GemmaLocalAsyncLLMClient.complete()` without provider-specific changes. Use:
 
 - 2 agents;
-- sequential update mode;
+- sequential mode;
 - 2 interactions;
 - no reasoning interactions;
 - temperature 0;
-- provider concurrency 1;
-- fixed seed.
+- concurrency 1; and
+- a fixed seed.
 
-Assert that the run completes, makes four successful model calls, writes normal
-artifacts, records `api_backend/provider == gemma_local`, and never initializes
-more than one model.
+Assert four successful model calls, normal output artifacts, provider identity
+`gemma_local`, and one runtime construction. This is a fake-backed integration test, not
+a live model test.
 
-### 6.3 Constrained game decisions
+### 9.2 Constrained decisions
 
-After compatibility is proven, use `complete_constrained()` at decisions whose
-legal action set is already known:
+Where the legal action set is already known, pass it explicitly:
 
-- binary speaker selection: the speaker's current inventory (`A`, `B`, or both);
-- convention game action: `config.actions` in the randomized display order;
-- other explicitly enumerated experimental actions.
+- speaker selection uses the speaker's inventory;
+- convention-game selection uses `config.actions` in display order; and
+- other experimental actions use their enumerated state/configuration values.
 
-Do not infer allowed choices by parsing prompt text. The game engine must pass the
-legal choices explicitly. Store the complete constrained distribution in the
-interaction log so later analyses can use uncertainty, entropy, margins, or
-counterfactual choice probabilities.
+Never infer allowed choices by parsing prompt text. The constrained response must be the
+authoritative state-transition action.
 
-For responses that also require a reason, use a two-stage design:
+For a rationale-producing interaction:
 
-1. score/select the legal action with `complete_constrained()`;
-2. optionally generate a short rationale conditioned on that fixed action.
+1. select the action using `complete_constrained()`;
+2. optionally generate a rationale conditioned on that fixed action; and
+3. never reparse the rationale to replace the constrained action.
 
-The action used to update the game must come from the constrained call, never
-from reparsing the rationale. Basic Naming Game interactions can skip rationale
-generation entirely.
-
-Add optional log fields rather than changing existing required columns:
+Add optional log fields without changing established required columns:
 
 ```text
 decision_method: generated | constrained_sequence
@@ -319,34 +450,51 @@ selected_choice_probability: ...
 choice_entropy: ...
 ```
 
-## 7. Test strategy
+Keep remote clients on generated decisions unless a separate constrained adapter is
+explicitly implemented. Do not assume every `LLMClient` implements
+`ConstrainedLLMClient`; use explicit configuration and capability checks.
 
-### 7.1 Fast unit tests without the real model
+## 10. CPU/fake test requirements
 
-Use fake tokenizer/model objects with tiny vocabularies to test:
+Tests must not patch around an accidental real load after it begins. They must inject a
+fake before any real-runtime factory or Transformers import can be reached.
 
-- prompt tokens are excluded from sequence scores;
-- one-token and multi-token choices are handled correctly;
-- candidate token alignment is correct;
-- choice order is preserved;
-- float32 normalization sums to one;
-- duplicate/blank choices and invalid temperatures fail clearly;
-- non-finite logits fail;
-- deterministic argmax selection works;
-- the async semaphore limits active inference to one;
-- request statistics and token usage are correct;
-- construction and multiple calls load the fake model only once;
-- `close()` is idempotent;
-- ordinary `complete()` still satisfies `LLMClient`.
+Cover:
 
-Add a contract test that both `MockAsyncLLMClient` and the fake-backed Gemma
-client satisfy the ordinary completion behavior. Add constrained behavior to a
-mock constrained client so game integration tests do not need the A100.
+- ordinary `LLMClient` structural compatibility;
+- choice-order preservation;
+- deterministic first-in-order tie handling;
+- one-token and multi-token choices;
+- correct teacher-forcing offset/alignment with tiny CPU tensors when available;
+- prompt tokens excluded from candidate sequence log-likelihoods;
+- float32 normalization and an approximately unit probability sum;
+- blank/duplicate choices and invalid temperatures;
+- empty candidate tokenization;
+- non-finite logits, scores, and probabilities;
+- tokenizer/model vocabulary mismatch;
+- exact message validation;
+- ordinary generation slices off prompt tokens;
+- exact token-usage accounting under the documented semantics;
+- request success/failure statistics;
+- semaphore-limited active inference of one;
+- racing first requests initialize one runtime;
+- several calls reuse the same runtime;
+- idempotent `close()`;
+- imports and CLI help do not import Transformers or initialize CUDA;
+- a two-agent sequential fake-backed local game;
+- synchronous fake-backed requests remain serialized;
+- the selected constrained action drives state updates;
+- single-action inventories;
+- constrained decision logging; and
+- existing mock/remote regression behavior.
 
-### 7.2 Live internal-API reasoning test
+Register a marker such as `gemma_live` if a pytest live test is added. Ordinary `pytest`
+must never select the live test and must never fetch a checkpoint.
 
-Create `scripts/gemma4_api_test/test_internal_api.py` with an explicit live-test
-marker or CLI entry. Use this prompt:
+## 11. Live scripts to implement but not run
+
+Create `scripts/gemma4_api_test/test_internal_api.py` and its README. The script must
+call only the public client API and use this diagnostic:
 
 ```text
 Question: Which number is larger, 7 or 3?
@@ -358,7 +506,7 @@ C. They are equal
 Return only A, B, or C.
 ```
 
-The script must call the public client API, not private runtime helpers:
+It should call:
 
 ```python
 response = await client.complete_constrained(
@@ -368,165 +516,111 @@ response = await client.complete_constrained(
 )
 ```
 
-Acceptance checks:
+The written live script should check:
 
-- model is `google/gemma-4-12B-it`;
-- provider is `gemma_local`;
-- selected choice is `A`;
-- all three choices and token IDs are returned;
-- all log-likelihoods and probabilities are finite;
-- probabilities sum to one within `1e-5`;
+- client model and provider identity;
+- all choices and token IDs are present;
+- scores/probabilities are finite and ordered;
+- probabilities sum to one;
 - `A` has the greatest probability;
-- an ordinary `complete()` call also returns a non-empty response;
-- startup and post-request memory diagnostics are printed;
-- a second request reuses the existing model instance;
-- no cache or model file appears in Git status.
+- ordinary `complete()` returns non-empty content;
+- a second request reuses the runtime; and
+- startup/post-request memory diagnostics are available.
 
-This is an infrastructure assertion, not a benchmark of Gemma's reasoning
-quality. Only numerical correctness and API behavior should be generalized from
-it.
+The CPU-only agent must syntax-check or inspect this script without executing its main
+function. Do not add a test that accidentally runs merely because pytest imports it.
 
-### 7.3 Game integration tests
+## 12. Required GPU handoff document
 
-With a fake constrained client:
+Before finishing, create `tdd/gemma4_gpu_validation_handoff.md`. It must be a direct,
+copy-pasteable task for an agent that has the cached model, compatible dependencies, and
+an A100-class GPU.
 
-- run a two-agent sequential game;
-- verify allowed choices exactly match each speaker inventory;
-- verify the selected constrained choice drives the state update;
-- verify probabilities are logged;
-- test an inventory containing only one legal action;
-- run the synchronous game and confirm provider concurrency remains bounded;
-- prove seeded runs are reproducible;
-- prove existing mock/remote tests remain unchanged.
+It must contain:
 
-Then add one opt-in live A100 test for the two-interaction Gemma game. Never run
-the 24 GB live test as part of ordinary CI.
+1. a statement that CPU implementation is complete but live validation is pending;
+2. the commit/worktree state and a concise list of implemented files;
+3. the exact environment assumptions taken from the existing logits README;
+4. commands to run the focused CPU tests first;
+5. commands to run the public internal-API live test;
+6. the exact tiny live game command using `--num-interactions`;
+7. a requirement to compare behavior with
+   `scripts/gemma4_logits_test/test_gemma4_logits.py` without rewriting known-good
+   behavior unnecessarily;
+8. explicit tokenizer-boundary questions from section 7.4;
+9. seeded generation, processor fields, device placement, dtype, vocabulary, token
+   counts, model-reuse, and CUDA-memory checks;
+10. expected acceptance results and space to record observed values;
+11. failure triage for authentication, missing cache, Transformers compatibility,
+    torchvision, CUDA, and OOM errors;
+12. permission to make narrow compatibility fixes supported by actual observations;
+13. a requirement to rerun the complete regression suite after fixes; and
+14. a final `git status --short` check proving no `.env`, token, cache, tokenizer,
+    config, or model-weight artifacts were added.
 
-## 8. Configuration and CLI work
+The GPU agent must not redesign the API merely because a narrow runtime compatibility
+fix is needed. Material API or experiment-semantics changes should be reported rather
+than silently introduced.
 
-Add only the options needed for the local provider:
+## 13. CPU-only validation commands
 
-```text
---provider gemma_local
---model google/gemma-4-12B-it
---local-dtype bfloat16
---local-device-map auto
---decision-mode generated|constrained
-```
-
-Recommended defaults for `gemma_local`:
-
-```text
-request_concurrency: 1
-local_dtype: bfloat16
-local_device_map: auto
-decision_mode: constrained
-enable_thinking: false
-```
-
-Validate incompatible combinations early. For example, reject local concurrency
-above the tested limit unless an explicit unsafe/experimental batching option is
-later introduced. Keep `HF_HOME` exclusively in `.env`; do not place cache paths
-or tokens in YAML configuration.
-
-## 9. Implementation phases
-
-### Phase 1 — Typed constrained API
-
-- Add response dataclasses and the `ConstrainedLLMClient` protocol.
-- Extract pure token-scoring helpers from the smoke test.
-- Cover them with tiny fake-model unit tests.
-
-Exit criterion: fast tests prove correct one-token and multi-token probabilities.
-
-### Phase 2 — Local Gemma client
-
-- Implement lazy heavyweight imports and one-time runtime initialization.
-- Implement `complete()` and `complete_constrained()`.
-- Add serialization, usage, statistics, error handling, and memory diagnostics.
-- Run the live reasoning smoke test on the A100.
-
-Exit criterion: `A` wins the reasoning prompt; both API methods work through the
-public client; the model is loaded once.
-
-### Phase 3 — Provider and game compatibility
-
-- Add `gemma_local` to CLI/config provider selection.
-- Run the existing basic game through ordinary `complete()` first.
-- Add fake-backed integration tests and one opt-in live two-interaction run.
-
-Exit criterion: normal game artifacts are produced with the local provider and
-existing remote/mock tests still pass.
-
-### Phase 4 — Constrained decisions in games
-
-- Pass legal actions explicitly from game state.
-- Use constrained sequence scoring for speaker/convention decisions.
-- Persist distributions and derived entropy/margin fields.
-- Separate optional rationale generation from authoritative action selection.
-
-Exit criterion: a game run exposes auditable per-action probabilities and uses
-the constrained selection for state transitions.
-
-### Phase 5 — Performance and optional service boundary
-
-- Profile queue, tokenize, forward, scoring, and generation times.
-- Measure peak memory for realistic prompts and choice counts.
-- Consider batched candidate scoring and request batching.
-- If multiple processes need the same model, wrap the runtime in a small local
-  HTTP service and implement an `LLMClient` adapter without changing game code.
-
-Exit criterion: only pursue this phase when correctness tests are stable and a
-measured workload justifies the added complexity.
-
-## 10. Acceptance checklist
-
-- [ ] `.env` is loaded before Hugging Face initialization.
-- [ ] Model files exist only below `HF_HOME`.
-- [ ] Gemma model and processor load exactly once per process/client lifetime.
-- [ ] Existing `LLMClient.complete()` remains backward compatible.
-- [ ] `complete_constrained()` supports one-token and multi-token choices.
-- [ ] Prompt tokens are excluded from sequence likelihoods.
-- [ ] Returned probabilities are finite, ordered, and sum to one.
-- [ ] The reasoning API test selects `A` for 7 versus 3.
-- [ ] Ordinary generation works through the same public client.
-- [ ] Local GPU inference is serialized initially.
-- [ ] A tiny existing Naming Game completes with `provider=gemma_local`.
-- [ ] Constrained legal-action probabilities are accessible to callers and logs.
-- [ ] The action used by the game comes from the constrained call.
-- [ ] Existing mock, University, and OpenAI clients remain unaffected.
-- [ ] Fast tests do not download or initialize Gemma.
-- [ ] Live A100 tests are explicit and excluded from normal CI.
-- [ ] Git status contains no `.env`, token, cache, or safetensors artifact.
-
-## 11. Suggested validation commands
+Use the already-configured repository environment if available. Do not install Gemma or
+invoke a loader.
 
 ```bash
-conda activate MA-CC
-
-# Fast contract/unit/integration tests (no model load)
+# Focused CPU/fake tests. These names are targets and should match created files.
 pytest tests/test_constrained_client_contract.py \
   tests/test_gemma_local_client_unit.py \
   tests/test_gemma_language_game_integration.py
 
-# Live internal API and logits test
-python scripts/gemma4_api_test/test_internal_api.py
-
-# Existing regression suite
+# Existing regression suite. It must not collect a live Gemma invocation.
 pytest
 
-# Tiny live game; exact CLI flags should follow the implemented provider option
-python -m naming_game.cli run \
-  --provider gemma_local \
-  --model google/gemma-4-12B-it \
-  --num-agents 2 \
-  --update-mode sequential \
-  --interactions 2 \
-  --temperature 0 \
-  --concurrency 1
+# Static import/help checks that must not initialize the model.
+python -c "import naming_game; import naming_game.gemma_local_client"
+python -m naming_game.cli --help
+python -m naming_game.cli run --help
 
 git status --short
 ```
 
-The CLI example is a target interface for implementation; verify the current
-parser's final option names when Phase 3 is implemented.
+Do **not** include a live Gemma command in the CPU agent's executed validation log. Live
+commands belong in `tdd/gemma4_gpu_validation_handoff.md` for the later agent.
+
+## 14. CPU implementation checklist
+
+- [ ] No Gemma/Hugging Face download or real loader call was made.
+- [ ] No ML packages or CUDA components were installed or changed for live validation.
+- [ ] Typed constrained API is implemented.
+- [ ] Local client preserves ordinary `LLMClient.complete()` behavior.
+- [ ] Heavy imports and runtime initialization are lazy.
+- [ ] Fake dependency injection reaches all public-client behavior.
+- [ ] Runtime construction is race-safe and occurs once per client.
+- [ ] Constrained scoring supports one-token and multi-token candidates in CPU/fake tests.
+- [ ] Tokenizer-boundary assumptions are clearly deferred to live validation.
+- [ ] Local inference is serialized.
+- [ ] Provider selection includes `gemma_local`.
+- [ ] Direct-run CLI and backend artifact identity are corrected.
+- [ ] Fake-backed ordinary and constrained games pass.
+- [ ] Constrained probabilities and derived fields are logged.
+- [ ] Live API script and README are written but not run.
+- [ ] Existing regression tests pass, or unrelated/pre-existing failures are documented.
+- [ ] GPU validation handoff is complete and uses actual implemented paths/flags.
+- [ ] Git status contains no credentials, caches, tokenizer files, or model artifacts.
+
+## 15. Final report required from the CPU-only agent
+
+Report separately:
+
+- implementation completed;
+- CPU/fake tests executed and their results;
+- tests not executable because an optional dependency was absent;
+- live scripts written but intentionally not executed;
+- Gemma-specific assumptions awaiting validation;
+- the path to `tdd/gemma4_gpu_validation_handoff.md`; and
+- confirmation that no model download or real model initialization was attempted.
+
+Never phrase the result as “Gemma works.” The correct conclusion before GPU handoff is:
+
+> The Gemma-local integration is implemented and verified against deterministic fakes;
+> compatibility with the real checkpoint remains to be validated on the GPU host.
