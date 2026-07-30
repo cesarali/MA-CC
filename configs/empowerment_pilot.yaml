@@ -16,6 +16,9 @@ convention_roles:
   weak_name: B
   source: calibration
 temperature: 0.5
+decision_output_format: json_reason
+choice_selection_policy: argmax
+choice_temperature: 1.0
 max_tokens: 15
 seed: 1
 window_interactions: 72

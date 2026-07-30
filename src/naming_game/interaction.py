@@ -204,6 +204,12 @@ async def execute_pair_interaction(
     # retain the established generated JSON path.
     if interaction_kind == "basic" and getattr(client, "provider_name", None) == "gemma_local" and callable(constrained):
         allowed = inventory_values(speaker.inventory)
+        # A constrained continuation must be scored against a prompt requesting
+        # that same bare continuation, never against the legacy JSON schema.
+        speaker_messages = [
+            {"role": "system", "content": "Select exactly one legal inventory name. Return only the bare name; no JSON or explanation."},
+            {"role": "user", "content": f"LEGAL_NAMES: {json.dumps(allowed)}"},
+        ]
         decision = await constrained(speaker_messages, choices=allowed, temperature=max(temperature, 1.0))
         selected = decision.selected_choice
         speaker_response = LLMResponse(
