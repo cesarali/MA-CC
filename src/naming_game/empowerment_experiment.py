@@ -31,10 +31,18 @@ from .naming_convention_game import (
     build_convention_messages,
 )
 
-SCHEMA_VERSION = 3
-PROMPT_VERSION = "convention-answer-first-v2"
+SCHEMA_VERSION = 4
+PROMPT_VERSION_BASE = "convention-answer-first-v3"
 Regime = Literal["neutral", "consensus_attack", "pulse"]
 LOGGER = logging.getLogger(__name__)
+
+
+def convention_prompt_version(output_format: str) -> str:
+    """Return the persisted identity of one concrete response contract."""
+
+    if output_format not in {"json_reason", "choice_reason", "choice_only"}:
+        raise ValueError(f"Unknown decision output format: {output_format!r}")
+    return f"{PROMPT_VERSION_BASE}-{output_format}"
 
 
 @dataclass(frozen=True)
@@ -227,6 +235,8 @@ def load_experiment_config(path: str | Path) -> EmpowermentExperimentConfig:
             audit_traces=AuditTraceConfig(**audit_raw),
         )
         return EmpowermentExperimentConfig(**values)
+    except ConfigurationError:
+        raise
     except (TypeError, ValueError) as exc:
         raise ConfigurationError("Experiment configuration has invalid fields.") from exc
 
@@ -278,7 +288,19 @@ def build_episode_specs(config: EmpowermentExperimentConfig) -> tuple[EpisodeSpe
     specs: list[EpisodeSpec] = []
     for ordinal, raw in enumerate(raw_specs):
         episode_seed = config.seed + ordinal
-        identity = json.dumps({**raw, "seed": episode_seed}, sort_keys=True)
+        identity = json.dumps(
+            {
+                **raw,
+                "seed": episode_seed,
+                "decision_output_format": config.decision_output_format,
+                "choice_selection_policy": config.choice_selection_policy,
+                "choice_temperature": config.choice_temperature,
+                "prompt_version": convention_prompt_version(
+                    config.decision_output_format
+                ),
+            },
+            sort_keys=True,
+        )
         specs.append(
             EpisodeSpec(
                 episode_id=hashlib.sha256(identity.encode()).hexdigest()[:20],
@@ -320,7 +342,7 @@ def _status_row(logger: ExperimentAuditLogger, spec: EpisodeSpec, record: Any, a
 
 def _prompt_hash(config: EmpowermentExperimentConfig) -> str:
     body = {
-        "version": PROMPT_VERSION,
+        "version": convention_prompt_version(config.decision_output_format),
         "names": config.names,
         "memory_length": config.memory_length,
         "temperature": config.temperature,
@@ -485,8 +507,12 @@ def derive_episode(
         **_direction_metadata(spec, config),
         "provider": terminal["provider"],
         "model": terminal["model"],
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": convention_prompt_version(config.decision_output_format),
         "prompt_hash": terminal["prompt_hash"],
+        "decision_output_format": config.decision_output_format,
+        "choice_selection_policy": config.choice_selection_policy,
+        "choice_temperature": config.choice_temperature,
+        "generation_temperature": config.temperature,
         "N": config.population_size,
         "W": 2,
         "H": config.memory_length,
@@ -572,7 +598,6 @@ async def run_episode(
                 error_message = None if final_status == "success" else "Response parsing failed; requesting a replacement."
                 audit_logger and audit_logger.append_status(_status_row(audit_logger, spec, record, agent_id, partner_id, call_id, attempt, provider, client.model, validation_response, final_status, error_type, error_message))
             if audit_logger and audit_logger.selected(spec.episode_id, population_round, record.interaction_index, slot):
-                messages = build_convention_messages(agent=game.agents[agent_id], action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50)
                 # Reconstruct against the immutable pre-interaction memory, not updated state.
                 temp_agent = game.agents[agent_id].__class__(agent_id=agent_id, history=list(before))
                 messages = build_convention_messages(agent=temp_agent, action_order=decision.action_order, memory_size=config.memory_length, success_reward=100, failure_payoff=-50, output_format=config.decision_output_format)
@@ -608,7 +633,15 @@ async def run_episode(
             f"decision_method_{suffix}": decision.decision_method if not (decision.forced or decision.committed) else ("forced" if decision.forced else "committed"),
             f"reason_{suffix}": None if (decision.forced or decision.committed) else decision.reason,
             f"reason_valid_{suffix}": None if (decision.forced or decision.committed) else decision.reason_valid,
-            f"allowed_choices_{suffix}": json.dumps(list(decision.action_order), ensure_ascii=False, separators=(",", ":")) if scores else None,
+            f"allowed_choices_{suffix}": (
+                json.dumps(
+                    list(decision.action_order),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+                if not (decision.forced or decision.committed)
+                else None
+            ),
             f"choice_log_likelihoods_{suffix}": json.dumps(log_likelihoods, ensure_ascii=False, separators=(",", ":")) if log_likelihoods else None,
             f"choice_probabilities_{suffix}": json.dumps(probabilities, ensure_ascii=False, separators=(",", ":")) if probabilities else None,
             f"selected_choice_probability_{suffix}": probabilities.get(decision.action) if probabilities else None,
@@ -623,8 +656,12 @@ async def run_episode(
                 "regime": spec.regime,
                 "provider": provider,
                 "model": actual_model,
-                "prompt_version": PROMPT_VERSION,
+                "prompt_version": convention_prompt_version(config.decision_output_format),
                 "prompt_hash": prompt_hash,
+                "decision_output_format": config.decision_output_format,
+                "choice_selection_policy": config.choice_selection_policy,
+                "choice_temperature": config.choice_temperature,
+                "generation_temperature": config.temperature,
                 "N": config.population_size,
                 "W": 2,
                 "H": config.memory_length,
@@ -845,6 +882,10 @@ async def run_experiment(
         "episodes_path": str(episodes_path),
         "experiment_fingerprint": fingerprint,
         "episodes_resumed": completed_at_start,
+        "prompt_version": convention_prompt_version(config.decision_output_format),
+        "decision_output_format": config.decision_output_format,
+        "choice_selection_policy": config.choice_selection_policy,
+        "choice_temperature": config.choice_temperature,
     }
 
 
@@ -863,6 +904,7 @@ __all__ = [
     "EpisodeSpec",
     "ReplicationConfig",
     "build_episode_specs",
+    "convention_prompt_version",
     "derive_episode",
     "load_experiment_config",
     "run_episode",

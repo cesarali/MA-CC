@@ -89,8 +89,8 @@ class ConventionGameConfig:
             raise ConfigurationError("max_tokens must be positive.")
         if self.advertised_rounds < 1:
             raise ConfigurationError("advertised_rounds must be positive.")
-        if self.temperature < 0:
-            raise ConfigurationError("temperature cannot be negative.")
+        if not math.isfinite(self.temperature) or self.temperature < 0:
+            raise ConfigurationError("temperature must be finite and non-negative.")
         if self.convergence_window is not None and self.convergence_window < 1:
             raise ConfigurationError("convergence_window must be positive when set.")
         if not 0.0 < self.convergence_threshold <= 1.0:
@@ -214,6 +214,14 @@ class ConventionInteraction:
     def to_log_dict(self) -> dict[str, Any]:
         def decision_fields(decision: ConventionDecision) -> dict[str, Any]:
             response = decision.response
+            probabilities = (
+                {
+                    score.choice: score.probability
+                    for score in decision.constrained_scores
+                }
+                if decision.constrained_scores
+                else None
+            )
             return {
                 "action": decision.action,
                 "reason": decision.reason,
@@ -231,9 +239,25 @@ class ConventionInteraction:
                 "validation_attempts": len(decision.responses),
                 "token_usage": asdict(response.usage) if response is not None else None,
                 "decision_method": decision.decision_method,
-                "allowed_choices": list(decision.action_order) if decision.constrained_scores else None,
+                "allowed_choices": (
+                    list(decision.action_order)
+                    if not (decision.forced or decision.committed)
+                    else None
+                ),
                 "choice_log_likelihoods": ({score.choice: score.log_likelihood for score in decision.constrained_scores} if decision.constrained_scores else None),
-                "choice_probabilities": ({score.choice: score.probability for score in decision.constrained_scores} if decision.constrained_scores else None),
+                "choice_probabilities": probabilities,
+                "selected_choice_probability": (
+                    probabilities.get(decision.action) if probabilities else None
+                ),
+                "choice_entropy": (
+                    -math.fsum(
+                        probability * math.log(probability)
+                        for probability in probabilities.values()
+                        if probability > 0
+                    )
+                    if probabilities
+                    else None
+                ),
             }
 
         return {
@@ -399,13 +423,12 @@ def parse_convention_decision(
         return candidate, None
     if output_format == "choice_reason":
         lines = content.strip().splitlines()
-        if not lines or lines[0].strip() not in actions:
+        if len(lines) < 2 or lines[0].strip() not in actions:
             raise ValueError("first non-blank line must be exactly one configured action")
         candidate = lines[0].strip()
-        remainder = "\n".join(lines[1:]).strip()
-        if not remainder.startswith("Reason:"):
+        if not lines[1].startswith("Reason:"):
             raise ValueError("response is missing the exact Reason: marker")
-        reason = remainder[len("Reason:"):].strip()
+        reason = "\n".join((lines[1][len("Reason:"):], *lines[2:])).strip()
         if not reason:
             raise ValueError("reason must be non-blank")
         return candidate, reason
@@ -601,20 +624,24 @@ class NamingConventionGame:
             self._validate_action(forced_action)
             return ConventionDecision(
                 action=forced_action,
-                reason="committee intervention action",
+                reason=None,
                 action_order=action_order,
                 response=None,
                 responses=(),
                 forced=True,
+                output_format=self.config.decision_output_format,
+                decision_method="forced",
             )
         if agent.committed_action is not None:
             return ConventionDecision(
                 action=agent.committed_action,
-                reason="fixed committed-minority action",
+                reason=None,
                 action_order=action_order,
                 response=None,
                 responses=(),
                 committed=True,
+                output_format=self.config.decision_output_format,
+                decision_method="committed",
             )
 
         messages = build_convention_messages(
@@ -661,7 +688,7 @@ class NamingConventionGame:
             responses.append(response)
             try:
                 action, reason = parse_convention_decision(
-                    response.content, self.config.actions,
+                    response.content, action_order,
                     self.config.decision_output_format,
                 )
                 return ConventionDecision(

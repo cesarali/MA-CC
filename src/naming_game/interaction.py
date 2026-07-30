@@ -200,9 +200,9 @@ async def execute_pair_interaction(
 
     constrained = getattr(client, "complete_constrained", None)
     decision = None
-    # Local constrained decisions are opt-in by provider capability; remote clients
-    # retain the established generated JSON path.
-    if interaction_kind == "basic" and getattr(client, "provider_name", None) == "gemma_local" and callable(constrained):
+    # Any provider exposing the constrained capability can use the aligned bare-
+    # choice path.  Provider identity is audit metadata, not a capability gate.
+    if interaction_kind == "basic" and callable(constrained):
         allowed = inventory_values(speaker.inventory)
         # A constrained continuation must be scored against a prompt requesting
         # that same bare continuation, never against the legacy JSON schema.
@@ -210,7 +210,16 @@ async def execute_pair_interaction(
             {"role": "system", "content": "Select exactly one legal inventory name. Return only the bare name; no JSON or explanation."},
             {"role": "user", "content": f"LEGAL_NAMES: {json.dumps(allowed)}"},
         ]
-        decision = await constrained(speaker_messages, choices=allowed, temperature=max(temperature, 1.0))
+        # The older basic-game API has no separate choice-temperature field.
+        # Preserve every positive generation temperature exactly; legacy zero
+        # uses an explicit positive normalization temperature while argmax keeps
+        # selection deterministic.
+        constrained_temperature = temperature if temperature > 0 else 1.0
+        decision = await constrained(
+            speaker_messages,
+            choices=allowed,
+            temperature=constrained_temperature,
+        )
         selected = decision.selected_choice
         speaker_response = LLMResponse(
             content=json.dumps({"selected_name": selected}), model=decision.model,

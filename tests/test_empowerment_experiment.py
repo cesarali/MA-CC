@@ -14,8 +14,12 @@ from naming_game.empowerment_experiment import (
     ReplicationConfig,
     build_episode_specs,
     derive_episode,
+    convention_prompt_version,
+    run_episode,
     run_experiment,
 )
+from naming_game.local_model_types import ChoiceScore, ConstrainedDecisionResponse
+from naming_game.models import LLMResponse, TokenUsage
 from naming_game.naming_convention_game import ConventionGameConfig, NamingConventionGame
 
 
@@ -207,6 +211,7 @@ def test_mock_parquet_experiment_and_offline_analysis(tmp_path):
     assert result["episodes"] == 8
     interactions = pd.read_parquet(history / "interactions.parquet")
     episodes = pd.read_parquet(history / "episodes.parquet")
+    persisted_config = json.loads((history / "experiment_config.json").read_text())
     assert len(interactions) == 32
     assert len(episodes) == 8
     assert {
@@ -218,9 +223,15 @@ def test_mock_parquet_experiment_and_offline_analysis(tmp_path):
         "incumbent_name",
         "promoted_name",
         "attack_direction",
+        "decision_output_format_i",
+        "decision_method_i",
+        "allowed_choices_i",
     } <= set(interactions)
     assert {"terminal_takeover", "ever_crossed", "incumbent_survives"} <= set(episodes)
     assert set(episodes["attack_direction"]) == {"strong_to_weak", "weak_to_strong"}
+    assert persisted_config["decision_output_format"] == "json_reason"
+    assert persisted_config["choice_selection_policy"] == "argmax"
+    assert persisted_config["choice_temperature"] == 1.0
     analysis = analyze_histories(
         history,
         tmp_path / "analysis",
@@ -231,3 +242,128 @@ def test_mock_parquet_experiment_and_offline_analysis(tmp_path):
     assert (tmp_path / "analysis" / "summary.md").exists()
     assert (tmp_path / "analysis" / "plots" / "experiment_summary.png").stat().st_size > 0
     assert (tmp_path / "analysis" / "plots" / "pulse_summary.png").stat().st_size > 0
+
+
+class EmpowermentCombinedClient:
+    model = "fake/combined"
+    provider_name = "capable"
+    concurrency = 2
+
+    def __init__(self):
+        self.calls = []
+
+    async def complete_decision(self, messages, *, choices, **kwargs):
+        self.calls.append((messages, tuple(choices), kwargs))
+        scores = (
+            ChoiceScore(choices[0], (1,), -0.25, 0.75),
+            ChoiceScore(choices[1], (2,), -1.25, 0.25),
+        )
+        output_format = kwargs["output_format"]
+        reason = "recent coordination" if output_format == "choice_reason" else None
+        content = choices[0] if reason is None else f"{choices[0]}\nReason: {reason}"
+        return ConstrainedDecisionResponse(
+            choices[0],
+            scores,
+            content,
+            reason,
+            True if reason else None,
+            output_format,
+            self.model,
+            0.0,
+            TokenUsage(4, 2, 6),
+            kwargs["choice_temperature"],
+            kwargs["selection_policy"],
+        )
+
+    async def complete(self, messages, **kwargs):
+        raise AssertionError("combined path expected")
+
+    def close(self):
+        pass
+
+
+def test_combined_rows_and_summary_preserve_scientific_decision_metadata():
+    config = EmpowermentExperimentConfig(
+        population_size=2,
+        memory_length=1,
+        max_population_rounds=1,
+        committee_sizes=(0,),
+        regimes=("neutral",),
+        replications=ReplicationConfig("per_stratum", 1),
+        decision_output_format="choice_reason",
+        choice_selection_policy="sample",
+        choice_temperature=0.5,
+    )
+    spec = EpisodeSpec(
+        "episode", 2, "neutral", 0, "no_committee", "empty", None, None, None, 0
+    )
+    client = EmpowermentCombinedClient()
+    rows, summary = asyncio.run(run_episode(spec, config, client))
+    assert len(client.calls) == 4
+    assert summary["prompt_version"] == convention_prompt_version("choice_reason")
+    assert summary["decision_output_format"] == "choice_reason"
+    assert summary["choice_selection_policy"] == "sample"
+    assert summary["choice_temperature"] == 0.5
+    for row in rows:
+        assert row["prompt_version"] == convention_prompt_version("choice_reason")
+        assert row["decision_output_format"] == "choice_reason"
+        for suffix in ("i", "j"):
+            assert row[f"decision_output_format_{suffix}"] == "choice_reason"
+            assert row[f"decision_method_{suffix}"] == "constrained_decision"
+            assert row[f"reason_{suffix}"] == "recent coordination"
+            assert row[f"reason_valid_{suffix}"]
+            allowed = json.loads(row[f"allowed_choices_{suffix}"])
+            probabilities = json.loads(row[f"choice_probabilities_{suffix}"])
+            log_likelihoods = json.loads(row[f"choice_log_likelihoods_{suffix}"])
+            assert list(probabilities) == allowed
+            assert list(log_likelihoods) == allowed
+            assert sum(probabilities.values()) == 1.0
+            assert row[f"selected_choice_probability_{suffix}"] == 0.75
+            assert row[f"choice_entropy_{suffix}"] > 0
+
+
+def test_generated_remote_rows_keep_displayed_choices_without_probabilities():
+    config = EmpowermentExperimentConfig(
+        population_size=2,
+        max_population_rounds=1,
+        committee_sizes=(0,),
+        regimes=("neutral",),
+        replications=ReplicationConfig("per_stratum", 1),
+        decision_output_format="choice_only",
+    )
+    spec = EpisodeSpec(
+        "episode", 2, "neutral", 0, "no_committee", "empty", None, None, None, 0
+    )
+    client = MockAsyncLLMClient(
+        artificial_latency=0, response_factory=lambda messages: "A"
+    )
+    rows, _ = asyncio.run(run_episode(spec, config, client))
+    for row in rows:
+        for suffix in ("i", "j"):
+            assert set(json.loads(row[f"allowed_choices_{suffix}"])) == {"A", "B"}
+            assert row[f"choice_probabilities_{suffix}"] is None
+            assert row[f"choice_log_likelihoods_{suffix}"] is None
+
+
+def test_forced_rows_have_null_rationale_and_probability_fields():
+    config = EmpowermentExperimentConfig(
+        population_size=2,
+        max_population_rounds=1,
+        committee_sizes=(2,),
+        regimes=("neutral",),
+        replications=ReplicationConfig("per_stratum", 1),
+        decision_output_format="choice_reason",
+    )
+    spec = EpisodeSpec(
+        "episode", 2, "neutral", 2, "always_A", "empty", None, None, None, 0
+    )
+    client = EmpowermentCombinedClient()
+    rows, _ = asyncio.run(run_episode(spec, config, client))
+    assert client.calls == []
+    for row in rows:
+        for suffix in ("i", "j"):
+            assert row[f"decision_method_{suffix}"] == "forced"
+            assert row[f"reason_{suffix}"] is None
+            assert row[f"reason_valid_{suffix}"] is None
+            assert row[f"allowed_choices_{suffix}"] is None
+            assert row[f"choice_probabilities_{suffix}"] is None

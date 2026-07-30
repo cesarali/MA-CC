@@ -4,6 +4,8 @@ import json
 import pytest
 
 from naming_game.api_client import MockAsyncLLMClient
+from naming_game.local_model_types import ChoiceScore, ConstrainedDecisionResponse
+from naming_game.models import LLMResponse, TokenUsage
 from naming_game.naming_convention_game import (
     ConventionAgent,
     ConventionGameConfig,
@@ -201,3 +203,158 @@ def test_invalid_responses_are_retried_but_never_silently_repaired():
     assert client.stats["actual_calls"] == 4
     assert game.interactions == []
     assert all(not agent.history for agent in game.agents.values())
+
+
+@pytest.mark.parametrize(
+    ("output_format", "content", "reason"),
+    (
+        ("json_reason", '{"value":"Q","reason":"json"}', "json"),
+        ("choice_reason", "Q\nReason: text", "text"),
+        ("choice_only", "Q", None),
+    ),
+)
+def test_ordinary_clients_use_strict_generated_text_for_all_formats(
+    output_format, content, reason
+):
+    client = MockAsyncLLMClient(
+        artificial_latency=0, response_factory=lambda messages: content
+    )
+    game = NamingConventionGame(
+        client=client,
+        config=ConventionGameConfig(
+            num_agents=2,
+            actions=("Q", "M"),
+            decision_output_format=output_format,
+        ),
+        seed=4,
+    )
+    record = asyncio.run(game.run(1, stop_on_convergence=False)).interactions[0]
+    assert record.player_1_decision.reason == reason
+    assert record.player_2_decision.reason == reason
+    assert record.player_1_decision.constrained_scores is None
+    assert client.stats["actual_calls"] == 2
+
+
+class CombinedConventionClient:
+    model = "fake/combined"
+    provider_name = "not-gemma"
+    concurrency = 4
+
+    def __init__(self, *, malformed_reason=False):
+        self.calls = []
+        self.complete_calls = 0
+        self.active = 0
+        self.maximum = 0
+        self.malformed_reason = malformed_reason
+
+    async def complete_decision(self, messages, *, choices, **kwargs):
+        self.active += 1
+        self.maximum = max(self.maximum, self.active)
+        await asyncio.sleep(0.005)
+        self.active -= 1
+        self.calls.append((messages, tuple(choices), kwargs))
+        scores = tuple(
+            ChoiceScore(choice, (index + 1,), 0.0, 0.5)
+            for index, choice in enumerate(choices)
+        )
+        selected = choices[0]
+        reason = None if kwargs["output_format"] == "choice_only" else "bad B"
+        valid = None if kwargs["output_format"] == "choice_only" else not self.malformed_reason
+        if self.malformed_reason:
+            reason = None
+        content = selected if reason is None else f"{selected}\nReason: {reason}"
+        return ConstrainedDecisionResponse(
+            selected,
+            scores,
+            content,
+            reason,
+            valid,
+            kwargs["output_format"],
+            self.model,
+            0.005,
+            TokenUsage(4, 1, 5),
+            kwargs["choice_temperature"],
+            kwargs["selection_policy"],
+        )
+
+    async def complete(self, messages, **kwargs):
+        self.complete_calls += 1
+        return LLMResponse("unused", self.model, 0.0)
+
+    def close(self):
+        pass
+
+
+@pytest.mark.parametrize("output_format", ("choice_reason", "choice_only"))
+def test_combined_capability_is_provider_agnostic_concurrent_and_preserves_order_temperature(
+    output_format,
+):
+    client = CombinedConventionClient()
+    game = NamingConventionGame(
+        client=client,
+        config=ConventionGameConfig(
+            num_agents=2,
+            actions=("Q", "M"),
+            decision_output_format=output_format,
+            choice_temperature=0.5,
+        ),
+        seed=12,
+    )
+    record = asyncio.run(game.run(1, stop_on_convergence=False)).interactions[0]
+    assert client.complete_calls == 0
+    assert len(client.calls) == 2
+    assert client.maximum == 2
+    for _, choices, kwargs in client.calls:
+        assert choices in (("Q", "M"), ("M", "Q"))
+        assert kwargs["choice_temperature"] == 0.5
+    assert tuple(score.choice for score in record.player_1_decision.constrained_scores) == record.player_1_decision.action_order
+    assert tuple(score.choice for score in record.player_2_decision.constrained_scores) == record.player_2_decision.action_order
+    assert record.player_1_action == record.player_1_decision.action_order[0]
+    assert record.player_2_action == record.player_2_decision.action_order[0]
+    assert all(
+        "Reason:" not in entry.own_action and "Reason:" not in entry.partner_action
+        for agent in game.agents.values()
+        for entry in agent.history
+    )
+
+
+def test_malformed_combined_reasons_do_not_change_state_or_payoff():
+    client = CombinedConventionClient(malformed_reason=True)
+    game = NamingConventionGame(
+        client=client,
+        config=ConventionGameConfig(
+            num_agents=2,
+            actions=("Q", "M"),
+            decision_output_format="choice_reason",
+        ),
+        seed=6,
+    )
+    record = asyncio.run(game.run(1, stop_on_convergence=False)).interactions[0]
+    assert record.player_1_decision.reason is None
+    assert record.player_1_decision.reason_valid is False
+    assert record.player_1_action == record.player_1_decision.action_order[0]
+    assert record.payoff in (100, -50)
+
+
+def test_forced_decisions_have_no_rationale_and_make_no_model_request():
+    class AlwaysForced:
+        def action_for(self, agent_id, interaction_index):
+            return "Q"
+
+        def window_active(self, interaction_index):
+            return True
+
+    client = CombinedConventionClient()
+    game = NamingConventionGame(
+        client=client,
+        config=ConventionGameConfig(
+            num_agents=2,
+            actions=("Q", "M"),
+            decision_output_format="choice_reason",
+        ),
+        intervention=AlwaysForced(),
+    )
+    record = asyncio.run(game.run(1, stop_on_convergence=False)).interactions[0]
+    assert not client.calls and client.complete_calls == 0
+    assert record.player_1_decision.reason is None
+    assert record.player_2_decision.reason is None
