@@ -1,0 +1,65 @@
+# Live OpenAI inspection run for the convention decision output format.
+#
+# This creates exactly one episode with:
+# - 4 agents
+# - 3 population rounds (12 pair interactions)
+# - no committee-forced decisions
+# - bare A/B responses (`choice_only`), with no JSON and no reason
+# - exactly one sampled prompt/response trace per population round
+#
+# The CLI rejects --mock so this cannot silently use synthetic responses.
+population_size: 4
+names: [A, B]
+memory_length: 3
+max_population_rounds: 3
+committee_sizes: [0]
+regimes: [neutral]
+
+# One neutral stratum and one selected policy produces exactly one episode.
+replications:
+  unit: per_stratum
+  count: 1
+
+# This is an exchange-inspection run, not an estimable empowerment grid.
+auto_analyze: false
+quick_bootstrap_resamples: 0
+quick_null_permutations: 0
+
+temperature: 0.0
+decision_output_format: choice_only
+choice_selection_policy: argmax
+choice_temperature: 1.0
+# A/B each need only one completion token; extra explanatory output is impossible.
+max_tokens: 1
+seed: 1
+
+window_interactions: 12
+resolution_threshold: 0.95
+
+# Use the official OpenAI endpoint only; never fall back to the university API.
+provider: openai
+model: gpt-4o-mini
+fallback_provider: openai
+allow_fallback: false
+require_live_provider: true
+
+# Keep the two simultaneous decisions in each pair concurrent.
+request_concurrency: 2
+episode_concurrency: 1
+timeout_seconds: 60
+max_retries: 2
+
+logging:
+  enabled: true
+  level: INFO
+  api_status_log: true
+  audit_traces:
+    enabled: true
+    # With a three-round horizon, 1% checkpoint spacing selects rounds 1, 2, 3.
+    inspect_every_percent: 1
+    examples_per_selected_round: 1
+    seed: 1
+    include_request: true
+    include_raw_response: true
+    include_parsed_response: true
+    include_agent_memory: true
