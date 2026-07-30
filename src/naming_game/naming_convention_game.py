@@ -175,6 +175,7 @@ class ConventionDecision:
     responses: tuple[LLMResponse, ...]
     committed: bool = False
     forced: bool = False
+    constrained_scores: tuple[Any, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -213,6 +214,10 @@ class ConventionInteraction:
                 "retries": response.retries if response is not None else None,
                 "validation_attempts": len(decision.responses),
                 "token_usage": asdict(response.usage) if response is not None else None,
+                "decision_method": "constrained_sequence" if decision.constrained_scores else "generated",
+                "allowed_choices": list(decision.action_order) if decision.constrained_scores else None,
+                "choice_log_likelihoods": ({score.choice: score.log_likelihood for score in decision.constrained_scores} if decision.constrained_scores else None),
+                "choice_probabilities": ({score.choice: score.probability for score in decision.constrained_scores} if decision.constrained_scores else None),
             }
 
         return {
@@ -565,6 +570,21 @@ class NamingConventionGame:
             failure_payoff=self.config.failure_payoff,
             advertised_rounds=self.config.advertised_rounds,
         )
+        constrained = getattr(self.client, "complete_constrained", None)
+        if getattr(self.client, "provider_name", None) == "gemma_local" and callable(constrained):
+            decision = await constrained(
+                messages, choices=self.config.actions,
+                temperature=max(self.config.temperature, 1.0), seed=request_seed,
+            )
+            response = LLMResponse(
+                content=json.dumps({"action": decision.selected_choice}), model=decision.model,
+                latency_seconds=decision.latency_seconds, usage=decision.usage,
+            )
+            return ConventionDecision(
+                action=decision.selected_choice, reason=None,
+                action_order=tuple(self.config.actions), response=response,
+                responses=(response,), constrained_scores=decision.scores,
+            )
         responses: list[LLMResponse] = []
         last_error = "unknown validation error"
         for _ in range(self.config.invalid_response_retries + 1):
