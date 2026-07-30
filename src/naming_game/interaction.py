@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 import time
@@ -16,6 +17,7 @@ from .models import (
     Name,
     inventory_values,
     normalize_inventory,
+    LLMResponse,
 )
 from .reasoning_game import (
     ReasoningTask,
@@ -196,14 +198,28 @@ async def execute_pair_interaction(
     else:
         speaker_messages = build_basic_speaker_messages(speaker)
 
-    speaker_response = await client.complete(
-        speaker_messages,
-        temperature=temperature,
-        max_tokens=max_tokens_speaker,
-    )
-    selected, speaker_valid, speaker_error, reason = _validate_speaker(
-        speaker_response.content, speaker.inventory, choice_seed
-    )
+    constrained = getattr(client, "complete_constrained", None)
+    decision = None
+    # Local constrained decisions are opt-in by provider capability; remote clients
+    # retain the established generated JSON path.
+    if interaction_kind == "basic" and getattr(client, "provider_name", None) == "gemma_local" and callable(constrained):
+        allowed = inventory_values(speaker.inventory)
+        decision = await constrained(speaker_messages, choices=allowed, temperature=max(temperature, 1.0))
+        selected = decision.selected_choice
+        speaker_response = LLMResponse(
+            content=json.dumps({"selected_name": selected}), model=decision.model,
+            latency_seconds=decision.latency_seconds, usage=decision.usage,
+        )
+        speaker_valid, speaker_error, reason = True, None, None
+    else:
+        speaker_response = await client.complete(
+            speaker_messages,
+            temperature=temperature,
+            max_tokens=max_tokens_speaker,
+        )
+        selected, speaker_valid, speaker_error, reason = _validate_speaker(
+            speaker_response.content, speaker.inventory, choice_seed
+        )
 
     if interaction_kind == "basic":
         listener_messages = build_basic_listener_messages(listener, selected)
@@ -248,6 +264,7 @@ async def execute_pair_interaction(
             listener_valid = False
             listener_error = f"{exc}; listener state was left unchanged"
 
+    probabilities = ({score.choice: score.probability for score in decision.scores} if decision else None)
     return InteractionResult(
         interaction_index=interaction_index,
         round_index=round_index,
@@ -271,4 +288,10 @@ async def execute_pair_interaction(
         listener_validation_error=listener_error,
         reason=reason,
         pair_wall_seconds=time.perf_counter() - started,
+        decision_method="constrained_sequence" if decision else "generated",
+        allowed_choices=tuple(inventory_values(speaker.inventory)) if decision else None,
+        choice_log_likelihoods=({score.choice: score.log_likelihood for score in decision.scores} if decision else None),
+        choice_probabilities=probabilities,
+        selected_choice_probability=(probabilities[selected] if probabilities else None),
+        choice_entropy=(-sum(p * math.log(p) for p in probabilities.values() if p > 0) if probabilities else None),
     )

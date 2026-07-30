@@ -283,11 +283,7 @@ async def run_single(
         result = await game.run(spec.rounds)
 
     run_id = make_run_id(spec)
-    api_backend = (
-        "mock"
-        if client.__class__.__name__ == "MockAsyncLLMClient"
-        else "university_proxy"
-    )
+    api_backend = getattr(client, "provider_name", "unknown")
     summary = summarize_run(run_id, spec, result, api_backend=api_backend)
     destination = Path(output_dir)
     output_files = write_run_outputs(
