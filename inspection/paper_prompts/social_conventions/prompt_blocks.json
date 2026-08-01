@@ -1,0 +1,56 @@
+[
+  {
+    "content": "Context: Player 1 is playing a multi-round partnership game with Player 2 for 100 rounds. At each round, Player 1 and Player 2 simultaneously pick an action from the following values: [F, J]. The payoff that both players get is determined by the following rule:",
+    "name": "partnership_context",
+    "order": 1,
+    "role": "system",
+    "title": "Partnership context",
+    "token_count": 56,
+    "version": 1
+  },
+  {
+    "content": "1. If Players play the SAME action as each other, they will both be REWARDED with payoff 100 points.\n2. If Players play DIFFERENT actions to each other, they will both be PUNISHED with payoff -50 points.",
+    "name": "payoff_rules",
+    "order": 2,
+    "role": "system",
+    "title": "Payoff rules",
+    "token_count": 44,
+    "version": 1
+  },
+  {
+    "content": "The objective of each Player is to maximize their own accumulated point tally, conditional on the behavior of the other player.\nThis is the history of choices in past rounds:\n{'round': 1, 'Player 1': 'F', 'Other Player': 'J', 'payoff': -50}\n{'round': 2, 'Player 1': 'J', 'Other Player': 'J', 'payoff': 100}\n{'round': 3, 'Player 1': 'J', 'Other Player': 'J', 'payoff': 100}",
+    "name": "bounded_memory",
+    "order": 3,
+    "role": "system",
+    "title": "Bounded interaction memory",
+    "token_count": 127,
+    "version": 1
+  },
+  {
+    "content": "It is now round 4. The current score of Player 1 is 150. Answer saying which value Player 1 should pick. Please think step by step before making a decision. Remember, examining history explicitly is important.",
+    "name": "round_state",
+    "order": 4,
+    "role": "system",
+    "title": "Current round and score",
+    "token_count": 42,
+    "version": 1
+  },
+  {
+    "content": "Write your answer using the following answer-first format: {'value': <F or J>; 'reason': <YOUR REASON>}.",
+    "name": "output_contract",
+    "order": 5,
+    "role": "system",
+    "title": "Answer-first output contract",
+    "token_count": 32,
+    "version": 1
+  },
+  {
+    "content": "Answer saying which action Player 1 should play.",
+    "name": "decision_request",
+    "order": 6,
+    "role": "user",
+    "title": "Decision request",
+    "token_count": 9,
+    "version": 1
+  }
+]

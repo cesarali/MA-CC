@@ -1,0 +1,5 @@
+schema_version: 1
+output_dir: ${MAS_CC_OUTPUT_DIR:-results}
+format: jsonl
+checkpoints: true
+overwrite: false

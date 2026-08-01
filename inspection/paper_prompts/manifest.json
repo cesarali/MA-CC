@@ -1,0 +1,163 @@
+{
+  "artifacts": [
+    {
+      "bytes": 17536,
+      "path": "all_requests.md",
+      "sha256": "1d3e2574d835d20d7b278b014958c8f180bd58e7184b5cd8f1efca96936bbc6a"
+    },
+    {
+      "bytes": 3286,
+      "path": "hiddenbench_discussion/compiled_messages.json",
+      "sha256": "58a93865d95e4782ea8d475d94f47675320e845d1a6c2c6363480323a5adfabf"
+    },
+    {
+      "bytes": 3360,
+      "path": "hiddenbench_discussion/prompt_blocks.json",
+      "sha256": "5ef1c6da137ee9f11916f88bf94026b112e603de770cbe11d70757b8395c2841"
+    },
+    {
+      "bytes": 293,
+      "path": "hiddenbench_discussion/prompt_config.yaml",
+      "sha256": "c2ea0b981b4fba6907607c93108883ed13caee5086fb9b713d8bfe49e1f6d940"
+    },
+    {
+      "bytes": 3240,
+      "path": "hiddenbench_discussion/prompt_context.json",
+      "sha256": "3fabdf30b41a34707979cd3616101de01f3517aa13519620ce72627078ff9314"
+    },
+    {
+      "bytes": 3770,
+      "path": "hiddenbench_discussion/request.md",
+      "sha256": "7164c93426a087e015df7f779c81a850577ffa92850f25f1051118386cd09991"
+    },
+    {
+      "bytes": 3063,
+      "path": "hiddenbench_first_speaker/compiled_messages.json",
+      "sha256": "05f38ea996a2aa64514d714513e07abdca9a635aa89db74d2b955f4f5c0ee803"
+    },
+    {
+      "bytes": 3136,
+      "path": "hiddenbench_first_speaker/prompt_blocks.json",
+      "sha256": "c9f1b6018e4529d856692a7167a6ecdf647b28cb1e598ee35fc50b48e8c91d77"
+    },
+    {
+      "bytes": 293,
+      "path": "hiddenbench_first_speaker/prompt_config.yaml",
+      "sha256": "c2ea0b981b4fba6907607c93108883ed13caee5086fb9b713d8bfe49e1f6d940"
+    },
+    {
+      "bytes": 2961,
+      "path": "hiddenbench_first_speaker/prompt_context.json",
+      "sha256": "ab46a8c1de9e65f1a92c436e6d215db9312c19f60b42b77098a9b97cedfba76a"
+    },
+    {
+      "bytes": 3544,
+      "path": "hiddenbench_first_speaker/request.md",
+      "sha256": "f885f1e5550d999ef43e2a7cff820093d744f31eb4128076d7500dc711b611d4"
+    },
+    {
+      "bytes": 3454,
+      "path": "hiddenbench_post_vote/compiled_messages.json",
+      "sha256": "e8b52979d07f1da422661fedf4354a8a2cba0908b4aa0db0b52e9387116dcc5d"
+    },
+    {
+      "bytes": 3540,
+      "path": "hiddenbench_post_vote/prompt_blocks.json",
+      "sha256": "bbdb2b5233a019eed6bd77fde3d61f35aeea955024f1a0dc56026c05f5877d15"
+    },
+    {
+      "bytes": 345,
+      "path": "hiddenbench_post_vote/prompt_config.yaml",
+      "sha256": "6c818dab0c4762d55f07492a9a5cdadc0965122d8cc70bddf8ce7ed7aa718162"
+    },
+    {
+      "bytes": 3240,
+      "path": "hiddenbench_post_vote/prompt_context.json",
+      "sha256": "3fabdf30b41a34707979cd3616101de01f3517aa13519620ce72627078ff9314"
+    },
+    {
+      "bytes": 4007,
+      "path": "hiddenbench_post_vote/request.md",
+      "sha256": "7ed9da37ac0cb5f04bd33b8839ac4e037afb0f608909475140a9f92da3992730"
+    },
+    {
+      "bytes": 3228,
+      "path": "hiddenbench_pre_vote/compiled_messages.json",
+      "sha256": "c138fb21c30a20cd67fffd5a3aaa1d2dfc4c0d07ecfa05e691e9aa29aad63f42"
+    },
+    {
+      "bytes": 3313,
+      "path": "hiddenbench_pre_vote/prompt_blocks.json",
+      "sha256": "fb07c76b2ed8fe2639db6a024897918f54931d724f979dcfe15618f2aba43766"
+    },
+    {
+      "bytes": 345,
+      "path": "hiddenbench_pre_vote/prompt_config.yaml",
+      "sha256": "6c818dab0c4762d55f07492a9a5cdadc0965122d8cc70bddf8ce7ed7aa718162"
+    },
+    {
+      "bytes": 2936,
+      "path": "hiddenbench_pre_vote/prompt_context.json",
+      "sha256": "1c9c16b4e69a4a3f5eaaec58098b9756a8cb114a46feccd2f23c49d40b6188a8"
+    },
+    {
+      "bytes": 3783,
+      "path": "hiddenbench_pre_vote/request.md",
+      "sha256": "255bdf39223e23037eb27a3b7882819f9fc5669019368c5132b1ebadb0f5bd91"
+    },
+    {
+      "bytes": 2205,
+      "path": "report.md",
+      "sha256": "8ae1de229edd66429474a5d19373e0ee95cc35df8179f9d9cf1322f9bd950c4e"
+    },
+    {
+      "bytes": 1918,
+      "path": "social_conventions/compiled_messages.json",
+      "sha256": "963445d43c8f9cf0e2bc9c3fa039ec859b1e9c3512886816296d8aefe2408e34"
+    },
+    {
+      "bytes": 2248,
+      "path": "social_conventions/prompt_blocks.json",
+      "sha256": "5ba17af94033b24418d0804d3c3aaac889a0f8131a818439a5582a26df15b6b7"
+    },
+    {
+      "bytes": 344,
+      "path": "social_conventions/prompt_config.yaml",
+      "sha256": "3c6343acf572610cdf6c891619ed0c29f65da3520241ee6cd7a420a8e901ed3c"
+    },
+    {
+      "bytes": 1307,
+      "path": "social_conventions/prompt_context.json",
+      "sha256": "066a724529911785e6a825ab7df6b9718685f619c8fc278c5411ad6132ce32ce"
+    },
+    {
+      "bytes": 2274,
+      "path": "social_conventions/request.md",
+      "sha256": "853be165da00a6472cadd37143b490a8cf9a6eb525c305f09e356a54e852680a"
+    }
+  ],
+  "checks": {
+    "hiddenbench_audit_answer_key_excluded": true,
+    "hiddenbench_discussion_markdown_matches_messages": true,
+    "hiddenbench_discussion_two_message_request": true,
+    "hiddenbench_first_speaker_markdown_matches_messages": true,
+    "hiddenbench_first_speaker_two_message_request": true,
+    "hiddenbench_post_vote_markdown_matches_messages": true,
+    "hiddenbench_post_vote_two_message_request": true,
+    "hiddenbench_pre_vote_markdown_matches_messages": true,
+    "hiddenbench_pre_vote_two_message_request": true,
+    "social_conventions_markdown_matches_messages": true,
+    "social_conventions_two_message_request": true
+  },
+  "generated_at": "2026-08-01T14:26:53.049664Z",
+  "kind": "paper_prompt_examples",
+  "manifest_version": 1,
+  "sources": {
+    "agent_id": 0,
+    "hiddenbench_data": "/home/cesarali/LanguageGames/MA-CC/scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/scaled/exact_replication/N_32.json",
+    "hiddenbench_paper": "pdfs/Systematic Failures in Collective Reasoning under Distributed Information in.pdf",
+    "social_conventions_paper": "pdfs/Emergence of social conventions supplementary.pdf",
+    "task_id": 1
+  },
+  "status": "pass"
+}

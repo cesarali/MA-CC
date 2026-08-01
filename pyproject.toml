@@ -34,6 +34,7 @@ gemma4 = [
 
 [project.scripts]
 naming-game = "naming_game.cli:main"
+mas-cc = "mas_cc.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

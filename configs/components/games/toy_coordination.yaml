@@ -1,0 +1,9 @@
+schema_version: 1
+type: toy_coordination
+population_size: 2
+horizon: 3
+topology: complete
+options:
+  actions:
+    - A
+    - B

@@ -1,0 +1,41 @@
+{
+  "artifacts": [
+    {
+      "bytes": 6541,
+      "path": "config_schema.json",
+      "sha256": "44daf40cba7726bae8326d18431d5e79c5f67299898acbb805f312ddab4d1408"
+    },
+    {
+      "bytes": 707,
+      "path": "input_config.yaml",
+      "sha256": "7040edb8653aa6e6d1bbdbc8353f6677c71c6dd09cd7a3422b5fb0a0ec48134f"
+    },
+    {
+      "bytes": 1266,
+      "path": "report.md",
+      "sha256": "c9422eca98052e09c17d4e1660e5d724c41f19685409f801f18238c3133d244a"
+    },
+    {
+      "bytes": 1391,
+      "path": "resolved_config.yaml",
+      "sha256": "721f603ade05ee21444b9f92c4daee204d65f2bd35a0d34e4d4d2f0c847728df"
+    },
+    {
+      "bytes": 423,
+      "path": "validation_examples.md",
+      "sha256": "dbab2d2d106a4f1d4ea80328803750656dc4286255ca6e0f6a4bc3abc64e6f3c"
+    }
+  ],
+  "checks": {
+    "deterministic_resolution": true,
+    "invalid_examples_rejected": true,
+    "resolved_config_secret_free": true,
+    "schema_version_supported": true
+  },
+  "generated_at": "2026-08-01T13:45:38.649690Z",
+  "manifest_version": 1,
+  "mas_cc_version": "0.1.0",
+  "phase": 2,
+  "status": "pass",
+  "warnings": []
+}

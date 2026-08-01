@@ -1,0 +1,75 @@
+schema_version: 1
+llm_provider:
+  schema_version: 1
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60.0
+  max_retries: 2
+  request_concurrency: 2
+  temperature: 0.0
+  max_output_tokens: 64
+  options: {}
+prompt:
+  schema_version: 1
+  prompt_family: basic_binary_choice
+  prompt_version: 1
+  blocks:
+  - task_description
+  - game_rules
+  - private_state
+  - recent_memory
+  - current_interaction
+  - decision_instruction
+  - output_contract
+  response_contract:
+    type: choice_only
+    allowed_values:
+    - A
+    - B
+  options: {}
+game:
+  schema_version: 1
+  type: toy_coordination
+  population_size: 2
+  horizon: 3
+  topology: complete
+  options:
+    actions:
+    - A
+    - B
+execution:
+  schema_version: 1
+  seed: 1026
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+  timeout_seconds: null
+logging:
+  schema_version: 1
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options: {}
+storage:
+  schema_version: 1
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+  options: {}
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+  options: {}
+experiment:
+  schema_version: 1
+  name: provider-smoke-test
+  description: Static Phase 2 configuration validation; no provider call is made.
+  tags:
+  - smoke
+  - phase-02
+  metadata: {}

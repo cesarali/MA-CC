@@ -1,0 +1,36 @@
+[
+  {
+    "content": "You are participating in a study, acting as a community leader of a small village surrounded by mountains and rivers. Most villagers own cars, but there are also elderly people and children who may need additional assistance when walking. Earlier today, heavy rain began to fall, and the local government issued a warning about a potential disaster.\nHours ago, you requested relief supplies, but the supply truck has yet to arrive. Now, the rain has temporarily stopped, giving you and the others community leaders a short window to decide on the safest evacuation route before the rain resumes. You don’t know how much time you have left to make this critical decision.\nYour Task:\nyou will discuss with other participants, who are also acting as community leaders, to decide where to evacuate. You have three options:\n- West City: Accessible through a bridge over the river.\n- East Town: Accessible through a tunnel on middle ground.\n- North Hill: Accessible through a driveway and walking trails.\nUsually, it takes the same time to reach all three places by car, but some routes may be inaccessible now.\nThere is only one correct evacuation location. After the discussion:\n- If you choose the correct location, you will earn $1.\n- If all other participants also choose the correct location, you will earn an additional $1 (for a total of $2).\nThis means that coordinating with others is critical to maximize your rewards. The chat will at most take 15 minutes. However, the exact time when the chat will end is unknown.\n\nYou have received the following information. Notice that the order of this information is randomly shuffled; the order of facts does not indicate importance or relationship. Please reason carefully:\n- A massive fire has blocked the supply truck and all other traffic.\n- The school at North Hill can serve as a temporary evacuation center, providing a two-week supply of essentials and sleeping space in the gym.\n- The mayor of East Town has offered accommodations for any evacuees. She also ensures that volunteers are available to assist them.\n- The river level is still below the bridge to West City.\n- The local government announced that hotels in West City are prepared to accommodate evacuees. While these hotels are fully stocked with food, they may lack medical supplies.\n\nKeep your response concise—just one or two sentences.",
+    "metadata": {
+      "block_versions": [
+        1,
+        1,
+        1
+      ],
+      "blocks": [
+        "scenario_description",
+        "available_information",
+        "brevity_instruction"
+      ],
+      "message_order": 1,
+      "prompt_family": "hidden_profile_vote_paper",
+      "prompt_version": 1
+    },
+    "role": "system"
+  },
+  {
+    "content": "Please decide and provide your rationale in the following JSON format:\n{\n  \"vote\": <A string, [\"West City\", \"East Town\", \"North Hill\"]>,\n  \"rationale\": <A string, representing your rationale>\n}",
+    "metadata": {
+      "block_versions": [
+        1
+      ],
+      "blocks": [
+        "vote_request"
+      ],
+      "message_order": 2,
+      "prompt_family": "hidden_profile_vote_paper",
+      "prompt_version": 1
+    },
+    "role": "user"
+  }
+]

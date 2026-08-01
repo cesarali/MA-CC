@@ -1,0 +1,7 @@
+Command: /home/cesarali/miniconda3/envs/MA-CC/bin/python -m pytest tests/test_benchmark.py tests/test_constrained_client_contract.py tests/test_convention_output_formats.py tests/test_empowerment_cli.py tests/test_empowerment_estimators.py tests/test_empowerment_experiment.py tests/test_gemma_language_game_integration.py tests/test_gemma_local_client_unit.py tests/test_interaction.py tests/test_mock_api.py tests/test_naming_convention_game.py tests/test_sequential_game.py tests/test_synchronous_game.py
+Legacy test files: 13
+Exit status: 0
+
+........................................................................ [ 57%]
+......................................................                   [100%]
+126 passed in 2.83s

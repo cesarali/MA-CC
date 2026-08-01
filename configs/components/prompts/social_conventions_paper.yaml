@@ -1,0 +1,18 @@
+schema_version: 1
+prompt_family: social_conventions_paper
+prompt_version: 1
+blocks:
+  - partnership_context
+  - payoff_rules
+  - bounded_memory
+  - round_state
+  - output_contract
+  - decision_request
+response_contract:
+  type: paper_choice_reason
+  allowed_values:
+    - F
+    - J
+options:
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"

@@ -1,0 +1,13 @@
+schema_version: 1
+prompt_family: hidden_profile_discussion_paper
+prompt_version: 1
+blocks:
+  - scenario_description
+  - available_information
+  - brevity_instruction
+  - discussion_turn
+response_contract:
+  type: free_text
+options:
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"

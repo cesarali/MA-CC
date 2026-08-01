@@ -1,2 +1,3 @@
 [console_scripts]
+mas-cc = mas_cc.cli.main:main
 naming-game = naming_game.cli:main

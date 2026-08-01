@@ -1,0 +1,1 @@
+"""Game protocols and implementations."""

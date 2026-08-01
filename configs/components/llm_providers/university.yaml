@@ -1,0 +1,10 @@
+schema_version: 1
+type: university
+model: gwdg/qwen3-30b-a3b-instruct-2507
+credentials_env: POTSDAM_API_KEY
+base_url_env: BASE_POTSDAM_LLM_URL
+timeout_seconds: 60
+max_retries: 2
+request_concurrency: 10
+temperature: 0.0
+max_output_tokens: 64

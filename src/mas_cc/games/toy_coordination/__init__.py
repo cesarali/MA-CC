@@ -1,0 +1,1 @@
+"""Reference coordination game namespace."""

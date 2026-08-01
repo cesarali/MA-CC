@@ -1,0 +1,5 @@
+schema_version: 1
+level: INFO
+console: true
+audit: true
+comet: false
