@@ -8,6 +8,7 @@ dependencies:
   - jupyterlab
   - ipykernel
   - requests
+  - openai
   - python-dotenv
   - pyyaml
   - pytest

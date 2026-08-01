@@ -24,6 +24,52 @@ conda run -n MA-CC python ...
 It contains Python 3.11, `requests`, and `python-dotenv`. Do not depend on
 `conda activate` persisting between tool calls.
 
+## WSL and the Windows VPN
+
+The repository automatically starts a restricted Windows CONNECT bridge for
+the known Potsdam API host when a supported client runs under WSL. This lets
+the shared `AsyncLLMClient` and the HiddenBench OpenAI client use the Windows
+VPN without exposing credentials or terminating TLS on the bridge. The bridge
+listens only on Windows localhost and rejects destinations other than the
+configured Potsdam host on TCP 443.
+
+Mirrored networking remains recommended on Windows 11 22H2 or newer. Configure
+it globally in `%UserProfile%\.wslconfig`:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+dnsTunneling=true
+autoProxy=true
+```
+
+Ensure `/etc/wsl.conf` does not disable generated DNS configuration. A suitable
+network section is:
+
+```ini
+[network]
+generateResolvConf=true
+```
+
+Apply these settings from Windows PowerShell after saving all WSL work:
+
+```powershell
+wsl --shutdown
+```
+
+Restart Ubuntu, connect the Windows VPN, and verify the same bridge path used
+by API-heavy pipelines:
+
+```bash
+conda run --live-stream -n MA-CC python \
+  scripts/Potsdam/check_university_api.py
+```
+
+Use `--direct` only to diagnose the raw WSL route; Cisco VPN configurations may
+block that path even in mirrored mode. Use `--windows` to run the complete
+diagnostic in PowerShell as a final fallback. The ordinary command is the
+relevant preflight for the HiddenBench pipeline.
+
 ## Known working API shape
 
 Load credentials with `python-dotenv` and send the key as a bearer token:

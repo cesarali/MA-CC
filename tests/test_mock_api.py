@@ -43,6 +43,22 @@ def test_shared_clients_do_not_have_message_history(monkeypatch):
         real.close()
 
 
+def test_university_client_installs_windows_bridge_proxy(monkeypatch):
+    monkeypatch.setattr(
+        "naming_game.api_client.ensure_windows_vpn_bridge",
+        lambda *args, **kwargs: "http://127.0.0.1:18765",
+    )
+    client = AsyncLLMClient(
+        model="model",
+        api_key="fake-key",
+        base_url="https://proxy.example",
+    )
+    try:
+        assert client._session.proxies["https"] == "http://127.0.0.1:18765"
+    finally:
+        client.close()
+
+
 def test_evaluator_history_is_never_inserted_into_later_prompts():
     prompts = []
     client = MockAsyncLLMClient(
@@ -57,4 +73,3 @@ def test_evaluator_history_is_never_inserted_into_later_prompts():
     assert all("counterpart_id" not in prompt for prompt in prompts)
     assert all("interaction_index" not in prompt for prompt in prompts)
     assert all("history" not in prompt.lower() for prompt in prompts)
-

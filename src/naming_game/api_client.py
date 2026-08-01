@@ -20,6 +20,7 @@ import requests
 from dotenv import load_dotenv
 
 from .models import ConfigurationError, LLMResponse, TokenUsage
+from .potsdam_network import ensure_windows_vpn_bridge
 
 Message = dict[str, str]
 ResponseFactory = Callable[[Sequence[Message]], str | Awaitable[str]]
@@ -134,6 +135,7 @@ class AsyncLLMClient:
         env_path: Path | None = None,
         backoff_base_seconds: float = 0.5,
         provider_name: str = "university",
+        allow_windows_proxy: bool = True,
     ) -> None:
         if concurrency < 1:
             raise ConfigurationError("concurrency must be at least 1.")
@@ -142,8 +144,10 @@ class AsyncLLMClient:
         if max_retries < 0:
             raise ConfigurationError("max_retries cannot be negative.")
 
+        resolved_env_path: Path | None = None
         if api_key is None or base_url is None:
-            load_dotenv(env_path or _find_repository_env())
+            resolved_env_path = env_path or _find_repository_env()
+            load_dotenv(resolved_env_path)
         self._api_key = api_key or os.getenv("POTSDAM_API_KEY")
         configured_url = base_url or os.getenv("BASE_POTSDAM_LLM_URL")
         if not self._api_key:
@@ -163,6 +167,15 @@ class AsyncLLMClient:
         self._endpoint_lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(concurrency)
         self._session = requests.Session()
+        if allow_windows_proxy:
+            proxy_url = ensure_windows_vpn_bridge(
+                self._base_url,
+                repository_root=(
+                    resolved_env_path.parent if resolved_env_path is not None else None
+                ),
+            )
+            if proxy_url is not None:
+                self._session.proxies["https"] = proxy_url
         self._session.headers.update(
             {
                 "Authorization": f"Bearer {self._api_key}",

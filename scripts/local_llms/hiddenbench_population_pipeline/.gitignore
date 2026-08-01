@@ -1,0 +1,19 @@
+# Downloaded benchmark and all derived/population data
+data/
+
+# API-generated annotations, audits, and benchmark outputs
+annotations/*.json
+annotations/*.jsonl
+results/
+
+# Credentials and local caches
+.cache/
+caches/
+secrets/
+__pycache__/
+*.py[cod]
+
+# Operating-system metadata
+.DS_Store
+__MACOSX/
+*:Zone.Identifier
