@@ -43,10 +43,32 @@ def build_parser() -> argparse.ArgumentParser:
     examples.add_argument("--task-id", type=int, default=1)
     examples.add_argument("--agent-id", type=int, default=0)
 
+    provider = commands.add_parser("provider", help="test one normalized LLM provider")
+    provider_commands = provider.add_subparsers(dest="provider_command", required=True)
+    provider_test = provider_commands.add_parser(
+        "test", help="compile one prompt, run static preflight, and send one completion"
+    )
+    provider_test.add_argument(
+        "--provider", choices=("mock", "openai", "university", "gemma_local"), required=True
+    )
+    provider_test.add_argument(
+        "--prompt",
+        type=Path,
+        default=Path("configs/components/prompts/basic_binary_choice.yaml"),
+    )
+    provider_test.add_argument("--provider-config", type=Path)
+    provider_test.add_argument("--output-dir", type=Path, required=True)
+    provider_test.add_argument("--logical-calls", type=int, default=1)
+    provider_test.add_argument("--assumed-output-tokens", type=int, default=16)
+    provider_test.add_argument("--max-output-tokens", type=int, default=16)
+    provider_test.add_argument("--temperature", type=float, default=0.0)
+    provider_test.add_argument("--seed", type=int, default=1026)
+    provider_test.add_argument("--budget-usd", type=float)
+
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
-    phase.add_argument("number", type=int, choices=(1, 2, 3), help="implemented phase number")
+    phase.add_argument("number", type=int, choices=(1, 2, 3, 4), help="implemented phase number")
     phase.add_argument(
         "--config",
         type=Path,
@@ -88,6 +110,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(f"Paper prompt examples written: {destination}")
         return 0
+    if args.command == "provider" and args.provider_command == "test":
+        from .provider import run_provider_smoke_test
+
+        try:
+            passed = run_provider_smoke_test(
+                args.provider,
+                args.prompt,
+                args.output_dir,
+                provider_config_path=args.provider_config,
+                logical_calls=args.logical_calls,
+                assumed_output_tokens=args.assumed_output_tokens,
+                max_output_tokens=args.max_output_tokens,
+                temperature=args.temperature,
+                seed=args.seed,
+                budget_usd=args.budget_usd,
+            )
+        except (ConfigurationError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Provider {args.provider} inspection {'passed' if passed else 'failed'}: "
+            f"{args.output_dir}"
+        )
+        return 0 if passed else 1
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
 
@@ -97,8 +143,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 passed = inspect_phase_1(output_dir)
             elif args.number == 2:
                 passed = inspect_phase_2(args.config, output_dir)
-            else:
+            elif args.number == 3:
                 passed = inspect_phase_3(args.prompt, output_dir)
+            else:
+                from .provider import run_provider_smoke_test
+
+                passed = run_provider_smoke_test("mock", args.prompt, output_dir)
         except (ConfigurationError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2

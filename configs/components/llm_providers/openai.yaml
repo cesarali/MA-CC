@@ -1,0 +1,11 @@
+schema_version: 1
+type: openai
+model: gpt-4o-mini
+credentials_env: OPENAI_API_KEY
+timeout_seconds: 60
+max_retries: 2
+request_concurrency: 10
+temperature: 0.0
+max_output_tokens: 64
+options:
+  estimated_latency_seconds: 2.0

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from mas_cc.cli.inspect import inspect_phase_2, inspect_phase_3
 from mas_cc.cli.main import main
+from mas_cc.cli.provider import run_provider_smoke_test
 from mas_cc.cli.prompt import generate_paper_prompt_examples
 
 
@@ -64,6 +65,33 @@ def test_phase_3_inspection_contract(tmp_path: Path):
     )
     assert len(messages) == 7
     assert {message["role"] for message in messages} == {"system", "user"}
+
+
+def test_phase_4_mock_provider_inspection_contract(tmp_path: Path):
+    output = tmp_path / "phase_04" / "mock"
+    assert run_provider_smoke_test(
+        "mock", "configs/components/prompts/basic_binary_choice.yaml", output
+    )
+    expected = {
+        "report.md",
+        "manifest.json",
+        "request.json",
+        "normalized_response.json",
+        "raw_response_redacted.json",
+        "usage.json",
+        "preflight_estimate.json",
+        "timing.csv",
+    }
+    assert {path.name for path in output.iterdir()} == expected
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "pass"
+    assert all(manifest["checks"].values())
+    response = json.loads((output / "normalized_response.json").read_text(encoding="utf-8"))
+    assert response["provider"] == "mock"
+    assert response["content"] == "A"
+    assert "Bearer " not in "".join(
+        path.read_text(encoding="utf-8") for path in output.iterdir()
+    )
 
 
 def test_paper_prompt_example_bundle_is_readable_and_machine_inspectable(tmp_path: Path):

@@ -1,0 +1,14 @@
+schema_version: 1
+type: gemma_local
+model: google/gemma-4-12B-it
+timeout_seconds: 300
+max_retries: 0
+request_concurrency: 1
+temperature: 0.0
+max_output_tokens: 64
+options:
+  dtype: bfloat16
+  device_map: auto
+  allow_cpu: false
+  estimated_load_seconds: 120
+  estimated_latency_seconds: 2.0

@@ -1,0 +1,12 @@
+schema_version: 1
+type: mock
+model: deterministic-v1
+timeout_seconds: 5
+max_retries: 0
+request_concurrency: 20
+temperature: 0.0
+max_output_tokens: 64
+options:
+  response: A
+  artificial_latency_seconds: 0.0
+  estimated_latency_seconds: 0.001
