@@ -1,0 +1,73 @@
+{
+  "agents": [
+    {
+      "agent_id": "agent-000",
+      "attributes": {
+        "available_actions": [
+          "A",
+          "B"
+        ]
+      },
+      "memory": [
+        {
+          "counterpart_action": "A",
+          "interaction_number": 1,
+          "own_action": "A",
+          "payoff": 1.0
+        },
+        {
+          "counterpart_action": "A",
+          "interaction_number": 2,
+          "own_action": "A",
+          "payoff": 1.0
+        },
+        {
+          "counterpart_action": "A",
+          "interaction_number": 3,
+          "own_action": "A",
+          "payoff": 1.0
+        }
+      ],
+      "score": 3.0
+    },
+    {
+      "agent_id": "agent-001",
+      "attributes": {
+        "available_actions": [
+          "A",
+          "B"
+        ]
+      },
+      "memory": [
+        {
+          "counterpart_action": "A",
+          "interaction_number": 1,
+          "own_action": "A",
+          "payoff": 1.0
+        },
+        {
+          "counterpart_action": "A",
+          "interaction_number": 2,
+          "own_action": "A",
+          "payoff": 1.0
+        },
+        {
+          "counterpart_action": "A",
+          "interaction_number": 3,
+          "own_action": "A",
+          "payoff": 1.0
+        }
+      ],
+      "score": 3.0
+    }
+  ],
+  "data": {
+    "horizon": 3,
+    "matches": 3,
+    "seed": 1026,
+    "topology": "complete"
+  },
+  "game_type": "toy_coordination",
+  "terminated": true,
+  "turn": 3
+}

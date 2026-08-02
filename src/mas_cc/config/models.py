@@ -251,6 +251,56 @@ class ExperimentConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class PricingConfig:
+    """Explicit pricing provenance/freshness policy; resolving it performs no I/O."""
+
+    schema_version: int = 1
+    mode: str = "offline"
+    cache_path: str | None = None
+    max_age_seconds: float = 86400.0
+    require_fresh_at_launch: bool = True
+    fallback_policy: str = "deny"
+    explicit_unknown_price_override: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "mode": self.mode,
+            "cache_path": self.cache_path,
+            "max_age_seconds": self.max_age_seconds,
+            "require_fresh_at_launch": self.require_fresh_at_launch,
+            "fallback_policy": self.fallback_policy,
+            "explicit_unknown_price_override": self.explicit_unknown_price_override,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetConfig:
+    """MAS-CC run limits, separate from any provider account budget."""
+
+    schema_version: int = 1
+    accounting_unit: str = "unknown"
+    system_max_cost_per_run: float | None = None
+    max_cost_per_run: float | None = None
+    max_provider_requests: int | None = None
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
+    allow_unbounded_paid_requests: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "accounting_unit": self.accounting_unit,
+            "system_max_cost_per_run": self.system_max_cost_per_run,
+            "max_cost_per_run": self.max_cost_per_run,
+            "max_provider_requests": self.max_provider_requests,
+            "max_input_tokens": self.max_input_tokens,
+            "max_output_tokens": self.max_output_tokens,
+            "allow_unbounded_paid_requests": self.allow_unbounded_paid_requests,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RunConfig:
     """A fully resolved run configuration with no component references."""
 
@@ -262,6 +312,8 @@ class RunConfig:
     storage: StorageConfig = field(default_factory=StorageConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
+    pricing: PricingConfig = field(default_factory=PricingConfig)
+    budget: BudgetConfig = field(default_factory=BudgetConfig)
     schema_version: int = 1
 
     @property
@@ -283,4 +335,6 @@ class RunConfig:
             "storage": self.storage.to_dict(),
             "analysis": self.analysis.to_dict(),
             "experiment": self.experiment.to_dict(),
+            "pricing": self.pricing.to_dict(),
+            "budget": self.budget.to_dict(),
         }

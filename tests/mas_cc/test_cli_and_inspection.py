@@ -3,6 +3,7 @@ from pathlib import Path
 
 from mas_cc.cli.inspect import inspect_phase_2, inspect_phase_3
 from mas_cc.cli.main import main
+from mas_cc.cli.game import run_game_inspection
 from mas_cc.cli.provider import run_provider_smoke_test
 from mas_cc.cli.prompt import generate_paper_prompt_examples
 
@@ -92,6 +93,65 @@ def test_phase_4_mock_provider_inspection_contract(tmp_path: Path):
     assert "Bearer " not in "".join(
         path.read_text(encoding="utf-8") for path in output.iterdir()
     )
+
+
+def test_phase_5_game_inspection_contract_and_deterministic_artifacts(tmp_path: Path):
+    first = tmp_path / "first" / "phase_05"
+    second = tmp_path / "second" / "phase_05"
+    assert run_game_inspection("configs/runs/toy_game_smoke_test.yaml", first)
+    assert run_game_inspection("configs/runs/toy_game_smoke_test.yaml", second)
+    expected = {
+        "report.md",
+        "manifest.json",
+        "resolved_config.yaml",
+        "initial_state.json",
+        "interactions.jsonl",
+        "final_state.json",
+        "game_call_plan.json",
+        "trajectory.csv",
+        "trajectory.png",
+    }
+    assert {path.name for path in first.iterdir()} == expected
+    manifest = json.loads((first / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["phase"] == 5
+    assert manifest["status"] == "pass"
+    assert all(manifest["checks"].values())
+
+    deterministic = expected - {"report.md", "manifest.json"}
+    assert {
+        name: (first / name).read_bytes() for name in deterministic
+    } == {
+        name: (second / name).read_bytes() for name in deterministic
+    }
+    interactions = [
+        json.loads(line)
+        for line in (first / "interactions.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(interactions) == 3
+    assert all(len(item["decisions"]) == 2 for item in interactions)
+    plan = json.loads((first / "game_call_plan.json").read_text(encoding="utf-8"))
+    assert plan["provider_requests"] == {"lower": 6, "expected": 6, "maximum": 6}
+    assert plan["metadata"]["provider_prices_included"] is False
+    assert (first / "trajectory.png").stat().st_size > 0
+
+
+def test_phase_5_cli_aliases(tmp_path: Path, capsys):
+    direct = tmp_path / "direct"
+    assert main(
+        [
+            "game",
+            "run",
+            "--config",
+            "configs/runs/toy_game_smoke_test.yaml",
+            "--output-dir",
+            str(direct),
+        ]
+    ) == 0
+    assert "Game inspection passed" in capsys.readouterr().out
+
+    standard = tmp_path / "standard"
+    assert main(["inspect", "phase", "5", "--output-dir", str(standard)]) == 0
+    assert "Phase 5 inspection passed" in capsys.readouterr().out
 
 
 def test_paper_prompt_example_bundle_is_readable_and_machine_inspectable(tmp_path: Path):

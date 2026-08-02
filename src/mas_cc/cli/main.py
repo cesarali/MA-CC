@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Sequence
 
 from mas_cc import __version__
-from mas_cc.core.exceptions import ConfigurationError
+from mas_cc.core.exceptions import ConfigurationError, ProviderError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,15 +65,27 @@ def build_parser() -> argparse.ArgumentParser:
     provider_test.add_argument("--seed", type=int, default=1026)
     provider_test.add_argument("--budget-usd", type=float)
 
+    game = commands.add_parser("game", help="run a game through the generic interface")
+    game_commands = game.add_subparsers(dest="game_command", required=True)
+    game_run = game_commands.add_parser(
+        "run", help="run one resolved game and write inspectable trajectory artifacts"
+    )
+    game_run.add_argument(
+        "--config",
+        type=Path,
+        default=Path("configs/runs/toy_game_smoke_test.yaml"),
+        help="run configuration (default: %(default)s)",
+    )
+    game_run.add_argument("--output-dir", type=Path, required=True)
+
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
-    phase.add_argument("number", type=int, choices=(1, 2, 3, 4), help="implemented phase number")
+    phase.add_argument("number", type=int, choices=(1, 2, 3, 4, 5), help="implemented phase number")
     phase.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/runs/provider_smoke_test.yaml"),
-        help="run config for phases that use configuration (default: %(default)s)",
+        help="run config (defaults to the phase-specific smoke-test config)",
     )
     phase.add_argument(
         "--output-dir",
@@ -85,6 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("configs/components/prompts/basic_binary_choice.yaml"),
         help="prompt component for Phase 3 (default: %(default)s)",
+    )
+    phase.add_argument("--amendment", choices=("provider-economics-v2",))
+    phase.add_argument("--provider", choices=("mock", "openai", "university", "gemma_local"), default="university")
+    phase.add_argument("--pricing-mode", choices=("live", "cached", "offline"), default="offline")
+    phase.add_argument("--pricing-cache", type=Path)
+    phase.add_argument(
+        "--live-completion", action="store_true",
+        help="after immediate live revalidation, send one billable completion",
     )
     return parser
 
@@ -126,13 +146,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seed=args.seed,
                 budget_usd=args.budget_usd,
             )
-        except (ConfigurationError, ValueError) as exc:
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(
             f"Provider {args.provider} inspection {'passed' if passed else 'failed'}: "
             f"{args.output_dir}"
         )
+        return 0 if passed else 1
+    if args.command == "game" and args.game_command == "run":
+        from .game import run_game_inspection
+
+        try:
+            passed = run_game_inspection(args.config, args.output_dir)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Game inspection {'passed' if passed else 'failed'}: {args.output_dir}")
         return 0 if passed else 1
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
@@ -142,14 +172,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.number == 1:
                 passed = inspect_phase_1(output_dir)
             elif args.number == 2:
-                passed = inspect_phase_2(args.config, output_dir)
+                passed = inspect_phase_2(
+                    args.config or Path("configs/runs/provider_smoke_test.yaml"), output_dir
+                )
             elif args.number == 3:
                 passed = inspect_phase_3(args.prompt, output_dir)
-            else:
-                from .provider import run_provider_smoke_test
+            elif args.number == 4:
+                if args.amendment == "provider-economics-v2":
+                    from .provider_economics import inspect_phase_4_amendment
 
-                passed = run_provider_smoke_test("mock", args.prompt, output_dir)
-        except (ConfigurationError, ValueError) as exc:
+                    passed = inspect_phase_4_amendment(
+                        args.config or Path("configs/runs/provider_smoke_test.yaml"),
+                        output_dir, provider=args.provider,
+                        pricing_mode=args.pricing_mode, cache_path=args.pricing_cache,
+                        live_completion=args.live_completion,
+                    )
+                else:
+                    from .provider import run_provider_smoke_test
+
+                    passed = run_provider_smoke_test("mock", args.prompt, output_dir)
+            else:
+                from .game import run_game_inspection
+
+                passed = run_game_inspection(
+                    args.config or Path("configs/runs/toy_game_smoke_test.yaml"), output_dir
+                )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(f"Phase {args.number} inspection {'passed' if passed else 'failed'}: {output_dir}")

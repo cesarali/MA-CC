@@ -15,12 +15,14 @@ from mas_cc.core.validation import ValidationIssue, ValidationResult
 
 from .models import (
     AnalysisConfig,
+    BudgetConfig,
     ExecutionConfig,
     ExperimentConfig,
     GameConfig,
     LLMProviderConfig,
     LoggingConfig,
     PromptConfig,
+    PricingConfig,
     RunConfig,
     StorageConfig,
 )
@@ -456,6 +458,51 @@ def _parse_game(raw: Any, issues: list[ValidationIssue]) -> GameConfig:
     )
 
 
+def _parse_pricing(raw: Any, issues: list[ValidationIssue]) -> PricingConfig:
+    path = "pricing"
+    values = _as_mapping(raw, path, issues)
+    allowed = {"schema_version", "mode", "cache_path", "max_age_seconds",
+               "require_fresh_at_launch", "fallback_policy", "explicit_unknown_price_override"}
+    _unknown_fields(values, allowed, path, issues)
+    mode = _string(values, "mode", path, issues, default="offline", required=True) or "offline"
+    fallback = _string(values, "fallback_policy", path, issues, default="deny", required=True) or "deny"
+    if mode not in {"live", "cached", "offline"}:
+        _issue(issues, f"{path}.mode", "must be live, cached, or offline", mode)
+    if fallback not in {"deny", "offline", "allow_stale"}:
+        _issue(issues, f"{path}.fallback_policy", "must be deny, offline, or allow_stale", fallback)
+    return PricingConfig(
+        schema_version=_schema_version(values, path, issues), mode=mode,
+        cache_path=_string(values, "cache_path", path, issues),
+        max_age_seconds=_number(values, "max_age_seconds", path, issues, default=86400.0, minimum=0.0) or 0.0,
+        require_fresh_at_launch=_boolean(values, "require_fresh_at_launch", path, issues, default=True),
+        fallback_policy=fallback,
+        explicit_unknown_price_override=_boolean(values, "explicit_unknown_price_override", path, issues, default=False),
+    )
+
+
+def _parse_budget(raw: Any, issues: list[ValidationIssue]) -> BudgetConfig:
+    path = "budget"
+    values = _as_mapping(raw, path, issues)
+    allowed = {"schema_version", "accounting_unit", "system_max_cost_per_run", "max_cost_per_run",
+               "max_provider_requests", "max_input_tokens", "max_output_tokens",
+               "allow_unbounded_paid_requests"}
+    _unknown_fields(values, allowed, path, issues)
+    def optional_integer(name: str) -> int | None:
+        if values.get(name) is None:
+            return None
+        return _integer(values, name, path, issues, default=0, minimum=0)
+    return BudgetConfig(
+        schema_version=_schema_version(values, path, issues),
+        accounting_unit=_string(values, "accounting_unit", path, issues, default="unknown", required=True) or "unknown",
+        system_max_cost_per_run=_number(values, "system_max_cost_per_run", path, issues, default=None, minimum=0.0),
+        max_cost_per_run=_number(values, "max_cost_per_run", path, issues, default=None, minimum=0.0),
+        max_provider_requests=optional_integer("max_provider_requests"),
+        max_input_tokens=optional_integer("max_input_tokens"),
+        max_output_tokens=optional_integer("max_output_tokens"),
+        allow_unbounded_paid_requests=_boolean(values, "allow_unbounded_paid_requests", path, issues, default=False),
+    )
+
+
 def _parse_execution(raw: Any, issues: list[ValidationIssue]) -> ExecutionConfig:
     path = "execution"
     values = _as_mapping(raw, path, issues)
@@ -549,7 +596,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
     values = {str(key): value for key, value in raw.items()}
     allowed = {
         "schema_version", "llm_provider", "prompt", "game", "execution",
-        "logging", "storage", "analysis", "experiment",
+        "logging", "storage", "analysis", "experiment", "pricing", "budget",
     }
     _unknown_fields(values, allowed, "", issues)
     schema_version = _schema_version(values, "", issues)
@@ -568,6 +615,8 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         storage=_parse_storage(values.get("storage", {}), issues),
         analysis=_parse_analysis(values.get("analysis", {}), issues),
         experiment=_parse_experiment(values.get("experiment", {}), issues),
+        pricing=_parse_pricing(values.get("pricing", {}), issues),
+        budget=_parse_budget(values.get("budget", {}), issues),
     )
     if issues:
         raise ConfigurationError(issues, context="configuration validation")

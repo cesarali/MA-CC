@@ -1,8 +1,8 @@
 # University of Potsdam LLM Proxy
 
 This repository uses the University of Potsdam LLM Proxy through its
-OpenAI-compatible HTTP API. These notes describe the working setup observed on
-2026-07-28 and are intended for agents working in this repository.
+OpenAI-compatible HTTP API. These notes describe the working setup observed
+through 2026-08-02 and are intended for agents working in this repository.
 
 ## Credentials and environment
 
@@ -124,7 +124,7 @@ available_models = sorted(
 
 ## Available models
 
-On 2026-07-30, `GET /models` returned the following 45 entries:
+On 2026-08-02, `GET /models` returned the following 45 entries:
 
 ```text
 all-proxy-models
@@ -179,6 +179,134 @@ run because the proxy's available deployments can change. The list includes
 the `all-proxy-models` routing alias as well as image, video, and embedding
 models; those entries are not concrete chat models.
 
+## Current pricing and limits snapshot
+
+The following table was generated on 2026-08-02 by joining the exact model IDs
+returned by `GET {base_url}/models` with the records returned by
+`GET {base_url}/v1/model/info`. The endpoint returned metadata for 44 of the 45
+available IDs. `all-proxy-models` is the only ID without its own model-info
+record because it is a routing alias rather than a concrete deployment.
+
+The endpoint reports costs per token. This table multiplies those values by
+1,000,000 for readability. Values are in the proxy's budget/accounting unit;
+do not assume a currency independently of `GET /user/info`. `0` means the
+endpoint explicitly reported zero token cost, while `—` means it supplied no
+value. RPM and TPM are published ceilings, not guaranteed throughput.
+
+| Model | Input/M | Cached input/M | Output/M | Long input/output/M | RPM | TPM |
+|---|---:|---:|---:|---:|---:|---:|
+| `all-proxy-models` | — | — | — | — | — | — |
+| `gwdg/openai-gpt-oss-120b` | 0 | — | 0 | — | 2,000 | — |
+| `gwdg/qwen3-30b-a3b-instruct-2507` | 0 | — | 0 | — | 2,000 | — |
+| `gwdg/qwen3.5-397b-a17b` | 0 | — | 0 | — | 2,000 | — |
+| `microsoft/Kimi-K2.6` | 0.95 | — | 4 | — | 250 | 250,000 |
+| `microsoft/Mistral-Codestral-2501` | 0.30 | — | 0.90 | — | 250 | 250,000 |
+| `microsoft/Mistral-Large-3` | 0.50 | — | 1.50 | — | 250 | 250,000 |
+| `microsoft/claude-fable-5` | 10 | — | 50 | — | 170 | 170,000 |
+| `microsoft/claude-haiku-4-5` | 1 | 0.10 | 5 | — | 250 | 250,000 |
+| `microsoft/claude-opus-4-5` | 5 | 0.50 | 25 | — | 250 | 250,000 |
+| `microsoft/claude-opus-4-6` | 5 | 0.50 | 25 | — | 250 | 250,000 |
+| `microsoft/claude-opus-4-7` | 5 | 0.50 | 25 | — | 250 | 250,000 |
+| `microsoft/claude-opus-4-8` | 5 | — | 25 | — | 120 | 120,000 |
+| `microsoft/claude-opus-5` | 5 | — | 25 | — | 250 | 250,000 |
+| `microsoft/claude-sonnet-4-5` | 3 | 0.30 | 15 | — | 250 | 250,000 |
+| `microsoft/claude-sonnet-4-6` | 3 | 0.30 | 15 | — | 100 | 100,000 |
+| `microsoft/claude-sonnet-5` | 2 | — | 10 | — | 250 | 250,000 |
+| `microsoft/gpt-4.1` | 2 | 0.50 | 8 | — | 250 | 250,000 |
+| `microsoft/gpt-4o` | 2.50 | 1.25 | 10 | — | 1,500 | 250,000 |
+| `microsoft/gpt-5` | 1.25 | — | 10 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5-codex` | 1.25 | — | 10 | — | 250 | 250,000 |
+| `microsoft/gpt-5-mini` | 0.25 | 0.025 | 2 | — | 250 | 250,000 |
+| `microsoft/gpt-5.1` | 1.25 | 0.125 | 10 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5.1-codex-max` | 1.25 | — | 10 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5.2` | 1.75 | 0.175 | 14 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5.2-codex` | 1.75 | 0.175 | 14 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5.3-codex` | 1.75 | 0.175 | 14 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5.4` | 2.50 | 0.25 | 15 | 5 / 22.50 | 2,500 | 250,000 |
+| `microsoft/gpt-5.4-mini` | 0.75 | 0.075 | 4.50 | — | 2,500 | 250,000 |
+| `microsoft/gpt-5.4-nano` | 0.20 | 0.02 | 1.25 | — | 250 | 250,000 |
+| `microsoft/gpt-5.4-pro` | 30 | 3 | 180 | 60 / 270 | 150 | 150,000 |
+| `microsoft/gpt-5.5` | 5 | 0.50 | 30 | 10 / 45 | 250 | 250,000 |
+| `microsoft/gpt-5.6-luna` | 1 | — | 6 | — | 250 | 250,000 |
+| `microsoft/gpt-5.6-sol` | 5 | — | 30 | — | 250 | 250,000 |
+| `microsoft/gpt-5.6-terra` | 2.50 | — | 15 | — | 250 | 250,000 |
+| `microsoft/gpt-chat-latest` | 5 | — | 30 | — | 2,500 | 250,000 |
+| `microsoft/gpt-image-1.5` | 5 | 1.25 | 32 | — | 90 | — |
+| `microsoft/gpt-image-2` | 5 | — | 30 | — | 2 | — |
+| `microsoft/sora-2` | 0 | — | 0 | — | 50 | — |
+| `microsoft/text-embedding-3-large` | 0.14 | — | 0 | — | 1,500 | 250,000 |
+| `up/e5-mistral-7b` | 0.05 | — | 0.30 | — | — | — |
+| `up/gemma4-31b` | 0.10 | — | 0.70 | — | — | — |
+| `up/minimax-m2-5` | 0.20 | — | 1.50 | — | — | — |
+| `up/qwen3-6-35b` | 0.10 | — | 0.70 | — | — | — |
+| `up/translategemma-27b-it` | 0.10 | — | 0.70 | — | — | — |
+
+### Context and modality details
+
+- `microsoft/gpt-5.4`, `microsoft/gpt-5.4-pro`, and `microsoft/gpt-5.5`
+  expose long-context overrides. Their model-info records also expose the exact
+  threshold-specific fields; query the endpoint when planning requests near or
+  above 128K/272K tokens instead of relying only on the compact table.
+- Known maximum input/output token pairs include: GPT-5.4 family and GPT-5.5,
+  1,050,000/128,000; GPT-5.1/5.2/5.3 and GPT-5 mini,
+  272,000/128,000; GPT-4.1, 1,047,576/32,768; GPT-4o,
+  128,000/16,384; Claude Sonnet 4.6, 1,000,000/64,000; and the other
+  fully described Claude chat deployments, 200,000 input tokens.
+- The Claude records include separate cache-write charges. On this snapshot,
+  ordinary/over-one-hour cache-write costs per million tokens were 1.25/2 for
+  Haiku 4.5, 3.75/6 for Sonnet 4.5/4.6, and 6.25/10 for Opus 4.5/4.6/4.7.
+- `microsoft/gpt-image-1.5` additionally reports 8 per million image-input
+  tokens and 32 per million image-output tokens. The ordinary text-input rate
+  is the 5 shown in the main table.
+- `microsoft/sora-2` is priced by generated duration rather than ordinary text
+  tokens: the endpoint reports 0.10 per output-video second.
+- A missing mode, context limit, RPM, or TPM means the endpoint returned null;
+  it is not evidence that the model has no such limit or capability.
+
+### Cost calculation
+
+For ordinary token-billed requests below any long-context threshold:
+
+```text
+estimated cost =
+    input tokens × input_cost_per_token
+  + cached input tokens × cache_read_input_token_cost
+  + output tokens × output_cost_per_token
+```
+
+The `usage` returned by the proxy is authoritative for actual token counts.
+The static MAS-CC preflight catalog is a dated fallback and does not currently
+replace this live endpoint snapshot.
+
+A safe refresh starts from the current model list and joins on `model_name`:
+
+```python
+models_response = requests.get(
+    f"{base_url}/models", headers=headers, timeout=60
+)
+models_response.raise_for_status()
+available = {
+    item["id"]
+    for item in models_response.json().get("data", [])
+    if isinstance(item, dict) and isinstance(item.get("id"), str)
+}
+
+info_response = requests.get(
+    f"{base_url}/v1/model/info", headers=headers, timeout=60
+)
+info_response.raise_for_status()
+info_by_name = {
+    item["model_name"]: item
+    for item in info_response.json().get("data", [])
+    if isinstance(item, dict) and isinstance(item.get("model_name"), str)
+}
+
+missing_info = sorted(available - set(info_by_name))
+```
+
+Do not serialize `headers`, and do not publish internal `api_base` or deployment
+fields from the raw response when only price/limit metadata is needed.
+
 ## Recommended test model
 
 For inexpensive parallel connectivity tests, prefer:
@@ -187,7 +315,7 @@ For inexpensive parallel connectivity tests, prefer:
 gwdg/qwen3-30b-a3b-instruct-2507
 ```
 
-On 2026-07-28, `/v1/model/info` reported zero input and output token cost and a
+On 2026-08-02, `/v1/model/info` reported zero input and output token cost and a
 2,000 requests-per-minute limit for this model. Treat these as dynamic proxy
 settings: query `/v1/model/info` again before a large run.
 

@@ -1,8 +1,8 @@
 schema_version: 1
 llm_provider:
-  component: ../components/llm_providers/university.yaml
+  component: ../components/llm_providers/mock.yaml
   overrides:
-    request_concurrency: 2
+    max_output_tokens: 1
 prompt:
   component: ../components/prompts/basic_binary_choice.yaml
 game:
@@ -15,20 +15,19 @@ execution:
   fail_fast: true
 pricing:
   schema_version: 1
-  mode: live
-  cache_path: inspection/phase_04_amendment/pricing_snapshot.json
-  max_age_seconds: 900
+  mode: offline
+  max_age_seconds: 86400
   require_fresh_at_launch: true
   fallback_policy: deny
   explicit_unknown_price_override: false
 budget:
   schema_version: 1
-  accounting_unit: proxy_accounting_unit
-  system_max_cost_per_run: 1.0
-  max_cost_per_run: 0.5
-  max_provider_requests: 10
+  accounting_unit: USD
+  system_max_cost_per_run: 0.01
+  max_cost_per_run: 0.01
+  max_provider_requests: 6
   max_input_tokens: 10000
-  max_output_tokens: 1000
+  max_output_tokens: 6
   allow_unbounded_paid_requests: false
 logging:
   component: ../components/logging/default.yaml
@@ -40,8 +39,8 @@ analysis:
   estimators: []
 experiment:
   schema_version: 1
-  name: provider-smoke-test
-  description: Static Phase 2 configuration validation; no provider call is made.
+  name: toy-coordination-smoke-test
+  description: Deterministic Phase 5 generic-game interface inspection.
   tags:
     - smoke
-    - phase-02
+    - phase-05

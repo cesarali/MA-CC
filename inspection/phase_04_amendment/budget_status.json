@@ -1,0 +1,84 @@
+{
+  "controls_are_separate": true,
+  "launch_status": "permitted",
+  "mas_cc_effective_limits": {
+    "allow_unbounded_paid_requests": false,
+    "max_cost": {
+      "amount": 0.5,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "resolved run-specific limit",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "resolved budget configuration",
+      "version": "resolved-config-v1"
+    },
+    "max_input_tokens": 10000,
+    "max_output_tokens": 1000,
+    "max_requests": 10
+  },
+  "mas_cc_run_specific_limits": {
+    "allow_unbounded_paid_requests": false,
+    "max_cost": {
+      "amount": 0.5,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "resolved run-specific limit",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "resolved budget configuration",
+      "version": "resolved-config-v1"
+    },
+    "max_input_tokens": 10000,
+    "max_output_tokens": 1000,
+    "max_requests": 10
+  },
+  "mas_cc_system_wide_limits": {
+    "allow_unbounded_paid_requests": false,
+    "max_cost": {
+      "amount": 1.0,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "resolved system-wide per-run limit",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "resolved budget configuration",
+      "version": "resolved-config-v1"
+    },
+    "max_input_tokens": null,
+    "max_output_tokens": null,
+    "max_requests": null
+  },
+  "provider_account_budget": {
+    "limit": {
+      "amount": 10000.0,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "University GET /user/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "university-account-2026-08-02"
+    },
+    "remaining": {
+      "amount": 9647.820631250004,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "University GET /user/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "university-account-2026-08-02"
+    },
+    "spent": {
+      "amount": 352.1793687499955,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "University GET /user/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "university-account-2026-08-02"
+    }
+  }
+}

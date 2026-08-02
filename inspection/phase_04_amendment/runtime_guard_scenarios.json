@@ -1,0 +1,47 @@
+{
+  "concurrent_cost_limit": {
+    "attempts": 12,
+    "denied": 9,
+    "guard_status": {
+      "active_reservations": 3,
+      "approved_limits": {
+        "allow_unbounded_paid_requests": false,
+        "max_cost": {
+          "amount": 1.0,
+          "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+          "provider": "university",
+          "retrieved_at": "2026-08-02T10:33:57.825767Z",
+          "source": "Phase 4 amendment deterministic scenario",
+          "unit": "proxy_accounting_unit",
+          "unit_source": "deterministic guard fixture",
+          "version": "guard-v1"
+        },
+        "max_input_tokens": 400,
+        "max_output_tokens": 40,
+        "max_requests": 4
+      },
+      "schema_version": 2,
+      "stop_count": 9,
+      "used_and_reserved": {
+        "cost": {
+          "amount": 0.8999999999999999,
+          "unit": "proxy_accounting_unit"
+        },
+        "input_tokens": 300,
+        "output_tokens": 30,
+        "requests": 3
+      }
+    },
+    "passed": true,
+    "reserved": 3,
+    "result_codes": [
+      "budget_exhausted",
+      "reserved"
+    ]
+  },
+  "schema_version": 1,
+  "unknown_paid_cost_fails_closed": {
+    "passed": true,
+    "result": "budget_unbounded"
+  }
+}

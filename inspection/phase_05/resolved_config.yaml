@@ -1,0 +1,95 @@
+schema_version: 1
+llm_provider:
+  schema_version: 1
+  type: mock
+  model: deterministic-v1
+  credentials_env: null
+  base_url_env: null
+  timeout_seconds: 5.0
+  max_retries: 0
+  request_concurrency: 20
+  temperature: 0.0
+  max_output_tokens: 1
+  options:
+    response: A
+    artificial_latency_seconds: 0.0
+    estimated_latency_seconds: 0.001
+prompt:
+  schema_version: 1
+  prompt_family: basic_binary_choice
+  prompt_version: 1
+  blocks:
+  - task_description
+  - game_rules
+  - private_state
+  - recent_memory
+  - current_interaction
+  - decision_instruction
+  - output_contract
+  response_contract:
+    type: choice_only
+    allowed_values:
+    - A
+    - B
+  options: {}
+game:
+  schema_version: 1
+  type: toy_coordination
+  population_size: 2
+  horizon: 3
+  topology: complete
+  options:
+    actions:
+    - A
+    - B
+execution:
+  schema_version: 1
+  seed: 1026
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+  timeout_seconds: null
+logging:
+  schema_version: 1
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options: {}
+storage:
+  schema_version: 1
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+  options: {}
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+  options: {}
+experiment:
+  schema_version: 1
+  name: toy-coordination-smoke-test
+  description: Deterministic Phase 5 generic-game interface inspection.
+  tags:
+  - smoke
+  - phase-05
+  metadata: {}
+pricing:
+  schema_version: 1
+  mode: offline
+  cache_path: null
+  max_age_seconds: 86400.0
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.01
+  max_cost_per_run: 0.01
+  max_provider_requests: 6
+  max_input_tokens: 10000
+  max_output_tokens: 6
+  allow_unbounded_paid_requests: false

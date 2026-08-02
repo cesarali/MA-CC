@@ -1,0 +1,127 @@
+{
+  "decision_stages": [
+    {
+      "assumptions": [
+        "Both selected agents require one independent decision."
+      ],
+      "forced_decisions_per_interaction": 0,
+      "maximum_prompt": {
+        "assumptions": [
+          "Every prior interaction is retained in bounded game memory.",
+          "All memory entries use the longest action/payoff fixture used by this game."
+        ],
+        "context": {
+          "current_interaction": {
+            "counterpart_actions_visible": false,
+            "counterpart_ids": [
+              "agent-001"
+            ],
+            "horizon": 3,
+            "interaction_number": 3
+          },
+          "decision_instruction": "Choose your action for this interaction now.",
+          "game_rules": [
+            "Choose exactly one action: A or B.",
+            "Both selected agents decide without seeing the other's current action.",
+            "Each selected agent receives 1 point if the two actions match and 0 otherwise.",
+            "The game ends after 3 interactions."
+          ],
+          "metadata": {
+            "game_type": "toy_coordination",
+            "game_version": 1,
+            "interaction_id": "interaction-0003"
+          },
+          "private_state": {
+            "agent_id": "agent-000",
+            "available_actions": [
+              "A",
+              "B"
+            ],
+            "score": 2.0
+          },
+          "recent_memory": [
+            {
+              "counterpart_action": "B",
+              "interaction_number": 1,
+              "own_action": "A",
+              "payoff": 0.0
+            },
+            {
+              "counterpart_action": "B",
+              "interaction_number": 2,
+              "own_action": "A",
+              "payoff": 0.0
+            }
+          ],
+          "task_description": "Coordinate with the other selected agent by choosing the same action."
+        },
+        "name": "final_interaction_full_memory"
+      },
+      "name": "simultaneous_choice",
+      "provider_free_decisions_per_interaction": 0,
+      "representative_prompt": {
+        "assumptions": [
+          "No interaction memory has accumulated."
+        ],
+        "context": {
+          "current_interaction": {
+            "counterpart_actions_visible": false,
+            "counterpart_ids": [
+              "agent-001"
+            ],
+            "horizon": 3,
+            "interaction_number": 1
+          },
+          "decision_instruction": "Choose your action for this interaction now.",
+          "game_rules": [
+            "Choose exactly one action: A or B.",
+            "Both selected agents decide without seeing the other's current action.",
+            "Each selected agent receives 1 point if the two actions match and 0 otherwise.",
+            "The game ends after 3 interactions."
+          ],
+          "metadata": {
+            "game_type": "toy_coordination",
+            "game_version": 1,
+            "interaction_id": "interaction-0001"
+          },
+          "private_state": {
+            "agent_id": "agent-000",
+            "available_actions": [
+              "A",
+              "B"
+            ],
+            "score": 0.0
+          },
+          "recent_memory": [],
+          "task_description": "Coordinate with the other selected agent by choosing the same action."
+        },
+        "name": "first_interaction"
+      },
+      "requests_per_interaction": 2,
+      "retry_bound": 0
+    }
+  ],
+  "game_type": "toy_coordination",
+  "game_version": 1,
+  "interactions": {
+    "expected": 3,
+    "fixed": 3,
+    "lower": 3,
+    "maximum": 3
+  },
+  "metadata": {
+    "population_size": 2,
+    "provider_prices_included": false,
+    "topology": "complete"
+  },
+  "provider_requests": {
+    "expected": 6,
+    "lower": 6,
+    "maximum": 6
+  },
+  "schema_version": 1,
+  "stopping_condition_assumptions": [
+    "The run stops after exactly 3 interactions.",
+    "Each interaction selects exactly two distinct agents."
+  ]
+}

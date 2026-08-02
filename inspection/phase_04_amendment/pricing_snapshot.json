@@ -1,0 +1,68 @@
+{
+  "available": true,
+  "fresh_until": "2026-08-02T10:48:57.825767Z",
+  "mode": "live",
+  "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+  "pricing": {
+    "context_threshold_overrides": [],
+    "limits": {
+      "maximum_input_tokens": null,
+      "maximum_output_tokens": null,
+      "requests_per_minute": 2000,
+      "tokens_per_minute": null
+    },
+    "modality": "chat",
+    "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+    "provider": "university",
+    "rates_per_million_tokens": {
+      "cache_creation": null,
+      "cached_input_read": null,
+      "ordinary_input": 0.0,
+      "output": 0.0
+    },
+    "retrieved_at": "2026-08-02T10:33:57.825767Z",
+    "source": "University GET /v1/model/info",
+    "unit": "proxy_accounting_unit",
+    "unit_source": "University proxy budget semantics; no currency field reported",
+    "version": "live-2026-08-02"
+  },
+  "provider": "university",
+  "provider_account_budget": {
+    "limit": {
+      "amount": 10000.0,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "University GET /user/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "university-account-2026-08-02"
+    },
+    "remaining": {
+      "amount": 9647.820631250004,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "University GET /user/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "university-account-2026-08-02"
+    },
+    "spent": {
+      "amount": 352.1793687499955,
+      "model": "gwdg/qwen3-30b-a3b-instruct-2507",
+      "provider": "university",
+      "retrieved_at": "2026-08-02T10:33:57.825767Z",
+      "source": "University GET /user/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "university-account-2026-08-02"
+    }
+  },
+  "retrieved_at": "2026-08-02T10:33:57.825767Z",
+  "schema_version": 2,
+  "source": "University GET /models + GET /v1/model/info",
+  "status": "known",
+  "version": "live-2026-08-02",
+  "warning": null
+}

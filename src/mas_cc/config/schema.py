@@ -126,6 +126,29 @@ def config_schema() -> dict[str, Any]:
                     "metadata": options,
                 }
             ),
+            "pricing": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "mode": {"enum": ["live", "cached", "offline"]},
+                    "cache_path": {"type": ["string", "null"]},
+                    "max_age_seconds": {"type": "number", "minimum": 0},
+                    "require_fresh_at_launch": {"type": "boolean"},
+                    "fallback_policy": {"enum": ["deny", "offline", "allow_stale"]},
+                    "explicit_unknown_price_override": {"type": "boolean"},
+                }
+            ),
+            "budget": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "accounting_unit": {"type": "string", "minLength": 1},
+                    "system_max_cost_per_run": {"type": ["number", "null"], "minimum": 0},
+                    "max_cost_per_run": {"type": ["number", "null"], "minimum": 0},
+                    "max_provider_requests": {"type": ["integer", "null"], "minimum": 0},
+                    "max_input_tokens": {"type": ["integer", "null"], "minimum": 0},
+                    "max_output_tokens": {"type": ["integer", "null"], "minimum": 0},
+                    "allow_unbounded_paid_requests": {"type": "boolean"},
+                }
+            ),
         },
     }
 
