@@ -4,7 +4,7 @@ llm_provider:
   overrides:
     request_concurrency: 2
 prompt:
-  component: ../components/prompts/basic_binary_choice.yaml
+  component: ../components/prompts/basic_choice_v3.yaml
 game:
   component: ../components/games/toy_coordination.yaml
 execution:

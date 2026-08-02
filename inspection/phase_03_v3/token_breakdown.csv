@@ -1,0 +1,7 @@
+order,block,role,tokenizer,token_count
+1,task,system,mas_cc_regex_v1_estimate,10
+2,rules,system,mas_cc_regex_v1_estimate,19
+3,private_state,system,mas_cc_regex_v1_estimate,27
+4,recent_memory,system,mas_cc_regex_v1_estimate,50
+5,current_interaction,system,mas_cc_regex_v1_estimate,27
+total,all_blocks,,mas_cc_regex_v1_estimate,133

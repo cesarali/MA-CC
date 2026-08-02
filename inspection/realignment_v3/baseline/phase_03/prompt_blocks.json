@@ -1,0 +1,65 @@
+[
+  {
+    "content": "Coordinate with another player by choosing one of the two available actions.",
+    "name": "task_description",
+    "order": 1,
+    "role": "system",
+    "title": "Task description",
+    "token_count": 13,
+    "version": 1
+  },
+  {
+    "content": "1. Choose exactly one action on every interaction.\n2. Both players receive a positive payoff when their actions match.\n3. Both players receive a negative payoff when their actions differ.\n4. The other player's current choice is not visible before you decide.",
+    "name": "game_rules",
+    "order": 2,
+    "role": "system",
+    "title": "Game rules",
+    "token_count": 52,
+    "version": 1
+  },
+  {
+    "content": "- Available actions: [\"A\", \"B\"]\n- Cumulative score: 50\n- Committed action: null",
+    "name": "private_state",
+    "order": 3,
+    "role": "user",
+    "title": "Private information",
+    "token_count": 23,
+    "version": 1
+  },
+  {
+    "content": "- Interaction 1: {\"other_action\": \"B\", \"own_action\": \"A\", \"payoff\": -50}\n- Interaction 2: {\"other_action\": \"B\", \"own_action\": \"B\", \"payoff\": 100}",
+    "name": "recent_memory",
+    "order": 4,
+    "role": "user",
+    "title": "Recent memory",
+    "token_count": 55,
+    "version": 1
+  },
+  {
+    "content": "- Interaction number: 3\n- Available actions: [\"A\", \"B\"]\n- Other action visible: false",
+    "name": "current_interaction",
+    "order": 5,
+    "role": "user",
+    "title": "Current interaction",
+    "token_count": 24,
+    "version": 1
+  },
+  {
+    "content": "Select the action that you will play in this interaction.",
+    "name": "decision_instruction",
+    "order": 6,
+    "role": "user",
+    "title": "Decision instruction",
+    "token_count": 11,
+    "version": 1
+  },
+  {
+    "content": "Return exactly one of these values: A, B. Return only the value, with no explanation or punctuation.",
+    "name": "output_contract",
+    "order": 7,
+    "role": "user",
+    "title": "Output contract",
+    "token_count": 22,
+    "version": 1
+  }
+]

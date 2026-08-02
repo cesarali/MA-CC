@@ -1,0 +1,10 @@
+schema_version: 2
+prompt_family: basic_choice
+prompt_version: 1
+message_mode: merge_consecutive_roles
+block_separator: "\n\n"
+response_contract:
+  type: choice_only
+  allowed_values:
+    - A
+    - B

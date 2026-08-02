@@ -5,18 +5,22 @@ import pytest
 
 from mas_cc.config import PromptConfig, load_component_config
 from mas_cc.prompts import (
-    PromptComposer,
-    PromptContext,
-    PromptDefinition,
     PromptMarkdownLogger,
     PromptRegistry,
     PromptVersion,
     RegexTokenCounter,
     ResponseContract,
-    create_default_prompt_registry,
+    create_default_prompt_registry as create_v3_prompt_registry,
+)
+from mas_cc.prompts.compatibility import PromptComposer, PromptContext, PromptDefinition
+from mas_cc.prompts.examples import (
     hiddenbench_example_context,
     social_conventions_example_context,
 )
+
+
+def create_default_prompt_registry():
+    return create_v3_prompt_registry(include_legacy=True)
 
 
 def _context() -> PromptContext:
@@ -44,6 +48,7 @@ def _config(**updates) -> PromptConfig:
             "output_contract",
         ),
         "response_contract": {"type": "choice_only", "allowed_values": ["A", "B"]},
+        "schema_version": 1,
     }
     values.update(updates)
     return PromptConfig(**values)
@@ -76,16 +81,15 @@ def test_response_contract_renders_and_validates_choice_only():
 def test_registry_has_explicit_family_version_and_rejects_duplicates():
     registry = create_default_prompt_registry()
     assert registry.versions() == (
-        PromptVersion("basic_binary_choice", 1),
-        PromptVersion("hidden_profile_discussion_paper", 1),
-        PromptVersion("hidden_profile_vote_paper", 1),
-        PromptVersion("social_conventions_paper", 1),
+        PromptVersion("basic_choice", 1),
+        PromptVersion("hidden_profile_discussion", 2),
+        PromptVersion("hidden_profile_vote", 2),
     )
-    definition = registry.get("basic_binary_choice", 1)
+    definition = registry.get("basic_choice", 1)
     with pytest.raises(ValueError, match="already registered"):
         registry.register(definition)
     with pytest.raises(ValueError, match=r"prompt\.version"):
-        registry.get("basic_binary_choice", 2)
+        registry.get("basic_choice", 2)
 
 
 def test_yaml_order_is_the_message_and_block_order():

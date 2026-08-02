@@ -241,7 +241,7 @@ def inspect_phase_4_amendment(
         allow_unbounded_paid_requests=run_config.budget.allow_unbounded_paid_requests,
     )
     request = _compile_request(
-        "configs/components/prompts/basic_binary_choice.yaml",
+        "configs/components/prompts/basic_choice_v3.yaml",
         temperature=config.temperature, max_output_tokens=config.max_output_tokens,
         seed=run_config.execution.seed,
     )

@@ -17,7 +17,7 @@ import statistics
 import sys
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,11 +32,12 @@ from mas_cc.llm_providers import (
 )
 from mas_cc.planning import LogicalCallSpec, static_preflight
 from mas_cc.prompts import (
-    PromptComposer,
-    PromptContext,
     RegexTokenCounter,
     ResponseContract,
-    create_default_prompt_registry,
+)
+from mas_cc.prompts.plugins.hidden_profile_v3 import (
+    hidden_profile_discussion_prompt,
+    hidden_profile_vote_prompt,
 )
 
 
@@ -49,10 +50,10 @@ DEFAULT_PROVIDER_CONFIG = (
     REPOSITORY_ROOT / "configs/components/llm_providers/gemma_local.yaml"
 )
 DEFAULT_DISCUSSION_PROMPT = (
-    REPOSITORY_ROOT / "configs/components/prompts/hidden_profile_discussion_paper.yaml"
+    REPOSITORY_ROOT / "configs/components/prompts/hidden_profile_discussion_v3.yaml"
 )
 DEFAULT_VOTE_PROMPT = (
-    REPOSITORY_ROOT / "configs/components/prompts/hidden_profile_vote_paper.yaml"
+    REPOSITORY_ROOT / "configs/components/prompts/hidden_profile_vote_v3.yaml"
 )
 
 
@@ -187,12 +188,6 @@ def _shuffled_information(
 class HiddenBenchPromptCompiler:
     discussion_config: PromptConfig
     vote_config: PromptConfig
-    _composer: PromptComposer = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._composer = PromptComposer(
-            create_default_prompt_registry(), RegexTokenCounter()
-        )
 
     @classmethod
     def from_files(
@@ -224,47 +219,34 @@ class HiddenBenchPromptCompiler:
         information = _shuffled_information(task, private_information, task_seed)
         is_vote = stage in {"pre_vote", "post_vote", "full_profile_vote"}
         config = self.vote_config if is_vote else self.discussion_config
-        if is_vote:
-            config = replace(
-                config,
-                response_contract={
-                    "type": "json_vote",
-                    "allowed_values": list(task["possible_answers"]),
-                },
-            )
-        contract = ResponseContract.from_mapping(config.response_contract)
-        context = PromptContext(
-            task_description=str(task["scenario_description"]),
-            game_rules=(
-                "Use only your permitted shared/private evidence and the visible public transcript.",
-            ),
-            private_state={
+        contract = (
+            ResponseContract("json_vote", tuple(map(str, task["possible_answers"])))
+            if is_vote
+            else ResponseContract.from_mapping(config.response_contract)
+        )
+        definition = (
+            hidden_profile_vote_prompt()
+            if is_vote
+            else hidden_profile_discussion_prompt()
+        )
+        definition = replace(definition, response_contract=contract)
+        prompt = definition.bind(
+            scenario=str(task["scenario_description"]),
+            private_information={
                 "information": information,
                 "possible_answers": list(task["possible_answers"]),
             },
-            recent_memory=tuple(
+            transcript=tuple(
                 {
                     "speaker_id": int(entry["speaker_id"]),
                     "message": str(entry["message"]),
                 }
                 for entry in transcript
             ),
-            current_interaction={
-                "phase": stage,
-                "session_index": session_index,
-                "agent_id": agent_id,
-                "round_index": round_index,
-            },
-            decision_instruction=(
-                "Return your vote using the required JSON contract."
-                if is_vote
-                else "Contribute one concise public message."
-            ),
-            metadata={"prompt_fixture": "hiddenbench_canonical_gemma_v1"},
         )
-        prompt = self._composer.compose(config, context)
+        compiled = prompt.compile(RegexTokenCounter())
         request = CompletionRequest(
-            messages=prompt.messages,
+            messages=compiled.messages,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
             seed=request_seed,
@@ -278,6 +260,8 @@ class HiddenBenchPromptCompiler:
                 "stage": stage,
                 "prompt_family": config.prompt_family,
                 "prompt_version": config.prompt_version,
+                "prompt_definition_hash": compiled.definition_hash,
+                "prompt_instance_hash": compiled.instance_hash,
                 "response_contract": contract.to_dict(),
             },
         )

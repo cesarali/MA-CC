@@ -423,22 +423,65 @@ def _parse_prompt(raw: Any, issues: list[ValidationIssue]) -> PromptConfig:
     values = _as_mapping(raw, path, issues)
     allowed = {
         "schema_version", "prompt_family", "prompt_version", "blocks",
-        "response_contract", "options",
+        "response_contract", "message_mode", "block_separator", "options",
     }
     _unknown_fields(values, allowed, path, issues)
     response_contract = _as_mapping(
         values.get("response_contract", {}), f"{path}.response_contract", issues
     )
-    if not response_contract:
+    raw_schema = values.get("schema_version", 1)
+    if isinstance(raw_schema, bool) or not isinstance(raw_schema, int):
+        _issue(issues, f"{path}.schema_version", "must be an integer", raw_schema)
+        prompt_schema = 2
+    elif raw_schema not in {1, 2}:
+        _issue(
+            issues,
+            f"{path}.schema_version",
+            "unsupported prompt schema; supported versions are 1 and 2",
+            raw_schema,
+        )
+        prompt_schema = 2
+    else:
+        prompt_schema = raw_schema
+    if prompt_schema == 1 and not response_contract:
         _issue(issues, f"{path}.response_contract", "must contain a response contract")
-    elif not isinstance(response_contract.get("type"), str) or not response_contract["type"].strip():
+    elif response_contract and (
+        not isinstance(response_contract.get("type"), str)
+        or not response_contract["type"].strip()
+    ):
         _issue(issues, f"{path}.response_contract.type", "must be a non-empty string")
+    blocks = _string_tuple(
+        values, "blocks", path, issues, required=prompt_schema == 1
+    )
+    if prompt_schema == 2 and "blocks" in values:
+        _issue(
+            issues,
+            f"{path}.blocks",
+            "schema version 2 uses authoritative registered FullPrompt order; remove blocks",
+            list(blocks),
+        )
+    message_mode = _string(values, "message_mode", path, issues)
+    if message_mode is not None and message_mode not in {
+        "per_block", "merge_consecutive_roles"
+    }:
+        _issue(
+            issues,
+            f"{path}.message_mode",
+            "must be per_block or merge_consecutive_roles",
+            message_mode,
+        )
+    separator = values.get("block_separator")
+    if separator is not None and not isinstance(separator, str):
+        _issue(issues, f"{path}.block_separator", "must be a string", separator)
+        separator = None
     return PromptConfig(
-        schema_version=_schema_version(values, path, issues),
+        schema_version=prompt_schema,
         prompt_family=_string(values, "prompt_family", path, issues, default="invalid", required=True) or "invalid",
         prompt_version=_integer(values, "prompt_version", path, issues, default=1, minimum=1),
-        blocks=_string_tuple(values, "blocks", path, issues, required=True),
+        blocks=() if prompt_schema == 2 else blocks,
         response_contract=response_contract,
+        message_mode=message_mode,
+        block_separator=separator,
         options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
     )
 

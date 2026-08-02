@@ -1,29 +1,22 @@
-"""Generate readable, paper-grounded prompt inspection bundles."""
+"""Generate readable examples from concrete bound FullPrompt values."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from mas_cc.config import PromptConfig, load_component_config
-from mas_cc.prompts import (
-    PromptComposer,
-    PromptMarkdownLogger,
-    RegexTokenCounter,
-    create_default_prompt_registry,
-    hiddenbench_example_context,
-    social_conventions_example_context,
+from mas_cc.games.naming_convention.prompts import bind_naming_convention_prompt
+from mas_cc.prompts import PromptMarkdownLogger, RegexTokenCounter
+from mas_cc.prompts.plugins.hidden_profile_v3 import (
+    hidden_profile_discussion_prompt,
+    hidden_profile_vote_prompt,
 )
-
-
-def _root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -37,11 +30,63 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _load_prompt(path: Path) -> PromptConfig:
-    loaded = load_component_config(path, "prompt", environment={})
-    if not isinstance(loaded, PromptConfig):
-        raise ValueError(f"prompt: {path} did not resolve to PromptConfig")
-    return loaded
+def _hiddenbench_values(
+    data_path: Path, *, task_id: int, agent_id: int, shuffle_seed: int = 1026
+) -> dict[str, Any]:
+    data = json.loads(data_path.read_text(encoding="utf-8"))
+    try:
+        task = next(
+            item for item in data.get("tasks", []) if int(item.get("task_id", -1)) == task_id
+        )
+    except StopIteration as exc:
+        raise ValueError(f"hiddenbench.task_id: {task_id} was not found") from exc
+    agents = task.get("agents")
+    if not isinstance(agents, list):
+        agents = [
+            {
+                "agent_id": int(item["evidence_type"]),
+                "evidence_type": int(item["evidence_type"]),
+                "private_information": [item["source_text"]],
+            }
+            for item in task.get("hidden_information", [])
+        ]
+    try:
+        selected = next(item for item in agents if int(item["agent_id"]) == agent_id)
+    except StopIteration as exc:
+        raise ValueError(
+            f"hiddenbench.agent_id: {agent_id} was not found for task {task_id}"
+        ) from exc
+    information = [
+        *map(str, task.get("shared_information", [])),
+        *map(str, selected.get("private_information", [])),
+    ]
+    random.Random(shuffle_seed).shuffle(information)
+    transcript: list[dict[str, Any]] = []
+    seen = {selected.get("evidence_type")}
+    for agent in agents:
+        private = agent.get("private_information", [])
+        evidence_type = agent.get("evidence_type")
+        if int(agent["agent_id"]) == agent_id or evidence_type in seen or not private:
+            continue
+        transcript.append(
+            {"speaker_id": int(agent["agent_id"]), "message": f"I was told: {private[0]}"}
+        )
+        seen.add(evidence_type)
+        if len(transcript) == 2:
+            break
+    return {
+        "scenario": str(task.get("scenario_description", task.get("source_description", ""))),
+        "information": tuple(information),
+        "transcript": tuple(transcript),
+        "answers": tuple(map(str, task.get("possible_answers", []))),
+        "metadata": {
+            "source_data": str(data_path),
+            "task_id": task_id,
+            "agent_id": agent_id,
+            "shuffle_seed": shuffle_seed,
+            "audit_answer_included": False,
+        },
+    }
 
 
 def generate_paper_prompt_examples(
@@ -51,168 +96,121 @@ def generate_paper_prompt_examples(
     task_id: int = 1,
     agent_id: int = 0,
 ) -> Path:
-    """Compile all paper examples without making an LLM call."""
+    """Compile concrete paper-oriented fixtures without making an LLM call."""
 
-    root = _root()
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    data_path = Path(hiddenbench_data).resolve()
-    hidden_context = hiddenbench_example_context(
-        data_path, task_id=task_id, agent_id=agent_id
+    values = _hiddenbench_values(
+        Path(hiddenbench_data).resolve(), task_id=task_id, agent_id=agent_id
     )
-    social_context = social_conventions_example_context()
-
-    discussion_config = _load_prompt(
-        root / "configs/components/prompts/hidden_profile_discussion_paper.yaml"
+    discussion = hidden_profile_discussion_prompt().bind(
+        scenario=values["scenario"],
+        private_information={"information": values["information"]},
+        transcript=values["transcript"],
     )
-    vote_config = _load_prompt(
-        root / "configs/components/prompts/hidden_profile_vote_paper.yaml"
+    vote = hidden_profile_vote_prompt()
+    vote = type(vote)(
+        vote.family,
+        vote.version,
+        vote.blocks,
+        type(vote.response_contract)("json_vote", values["answers"]),
+        vote.message_mode,
+        vote.block_separator,
+    ).bind(
+        scenario=values["scenario"],
+        private_information={"information": values["information"]},
+        transcript=values["transcript"],
     )
-    configs = {
-        "social_conventions": _load_prompt(
-            root / "configs/components/prompts/social_conventions_paper.yaml"
+    social = bind_naming_convention_prompt(
+        presented_actions=("F", "J"),
+        visible_memory=(
+            {"own_action": "F", "partner_action": "J", "payoff": -50},
+            {"own_action": "J", "partner_action": "J", "payoff": 100},
+            {"own_action": "J", "partner_action": "J", "payoff": 100},
         ),
-        "hiddenbench_first_speaker": discussion_config,
-        "hiddenbench_discussion": discussion_config,
-        "hiddenbench_pre_vote": vote_config,
-        "hiddenbench_post_vote": vote_config,
-    }
-    possible_answers = tuple(hidden_context.private_state["possible_answers"])
-    resolved_vote_config = replace(
-        vote_config,
-        response_contract={"type": "json_vote", "allowed_values": possible_answers},
+        visible_score=150,
+        local_round=4,
+        allowed_actions=("F", "J"),
     )
-    configs["hiddenbench_pre_vote"] = resolved_vote_config
-    configs["hiddenbench_post_vote"] = resolved_vote_config
-    first_context = replace(
-        hidden_context,
-        recent_memory=(),
-        current_interaction={"phase": "public_discussion", "first_speaker": True},
-    )
-    contexts = {
-        "social_conventions": social_context,
-        "hiddenbench_first_speaker": first_context,
-        "hiddenbench_discussion": hidden_context,
-        "hiddenbench_pre_vote": replace(
-            hidden_context,
-            recent_memory=(),
-            current_interaction={"phase": "pre_discussion_vote"},
-        ),
-        "hiddenbench_post_vote": hidden_context,
+    examples = {
+        "social_conventions": social,
+        "hiddenbench_first_speaker": discussion.bind(transcript=()),
+        "hiddenbench_discussion": discussion,
+        "hiddenbench_pre_vote": vote.bind(transcript=()),
+        "hiddenbench_post_vote": vote,
     }
-    titles = {
-        "social_conventions": "Social conventions paper — one agent decision",
-        "hiddenbench_first_speaker": "HiddenBench paper — first public speaker",
-        "hiddenbench_discussion": "HiddenBench paper — one public discussion turn",
-        "hiddenbench_pre_vote": "HiddenBench paper — one pre-discussion vote",
-        "hiddenbench_post_vote": "HiddenBench paper — one post-discussion vote",
-    }
-    composer = PromptComposer(create_default_prompt_registry(), RegexTokenCounter())
-    consolidated: list[str] = [
-        "# Paper-grounded prompt examples",
+    consolidated = [
+        "# Paper-grounded concrete FullPrompt examples",
         "",
-        "Each section shows one complete request exactly as it would be passed to an LLM provider.",
+        "Social conventions paper and HiddenBench paper inspection fixtures.",
     ]
     checks: dict[str, bool] = {}
-    for name in (
-        "social_conventions",
-        "hiddenbench_first_speaker",
-        "hiddenbench_discussion",
-        "hiddenbench_pre_vote",
-        "hiddenbench_post_vote",
-    ):
+    counter = RegexTokenCounter()
+    for name, prompt in examples.items():
         example_dir = destination / name
         example_dir.mkdir(parents=True, exist_ok=True)
-        config = configs[name]
-        context = contexts[name]
-        instance = composer.compose(config, context)
-        metadata = context.to_dict()["metadata"]
-        logger = PromptMarkdownLogger(example_dir, overwrite=True)
-        request_path = logger.log(
-            instance,
+        compiled = prompt.compile(counter)
+        markdown = PromptMarkdownLogger(example_dir, overwrite=True).log(
+            compiled,
             "request",
-            title=titles[name],
-            metadata=metadata,
+            title=name.replace("_", " ").title(),
+            metadata=values["metadata"] if name.startswith("hiddenbench") else {},
         )
-        _write_json(example_dir / "compiled_messages.json", instance.messages_as_dicts())
-        _write_json(example_dir / "prompt_blocks.json", instance.blocks_as_dicts())
-        _write_json(example_dir / "prompt_context.json", context.to_dict())
+        _write_json(example_dir / "full_prompt.json", prompt.to_dict())
+        _write_json(example_dir / "compiled_messages.json", compiled.messages_as_dicts())
+        _write_json(example_dir / "prompt_blocks.json", compiled.blocks_as_dicts())
+        _write_json(example_dir / "bound_prompt.json", prompt.to_dict())
         (example_dir / "prompt_config.yaml").write_text(
-            yaml.safe_dump(config.to_dict(), sort_keys=False, allow_unicode=True),
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "prompt_family": prompt.family,
+                    "prompt_version": prompt.version,
+                    "message_mode": prompt.message_mode,
+                    "block_separator": prompt.block_separator,
+                },
+                sort_keys=False,
+            ),
             encoding="utf-8",
         )
-        markdown = request_path.read_text(encoding="utf-8")
-        consolidated.extend(["", "---", "", markdown])
-        checks[f"{name}_two_message_request"] = (
-            len(instance.messages) == 2
-            and [message.role.value for message in instance.messages] == ["system", "user"]
+        text = markdown.read_text(encoding="utf-8")
+        consolidated.extend(["", "---", "", text])
+        checks[f"{name}_compiled"] = bool(compiled.messages)
+        checks[f"{name}_markdown_matches"] = all(
+            message.content in text for message in compiled.messages
         )
-        checks[f"{name}_markdown_matches_messages"] = all(
-            message.content in markdown for message in instance.messages
-        )
-
     (destination / "all_requests.md").write_text(
         "\n".join(consolidated).rstrip() + "\n", encoding="utf-8"
     )
-    no_answer_key = "correct_answer" not in (
-        destination / "hiddenbench_discussion/prompt_context.json"
+    checks["hiddenbench_audit_answer_key_excluded"] = "correct_answer" not in (
+        destination / "hiddenbench_discussion/bound_prompt.json"
     ).read_text(encoding="utf-8")
-    checks["hiddenbench_audit_answer_key_excluded"] = no_answer_key
-
     status = "pass" if all(checks.values()) else "fail"
-    report = f"""# Paper prompt example report
-
-- Status: **{status.upper()}**
-- No LLM was called.
-- Social-conventions source: `pdfs/Emergence of social conventions supplementary.pdf`, section **Prompting → Example Prompt**.
-- HiddenBench source: `pdfs/Systematic Failures in Collective Reasoning under Distributed Information in.pdf`, Appendix **A.4 Prompts and Communication Templates**.
-- HiddenBench fixture: `{data_path}`, task `{task_id}`, agent `{agent_id}`.
-- Token counts are dependency-free estimates from `mas_cc_regex_v1_estimate`.
-
-## What is adapted
-
-- The social-conventions wording, F/J actions, simultaneous choice, +100/−50 payoffs, bounded memory, answer-first response, and final user request follow the supplementary example. The concrete score and three memory rows are an inspection fixture.
-- HiddenBench uses the downloaded scenario, shared facts, and the selected agent's private fact. Fact order is deterministically shuffled. The two public transcript lines are inspection fixtures constructed from other agents' private packets.
-- The HiddenBench `correct_answer` audit field is never copied into the prompt context or request.
-- Lego blocks are merged by consecutive role so the final transmission is exactly one `system` message followed by one `user` message, matching both papers' request shape.
-
-## Readable requests
-
-- [`all_requests.md`](all_requests.md) — all five complete requests in one document.
-- [`social_conventions/request.md`](social_conventions/request.md) — one convention decision.
-- [`hiddenbench_first_speaker/request.md`](hiddenbench_first_speaker/request.md) — the first discussion turn.
-- [`hiddenbench_discussion/request.md`](hiddenbench_discussion/request.md) — a later discussion turn with public transcript.
-- [`hiddenbench_pre_vote/request.md`](hiddenbench_pre_vote/request.md) — a vote before discussion.
-- [`hiddenbench_post_vote/request.md`](hiddenbench_post_vote/request.md) — one post-discussion vote.
-
-Each example directory also contains the source prompt config, context, rendered blocks, and compiled JSON messages for machine inspection.
-"""
-    (destination / "report.md").write_text(report, encoding="utf-8")
-
-    artifacts = []
-    for path in sorted(destination.rglob("*")):
-        if path.is_file() and path.name != "manifest.json":
-            artifacts.append(
-                {
-                    "path": str(path.relative_to(destination)),
-                    "bytes": path.stat().st_size,
-                    "sha256": _sha256(path),
-                }
-            )
-    manifest = {
-        "manifest_version": 1,
-        "kind": "paper_prompt_examples",
-        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "status": status,
-        "checks": checks,
-        "sources": {
-            "social_conventions_paper": "pdfs/Emergence of social conventions supplementary.pdf",
-            "hiddenbench_paper": "pdfs/Systematic Failures in Collective Reasoning under Distributed Information in.pdf",
-            "hiddenbench_data": str(data_path),
-            "task_id": task_id,
-            "agent_id": agent_id,
+    (destination / "report.md").write_text(
+        "# Paper prompt example report\n\n"
+        f"- Status: **{status.upper()}**\n"
+        "- All examples use concrete bound FullPrompt objects.\n"
+        "- No provider was constructed and no LLM was called.\n",
+        encoding="utf-8",
+    )
+    artifacts = [
+        {
+            "path": str(path.relative_to(destination)),
+            "bytes": path.stat().st_size,
+            "sha256": _sha256(path),
+        }
+        for path in sorted(destination.rglob("*"))
+        if path.is_file() and path.name != "manifest.json"
+    ]
+    _write_json(
+        destination / "manifest.json",
+        {
+            "manifest_version": 2,
+            "kind": "full_prompt_examples",
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "status": status,
+            "checks": checks,
+            "artifacts": artifacts,
         },
-        "artifacts": artifacts,
-    }
-    _write_json(destination / "manifest.json", manifest)
+    )
     return destination

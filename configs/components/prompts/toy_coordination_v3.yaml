@@ -1,0 +1,10 @@
+schema_version: 2
+prompt_family: toy_coordination_decision
+prompt_version: 1
+message_mode: per_block
+block_separator: "\n\n"
+response_contract:
+  type: choice_only
+  allowed_values:
+    - A
+    - B

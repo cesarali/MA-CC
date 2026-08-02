@@ -1,0 +1,10 @@
+schema_version: 2
+prompt_family: naming_convention_decision
+prompt_version: 1
+message_mode: merge_consecutive_roles
+block_separator: "\n\n"
+response_contract:
+  type: paper_choice_reason
+  allowed_values:
+    - Q
+    - M

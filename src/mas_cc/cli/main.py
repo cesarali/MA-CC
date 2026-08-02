@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     provider_test.add_argument(
         "--prompt",
         type=Path,
-        default=Path("configs/components/prompts/basic_binary_choice.yaml"),
+        default=Path("configs/components/prompts/basic_choice_v3.yaml"),
     )
     provider_test.add_argument("--provider-config", type=Path)
     provider_test.add_argument("--output-dir", type=Path, required=True)
@@ -81,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
-    phase.add_argument("number", type=int, choices=(1, 2, 3, 4, 5), help="implemented phase number")
+    phase.add_argument("number", type=int, choices=(1, 2, 3, 4, 5, 6), help="implemented phase number")
     phase.add_argument(
         "--config",
         type=Path,
@@ -95,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     phase.add_argument(
         "--prompt",
         type=Path,
-        default=Path("configs/components/prompts/basic_binary_choice.yaml"),
+        default=Path("configs/components/prompts/basic_choice_v3.yaml"),
         help="prompt component for Phase 3 (default: %(default)s)",
     )
     phase.add_argument("--amendment", choices=("provider-economics-v2",))
@@ -191,11 +191,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                     from .provider import run_provider_smoke_test
 
                     passed = run_provider_smoke_test("mock", args.prompt, output_dir)
-            else:
+            elif args.number == 5:
                 from .game import run_game_inspection
 
                 passed = run_game_inspection(
                     args.config or Path("configs/runs/toy_game_smoke_test.yaml"), output_dir
+                )
+            else:
+                from .game import run_game_inspection
+
+                passed = run_game_inspection(
+                    args.config
+                    or Path("configs/runs/naming_convention_smoke_test.yaml"),
+                    output_dir,
                 )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

@@ -1,0 +1,98 @@
+{
+  "artifacts": [
+    {
+      "bytes": 26084,
+      "path": "action_share.png",
+      "sha256": "6f5b3748cad85eb3089f560346ab2c1fd1f8854069e5bae9e79114126ebcfe89"
+    },
+    {
+      "bytes": 5553,
+      "path": "agents_final.json",
+      "sha256": "abaa8e6f4dd31a666f10f5e3d644d2e068105e97c6dc0b3e956b2de4ba100fea"
+    },
+    {
+      "bytes": 1185,
+      "path": "agents_initial.json",
+      "sha256": "207380aacb3eaf3061d74f069d1b07fd0e0af5a2c836f82be52d76d24198fe25"
+    },
+    {
+      "bytes": 22822,
+      "path": "coordination_rate.png",
+      "sha256": "36287ed5fa8dedf423ea1c9f8dba0a4caa92e0ff7cfafdd924af16fc10569bef"
+    },
+    {
+      "bytes": 2684,
+      "path": "full_prompt_definition.json",
+      "sha256": "0abaf6611ca33ace0de59a5ec94b60cafb67661db2e0a00daa89e35133697378"
+    },
+    {
+      "bytes": 4235,
+      "path": "game_call_plan.json",
+      "sha256": "3a56efb21f6217c856d1949798d552e74065a71dbadfc8478eb7bbf926c0fc5a"
+    },
+    {
+      "bytes": 185236,
+      "path": "interactions.jsonl",
+      "sha256": "a4ac1d2c52bb7ebad70497fa86bb625e1905d307f654aeae18c6920327f96024"
+    },
+    {
+      "bytes": 320,
+      "path": "prompt_parity_report.md",
+      "sha256": "7d6e35e303ab4fb3d92559af60ca9859f6d1e4902ea5b3a341039d22eefef819"
+    },
+    {
+      "bytes": 656,
+      "path": "prompt_token_scenarios.csv",
+      "sha256": "460c9239c35d1ccb68f134c3f92a1a052756950a8302222f168bab047d37f359"
+    },
+    {
+      "bytes": 2537,
+      "path": "report.md",
+      "sha256": "c3471892b1bfceede7f1fd65d9f40c9a023243516c284bc0daaaefa399d63970"
+    },
+    {
+      "bytes": 3190,
+      "path": "resolved_config.yaml",
+      "sha256": "d00a3b7c537bf414528501e8652acb41c73920da02faad4988ecb6e3acce381c"
+    },
+    {
+      "bytes": 45224,
+      "path": "selected_audit_traces.jsonl",
+      "sha256": "8748ec91613f78bfa4ed172069cbc229ea2c202882c74ff51da13bf49871827d"
+    },
+    {
+      "bytes": 10398,
+      "path": "selected_block_traces.jsonl",
+      "sha256": "9470ba05aa9589cef684a9d79ce92d3b7fc87339c76bae5a7923cf9f3f41ea74"
+    },
+    {
+      "bytes": 949,
+      "path": "trajectory.csv",
+      "sha256": "945bc0cbb99b334904bee3a8ba78c84aafcce10cdc21e7b314fd80515878a146"
+    }
+  ],
+  "checks": {
+    "action_orders_seeded_and_auditable": true,
+    "artifacts_are_secret_free": true,
+    "bounded_visible_memory_and_full_audit_history": true,
+    "empty_memory_calls_provider": true,
+    "fixed_horizon_completed": true,
+    "frozen_prompt_wire_parity": true,
+    "legacy_fixed_fixture_parity": true,
+    "memory_aware_token_scenarios": true,
+    "payoff_and_memory_transitions_valid": true,
+    "planned_and_actual_valid_mock_calls_match": true,
+    "plots_nonempty": true,
+    "private_prompt_boundary": true,
+    "provider_independent_stage_aware_plan": true,
+    "sampling_profile_deviations_audited": true,
+    "selected_audit_traces_complete": true,
+    "simultaneous_pre_state_barrier": true
+  },
+  "generated_at": "2026-08-02T14:57:19.142225Z",
+  "manifest_version": 1,
+  "mas_cc_version": "0.1.0",
+  "phase": 6,
+  "status": "pass",
+  "warnings": []
+}

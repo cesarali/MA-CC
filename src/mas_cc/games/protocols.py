@@ -12,7 +12,7 @@ from mas_cc.config import GameConfig
 from mas_cc.core import AgentId, InteractionId, ValidationResult
 from mas_cc.llm_providers import CompletionRequest, CompletionResponse
 from mas_cc.planning import GameCallPlan
-from mas_cc.prompts import PromptContext
+from mas_cc.prompts import CompilablePrompt
 
 
 def _freeze(value: Any) -> Any:
@@ -191,7 +191,7 @@ class DecisionRequest:
     interaction_id: InteractionId
     stage: str
     observation: Observation
-    prompt_context: PromptContext
+    prompt: CompilablePrompt
     provider_required: bool = True
     retry_bound: int = 0
 
@@ -205,6 +205,8 @@ class DecisionRequest:
             raise ValueError("DecisionRequest agent and observation agent must match")
         if self.interaction_id != self.observation.interaction_id:
             raise ValueError("DecisionRequest interaction and observation interaction must match")
+        if not isinstance(self.prompt, CompilablePrompt):
+            raise TypeError("DecisionRequest.prompt must satisfy CompilablePrompt")
         if (
             isinstance(self.retry_bound, bool)
             or not isinstance(self.retry_bound, int)
@@ -218,7 +220,12 @@ class DecisionRequest:
             "interaction_id": str(self.interaction_id),
             "stage": self.stage,
             "observation": self.observation.to_dict(),
-            "prompt_context": self.prompt_context.to_dict(),
+            "prompt": {
+                "family": self.prompt.family,
+                "version": self.prompt.version,
+                "definition_hash": self.prompt.compile().definition_hash,
+                "instance_hash": self.prompt.compile().instance_hash,
+            },
             "provider_required": self.provider_required,
             "retry_bound": self.retry_bound,
         }
@@ -300,6 +307,8 @@ class DecisionRecord:
     response: CompletionResponse | None
     action: Action
     attempts: int
+    prompt_definition_hash: str | None = None
+    prompt_instance_hash: str | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.attempts, bool) or not isinstance(self.attempts, int) or self.attempts < 1:
@@ -328,6 +337,8 @@ class DecisionRecord:
             "response": response,
             "action": self.action.to_dict(),
             "attempts": self.attempts,
+            "prompt_definition_hash": self.prompt_definition_hash,
+            "prompt_instance_hash": self.prompt_instance_hash,
         }
 
 

@@ -1,0 +1,118 @@
+schema_version: 1
+llm_provider:
+  schema_version: 1
+  type: mock
+  model: deterministic-v1
+  credentials_env: null
+  base_url_env: null
+  timeout_seconds: 5.0
+  max_retries: 0
+  request_concurrency: 2
+  temperature: 0.5
+  max_output_tokens: 6
+  options:
+    response: '{"value":"Q","reason":"seeded mock"}'
+    artificial_latency_seconds: 0.0
+    estimated_latency_seconds: 0.001
+    top_k: 10
+prompt:
+  schema_version: 1
+  prompt_family: ashery_2025_v1
+  prompt_version: 1
+  blocks:
+  - fixed_game
+  - bounded_memory
+  - local_state
+  - output_instruction
+  - decision_request
+  response_contract:
+    type: paper_choice_reason
+    allowed_values:
+    - Q
+    - M
+  options:
+    message_mode: merge_consecutive_roles
+    block_separator: '
+
+
+      '
+game:
+  schema_version: 1
+  type: naming_convention
+  population_size: 6
+  horizon: 12
+  topology: complete
+  options:
+    actions:
+    - Q
+    - M
+    memory_size: 3
+    success_payoff: 100
+    failure_payoff: -50
+    pair_sampling: uniform_two_distinct
+    simultaneous_pair_decisions: true
+    randomize_presented_action_order: true
+    prompt_contract: ashery_2025_v1
+    response_contract: json_reason
+    parser_contract: tolerant_paper_object_v1
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.0
+    representative_memory_size: 1
+    stop_on_convergence: false
+    selected_audit_interactions:
+    - 1
+    - 6
+    - 12
+execution:
+  schema_version: 1
+  seed: 1
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+  timeout_seconds: null
+logging:
+  schema_version: 1
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options: {}
+storage:
+  schema_version: 1
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+  options: {}
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+  options: {}
+experiment:
+  schema_version: 1
+  name: naming-convention-phase-06-smoke
+  description: Architecture smoke test for the Ashery 2025 repeated convention game;
+    not a paper replication.
+  tags:
+  - smoke
+  - phase-06
+  - not-a-paper-replication
+  metadata: {}
+pricing:
+  schema_version: 1
+  mode: offline
+  cache_path: null
+  max_age_seconds: 86400.0
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.01
+  max_cost_per_run: 0.01
+  max_provider_requests: 72
+  max_input_tokens: 100000
+  max_output_tokens: 1000
+  allow_unbounded_paid_requests: false

@@ -1,0 +1,9 @@
+{
+  "algorithm": "sha256",
+  "phase_manifests": {
+    "phase_03/manifest.json": "e0b587c8fc5e1b5160edbaacfad0d84ef72387ce28aa6088f748de8329e62253",
+    "phase_04/manifest.json": "69ad26a64cacfb05ff63d89fd1ed5bc08260adb3420ea3e3af17216052cc9d56",
+    "phase_05/manifest.json": "6236461e221fdf375e27fe6bcbcb0b821c6c280cf3f3824e334dba6caf2678f8",
+    "phase_06/manifest.json": "eb6a2d91825a83443555cced8a75d777d1f9e4e4ec29c4bd71d08f7873bba23f"
+  }
+}

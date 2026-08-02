@@ -18,6 +18,33 @@ def resolved_config_yaml(config: RunConfig) -> str:
     """Serialize a fully resolved config after a second secret-field audit."""
 
     values = config.to_dict()
+    if config.prompt.schema_version == 2:
+        from mas_cc.prompts import create_default_prompt_registry
+
+        registry = create_default_prompt_registry(include_legacy=False)
+        try:
+            prompt = registry.get(
+                config.prompt.prompt_family, config.prompt.prompt_version
+            )
+        except ValueError:
+            from mas_cc.games.registry import register_game_prompt_factories
+
+            prompt = register_game_prompt_factories(registry).get(
+                config.prompt.prompt_family, config.prompt.prompt_version
+            )
+        values["prompt"]["resolved_block_manifest"] = [
+            {
+                "order": index,
+                "name": block.name,
+                "version": block.version,
+                "role": block.role.value,
+                "required": block.required,
+                "binding": block.binding,
+                "sensitive": block.sensitive,
+            }
+            for index, block in enumerate(prompt.blocks, start=1)
+        ]
+        values["prompt"]["definition_hash"] = prompt.definition_hash
     issues: list[ValidationIssue] = []
     _validate_secret_fields(values, path="", issues=issues)
     if issues:

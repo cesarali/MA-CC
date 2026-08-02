@@ -1,0 +1,25 @@
+revision 73c2bd27a329c43beb873f85f57969c8b4bc5a6c
+dirty worktree preserved before realignment:
+ D docs/university_llm_api.md
+ M src/mas_cc/cli/game.py
+ M src/mas_cc/cli/main.py
+ M src/mas_cc/games/naming_convention/__init__.py
+ M src/mas_cc/games/registry.py
+ M src/mas_cc/planning/call_graph.py
+ M src/mas_cc/planning/game_preflight.py
+ M src/mas_cc/prompts/registry.py
+ M tests/mas_cc/test_cli_and_inspection.py
+ M tests/mas_cc/test_games.py
+ M tests/mas_cc/test_prompts.py
+?? configs/components/games/naming_convention.yaml
+?? configs/components/prompts/ashery_2025_v1.yaml
+?? configs/runs/naming_convention_smoke_test.yaml
+?? docs/howto/
+?? inspection/phase_06/
+?? src/mas_cc/cli/naming_convention.py
+?? src/mas_cc/games/naming_convention/game.py
+?? src/mas_cc/games/naming_convention/parsing.py
+?? src/mas_cc/games/naming_convention/records.py
+?? src/mas_cc/games/naming_convention/runtime.py
+?? src/mas_cc/prompts/plugins/ashery_2025.py
+?? tests/mas_cc/test_mas_cc_naming_convention.py

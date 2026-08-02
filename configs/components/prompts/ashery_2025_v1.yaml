@@ -1,0 +1,17 @@
+schema_version: 1
+prompt_family: ashery_2025_v1
+prompt_version: 1
+blocks:
+  - fixed_game
+  - bounded_memory
+  - local_state
+  - output_instruction
+  - decision_request
+response_contract:
+  type: paper_choice_reason
+  allowed_values:
+    - Q
+    - M
+options:
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"

@@ -18,9 +18,9 @@ from mas_cc.llm_providers import (
     create_llm_provider,
 )
 from mas_cc.planning import LogicalCallSpec, static_preflight
-from mas_cc.prompts import PromptComposer, RegexTokenCounter, create_default_prompt_registry
+from mas_cc.prompts import CompiledPrompt, RegexTokenCounter
 
-from .inspect import _phase_3_context, _write, _write_manifest
+from .inspect import _phase_3_bound_prompt, _write, _write_manifest
 
 
 PROVIDER_CONFIGS = {
@@ -42,13 +42,27 @@ def _compile_request(
     max_output_tokens: int,
     seed: int | None,
 ) -> CompletionRequest:
+    _, request = _compile_prompt_and_request(
+        prompt_path,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        seed=seed,
+    )
+    return request
+
+
+def _compile_prompt_and_request(
+    prompt_path: str | Path,
+    *,
+    temperature: float,
+    max_output_tokens: int,
+    seed: int | None,
+) -> tuple[CompiledPrompt, CompletionRequest]:
     prompt = load_component_config(Path(prompt_path).resolve(), "prompt", environment={})
     if not isinstance(prompt, PromptConfig):
         raise ValueError("prompt component did not resolve to PromptConfig")
-    instance = PromptComposer(
-        create_default_prompt_registry(), RegexTokenCounter()
-    ).compose(prompt, _phase_3_context())
-    return CompletionRequest(
+    instance = _phase_3_bound_prompt(prompt).compile(RegexTokenCounter())
+    request = CompletionRequest(
         messages=instance.messages,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
@@ -56,9 +70,12 @@ def _compile_request(
         metadata={
             "prompt_family": prompt.prompt_family,
             "prompt_version": prompt.prompt_version,
+            "prompt_definition_hash": instance.definition_hash,
+            "prompt_instance_hash": instance.instance_hash,
             "response_contract": prompt.response_contract,
         },
     )
+    return instance, request
 
 
 async def provider_smoke_test(
@@ -89,7 +106,7 @@ async def provider_smoke_test(
 
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    request = _compile_request(
+    compiled_prompt, request = _compile_prompt_and_request(
         prompt_path,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
@@ -104,7 +121,44 @@ async def provider_smoke_test(
         budget=budget,
     )
     _write(destination / "request.json", _json(request.to_dict()))
+    _write(destination / "compiled_prompt.json", _json(compiled_prompt.to_dict()))
     _write(destination / "preflight_estimate.json", _json(preflight.to_dict()))
+    _write(
+        destination / "pricing_snapshot.json",
+        _json(
+            {
+                "mode": preflight.pricing_mode,
+                "status": preflight.pricing_status,
+                "source": preflight.pricing_source,
+                "version": preflight.pricing_version,
+                "retrieved_at": preflight.pricing_retrieved_at,
+                "fresh_until": preflight.pricing_fresh_until,
+            }
+        ),
+    )
+    _write(
+        destination / "budget_status.json",
+        _json(
+            {
+                "configured_budget_usd": budget_usd,
+                "launch_status": preflight.launch_status,
+                "within_budget": preflight.within_budget,
+            }
+        ),
+    )
+    normalized = [
+        {"role": message.role.value, "content": message.content}
+        for message in compiled_prompt.messages
+    ]
+    boundary_ok = request.wire_messages() == normalized
+    _write(
+        destination / "provider_boundary_diff.md",
+        "# Provider boundary diff\n\n"
+        f"- Compiled messages equal wire messages: **{str(boundary_ok).lower()}**\n"
+        "- Prompt family, versions, hashes, block values, and response contracts remain "
+        "local request metadata and are excluded from `wire_messages()`.\n"
+        "- Provider adapters receive only `CompletionRequest`.\n",
+    )
 
     provider = None
     response = None
@@ -158,6 +212,7 @@ async def provider_smoke_test(
     )
     checks = {
         "request_is_normalized": bool(request.messages),
+        "compiled_messages_equal_wire_messages": boundary_ok,
         "static_preflight_completed": preflight.logical_calls == logical_calls,
         "normalized_response_received": response is not None,
         "provider_identity_matches": response is not None and response.provider == provider_name,

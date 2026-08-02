@@ -8,7 +8,7 @@ from typing import Any
 from mas_cc.config import RunConfig
 from mas_cc.core import Seed, ValidationIssue, ValidationResult
 from mas_cc.llm_providers import CompletionRequest, LLMProvider
-from mas_cc.prompts import PromptComposer, RegexTokenCounter, create_default_prompt_registry
+from mas_cc.prompts import RegexTokenCounter, TokenCounter
 
 from .protocols import DecisionRecord, Game, GameResult, InteractionRecord
 
@@ -18,13 +18,11 @@ async def run_game(
     config: RunConfig,
     provider: LLMProvider,
     *,
-    composer: PromptComposer | None = None,
+    token_counter: TokenCounter | None = None,
 ) -> GameResult:
     """Execute a game while keeping every provider call outside transitions."""
 
-    selected_composer = composer or PromptComposer(
-        create_default_prompt_registry(), RegexTokenCounter()
-    )
+    selected_counter = token_counter or RegexTokenCounter()
     root_seed = Seed(config.execution.seed)
     rng = root_seed.derive("participant-selection").create_random()
     state = game.initialize(config.game, config.execution.seed)
@@ -45,7 +43,27 @@ async def run_game(
                 raise NotImplementedError(
                     "provider-free runtime decisions require a game control resolver"
                 )
-            prompt = selected_composer.compose(config.prompt, logical.prompt_context)
+            if (
+                logical.prompt.family != config.prompt.prompt_family
+                or logical.prompt.version != config.prompt.prompt_version
+            ):
+                raise ValueError("bound decision prompt does not match resolved prompt selection")
+            if config.prompt.message_mode is not None and getattr(
+                logical.prompt, "message_mode", None
+            ) != config.prompt.message_mode:
+                raise ValueError("bound decision prompt does not match configured message_mode")
+            if config.prompt.block_separator is not None and getattr(
+                logical.prompt, "block_separator", None
+            ) != config.prompt.block_separator:
+                raise ValueError("bound decision prompt does not match configured block_separator")
+            prompt = logical.prompt.compile(selected_counter)
+            expected_contract = config.prompt.response_contract
+            if expected_contract:
+                if expected_contract.get("type") != prompt.response_contract.type:
+                    raise ValueError("bound prompt response contract type does not match config")
+                allowed = tuple(expected_contract.get("allowed_values", ()))
+                if allowed and set(allowed) != set(prompt.response_contract.allowed_values):
+                    raise ValueError("bound prompt response values do not match config")
             response = None
             action = None
             completion_request = None
@@ -70,6 +88,8 @@ async def run_game(
                         "attempt": attempt + 1,
                         "prompt_family": config.prompt.prompt_family,
                         "prompt_version": config.prompt.prompt_version,
+                        "prompt_definition_hash": prompt.definition_hash,
+                        "prompt_instance_hash": prompt.instance_hash,
                         "response_contract": prompt.response_contract.to_dict(),
                     },
                 )
@@ -87,6 +107,8 @@ async def run_game(
                             response=response,
                             action=action,
                             attempts=attempt + 1,
+                            prompt_definition_hash=prompt.definition_hash,
+                            prompt_instance_hash=prompt.instance_hash,
                         )
                     )
                     break

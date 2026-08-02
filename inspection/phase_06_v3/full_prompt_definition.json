@@ -1,0 +1,84 @@
+{
+  "block_separator": "\n\n",
+  "blocks": [
+    {
+      "binding": "fixed",
+      "fixed_value": "Player 1 is playing a repeated two-player partnership game with Player 2. In each round both players choose simultaneously.",
+      "implementation": "mas_cc.games.naming_convention.prompts.DescriptionBlock",
+      "name": "description",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Game description",
+      "version": 1
+    },
+    {
+      "binding": "fixed",
+      "fixed_value": [
+        "If both players choose the same value, both receive +100 points.",
+        "If the players choose different values, both receive -50 points.",
+        "Player 1 cannot see Player 2's current choice before deciding."
+      ],
+      "implementation": "mas_cc.games.naming_convention.prompts.RulesBlock",
+      "name": "rules",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Game rules",
+      "version": 1
+    },
+    {
+      "binding": "dynamic",
+      "implementation": "mas_cc.games.naming_convention.prompts.PresentedActionsBlock",
+      "name": "presented_actions",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Presented actions",
+      "version": 1
+    },
+    {
+      "binding": "dynamic",
+      "implementation": "mas_cc.games.naming_convention.prompts.VisibleMemoryBlock",
+      "name": "visible_memory",
+      "required": true,
+      "role": "system",
+      "sensitive": true,
+      "title": "Visible bounded memory",
+      "version": 1
+    },
+    {
+      "binding": "dynamic",
+      "implementation": "mas_cc.games.naming_convention.prompts.VisibleScoreBlock",
+      "name": "visible_score",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Visible score and local round",
+      "version": 1
+    }
+  ],
+  "concrete_prompt_type": "naming_convention_decision",
+  "family": "naming_convention_decision",
+  "implementation": "mas_cc.games.naming_convention.prompts.NamingConventionFullPrompt",
+  "message_mode": "merge_consecutive_roles",
+  "response_contract": {
+    "allowed_values": [
+      "Q",
+      "M"
+    ],
+    "instruction_messages": [
+      {
+        "content": "Put the decision before the explanation. Return only an object in this answer-first form: {'value': '<ACTION>'; 'reason': '<YOUR REASON>'}. The value must be exactly Q or M. Do not add text outside the object.",
+        "role": "system"
+      },
+      {
+        "content": "Answer saying which action Player 1 should play.",
+        "role": "user"
+      }
+    ],
+    "type": "paper_choice_reason"
+  },
+  "schema_version": 1,
+  "version": 1
+}

@@ -1,0 +1,28 @@
+{
+  "manifest_version": 1,
+  "kind": "phase_3_6_v3_realignment_acceptance",
+  "status": "pass",
+  "tests": {"passed": 225, "environment": "MA-CC", "python": "3.11.15"},
+  "gates": {
+    "0_baseline": "pass",
+    "1_prompt_kernel": "pass",
+    "2_prompt_schema_v2": "pass",
+    "3_provider_boundary": "pass",
+    "4_toy_migration": "pass",
+    "5_naming_migration": "pass",
+    "6_legacy_isolation": "pass",
+    "7_tutorial": "pass",
+    "8_reinspection": "pass"
+  },
+  "inspection_bundles": {
+    "phase_02_v3": "pass",
+    "phase_03_v3": "pass",
+    "phase_04_v3": "pass",
+    "phase_05_v3": "pass",
+    "phase_06_v3": "pass"
+  },
+  "historical_artifacts_unchanged": true,
+  "secret_scan": "pass",
+  "legacy_naming_game_unchanged": true,
+  "phase_7_unblocked": true
+}

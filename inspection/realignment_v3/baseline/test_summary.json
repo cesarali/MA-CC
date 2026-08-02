@@ -1,0 +1,16 @@
+{
+  "authoritative": {
+    "command": "conda run -n MA-CC pytest -q",
+    "python": "3.11.15",
+    "collected": 210,
+    "passed": 210,
+    "status": "pass"
+  },
+  "ambient_shell": {
+    "command": "pytest -q",
+    "python": "3.10",
+    "collection_errors": 5,
+    "reason": "datetime.UTC is unavailable before Python 3.11",
+    "status": "environment-mismatch"
+  }
+}

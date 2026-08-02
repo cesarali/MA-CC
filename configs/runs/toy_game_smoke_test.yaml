@@ -4,7 +4,7 @@ llm_provider:
   overrides:
     max_output_tokens: 1
 prompt:
-  component: ../components/prompts/basic_binary_choice.yaml
+  component: ../components/prompts/toy_coordination_v3.yaml
 game:
   component: ../components/games/toy_coordination.yaml
 execution:

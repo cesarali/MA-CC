@@ -16,7 +16,7 @@ def _config():
 def test_default_registry_constructs_a_generic_game_lazily():
     config = _config()
     registry = create_default_game_registry()
-    assert registry.names() == ("toy_coordination",)
+    assert registry.names() == ("naming_convention", "toy_coordination")
     game = registry.create(config.game)
     assert isinstance(game, Game)
     assert game.spec.game_type == "toy_coordination"
@@ -81,8 +81,11 @@ def test_call_plan_is_provider_independent_and_bounds_prompt_memory():
     assert plan.provider_requests.maximum == 6
     stage = plan.decision_stages[0]
     assert stage.requests_per_interaction == 2
-    assert len(stage.representative_prompt.context.recent_memory) == 0
-    assert len(stage.maximum_prompt.context.recent_memory) == config.game.horizon - 1
+    assert len(stage.representative_prompt.bound_prompt.block("visible_memory").value) == 0
+    assert (
+        len(stage.maximum_prompt.bound_prompt.block("visible_memory").value)
+        == config.game.horizon - 1
+    )
     assert "pricing" not in plan.to_dict()
 
 

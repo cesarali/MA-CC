@@ -5,7 +5,7 @@ from .call_graph import (
     GameCallPlan,
     InteractionCount,
     LogicalCallSpec,
-    PromptContextScenario,
+    PromptScenario,
     ProviderRequestCount,
 )
 from .cost_estimation import estimate_cost, estimate_cost_usd
@@ -19,7 +19,7 @@ __all__ = [
     "GameCallPlan",
     "GamePreflightEstimate",
     "InteractionCount",
-    "PromptContextScenario",
+    "PromptScenario",
     "ProviderRequestCount",
     "PreflightEstimate",
     "EstimateRange",

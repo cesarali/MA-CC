@@ -1,0 +1,51 @@
+schema_version: 2
+prompt_family: basic_choice
+prompt_version: 1
+response_contract:
+  type: choice_only
+  allowed_values:
+  - A
+  - B
+message_mode: merge_consecutive_roles
+block_separator: '
+
+
+  '
+options: {}
+resolved_block_manifest:
+- order: 1
+  name: task
+  version: 1
+  role: system
+  required: true
+  binding: fixed
+  sensitive: false
+- order: 2
+  name: rules
+  version: 1
+  role: system
+  required: true
+  binding: fixed
+  sensitive: false
+- order: 3
+  name: private_state
+  version: 1
+  role: system
+  required: true
+  binding: dynamic
+  sensitive: true
+- order: 4
+  name: recent_memory
+  version: 1
+  role: system
+  required: true
+  binding: dynamic
+  sensitive: false
+- order: 5
+  name: current_interaction
+  version: 1
+  role: system
+  required: true
+  binding: dynamic
+  sensitive: false
+definition_hash: e7196f7ea821ca3823211ae87a9268b3004730dfce0bdcc25f8a13a1801f7625

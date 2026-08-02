@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from mas_cc.config import GameConfig
 from mas_cc.core.exceptions import ConfigurationError
 from mas_cc.core.validation import ValidationIssue
+from mas_cc.prompts import PromptRegistry
 
 from .protocols import Game
 
@@ -64,6 +65,21 @@ def create_default_game_registry() -> GameRegistry:
     registry.register(
         "toy_coordination", "mas_cc.games.toy_coordination.game:ToyCoordinationGame"
     )
+    registry.register(
+        "naming_convention",
+        "mas_cc.games.naming_convention.game:NamingConventionGame",
+    )
+    return registry
+
+
+def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
+    """Register concrete prompts at the application boundary that owns the games."""
+
+    from .naming_convention.prompts import naming_convention_prompt
+    from .toy_coordination.prompts import toy_coordination_prompt
+
+    registry.register(naming_convention_prompt)
+    registry.register(toy_coordination_prompt)
     return registry
 
 

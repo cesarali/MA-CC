@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
+import math
 from typing import Any, Literal, Mapping
 
-from mas_cc.prompts import PromptContext
+from mas_cc.prompts import CompilablePrompt
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,22 +63,27 @@ class InteractionCount:
 
 
 @dataclass(frozen=True, slots=True)
-class PromptContextScenario:
-    """A bounded prompt context supplied by a game to the prompt layer."""
+class PromptScenario:
+    """A bounded prompt supplied by a game to compilation and planning."""
 
     name: str
-    context: PromptContext
+    bound_prompt: CompilablePrompt
     assumptions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.name.strip():
-            raise ValueError("prompt context scenario name must be non-empty")
+            raise ValueError("prompt scenario name must be non-empty")
+        if not isinstance(self.bound_prompt, CompilablePrompt):
+            raise TypeError("PromptScenario.bound_prompt must satisfy CompilablePrompt")
         object.__setattr__(self, "assumptions", tuple(self.assumptions))
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "context": self.context.to_dict(),
+            "prompt_family": self.bound_prompt.family,
+            "prompt_version": self.bound_prompt.version,
+            "definition_hash": self.bound_prompt.compile().definition_hash,
+            "instance_hash": self.bound_prompt.compile().instance_hash,
             "assumptions": list(self.assumptions),
         }
 
@@ -91,8 +97,13 @@ class DecisionStagePlan:
     forced_decisions_per_interaction: int = 0
     provider_free_decisions_per_interaction: int = 0
     retry_bound: int = 0
-    representative_prompt: PromptContextScenario | None = None
-    maximum_prompt: PromptContextScenario | None = None
+    expected_attempts_per_request: float = 1.0
+    concurrency_within_stage: int = 1
+    state_barrier_after_stage: bool = True
+    lower_prompt: PromptScenario | None = None
+    representative_prompt: PromptScenario | None = None
+    maximum_prompt: PromptScenario | None = None
+    prompt_scenarios: tuple[PromptScenario, ...] = ()
     assumptions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -107,11 +118,39 @@ class DecisionStagePlan:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
+        if (
+            not isinstance(self.expected_attempts_per_request, (int, float))
+            or isinstance(self.expected_attempts_per_request, bool)
+            or not math.isfinite(self.expected_attempts_per_request)
+            or not 1 <= self.expected_attempts_per_request <= 1 + self.retry_bound
+        ):
+            raise ValueError(
+                "expected_attempts_per_request must be between 1 and 1 + retry_bound"
+            )
+        if self.concurrency_within_stage < 1:
+            raise ValueError("concurrency_within_stage must be positive")
+        scenarios = tuple(self.prompt_scenarios)
+        if len({scenario.name for scenario in scenarios}) != len(scenarios):
+            raise ValueError("prompt scenario names must be unique within a stage")
+        object.__setattr__(self, "expected_attempts_per_request", float(self.expected_attempts_per_request))
+        object.__setattr__(self, "prompt_scenarios", scenarios)
         object.__setattr__(self, "assumptions", tuple(self.assumptions))
 
-    def requests(self, interactions: int, *, include_retries: bool = False) -> int:
-        multiplier = 1 + self.retry_bound if include_retries else 1
-        return interactions * self.requests_per_interaction * multiplier
+    def requests(
+        self,
+        interactions: int,
+        *,
+        scenario: Literal["lower", "expected", "maximum"] = "lower",
+        include_retries: bool = False,
+    ) -> int:
+        if include_retries:
+            scenario = "maximum"
+        multiplier = {
+            "lower": 1.0,
+            "expected": self.expected_attempts_per_request,
+            "maximum": float(1 + self.retry_bound),
+        }[scenario]
+        return math.ceil(interactions * self.requests_per_interaction * multiplier)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -120,12 +159,21 @@ class DecisionStagePlan:
             "forced_decisions_per_interaction": self.forced_decisions_per_interaction,
             "provider_free_decisions_per_interaction": self.provider_free_decisions_per_interaction,
             "retry_bound": self.retry_bound,
+            "expected_attempts_per_request": self.expected_attempts_per_request,
+            "concurrency_within_stage": self.concurrency_within_stage,
+            "state_barrier_after_stage": self.state_barrier_after_stage,
+            "lower_prompt": (
+                None if self.lower_prompt is None else self.lower_prompt.to_dict()
+            ),
             "representative_prompt": (
                 None if self.representative_prompt is None else self.representative_prompt.to_dict()
             ),
             "maximum_prompt": (
                 None if self.maximum_prompt is None else self.maximum_prompt.to_dict()
             ),
+            "prompt_scenarios": [
+                scenario.to_dict() for scenario in self.prompt_scenarios
+            ],
             "assumptions": list(self.assumptions),
         }
 
@@ -170,12 +218,32 @@ class GameCallPlan:
     @property
     def provider_requests(self) -> ProviderRequestCount:
         return ProviderRequestCount(
-            lower=sum(stage.requests(self.interactions.lower) for stage in self.decision_stages),
-            expected=sum(stage.requests(self.interactions.expected) for stage in self.decision_stages),
-            maximum=sum(
-                stage.requests(self.interactions.maximum, include_retries=True)
+            lower=sum(
+                stage.requests(self.interactions.lower, scenario="lower")
                 for stage in self.decision_stages
             ),
+            expected=sum(
+                stage.requests(self.interactions.expected, scenario="expected")
+                for stage in self.decision_stages
+            ),
+            maximum=sum(
+                stage.requests(self.interactions.maximum, scenario="maximum")
+                for stage in self.decision_stages
+            ),
+        )
+
+    @property
+    def logical_decisions(self) -> ProviderRequestCount:
+        def total(interactions: int) -> int:
+            return sum(
+                interactions * stage.requests_per_interaction
+                for stage in self.decision_stages
+            )
+
+        return ProviderRequestCount(
+            total(self.interactions.lower),
+            total(self.interactions.expected),
+            total(self.interactions.maximum),
         )
 
     def logical_calls(
@@ -193,6 +261,7 @@ class GameCallPlan:
             "game_version": self.game_version,
             "interactions": self.interactions.to_dict(),
             "decision_stages": [stage.to_dict() for stage in self.decision_stages],
+            "logical_decisions": self.logical_decisions.to_dict(),
             "provider_requests": self.provider_requests.to_dict(),
             "stopping_condition_assumptions": list(self.stopping_condition_assumptions),
             "metadata": dict(self.metadata),

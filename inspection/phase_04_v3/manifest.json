@@ -1,0 +1,73 @@
+{
+  "artifacts": [
+    {
+      "bytes": 93,
+      "path": "budget_status.json",
+      "sha256": "de36cd9adec8c6a3281a5a282291b5666d2e0a907b090db29aa743304ebc8ed3"
+    },
+    {
+      "bytes": 4368,
+      "path": "compiled_prompt.json",
+      "sha256": "1a50b392aeb78ea1797c394aa0d29b539e8cf24373c6cd3b653b4d8dd984f4aa"
+    },
+    {
+      "bytes": 420,
+      "path": "normalized_response.json",
+      "sha256": "dc9a8c95fbdd82c1a6f76df595dbded3b618d1ad4311e4cb936a968fd46c2d67"
+    },
+    {
+      "bytes": 2351,
+      "path": "preflight_estimate.json",
+      "sha256": "799905fe73e5223985799d0079f7d5e6042dd26ad5a4b86be44520c898e6714f"
+    },
+    {
+      "bytes": 206,
+      "path": "pricing_snapshot.json",
+      "sha256": "f6d648272bf45157b3d0fa62835eafd2365aa71ae0f633ae1a7535599c559845"
+    },
+    {
+      "bytes": 273,
+      "path": "provider_boundary_diff.md",
+      "sha256": "9c55127c4069a3317bdfc17a462c40ce0150a371babc1fdfa363f7f64451c5a3"
+    },
+    {
+      "bytes": 276,
+      "path": "raw_response_redacted.json",
+      "sha256": "3f551b007befb49bbe8b37ba3bd823e6feafbc3394e8230f8cdd21996f201158"
+    },
+    {
+      "bytes": 937,
+      "path": "report.md",
+      "sha256": "b394601fb582eb141f185f4735f37b2eb3ac1ca292c0a5232fa43febee76248a"
+    },
+    {
+      "bytes": 2673,
+      "path": "request.json",
+      "sha256": "14924f28c372f7feb142dd48237e7fe4340083fc9d3144d887005455a7b55f18"
+    },
+    {
+      "bytes": 129,
+      "path": "timing.csv",
+      "sha256": "4f2da48c878b73bc41240ced92f06a9d22dc1e2c1cb4ba836eacd534824fe0e9"
+    },
+    {
+      "bytes": 102,
+      "path": "usage.json",
+      "sha256": "306525400fa854e918be21ced72597f71020023358b8310b8aeaa49bf0826414"
+    }
+  ],
+  "checks": {
+    "artifacts_are_secret_free": true,
+    "compiled_messages_equal_wire_messages": true,
+    "normalized_response_received": true,
+    "provider_identity_matches": true,
+    "request_is_normalized": true,
+    "static_preflight_completed": true
+  },
+  "generated_at": "2026-08-02T14:57:19.178589Z",
+  "manifest_version": 1,
+  "mas_cc_version": "0.1.0",
+  "phase": 4,
+  "status": "pass",
+  "warnings": []
+}

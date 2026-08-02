@@ -1,0 +1,7 @@
+schema_version: 2
+prompt_family: hidden_profile_discussion
+prompt_version: 2
+message_mode: merge_consecutive_roles
+block_separator: "\n\n"
+response_contract:
+  type: free_text

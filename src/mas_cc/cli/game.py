@@ -24,6 +24,7 @@ from mas_cc.llm_providers import (
     resolve_budget_limits,
 )
 from mas_cc.planning import estimate_input_tokens, static_game_preflight
+from mas_cc.prompts import RegexTokenCounter
 
 from .inspect import _write, _write_manifest
 
@@ -177,6 +178,23 @@ def run_game_inspection(config_path: str | Path, output_dir: str | Path) -> bool
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     config = load_run_config(source)
+    if config.game.type == "naming_convention":
+        from .naming_convention import run_naming_convention_inspection
+
+        quote = _quote(config)
+        runtime_quote = _quote(config) if config.pricing.mode == "live" else quote
+        if _pricing_terms(runtime_quote) != _pricing_terms(quote):
+            raise ValueError("live pricing changed during immediate pre-launch revalidation")
+        system_budget, run_budget = _budgets(config, quote)
+        return run_naming_convention_inspection(
+            config,
+            source,
+            destination,
+            quote=quote,
+            runtime_quote=runtime_quote,
+            system_budget=system_budget,
+            run_budget=run_budget,
+        )
     game = create_game(config.game)
     plan = game.call_plan(config.game)
     quote = _quote(config)
@@ -219,6 +237,34 @@ def run_game_inspection(config_path: str | Path, output_dir: str | Path) -> bool
 
     _write(destination / "resolved_config.yaml", resolved_config_yaml(config))
     _write(destination / "initial_state.json", _json(result.initial_state.to_dict()))
+    decisions = tuple(
+        decision for interaction in result.interactions for decision in interaction.decisions
+    )
+    _write(
+        destination / "observations.jsonl",
+        "".join(
+            json.dumps(decision.request.observation.to_dict(), sort_keys=True) + "\n"
+            for decision in decisions
+        ),
+    )
+    _write(
+        destination / "bound_prompts.jsonl",
+        "".join(
+            json.dumps(decision.request.prompt.to_dict(), sort_keys=True) + "\n"
+            for decision in decisions
+        ),
+    )
+    _write(
+        destination / "compiled_prompts.jsonl",
+        "".join(
+            json.dumps(
+                decision.request.prompt.compile(RegexTokenCounter()).to_dict(),
+                sort_keys=True,
+            )
+            + "\n"
+            for decision in decisions
+        ),
+    )
     _write(
         destination / "interactions.jsonl",
         "".join(
@@ -228,6 +274,16 @@ def run_game_inspection(config_path: str | Path, output_dir: str | Path) -> bool
     )
     _write(destination / "final_state.json", _json(result.final_state.to_dict()))
     _write(destination / "game_call_plan.json", _json(plan.to_dict()))
+    _write(
+        destination / "prompt_scenarios.json",
+        _json(
+            [
+                scenario.to_dict()
+                for stage in plan.decision_stages
+                for scenario in stage.prompt_scenarios
+            ]
+        ),
+    )
     _write(destination / "trajectory.csv", _trajectory_csv(result))
     _trajectory_plot(result, destination / "trajectory.png")
 
@@ -294,9 +350,10 @@ def run_game_inspection(config_path: str | Path, output_dir: str | Path) -> bool
 
 - `resolved_config.yaml` — all component references expanded without secrets.
 - `initial_state.json` — immutable state before any provider call.
+- `observations.jsonl`, `bound_prompts.jsonl`, and `compiled_prompts.jsonl` — the narrow prompt chain for every decision.
 - `interactions.jsonl` — one complete observation/prompt/response/action/transition chain per line.
 - `final_state.json` — terminated state and cumulative scores.
-- `game_call_plan.json` — provider-independent interaction, decision-stage, retry, and prompt-context bounds.
+- `game_call_plan.json` and `prompt_scenarios.json` — provider-independent demand and bound prompt scenarios.
 - `trajectory.csv` and `trajectory.png` — tabular and visual score trajectories.
 - `manifest.json` — artifact hashes and machine-readable acceptance checks.
 """

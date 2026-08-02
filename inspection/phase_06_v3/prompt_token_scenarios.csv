@@ -1,0 +1,4 @@
+scenario,visible_memory_entries,presented_actions,tokenizer,estimated_input_tokens,prompt_hash_sha256,assumptions
+empty_memory,0,"[""Q"", ""M""]",mas_cc_regex_v1_estimate,211,5af0aea17fd74527ec2278c5facb014e58adb5f87bb9b188e38be56bdc78e477,Visible private memory contains exactly 0 entries.
+representative_memory,1,"[""Q"", ""M""]",mas_cc_regex_v1_estimate,247,6a779f527a70835159b20df7268dcbd214d5fc35f64607f24fe116e898f12608,Visible private memory contains exactly 1 entries.
+maximum_memory,3,"[""Q"", ""M""]",mas_cc_regex_v1_estimate,311,8ed75c6eaba2a1a216bbed9d6b20d8e9c40943e3c2fb3ab48e45b7bb0b50e501,Visible private memory contains exactly 3 entries.

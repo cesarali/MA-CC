@@ -1,0 +1,22 @@
+schema_version: 1
+type: naming_convention
+population_size: 24
+horizon: 240
+topology: complete
+options:
+  actions:
+    - Q
+    - M
+  memory_size: 5
+  success_payoff: 100
+  failure_payoff: -50
+  pair_sampling: uniform_two_distinct
+  simultaneous_pair_decisions: true
+  randomize_presented_action_order: true
+  prompt_contract: naming_convention_decision
+  response_contract: json_reason
+  parser_contract: tolerant_paper_object_v1
+  invalid_response_retries: 2
+  expected_validation_failure_rate: 0.0
+  representative_memory_size: 2
+  stop_on_convergence: false

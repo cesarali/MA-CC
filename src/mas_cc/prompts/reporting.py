@@ -10,7 +10,7 @@ from typing import Any
 
 from mas_cc.config import assert_secret_free
 
-from .composer import PromptInstance
+from .compiled import CompiledPrompt
 
 _LOG_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -23,7 +23,7 @@ def _fenced(content: str) -> str:
 
 
 def render_prompt_request_markdown(
-    instance: PromptInstance,
+    instance: CompiledPrompt,
     *,
     title: str = "Compiled LLM request",
     metadata: Mapping[str, Any] | None = None,
@@ -31,10 +31,13 @@ def render_prompt_request_markdown(
 ) -> str:
     """Render the final ordered messages verbatim in one Markdown document."""
 
+    family = getattr(instance, "prompt_family", None)
+    version = instance.prompt_version
+    identity = f"{family}@{version}" if family is not None else str(version)
     lines = [
         f"# {title}",
         "",
-        f"- Prompt version: `{instance.prompt_version}`",
+        f"- Prompt version: `{identity}`",
         f"- Messages sent: `{len(instance.messages)}`",
         f"- Token counter: `{instance.tokenizer_name or 'unavailable'}`",
         f"- Estimated block tokens: `{instance.total_tokens if instance.total_tokens is not None else 'unavailable'}`",
@@ -105,7 +108,7 @@ class PromptMarkdownLogger:
 
     def log(
         self,
-        instance: PromptInstance,
+        instance: CompiledPrompt,
         interaction_id: str,
         *,
         title: str = "Compiled LLM request",

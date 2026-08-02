@@ -1,0 +1,64 @@
+{
+  "artifacts": [
+    {
+      "bytes": 9363,
+      "path": "config_schema.json",
+      "sha256": "42137741fca12cd305f078f5626ca2d0458a9c23ce9b54e7fc147199f7d44a6b"
+    },
+    {
+      "bytes": 1203,
+      "path": "input_config.yaml",
+      "sha256": "9211049e87f6762e605e7f9bb4af0c20487bc661a71fe72acc4e53f1686c85df"
+    },
+    {
+      "bytes": 995,
+      "path": "prompt_schema_v2.json",
+      "sha256": "12d057e9baf84d9bbc2bdb32ca2d5930462911d8e155790a5a4f578750d601df"
+    },
+    {
+      "bytes": 1625,
+      "path": "report.md",
+      "sha256": "88c50d30e0a2c0400b72b54a1b0e4d00f6b1717c13299972b5a8c0774042aec3"
+    },
+    {
+      "bytes": 2583,
+      "path": "resolved_config.yaml",
+      "sha256": "3d31a14ead13bae886b551e5507f5c68f77a95e800c33411b812833b720299a4"
+    },
+    {
+      "bytes": 879,
+      "path": "resolved_prompt_component.yaml",
+      "sha256": "c0966f286243c76d3ca416bd62415fe7e5478110b3d0576f5a9a2e511f88dda9"
+    },
+    {
+      "bytes": 270,
+      "path": "secret_scan.json",
+      "sha256": "61e7f5401b68f2bd8db1e798635e381627337c32c844937aad0cf12091993ddf"
+    },
+    {
+      "bytes": 991,
+      "path": "v1_to_v2_migration_examples.md",
+      "sha256": "66c56126bfa40fae644824cfce872ebaaa7c7a01a97c73abbe25549f87db3ca1"
+    },
+    {
+      "bytes": 423,
+      "path": "validation_examples.md",
+      "sha256": "dbab2d2d106a4f1d4ea80328803750656dc4286255ca6e0f6a4bc3abc64e6f3c"
+    }
+  ],
+  "checks": {
+    "deterministic_resolution": true,
+    "invalid_examples_rejected": true,
+    "prompt_schema_v2_exported": true,
+    "resolved_config_secret_free": true,
+    "resolved_prompt_manifest_exported": true,
+    "schema_version_supported": true,
+    "v1_migration_documented": true
+  },
+  "generated_at": "2026-08-02T14:57:18.425729Z",
+  "manifest_version": 1,
+  "mas_cc_version": "0.1.0",
+  "phase": 2,
+  "status": "pass",
+  "warnings": []
+}

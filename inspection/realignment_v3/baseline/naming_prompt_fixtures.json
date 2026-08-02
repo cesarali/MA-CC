@@ -1,0 +1,13 @@
+{
+  "source": "phase_06/selected_audit_traces.jsonl",
+  "prompt_family": "ashery_2025_v1",
+  "prompt_version": 1,
+  "fixtures": {
+    "empty_memory": {"interaction": 1, "visible_entries": 0},
+    "one_memory_item": {"interaction": 6, "visible_entries": 1},
+    "maximum_configured_memory": {"visible_entries": 3},
+    "presented_order_q_m": ["Q", "M"],
+    "presented_order_m_q": ["M", "Q"]
+  },
+  "parity_scope": "wire role and content; Version 3 provenance metadata is expected to change"
+}

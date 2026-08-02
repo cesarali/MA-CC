@@ -40,12 +40,25 @@ def config_schema() -> dict[str, Any]:
             "prompt": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": [
-                    "schema_version", "prompt_family", "prompt_version", "blocks",
-                    "response_contract",
+                "required": ["schema_version", "prompt_family", "prompt_version"],
+                "allOf": [
+                    {
+                        "if": {
+                            "properties": {"schema_version": {"const": 1}},
+                            "required": ["schema_version"],
+                        },
+                        "then": {"required": ["blocks", "response_contract"]},
+                    },
+                    {
+                        "if": {
+                            "properties": {"schema_version": {"const": 2}},
+                            "required": ["schema_version"],
+                        },
+                        "then": {"not": {"required": ["blocks"]}},
+                    },
                 ],
                 "properties": {
-                    "schema_version": {"const": 1},
+                    "schema_version": {"enum": [1, 2]},
                     "prompt_family": {"type": "string", "minLength": 1},
                     "prompt_version": {"type": "integer", "minimum": 1},
                     "blocks": {
@@ -58,6 +71,10 @@ def config_schema() -> dict[str, Any]:
                         "required": ["type"],
                         "properties": {"type": {"type": "string", "minLength": 1}},
                     },
+                    "message_mode": {
+                        "enum": ["per_block", "merge_consecutive_roles"]
+                    },
+                    "block_separator": {"type": "string"},
                     "options": options,
                 },
             },

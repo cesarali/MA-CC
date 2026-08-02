@@ -1,0 +1,65 @@
+schema_version: 1
+llm_provider:
+  component: ../components/llm_providers/mock.yaml
+  overrides:
+    request_concurrency: 2
+    temperature: 0.5
+    max_output_tokens: 6
+    options:
+      response: '{"value":"Q","reason":"seeded mock"}'
+      artificial_latency_seconds: 0.0
+      estimated_latency_seconds: 0.001
+      top_k: 10
+prompt:
+  component: ../components/prompts/naming_convention_v3.yaml
+game:
+  component: ../components/games/naming_convention.yaml
+  overrides:
+    population_size: 6
+    horizon: 12
+    options:
+      memory_size: 3
+      representative_memory_size: 1
+      selected_audit_interactions:
+        - 1
+        - 6
+        - 12
+execution:
+  schema_version: 1
+  seed: 1
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.01
+  max_cost_per_run: 0.01
+  max_provider_requests: 72
+  max_input_tokens: 100000
+  max_output_tokens: 1000
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+experiment:
+  schema_version: 1
+  name: naming-convention-phase-06-smoke-v3
+  description: Version 3 architecture smoke test for the Ashery 2025 repeated convention game; not a paper replication.
+  tags:
+    - smoke
+    - phase-06
+    - prompt-v3
+    - not-a-paper-replication

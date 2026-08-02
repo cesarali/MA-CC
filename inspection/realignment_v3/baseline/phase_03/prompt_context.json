@@ -1,0 +1,41 @@
+{
+  "current_interaction": {
+    "available_actions": [
+      "A",
+      "B"
+    ],
+    "interaction_number": 3,
+    "other_action_visible": false
+  },
+  "decision_instruction": "Select the action that you will play in this interaction.",
+  "game_rules": [
+    "Choose exactly one action on every interaction.",
+    "Both players receive a positive payoff when their actions match.",
+    "Both players receive a negative payoff when their actions differ.",
+    "The other player's current choice is not visible before you decide."
+  ],
+  "metadata": {
+    "fixture": "phase_03_inspection_v1"
+  },
+  "private_state": {
+    "available_actions": [
+      "A",
+      "B"
+    ],
+    "committed_action": null,
+    "cumulative_score": 50
+  },
+  "recent_memory": [
+    {
+      "other_action": "B",
+      "own_action": "A",
+      "payoff": -50
+    },
+    {
+      "other_action": "B",
+      "own_action": "B",
+      "payoff": 100
+    }
+  ],
+  "task_description": "Coordinate with another player by choosing one of the two available actions."
+}

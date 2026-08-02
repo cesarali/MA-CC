@@ -13,7 +13,7 @@ from mas_cc.llm_providers import (
     OfflinePricingSource,
     PricingQuote,
 )
-from mas_cc.prompts import PromptComposer, RegexTokenCounter, create_default_prompt_registry
+from mas_cc.prompts import RegexTokenCounter
 
 from .call_graph import GameCallPlan, LogicalCallSpec
 from .cost_estimation import estimate_cost
@@ -89,7 +89,7 @@ def static_game_preflight(
 
     if assumed_output_tokens < 1:
         raise ValueError("assumed_output_tokens must be positive")
-    composer = PromptComposer(create_default_prompt_registry(), RegexTokenCounter())
+    counter = RegexTokenCounter()
     quote = pricing_quote or OfflinePricingSource().fetch(
         provider_config.type, provider_config.model
     )
@@ -110,10 +110,18 @@ def static_game_preflight(
             raise ValueError(
                 f"decision stage {stage.name!r} must define representative and maximum prompts"
             )
-        representative_prompt = composer.compose(
-            prompt_config, stage.representative_prompt.context
-        )
-        maximum_prompt = composer.compose(prompt_config, stage.maximum_prompt.context)
+        lower_scenario = stage.lower_prompt or stage.representative_prompt
+        for scenario in (lower_scenario, stage.representative_prompt, stage.maximum_prompt):
+            if (
+                scenario.bound_prompt.family != prompt_config.prompt_family
+                or scenario.bound_prompt.version != prompt_config.prompt_version
+            ):
+                raise ValueError(
+                    f"decision stage {stage.name!r} prompt scenario does not match resolved prompt selection"
+                )
+        lower_prompt = lower_scenario.bound_prompt.compile(counter)
+        representative_prompt = stage.representative_prompt.bound_prompt.compile(counter)
+        maximum_prompt = stage.maximum_prompt.bound_prompt.compile(counter)
         representative_request = CompletionRequest(
             representative_prompt.messages,
             temperature=provider_config.temperature,
@@ -126,16 +134,23 @@ def static_game_preflight(
             max_output_tokens=provider_config.max_output_tokens,
             metadata={"game_type": plan.game_type, "decision_stage": stage.name},
         )
+        lower_request = CompletionRequest(
+            lower_prompt.messages,
+            temperature=provider_config.temperature,
+            max_output_tokens=provider_config.max_output_tokens,
+            metadata={"game_type": plan.game_type, "decision_stage": stage.name},
+        )
+        lower_input = estimate_input_tokens(lower_request)
         representative_input = estimate_input_tokens(representative_request)
         maximum_input = estimate_input_tokens(maximum_stage_request)
-        if maximum_input < representative_input:
+        if maximum_input < max(lower_input, representative_input):
             raise ValueError(
                 f"decision stage {stage.name!r} maximum prompt is smaller than its representative"
             )
-        lower_calls = stage.requests(plan.interactions.lower)
-        expected_calls = stage.requests(plan.interactions.expected)
-        maximum_calls = stage.requests(plan.interactions.maximum, include_retries=True)
-        lower_inputs += representative_input * lower_calls
+        lower_calls = stage.requests(plan.interactions.lower, scenario="lower")
+        expected_calls = stage.requests(plan.interactions.expected, scenario="expected")
+        maximum_calls = stage.requests(plan.interactions.maximum, scenario="maximum")
+        lower_inputs += lower_input * lower_calls
         expected_inputs += representative_input * expected_calls
         maximum_inputs += maximum_input * maximum_calls
         lower_outputs += lower_calls
@@ -144,7 +159,7 @@ def static_game_preflight(
         lower_costs.append(
             estimate_cost(
                 pricing,
-                input_tokens_per_call=representative_input,
+                input_tokens_per_call=lower_input,
                 output_tokens_per_call=1,
                 logical_calls=lower_calls,
             )
@@ -168,13 +183,24 @@ def static_game_preflight(
         scenarios.append(
             {
                 "decision_stage": stage.name,
+                "lower": {
+                    "name": lower_scenario.name,
+                    "definition_hash": lower_prompt.definition_hash,
+                    "instance_hash": lower_prompt.instance_hash,
+                    "input_tokens_per_request": lower_input,
+                    "base_requests": lower_calls,
+                },
                 "representative": {
                     "name": stage.representative_prompt.name,
+                    "definition_hash": representative_prompt.definition_hash,
+                    "instance_hash": representative_prompt.instance_hash,
                     "input_tokens_per_request": representative_input,
                     "base_requests": expected_calls,
                 },
                 "maximum": {
                     "name": stage.maximum_prompt.name,
+                    "definition_hash": maximum_prompt.definition_hash,
+                    "instance_hash": maximum_prompt.instance_hash,
                     "input_tokens_per_request": maximum_input,
                     "requests_including_retries": maximum_calls,
                 },

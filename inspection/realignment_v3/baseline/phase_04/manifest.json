@@ -1,0 +1,52 @@
+{
+  "artifacts": [
+    {
+      "bytes": 420,
+      "path": "normalized_response.json",
+      "sha256": "943ac9d77d205348b82b2245b54bd406ccd485ecf2e98ff634f32093fe85d7ae"
+    },
+    {
+      "bytes": 2351,
+      "path": "preflight_estimate.json",
+      "sha256": "9adea3359d8edc633f6eed28a47555da49c0a9d605f993e01da2551065de063a"
+    },
+    {
+      "bytes": 276,
+      "path": "raw_response_redacted.json",
+      "sha256": "6d4033904e089dd48240f5ae837a285515b5325164ffa74c73c7d6e8de690290"
+    },
+    {
+      "bytes": 941,
+      "path": "report.md",
+      "sha256": "0e0d13e4265ecb8af275e687fdff60e55dae9213b7d181c5dc276805c0a531ef"
+    },
+    {
+      "bytes": 2890,
+      "path": "request.json",
+      "sha256": "147feb613246e29a89d957a1fb561a2990e01762c0dd3919ca3edbbd91047d39"
+    },
+    {
+      "bytes": 129,
+      "path": "timing.csv",
+      "sha256": "b6d5314f0c66748d096fe5e6ca096c6cf60c008e442e426cfb76eda36728229b"
+    },
+    {
+      "bytes": 102,
+      "path": "usage.json",
+      "sha256": "9a6c8cfb35054bc5d4c3c0f2b1e0451a133a8124dbff4f7ef4f530d7ef9f1500"
+    }
+  ],
+  "checks": {
+    "artifacts_are_secret_free": true,
+    "normalized_response_received": true,
+    "provider_identity_matches": true,
+    "request_is_normalized": true,
+    "static_preflight_completed": true
+  },
+  "generated_at": "2026-08-02T14:02:14.345928Z",
+  "manifest_version": 1,
+  "mas_cc_version": "0.1.0",
+  "phase": 4,
+  "status": "pass",
+  "warnings": []
+}

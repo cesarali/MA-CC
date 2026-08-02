@@ -1,0 +1,47 @@
+[
+  {
+    "content": "Choose the option that best matches your private signal.",
+    "name": "task",
+    "order": 1,
+    "role": "system",
+    "title": "Task",
+    "token_count": 10,
+    "version": 1
+  },
+  {
+    "content": "[\"Choose exactly one available option.\", \"Do not reveal hidden metadata.\"]",
+    "name": "rules",
+    "order": 2,
+    "role": "system",
+    "title": "Rules",
+    "token_count": 19,
+    "version": 1
+  },
+  {
+    "content": "{\"available_actions\": [\"A\", \"B\"], \"committed_action\": null, \"cumulative_score\": 50}",
+    "name": "private_state",
+    "order": 3,
+    "role": "system",
+    "title": "Private state",
+    "token_count": 27,
+    "version": 1
+  },
+  {
+    "content": "[{\"other_action\": \"B\", \"own_action\": \"A\", \"payoff\": -50}, {\"other_action\": \"B\", \"own_action\": \"B\", \"payoff\": 100}]",
+    "name": "recent_memory",
+    "order": 4,
+    "role": "system",
+    "title": "Recent memory",
+    "token_count": 50,
+    "version": 1
+  },
+  {
+    "content": "{\"available_actions\": [\"A\", \"B\"], \"interaction_number\": 3, \"other_action_visible\": false}",
+    "name": "current_interaction",
+    "order": 5,
+    "role": "system",
+    "title": "Current interaction",
+    "token_count": 27,
+    "version": 1
+  }
+]

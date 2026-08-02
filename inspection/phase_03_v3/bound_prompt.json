@@ -1,0 +1,117 @@
+{
+  "block_separator": "\n\n",
+  "blocks": [
+    {
+      "binding": "fixed",
+      "fixed_value": "Choose the option that best matches your private signal.",
+      "implementation": "mas_cc.prompts.plugins.basic_choice_v3.BasicChoiceBlock",
+      "is_bound": true,
+      "name": "task",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Task",
+      "value": "Choose the option that best matches your private signal.",
+      "value_state": "bound",
+      "version": 1
+    },
+    {
+      "binding": "fixed",
+      "fixed_value": [
+        "Choose exactly one available option.",
+        "Do not reveal hidden metadata."
+      ],
+      "implementation": "mas_cc.prompts.plugins.basic_choice_v3.BasicChoiceBlock",
+      "is_bound": true,
+      "name": "rules",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Rules",
+      "value": [
+        "Choose exactly one available option.",
+        "Do not reveal hidden metadata."
+      ],
+      "value_state": "bound",
+      "version": 1
+    },
+    {
+      "binding": "dynamic",
+      "implementation": "mas_cc.prompts.plugins.basic_choice_v3.BasicChoiceBlock",
+      "is_bound": true,
+      "name": "private_state",
+      "required": true,
+      "role": "system",
+      "sensitive": true,
+      "title": "Private state",
+      "value": "<redacted>",
+      "value_state": "bound",
+      "version": 1
+    },
+    {
+      "binding": "dynamic",
+      "implementation": "mas_cc.prompts.plugins.basic_choice_v3.BasicChoiceBlock",
+      "is_bound": true,
+      "name": "recent_memory",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Recent memory",
+      "value": [
+        {
+          "other_action": "B",
+          "own_action": "A",
+          "payoff": -50
+        },
+        {
+          "other_action": "B",
+          "own_action": "B",
+          "payoff": 100
+        }
+      ],
+      "value_state": "bound",
+      "version": 1
+    },
+    {
+      "binding": "dynamic",
+      "implementation": "mas_cc.prompts.plugins.basic_choice_v3.BasicChoiceBlock",
+      "is_bound": true,
+      "name": "current_interaction",
+      "required": true,
+      "role": "system",
+      "sensitive": false,
+      "title": "Current interaction",
+      "value": {
+        "available_actions": [
+          "A",
+          "B"
+        ],
+        "interaction_number": 3,
+        "other_action_visible": false
+      },
+      "value_state": "bound",
+      "version": 1
+    }
+  ],
+  "concrete_prompt_type": "basic_choice",
+  "definition_hash": "e7196f7ea821ca3823211ae87a9268b3004730dfce0bdcc25f8a13a1801f7625",
+  "family": "basic_choice",
+  "implementation": "mas_cc.prompts.plugins.basic_choice_v3.BasicChoiceFullPrompt",
+  "instance_hash": "3e7f63fb48e977392ba66097e53fc6d9d272256f24933d58f9c3a72efad941b0",
+  "message_mode": "merge_consecutive_roles",
+  "response_contract": {
+    "allowed_values": [
+      "A",
+      "B"
+    ],
+    "instruction_messages": [
+      {
+        "content": "Return exactly one of these values: A, B. Return only the value, with no explanation or punctuation.",
+        "role": "user"
+      }
+    ],
+    "type": "choice_only"
+  },
+  "schema_version": 1,
+  "version": 1
+}

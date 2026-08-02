@@ -1,0 +1,238 @@
+{
+  "agents": [
+    {
+      "agent_id": "agent-000",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 300,
+      "private_history": [
+        {
+          "agent_local_interaction_index": 1,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 2,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 3,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        }
+      ]
+    },
+    {
+      "agent_id": "agent-001",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 600,
+      "private_history": [
+        {
+          "agent_local_interaction_index": 1,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 2,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 3,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 4,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 5,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 6,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        }
+      ]
+    },
+    {
+      "agent_id": "agent-002",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 300,
+      "private_history": [
+        {
+          "agent_local_interaction_index": 1,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 2,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 3,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        }
+      ]
+    },
+    {
+      "agent_id": "agent-003",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 500,
+      "private_history": [
+        {
+          "agent_local_interaction_index": 1,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 2,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 3,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 4,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 5,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        }
+      ]
+    },
+    {
+      "agent_id": "agent-004",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 300,
+      "private_history": [
+        {
+          "agent_local_interaction_index": 1,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 2,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 3,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        }
+      ]
+    },
+    {
+      "agent_id": "agent-005",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 400,
+      "private_history": [
+        {
+          "agent_local_interaction_index": 1,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 2,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 3,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        },
+        {
+          "agent_local_interaction_index": 4,
+          "own_action": "Q",
+          "partner_action": "Q",
+          "payoff": 100,
+          "success": true
+        }
+      ]
+    }
+  ]
+}

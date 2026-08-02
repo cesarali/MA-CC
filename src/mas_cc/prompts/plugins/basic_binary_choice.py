@@ -8,7 +8,7 @@ from typing import Any
 
 from mas_cc.core import MessageRole
 
-from ..blocks import PromptBlock
+from ..compatibility import LegacyPromptBlock as PromptBlock
 from ..context import PromptContext, _thaw
 from ..contracts import ResponseContract
 from ..registry import PromptDefinition

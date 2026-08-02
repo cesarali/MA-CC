@@ -1,0 +1,64 @@
+{
+  "agents": [
+    {
+      "agent_id": "agent-000",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 0,
+      "private_history": []
+    },
+    {
+      "agent_id": "agent-001",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 0,
+      "private_history": []
+    },
+    {
+      "agent_id": "agent-002",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 0,
+      "private_history": []
+    },
+    {
+      "agent_id": "agent-003",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 0,
+      "private_history": []
+    },
+    {
+      "agent_id": "agent-004",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 0,
+      "private_history": []
+    },
+    {
+      "agent_id": "agent-005",
+      "available_actions": [
+        "Q",
+        "M"
+      ],
+      "committed_action": null,
+      "lifetime_score": 0,
+      "private_history": []
+    }
+  ]
+}

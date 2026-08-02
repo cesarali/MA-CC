@@ -1,0 +1,13 @@
+interaction_index,population_round_project_convention,agent_i,agent_j,action_i,action_j,success,payoff,rolling_window_interactions,rolling_coordination_rate,rolling_share_Q,rolling_share_M
+1,0.16666666666666666,agent-003,agent-001,Q,Q,True,100,1,1.0,1.0,0.0
+2,0.3333333333333333,agent-001,agent-000,Q,Q,True,100,2,1.0,1.0,0.0
+3,0.5,agent-001,agent-005,Q,Q,True,100,3,1.0,1.0,0.0
+4,0.6666666666666666,agent-004,agent-005,Q,Q,True,100,4,1.0,1.0,0.0
+5,0.8333333333333334,agent-005,agent-001,Q,Q,True,100,5,1.0,1.0,0.0
+6,1.0,agent-000,agent-003,Q,Q,True,100,6,1.0,1.0,0.0
+7,1.1666666666666667,agent-004,agent-002,Q,Q,True,100,6,1.0,1.0,0.0
+8,1.3333333333333333,agent-003,agent-001,Q,Q,True,100,6,1.0,1.0,0.0
+9,1.5,agent-000,agent-003,Q,Q,True,100,6,1.0,1.0,0.0
+10,1.6666666666666667,agent-001,agent-005,Q,Q,True,100,6,1.0,1.0,0.0
+11,1.8333333333333333,agent-004,agent-002,Q,Q,True,100,6,1.0,1.0,0.0
+12,2.0,agent-002,agent-003,Q,Q,True,100,6,1.0,1.0,0.0

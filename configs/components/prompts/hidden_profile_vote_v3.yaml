@@ -1,0 +1,10 @@
+schema_version: 2
+prompt_family: hidden_profile_vote
+prompt_version: 2
+message_mode: merge_consecutive_roles
+block_separator: "\n\n"
+response_contract:
+  type: json_vote
+  allowed_values:
+    - placeholder-a
+    - placeholder-b

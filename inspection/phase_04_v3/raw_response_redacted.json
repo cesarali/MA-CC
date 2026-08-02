@@ -1,0 +1,17 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "message": {
+        "content": "A"
+      }
+    }
+  ],
+  "id": "mock-b53c8ed6f9aff6e7",
+  "model": "deterministic-v1",
+  "usage": {
+    "completion_tokens": 1,
+    "prompt_tokens": 155,
+    "total_tokens": 156
+  }
+}

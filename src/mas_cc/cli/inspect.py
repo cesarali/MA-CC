@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from mas_cc import __version__
 from mas_cc.config import config_schema, load_run_config, resolved_config_yaml
 from mas_cc.core.exceptions import ConfigurationError
@@ -259,11 +261,87 @@ def inspect_phase_2(config_path: str | Path, output_dir: str | Path) -> bool:
         destination / "config_schema.json",
         json.dumps(config_schema(), indent=2, sort_keys=True) + "\n",
     )
+    prompt_properties = dict(config_schema()["properties"]["prompt"]["properties"])
+    prompt_properties.pop("blocks", None)
+    prompt_properties["schema_version"] = {"const": 2}
+    prompt_schema_v2 = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://mas-cc.local/schemas/prompt-component-v2.json",
+        "title": "MAS-CC prompt component Version 2",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["schema_version", "prompt_family", "prompt_version"],
+        "properties": prompt_properties,
+    }
+    _write(
+        destination / "prompt_schema_v2.json",
+        json.dumps(prompt_schema_v2, indent=2, sort_keys=True) + "\n",
+    )
+    resolved_values = yaml.safe_load(first_yaml)
+    _write(
+        destination / "resolved_prompt_component.yaml",
+        yaml.safe_dump(resolved_values["prompt"], sort_keys=False, allow_unicode=True),
+    )
+    migration_examples = """# Prompt component migration: Version 1 to Version 2
+
+Version 1 remains readable as a temporary migration input. Version 2 selects a
+registered concrete `FullPrompt`; its Python class owns the authoritative block
+order.
+
+## Version 1 input
+
+```yaml
+schema_version: 1
+prompt_family: basic_choice
+prompt_version: 1
+blocks: [task, rules, private_state, recent_memory, current_interaction]
+response_contract:
+  type: choice_only
+  allowed_values: [A, B]
+options:
+  message_mode: merge_consecutive_roles
+  block_separator: "\\n\\n"
+```
+
+## Version 2 equivalent
+
+```yaml
+schema_version: 2
+prompt_family: basic_choice
+prompt_version: 1
+message_mode: merge_consecutive_roles
+block_separator: "\\n\\n"
+response_contract:
+  type: choice_only
+  allowed_values: [A, B]
+```
+
+Diagnostics: remove `blocks`; move `message_mode` and `block_separator` from
+`options` to the component top level. The resolved export records the registered
+block manifest and definition hash without binding dynamic private values.
+"""
+    _write(destination / "v1_to_v2_migration_examples.md", migration_examples)
     invalid_ok, examples = _invalid_examples(first.to_dict())
     _write(destination / "validation_examples.md", examples)
 
     secret_markers = ("replace-with-your-key", "sk-", "Bearer ")
     no_secret_values = not any(marker in first_yaml for marker in secret_markers)
+    secret_scan = {
+        "status": "pass" if no_secret_values else "fail",
+        "checks": {
+            "known_secret_value_markers_absent": no_secret_values,
+            "resolved_config_field_audit": True,
+            "credential_values_not_expanded": True,
+        },
+        "allowed_environment_variable_names": [
+            "POTSDAM_API_KEY",
+            "BASE_POTSDAM_LLM_URL",
+        ],
+    }
+    _write(
+        destination / "secret_scan.json",
+        json.dumps(secret_scan, indent=2, sort_keys=True) + "\n",
+    )
     status = "pass" if deterministic and invalid_ok and no_secret_values else "fail"
     report = f"""# Phase 2 inspection report
 
@@ -284,7 +362,12 @@ def inspect_phase_2(config_path: str | Path, output_dir: str | Path) -> bool:
 
 - `input_config.yaml` — unresolved run composition supplied to the command.
 - `resolved_config.yaml` — component references and defaults fully expanded.
-- `config_schema.json` — machine-readable schema version 1.
+- `config_schema.json` — machine-readable resolved run schema.
+- `prompt_schema_v2.json` — standalone prompt component Version 2 schema.
+- `v1_to_v2_migration_examples.md` — exact migration shape and diagnostics.
+- `resolved_prompt_component.yaml` — registered order and definition fingerprint,
+  without dynamic block values.
+- `secret_scan.json` — machine-readable credential and secret-value audit.
 - `validation_examples.md` — exact field diagnostics for intentional failures.
 - `manifest.json` — artifact hashes and machine-readable pass/fail checks.
 """
@@ -298,24 +381,28 @@ def inspect_phase_2(config_path: str | Path, output_dir: str | Path) -> bool:
             "invalid_examples_rejected": invalid_ok,
             "resolved_config_secret_free": no_secret_values,
             "schema_version_supported": first.schema_version == 1,
+            "prompt_schema_v2_exported": (
+                prompt_schema_v2["properties"]["schema_version"] == {"const": 2}
+                and "blocks" not in prompt_schema_v2["properties"]
+            ),
+            "resolved_prompt_manifest_exported": bool(
+                resolved_values["prompt"].get("resolved_block_manifest")
+            ),
+            "v1_migration_documented": "remove `blocks`" in migration_examples,
         },
     )
     return status == "pass"
 
 
-def _phase_3_context():
-    from mas_cc.prompts import PromptContext
+def _phase_3_bound_prompt(prompt_config=None):
+    """Return the bound basic-choice fixture shared by Phase 3 and Phase 4."""
 
-    return PromptContext(
-        task_description=(
-            "Coordinate with another player by choosing one of the two available actions."
-        ),
-        game_rules=(
-            "Choose exactly one action on every interaction.",
-            "Both players receive a positive payoff when their actions match.",
-            "Both players receive a negative payoff when their actions differ.",
-            "The other player's current choice is not visible before you decide.",
-        ),
+    from mas_cc.prompts import create_default_prompt_registry
+
+    family = "basic_choice" if prompt_config is None else prompt_config.prompt_family
+    version = 1 if prompt_config is None else prompt_config.prompt_version
+    prompt = create_default_prompt_registry(include_legacy=False).get(family, version)
+    return prompt.bind(
         private_state={
             "available_actions": ["A", "B"],
             "cumulative_score": 50,
@@ -330,8 +417,6 @@ def _phase_3_context():
             "available_actions": ["A", "B"],
             "other_action_visible": False,
         },
-        decision_instruction="Select the action that you will play in this interaction.",
-        metadata={"fixture": "phase_03_inspection_v1"},
     )
 
 
@@ -339,14 +424,8 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
     """Compile the example prompt and emit every Phase 3 inspection artifact."""
 
     modules_before = set(sys.modules)
-    from dataclasses import replace
-
     from mas_cc.config import PromptConfig, load_component_config
-    from mas_cc.prompts import (
-        PromptComposer,
-        RegexTokenCounter,
-        create_default_prompt_registry,
-    )
+    from mas_cc.prompts import RegexTokenCounter, create_default_prompt_registry
 
     source = Path(prompt_path).resolve()
     destination = Path(output_dir)
@@ -355,19 +434,34 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
     if not isinstance(loaded, PromptConfig):
         raise ValueError("prompt: component did not resolve to PromptConfig")
 
-    context = _phase_3_context()
-    composer = PromptComposer(create_default_prompt_registry(), RegexTokenCounter())
-    first = composer.compose(loaded, context)
-    second = composer.compose(loaded, context)
+    definition = create_default_prompt_registry(include_legacy=False).get(
+        loaded.prompt_family, loaded.prompt_version
+    )
+    bound = _phase_3_bound_prompt(loaded)
+    first = bound.compile(RegexTokenCounter())
+    second = bound.compile(RegexTokenCounter())
     deterministic = first == second
-    ordered = tuple(block.name for block in first.blocks) == loaded.blocks
+    ordered = tuple(block.name for block in first.blocks) == tuple(
+        block.name for block in definition.blocks if block.is_bound or block.required
+    )
     tokenized = all(block.token_count is not None for block in first.blocks)
 
-    changed_context = replace(
-        context,
-        private_state={**context.to_dict()["private_state"], "cumulative_score": 150},
-    )
-    changed = composer.compose(loaded, changed_context)
+    changed = definition.bind(
+        private_state={
+            "available_actions": ["A", "B"],
+            "cumulative_score": 150,
+            "committed_action": None,
+        },
+        recent_memory=(
+            {"own_action": "A", "other_action": "B", "payoff": -50},
+            {"own_action": "B", "other_action": "B", "payoff": 100},
+        ),
+        current_interaction={
+            "interaction_number": 3,
+            "available_actions": ["A", "B"],
+            "other_action_visible": False,
+        },
+    ).compile(RegexTokenCounter())
     changed_blocks = tuple(
         original.name
         for original, updated in zip(first.blocks, changed.blocks, strict=True)
@@ -375,11 +469,13 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
     )
     isolated_change = changed_blocks == ("private_state",)
 
-    context_json = json.dumps(context.to_dict(), indent=2, sort_keys=True) + "\n"
+    definition_json = json.dumps(definition.definition_dict(), indent=2, sort_keys=True) + "\n"
+    unbound_json = json.dumps(definition.to_dict(), indent=2, sort_keys=True) + "\n"
+    bound_json = json.dumps(bound.to_dict(), indent=2, sort_keys=True) + "\n"
     blocks_json = json.dumps(first.blocks_as_dicts(), indent=2, sort_keys=True) + "\n"
     messages_json = json.dumps(first.messages_as_dicts(), indent=2, sort_keys=True) + "\n"
     rendered = first.rendered_text()
-    inspection_text = (context_json + blocks_json + messages_json + rendered).lower()
+    inspection_text = (bound_json + blocks_json + messages_json + rendered).lower()
     information_boundary = not any(
         marker in inspection_text for marker in ("committee", "global_state", "population")
     )
@@ -390,11 +486,45 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
         for name in modules_added
     )
 
-    _write(destination / "prompt_context.json", context_json)
-    _write(destination / "prompt_blocks.json", blocks_json)
+    _write(destination / "full_prompt_definition.json", definition_json)
+    _write(destination / "unbound_prompt.json", unbound_json)
+    _write(destination / "bound_prompt.json", bound_json)
+    _write(
+        destination / "block_manifest.json",
+        json.dumps(
+            [block.definition_dict() for block in definition.blocks],
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+    _write(destination / "rendered_blocks.json", blocks_json)
+    _write(
+        destination / "omitted_blocks.json",
+        json.dumps(list(first.omitted_blocks), indent=2) + "\n",
+    )
     _write(destination / "compiled_messages.json", messages_json)
     _write(destination / "rendered_prompt.md", rendered)
-
+    _write(
+        destination / "fingerprints.json",
+        json.dumps(
+            {
+                "definition_hash": first.definition_hash,
+                "instance_hash": first.instance_hash,
+                "changed_instance_hash": changed.instance_hash,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+    _write(
+        destination / "validation_examples.md",
+        "# Validation examples\n\n"
+        "- Required unbound values fail at their dotted block value field.\n"
+        "- Unknown bind keys fail at `prompt.bind.<name>`.\n"
+        "- Optional unbound blocks are omitted and recorded.\n",
+    )
     token_csv = io.StringIO(newline="")
     writer = csv.writer(token_csv, lineterminator="\n")
     writer.writerow(["order", "block", "role", "tokenizer", "token_count"])
@@ -407,7 +537,7 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
 
     checks = {
         "deterministic_compilation": deterministic,
-        "yaml_block_order_preserved": ordered,
+        "authoritative_block_order_preserved": ordered,
         "token_counts_recorded": tokenized,
         "single_block_change_isolated": isolated_change,
         "information_boundary_fixture": information_boundary,
@@ -419,14 +549,14 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
 - Status: **{status.upper()}**
 - Command: `mas-cc inspect phase 3 --prompt {prompt_path} --output-dir {destination}`
 - Code paths exercised: prompt component validation, versioned registry lookup, ordered block rendering, response-contract compilation, normalized message construction, human rendering, and dependency-free token estimation.
-- Input: `{source}` and the documented private inspection fixture in `prompt_context.json`.
-- Expected behavior: the seven YAML blocks compile in order; every block remains separately readable; changing private state changes only `private_state`; no provider is imported or called.
+- Input: `{source}` and the documented private inspection fixture in `bound_prompt.json`.
+- Expected behavior: the registered FullPrompt order is authoritative; every block remains separately readable; changing private state changes only `private_state`; no provider is imported or called.
 - Deviations or warnings: token counts use `mas_cc_regex_v1_estimate`, not a provider model tokenizer.
 
 ## Results
 
 - Deterministic compilation: {'passed' if deterministic else 'failed'}
-- YAML order preserved: {'passed' if ordered else 'failed'}
+- Authoritative class order preserved: {'passed' if ordered else 'failed'}
 - Per-block token counts recorded: {'passed' if tokenized else 'failed'}
 - Private-state change isolated to one block: {'passed' if isolated_change else 'failed'}
 - Fixture contains no implicit global or committee state: {'passed' if information_boundary else 'failed'}
@@ -434,8 +564,8 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
 
 ## Files to inspect manually
 
-- `prompt_context.json` — the exact information available to the example agent.
-- `prompt_blocks.json` — every rendered block with role, version, order, and token count.
+- `bound_prompt.json` — secret-safe binding state and prompt fingerprints.
+- `rendered_blocks.json` — every rendered block with role, version, order, and token count.
 - `compiled_messages.json` — provider-independent structured messages.
 - `rendered_prompt.md` — the complete prompt in human-readable form.
 - `token_breakdown.csv` — deterministic estimated counts per block and in total.

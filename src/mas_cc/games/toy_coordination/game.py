@@ -12,9 +12,10 @@ from mas_cc.planning import (
     DecisionStagePlan,
     GameCallPlan,
     InteractionCount,
-    PromptContextScenario,
+    PromptScenario,
 )
-from mas_cc.prompts import PromptContext
+
+from .prompts import ToyCoordinationFullPrompt, bind_toy_prompt
 
 from ..protocols import (
     Action,
@@ -107,31 +108,16 @@ class ToyCoordinationGame:
             for agent_id in participants
         )
 
-    def _prompt_context(
+    def _bound_prompt(
         self, state: GameState, observation: Observation, config: GameConfig
-    ) -> PromptContext:
+    ) -> ToyCoordinationFullPrompt:
         agent = state.agent(observation.agent_id)
-        return PromptContext(
-            task_description="Coordinate with the other selected agent by choosing the same action.",
-            game_rules=(
-                "Choose exactly one action: A or B.",
-                "Both selected agents decide without seeing the other's current action.",
-                "Each selected agent receives 1 point if the two actions match and 0 otherwise.",
-                f"The game ends after {config.horizon} interactions.",
-            ),
-            private_state={
-                "agent_id": str(agent.agent_id),
-                "score": agent.score,
-                "available_actions": list(self._actions(config)),
-            },
-            recent_memory=agent.memory,
-            current_interaction=observation.visible_state,
-            decision_instruction="Choose your action for this interaction now.",
-            metadata={
-                "game_type": self.spec.game_type,
-                "game_version": self.spec.version,
-                "interaction_id": str(observation.interaction_id),
-            },
+        return bind_toy_prompt(
+            horizon=config.horizon,
+            agent_id=str(agent.agent_id),
+            score=agent.score,
+            memory=agent.memory,
+            interaction=observation.visible_state,
         )
 
     def build_decision_requests(
@@ -144,7 +130,7 @@ class ToyCoordinationGame:
                 interaction_id=observation.interaction_id,
                 stage="simultaneous_choice",
                 observation=observation,
-                prompt_context=self._prompt_context(state, observation, config),
+                prompt=self._bound_prompt(state, observation, config),
                 provider_required=True,
                 retry_bound=retry_bound,
             )
@@ -251,7 +237,7 @@ class ToyCoordinationGame:
                 "counterpart_actions_visible": False,
             },
         )
-        representative = self._prompt_context(
+        representative = self._bound_prompt(
             representative_state, representative_observation, config
         )
 
@@ -284,7 +270,7 @@ class ToyCoordinationGame:
                 "counterpart_actions_visible": False,
             },
         )
-        maximum = self._prompt_context(maximum_state, maximum_observation, config)
+        maximum = self._bound_prompt(maximum_state, maximum_observation, config)
         retry_bound = int(config.options.get("decision_retry_bound", 0))
         return GameCallPlan(
             game_type=self.spec.game_type,
@@ -300,18 +286,27 @@ class ToyCoordinationGame:
                     name="simultaneous_choice",
                     requests_per_interaction=2,
                     retry_bound=retry_bound,
-                    representative_prompt=PromptContextScenario(
+                    lower_prompt=PromptScenario(
                         "first_interaction",
                         representative,
                         ("No interaction memory has accumulated.",),
                     ),
-                    maximum_prompt=PromptContextScenario(
+                    representative_prompt=PromptScenario(
+                        "first_interaction",
+                        representative,
+                        ("No interaction memory has accumulated.",),
+                    ),
+                    maximum_prompt=PromptScenario(
                         "final_interaction_full_memory",
                         maximum,
                         (
                             "Every prior interaction is retained in bounded game memory.",
                             "All memory entries use the longest action/payoff fixture used by this game.",
                         ),
+                    ),
+                    prompt_scenarios=(
+                        PromptScenario("first_interaction", representative),
+                        PromptScenario("final_interaction_full_memory", maximum),
                     ),
                     assumptions=("Both selected agents require one independent decision.",),
                 ),

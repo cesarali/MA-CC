@@ -59,7 +59,7 @@ class PromptInstance:
         return [message.to_dict() for message in self.messages]
 
     def blocks_as_dicts(self) -> list[dict[str, object]]:
-        return [block.to_dict(order=index) for index, block in enumerate(self.blocks, start=1)]
+        return [replace(block, order=index).to_dict() for index, block in enumerate(self.blocks, start=1)]
 
     def rendered_text(self) -> str:
         lines = [
@@ -93,7 +93,7 @@ class PromptComposer:
         self._token_counter = token_counter
 
     def compose(self, config: PromptConfig, context: PromptContext) -> PromptInstance:
-        definition = self._registry.get(config.prompt_family, config.prompt_version)
+        definition = self._registry.get_legacy(config.prompt_family, config.prompt_version)
         response_contract = ResponseContract.from_mapping(config.response_contract)
         names = tuple(config.blocks)
         if len(set(names)) != len(names):
@@ -110,6 +110,7 @@ class PromptComposer:
             except KeyError as exc:
                 raise ValueError(f"prompt.blocks[{index}]: unknown block {name!r}") from exc
             item = block.render(context, response_contract)
+            item = replace(item, order=index + 1)
             if self._token_counter is not None:
                 item = replace(item, token_count=self._token_counter.count_tokens(item.content))
             rendered.append(item)
