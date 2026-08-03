@@ -134,6 +134,13 @@ def config_schema() -> dict[str, Any]:
                     "options": options,
                 }
             ),
+            "control": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "mechanism": {"type": "string", "minLength": 1},
+                    "options": options,
+                }
+            ),
             "metrics": _simple_object(
                 {
                     "schema_version": {"const": 1},

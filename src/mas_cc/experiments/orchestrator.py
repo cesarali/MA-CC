@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from mas_cc.config import GridSpec, RunConfig, resolved_config_yaml
+from mas_cc.control import create_control
 from mas_cc.core.random import Seed
 from mas_cc.games import Game, create_game
 from mas_cc.games.naming_convention.runtime import run_naming_convention_game
@@ -283,9 +284,10 @@ async def _execute_episode(
             price_snapshot_hash=price_hash, metrics=metrics, to_round_view=to_round_view,
         )
         observer = _RoundTickingObserver(recorder, guard, progress, episode_label)
+        control = create_control(episode_config.control)
         try:
             result = await run_naming_convention_game(
-                game, episode_config, guarded_provider, observer=observer
+                game, episode_config, guarded_provider, observer=observer, control=control
             )
         except Exception as exc:
             recorder.event("run_failed", error_type=type(exc).__name__, error=str(exc))

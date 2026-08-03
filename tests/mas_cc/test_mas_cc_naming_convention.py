@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from mas_cc.config import load_run_config
+from mas_cc.control import ForcedActionControl
 from mas_cc.core import AgentId
 from mas_cc.games import Action, Game, create_game
 from mas_cc.games.naming_convention import (
@@ -285,6 +286,51 @@ def test_completion_order_does_not_change_simultaneous_transition():
         not decision.request.visible_memory
         for decision in first.interactions[0].decisions
     )
+
+
+def test_forced_control_skips_the_provider_and_is_audited():
+    config = _config(population_size=2, horizon=3)
+    control = ForcedActionControl(
+        agent_ids=frozenset({AgentId("agent-000")}), forced_value="Q", until_interaction=2,
+    )
+    provider = ScriptedProvider(
+        {
+            "agent-000": ('{"value":"M","reason":"free choice"}',),
+            "agent-001": ('{"value":"Q","reason":"match"}',) * 3,
+        }
+    )
+    game = create_game(config.game)
+    result = run_naming_convention_game_sync(game, config, provider, control=control)
+
+    # agent-000 is forced for interactions 1-2 (never calls the provider) and
+    # free on interaction 3 (exactly one real call).
+    assert provider.calls == {"agent-000": 1, "agent-001": 3}
+    assert len(result.interactions) == 3
+    for interaction in result.interactions[:2]:
+        forced_decision = next(
+            d for d in interaction.decisions if d.request.agent_id == AgentId("agent-000")
+        )
+        free_decision = next(
+            d for d in interaction.decisions if d.request.agent_id == AgentId("agent-001")
+        )
+        assert forced_decision.forced is True
+        assert forced_decision.action.value == "Q"
+        assert free_decision.forced is False
+        # A forced decision has no provider attempts, and to_dict() must not
+        # crash on that (regression guard for the empty-attempts branch).
+        forced_payload = forced_decision.to_dict()
+        assert forced_payload["validation"]["forced_decision"] is True
+        assert forced_payload["validation"]["attempts"] == []
+        assert forced_payload["parsed_action"] == "Q"
+
+    last_interaction = result.interactions[-1]
+    last_agent_000 = next(
+        d for d in last_interaction.decisions if d.request.agent_id == AgentId("agent-000")
+    )
+    assert last_agent_000.forced is False
+    assert last_agent_000.action.value == "M"
+
+    assert result.to_dict()["counters"]["forced_decisions"] == 2
 
 
 def test_call_plan_is_stage_retry_memory_and_provider_independent():

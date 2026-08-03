@@ -15,6 +15,7 @@ from .loader import (
 from .models import (
     AnalysisConfig,
     BudgetConfig,
+    ControlConfig,
     ExecutionConfig,
     ExperimentConfig,
     GameConfig,
@@ -33,6 +34,7 @@ __all__ = [
     "AnalysisConfig",
     "BudgetConfig",
     "ConfigLoader",
+    "ControlConfig",
     "ExecutionConfig",
     "ExperimentConfig",
     "GameConfig",

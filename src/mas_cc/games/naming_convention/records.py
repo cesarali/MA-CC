@@ -237,6 +237,35 @@ class ConventionDecisionOutcome:
         return sum(attempt.response.retries for attempt in self.attempts)
 
     def to_dict(self) -> dict[str, Any]:
+        if not self.attempts:
+            # A forced decision never called the provider - there is no
+            # completion request/response to report, only the outcome.
+            return {
+                "agent_id": str(self.request.agent_id),
+                "local_role": "Player 1",
+                "anonymous_partner_role": "Player 2",
+                "visible_memory": _thaw(self.request.visible_memory),
+                "visible_score": self.request.visible_score,
+                "local_round": self.request.local_round,
+                "presented_actions": list(self.request.presented_actions),
+                "prompt_contract": self.request.prompt.family,
+                "prompt_hash": self.prompt_hash,
+                "prompt_definition_hash": self.prompt_definition_hash,
+                "prompt_instance_hash": self.prompt_instance_hash,
+                "parsed_action": self.action.value,
+                "parsed_reason": self.parsed_reason,
+                "parser_mode": self.parser_mode,
+                "validation": {
+                    "valid": True,
+                    "logical_decisions": 1,
+                    "validation_attempts": 0,
+                    "validation_retries": 0,
+                    "provider_retries": 0,
+                    "forced_decision": self.forced,
+                    "permanent_failures": 0,
+                    "attempts": [],
+                },
+            }
         first = self.attempts[0]
         last = self.attempts[-1]
         return {
@@ -348,7 +377,11 @@ class ConventionGameResult:
                 "logical_decisions": self.logical_decisions,
                 "validation_attempts": self.validation_attempts,
                 "provider_retries": self.provider_retries,
-                "forced_decisions": 0,
+                "forced_decisions": sum(
+                    decision.forced
+                    for interaction in self.interactions
+                    for decision in interaction.decisions
+                ),
                 "permanent_failures": 0,
             },
         }

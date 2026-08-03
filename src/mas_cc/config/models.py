@@ -278,6 +278,31 @@ class AnalysisConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ControlConfig:
+    """Selection of a provider-independent intervention/control mechanism.
+
+    Mirrors ``GameConfig``'s ``type``/``options`` idiom: the shared schema
+    only names a mechanism and carries a free-form options mapping, so a
+    concrete ``Control`` implementation owns validating its own options
+    rather than every mechanism's fields living in this shared model.
+    """
+
+    schema_version: int = 1
+    mechanism: str = "none"
+    options: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "options", _freeze(self.options))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "mechanism": self.mechanism,
+            "options": _thaw(self.options),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class MetricsConfig:
     """Whether to compute the game's declared metrics, and what may reach Comet.
 
@@ -386,6 +411,7 @@ class RunConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    control: ControlConfig = field(default_factory=ControlConfig)
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
     pricing: PricingConfig = field(default_factory=PricingConfig)
@@ -410,6 +436,7 @@ class RunConfig:
             "logging": self.logging.to_dict(),
             "storage": self.storage.to_dict(),
             "analysis": self.analysis.to_dict(),
+            "control": self.control.to_dict(),
             "metrics": self.metrics.to_dict(),
             "experiment": self.experiment.to_dict(),
             "pricing": self.pricing.to_dict(),

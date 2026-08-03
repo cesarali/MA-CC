@@ -109,6 +109,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="disable tqdm progress bars; log one line per completed episode instead",
     )
 
+    analysis = commands.add_parser("analysis", help="offline analysis over completed run/grid output")
+    analysis_commands = analysis.add_subparsers(dest="analysis_command", required=True)
+    empowerment = analysis_commands.add_parser(
+        "empowerment",
+        help="estimate mutual information between a swept control condition and the outcome",
+    )
+    empowerment.add_argument(
+        "--grid-dir", type=Path, required=True,
+        help="a completed `mas-cc experiment run --config <grid-config>` output directory",
+    )
+    empowerment.add_argument(
+        "--output-dir", type=Path,
+        help="analysis destination (default: <grid-dir>/analysis)",
+    )
+    empowerment.add_argument(
+        "--condition-column",
+        help="dotted grid-axis path to treat as the condition (default: the grid's only swept axis)",
+    )
+    empowerment.add_argument("--horizons", nargs="+", type=int, default=[1])
+    empowerment.add_argument("--bootstrap-resamples", type=int, default=1000)
+    empowerment.add_argument("--null-permutations", type=int, default=1000)
+    empowerment.add_argument("--seed", type=int, default=1)
+
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
@@ -233,6 +256,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{result.output_dir}"
         )
         return 0 if result.failed == 0 else 1
+    if args.command == "analysis" and args.analysis_command == "empowerment":
+        from .analysis import run_analysis_empowerment_command
+
+        try:
+            summary = run_analysis_empowerment_command(
+                args.grid_dir, args.output_dir,
+                condition_column=args.condition_column, horizons=tuple(args.horizons),
+                bootstrap_resamples=args.bootstrap_resamples,
+                null_permutations=args.null_permutations, seed=args.seed,
+            )
+        except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
 

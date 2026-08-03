@@ -69,6 +69,7 @@ async def run_validated_decision(
     seed_for_attempt: Callable[[int], int],
     metadata_for_attempt: Callable[[int], Mapping[str, Any]],
     on_attempt: Callable[[ValidationAttempt], None] | None = None,
+    forced_action: "Action | None" = None,
 ) -> ValidatedDecision:
     """Ask, validate, retry up to `request.retry_bound`, and log every attempt.
 
@@ -79,7 +80,15 @@ async def run_validated_decision(
     A transport failure (the provider call itself raising) is not retried:
     it is reported through `on_attempt` and re-raised immediately. Only a
     response that fails the game's own validation is retried.
+
+    `forced_action`, when not `None`, short-circuits the loop entirely: no
+    `CompletionRequest` is built and `provider` is never called. This is the
+    one shared seam every game's runtime uses to let a `Control` (see
+    `mas_cc.control`) override a decision before the LLM is ever asked.
     """
+
+    if forced_action is not None:
+        return ValidatedDecision(action=forced_action, attempts=())
 
     attempts: list[ValidationAttempt] = []
     last_error = "unknown validation failure"

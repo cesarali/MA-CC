@@ -17,6 +17,7 @@ from .grid import GridSpec, parse_grid_axes
 from .models import (
     AnalysisConfig,
     BudgetConfig,
+    ControlConfig,
     ExecutionConfig,
     ExperimentConfig,
     GameConfig,
@@ -37,6 +38,7 @@ ConfigSection = (
     | LoggingConfig
     | StorageConfig
     | AnalysisConfig
+    | ControlConfig
     | ExperimentConfig
 )
 
@@ -56,7 +58,7 @@ _ENV_NAME_FIELDS = frozenset(
 _COMPONENT_SECTIONS = frozenset(
     {
         "llm_provider", "provider", "prompt", "game", "execution", "logging",
-        "storage", "analysis", "experiment",
+        "storage", "analysis", "control", "experiment",
     }
 )
 
@@ -618,6 +620,17 @@ def _parse_analysis(raw: Any, issues: list[ValidationIssue]) -> AnalysisConfig:
     )
 
 
+def _parse_control(raw: Any, issues: list[ValidationIssue]) -> ControlConfig:
+    path = "control"
+    values = _as_mapping(raw, path, issues)
+    _unknown_fields(values, {"schema_version", "mechanism", "options"}, path, issues)
+    return ControlConfig(
+        schema_version=_schema_version(values, path, issues),
+        mechanism=_string(values, "mechanism", path, issues, default="none", required=True) or "none",
+        options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
+    )
+
+
 def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
     path = "metrics"
     values = _as_mapping(raw, path, issues)
@@ -652,7 +665,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
     values = {str(key): value for key, value in raw.items()}
     allowed = {
         "schema_version", "llm_provider", "prompt", "game", "execution",
-        "logging", "storage", "analysis", "metrics", "experiment", "pricing", "budget",
+        "logging", "storage", "analysis", "control", "metrics", "experiment", "pricing", "budget",
     }
     _unknown_fields(values, allowed, "", issues)
     schema_version = _schema_version(values, "", issues)
@@ -670,6 +683,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         logging=_parse_logging(values.get("logging", {}), issues),
         storage=_parse_storage(values.get("storage", {}), issues),
         analysis=_parse_analysis(values.get("analysis", {}), issues),
+        control=_parse_control(values.get("control", {}), issues),
         metrics=_parse_metrics(values.get("metrics", {}), issues),
         experiment=_parse_experiment(values.get("experiment", {}), issues),
         pricing=_parse_pricing(values.get("pricing", {}), issues),
@@ -727,6 +741,7 @@ class ConfigLoader:
             "logging": _parse_logging,
             "storage": _parse_storage,
             "analysis": _parse_analysis,
+            "control": _parse_control,
             "experiment": _parse_experiment,
         }
         parser = parsers.get(component_type)

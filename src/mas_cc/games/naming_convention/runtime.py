@@ -8,7 +8,9 @@ import json
 from typing import Any
 
 from mas_cc.config import RunConfig
+from mas_cc.control import Control
 from mas_cc.core import Seed
+from mas_cc.games.protocols import Action
 from mas_cc.llm_providers import CompletionRequest, LLMProvider
 from mas_cc.prompts import CompiledPrompt, RegexTokenCounter, TokenCounter
 from mas_cc.runtime import DecisionLoopExhausted, ValidationAttempt, run_validated_decision
@@ -50,6 +52,7 @@ async def _execute_validated_decision(
     token_counter: TokenCounter,
     root_seed: Seed,
     observer: Any | None = None,
+    control: Control | None = None,
 ) -> ConventionDecisionOutcome:
     """Ask/validate/retry through the shared loop, then wrap the result in
     this game's own typed audit record."""
@@ -110,6 +113,23 @@ async def _execute_validated_decision(
             observation=logical.observation.to_dict(),
         )
 
+    forced_value = (
+        control.override(agent_id=logical.agent_id, interaction_index=state.turn + 1, state=state)
+        if control is not None
+        else None
+    )
+    forced_action = (
+        None
+        if forced_value is None
+        else Action(
+            logical.agent_id, forced_value, logical.stage,
+            {
+                "parsed_reason": None, "parser_mode": "forced",
+                "presented_actions": list(logical.presented_actions),
+            },
+        )
+    )
+
     try:
         decision = await run_validated_decision(
             game=game, state=state, request=logical, game_config=config.game,
@@ -119,6 +139,7 @@ async def _execute_validated_decision(
             seed_for_attempt=_seed_for_attempt,
             metadata_for_attempt=_metadata_for_attempt,
             on_attempt=_on_attempt,
+            forced_action=forced_action,
         )
     except DecisionLoopExhausted as exc:
         raise InvalidConventionResponse(str(exc)) from exc
@@ -143,17 +164,25 @@ async def _execute_validated_decision(
         )
         for attempt in decision.attempts
     )
-    final_request = decision.attempts[-1].request
+    # A forced decision never calls the provider, so there is no attempt to
+    # hash a request from; fall back to the already-computed prompt's own
+    # instance hash, which is still a stable per-agent identity.
+    prompt_hash = (
+        _prompt_hash(decision.attempts[-1].request)
+        if decision.attempts
+        else prompt.instance_hash
+    )
     return ConventionDecisionOutcome(
         request=logical,
         action=decision.action,
         parsed_reason=decision.action.metadata.get("parsed_reason"),
         parser_mode=str(decision.action.metadata["parser_mode"]),
-        prompt_hash=_prompt_hash(final_request),
+        prompt_hash=prompt_hash,
         prompt_definition_hash=prompt.definition_hash,
         prompt_instance_hash=prompt.instance_hash,
         compiled_prompt=prompt,
         attempts=attempts,
+        forced=forced_action is not None,
     )
 
 
@@ -164,6 +193,7 @@ async def run_naming_convention_game(
     *,
     token_counter: TokenCounter | None = None,
     observer: Any | None = None,
+    control: Control | None = None,
 ) -> ConventionGameResult:
     """Run sequential pairs with a two-request concurrency barrier per pair."""
 
@@ -210,10 +240,12 @@ async def run_naming_convention_game(
         # transition occurs until both validated decisions cross this barrier.
         decision_1, decision_2 = await asyncio.gather(
             _execute_validated_decision(
-                game, requests[0], state, config, provider, selected_counter, root_seed, observer
+                game, requests[0], state, config, provider, selected_counter, root_seed,
+                observer, control,
             ),
             _execute_validated_decision(
-                game, requests[1], state, config, provider, selected_counter, root_seed, observer
+                game, requests[1], state, config, provider, selected_counter, root_seed,
+                observer, control,
             ),
         )
         transition = game.apply_transition(
