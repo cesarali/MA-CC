@@ -9,7 +9,7 @@ from typing import Any, Mapping
 
 from mas_cc.config import GameConfig
 from mas_cc.core import AgentId, InteractionId, Seed, ValidationIssue, ValidationResult
-from mas_cc.games.protocols import Action, GameSpec, Observation
+from mas_cc.games.protocols import Action, Game, GameSpec, Observation
 from mas_cc.planning import (
     DecisionStagePlan,
     GameCallPlan,
@@ -164,7 +164,7 @@ def _boolean(options: Mapping[str, Any], name: str, default: bool) -> bool:
     return value
 
 
-class NamingConventionGame:
+class NamingConventionGame(Game):
     """Pure game mechanics and private-view construction; no provider execution."""
 
     spec = GameSpec(

@@ -21,6 +21,7 @@ from ..protocols import (
     Action,
     AgentState,
     DecisionRequest,
+    Game,
     GameSpec,
     GameState,
     Observation,
@@ -28,7 +29,7 @@ from ..protocols import (
 )
 
 
-class ToyCoordinationGame:
+class ToyCoordinationGame(Game):
     """A finite-horizon pairwise matching game used as an architecture fixture."""
 
     spec = GameSpec(

@@ -1,8 +1,0 @@
-{
-  "compiled_source": "phase_05/interactions.jsonl",
-  "planning_source": "phase_05/game_call_plan.json",
-  "prompt_family": "basic_binary_choice",
-  "prompt_version": 1,
-  "inspection_status": "pass",
-  "scientific_parity_scope": "participant selection, action validation, payoff, transition, horizon, and provider-call demand"
-}

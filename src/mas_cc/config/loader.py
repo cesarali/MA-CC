@@ -13,6 +13,7 @@ import yaml
 from mas_cc.core.exceptions import ConfigurationError
 from mas_cc.core.validation import ValidationIssue, ValidationResult
 
+from .grid import GridSpec, parse_grid_axes
 from .models import (
     AnalysisConfig,
     BudgetConfig,
@@ -21,6 +22,7 @@ from .models import (
     GameConfig,
     LLMProviderConfig,
     LoggingConfig,
+    MetricsConfig,
     PromptConfig,
     PricingConfig,
     RunConfig,
@@ -616,6 +618,17 @@ def _parse_analysis(raw: Any, issues: list[ValidationIssue]) -> AnalysisConfig:
     )
 
 
+def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
+    path = "metrics"
+    values = _as_mapping(raw, path, issues)
+    _unknown_fields(values, {"schema_version", "enabled", "comet_export"}, path, issues)
+    return MetricsConfig(
+        schema_version=_schema_version(values, path, issues),
+        enabled=_boolean(values, "enabled", path, issues, default=True),
+        comet_export=_string_tuple(values, "comet_export", path, issues),
+    )
+
+
 def _parse_experiment(raw: Any, issues: list[ValidationIssue]) -> ExperimentConfig:
     path = "experiment"
     values = _as_mapping(raw, path, issues)
@@ -639,7 +652,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
     values = {str(key): value for key, value in raw.items()}
     allowed = {
         "schema_version", "llm_provider", "prompt", "game", "execution",
-        "logging", "storage", "analysis", "experiment", "pricing", "budget",
+        "logging", "storage", "analysis", "metrics", "experiment", "pricing", "budget",
     }
     _unknown_fields(values, allowed, "", issues)
     schema_version = _schema_version(values, "", issues)
@@ -657,6 +670,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         logging=_parse_logging(values.get("logging", {}), issues),
         storage=_parse_storage(values.get("storage", {}), issues),
         analysis=_parse_analysis(values.get("analysis", {}), issues),
+        metrics=_parse_metrics(values.get("metrics", {}), issues),
         experiment=_parse_experiment(values.get("experiment", {}), issues),
         pricing=_parse_pricing(values.get("pricing", {}), issues),
         budget=_parse_budget(values.get("budget", {}), issues),
@@ -741,6 +755,31 @@ def load_run_config(
     """Load and fully resolve a run config without reading a ``.env`` file."""
 
     return ConfigLoader(environment=environment).load(path)
+
+
+def load_run_config_or_grid(
+    path: str | Path, *, environment: Mapping[str, str] | None = None
+) -> RunConfig | GridSpec:
+    """Load a run config, or a :class:`GridSpec` if the file has a top-level ``grid:`` section.
+
+    The ``grid:`` section is stripped before the rest of the file is resolved and validated
+    exactly as an ordinary run config, so a grid file's base section is always independently
+    loadable as a single run — the grid section only says which fields to additionally sweep.
+    """
+
+    source = Path(path).resolve()
+    raw = dict(_read_yaml(source))
+    grid_raw = raw.pop("grid", None)
+    resolved = _resolve_components(raw, source)
+    issues: list[ValidationIssue] = []
+    env = dict(os.environ if environment is None else environment)
+    expanded = _expand_environment(resolved, environment=env, path="", issues=issues)
+    if issues:
+        raise ConfigurationError(issues, context="environment resolution")
+    base = parse_run_config(expanded)
+    if grid_raw is None:
+        return base
+    return GridSpec(base=base, axes=parse_grid_axes(grid_raw))
 
 
 def load_component_config(

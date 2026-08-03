@@ -78,10 +78,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     game_run.add_argument("--output-dir", type=Path, required=True)
 
+    experiment = commands.add_parser(
+        "experiment", help="price and run many concurrent episodes of one resolved game"
+    )
+    experiment_commands = experiment.add_subparsers(dest="experiment_command", required=True)
+    experiment_preflight = experiment_commands.add_parser(
+        "preflight", help="estimate total calls/tokens/cost/runtime without provider I/O"
+    )
+    experiment_preflight.add_argument("--config", type=Path, required=True)
+    experiment_preflight.add_argument("--output-dir", type=Path, required=True)
+    experiment_run = experiment_commands.add_parser(
+        "run", help="run config.execution.repetitions episodes concurrently"
+    )
+    experiment_run.add_argument("--config", type=Path, required=True)
+    experiment_run.add_argument("--output-dir", type=Path, required=True)
+    experiment_run.add_argument(
+        "--approve-preflight", type=Path,
+        help="path to a preflight_id.txt written by `experiment preflight`",
+    )
+    experiment_run.add_argument(
+        "--resume", dest="resume", action="store_true", default=True,
+        help="skip episodes already completed in --output-dir (default)",
+    )
+    experiment_run.add_argument(
+        "--no-resume", dest="resume", action="store_false",
+        help="ignore any previously completed episodes and re-run everything",
+    )
+    experiment_run.add_argument(
+        "--no-progress", dest="show_progress", action="store_false", default=True,
+        help="disable tqdm progress bars; log one line per completed episode instead",
+    )
+
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
-    phase.add_argument("number", type=int, choices=(1, 2, 3, 4, 5, 6), help="implemented phase number")
+    phase.add_argument("number", type=int, choices=(1, 2, 3, 4, 5, 6, 7), help="implemented phase number")
     phase.add_argument(
         "--config",
         type=Path,
@@ -164,6 +195,44 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(f"Game inspection {'passed' if passed else 'failed'}: {args.output_dir}")
         return 0 if passed else 1
+    if args.command == "experiment" and args.experiment_command == "preflight":
+        from mas_cc.planning import GridPreflightEstimate
+
+        from .experiment import run_experiment_preflight
+
+        try:
+            estimate = run_experiment_preflight(args.config, args.output_dir)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if isinstance(estimate, GridPreflightEstimate):
+            print(
+                f"Grid preflight {estimate.launch_status}: {estimate.cell_count} cell(s), "
+                f"{estimate.total_episode_count} episode(s) total, {args.output_dir}"
+            )
+        else:
+            print(
+                f"Experiment preflight {estimate.launch_status}: {estimate.episode_count} "
+                f"episode(s), {args.output_dir}"
+            )
+        return 0 if estimate.launch_status == "permitted" else 1
+    if args.command == "experiment" and args.experiment_command == "run":
+        from .experiment import run_experiment_command
+
+        try:
+            result = run_experiment_command(
+                args.config, args.output_dir, resume=args.resume,
+                show_progress=args.show_progress, approve_preflight=args.approve_preflight,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Experiment {result.experiment_name}: {result.completed} completed, "
+            f"{result.failed} failed, {result.skipped_resumed} skipped (resumed): "
+            f"{result.output_dir}"
+        )
+        return 0 if result.failed == 0 else 1
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
 
@@ -197,12 +266,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 passed = run_game_inspection(
                     args.config or Path("configs/runs/toy_game_smoke_test.yaml"), output_dir
                 )
-            else:
+            elif args.number == 6:
                 from .game import run_game_inspection
 
                 passed = run_game_inspection(
                     args.config
                     or Path("configs/runs/naming_convention_smoke_test.yaml"),
+                    output_dir,
+                )
+            else:
+                from .phase7 import run_phase_7_inspection
+
+                passed = run_phase_7_inspection(
+                    args.config or Path("configs/runs/naming_convention_smoke_test_v3.yaml"),
                     output_dir,
                 )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:

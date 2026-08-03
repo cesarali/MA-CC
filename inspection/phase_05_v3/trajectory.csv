@@ -1,4 +1,0 @@
-interaction,participant_1,participant_2,action_1,action_2,matched,payoff,score_agent-000,score_agent-001
-1,agent-000,agent-001,A,A,True,1.0,1.0,1.0
-2,agent-000,agent-001,A,A,True,1.0,2.0,2.0
-3,agent-000,agent-001,A,A,True,1.0,3.0,3.0

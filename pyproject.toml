@@ -24,6 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+comet = ["comet_ml>=3.58,<4"]
 gemma4 = [
   "accelerate>=1.0",
   "huggingface-hub>=0.30",

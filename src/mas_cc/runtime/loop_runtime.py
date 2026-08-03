@@ -1,0 +1,124 @@
+"""The one provider-agnostic, game-agnostic "ask / validate / retry / log" loop.
+
+Every LLM-backed decision, in every game, goes through the same mechanical
+steps: build a request from a compiled prompt, call the provider, check the
+response against the game's own rules, retry up to a bound, and hand back a
+full record of every attempt. This module owns that loop exactly once.
+
+It knows nothing about what a legal answer looks like for any particular
+game — validity is entirely defined by the already-generic `Game` contract
+(`prompt.response_contract`, `game.parse_action`, `game.validate_action`).
+It also knows nothing about which provider it's talking to; `provider` is
+whatever normalized `LLMProvider` the caller constructed. Games are the
+reason a call happens, never the mechanism.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, Mapping
+
+from mas_cc.config import GameConfig
+from mas_cc.llm_providers import CompletionRequest, CompletionResponse, LLMProvider
+from mas_cc.prompts import CompiledPrompt
+
+if TYPE_CHECKING:
+    # Deferred: `mas_cc.games` imports this module (via `runner.py` and
+    # `naming_convention/runtime.py`), so a module-level import here would
+    # cycle back before `mas_cc.games.protocols` finishes loading. Safe to
+    # defer because `from __future__ import annotations` makes every
+    # annotation below a lazy string - these names are never evaluated at
+    # runtime, only used by type checkers.
+    from mas_cc.games.protocols import Action, DecisionRequest, Game, GameState
+
+
+class DecisionLoopExhausted(RuntimeError):
+    """Raised when no attempt validated within the request's retry bound."""
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationAttempt:
+    attempt: int
+    request: CompletionRequest
+    response: CompletionResponse | None
+    action: Action | None
+    validation_error: str | None
+    provider_error: str | None
+
+    @property
+    def valid(self) -> bool:
+        return self.action is not None and self.validation_error is None and self.provider_error is None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedDecision:
+    action: Action
+    attempts: tuple[ValidationAttempt, ...]
+
+
+async def run_validated_decision(
+    *,
+    game: Game,
+    state: GameState,
+    request: DecisionRequest,
+    game_config: GameConfig,
+    provider: LLMProvider,
+    prompt: CompiledPrompt,
+    temperature: float,
+    max_output_tokens: int,
+    seed_for_attempt: Callable[[int], int],
+    metadata_for_attempt: Callable[[int], Mapping[str, Any]],
+    on_attempt: Callable[[ValidationAttempt], None] | None = None,
+) -> ValidatedDecision:
+    """Ask, validate, retry up to `request.retry_bound`, and log every attempt.
+
+    `seed_for_attempt`/`metadata_for_attempt` take the zero-based attempt
+    index so each caller keeps its own seed-derivation and metadata shape;
+    this function only supplies the loop, not those per-caller details.
+
+    A transport failure (the provider call itself raising) is not retried:
+    it is reported through `on_attempt` and re-raised immediately. Only a
+    response that fails the game's own validation is retried.
+    """
+
+    attempts: list[ValidationAttempt] = []
+    last_error = "unknown validation failure"
+    for attempt_index in range(request.retry_bound + 1):
+        completion_request = CompletionRequest(
+            messages=prompt.messages,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            seed=seed_for_attempt(attempt_index),
+            metadata=metadata_for_attempt(attempt_index),
+        )
+        try:
+            response = await provider.complete(completion_request)
+        except Exception as exc:
+            failed = ValidationAttempt(attempt_index + 1, completion_request, None, None, None, str(exc))
+            if on_attempt is not None:
+                on_attempt(failed)
+            raise
+        action: Action | None = None
+        validation_error: str | None = None
+        try:
+            prompt.response_contract.validate(response.content).raise_for_errors(
+                context=f"{game.spec.game_type} response contract"
+            )
+            action = game.parse_action(request, response.content)
+            game.validate_action(state, request, action, game_config).raise_for_errors(
+                context=f"{game.spec.game_type} action"
+            )
+        except (TypeError, ValueError) as exc:
+            validation_error = str(exc)
+            last_error = validation_error
+        attempt = ValidationAttempt(
+            attempt_index + 1, completion_request, response, action, validation_error, None,
+        )
+        attempts.append(attempt)
+        if on_attempt is not None:
+            on_attempt(attempt)
+        if attempt.valid:
+            return ValidatedDecision(action=action, attempts=tuple(attempts))
+    raise DecisionLoopExhausted(
+        f"{request.agent_id} produced no valid action after {len(attempts)} validation attempts: {last_error}"
+    )

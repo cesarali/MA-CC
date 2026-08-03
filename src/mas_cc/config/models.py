@@ -278,6 +278,30 @@ class AnalysisConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MetricsConfig:
+    """Whether to compute the game's declared metrics, and what may reach Comet.
+
+    Metric instances themselves live in code (``games/<game>/metrics.py``);
+    this section only controls whether they run and which metric names are
+    allowed off the machine, mirroring LoggingConfig's Comet privacy stance.
+    """
+
+    schema_version: int = 1
+    enabled: bool = True
+    comet_export: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "comet_export", tuple(self.comet_export))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "enabled": self.enabled,
+            "comet_export": list(self.comet_export),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExperimentConfig:
     """Human-facing experiment identity and grouping metadata."""
 
@@ -362,6 +386,7 @@ class RunConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    metrics: MetricsConfig = field(default_factory=MetricsConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
     pricing: PricingConfig = field(default_factory=PricingConfig)
     budget: BudgetConfig = field(default_factory=BudgetConfig)
@@ -385,6 +410,7 @@ class RunConfig:
             "logging": self.logging.to_dict(),
             "storage": self.storage.to_dict(),
             "analysis": self.analysis.to_dict(),
+            "metrics": self.metrics.to_dict(),
             "experiment": self.experiment.to_dict(),
             "pricing": self.pricing.to_dict(),
             "budget": self.budget.to_dict(),

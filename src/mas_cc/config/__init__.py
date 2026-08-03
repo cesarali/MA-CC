@@ -1,11 +1,13 @@
 """Versioned component/run configuration loading with secret-safe export."""
 
 from .export import assert_secret_free, resolved_config_yaml, write_resolved_config
+from .grid import GridAxis, GridCell, GridSpec
 from .loader import (
     SUPPORTED_SCHEMA_VERSIONS,
     ConfigLoader,
     load_component_config,
     load_run_config,
+    load_run_config_or_grid,
     parse_run_config,
     validate_run_config,
     resolve_run_config,
@@ -18,6 +20,7 @@ from .models import (
     GameConfig,
     LLMProviderConfig,
     LoggingConfig,
+    MetricsConfig,
     PromptConfig,
     PricingConfig,
     ProviderConfig,
@@ -33,8 +36,12 @@ __all__ = [
     "ExecutionConfig",
     "ExperimentConfig",
     "GameConfig",
+    "GridAxis",
+    "GridCell",
+    "GridSpec",
     "LLMProviderConfig",
     "LoggingConfig",
+    "MetricsConfig",
     "PromptConfig",
     "PricingConfig",
     "ProviderConfig",
@@ -44,6 +51,7 @@ __all__ = [
     "assert_secret_free",
     "config_schema",
     "load_run_config",
+    "load_run_config_or_grid",
     "load_component_config",
     "parse_run_config",
     "resolved_config_yaml",

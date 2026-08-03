@@ -6,9 +6,10 @@ import asyncio
 from typing import Any
 
 from mas_cc.config import RunConfig
-from mas_cc.core import Seed, ValidationIssue, ValidationResult
-from mas_cc.llm_providers import CompletionRequest, LLMProvider
+from mas_cc.core import Seed
+from mas_cc.llm_providers import LLMProvider
 from mas_cc.prompts import RegexTokenCounter, TokenCounter
+from mas_cc.runtime import run_validated_decision
 
 from .protocols import DecisionRecord, Game, GameResult, InteractionRecord
 
@@ -64,62 +65,49 @@ async def run_game(
                 allowed = tuple(expected_contract.get("allowed_values", ()))
                 if allowed and set(allowed) != set(prompt.response_contract.allowed_values):
                     raise ValueError("bound prompt response values do not match config")
-            response = None
-            action = None
-            completion_request = None
-            last_validation = ValidationResult.success()
-            for attempt in range(logical.retry_bound + 1):
-                request_seed = int(
+
+            def _seed_for_attempt(attempt: int) -> int:
+                return int(
                     root_seed.derive(
                         f"{logical.interaction_id}:{logical.stage}:{logical.agent_id}:{attempt}"
                     )
                 )
-                completion_request = CompletionRequest(
-                    messages=prompt.messages,
-                    temperature=config.llm_provider.temperature,
-                    max_output_tokens=config.llm_provider.max_output_tokens,
-                    seed=request_seed,
-                    metadata={
-                        "game_type": game.spec.game_type,
-                        "game_version": game.spec.version,
-                        "interaction_id": str(logical.interaction_id),
-                        "decision_stage": logical.stage,
-                        "agent_id": str(logical.agent_id),
-                        "attempt": attempt + 1,
-                        "prompt_family": config.prompt.prompt_family,
-                        "prompt_version": config.prompt.prompt_version,
-                        "prompt_definition_hash": prompt.definition_hash,
-                        "prompt_instance_hash": prompt.instance_hash,
-                        "response_contract": prompt.response_contract.to_dict(),
-                    },
+
+            def _metadata_for_attempt(attempt: int) -> dict[str, Any]:
+                return {
+                    "game_type": game.spec.game_type,
+                    "game_version": game.spec.version,
+                    "interaction_id": str(logical.interaction_id),
+                    "decision_stage": logical.stage,
+                    "agent_id": str(logical.agent_id),
+                    "attempt": attempt + 1,
+                    "prompt_family": config.prompt.prompt_family,
+                    "prompt_version": config.prompt.prompt_version,
+                    "prompt_definition_hash": prompt.definition_hash,
+                    "prompt_instance_hash": prompt.instance_hash,
+                    "response_contract": prompt.response_contract.to_dict(),
+                }
+
+            decision = await run_validated_decision(
+                game=game, state=state, request=logical, game_config=config.game,
+                provider=provider, prompt=prompt,
+                temperature=config.llm_provider.temperature,
+                max_output_tokens=config.llm_provider.max_output_tokens,
+                seed_for_attempt=_seed_for_attempt,
+                metadata_for_attempt=_metadata_for_attempt,
+            )
+            last_attempt = decision.attempts[-1]
+            decisions.append(
+                DecisionRecord(
+                    request=logical,
+                    completion_request=last_attempt.request,
+                    response=last_attempt.response,
+                    action=decision.action,
+                    attempts=len(decision.attempts),
+                    prompt_definition_hash=prompt.definition_hash,
+                    prompt_instance_hash=prompt.instance_hash,
                 )
-                response = await provider.complete(completion_request)
-                contract_result = prompt.response_contract.validate(response.content)
-                action = game.parse_action(logical, response.content)
-                game_result = game.validate_action(state, logical, action, config.game)
-                issues = (*contract_result.issues, *game_result.issues)
-                last_validation = ValidationResult(tuple(issues))
-                if last_validation.is_valid:
-                    decisions.append(
-                        DecisionRecord(
-                            request=logical,
-                            completion_request=completion_request,
-                            response=response,
-                            action=action,
-                            attempts=attempt + 1,
-                            prompt_definition_hash=prompt.definition_hash,
-                            prompt_instance_hash=prompt.instance_hash,
-                        )
-                    )
-                    break
-            else:
-                if not last_validation.issues:
-                    last_validation = ValidationResult.failure(
-                        ValidationIssue("response", "could not resolve a valid action")
-                    )
-                last_validation.raise_for_errors(
-                    context=f"{logical.interaction_id} {logical.agent_id} decision"
-                )
+            )
 
         transition = game.apply_transition(
             state,

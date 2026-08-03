@@ -98,7 +98,7 @@ class RuntimeBudgetGuard:
 
     def __init__(self, limits: BudgetLimits) -> None:
         self.limits = limits
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._reservations: dict[str, BudgetReservation] = {}
         self._cost = 0.0
         self._requests = 0
@@ -215,6 +215,56 @@ class RuntimeBudgetGuard:
                 "active_reservations": len(self._reservations),
                 "stop_count": self._stops,
             }
+
+    def checkpoint_state(self) -> dict[str, Any]:
+        """Return a JSON-safe state for an atomic checkpoint.
+
+        Reservations are retained because a cancelled request may have been
+        dispatched and must remain conservatively charged after resume.
+        """
+        with self._lock:
+            return {
+                "schema_version": 1,
+                "status": self.status(),
+                "reservations": [
+                    {
+                        "reservation_id": item.reservation_id,
+                        "cost": None if item.cost is None else item.cost.to_dict(),
+                        "requests": item.requests,
+                        "input_tokens": item.input_tokens,
+                        "output_tokens": item.output_tokens,
+                    }
+                    for item in self._reservations.values()
+                ],
+            }
+
+    def restore_checkpoint_state(self, value: dict[str, Any]) -> None:
+        """Restore counters only when the checkpoint has compatible limits."""
+        if value.get("schema_version") != 1:
+            raise ValueError("unsupported budget checkpoint schema version")
+        status = value.get("status")
+        if not isinstance(status, dict) or status.get("approved_limits") != self.limits.to_dict():
+            raise ValueError("budget checkpoint limits do not match the active run")
+        used = status.get("used_and_reserved", {})
+        with self._lock:
+            self._cost = float((used.get("cost") or {}).get("amount", 0.0))
+            self._requests = int(used.get("requests", 0))
+            self._input_tokens = int(used.get("input_tokens", 0))
+            self._output_tokens = int(used.get("output_tokens", 0))
+            self._stops = int(status.get("stop_count", 0))
+            restored: dict[str, BudgetReservation] = {}
+            for item in value.get("reservations", []):
+                if not isinstance(item, dict):
+                    raise ValueError("budget checkpoint reservations must be mappings")
+                raw_cost = item.get("cost")
+                cost = None if raw_cost is None else MonetaryAmount(**raw_cost)
+                reservation = BudgetReservation(
+                    reservation_id=str(item["reservation_id"]), cost=cost,
+                    requests=int(item["requests"]), input_tokens=int(item["input_tokens"]),
+                    output_tokens=int(item["output_tokens"]),
+                )
+                restored[reservation.reservation_id] = reservation
+            self._reservations = restored
 
 
 class BudgetGuardedProvider:

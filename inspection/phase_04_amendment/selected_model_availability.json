@@ -1,7 +1,0 @@
-{
-  "available": true,
-  "model": "gwdg/qwen3-30b-a3b-instruct-2507",
-  "provider": "university",
-  "retrieved_at": "2026-08-02T10:33:57.825767Z",
-  "source": "University GET /models + GET /v1/model/info"
-}

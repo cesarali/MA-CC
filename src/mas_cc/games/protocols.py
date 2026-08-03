@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import random
+from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 from mas_cc.config import GameConfig
 from mas_cc.core import AgentId, InteractionId, ValidationResult
@@ -400,37 +401,53 @@ class GameResult:
         }
 
 
-@runtime_checkable
-class Game(Protocol):
-    """Operational contract implemented by every game."""
+class Game(ABC):
+    """Operational contract implemented by every game.
 
-    spec: GameSpec
+    An ABC rather than a structural protocol: a new game must explicitly
+    subclass this and implement every method below, or Python refuses to
+    construct it at all - the mistake surfaces at `MyGame()`, not the first
+    time something happens to call the one method you forgot.
+    """
 
+    @property
+    @abstractmethod
+    def spec(self) -> GameSpec: ...
+
+    @abstractmethod
     def initialize(self, config: GameConfig, seed: int) -> GameState: ...
 
+    @abstractmethod
     def select_participants(
         self, state: GameState, config: GameConfig, rng: random.Random
     ) -> tuple[AgentId, ...]: ...
 
+    @abstractmethod
     def construct_observations(
         self, state: GameState, participants: tuple[AgentId, ...], config: GameConfig
     ) -> tuple[Observation, ...]: ...
 
+    @abstractmethod
     def build_decision_requests(
         self, state: GameState, observations: tuple[Observation, ...], config: GameConfig
     ) -> tuple[DecisionRequest, ...]: ...
 
+    @abstractmethod
     def parse_action(self, request: DecisionRequest, response: str) -> Action: ...
 
+    @abstractmethod
     def validate_action(
         self, state: GameState, request: DecisionRequest, action: Action, config: GameConfig
     ) -> ValidationResult: ...
 
+    @abstractmethod
     def apply_transition(
         self, state: GameState, participants: tuple[AgentId, ...], actions: tuple[Action, ...],
         config: GameConfig,
     ) -> Transition: ...
 
+    @abstractmethod
     def detect_termination(self, state: GameState, config: GameConfig) -> str | None: ...
 
+    @abstractmethod
     def call_plan(self, config: GameConfig) -> GameCallPlan: ...

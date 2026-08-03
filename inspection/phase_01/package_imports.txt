@@ -1,5 +1,0 @@
-mas_cc imported: True
-mas_cc version: 0.1.0
-naming_game imported: True
-modules added by import mas_cc: mas_cc
-forbidden external-work modules loaded by mas_cc: none

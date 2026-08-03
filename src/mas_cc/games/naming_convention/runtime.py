@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from typing import Any
 
 from mas_cc.config import RunConfig
 from mas_cc.core import Seed
 from mas_cc.llm_providers import CompletionRequest, LLMProvider
 from mas_cc.prompts import CompiledPrompt, RegexTokenCounter, TokenCounter
+from mas_cc.runtime import DecisionLoopExhausted, ValidationAttempt, run_validated_decision
 
 from .game import NamingConventionGame
 from .records import (
@@ -31,6 +33,14 @@ def _prompt_hash(request: CompletionRequest) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _notify(observer: Any | None, method: str, *args: Any, **payload: Any) -> None:
+    """Keep the game runtime independent of any observability implementation."""
+
+    callback = getattr(observer, method, None) if observer is not None else None
+    if callback is not None:
+        callback(*args, **payload)
+
+
 async def _execute_validated_decision(
     game: NamingConventionGame,
     logical: ConventionDecisionRequest,
@@ -39,94 +49,111 @@ async def _execute_validated_decision(
     provider: LLMProvider,
     token_counter: TokenCounter,
     root_seed: Seed,
+    observer: Any | None = None,
 ) -> ConventionDecisionOutcome:
+    """Ask/validate/retry through the shared loop, then wrap the result in
+    this game's own typed audit record."""
+
     prompt = logical.prompt.compile(token_counter)
-    attempts: list[ConventionValidationAttempt] = []
-    last_error = "unknown validation failure"
+    _notify(
+        observer, "event", "decision_started", round_index=state.turn + 1,
+        interaction_id=str(logical.interaction_id), agent_id=str(logical.agent_id),
+        decision_stage=logical.stage, prompt_definition_hash=prompt.definition_hash,
+        prompt_instance_hash=prompt.instance_hash,
+    )
     top_k = config.llm_provider.options.get("top_k")
-    for attempt_index in range(logical.retry_bound + 1):
-        request_seed = int(
+
+    def _seed_for_attempt(attempt_index: int) -> int:
+        return int(
             root_seed.derive(
                 f"naming-convention-request:{logical.interaction_id}:"
                 f"{logical.agent_id}:{attempt_index + 1}"
             )
         )
-        completion_request = CompletionRequest(
-            messages=prompt.messages,
+
+    def _metadata_for_attempt(attempt_index: int) -> dict[str, Any]:
+        return {
+            "game_type": game.spec.game_type,
+            "game_version": game.spec.version,
+            "interaction_id": str(logical.interaction_id),
+            "decision_stage": logical.stage,
+            "agent_id": str(logical.agent_id),
+            "validation_attempt": attempt_index + 1,
+            "prompt_family": config.prompt.prompt_family,
+            "prompt_version": config.prompt.prompt_version,
+            "prompt_definition_hash": prompt.definition_hash,
+            "prompt_instance_hash": prompt.instance_hash,
+            "requested_sampling": {
+                "temperature": config.llm_provider.temperature,
+                "top_k": top_k,
+                "max_tokens": config.llm_provider.max_output_tokens,
+            },
+            "parameters_sent_by_normalized_request": [
+                "temperature",
+                "max_output_tokens",
+                "seed",
+            ],
+            "unsupported_or_adapter_omitted_parameters": (
+                ["top_k"] if top_k is not None else []
+            ),
+        }
+
+    def _on_attempt(attempt: ValidationAttempt) -> None:
+        _notify(
+            observer, "record_attempt", round_index=state.turn + 1,
+            game_id=game.spec.game_type, request=attempt.request, prompt=prompt,
+            response=attempt.response, attempt=attempt.attempt,
+            valid=attempt.valid, validation_error=attempt.validation_error,
+            provider_error=(
+                RuntimeError(attempt.provider_error) if attempt.provider_error else None
+            ),
+            observation=logical.observation.to_dict(),
+        )
+
+    try:
+        decision = await run_validated_decision(
+            game=game, state=state, request=logical, game_config=config.game,
+            provider=provider, prompt=prompt,
             temperature=config.llm_provider.temperature,
             max_output_tokens=config.llm_provider.max_output_tokens,
-            seed=request_seed,
-            metadata={
-                "game_type": game.spec.game_type,
-                "game_version": game.spec.version,
-                "interaction_id": str(logical.interaction_id),
-                "decision_stage": logical.stage,
-                "agent_id": str(logical.agent_id),
-                "validation_attempt": attempt_index + 1,
-                "prompt_family": config.prompt.prompt_family,
-                "prompt_version": config.prompt.prompt_version,
-                "prompt_definition_hash": prompt.definition_hash,
-                "prompt_instance_hash": prompt.instance_hash,
-                "requested_sampling": {
-                    "temperature": config.llm_provider.temperature,
-                    "top_k": top_k,
-                    "max_tokens": config.llm_provider.max_output_tokens,
-                },
-                "parameters_sent_by_normalized_request": [
-                    "temperature",
-                    "max_output_tokens",
-                    "seed",
-                ],
-                "unsupported_or_adapter_omitted_parameters": (
-                    ["top_k"] if top_k is not None else []
-                ),
-            },
+            seed_for_attempt=_seed_for_attempt,
+            metadata_for_attempt=_metadata_for_attempt,
+            on_attempt=_on_attempt,
         )
-        response = await provider.complete(completion_request)
-        parsed = None
-        action = None
-        validation_error = None
-        try:
-            prompt.response_contract.validate(response.content).raise_for_errors(
-                context="naming-convention response contract"
-            )
-            action = game.parse_action(logical, response.content)
-            validation = game.validate_action(state, logical, action, config.game)
-            validation.raise_for_errors(context="naming-convention action")
-            parsed = ParsedConventionResponse(
-                raw_text=response.content,
-                value=action.value,
-                reason=action.metadata.get("parsed_reason"),
-                parser_mode=str(action.metadata["parser_mode"]),
-            )
-        except (TypeError, ValueError) as exc:
-            validation_error = str(exc)
-            last_error = validation_error
-        attempts.append(
-            ConventionValidationAttempt(
-                attempt=attempt_index + 1,
-                completion_request=completion_request,
-                response=response,
-                parsed=parsed,
-                valid=action is not None and validation_error is None,
-                validation_error=validation_error,
-            )
+    except DecisionLoopExhausted as exc:
+        raise InvalidConventionResponse(str(exc)) from exc
+
+    attempts = tuple(
+        ConventionValidationAttempt(
+            attempt=attempt.attempt,
+            completion_request=attempt.request,
+            response=attempt.response,
+            parsed=(
+                None
+                if attempt.action is None
+                else ParsedConventionResponse(
+                    raw_text=attempt.response.content,
+                    value=attempt.action.value,
+                    reason=attempt.action.metadata.get("parsed_reason"),
+                    parser_mode=str(attempt.action.metadata["parser_mode"]),
+                )
+            ),
+            valid=attempt.valid,
+            validation_error=attempt.validation_error,
         )
-        if action is not None and validation_error is None:
-            return ConventionDecisionOutcome(
-                request=logical,
-                action=action,
-                parsed_reason=parsed.reason,
-                parser_mode=parsed.parser_mode,
-                prompt_hash=_prompt_hash(completion_request),
-                prompt_definition_hash=prompt.definition_hash,
-                prompt_instance_hash=prompt.instance_hash,
-                compiled_prompt=prompt,
-                attempts=tuple(attempts),
-            )
-    raise InvalidConventionResponse(
-        f"{logical.agent_id} returned no valid convention action after "
-        f"{len(attempts)} validation attempts: {last_error}"
+        for attempt in decision.attempts
+    )
+    final_request = decision.attempts[-1].request
+    return ConventionDecisionOutcome(
+        request=logical,
+        action=decision.action,
+        parsed_reason=decision.action.metadata.get("parsed_reason"),
+        parser_mode=str(decision.action.metadata["parser_mode"]),
+        prompt_hash=_prompt_hash(final_request),
+        prompt_definition_hash=prompt.definition_hash,
+        prompt_instance_hash=prompt.instance_hash,
+        compiled_prompt=prompt,
+        attempts=attempts,
     )
 
 
@@ -136,6 +163,7 @@ async def run_naming_convention_game(
     provider: LLMProvider,
     *,
     token_counter: TokenCounter | None = None,
+    observer: Any | None = None,
 ) -> ConventionGameResult:
     """Run sequential pairs with a two-request concurrency barrier per pair."""
 
@@ -163,6 +191,7 @@ async def run_naming_convention_game(
     pair_rng = root_seed.derive("naming-convention-pair-sampling").create_random()
     state = game.initialize(config.game, config.execution.seed)
     initial_state = state
+    _notify(observer, "event", "run_started", game_type=game.spec.game_type)
     interactions: list[ConventionInteractionRecord] = []
     termination = game.detect_termination(state, config.game)
 
@@ -181,10 +210,10 @@ async def run_naming_convention_game(
         # transition occurs until both validated decisions cross this barrier.
         decision_1, decision_2 = await asyncio.gather(
             _execute_validated_decision(
-                game, requests[0], state, config, provider, selected_counter, root_seed
+                game, requests[0], state, config, provider, selected_counter, root_seed, observer
             ),
             _execute_validated_decision(
-                game, requests[1], state, config, provider, selected_counter, root_seed
+                game, requests[1], state, config, provider, selected_counter, root_seed, observer
             ),
         )
         transition = game.apply_transition(
@@ -199,16 +228,23 @@ async def run_naming_convention_game(
             next_state.convention_agent(agent_id).visible_history(rules.memory_size)
             for agent_id in pair
         )
-        interactions.append(
-            ConventionInteractionRecord(
-                interaction_id=transition.interaction_id,
-                interaction_index=state.turn + 1,
-                selected_agents=pair,
-                pre_visible_memories=(pre_memories[0], pre_memories[1]),
-                decisions=(decision_1, decision_2),
-                transition=transition,
-                post_visible_memories=(post_memories[0], post_memories[1]),
-            )
+        interaction = ConventionInteractionRecord(
+            interaction_id=transition.interaction_id,
+            interaction_index=state.turn + 1,
+            selected_agents=pair,
+            pre_visible_memories=(pre_memories[0], pre_memories[1]),
+            decisions=(decision_1, decision_2),
+            transition=transition,
+            post_visible_memories=(post_memories[0], post_memories[1]),
+        )
+        interactions.append(interaction)
+        _notify(
+            observer, "record_interaction", round_index=state.turn + 1,
+            interaction=interaction, state=next_state.to_dict(),
+            prompt_definitions={
+                "pair_decision": decision.prompt_definition_hash
+                for decision in interaction.decisions
+            },
         )
         state = next_state
         termination = game.detect_termination(state, config.game)
@@ -216,7 +252,7 @@ async def run_naming_convention_game(
     decisions = tuple(
         decision for interaction in interactions for decision in interaction.decisions
     )
-    return ConventionGameResult(
+    result = ConventionGameResult(
         initial_state=initial_state,
         final_state=state,
         interactions=tuple(interactions),
@@ -225,6 +261,8 @@ async def run_naming_convention_game(
         validation_attempts=sum(decision.validation_attempts for decision in decisions),
         provider_retries=sum(decision.provider_retries for decision in decisions),
     )
+    _notify(observer, "event", "game_completed", interactions=len(result.interactions))
+    return result
 
 
 def run_naming_convention_game_sync(*args, **kwargs) -> ConventionGameResult:

@@ -1,0 +1,89 @@
+# One live, paper-scale W=2 convention trajectory.  It follows the paper's
+# N=24, H=5, pairwise random matching, randomized action order, and +100/-50
+# payoff profile, but is an adaptation: GPT-5.4-nano is not one of the source
+# models and this runtime cannot request the paper's K-sampling parameter.
+schema_version: 1
+llm_provider:
+  component: ../components/llm_providers/university.yaml
+  overrides:
+    model: microsoft/gpt-5.4-nano
+    request_concurrency: 2
+    # The University proxy accepts only temperature=1 for GPT-5.4-nano.
+    # This remains a nonzero sampling temperature, as required by the paper.
+    temperature: 1.0
+    # GPT-5.4-nano can give longer memory-grounded explanations than the
+    # 128-token cap; 256 avoids truncating an otherwise valid response object.
+    max_output_tokens: 256
+    options:
+      estimated_latency_seconds: 3.0
+prompt:
+  component: ../components/prompts/naming_convention_v3.yaml
+game:
+  component: ../components/games/naming_convention.yaml
+  overrides:
+    population_size: 24
+    horizon: 360 # 15 population rounds, matching the reported convergence scale
+    options:
+      actions: [Q, M]
+      memory_size: 5
+      representative_memory_size: 2
+execution:
+  schema_version: 1
+  seed: 20260802
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 1.0
+  max_cost_per_run: 1.0
+  max_provider_requests: 2160 # 720 logical calls with up to two validation retries
+  max_input_tokens: 2000000
+  max_output_tokens: 552960
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    comet: true
+    options:
+      comet_project: mas-cc
+      detailed_prompt_audit:
+        enabled: true
+        log_every_n_rounds: 30
+        always_log_first_n_rounds: 2
+        always_log_provider_errors: true
+        always_log_invalid_responses: true
+        max_logged_prompts_per_game: 25
+        max_logged_prompts_per_run: 25
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  comet_export:
+    - population_action_share_q
+    - dominant_action_share
+experiment:
+  schema_version: 1
+  name: ashery-2025-w2-gpt54nano-single-trajectory
+  description: One live N=24, H=5, W=2 {Q,M} convention trajectory at 15 population rounds; adaptation using University GPT-5.4-nano, not a source-paper replication.
+  tags:
+    - ashery-2025
+    - w2
+    - q-m
+    - university
+    - gpt-5.4-nano
+    - single-trajectory
+    - adaptation-not-replication

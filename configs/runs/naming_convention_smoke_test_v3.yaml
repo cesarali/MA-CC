@@ -48,12 +48,29 @@ budget:
   allow_unbounded_paid_requests: false
 logging:
   component: ../components/logging/default.yaml
+  overrides:
+    comet: true
+    options:
+      detailed_prompt_audit:
+        enabled: true
+        log_every_n_rounds: 10
+        always_log_first_n_rounds: 2
+        always_log_provider_errors: true
+        always_log_invalid_responses: true
+        max_logged_prompts_per_game: 5
+        max_logged_prompts_per_run: 8
 storage:
   component: ../components/storage/local.yaml
 analysis:
   schema_version: 1
   enabled: false
   estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  comet_export:
+    - population_action_share_q
+    - dominant_action_share
 experiment:
   schema_version: 1
   name: naming-convention-phase-06-smoke-v3

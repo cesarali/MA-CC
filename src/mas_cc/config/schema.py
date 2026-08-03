@@ -134,6 +134,13 @@ def config_schema() -> dict[str, Any]:
                     "options": options,
                 }
             ),
+            "metrics": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "enabled": {"type": "boolean"},
+                    "comet_export": {"type": "array", "items": {"type": "string"}},
+                }
+            ),
             "experiment": _simple_object(
                 {
                     "schema_version": {"const": 1},

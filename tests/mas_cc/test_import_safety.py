@@ -24,6 +24,19 @@ print(json.dumps({
     assert probe == {"version": "0.1.0", "forbidden": []}
 
 
+def test_import_runtime_standalone_before_games_does_not_cycle():
+    """mas_cc.runtime.loop_runtime is imported by mas_cc.games (via runner.py
+    and naming_convention/runtime.py); importing mas_cc.runtime by itself
+    first, before anything pulls in mas_cc.games, must not deadlock the
+    partially-initialized module."""
+
+    script = "import mas_cc.runtime\nprint('ok')"
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.strip() == "ok"
+
+
 def test_import_prompt_kernel_does_not_import_games_or_providers():
     script = """
 import json

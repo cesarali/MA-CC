@@ -1,2 +1,0 @@
-provider,model,load_seconds,inference_seconds,total_seconds
-mock,deterministic-v1,,0.00011874399206135422,0.00011874399206135422

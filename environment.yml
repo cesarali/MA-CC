@@ -25,3 +25,6 @@ dependencies:
   - pyarrow
   - matplotlib
   - tqdm
+  - pip
+  - pip:
+      - comet_ml>=3.58,<4

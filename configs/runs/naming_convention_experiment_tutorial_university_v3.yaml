@@ -1,0 +1,98 @@
+# Fully expanded, self-contained example config for
+# docs/howto/building/running_an_experiment.md - every value is written
+# directly here; nothing is chased through a `component:` reference. Same
+# small game as configs/runs/naming_convention_tutorial_university_v3.yaml
+# (4 agents, 6 interactions), but execution.repetitions/parallelism turn one
+# game run into a 5-episode experiment. Cheap, live against the University
+# proxy. Not a paper replication and not sized for scientific results.
+#
+# What changed relative to the single-run tutorial config, and why:
+#   - execution.repetitions: 1 -> 5      (this is what makes it an experiment)
+#   - execution.parallelism: 1 -> 3      (at most 3 episodes run at once)
+#   - budget.*: scaled up ~5x with headroom, since the same shared budget is
+#     now spent across all 5 episodes, not just one (see the manual, section 3)
+#   - logging.comet: true -> false       (mas-cc experiment run does not wire
+#     Comet per episode yet - see the manual's "What's different" section;
+#     leaving it on here would just be a config value with no effect)
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  prompt_family: naming_convention_decision
+  prompt_version: 1
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"
+  response_contract:
+    type: paper_choice_reason
+    allowed_values: [Q, M]
+game:
+  type: naming_convention
+  population_size: 4
+  horizon: 6
+  topology: complete
+  options:
+    actions: [Q, M]
+    memory_size: 3
+    success_payoff: 100
+    failure_payoff: -50
+    pair_sampling: uniform_two_distinct
+    simultaneous_pair_decisions: true
+    randomize_presented_action_order: true
+    prompt_contract: naming_convention_decision
+    response_contract: json_reason
+    parser_contract: tolerant_paper_object_v1
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.0
+    representative_memory_size: 1
+    stop_on_convergence: false
+execution:
+  seed: 20260803
+  repetitions: 5
+  parallelism: 3
+  fail_fast: true
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 1.5
+  max_cost_per_run: 1.5
+  max_provider_requests: 200
+  max_input_tokens: 1000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    comet_project: mas-cc
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  enabled: true
+  comet_export: []
+experiment:
+  name: naming-convention-experiment-tutorial
+  description: 5-episode experiment version of the single-run tutorial config, for docs/howto/building/running_an_experiment.md; not a paper replication, not sized for scientific results.
+  tags: [tutorial, university, howto-manual, experiment]
