@@ -41,15 +41,21 @@ least once so far"** (call it `participation_rate`). Simple on purpose, so the s
 "What fraction has played so far" makes sense to check every round → **live** (a `StreamingMetric`).
 If instead you wanted "how many rounds did it take before everyone had played at least once," that
 only makes sense once you can look back over the whole episode → **end-of-episode**
-(a `FinalMetric`, like the existing `first_consensus_time`).
+(a `FinalMetric`, like the existing `first_consensus_time_by_action_share`).
 
 ### Step 2 — check whether it already exists, generically
 
 Before writing a new class, check `src/mas_cc/metrics/generic.py` — metrics written there work for
 *any* game that reduces to "each round, each agent has a current value" (most games do). It already
-has `ValueShare`, `AgentCurrentValue`, `DominantValueShare`, `FirstConsensusTime`,
+has `ActionSharePerOption`, `AgentCurrentValue`, `DominantValueShare`, `FirstConsensusTime`,
 `AgentAbsoluteError`, `MeanAbsoluteError`. Only write a new class if none of these, with different
 constructor arguments, already say what you need.
+
+If your metric is "one number per option, every round," you almost certainly want scope `option`
+rather than N separate population-scope metrics: return `{option_label: value}` from
+`compute_round`, and the recorder writes one row per option with the label in the `series` column
+and the plotter draws them as one labelled family. Set `requires_game_family = "choice"` on it so
+it can't be attached to a game that has no option set.
 
 ### Step 3 — write the class
 

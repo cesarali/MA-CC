@@ -41,10 +41,10 @@ def test_import_prompt_kernel_does_not_import_games_or_providers():
     script = """
 import json
 import sys
-import mas_cc.prompts
+import mas_cc.llm_runtime.prompts
 print(json.dumps(sorted(
     name for name in sys.modules
-    if name.startswith('mas_cc.games') or name.startswith('mas_cc.llm_providers')
+    if name.startswith('mas_cc.games') or name.startswith('mas_cc.llm_runtime.providers')
 )))
 """
     result = subprocess.run(

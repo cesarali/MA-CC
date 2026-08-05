@@ -8,16 +8,16 @@ from pathlib import Path
 import pytest
 
 from mas_cc.config import LLMProviderConfig
-from mas_cc.core import Message
-from mas_cc.core.exceptions import ProviderError
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.messages import Message
+from mas_cc.llm_runtime.providers import (
     BudgetCeiling,
     CompletionRequest,
     CompletionResponse,
+    ProviderError,
     ProviderUsage,
     create_llm_provider,
 )
-from mas_cc.llm_providers.adapters.gemma_local import (
+from mas_cc.llm_runtime.providers.adapters.gemma_local import (
     GemmaLocalProvider,
     GenerationResult,
 )

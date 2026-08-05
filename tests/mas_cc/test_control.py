@@ -5,7 +5,7 @@ import pytest
 
 from mas_cc.config import ConfigLoader, ControlConfig, GridSpec, load_run_config_or_grid
 from mas_cc.core import AgentId
-from mas_cc.core.exceptions import ConfigurationError
+from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.control import ForcedActionControl, NoneControl, create_control
 
 

@@ -18,7 +18,7 @@ import yaml
 
 from mas_cc import __version__
 from mas_cc.config import config_schema, load_run_config, resolved_config_yaml
-from mas_cc.core.exceptions import ConfigurationError
+from mas_cc.llm_runtime.exceptions import ConfigurationError
 
 
 def _now() -> str:
@@ -397,11 +397,11 @@ block manifest and definition hash without binding dynamic private values.
 def _phase_3_bound_prompt(prompt_config=None):
     """Return the bound basic-choice fixture shared by Phase 3 and Phase 4."""
 
-    from mas_cc.prompts import create_default_prompt_registry
+    from mas_cc.games.registry import create_default_prompt_registry
 
     family = "basic_choice" if prompt_config is None else prompt_config.prompt_family
     version = 1 if prompt_config is None else prompt_config.prompt_version
-    prompt = create_default_prompt_registry(include_legacy=False).get(family, version)
+    prompt = create_default_prompt_registry().get(family, version)
     return prompt.bind(
         private_state={
             "available_actions": ["A", "B"],
@@ -425,7 +425,8 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
 
     modules_before = set(sys.modules)
     from mas_cc.config import PromptConfig, load_component_config
-    from mas_cc.prompts import RegexTokenCounter, create_default_prompt_registry
+    from mas_cc.games.registry import create_default_prompt_registry
+    from mas_cc.llm_runtime.prompts import RegexTokenCounter
 
     source = Path(prompt_path).resolve()
     destination = Path(output_dir)
@@ -434,7 +435,7 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
     if not isinstance(loaded, PromptConfig):
         raise ValueError("prompt: component did not resolve to PromptConfig")
 
-    definition = create_default_prompt_registry(include_legacy=False).get(
+    definition = create_default_prompt_registry().get(
         loaded.prompt_family, loaded.prompt_version
     )
     bound = _phase_3_bound_prompt(loaded)
@@ -481,7 +482,7 @@ def inspect_phase_3(prompt_path: str | Path, output_dir: str | Path) -> bool:
     )
     modules_added = set(sys.modules) - modules_before
     provider_independent = not any(
-        name.startswith("mas_cc.llm_providers")
+        name.startswith("mas_cc.llm_runtime.providers")
         or name in {"openai", "requests", "torch", "transformers"}
         for name in modules_added
     )

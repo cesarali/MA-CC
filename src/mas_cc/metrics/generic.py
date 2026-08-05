@@ -14,12 +14,18 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from mas_cc.core import AgentId
-from mas_cc.metrics.base import FinalMetric, StreamingMetric
+from mas_cc.metrics.base import FinalMetric, MetricKey, StreamingMetric
 
 
 @dataclass(frozen=True, slots=True)
 class RoundView:
     """One round's per-agent state, in a game-neutral shape.
+
+    ``options`` is the game-declared choice set (empty for games that aren't
+    a choice family). Metrics use it so every option gets a row every round,
+    including options nobody has picked yet - otherwise the curves would start
+    at ragged rounds and a share of 0 would be indistinguishable from a
+    missing measurement.
 
     ``recent_history`` is optional and empty by default: a game whose
     outcome is a discrete pairwise event (this round's participants, what
@@ -33,20 +39,38 @@ class RoundView:
 
     agent_values: Mapping[AgentId, Any]
     agent_targets: Mapping[AgentId, Any] | None = None
+    options: tuple[str, ...] = ()
     recent_history: tuple[Mapping[str, Any], ...] = ()
 
 
-class ValueShare(StreamingMetric):
-    """Population share of agents currently holding ``value``. Unset (None) agents are excluded."""
+class ActionSharePerOption(StreamingMetric):
+    """Population composition: what fraction of the population stands on each option.
 
-    def __init__(self, value: Any, *, name: str | None = None) -> None:
-        super().__init__(name or f"value_share_{value}", scope="population")
-        self.value = value
+    For every option, the count of agents whose *most recent* choice is that
+    option, divided by the number of agents that have chosen at all. Agents
+    that have not yet played are excluded from both sides, so the values sum
+    to 1 from the first round onward rather than creeping up as the population
+    warms up.
 
-    def compute_round(self, view: RoundView) -> Mapping[AgentId | None, Any]:
-        known = [v for v in view.agent_values.values() if v is not None]
-        share = 0.0 if not known else sum(1 for v in known if v == self.value) / len(known)
-        return {None: share}
+    This is a *standing* quantity, not a flow: an agent keeps contributing its
+    last choice on every round it isn't selected. That is what makes the curve
+    a readable population statistic in a game where only two agents act per
+    round - counting just the current round's choices would give a
+    0/0.5/1 sawtooth carrying almost no information.
+    """
+
+    requires_game_family = "choice"
+
+    def __init__(self, *, name: str = "population_action_share_per_option") -> None:
+        super().__init__(name, scope="option")
+
+    def compute_round(self, view: RoundView) -> Mapping[MetricKey, Any]:
+        chosen = Counter(value for value in view.agent_values.values() if value is not None)
+        options = view.options or tuple(sorted(chosen))
+        total = sum(chosen.values())
+        if not total:
+            return {option: 0.0 for option in options}
+        return {option: chosen[option] / total for option in options}
 
 
 class AgentCurrentValue(StreamingMetric):
@@ -76,10 +100,20 @@ class DominantValueShare(StreamingMetric):
 class FirstConsensusTime(FinalMetric):
     """First round index at which the dominant value's share reaches ``threshold``.
 
+    Consensus *by standing action share*: it asks whether enough agents are
+    currently holding the same value. That is a different question from "are
+    recent interactions succeeding", which is what the Ashery spec's §7
+    criterion measures (see
+    ``games/naming_convention/metrics.py::ConsensusFlipBySuccessRate``). The two
+    normally agree eventually but not on the same round, so both carry the
+    quantity they measure in their metric name.
+
     Returns ``None`` if consensus was never reached.
     """
 
-    def __init__(self, threshold: float = 0.95, *, name: str = "first_consensus_time") -> None:
+    def __init__(
+        self, threshold: float = 0.95, *, name: str = "first_consensus_time_by_action_share"
+    ) -> None:
         super().__init__(name, scope="population")
         if not 0.0 < threshold <= 1.0:
             raise ValueError("threshold must be in (0, 1]")

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from mas_cc.config import GridSpec, LLMProviderConfig
-from mas_cc.llm_providers import BudgetLimits, PricingQuote
+from mas_cc.llm_runtime.providers import BudgetLimits, PricingQuote
 
 from .experiment_preflight import (
     ExperimentPreflightEstimate,

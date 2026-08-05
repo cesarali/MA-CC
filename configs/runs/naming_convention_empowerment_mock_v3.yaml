@@ -1,0 +1,117 @@
+# FREE dry run of the empowerment/mutual-information pipeline.
+#
+# Same shape as naming_convention_empowerment_university_v3.yaml, but against
+# the mock provider with offline pricing, so it costs nothing and sends no
+# network traffic. Run this FIRST: it exercises the whole chain end to end -
+# grid expansion -> control layer -> parallel episodes -> streaming metrics ->
+# `mas-cc analysis empowerment` - so that the only thing left untested when you
+# spend real requests is the LLM's behaviour itself.
+#
+# What to expect: the mock always answers "Q", so the forced agent's value
+# (Q vs M) never changes which word wins - terminal outcome is Q in both cells.
+# The estimated MI should therefore come out at ~0 bits. That is the point:
+# it is a negative control. A near-zero number here means the estimator is
+# not inventing signal; a large number here would mean something is wrong.
+llm_provider:
+  type: mock
+  model: mock-choice
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 8
+  options:
+    response: "Q"
+    artificial_latency_seconds: 0.05   # keeps the tqdm bars visibly moving
+    estimated_latency_seconds: 0.05
+prompt:
+  schema_version: 2
+  prompt_family: naming_convention_decision
+  prompt_version: 1
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"
+  response_contract:
+    type: choice_only
+    allowed_values: [Q, M]
+game:
+  type: naming_convention
+  population_size: 3
+  horizon: 15            # 15 PAIR INTERACTIONS = 5 population rounds at N=3
+  topology: complete
+  options:
+    actions: [Q, M]
+    memory_size: 3
+    success_payoff: 100
+    failure_payoff: -50
+    pair_sampling: uniform_two_distinct
+    simultaneous_pair_decisions: true
+    randomize_presented_action_order: true
+    prompt_contract: naming_convention_decision
+    response_contract: choice_only
+    parser_contract: choice_only_v1
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.0
+    representative_memory_size: 1
+    stop_on_convergence: false
+# The intervention whose influence the MI measures. agent-000 of three is a
+# committed 1/3 minority, held to one word for every interaction. `forced_value`
+# below is a placeholder - the `grid:` section at the bottom is what actually
+# sets it, one value per cell, and that swept path becomes the MI's condition
+# variable. A forced decision short-circuits the provider entirely
+# (runtime/loop_runtime.py), so agent-000 never costs a request.
+control:
+  mechanism: forced_action
+  options:
+    agent_ids: [agent-000]
+    forced_value: Q
+    until_interaction: null   # null = committed for the whole episode
+execution:
+  seed: 20260805
+  repetitions: 3    # episodes PER CELL -> 2 cells x 3 = 6 episodes total
+  parallelism: 3    # 3 episodes in flight at once, across the whole grid
+  fail_fast: true
+pricing:
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  # true only because the mock provider has no published price and bills
+  # nothing. The live config keeps this false, where it matters.
+  explicit_unknown_price_override: true
+budget:
+  # The mock has no published price, so a monetary cap cannot be enforced
+  # against it - the runtime guard refuses to run rather than pretend it can.
+  # Cost caps are therefore left null and the request/token caps below do the
+  # actual bounding. Safe here and only here: the mock bills nothing and opens
+  # no socket. The live config keeps real monetary caps.
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 600
+  max_input_tokens: 2000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: true
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false      # never on for a dry run - see the accidental-live-run incident
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  # Must stay true: analysis/reader.py rebuilds each episode's per-round
+  # macrostate from the `population_action_share_per_option` rows in
+  # metrics/streaming.csv. Turn metrics off and the MI analysis has no input.
+  enabled: true
+  comet_export: []
+experiment:
+  name: naming-convention-empowerment-mock
+  description: Free mock dry run of the forced-action empowerment grid; negative control, expected MI ~ 0 bits.
+  tags: [empowerment, mutual-information, grid, mock, dry-run]
+grid:
+  # One axis, two levels -> the binary condition variable C in I(C; outcome).
+  control.options.forced_value: [Q, M]

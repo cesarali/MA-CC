@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.providers import (
     CompletionResponse,
     ProviderCapabilities,
     ProviderUsage,

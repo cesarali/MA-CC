@@ -44,19 +44,19 @@ have to cross-reference by hand:
 metrics:
   enabled: true
   available:
-    population_action_share_q:
-      comet: true
-    population_action_share_m:
+    population_action_share_per_option:
       comet: true
     dominant_action_share:
       comet: true
-    first_consensus_time:
+    first_consensus_time_by_action_share:
       comet: true
+    first_consensus_time_by_success_rate:
+      comet: true
+    consensus_action_by_success_rate:
+      comet: false   # a word, not a number
     rolling_coordination_rate:
       comet: true
-    rolling_action_share_q:
-      comet: false
-    rolling_action_share_m:
+    rolling_action_share_per_option:
       comet: false
     agent_current_action:
       comet: false   # agent-scoped - Comet only ever receives population-level values, regardless
@@ -66,10 +66,33 @@ Omitting a metric from `available` (or leaving `comet` unset/`false`) just keeps
 computed and written to `metrics/streaming.csv`/`final.csv` if `enabled: true`, just not sent
 anywhere. `game episode`'s closing summary prints exactly which names actually got exported
 (`Metrics exported to Comet (N): ...`), so you don't have to take the config's word for it either.
-The accompanying tutorial config lists all eight explicitly, as a working example.
+The accompanying tutorial config lists every metric explicitly, as a working example.
 
 **If you turn metrics off entirely** (`metrics.enabled: false`), none of the above computes or
-sends anything.
+sends anything — including the binned trajectory tables below.
+
+**The binned trajectory metrics** (success rate and production probability, from the Ashery spec)
+are configured by three further keys in the same section:
+
+```yaml
+metrics:
+  bin_size_interactions: null   # null = one population round (N interactions); a number pins it
+  partial_final_bin: drop       # drop | include | error
+  exclude_committed_outputs: false
+```
+
+They write `metrics/success_rate.csv` and `metrics/production_probability.csv`, one row per bin and
+per (bin, action) respectively, each keeping its raw counts beside the normalized value. Leave
+`bin_size_interactions` unset unless you have a reason not to: it then tracks `game.population_size`
+automatically, so it stays correct when you change the population.
+
+`exclude_committed_outputs: true` drops the outputs of agents pinned by
+`control.mechanism: forced_action` from both the numerator and the denominator of the production
+probability — the way to ask "did the *free* agents adopt this word" without the forced agents
+inflating the answer. It applies per output, so a committed/ordinary pairing keeps the ordinary
+agent's word. Leave it `false` outside committed-minority analyses. See
+[`docs/documentation/metrics.md` §3](../../documentation/metrics.md#3-the-binned-trajectory-metrics)
+for worked numbers.
 
 **The rolling metrics also get plotted automatically** — `game episode` writes one PNG per
 population-scope streaming metric to `<output-dir>/.../metrics/plots/`, using the same

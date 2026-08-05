@@ -7,8 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from mas_cc.config import ControlConfig
-from mas_cc.core.exceptions import ConfigurationError
-from mas_cc.core.validation import ValidationIssue
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.llm_runtime.validation import ValidationIssue
 
 from .protocols import Control
 

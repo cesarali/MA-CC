@@ -14,8 +14,8 @@ from mas_cc.games.naming_convention import (
     parse_convention_response,
     run_naming_convention_game_sync,
 )
-from mas_cc.llm_providers import CompletionResponse, ProviderCapabilities, ProviderUsage
-from mas_cc.prompts import RegexTokenCounter
+from mas_cc.llm_runtime.providers import CompletionResponse, ProviderCapabilities, ProviderUsage
+from mas_cc.llm_runtime.prompts import RegexTokenCounter
 
 
 def _config(*, population_size=6, horizon=12, memory_size=3):

@@ -81,10 +81,10 @@ shared between them. Naming-convention subclasses it as `ConventionAgentState`
   shown.
 - `lifetime_score` — a typed read of `score`.
 
-**Known trap:** `ConventionAgentState.attributes["committed_action"]` is set to `None` at
-initialization and never updated anywhere in the game logic — it's dead. The real "what did this
-agent last play" comes from `private_history[-1].own_action`, not from `committed_action`. If you
-ever see `committed_action` in an audit trace, it will always read `null`.
+- `committed_action` — the choice this agent currently stands on. `None` until the agent's first
+  interaction, then updated by `apply_transition` on every round it plays. This is what the
+  population-share metrics read, so "where does the population stand" never requires replaying
+  anyone's history.
 
 **In plain terms:** an agent is a lab sample with its own logbook page — an ID, a running score,
 and a private, append-only history of what happened to it. Two different agents are always two
@@ -224,15 +224,24 @@ Most games reduce to "each round, each agent has a current value," so metrics ar
 against a generic `RoundView` (`src/mas_cc/metrics/generic.py`):
 
 ```python
-RoundView(agent_values: Mapping[AgentId, Any], agent_targets: Mapping[AgentId, Any] | None = None)
+RoundView(
+    agent_values: Mapping[AgentId, Any],
+    agent_targets: Mapping[AgentId, Any] | None = None,
+    options: tuple[str, ...] = (),
+)
 ```
 
-with a small shelf of reusable metrics (`ValueShare`, `AgentCurrentValue`, `DominantValueShare`,
-`FirstConsensusTime`, `AgentAbsoluteError`, `MeanAbsoluteError`). A game only needs to write a
-small adapter — `games/naming_convention/metrics.py::to_round_view` reads each agent's last played
-action from `private_history` — and pick metrics off the shelf via `build_metrics()`:
-`population_action_share_q`/`_m`, `agent_current_action`, `dominant_action_share`,
-`first_consensus_time`.
+with a small shelf of reusable metrics (`ActionSharePerOption`, `AgentCurrentValue`,
+`DominantValueShare`, `FirstConsensusTime`, `AgentAbsoluteError`, `MeanAbsoluteError`). A game only
+needs to write a small adapter — `games/naming_convention/metrics.py::to_round_view` reads each
+agent's `committed_action` and the game's option set into a `RoundView` — and pick metrics off the
+shelf via `build_metrics()`: `population_action_share_per_option`, `agent_current_action`,
+`dominant_action_share`, `first_consensus_time_by_action_share`.
+
+`ActionSharePerOption` declares `requires_game_family = "choice"`, which is checked against the
+game's `GameSpec.game_family` when metrics are attached (`games/registry.py::game_metrics`) — a
+share-of-options metric on a game with no options fails at wiring time instead of writing a column
+of zeros.
 
 **In plain terms:** the raw readings are what happened in each interaction (who played what,
 who scored). Metrics are the numbers you actually report — "45% of the population is playing Q,"
@@ -324,7 +333,7 @@ above is exactly what gets written to `resolved_config.yaml` in a real run, secr
 
 ```python
 from mas_cc.games import create_game
-from mas_cc.llm_providers import create_llm_provider
+from mas_cc.llm_runtime.providers import create_llm_provider
 
 game = create_game(config.game)  # NamingConventionGame, resolved from config.game.type
 provider = create_llm_provider(config.llm_provider, environment=os.environ)  # the University adapter
@@ -403,15 +412,15 @@ print("Comet:", summary["comet"]["status"], "-", destination / "comet_summary.js
 # Fold the shared metrics over every resulting state.
 views = tuple(to_round_view(interaction.transition.next_state) for interaction in result.interactions)
 metrics = build_metrics()
-population_action_share_q = next(m for m in metrics if m.name == "population_action_share_q")
-print("final population_action_share_q:", population_action_share_q.compute_round(views[-1]))
+shares = next(m for m in metrics if m.name == "population_action_share_per_option")
+print("final share per option:", shares.compute_round(views[-1]))  # e.g. {"Q": 1.0, "M": 0.0}
 ```
 
 **What I actually validated, and what I didn't fabricate:** I ran this exact wiring — config
 resolution, `RunRecorder` construction, the `ObservedRecorder` adapter, `run_naming_convention_game_sync`,
 `recorder.finalize` — with a mock provider standing in for University, so I could confirm none of
 it crashes and that it produces 6 completed interactions,
-`termination_reason == "fixed_horizon_reached"`, and a real `population_action_share_q` value. That
+`termination_reason == "fixed_horizon_reached"`, and a real `population_action_share_per_option` value. That
 validation run *did* go through to a real, live Comet experiment (this repository's `.env` has a
 working `COMET_API_KEY`), which was not intentional — I was only trying to confirm the code path,
 not create a live artifact. Running the snippets above yourself, with your own University

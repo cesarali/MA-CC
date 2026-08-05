@@ -3,8 +3,9 @@
 Consumes only what a grid run already writes to disk - `cells/<cell_id>/overrides.json`
 (the condition label, free once `control.*` is a sweepable path - see
 `docs/architecture_overview.md`) and each episode's `metrics/streaming.csv`
-(the per-round `population_action_share_<value>` StreamingMetric output
-`games/naming_convention/metrics.py` already produces). No new `Metric`
+(the per-round `population_action_share_per_option` StreamingMetric output
+`games/naming_convention/metrics.py` already produces, one row per option
+per round with the option in the `series` column). No new `Metric`
 classes or `RunRecorder` changes were needed for this - see the plan's
 Phase 3 rationale: `Metric` instances are shared across every episode in an
 experiment, which rules out a stateful per-round metric, so the rolling/
@@ -20,7 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
-_SHARE_PREFIX = "population_action_share_"
+_SHARE_METRIC = "population_action_share_per_option"
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ class GridData:
 
 
 def _dominant_action(group: pd.DataFrame) -> str:
-    """The action whose `population_action_share_*` value is largest in this round.
+    """The action whose `population_action_share_per_option` value is largest in this round.
 
     Ties are broken by whichever action's metric row comes first - acceptable
     for a first version since a genuine tie is already a boundary case any
@@ -70,12 +71,11 @@ def read_grid(grid_dir: str | Path) -> GridData:
                 continue
             streaming = pd.read_csv(streaming_path)
             shares = streaming[
-                streaming["agent_id"].isna()
-                & streaming["metric_name"].str.startswith(_SHARE_PREFIX)
+                streaming["agent_id"].isna() & (streaming["metric_name"] == _SHARE_METRIC)
             ].copy()
             if shares.empty:
                 continue
-            shares["action_value"] = shares["metric_name"].str.removeprefix(_SHARE_PREFIX)
+            shares["action_value"] = shares["series"].astype(str)
             episode_id = episode_dir.name
 
             for round_index, group in shares.groupby("round_index"):

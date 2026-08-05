@@ -7,7 +7,8 @@ from dataclasses import replace
 from typing import Any
 
 from mas_cc.config import GameConfig
-from mas_cc.core import AgentId, InteractionId, ValidationIssue, ValidationResult
+from mas_cc.core import AgentId, InteractionId
+from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
 from mas_cc.planning import (
     DecisionStagePlan,
     GameCallPlan,
@@ -36,6 +37,7 @@ class ToyCoordinationGame(Game):
         game_type="toy_coordination",
         version=1,
         description="Pairwise agents choose A or B and receive one point when they match.",
+        game_family="choice",
         minimum_population=2,
         supported_topologies=("complete",),
     )

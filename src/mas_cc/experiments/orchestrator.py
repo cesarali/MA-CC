@@ -24,10 +24,10 @@ from typing import Any, Callable, Mapping
 from mas_cc.config import GridSpec, RunConfig, resolved_config_yaml
 from mas_cc.control import create_control
 from mas_cc.core.random import Seed
-from mas_cc.games import Game, create_game
+from mas_cc.games import Game, create_game, game_metrics
 from mas_cc.games.naming_convention.runtime import run_naming_convention_game
 from mas_cc.games.runner import run_game
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.providers import (
     BudgetGuardedProvider,
     BudgetLimits,
     CachedPricingSource,
@@ -138,16 +138,6 @@ def _pricing_terms(quote: PricingQuote) -> dict[str, Any] | None:
     for provenance_field in ("source", "retrieved_at", "version"):
         terms.pop(provenance_field, None)
     return terms
-
-
-def _game_metrics(game_type: str) -> tuple[tuple[Any, ...], Callable[[Any], Any] | None]:
-    """Best-effort per-game metrics lookup; empty for games without a metrics module."""
-
-    try:
-        module = import_module(f"mas_cc.games.{game_type}.metrics")
-    except ImportError:
-        return (), None
-    return tuple(getattr(module, "METRICS", ())), getattr(module, "to_round_view", None)
 
 
 class _RoundTickingObserver:
@@ -282,6 +272,7 @@ async def _execute_episode(
             # experiment would otherwise fan out into N remote experiments.
             comet_enabled=False, checkpoint_enabled=checkpoint_enabled,
             price_snapshot_hash=price_hash, metrics=metrics, to_round_view=to_round_view,
+            binning=episode_config.metrics.binning_policy(episode_config.game.population_size),
         )
         observer = _RoundTickingObserver(recorder, guard, progress, episode_label)
         control = create_control(episode_config.control)
@@ -471,7 +462,7 @@ async def run_experiment(
         )
 
     tasks = [_episode_task(index) for index in range(config.execution.repetitions)]
-    metrics, to_round_view = _game_metrics(config.game.type)
+    metrics, to_round_view = game_metrics(game)
     policy = DetailedAuditPolicy.from_mapping(config.logging.options.get("detailed_prompt_audit"))
     price_hash = price_snapshot_hash(runtime_quote.to_dict())
 
@@ -689,7 +680,7 @@ async def run_experiment_grid(
         input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
     )
 
-    metrics, to_round_view = _game_metrics(base.game.type)
+    metrics, to_round_view = game_metrics(game)
     policy = DetailedAuditPolicy.from_mapping(base.logging.options.get("detailed_prompt_audit"))
     price_hash = price_snapshot_hash(runtime_quote.to_dict())
 

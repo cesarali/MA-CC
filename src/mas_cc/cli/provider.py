@@ -11,14 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from mas_cc.config import LLMProviderConfig, PromptConfig, load_component_config
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.providers import (
     BudgetCeiling,
     CompletionRequest,
     ProviderError,
     create_llm_provider,
 )
 from mas_cc.planning import LogicalCallSpec, static_preflight
-from mas_cc.prompts import CompiledPrompt, RegexTokenCounter
+from mas_cc.llm_runtime.prompts import CompiledPrompt, RegexTokenCounter
 
 from .inspect import _phase_3_bound_prompt, _write, _write_manifest
 

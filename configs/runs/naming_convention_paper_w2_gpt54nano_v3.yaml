@@ -73,7 +73,7 @@ metrics:
   schema_version: 1
   enabled: true
   comet_export:
-    - population_action_share_q
+    - population_action_share_per_option
     - dominant_action_share
 experiment:
   schema_version: 1

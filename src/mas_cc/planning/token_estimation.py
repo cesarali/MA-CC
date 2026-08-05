@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from mas_cc.llm_providers import CompletionRequest
+from mas_cc.llm_runtime.providers import CompletionRequest
 
 
 TOKENIZER_NAME = "mas_cc_regex_v1_estimate"

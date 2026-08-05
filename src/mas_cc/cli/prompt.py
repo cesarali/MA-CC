@@ -12,11 +12,11 @@ from typing import Any
 import yaml
 
 from mas_cc.games.naming_convention.prompts import bind_naming_convention_prompt
-from mas_cc.prompts import PromptMarkdownLogger, RegexTokenCounter
-from mas_cc.prompts.plugins.hidden_profile_v3 import (
+from mas_cc.games.prompt_library.hidden_profile_v3 import (
     hidden_profile_discussion_prompt,
     hidden_profile_vote_prompt,
 )
+from mas_cc.llm_runtime.prompts import PromptMarkdownLogger, RegexTokenCounter
 
 
 def _write_json(path: Path, value: Any) -> None:

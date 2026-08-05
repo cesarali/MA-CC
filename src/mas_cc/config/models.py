@@ -3,6 +3,11 @@
 The models intentionally use only the standard library.  They describe what a
 run needs without constructing providers, reading credentials, or opening any
 external service.
+
+``LLMProviderConfig`` and ``PromptConfig`` live in
+:mod:`mas_cc.llm_runtime.config` as part of the portable ``llm_runtime``
+component and are re-exported here for compatibility, since ``RunConfig``
+composes them alongside the repository-wide sections below.
 """
 
 from __future__ import annotations
@@ -10,6 +15,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Mapping
+
+from mas_cc.llm_runtime.config import LLMProviderConfig, PromptConfig, ProviderConfig
+from mas_cc.metrics.interactions import PARTIAL_BIN_POLICIES, BinnedTrajectoryPolicy
+
+__all_reexported__ = ("LLMProviderConfig", "PromptConfig", "ProviderConfig")
 
 
 def _freeze(value: Any) -> Any:
@@ -30,128 +40,6 @@ def _thaw(value: Any) -> Any:
     if isinstance(value, (set, frozenset)):
         return sorted(_thaw(item) for item in value)
     return value
-
-
-@dataclass(frozen=True, slots=True)
-class LLMProviderConfig:
-    """Connection-free settings for one LLM provider adapter."""
-
-    type: str
-    model: str
-    schema_version: int = 1
-    credentials_env: str | None = None
-    base_url_env: str | None = None
-    timeout_seconds: float = 60.0
-    max_retries: int = 2
-    request_concurrency: int = 1
-    temperature: float = 0.0
-    max_output_tokens: int = 256
-    options: Mapping[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "options", _freeze(self.options))
-
-    @property
-    def provider_type(self) -> str:
-        return self.type
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema_version": self.schema_version,
-            "type": self.type,
-            "model": self.model,
-            "credentials_env": self.credentials_env,
-            "base_url_env": self.base_url_env,
-            "timeout_seconds": self.timeout_seconds,
-            "max_retries": self.max_retries,
-            "request_concurrency": self.request_concurrency,
-            "temperature": self.temperature,
-            "max_output_tokens": self.max_output_tokens,
-            "options": _thaw(self.options),
-        }
-
-
-# A short alias is convenient in user code while the longer name makes the
-# architecture boundary explicit.
-ProviderConfig = LLMProviderConfig
-
-
-@dataclass(frozen=True, slots=True)
-class PromptConfig:
-    """A Version 2 family selection plus permitted presentation policy."""
-
-    prompt_family: str
-    prompt_version: int
-    blocks: tuple[str, ...] = ()
-    response_contract: Mapping[str, Any] = field(default_factory=dict)
-    schema_version: int = 2
-    message_mode: str | None = None
-    block_separator: str | None = None
-    options: Mapping[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if (
-            isinstance(self.schema_version, bool)
-            or not isinstance(self.schema_version, int)
-            or self.schema_version not in {1, 2}
-        ):
-            raise ValueError("PromptConfig.schema_version must be 1 or 2")
-        if not isinstance(self.prompt_family, str) or not self.prompt_family.strip():
-            raise ValueError("PromptConfig.prompt_family must be non-empty")
-        if (
-            isinstance(self.prompt_version, bool)
-            or not isinstance(self.prompt_version, int)
-            or self.prompt_version < 1
-        ):
-            raise ValueError("PromptConfig.prompt_version must be positive")
-        if isinstance(self.blocks, (str, bytes)) or any(
-            not isinstance(name, str) or not name for name in self.blocks
-        ):
-            raise ValueError("PromptConfig.blocks must contain non-empty strings")
-        blocks = tuple(self.blocks)
-        if self.schema_version == 2 and blocks:
-            raise ValueError(
-                "PromptConfig.blocks is forbidden in schema version 2; "
-                "the registered FullPrompt owns authoritative order"
-            )
-        if not isinstance(self.response_contract, Mapping):
-            raise TypeError("PromptConfig.response_contract must be a mapping")
-        if self.message_mode not in {None, "per_block", "merge_consecutive_roles"}:
-            raise ValueError("PromptConfig.message_mode is invalid")
-        if self.block_separator is not None and not isinstance(self.block_separator, str):
-            raise TypeError("PromptConfig.block_separator must be a string or None")
-        if not isinstance(self.options, Mapping):
-            raise TypeError("PromptConfig.options must be a mapping")
-        object.__setattr__(self, "blocks", blocks)
-        object.__setattr__(self, "response_contract", _freeze(self.response_contract))
-        object.__setattr__(self, "options", _freeze(self.options))
-
-    def to_dict(self) -> dict[str, Any]:
-        result = {
-            "schema_version": self.schema_version,
-            "prompt_family": self.prompt_family,
-            "prompt_version": self.prompt_version,
-            "response_contract": _thaw(self.response_contract),
-            "message_mode": self.message_mode,
-            "block_separator": self.block_separator,
-            "options": _thaw(self.options),
-        }
-        if self.schema_version == 1:
-            result["blocks"] = list(self.blocks)
-        return result
-
-    @property
-    def is_legacy(self) -> bool:
-        return self.schema_version == 1
-
-    def migration_diagnostics(self) -> tuple[str, ...]:
-        if not self.is_legacy:
-            return ()
-        return (
-            "prompt.schema_version 1 is legacy; migrate to 2",
-            "remove prompt.blocks because the registered FullPrompt owns authoritative order",
-            "move prompt.options.message_mode/block_separator to prompt top-level fields",
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,16 +204,54 @@ class MetricsConfig:
     hand. ``comet_export`` (a flat list of names) still works too, for
     backward compatibility — ``comet_export_names()`` returns the union of
     both.
+
+    ``bin_size_interactions`` / ``partial_final_bin`` / ``exclude_committed_outputs``
+    configure the binned trajectory metrics (success rate and production
+    probability). They are explicit configuration rather than constants buried
+    in code because changing any of them changes what a reported number means,
+    so a run's own config has to record which policy produced it.
     """
 
     schema_version: int = 1
     enabled: bool = True
     comet_export: tuple[str, ...] = ()
     available: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    bin_size_interactions: int | None = None
+    partial_final_bin: str = "drop"
+    exclude_committed_outputs: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "comet_export", tuple(self.comet_export))
         object.__setattr__(self, "available", _freeze(self.available))
+        if self.bin_size_interactions is not None and self.bin_size_interactions < 1:
+            raise ValueError("metrics.bin_size_interactions must be a positive integer or null")
+        if self.partial_final_bin not in PARTIAL_BIN_POLICIES:
+            raise ValueError(
+                f"metrics.partial_final_bin must be one of {PARTIAL_BIN_POLICIES}, "
+                f"got {self.partial_final_bin!r}"
+            )
+
+    def resolved_bin_size(self, population_size: int) -> int:
+        """Interactions per trajectory bin, defaulting to one population round.
+
+        The Ashery convention is that a population round *is* N pair
+        interactions for population size N, so leaving this unset tracks the
+        population instead of silently pinning a bin size that stops matching
+        when the population changes.
+        """
+
+        return self.bin_size_interactions or population_size
+
+    def binning_policy(self, population_size: int) -> "BinnedTrajectoryPolicy | None":
+        """The binned-trajectory policy this config asks for, or None when metrics are off."""
+
+        if not self.enabled:
+            return None
+        return BinnedTrajectoryPolicy(
+            bin_size=self.resolved_bin_size(population_size),
+            partial_final_bin=self.partial_final_bin,
+            exclude_committed_outputs=self.exclude_committed_outputs,
+        )
 
     def comet_export_names(self) -> tuple[str, ...]:
         """Every metric name allowed to reach Comet, from either spelling."""
@@ -343,6 +269,9 @@ class MetricsConfig:
             "enabled": self.enabled,
             "comet_export": list(self.comet_export),
             "available": _thaw(self.available),
+            "bin_size_interactions": self.bin_size_interactions,
+            "partial_final_bin": self.partial_final_bin,
+            "exclude_committed_outputs": self.exclude_committed_outputs,
         }
 
 

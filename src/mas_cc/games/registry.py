@@ -5,11 +5,12 @@ from __future__ import annotations
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from mas_cc.config import GameConfig
-from mas_cc.core.exceptions import ConfigurationError
-from mas_cc.core.validation import ValidationIssue
-from mas_cc.prompts import PromptRegistry
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.llm_runtime.validation import ValidationIssue
+from mas_cc.llm_runtime.prompts import PromptRegistry
 
 from .protocols import Game
 
@@ -72,6 +73,27 @@ def create_default_game_registry() -> GameRegistry:
     return registry
 
 
+def create_default_prompt_registry() -> PromptRegistry:
+    """Build game-neutral example/benchmark registrations without discovery or I/O.
+
+    The portable prompt kernel (``mas_cc.llm_runtime.prompts``) ships with no
+    built-in content; this repository's fixture-specific prompt definitions
+    live under ``games/prompt_library/`` and are wired in here.
+    """
+
+    from .prompt_library.basic_choice_v3 import basic_choice_prompt
+    from .prompt_library.hidden_profile_v3 import (
+        hidden_profile_discussion_prompt,
+        hidden_profile_vote_prompt,
+    )
+
+    registry = PromptRegistry()
+    registry.register(basic_choice_prompt)
+    registry.register(hidden_profile_discussion_prompt)
+    registry.register(hidden_profile_vote_prompt)
+    return registry
+
+
 def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     """Register concrete prompts at the application boundary that owns the games."""
 
@@ -85,3 +107,34 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
 
 def create_game(config: GameConfig, *, registry: GameRegistry | None = None) -> Game:
     return (registry or create_default_game_registry()).create(config)
+
+
+def game_metrics(game: Game) -> tuple[tuple[Any, ...], Callable[[Any], Any] | None]:
+    """This game's declared metrics and its ``RoundView`` adapter.
+
+    Best effort: a game with no ``metrics`` module records nothing, which is
+    how the frozen Phase 7 gate stays unaffected.
+
+    Metrics that declare a ``requires_game_family`` are checked against the
+    game's own ``spec.game_family`` here - the one place where a concrete game
+    and its metric list are both in hand - so an option-share metric attached
+    to a game with no option set fails at wiring time rather than silently
+    producing a column of zeros.
+    """
+
+    try:
+        module = importlib.import_module(f"mas_cc.games.{game.spec.game_type}.metrics")
+    except ImportError:
+        return (), None
+    metrics = tuple(getattr(module, "METRICS", ()))
+    mismatched = [
+        f"{metric.name} (requires {metric.requires_game_family!r})"
+        for metric in metrics
+        if getattr(metric, "requires_game_family", None) not in (None, game.spec.game_family)
+    ]
+    if mismatched:
+        raise ValueError(
+            f"game {game.spec.game_type!r} is family {game.spec.game_family!r} but declares "
+            f"metrics for another family: {', '.join(mismatched)}"
+        )
+    return metrics, getattr(module, "to_round_view", None)

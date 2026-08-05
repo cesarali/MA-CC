@@ -7,8 +7,8 @@ from typing import Any
 
 from mas_cc.config import RunConfig
 from mas_cc.core import Seed
-from mas_cc.llm_providers import LLMProvider
-from mas_cc.prompts import RegexTokenCounter, TokenCounter
+from mas_cc.llm_runtime.providers import LLMProvider
+from mas_cc.llm_runtime.prompts import RegexTokenCounter, TokenCounter
 from mas_cc.runtime import run_validated_decision
 
 from .protocols import DecisionRecord, Game, GameResult, InteractionRecord

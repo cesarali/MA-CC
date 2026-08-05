@@ -1,0 +1,5 @@
+fde3a32e2dac1420ec01bb408ecc04d17f7fc401
+Working tree had uncommitted changes when this bundle was prepared: the
+llm_runtime consolidation itself (this commit's own diff) plus one new
+untracked directory, tdd/misselaneous/, that predates and is unrelated to
+this work.

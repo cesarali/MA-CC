@@ -12,8 +12,24 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from mas_cc.metrics import FinalMetric, Metric, StreamingMetric
+from mas_cc.metrics.interactions import (
+    PRODUCTION_PROBABILITY_FIELDS,
+    SUCCESS_RATE_FIELDS,
+    BinnedTrajectoryPolicy,
+    InteractionOutcome,
+    binned_trajectory_tables,
+)
 from mas_cc.observability.audit import DetailedAuditPolicy, DetailedAuditSelector
 from mas_cc.storage import AtomicCheckpointStore, Checkpoint, canonical_hash
+
+STREAMING_METRIC_FIELDS = ["round_index", "episode_id", "agent_id", "series", "metric_name", "value"]
+"""Column order of ``metrics/streaming.csv``, and the marker for its schema.
+
+``agent_id`` is set for agent-scope metrics, ``series`` for option-scope ones,
+and both are empty for population-scope metrics. Any change here changes the
+on-disk schema, which is exactly what the header comparison in
+``_record_round_metrics`` detects when it meets a file from an older run.
+"""
 
 
 def _now() -> str:
@@ -123,6 +139,7 @@ class RunRecorder:
         checkpoint_enabled: bool = True, price_snapshot_hash: str | None = None,
         metrics: Sequence[Metric] = (), to_round_view: Callable[[Any], Any] | None = None,
         comet_metric_export: Sequence[str] = (),
+        binning: BinnedTrajectoryPolicy | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -150,6 +167,9 @@ class RunRecorder:
         self._round_views: list[Any] = []
         self._streaming_metrics_path = self.output_dir / "metrics" / "streaming.csv"
         self._final_metrics_path = self.output_dir / "metrics" / "final.csv"
+        self._binning = binning
+        self._success_rate_path = self.output_dir / "metrics" / "success_rate.csv"
+        self._production_probability_path = self.output_dir / "metrics" / "production_probability.csv"
         self._streaming_metrics_header_written = False
 
     def event(self, event_type: str, **payload: Any) -> None:
@@ -220,6 +240,14 @@ class RunRecorder:
             self._checkpoint_store.write(Checkpoint(self.run_id, round_index, self.config_hash, state, budget_status, prompt_definitions))
             self.event("checkpoint_written", completed_rounds=round_index)
 
+    def _existing_streaming_header(self) -> list[str] | None:
+        """The header of an already-written streaming.csv, or None if there isn't one."""
+
+        if not self._streaming_metrics_path.exists():
+            return None
+        with self._streaming_metrics_path.open(newline="", encoding="utf-8") as stream:
+            return next(csv.reader(stream), None)
+
     def _record_round_metrics(self, round_index: int, game_state: Any) -> None:
         """Compute the game's declared streaming metrics for one round.
 
@@ -234,20 +262,45 @@ class RunRecorder:
         rows: list[dict[str, Any]] = []
         comet_values: dict[str, float] = {}
         for metric in self._streaming_metrics:
-            for agent_id, value in metric.compute_round(view).items():
+            for key, value in metric.compute_round(view).items():
+                # `key` means different things per scope, so it lands in a
+                # different column: agent ids identify a row's agent, option
+                # labels identify one curve within a single metric's family.
                 rows.append({
                     "round_index": round_index, "episode_id": self.run_id,
-                    "agent_id": "" if agent_id is None else str(agent_id),
+                    "agent_id": str(key) if metric.scope == "agent" else "",
+                    "series": str(key) if metric.scope == "option" else "",
                     "metric_name": metric.name, "value": value,
                 })
-                if agent_id is None and metric.name in self._comet_metric_export:
-                    comet_values[metric.name] = float(value)
+                if metric.scope != "agent" and metric.name in self._comet_metric_export:
+                    # Comet keys must be unique, so each option curve is exported
+                    # under its own suffixed key while staying one metric locally.
+                    comet_key = metric.name if metric.scope == "population" else f"{metric.name}_{key}"
+                    comet_values[comet_key] = float(value)
         if not rows:
             return
         self._streaming_metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        write_header = not self._streaming_metrics_header_written and not self._streaming_metrics_path.exists()
-        with self._streaming_metrics_path.open("a", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=["round_index", "episode_id", "agent_id", "metric_name", "value"])
+        mode, write_header = "a", False
+        if not self._streaming_metrics_header_written:
+            # First write of this recorder's life. The run id is derived from
+            # the config (experiment name + seed), so re-running one config
+            # lands in the directory a previous run already used - append only
+            # when that file is genuinely this same schema (a resumed episode).
+            # A header from an older metrics schema means a stale file whose
+            # rows can no longer be parsed alongside ours, so it is replaced
+            # rather than appended to, which would interleave two row widths
+            # under one header and make every reader mis-parse the file.
+            existing = self._existing_streaming_header()
+            if existing is None:
+                write_header = True
+            elif existing != STREAMING_METRIC_FIELDS:
+                mode, write_header = "w", True
+                self._logger.warning(
+                    "replacing %s: its header %s predates the current metrics schema %s",
+                    self._streaming_metrics_path, existing, list(STREAMING_METRIC_FIELDS),
+                )
+        with self._streaming_metrics_path.open(mode, newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=STREAMING_METRIC_FIELDS)
             if write_header:
                 writer.writeheader()
             writer.writerows(rows)
@@ -269,6 +322,42 @@ class RunRecorder:
             writer.writeheader()
             writer.writerows(rows)
 
+    def _write_binned_metrics(self) -> None:
+        """The two binned trajectory tables, from this episode's interaction records.
+
+        Opt-in: no ``binning`` policy means no tables, same stance as the
+        streaming metrics. Both are derived from the persisted per-interaction
+        record rather than accumulated during the run, so re-deriving them from
+        a finished episode gives byte-identical output.
+        """
+
+        if self._binning is None or not self._round_views:
+            return
+        view = self._round_views[-1]
+        records = [
+            InteractionOutcome.from_evaluator_entry(entry)
+            for entry in getattr(view, "recent_history", ())
+        ]
+        if not records:
+            return
+        success_rows, production_rows = binned_trajectory_tables(
+            records,
+            episode_id=self.run_id,
+            policy=self._binning,
+            action_space=getattr(view, "options", ()) or None,
+        )
+        for path, fields, rows in (
+            (self._success_rate_path, SUCCESS_RATE_FIELDS, success_rows),
+            (self._production_probability_path, PRODUCTION_PROBABILITY_FIELDS, production_rows),
+        ):
+            if not rows:
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(stream, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(rows)
+
     def record_budget(self, event: str, status: Mapping[str, Any]) -> None:
         _jsonl(self._budget_path, {"schema_version": self.schema_version, "run_id": self.run_id, "event": event, "price_snapshot_hash": self.price_snapshot_hash, "budget": dict(status)})
 
@@ -282,6 +371,7 @@ class RunRecorder:
             writer.writeheader()
             writer.writerows(self._metric_rows)
         self._write_final_metrics()
+        self._write_binned_metrics()
         checkpoint = self._checkpoint_store.load()
         manifest = {
             "schema_version": 1, "run_id": self.run_id, "checkpoint_path": f".checkpoints/{self._checkpoint_store.filename}",

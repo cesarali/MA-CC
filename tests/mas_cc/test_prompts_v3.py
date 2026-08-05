@@ -8,10 +8,11 @@ import pytest
 
 from mas_cc.config import PromptConfig, load_component_config, load_run_config, resolved_config_yaml
 from mas_cc.config.schema import config_schema
-from mas_cc.core.exceptions import ConfigurationError
-from mas_cc.core import MessageRole, ValidationIssue
 from mas_cc.games.naming_convention.prompts import bind_naming_convention_prompt
-from mas_cc.prompts import (
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.llm_runtime.messages import MessageRole
+from mas_cc.llm_runtime.validation import ValidationIssue
+from mas_cc.llm_runtime.prompts import (
     UNBOUND,
     FullPrompt,
     PromptBlock,
@@ -175,9 +176,9 @@ def test_active_games_planning_and_runtime_do_not_import_legacy_context():
 
 
 def test_provider_adapters_do_not_import_prompt_or_game_implementations():
-    for path in Path("src/mas_cc/llm_providers/adapters").glob("*.py"):
+    for path in Path("src/mas_cc/llm_runtime/providers/adapters").glob("*.py"):
         text = path.read_text(encoding="utf-8")
-        assert "mas_cc.prompts" not in text, path
+        assert "mas_cc.llm_runtime.prompts" not in text, path
         assert "mas_cc.games" not in text, path
 
 

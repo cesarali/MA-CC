@@ -8,7 +8,8 @@ from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 from mas_cc.config import GameConfig
-from mas_cc.core import AgentId, InteractionId, Seed, ValidationIssue, ValidationResult
+from mas_cc.core import AgentId, InteractionId, Seed
+from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
 from mas_cc.games.protocols import Action, Game, GameSpec, Observation
 from mas_cc.planning import (
     DecisionStagePlan,
@@ -185,6 +186,7 @@ class NamingConventionGame(Game):
         description=(
             "Repeated symmetric coordination with private finite memory from Ashery et al. 2025."
         ),
+        game_family="choice",
         minimum_population=2,
         supported_topologies=("complete",),
     )
@@ -384,6 +386,14 @@ class NamingConventionGame(Game):
                     agent,
                     score=agent.lifetime_score + payoff,
                     memory=(*agent.memory, entry.to_dict()),
+                    # The standing choice this agent is now committed to. Kept as
+                    # real state (not re-derived from `memory[-1]`) so anything
+                    # reading an agent - metrics, audit traces, the inspector -
+                    # sees the same last choice without replaying its history.
+                    attributes={
+                        **dict(agent.attributes),
+                        "committed_action": by_agent[agent.agent_id],
+                    },
                 )
             )
 
@@ -394,6 +404,13 @@ class NamingConventionGame(Game):
             "interaction_index": next_index,
             "selected_agents": [str(item) for item in participants],
             "actions": [action.value for action in actions],
+            # One flag per output, positionally aligned with `actions`: True
+            # where a control forced this agent's word instead of it being
+            # freely decided. Committed-minority analysis excludes exactly
+            # these outputs, and it has to be per-output rather than per
+            # interaction because a committed agent is routinely paired with
+            # an ordinary one.
+            "committed": [action.metadata.get("parser_mode") == "forced" for action in actions],
             "success": success,
             "payoff": payoff,
         }

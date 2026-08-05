@@ -11,7 +11,7 @@ from types import MappingProxyType
 import math
 from typing import Any, Literal, Mapping
 
-from mas_cc.prompts import CompilablePrompt
+from mas_cc.llm_runtime.prompts import CompilablePrompt
 
 
 @dataclass(frozen=True, slots=True)

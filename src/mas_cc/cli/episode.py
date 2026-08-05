@@ -20,9 +20,9 @@ from typing import Any
 from mas_cc.config import RunConfig, load_run_config, resolved_config_yaml
 from mas_cc.control import create_control
 from mas_cc.experiments.console import format_episode_banner, format_money, print_banner
-from mas_cc.games import create_game
+from mas_cc.games import create_game, game_metrics
 from mas_cc.games.naming_convention import NamingConventionGame, run_naming_convention_game_sync
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.providers import (
     BudgetGuardedProvider,
     RuntimeBudgetGuard,
     create_llm_provider,
@@ -31,7 +31,7 @@ from mas_cc.llm_providers import (
 from mas_cc.metrics import FinalMetric, StreamingMetric, plot_streaming_metrics
 from mas_cc.observability import DetailedAuditPolicy, RunRecorder, price_snapshot_hash
 from mas_cc.planning import GamePreflightEstimate, estimate_input_tokens, static_game_preflight
-from mas_cc.prompts import PromptMarkdownLogger
+from mas_cc.llm_runtime.prompts import PromptMarkdownLogger
 from mas_cc.storage import results_run_dir
 
 from .game import _budgets, _pricing_terms, _quote
@@ -48,18 +48,6 @@ def _destination(config: RunConfig, output_dir: str | Path | None) -> Path:
     base = Path(output_dir) if output_dir is not None else Path(config.storage.output_dir)
     run_id = f"{config.experiment.name}-{config.execution.seed}"
     return results_run_dir(base, game=config.game.type, experiment=config.experiment.name, run_id=run_id)
-
-
-def _game_metrics(game_type: str) -> tuple[tuple[Any, ...], Any]:
-    """Best-effort per-game metrics lookup; empty for games without a metrics module."""
-
-    from importlib import import_module
-
-    try:
-        module = import_module(f"mas_cc.games.{game_type}.metrics")
-    except ImportError:
-        return (), None
-    return tuple(getattr(module, "METRICS", ())), getattr(module, "to_round_view", None)
 
 
 def _load_naming_convention_game(config: RunConfig) -> NamingConventionGame:
@@ -244,8 +232,8 @@ def _print_final_metrics(result: Any, metrics: tuple[Any, ...], to_round_view: A
     print("Metrics:")
     for metric in metrics:
         if isinstance(metric, StreamingMetric):
-            for agent_id, value in metric.compute_round(views[-1]).items():
-                label = "population" if agent_id is None else str(agent_id)
+            for key, value in metric.compute_round(views[-1]).items():
+                label = "population" if key is None else str(key)
                 print(f"  {metric.name} [{label}]: {value:g}" if isinstance(value, (int, float)) else f"  {metric.name} [{label}]: {value}")
         elif isinstance(metric, FinalMetric):
             print(f"  {metric.name}: {metric.compute_final(views)}")
@@ -317,7 +305,7 @@ def run_game_episode(
         )
     )
     policy = DetailedAuditPolicy.from_mapping(config.logging.options.get("detailed_prompt_audit"))
-    metrics, to_round_view = _game_metrics(config.game.type)
+    metrics, to_round_view = game_metrics(game)
     recorder = RunRecorder(
         destination, run_id=f"{config.experiment.name}-{config.execution.seed}",
         resolved_config=config.to_dict(), policy=policy, comet_enabled=config.logging.comet,
@@ -326,6 +314,7 @@ def run_game_episode(
         price_snapshot_hash=price_snapshot_hash(runtime_quote.to_dict()),
         metrics=metrics, to_round_view=to_round_view,
         comet_metric_export=config.metrics.comet_export_names() if config.metrics.enabled else (),
+        binning=config.metrics.binning_policy(config.game.population_size),
     )
     guard = RuntimeBudgetGuard(resolve_budget_limits(system_budget, run_budget))
     provider = create_llm_provider(config.llm_provider)

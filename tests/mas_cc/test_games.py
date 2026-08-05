@@ -5,7 +5,7 @@ import pytest
 from mas_cc.config import LLMProviderConfig, load_run_config
 from mas_cc.core import AgentId
 from mas_cc.games import Game, create_default_game_registry, create_game, run_game_sync
-from mas_cc.llm_providers import OfflinePricingSource, create_llm_provider
+from mas_cc.llm_runtime.providers import OfflinePricingSource, create_llm_provider
 from mas_cc.planning import static_game_preflight
 
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mas_cc.config import LLMProviderConfig, PromptConfig
-from mas_cc.llm_providers import BudgetLimits, resolve_budget_limits, PricingQuote
+from mas_cc.llm_runtime.providers import BudgetLimits, resolve_budget_limits, PricingQuote
 
 from .call_graph import GameCallPlan
 from .game_preflight import GamePreflightEstimate, static_game_preflight

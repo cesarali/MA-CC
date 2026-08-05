@@ -52,7 +52,7 @@ completion cells. Its non-network path is executable without credentials.
 The Markdown logger writes one request per interaction:
 
 ```python
-from mas_cc.prompts import PromptMarkdownLogger
+from mas_cc.llm_runtime.prompts import PromptMarkdownLogger
 
 logger = PromptMarkdownLogger("run_artifacts/prompts")
 logger.log(

@@ -18,7 +18,7 @@ from mas_cc.games.naming_convention import (
     NamingConventionGame,
     run_naming_convention_game_sync,
 )
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.providers import (
     BudgetGuardedProvider,
     BudgetLimits,
     PricingQuote,
@@ -27,8 +27,8 @@ from mas_cc.llm_providers import (
     resolve_budget_limits,
 )
 from mas_cc.planning import estimate_input_tokens, static_game_preflight
-from mas_cc.llm_providers import CompletionRequest
-from mas_cc.prompts import RegexTokenCounter
+from mas_cc.llm_runtime.providers import CompletionRequest
+from mas_cc.llm_runtime.prompts import RegexTokenCounter
 
 from .inspect import _write, _write_manifest
 

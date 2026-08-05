@@ -6,10 +6,10 @@ import pytest
 
 from mas_cc.config import GridSpec, RunConfig, load_run_config
 from mas_cc.config.grid import GridAxis
-from mas_cc.core.exceptions import ConfigurationError
+from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.experiments import run_experiment_grid_sync
 from mas_cc.games import create_game
-from mas_cc.llm_providers import BudgetLimits, OfflinePricingSource
+from mas_cc.llm_runtime.providers import BudgetLimits, OfflinePricingSource
 from mas_cc.planning import static_experiment_preflight, static_grid_preflight
 
 

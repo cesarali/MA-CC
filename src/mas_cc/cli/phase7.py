@@ -10,7 +10,7 @@ from typing import Any
 from mas_cc.config import load_run_config, resolved_config_yaml
 from mas_cc.games import create_game
 from mas_cc.games.naming_convention import NamingConventionGame, run_naming_convention_game_sync
-from mas_cc.llm_providers import BudgetGuardedProvider, RuntimeBudgetGuard, create_llm_provider, resolve_budget_limits
+from mas_cc.llm_runtime.providers import BudgetGuardedProvider, RuntimeBudgetGuard, create_llm_provider, resolve_budget_limits
 from mas_cc.observability import DetailedAuditPolicy, RunRecorder, price_snapshot_hash
 from mas_cc.planning import estimate_input_tokens, static_game_preflight
 

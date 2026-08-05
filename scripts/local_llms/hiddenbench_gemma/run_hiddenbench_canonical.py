@@ -23,22 +23,23 @@ from pathlib import Path
 from typing import Any
 
 from mas_cc.config import LLMProviderConfig, PromptConfig, load_component_config
-from mas_cc.core import Message, ValidationIssue, ValidationResult
-from mas_cc.llm_providers import (
+from mas_cc.games.prompt_library.hidden_profile_v3 import (
+    hidden_profile_discussion_prompt,
+    hidden_profile_vote_prompt,
+)
+from mas_cc.llm_runtime.messages import Message
+from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
+from mas_cc.llm_runtime.providers import (
     CompletionRequest,
     LLMProvider,
     ProviderError,
     create_llm_provider,
 )
-from mas_cc.planning import LogicalCallSpec, static_preflight
-from mas_cc.prompts import (
+from mas_cc.llm_runtime.prompts import (
     RegexTokenCounter,
     ResponseContract,
 )
-from mas_cc.prompts.plugins.hidden_profile_v3 import (
-    hidden_profile_discussion_prompt,
-    hidden_profile_vote_prompt,
-)
+from mas_cc.planning import LogicalCallSpec, static_preflight
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]

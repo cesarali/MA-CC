@@ -15,7 +15,7 @@ from mas_cc.experiments import (
 )
 from mas_cc.experiments.console import format_money
 from mas_cc.games import create_game
-from mas_cc.llm_providers import PricingQuote
+from mas_cc.llm_runtime.providers import PricingQuote
 from mas_cc.observability import price_snapshot_hash
 from mas_cc.planning import (
     ExperimentPreflightEstimate,

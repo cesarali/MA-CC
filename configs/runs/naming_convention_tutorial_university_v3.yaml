@@ -31,8 +31,8 @@ prompt:
     allowed_values: [Q, M]
 game:
   type: naming_convention
-  population_size: 10
-  horizon: 30
+  population_size: 5
+  horizon: 20
   topology: complete
   options:
     actions: [Q, M]
@@ -50,7 +50,7 @@ game:
     representative_memory_size: 1
     stop_on_convergence: false
 execution:
-  seed: 20260807
+  seed: 20260808
   repetitions: 1
   parallelism: 1
   fail_fast: true
@@ -105,22 +105,25 @@ metrics:
   # metric here) keeps it local-only (still written to metrics/streaming.csv
   # and metrics/final.csv either way - that's controlled by `enabled` above,
   # not by this). agent_current_action is agent-scoped, not population-scoped,
-  # so it is never sent to Comet regardless of this setting.
+  # so it is never sent to Comet regardless of this setting. The
+  # *_per_option metrics are one metric carrying one curve per option; they
+  # reach Comet as one key per option (population_action_share_per_option_Q,
+  # ..._M) but are listed - and toggled - once, here.
   # See docs/howto/configuring/creating_a_game_config.md section 1.
   available:
-    population_action_share_q:
-      comet: true
-    population_action_share_m:
+    population_action_share_per_option:
       comet: true
     dominant_action_share:
       comet: true
-    first_consensus_time:
+    first_consensus_time_by_action_share:
       comet: true
+    first_consensus_time_by_success_rate:
+      comet: true
+    consensus_action_by_success_rate:
+      comet: false   # the winning word is a label, not a number Comet can chart
     rolling_coordination_rate:
       comet: true
-    rolling_action_share_q:
-      comet: false
-    rolling_action_share_m:
+    rolling_action_share_per_option:
       comet: false
     agent_current_action:
       comet: false   # agent-scoped; Comet never receives per-agent values

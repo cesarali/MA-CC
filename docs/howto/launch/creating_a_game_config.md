@@ -284,7 +284,7 @@ they run and what may leave the machine.
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `enabled` | bool | `true` | Whether streaming/final metrics get computed at all (`metrics/streaming.csv`, `metrics/final.csv`, and `logging.options.show_metrics`'s console printout all depend on this). |
-| `comet_export` | list of strings | `[]` | Metric *names* (e.g. `population_action_share_q`, `dominant_action_share`) allowed to reach Comet as aggregate values. Everything not listed here stays local even if `logging.comet: true`. |
+| `comet_export` | list of strings | `[]` | Metric *names* (e.g. `population_action_share_per_option`, `dominant_action_share`) allowed to reach Comet as aggregate values. Everything not listed here stays local even if `logging.comet: true`. |
 
 ---
 

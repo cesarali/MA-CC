@@ -14,9 +14,9 @@ def _write_streaming_csv(path: Path, *, rounds: list[tuple[float, float]]) -> No
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = []
     for round_index, (share_x, share_y) in enumerate(rounds, start=1):
-        rows.append({"round_index": round_index, "episode_id": "unused", "agent_id": "", "metric_name": "population_action_share_x", "value": share_x})
-        rows.append({"round_index": round_index, "episode_id": "unused", "agent_id": "", "metric_name": "population_action_share_y", "value": share_y})
-        rows.append({"round_index": round_index, "episode_id": "unused", "agent_id": "agent-000", "metric_name": "agent_current_action", "value": "x" if share_x > share_y else "y"})
+        rows.append({"round_index": round_index, "episode_id": "unused", "agent_id": "", "series": "x", "metric_name": "population_action_share_per_option", "value": share_x})
+        rows.append({"round_index": round_index, "episode_id": "unused", "agent_id": "", "series": "y", "metric_name": "population_action_share_per_option", "value": share_y})
+        rows.append({"round_index": round_index, "episode_id": "unused", "agent_id": "agent-000", "series": "", "metric_name": "agent_current_action", "value": "x" if share_x > share_y else "y"})
     pd.DataFrame(rows).to_csv(path, index=False)
 
 

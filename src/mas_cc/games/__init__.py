@@ -13,7 +13,7 @@ from .protocols import (
     Observation,
     Transition,
 )
-from .registry import GameRegistry, create_default_game_registry, create_game
+from .registry import GameRegistry, create_default_game_registry, create_game, game_metrics
 from .runner import run_game, run_game_sync
 
 __all__ = [
@@ -31,6 +31,7 @@ __all__ = [
     "Transition",
     "create_default_game_registry",
     "create_game",
+    "game_metrics",
     "run_game",
     "run_game_sync",
 ]

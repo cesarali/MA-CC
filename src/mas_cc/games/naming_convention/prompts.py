@@ -7,9 +7,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from mas_cc.core import Message, MessageRole, ValidationIssue, ValidationResult
-from mas_cc.prompts import UNBOUND, FullPrompt, PromptBlock, ResponseContract, Unbound
-from mas_cc.prompts._values import thaw
+from mas_cc.llm_runtime.messages import Message, MessageRole
+from mas_cc.llm_runtime.prompts import UNBOUND, FullPrompt, PromptBlock, ResponseContract, Unbound
+from mas_cc.llm_runtime.prompts._values import thaw
+from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
 
 
 @dataclass(frozen=True, slots=True)

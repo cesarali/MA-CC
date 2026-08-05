@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from mas_cc.config import GameConfig
-from mas_cc.llm_providers import CompletionRequest, CompletionResponse, LLMProvider
-from mas_cc.prompts import CompiledPrompt
+from mas_cc.llm_runtime.providers import CompletionRequest, CompletionResponse, LLMProvider
+from mas_cc.llm_runtime.prompts import CompiledPrompt
 
 if TYPE_CHECKING:
     # Deferred: `mas_cc.games` imports this module (via `runner.py` and

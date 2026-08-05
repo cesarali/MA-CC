@@ -7,8 +7,8 @@ from typing import Any, Mapping
 
 import yaml
 
-from mas_cc.core.exceptions import ConfigurationError
-from mas_cc.core.validation import ValidationIssue
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.llm_runtime.validation import ValidationIssue
 
 from .loader import _validate_secret_fields
 from .models import RunConfig
@@ -19,9 +19,9 @@ def resolved_config_yaml(config: RunConfig) -> str:
 
     values = config.to_dict()
     if config.prompt.schema_version == 2:
-        from mas_cc.prompts import create_default_prompt_registry
+        from mas_cc.games.registry import create_default_prompt_registry
 
-        registry = create_default_prompt_registry(include_legacy=False)
+        registry = create_default_prompt_registry()
         try:
             prompt = registry.get(
                 config.prompt.prompt_family, config.prompt.prompt_version

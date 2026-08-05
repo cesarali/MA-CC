@@ -17,8 +17,8 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from mas_cc.core.exceptions import ConfigurationError
-from mas_cc.core.validation import ValidationIssue
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.llm_runtime.validation import ValidationIssue
 
 from .models import RunConfig
 

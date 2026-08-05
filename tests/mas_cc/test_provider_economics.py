@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 
 from mas_cc.config import LLMProviderConfig
-from mas_cc.core import Message
-from mas_cc.core.exceptions import ProviderError
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.messages import Message
+from mas_cc.llm_runtime.providers import (
     BudgetLimits,
     CachedPricingSource,
     CompletionRequest,
     LongContextPricing,
+    ProviderError,
     ModelPricing,
     MonetaryAmount,
     OfflinePricingSource,
@@ -185,7 +185,7 @@ def test_cached_and_offline_sources_have_explicit_provenance_and_staleness(tmp_p
 
 def test_preflight_preserves_unit_and_uses_explicit_safe_statuses():
     config = LLMProviderConfig(type="university", model="chat-model")
-    from mas_cc.llm_providers import PricingQuote
+    from mas_cc.llm_runtime.providers import PricingQuote
 
     quote = PricingQuote(
         "live", "known", "university", "chat-model", NOW, "fixture", "v1", True,

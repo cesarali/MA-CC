@@ -10,10 +10,11 @@ from types import MappingProxyType
 from typing import Any
 
 from mas_cc.config import GameConfig
-from mas_cc.core import AgentId, InteractionId, ValidationResult
-from mas_cc.llm_providers import CompletionRequest, CompletionResponse
+from mas_cc.core import AgentId, InteractionId
+from mas_cc.llm_runtime.validation import ValidationResult
+from mas_cc.llm_runtime.providers import CompletionRequest, CompletionResponse
 from mas_cc.planning import GameCallPlan
-from mas_cc.prompts import CompilablePrompt
+from mas_cc.llm_runtime.prompts import CompilablePrompt
 
 
 def _freeze(value: Any) -> Any:
@@ -41,6 +42,17 @@ def _non_empty(value: str, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a non-empty string")
 
 
+GAME_FAMILIES = ("choice", "numeric")
+"""Structural categories a game can belong to.
+
+``game_type`` is a game's *identity* (``"naming_convention"``); ``game_family``
+is its *shape*, and it is what decides which metrics can legally be attached.
+A ``choice`` game has every agent pick from a finite, game-declared option set,
+so per-option share metrics are meaningful; a ``numeric`` game has agents
+report a number against a target, so error metrics are meaningful instead.
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class GameSpec:
     """Stable identity and structural capabilities of a game implementation."""
@@ -48,12 +60,17 @@ class GameSpec:
     game_type: str
     version: int
     description: str
+    game_family: str = "choice"
     minimum_population: int = 2
     supported_topologies: tuple[str, ...] = ("complete",)
 
     def __post_init__(self) -> None:
         _non_empty(self.game_type, "GameSpec.game_type")
         _non_empty(self.description, "GameSpec.description")
+        if self.game_family not in GAME_FAMILIES:
+            raise ValueError(
+                f"GameSpec.game_family must be one of {GAME_FAMILIES}, got {self.game_family!r}"
+            )
         if self.version < 1:
             raise ValueError("GameSpec.version must be positive")
         if self.minimum_population < 2:
@@ -70,6 +87,7 @@ class GameSpec:
             "game_type": self.game_type,
             "version": self.version,
             "description": self.description,
+            "game_family": self.game_family,
             "minimum_population": self.minimum_population,
             "supported_topologies": list(self.supported_topologies),
         }

@@ -11,7 +11,7 @@ from mas_cc.config import (
     resolved_config_yaml,
     validate_run_config,
 )
-from mas_cc.core.exceptions import ConfigurationError
+from mas_cc.llm_runtime.exceptions import ConfigurationError
 
 
 def _resolved_mapping():

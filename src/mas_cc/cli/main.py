@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Sequence
 
 from mas_cc import __version__
-from mas_cc.core.exceptions import ConfigurationError, ProviderError
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.llm_runtime.providers import ProviderError
 
 
 def build_parser() -> argparse.ArgumentParser:

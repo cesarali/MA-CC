@@ -11,8 +11,8 @@ from mas_cc.config import RunConfig
 from mas_cc.control import Control
 from mas_cc.core import Seed
 from mas_cc.games.protocols import Action
-from mas_cc.llm_providers import CompletionRequest, LLMProvider
-from mas_cc.prompts import CompiledPrompt, RegexTokenCounter, TokenCounter
+from mas_cc.llm_runtime.providers import CompletionRequest, LLMProvider
+from mas_cc.llm_runtime.prompts import CompiledPrompt, RegexTokenCounter, TokenCounter
 from mas_cc.runtime import DecisionLoopExhausted, ValidationAttempt, run_validated_decision
 
 from .game import NamingConventionGame

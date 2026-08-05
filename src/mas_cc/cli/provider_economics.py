@@ -14,13 +14,13 @@ from typing import Any
 import yaml
 
 from mas_cc.config import LLMProviderConfig, load_run_config
-from mas_cc.core.exceptions import ProviderError
-from mas_cc.llm_providers import (
+from mas_cc.llm_runtime.providers import (
     BudgetLimits,
     CachedPricingSource,
     MonetaryAmount,
     OfflinePricingSource,
     PricingQuote,
+    ProviderError,
     RuntimeBudgetGuard,
     UniversityPricingSource,
     sanitized_snapshot_bytes,
@@ -286,7 +286,7 @@ def inspect_phase_4_amendment(
             completion_status = "blocked-before-dispatch"
         else:
             # The explicit flag creates authority for exactly one normalized request.
-            from mas_cc.llm_providers import BudgetGuardedProvider, create_llm_provider
+            from mas_cc.llm_runtime.providers import BudgetGuardedProvider, create_llm_provider
             from mas_cc.planning.token_estimation import estimate_input_tokens
             guard = RuntimeBudgetGuard(run_budget)
             wrapped = BudgetGuardedProvider(

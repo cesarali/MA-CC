@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from mas_cc.core import AgentId, InteractionId
-from mas_cc.core.exceptions import MasCCError
+from mas_cc.llm_runtime.exceptions import MasCCError
 from mas_cc.games.protocols import (
     Action,
     AgentState,
@@ -15,8 +15,8 @@ from mas_cc.games.protocols import (
     Transition,
     _thaw,
 )
-from mas_cc.llm_providers import CompletionRequest, CompletionResponse
-from mas_cc.prompts import CompiledPrompt
+from mas_cc.llm_runtime.providers import CompletionRequest, CompletionResponse
+from mas_cc.llm_runtime.prompts import CompiledPrompt
 
 
 class InvalidConventionResponse(MasCCError, RuntimeError):

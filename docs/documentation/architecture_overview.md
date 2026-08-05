@@ -71,15 +71,29 @@ so metrics are written once against a generic `RoundView`
 (`metrics/generic.py`):
 
 ```python
-RoundView(agent_values: Mapping[AgentId, Any], agent_targets: Mapping[AgentId, Any] | None = None)
+RoundView(
+    agent_values: Mapping[AgentId, Any],
+    agent_targets: Mapping[AgentId, Any] | None = None,
+    options: tuple[str, ...] = (),
+)
 ```
 
-The shelf of ready-made metrics: `ValueShare`, `AgentCurrentValue`,
+The shelf of ready-made metrics: `ActionSharePerOption`, `AgentCurrentValue`,
 `DominantValueShare`, `FirstConsensusTime`, `AgentAbsoluteError`,
 `MeanAbsoluteError`. `games/naming_convention/metrics.py::to_round_view` is
-the adapter that reads each agent's last action from `private_history` into a
-`RoundView`; `build_metrics()` wires up `population_action_share_q`/`_m`,
-`agent_current_action`, `dominant_action_share`, `first_consensus_time`.
+the adapter that reads each agent's `committed_action` and the game's option
+set into a `RoundView`; `build_metrics()` wires up
+`population_action_share_per_option`, `agent_current_action`,
+`dominant_action_share`, `first_consensus_time_by_action_share`.
+
+A metric's `scope` decides what its per-round keys mean and which column they
+land in: `agent` (keyed by `AgentId` → `agent_id`), `population` (keyed by
+`None`), or `option` (keyed by the option label → `series`). An `option`-scope
+metric is one metric carrying a family of curves, which is why a per-option
+share is a single named quantity rather than one metric per option.
+`GameSpec.game_family` (`choice` | `numeric`) is the game-side counterpart:
+metrics declaring `requires_game_family` are validated against it in
+`games/registry.py::game_metrics`.
 
 **None of this computes mutual information, entropy, or any other
 information-theoretic quantity.** It answers "what fraction of the population

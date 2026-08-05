@@ -10,8 +10,9 @@ from typing import Any
 
 import yaml
 
-from mas_cc.core.exceptions import ConfigurationError
-from mas_cc.core.validation import ValidationIssue, ValidationResult
+from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.metrics.interactions import PARTIAL_BIN_POLICIES
+from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
 
 from .grid import GridSpec, parse_grid_axes
 from .models import (
@@ -634,12 +635,42 @@ def _parse_control(raw: Any, issues: list[ValidationIssue]) -> ControlConfig:
 def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
     path = "metrics"
     values = _as_mapping(raw, path, issues)
-    _unknown_fields(values, {"schema_version", "enabled", "comet_export", "available"}, path, issues)
+    _unknown_fields(
+        values,
+        {
+            "schema_version", "enabled", "comet_export", "available",
+            "bin_size_interactions", "partial_final_bin", "exclude_committed_outputs",
+        },
+        path,
+        issues,
+    )
+    # Left unset, the bin size follows the population at run time (one
+    # population round = N interactions), so it is parsed as optional rather
+    # than defaulted to a number here where the population isn't known.
+    bin_size = values.get("bin_size_interactions")
+    if bin_size is not None:
+        bin_size = _integer(values, "bin_size_interactions", path, issues, default=1, minimum=1)
+    partial_final_bin = (
+        _string(values, "partial_final_bin", path, issues, default="drop") or "drop"
+    )
+    if partial_final_bin not in PARTIAL_BIN_POLICIES:
+        _issue(
+            issues,
+            f"{path}.partial_final_bin",
+            f"must be one of {', '.join(PARTIAL_BIN_POLICIES)}",
+            partial_final_bin,
+        )
+        partial_final_bin = "drop"
     return MetricsConfig(
         schema_version=_schema_version(values, path, issues),
         enabled=_boolean(values, "enabled", path, issues, default=True),
         comet_export=_string_tuple(values, "comet_export", path, issues),
         available=_as_mapping(values.get("available", {}), f"{path}.available", issues),
+        bin_size_interactions=bin_size,
+        partial_final_bin=partial_final_bin,
+        exclude_committed_outputs=_boolean(
+            values, "exclude_committed_outputs", path, issues, default=False
+        ),
     )
 
 
