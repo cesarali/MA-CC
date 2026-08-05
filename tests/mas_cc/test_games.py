@@ -16,7 +16,11 @@ def _config():
 def test_default_registry_constructs_a_generic_game_lazily():
     config = _config()
     registry = create_default_game_registry()
-    assert registry.names() == ("naming_convention", "toy_coordination")
+    assert registry.names() == (
+        "naming_convention",
+        "synthetic_bernoulli",
+        "toy_coordination",
+    )
     game = registry.create(config.game)
     assert isinstance(game, Game)
     assert game.spec.game_type == "toy_coordination"

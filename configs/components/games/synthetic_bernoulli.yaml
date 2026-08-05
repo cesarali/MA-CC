@@ -1,0 +1,18 @@
+schema_version: 1
+type: synthetic_bernoulli
+# Eight agents and 500 rounds is the shape of a small real run, which is the
+# point: the null distribution measured here only tells you the significance
+# floor for runs of roughly this size.
+population_size: 8
+horizon: 500
+topology: complete
+options:
+  actions:
+    - Q
+    - M
+  # Private noise, one level for every agent. 0.5 is the null anchor: the
+  # agents' bits are then independent and the true pairwise mutual information
+  # is exactly zero, so anything the estimator reports here is bias.
+  # `mas-cc synthetic sweep` moves this knob itself; set `epsilons: [...]` for
+  # a per-agent asymmetric config instead.
+  epsilon: 0.5

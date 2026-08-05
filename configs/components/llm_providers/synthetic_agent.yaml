@@ -1,0 +1,14 @@
+schema_version: 1
+# Not a model. A lookup table behind the LLMProvider interface: it reads the
+# compiled prompt, applies the decoding rule the prompt states, and answers.
+# Nothing here reaches a network, so timeouts and retries are formalities kept
+# only so a synthetic run resolves through the same provider path as a real one.
+type: synthetic_agent
+model: lookup-table-v1
+timeout_seconds: 5
+max_retries: 0
+request_concurrency: 64
+temperature: 0.0
+max_output_tokens: 8
+options:
+  estimated_latency_seconds: 0.0

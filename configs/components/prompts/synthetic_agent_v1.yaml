@@ -1,0 +1,12 @@
+schema_version: 2
+prompt_family: synthetic_agent_decision
+prompt_version: 1
+message_mode: merge_consecutive_roles
+block_separator: "\n\n"
+response_contract:
+  type: choice_only
+  # The same Q/M alphabet the real naming game uses, so a synthetic prompt and
+  # a real one differ in content rather than in shape.
+  allowed_values:
+    - Q
+    - M

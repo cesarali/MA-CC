@@ -70,6 +70,10 @@ def create_default_game_registry() -> GameRegistry:
         "naming_convention",
         "mas_cc.games.naming_convention.game:NamingConventionGame",
     )
+    registry.register(
+        "synthetic_bernoulli",
+        "mas_cc.games.synthetic.bernoulli.game:SyntheticBernoulliGame",
+    )
     return registry
 
 
@@ -98,10 +102,12 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     """Register concrete prompts at the application boundary that owns the games."""
 
     from .naming_convention.prompts import naming_convention_prompt
+    from .synthetic.prompts import synthetic_agent_decision_prompt
     from .toy_coordination.prompts import toy_coordination_prompt
 
     registry.register(naming_convention_prompt)
     registry.register(toy_coordination_prompt)
+    registry.register(synthetic_agent_decision_prompt)
     return registry
 
 
@@ -115,6 +121,12 @@ def game_metrics(game: Game) -> tuple[tuple[Any, ...], Callable[[Any], Any] | No
     Best effort: a game with no ``metrics`` module records nothing, which is
     how the frozen Phase 7 gate stays unaffected.
 
+    The metrics module is resolved from the game class's *own package* rather
+    than from its ``game_type`` string. Those coincide for a game that lives at
+    ``games/<game_type>/``, but not for one nested a level deeper (the
+    synthetic games sit under ``games/synthetic/``), and a game should not have
+    to be named after its directory to have its metrics found.
+
     Metrics that declare a ``requires_game_family`` are checked against the
     game's own ``spec.game_family`` here - the one place where a concrete game
     and its metric list are both in hand - so an option-share metric attached
@@ -122,8 +134,9 @@ def game_metrics(game: Game) -> tuple[tuple[Any, ...], Callable[[Any], Any] | No
     producing a column of zeros.
     """
 
+    package = type(game).__module__.rpartition(".")[0]
     try:
-        module = importlib.import_module(f"mas_cc.games.{game.spec.game_type}.metrics")
+        module = importlib.import_module(f"{package}.metrics")
     except ImportError:
         return (), None
     metrics = tuple(getattr(module, "METRICS", ()))

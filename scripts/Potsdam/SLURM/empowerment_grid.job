@@ -1,0 +1,167 @@
+#!/bin/bash
+###############################################################################
+# Run a mas_cc empowerment GRID (control sweep -> mutual information) on Slurm.
+#
+# Submit the free mock rehearsal first - it sends no network traffic and proves
+# the whole chain including the analysis step:
+#   sbatch --export=ALL,RUN_MODE=mock scripts/Potsdam/SLURM/empowerment_grid.job
+#
+# Then the live pilot:
+#   sbatch --export=ALL,RUN_MODE=pilot scripts/Potsdam/SLURM/empowerment_grid.job
+#
+# RUN_MODE values: mock, pilot
+#   mock  - mock provider, offline pricing, --no-resume, Comet forced OFF
+#   pilot - University proxy, live pricing, resumes its stable output directory
+#
+# This replaces the naming_game-era scripts/Potsdam/SLURM/empowerment_experiment.job,
+# which drove the old `naming-game experiment` CLI. The entry point is now
+# `mas-cc experiment run`, and the empowerment estimate is a SEPARATE second
+# step (`mas-cc analysis empowerment`) over the completed grid directory.
+###############################################################################
+#SBATCH --job-name=mascc-empowerment
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+#SBATCH --time=1-00:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/slurm-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/slurm-%j.err
+###############################################################################
+
+set -euo pipefail
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly RESULTS_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly RUN_MODE="${RUN_MODE:-mock}"
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+# Analysis knobs, overridable at submit time:
+#   sbatch --export=ALL,RUN_MODE=pilot,NULL_PERMUTATIONS=2000 ...
+readonly HORIZONS="${HORIZONS:-1 2 3}"
+readonly BOOTSTRAP_RESAMPLES="${BOOTSTRAP_RESAMPLES:-1000}"
+readonly NULL_PERMUTATIONS="${NULL_PERMUTATIONS:-1000}"
+
+case "${RUN_MODE}" in
+  mock)
+    CONFIG=configs/runs/naming_convention_empowerment_mock_v3.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/empowerment_grid_mock
+    RESUME_ARGS=(--no-resume)
+    EXPERIMENT_NAME=naming-convention-empowerment-mock
+    SEED=20260805
+    ;;
+  pilot)
+    CONFIG=configs/runs/naming_convention_empowerment_university_v3.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/empowerment_grid_pilot
+    RESUME_ARGS=()
+    EXPERIMENT_NAME=naming-convention-empowerment-pilot
+    SEED=20260805
+    ;;
+  *)
+    echo "[error] RUN_MODE must be mock or pilot; got: ${RUN_MODE}" >&2
+    exit 2
+    ;;
+esac
+
+# `mas-cc experiment run` composes its own output path underneath --output-dir:
+#   <output-dir>/<game.type>/<experiment.name>/<experiment.name>-<execution.seed>/
+# The analysis step needs that full path, not --output-dir. Keep EXPERIMENT_NAME
+# and SEED above in sync with the config's experiment.name / execution.seed, or
+# the analysis step below will not find the grid it just produced.
+readonly GRID_DIR="${OUTPUT_DIR}/naming_convention/${EXPERIMENT_NAME}/${EXPERIMENT_NAME}-${SEED}"
+
+if [[ ! -x "${CONDA_BIN}" ]]; then
+  echo "[error] Conda is unavailable at ${CONDA_BIN}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/${CONFIG}" ]]; then
+  echo "[error] Grid config is missing: ${REPO_ROOT}/${CONFIG}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/.env" ]]; then
+  echo "[error] Repository credential file is missing: ${REPO_ROOT}/.env" >&2
+  exit 1
+fi
+
+# The mock mode must never reach Comet: the sink falls back to reading
+# COMET_API_KEY out of ${REPO_ROOT}/.env when the variable is unset, so a
+# rehearsal run started from the repo root would otherwise publish a real
+# remote experiment. Blanking the variable is not enough on its own - the
+# config for mock mode also sets logging.comet: false - but this makes the
+# guarantee independent of the config being edited later.
+if [[ "${RUN_MODE}" == "mock" ]]; then
+  export COMET_API_KEY=""
+  echo "[run] comet=FORCED-OFF (mock rehearsal)"
+fi
+
+mkdir -p "${RESULTS_ROOT}" "${OUTPUT_DIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] mode=${RUN_MODE}"
+echo "[run] config=${REPO_ROOT}/${CONFIG}"
+echo "[run] output_dir=${OUTPUT_DIR}"
+echo "[run] grid_dir=${GRID_DIR}"
+echo "[run] slurm_job_id=${SLURM_JOB_ID:-manual}"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+###############################################################################
+# Step 1 - price the grid without sending anything. `experiment run` repeats
+# this gate internally and refuses to launch unless it returns "permitted", so
+# this call is for the human-readable report.md/grid_estimate.json artifacts.
+#
+# NOTE: do NOT wire --approve-preflight here. With pricing.mode: live the
+# preflight ID hashes provenance timestamps (retrieved_at/fresh_until) that
+# change on every re-fetch, so the approval can never match and the run aborts.
+# See the accompanying empowerment_grid_hpc_runbook.md, "Known issues".
+###############################################################################
+echo "[step] preflight"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment preflight \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}/preflight"
+
+###############################################################################
+# Step 2 - run every cell's episodes under one shared concurrency/budget pool.
+# --no-progress because a Slurm log is not a TTY: tqdm would render nothing
+# useful, and the fallback emits one clean line per finished episode instead.
+# Live progress for a long run comes from the run-level Comet experiment
+# (logging.comet: true), which is one remote experiment for the WHOLE grid.
+###############################################################################
+echo "[step] run"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --no-progress \
+  "${RESUME_ARGS[@]}"
+
+###############################################################################
+# Step 3 - the mutual information itself. This is a separate offline pass over
+# the completed grid; nothing about it touches a provider. It is what turns
+# "20 episodes across 2 control conditions" into I(control ; outcome).
+###############################################################################
+if [[ ! -d "${GRID_DIR}/cells" ]]; then
+  echo "[error] No cells/ under ${GRID_DIR} - did experiment.name or execution.seed change?" >&2
+  exit 1
+fi
+
+echo "[step] analysis"
+# shellcheck disable=SC2086  # HORIZONS is an intentional multi-value argument
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc analysis empowerment \
+  --grid-dir "${GRID_DIR}" \
+  --horizons ${HORIZONS} \
+  --bootstrap-resamples "${BOOTSTRAP_RESAMPLES}" \
+  --null-permutations "${NULL_PERMUTATIONS}"
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "[done] grid=${GRID_DIR}"
+echo "[done] analysis=${GRID_DIR}/analysis"
+echo "[done] comet_status=$(cat "${GRID_DIR}/comet_run_summary.json" 2>/dev/null | tr -d '\n' || echo unknown)"

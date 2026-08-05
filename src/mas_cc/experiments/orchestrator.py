@@ -49,6 +49,7 @@ from mas_cc.planning import (
 )
 from mas_cc.storage import results_run_dir
 
+from .comet_monitor import RunLevelCometMonitor
 from .console import ExperimentProgress, format_banner, format_grid_banner, format_money, print_banner
 
 LOGGER = logging.getLogger("mas_cc.experiment")
@@ -138,6 +139,26 @@ def _pricing_terms(quote: PricingQuote) -> dict[str, Any] | None:
     for provenance_field in ("source", "retrieved_at", "version"):
         terms.pop(provenance_field, None)
     return terms
+
+
+def _run_level_monitor(
+    config: RunConfig, run_id: str, total_episodes: int, cell_ids: tuple[str, ...] = ()
+) -> RunLevelCometMonitor:
+    """Build the one run-level Comet experiment from `logging.comet`.
+
+    On this path `logging.comet` used to be inert - episode recorders hard-code
+    `comet_enabled=False` so that N episodes do not become N remote
+    experiments. The flag now means "publish run-level progress", which is the
+    only Comet object an experiment or grid ever creates.
+    """
+
+    return RunLevelCometMonitor(
+        config.logging.comet,
+        project_name=str(config.logging.options.get("comet_project", "mas-cc")),
+        run_name=run_id,
+        total_episodes=total_episodes,
+        cell_ids=cell_ids,
+    )
 
 
 class _RoundTickingObserver:
@@ -309,19 +330,29 @@ async def _run_episode_task(
     price_hash: str,
     checkpoint_enabled: bool,
     progress: ExperimentProgress,
+    monitor: RunLevelCometMonitor | None = None,
 ) -> EpisodeOutcome:
     manifest_path = task.episode_dir / "manifest.json"
     label = task.episode_id if task.cell_id is None else f"{task.cell_id}/{task.episode_id}"
+
+    def _finished(outcome: EpisodeOutcome) -> None:
+        """Local console bar and remote run-level monitor, always together."""
+        progress.episode_done(label, outcome.status)
+        if monitor is not None:
+            monitor.episode_finished(
+                status=outcome.status, cell_id=task.cell_id, budget_status=guard.status(),
+            )
+
     if resume and manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("status") == "completed":
             outcome = replace(EpisodeOutcome.from_dict(manifest), status="skipped_resumed")
-            progress.episode_done(label, outcome.status)
+            _finished(outcome)
             return outcome
     async with semaphore:
         if fail_fast and abort.is_set():
             outcome = EpisodeOutcome(task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id)
-            progress.episode_done(label, outcome.status)
+            _finished(outcome)
             return outcome
         try:
             interactions, termination_reason = await _execute_episode(
@@ -342,7 +373,7 @@ async def _run_episode_task(
             )
             LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
         _write(manifest_path, _json(outcome.to_dict()))
-        progress.episode_done(label, outcome.status)
+        _finished(outcome)
         return outcome
 
 
@@ -471,6 +502,7 @@ async def run_experiment(
         total_rounds=plan.interactions.expected * config.execution.repetitions,
         show=show_progress,
     )
+    monitor = _run_level_monitor(config, run_id, config.execution.repetitions)
     semaphore = asyncio.Semaphore(config.execution.parallelism)
     abort = asyncio.Event()
     started_at = _now()
@@ -481,10 +513,12 @@ async def run_experiment(
             semaphore=semaphore, abort=abort, fail_fast=config.execution.fail_fast,
             resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
             price_hash=price_hash, checkpoint_enabled=config.storage.checkpoints, progress=progress,
+            monitor=monitor,
         )
     finally:
         guarded_provider.close()
         progress.close()
+        _write(run_dir / "comet_run_summary.json", _json(monitor.close()))
 
     result = ExperimentResult(
         run_id=run_id, experiment_name=config.experiment.name, game_type=config.game.type,
@@ -709,6 +743,10 @@ async def run_experiment_grid(
     progress = ExperimentProgress(
         total_episodes=len(all_tasks), total_rounds=total_rounds, show=show_progress,
     )
+    # One remote experiment for the whole grid. Episode-level Comet stays off
+    # (see `_execute_episode`); this is the run-level view a long unattended
+    # Slurm job is watched through.
+    monitor = _run_level_monitor(base, run_id, len(all_tasks), tuple(cell.cell_id for cell in cells))
     semaphore = asyncio.Semaphore(base.execution.parallelism)
     abort = asyncio.Event()
     started_at = _now()
@@ -719,10 +757,12 @@ async def run_experiment_grid(
             semaphore=semaphore, abort=abort, fail_fast=base.execution.fail_fast,
             resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
             price_hash=price_hash, checkpoint_enabled=base.storage.checkpoints, progress=progress,
+            monitor=monitor,
         )
     finally:
         guarded_provider.close()
         progress.close()
+        _write(grid_dir / "comet_run_summary.json", _json(monitor.close()))
 
     by_cell: dict[str, list[EpisodeOutcome]] = {cell.cell_id: [] for cell in cells}
     for outcome in outcomes:

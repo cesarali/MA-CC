@@ -1,0 +1,70 @@
+schema_version: 1
+# The fidelity config: a small population and a noise level where the answer is
+# neither of the two trivial anchors, so a wrong number is visibly wrong rather
+# than coincidentally right.
+#
+# At epsilon = 0.15 for every agent, q = 2*0.15*0.85 = 0.255 and the exact
+# pairwise mutual information is 1 - H(0.255) = 0.18089... bits. `mas-cc
+# synthetic truth --config` prints that from this file rather than from this
+# comment; the comment is here to be read, not to be trusted.
+#
+# Used by `mas-cc synthetic episode` (one full-pipeline run) and by
+# `mas-cc synthetic parity` (the same seeds through both modes).
+llm_provider:
+  component: ../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../components/games/synthetic_bernoulli.yaml
+  overrides:
+    population_size: 4
+    horizon: 200
+    options:
+      epsilon: 0.15
+execution:
+  schema_version: 1
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    options:
+      # A handful of rendered prompts, so the synthetic prompt can be read
+      # beside a real one and seen to be the same shape.
+      prompt_examples:
+        count: 2
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-bernoulli-fidelity
+  description: >-
+    Game 1 at epsilon = 0.15 run through the full pipeline, for comparison
+    against speed mode on the same seeds.
+  tags:
+    - synthetic
+    - calibration
+    - fidelity

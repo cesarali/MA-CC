@@ -137,6 +137,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="disable tqdm progress bars; log one line per completed episode instead",
     )
 
+    synthetic = commands.add_parser(
+        "synthetic", help="run the synthetic games whose closed-form answers we already know"
+    )
+    synthetic_commands = synthetic.add_subparsers(dest="synthetic_command", required=True)
+    synthetic_truth = synthetic_commands.add_parser(
+        "truth", help="print the closed form for a config without running anything"
+    )
+    synthetic_truth.add_argument("--config", type=Path, required=True)
+    synthetic_truth.add_argument("--output-dir", type=Path)
+
+    synthetic_episode = synthetic_commands.add_parser(
+        "episode", help="fidelity mode: one episode through prompts, provider, parser and recorder"
+    )
+    synthetic_episode.add_argument("--config", type=Path, required=True)
+    synthetic_episode.add_argument("--output-dir", type=Path)
+
+    synthetic_sweep = synthetic_commands.add_parser(
+        "sweep", help="speed mode: the null distribution and the calibration curve"
+    )
+    synthetic_sweep.add_argument("--config", type=Path, required=True)
+    synthetic_sweep.add_argument("--output-dir", type=Path)
+    synthetic_sweep.add_argument(
+        "--seeds", type=int, default=200, help="episodes per grid point (default: %(default)s)"
+    )
+    synthetic_sweep.add_argument(
+        "--epsilon-grid", nargs="+", type=float,
+        help="noise levels to sweep (default: 0.0 to 0.5 in steps of 0.05)",
+    )
+
+    synthetic_parity = synthetic_commands.add_parser(
+        "parity", help="run both modes on the same seeds and demand the same trajectory"
+    )
+    synthetic_parity.add_argument("--config", type=Path, required=True)
+    synthetic_parity.add_argument("--output-dir", type=Path)
+    synthetic_parity.add_argument(
+        "--seeds", type=int, default=5, help="fidelity episodes to check (default: %(default)s)"
+    )
+
     analysis = commands.add_parser("analysis", help="offline analysis over completed run/grid output")
     analysis_commands = analysis.add_subparsers(dest="analysis_command", required=True)
     empowerment = analysis_commands.add_parser(
@@ -303,6 +341,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{result.output_dir}"
         )
         return 0 if result.failed == 0 else 1
+    if args.command == "synthetic":
+        from .synthetic import (
+            DEFAULT_EPSILON_GRID,
+            run_synthetic_episode,
+            run_synthetic_parity,
+            run_synthetic_sweep,
+            run_synthetic_truth,
+        )
+
+        try:
+            if args.synthetic_command == "truth":
+                run_synthetic_truth(args.config, args.output_dir)
+            elif args.synthetic_command == "episode":
+                run_synthetic_episode(args.config, args.output_dir)
+            elif args.synthetic_command == "sweep":
+                run_synthetic_sweep(
+                    args.config, args.output_dir, seeds=args.seeds,
+                    epsilon_grid=tuple(args.epsilon_grid or DEFAULT_EPSILON_GRID),
+                )
+            else:
+                summary = run_synthetic_parity(args.config, args.output_dir, seeds=args.seeds)
+                # A parity failure means the full pipeline and the bare sampler
+                # disagree on the same seed, which is a real finding, not a
+                # warning - so it leaves through a non-zero exit status.
+                return 0 if summary["all_identical"] else 1
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
     if args.command == "analysis" and args.analysis_command == "empowerment":
         from .analysis import run_analysis_empowerment_command
 
