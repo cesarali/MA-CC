@@ -11,11 +11,11 @@ schema_version: 1
 # Used by `mas-cc synthetic episode` (one full-pipeline run) and by
 # `mas-cc synthetic parity` (the same seeds through both modes).
 llm_provider:
-  component: ../components/llm_providers/synthetic_agent.yaml
+  component: ../../components/llm_providers/synthetic_agent.yaml
 prompt:
-  component: ../components/prompts/synthetic_agent_v1.yaml
+  component: ../../components/prompts/synthetic_agent_v1.yaml
 game:
-  component: ../components/games/synthetic_bernoulli.yaml
+  component: ../../components/games/synthetic_bernoulli.yaml
   overrides:
     population_size: 4
     horizon: 200
@@ -41,7 +41,7 @@ budget:
   max_cost_per_run: 0.0
   allow_unbounded_paid_requests: false
 logging:
-  component: ../components/logging/default.yaml
+  component: ../../components/logging/default.yaml
   overrides:
     options:
       # A handful of rendered prompts, so the synthetic prompt can be read
@@ -49,7 +49,7 @@ logging:
       prompt_examples:
         count: 2
 storage:
-  component: ../components/storage/local.yaml
+  component: ../../components/storage/local.yaml
 analysis:
   schema_version: 1
   enabled: false

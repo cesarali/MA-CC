@@ -1,11 +1,11 @@
 schema_version: 1
 # Game 3 - Game 2 plus an exogenous control input.
 llm_provider:
-  component: ../components/llm_providers/synthetic_agent.yaml
+  component: ../../components/llm_providers/synthetic_agent.yaml
 prompt:
-  component: ../components/prompts/synthetic_agent_v1.yaml
+  component: ../../components/prompts/synthetic_agent_v1.yaml
 game:
-  component: ../components/games/synthetic_controlled_markov.yaml
+  component: ../../components/games/synthetic_controlled_markov.yaml
 execution:
   schema_version: 1
   seed: 20260805
@@ -26,12 +26,12 @@ budget:
   max_cost_per_run: 0.0
   allow_unbounded_paid_requests: false
 logging:
-  component: ../components/logging/default.yaml
+  component: ../../components/logging/default.yaml
   overrides:
     options:
       show_metrics: true
 storage:
-  component: ../components/storage/local.yaml
+  component: ../../components/storage/local.yaml
 analysis:
   schema_version: 1
   enabled: false

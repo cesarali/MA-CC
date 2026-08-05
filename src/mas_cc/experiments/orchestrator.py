@@ -141,6 +141,24 @@ def _pricing_terms(quote: PricingQuote) -> dict[str, Any] | None:
     return terms
 
 
+def _provider_registry():
+    """The kernel's provider registry plus the game-layer synthetic agent.
+
+    `llm_runtime` is a portable kernel that ships no game-specific content, so
+    `synthetic_agent` is registered at this application boundary instead - the
+    same convention as `register_game_prompt_factories`. Without it a synthetic
+    game can only be driven by `mas-cc synthetic`, and never by an
+    `experiment run` grid, which is what the empowerment analysis reads.
+
+    The import is deferred because `mas_cc.games.synthetic` pulls in the
+    analysis stack, and this module is imported whenever the CLI starts.
+    """
+
+    from mas_cc.games.synthetic import create_synthetic_provider_registry
+
+    return create_synthetic_provider_registry()
+
+
 def _run_level_monitor(
     config: RunConfig, run_id: str, total_episodes: int, cell_ids: tuple[str, ...] = ()
 ) -> RunLevelCometMonitor:
@@ -268,6 +286,36 @@ class _EpisodeTask:
     cell_id: str | None = None
 
 
+def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: Any):
+    """This game's observer-aware runtime, or ``None`` if it has none.
+
+    Only a runtime that reports each round to an observer can drive the
+    recorder's streaming metrics, and `metrics/streaming.csv` is precisely what
+    `mas-cc analysis empowerment` reads back. A game without one still runs -
+    through the bare `run_game` path - but its episodes carry no per-round
+    metrics, so no grid over it can be analysed afterwards.
+
+    Synthetic games are matched by type rather than by name: they live under
+    `games/synthetic/` and are not named after their directory, so the
+    `game.type` string that identifies the convention game cannot identify them.
+    The import is deferred for the reason given in `_provider_registry`.
+    """
+
+    if episode_config.game.type == "naming_convention":
+        control = create_control(episode_config.control)
+        return lambda observer: run_naming_convention_game(
+            game, episode_config, guarded_provider, observer=observer, control=control
+        )
+
+    from mas_cc.games.synthetic import SyntheticGame, run_synthetic_game
+
+    if isinstance(game, SyntheticGame):
+        return lambda observer: run_synthetic_game(
+            game, episode_config, guarded_provider, observer=observer
+        )
+    return None
+
+
 async def _execute_episode(
     game: Game,
     episode_config: RunConfig,
@@ -285,7 +333,8 @@ async def _execute_episode(
 ) -> tuple[int | None, str | None]:
     """Run one episode; return ``(interaction_count, termination_reason)``."""
 
-    if episode_config.game.type == "naming_convention":
+    runtime = _observer_runtime(game, episode_config, guarded_provider)
+    if runtime is not None:
         recorder = RunRecorder(
             episode_dir, run_id=episode_label, resolved_config=episode_config.to_dict(),
             policy=policy,
@@ -296,11 +345,8 @@ async def _execute_episode(
             binning=episode_config.metrics.binning_policy(episode_config.game.population_size),
         )
         observer = _RoundTickingObserver(recorder, guard, progress, episode_label)
-        control = create_control(episode_config.control)
         try:
-            result = await run_naming_convention_game(
-                game, episode_config, guarded_provider, observer=observer, control=control
-            )
+            result = await runtime(observer)
         except Exception as exc:
             recorder.event("run_failed", error_type=type(exc).__name__, error=str(exc))
             recorder.finalize(status="failed", budget_status=guard.checkpoint_state())
@@ -475,7 +521,7 @@ async def run_experiment(
 
     effective_budget = resolve_budget_limits(system_budget, run_budget)
     guard = RuntimeBudgetGuard(effective_budget)
-    provider = create_llm_provider(config.llm_provider)
+    provider = create_llm_provider(config.llm_provider, registry=_provider_registry())
     guarded_provider = BudgetGuardedProvider(
         provider, guard, runtime_quote.pricing,
         input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
@@ -708,7 +754,7 @@ async def run_experiment_grid(
 
     effective_budget = resolve_budget_limits(system_budget, run_budget)
     guard = RuntimeBudgetGuard(effective_budget)
-    provider = create_llm_provider(base.llm_provider)
+    provider = create_llm_provider(base.llm_provider, registry=_provider_registry())
     guarded_provider = BudgetGuardedProvider(
         provider, guard, runtime_quote.pricing,
         input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,

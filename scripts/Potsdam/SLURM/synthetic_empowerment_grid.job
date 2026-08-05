@@ -1,0 +1,283 @@
+#!/bin/bash
+###############################################################################
+# Run the SYNTHETIC controlled-Markov empowerment grid on Slurm, end to end:
+# sweep the exogenous control input -> run every episode -> estimate the mutual
+# information -> check that estimate against the closed form.
+#
+#   sbatch scripts/Potsdam/SLURM/synthetic_empowerment_grid.job
+#
+# There is no mock/pilot split here and no RUN_MODE to choose, because there is
+# nothing to rehearse: the "agents" are lookup tables, the job opens no socket,
+# spends nothing, and needs no credentials. It is safe to submit as-is.
+#
+# This is the synthetic sibling of empowerment_grid.job, which drives the real
+# naming-convention game against the University proxy. The pipeline is the same
+# two steps (`mas-cc experiment run` then `mas-cc analysis empowerment`); what
+# is different is that here we already know the right answer, so the job ends by
+# printing the estimate next to the truth.
+#
+# WHY THE CPU REQUEST IS HEADROOM, NOT SPEED
+# Be aware before you scale this up: the 20 CPUs are requested as asked, but
+# nothing here is actually parallel across cores.
+#
+# `execution.parallelism: 20` is asyncio concurrency inside ONE process, not
+# multiprocessing. The synthetic agent is a lookup table that never waits on a
+# socket, so 20 episodes "in flight" interleave on a single core rather than
+# spreading over 20. Step 4 is single-threaded too (measured: user time equals
+# wall time). The request does no harm and leaves room to grow into, but more
+# CPUs will not make this finish sooner.
+#
+# Measured on 200 episodes, 6 agents, horizon 60:
+#   step 3, the episodes                   ~2 minutes
+#   step 4 at --null-permutations 50       ~1.5 minutes
+#   step 4 at --null-permutations 1000     ~27 minutes   <- the default
+# The nulls dominate, and they scale linearly. If you want a fast pass, lower
+# NULL_PERMUTATIONS rather than trimming episodes.
+###############################################################################
+#SBATCH --job-name=mascc-synth-empowerment
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/slurm-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/slurm-%j.err
+###############################################################################
+
+set -euo pipefail
+
+# No proxy exports: nothing in this job reaches the network. If a step ever
+# tries to, that is a bug worth failing on rather than tunnelling out.
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly RESULTS_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+
+readonly CONFIG=configs/runs/synthetic_games/synthetic_controlled_markov_empowerment.yaml
+# The closed-form step in stage 2 cannot read ${CONFIG}: `mas-cc synthetic
+# empowerment` takes a single run config and rejects one carrying a `grid:`
+# block. So it is pointed at the ungridded sibling instead. Both reference the
+# same `configs/components/games/synthetic_controlled_markov.yaml`, so today
+# they resolve to an identical game - and stage 2 asserts exactly that before
+# using it, because a silently desynced answer key is worse than no answer key.
+readonly TRUTH_CONFIG=configs/runs/synthetic_games/synthetic_controlled_markov.yaml
+readonly OUTPUT_DIR=${RESULTS_ROOT}/synthetic_empowerment_grid
+readonly EXPERIMENT_NAME=synthetic-controlled-markov-empowerment
+readonly GAME_TYPE=synthetic_controlled_markov
+
+# Keep these two in sync with the config's experiment.name / execution.seed, or
+# step 4 will not find the grid step 3 just produced.
+readonly SEED=20260805
+
+# The swept axis, as the two commands each want to name it. `experiment run`
+# takes the dotted config path (from the config's `grid:` block); the
+# closed-form command takes the bare game.options key.
+readonly CONTROL_VALUES=(0 1)
+readonly CONDITION_KEY=control_value
+
+# Analysis knobs, overridable at submit time:
+#   sbatch --export=ALL,NULL_PERMUTATIONS=200 scripts/Potsdam/SLURM/synthetic_empowerment_grid.job
+readonly HORIZONS="${HORIZONS:-1 2 3}"
+readonly BOOTSTRAP_RESAMPLES="${BOOTSTRAP_RESAMPLES:-1000}"
+readonly NULL_PERMUTATIONS="${NULL_PERMUTATIONS:-1000}"
+# Bin the macrostate onto common levels. Strongly advised: unbinned, the lagged
+# statistic carries more degrees-of-freedom inflation than signal - the
+# closed-form step prints the plug-in bias next to the value so you can see it.
+readonly MACROSTATE_BINS="${MACROSTATE_BINS:-7}"
+
+# `repetitions` in the config is episodes PER CELL. Two cells, so the total is
+# twice this. Reported here only so the log states what it ran.
+readonly REPETITIONS_PER_CELL=100
+
+# Numeric libraries default to one thread per core and then thrash against each
+# other for no gain, since the work here is not BLAS-bound in the first place.
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+# The synthetic games have no business publishing anything, and the Comet sink
+# falls back to reading COMET_API_KEY out of ${REPO_ROOT}/.env when the variable
+# is unset - so a run started from the repo root would otherwise create a real
+# remote experiment. The config also sets logging.comet: false; blanking the key
+# makes the guarantee independent of that config being edited later.
+export COMET_API_KEY=""
+
+if [[ ! -x "${CONDA_BIN}" ]]; then
+  echo "[error] Conda is unavailable at ${CONDA_BIN}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/${CONFIG}" ]]; then
+  echo "[error] Grid config is missing: ${REPO_ROOT}/${CONFIG}" >&2
+  exit 1
+fi
+# Deliberately NO .env check: this job needs no credentials.
+
+mkdir -p "${RESULTS_ROOT}" "${OUTPUT_DIR}"
+cd "${REPO_ROOT}"
+
+# `mas-cc experiment run` composes its own output path underneath --output-dir:
+#   <output-dir>/<game.type>/<experiment.name>/<experiment.name>-<execution.seed>/
+readonly GRID_DIR="${OUTPUT_DIR}/${GAME_TYPE}/${EXPERIMENT_NAME}/${EXPERIMENT_NAME}-${SEED}"
+readonly TRUTH_DIR="${OUTPUT_DIR}/ground_truth"
+# Same <game.type>/<experiment.name>/<run_id>/ composition, but keyed on
+# TRUTH_CONFIG's own experiment.name, which is the ungridded one.
+readonly TRUTH_JSON="${TRUTH_DIR}/${GAME_TYPE}/synthetic-controlled-markov/synthetic-controlled-markov-empowerment/empowerment_ground_truth.json"
+
+echo "[run] config=${REPO_ROOT}/${CONFIG}"
+echo "[run] output_dir=${OUTPUT_DIR}"
+echo "[run] grid_dir=${GRID_DIR}"
+echo "[run] sweep=${CONDITION_KEY} over ${CONTROL_VALUES[*]}"
+echo "[run] episodes=${REPETITIONS_PER_CELL} per cell x ${#CONTROL_VALUES[@]} cells"
+echo "[run] comet=FORCED-OFF"
+echo "[run] slurm_job_id=${SLURM_JOB_ID:-manual}"
+echo "[run] cpus=${SLURM_CPUS_PER_TASK:-unset}"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+###############################################################################
+# Step 1 - preflight. The synthetic provider bills nothing, so this is not a
+# spending gate; it is the cheapest check that the grid expands into the cells
+# you meant and that the run is permitted to launch at all. `experiment run`
+# repeats it internally and refuses to start if it does not come back
+# "permitted" - which it will not unless pricing.explicit_unknown_price_override
+# is set, because a lookup table has no published price.
+###############################################################################
+echo "[step] 1/4 preflight"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment preflight \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}/preflight"
+
+###############################################################################
+# Step 2 - the answer key, BEFORE the run rather than after. `synthetic
+# empowerment` derives the exact I(C;O) and I(C;S_t+h|S_t) for this exact sweep
+# in closed form, running no episodes at all. Written first on purpose: pull the
+# directory off the cluster and the right answer is already sitting next to the
+# estimate, whatever happened to the run.
+#
+# It needs the grid rather than just the config because p(c) - the channel's
+# input distribution - is a property of what you swept and how many episodes
+# each cell got, not of the game alone.
+###############################################################################
+echo "[step] 2/4 closed-form ground truth"
+# The answer key is only an answer key if it describes the game actually being
+# run. Fail here rather than print a confident number about a different game.
+"${CONDA_BIN}" run --live-stream -n MA-CC python - "${CONFIG}" "${TRUTH_CONFIG}" <<'PYTHON'
+import json, sys
+from mas_cc.config import load_run_config, load_run_config_or_grid
+
+grid_path, truth_path = sys.argv[1], sys.argv[2]
+swept = load_run_config_or_grid(grid_path).base.game.to_dict()
+truth = load_run_config(truth_path).game.to_dict()
+if swept != truth:
+    differing = {
+        key: {"grid": swept.get(key), "truth": truth.get(key)}
+        for key in set(swept) | set(truth)
+        if swept.get(key) != truth.get(key)
+    }
+    sys.exit(
+        "the closed-form config no longer describes the game being swept; "
+        "the ground truth would be an answer to a different question:\n"
+        + json.dumps(differing, indent=2, sort_keys=True)
+    )
+print("  game config matches the swept base: ok")
+PYTHON
+
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc synthetic empowerment \
+  --config "${TRUTH_CONFIG}" \
+  --output-dir "${TRUTH_DIR}" \
+  --condition "${CONDITION_KEY}" \
+  --values "${CONTROL_VALUES[@]}" \
+  --repetitions "${REPETITIONS_PER_CELL}" \
+  --horizons ${HORIZONS} \
+  --macrostate-bins "${MACROSTATE_BINS}"
+
+###############################################################################
+# Step 3 - run every cell's episodes under one shared concurrency pool.
+# --no-progress because a Slurm log is not a TTY: tqdm would render nothing
+# useful, and the fallback emits one clean line per finished episode.
+#
+# Resume is left ON (no --no-resume): a job that hits the wall clock can be
+# resubmitted and will pick up the episodes it already finished. Delete
+# ${GRID_DIR} to force a genuine re-run.
+###############################################################################
+echo "[step] 3/4 run ${REPETITIONS_PER_CELL} episodes per cell"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --no-progress
+
+###############################################################################
+# Step 4 - the mutual information itself, over the completed grid. This is the
+# step the whole job exists for: it turns "200 episodes across 2 control
+# conditions" into I(control ; outcome), with a bootstrap CI and a
+# label-permutation null to say whether that number means anything.
+#
+# It reads metrics/streaming.csv from each episode, so metrics.enabled must stay
+# true in the config - the guard below fails loudly rather than letting the
+# analysis produce an empty frame.
+#
+# This is the SLOW step, not the episodes: the nulls re-estimate the statistic
+# once per permutation per horizon. Lower NULL_PERMUTATIONS for a quick pass.
+###############################################################################
+if [[ ! -d "${GRID_DIR}/cells" ]]; then
+  echo "[error] No cells/ under ${GRID_DIR} - did experiment.name or execution.seed change?" >&2
+  exit 1
+fi
+if ! compgen -G "${GRID_DIR}/cells/*/data/episodes/*/metrics/streaming.csv" >/dev/null; then
+  echo "[error] No metrics/streaming.csv under ${GRID_DIR} - the MI step has no input." >&2
+  echo "[error] Check that metrics.enabled is still true in ${CONFIG}." >&2
+  exit 1
+fi
+
+echo "[step] 4/4 mutual information"
+# shellcheck disable=SC2086  # HORIZONS is an intentional multi-value argument
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc analysis empowerment \
+  --grid-dir "${GRID_DIR}" \
+  --horizons ${HORIZONS} \
+  --bootstrap-resamples "${BOOTSTRAP_RESAMPLES}" \
+  --null-permutations "${NULL_PERMUTATIONS}"
+
+###############################################################################
+# The verdict: estimate against closed form. A synthetic run that does not end
+# in this comparison has thrown away the only thing that makes it synthetic.
+###############################################################################
+echo "[check] estimate vs closed form"
+"${CONDA_BIN}" run --live-stream -n MA-CC python - "${GRID_DIR}/analysis/mi_estimates.csv" "${TRUTH_JSON}" <<'PYTHON'
+import csv, json, sys
+
+estimates_path, truth_path = sys.argv[1], sys.argv[2]
+
+with open(estimates_path, newline="", encoding="utf-8") as stream:
+    rows = [r for r in csv.DictReader(stream) if r["statistic"] == "terminal"]
+if not rows:
+    sys.exit("no terminal row in " + estimates_path)
+row = rows[0]
+
+truth = {
+    (q["name"], tuple(q["subject"])): q["value"]
+    for q in json.load(open(truth_path, encoding="utf-8"))["quantities"]
+}
+exact = truth[("terminal_mutual_information", ())]
+bias = truth[("terminal_plugin_bias", ())]
+
+estimate = float(row["jeffreys"])
+low, high = float(row["ci_low"]), float(row["ci_high"])
+covers = low <= exact <= high
+
+print(f"  episodes           {row['episodes']}")
+print(f"  terminal I(C;O)")
+print(f"    estimate (jeffreys)  {estimate:.6f} bits   95% CI [{low:.6f}, {high:.6f}]")
+print(f"    closed form          {exact:.6f} bits   (plug-in bias {bias:.4f})")
+print(f"    difference           {estimate - exact:+.6f} bits")
+# Not an assertion: one grid's CI missing the truth is a result to look at, not
+# a failed build. Exiting non-zero here would mark a perfectly good run as
+# FAILED in the Slurm mail.
+print(f"    CI covers truth      {'yes' if covers else 'NO  <-- worth investigating'}")
+PYTHON
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "[done] grid=${GRID_DIR}"
+echo "[done] analysis=${GRID_DIR}/analysis"
+echo "[done] ground_truth=${TRUTH_JSON}"

@@ -1,0 +1,94 @@
+schema_version: 1
+# Game 3 as an EMPOWERMENT GRID: sweep the exogenous control input `u`, run the
+# episodes, then estimate I(C ; outcome) from what was recorded.
+#
+# This is the positive control of the synthetic family. Sweeping epsilon or the
+# population size would move how noisy the population is, not which way it
+# goes, and the empowerment would come out at exactly zero. `control_value` is
+# the one axis that actually steers, so a near-zero MI here means the estimator
+# is broken rather than the game being uninformative.
+#
+# The answer key is not a guess: `mas-cc synthetic empowerment` states the exact
+# I(C;O) for this same sweep in closed form, without running anything. Run the
+# two and compare - that comparison is the entire point of a synthetic game, and
+# scripts/Potsdam/SLURM/synthetic_empowerment_grid.job does both in one job.
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov.yaml
+execution:
+  schema_version: 1
+  seed: 20260805
+  # Episodes PER CELL. Two cells below, so 2 x 100 = 200 episodes in total.
+  repetitions: 100
+  # Episodes in flight at once, shared across the whole grid. Note this is
+  # asyncio concurrency in a single process, not multiprocessing: the synthetic
+  # agent is a lookup table that never waits on a socket, so this bounds
+  # interleaving rather than buying cores. See the .job file's header.
+  parallelism: 20
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  # The synthetic agent is a lookup table with no published price. Without this
+  # the preflight gate returns "explicit-override-required" and `experiment run`
+  # refuses to launch. Safe here and only here: this provider bills nothing and
+  # opens no socket.
+  explicit_unknown_price_override: true
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  # A monetary cap cannot be enforced against a provider with no price - the
+  # runtime guard refuses to run rather than pretend it can - so the cost caps
+  # are null and the request/token caps below do the actual bounding.
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 200000
+  max_input_tokens: 200000000
+  max_output_tokens: 10000000
+  allow_unbounded_paid_requests: true
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    # Never on: a calibration run has no business uploading anything, and the
+    # .job file blanks COMET_API_KEY as well so this holds even if edited.
+    comet: false
+    options:
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  # Must stay true. analysis/reader.py rebuilds each episode's per-round
+  # macrostate from the `population_action_share_per_option` rows in
+  # metrics/streaming.csv; turn metrics off and the MI step has no input at all.
+  enabled: true
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-controlled-markov-empowerment
+  description: >-
+    Game 3 swept over its exogenous control input; the empirical I(C;O) to be
+    compared against the closed form for the same sweep.
+  tags:
+    - synthetic
+    - controlled-markov
+    - empowerment
+    - mutual-information
+    - grid
+grid:
+  # One axis, two levels -> the binary condition variable C in I(C; outcome).
+  # These are indices into the game's `control_targets`, so 0 pushes toward
+  # action Q and 1 toward action M.
+  game.options.control_value: [0, 1]
