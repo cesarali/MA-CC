@@ -36,7 +36,7 @@ import pandas as pd
 from mas_cc.analysis.estimators import Estimate, mutual_information_from_counts
 from mas_cc.config import GameConfig
 
-from .bernoulli.metrics import ACTION_METRIC_NAME
+from .metrics_common import ACTION_METRIC_NAME, DEFAULT_WINDOW
 from .protocols import GroundTruth, SyntheticGame
 
 ESTIMATORS = ("unsmoothed", "jeffreys", "miller_madow")
@@ -74,6 +74,186 @@ def read_action_series(run_dir: str | Path) -> dict[str, list[str]]:
         agent_id: [value for _, value in sorted(entries)]
         for agent_id, entries in sorted(by_agent.items())
     }
+
+
+def read_streaming_metrics(run_dir: str | Path) -> pd.DataFrame:
+    """The whole `metrics/streaming.csv` as a frame, or empty if absent."""
+
+    path = Path(run_dir) / "metrics" / "streaming.csv"
+    if not path.is_file():
+        return pd.DataFrame(columns=["round_index", "agent_id", "series", "metric_name", "value"])
+    return pd.read_csv(path)
+
+
+def read_final_metrics(run_dir: str | Path) -> dict[str, Any]:
+    """`metrics/final.csv` as ``{metric_name: value}``, with blanks read as None."""
+
+    path = Path(run_dir) / "metrics" / "final.csv"
+    if not path.is_file():
+        return {}
+    values: dict[str, Any] = {}
+    with path.open(newline="", encoding="utf-8") as stream:
+        for row in csv.DictReader(stream):
+            raw = row["value"]
+            values[row["metric_name"]] = None if raw in ("", "None") else raw
+    return values
+
+
+def _tolerance(expected: float | None, samples: int) -> float | None:
+    """How far a time-averaged proportion may sit from its closed form.
+
+    Derived rather than picked: these metrics are proportions averaged over
+    ``samples`` rounds, so their sampling error is ``sqrt(p(1-p)/n)`` and four
+    of those is a band a correct implementation essentially always sits inside.
+    A fixed tolerance would be wrong in both directions - far too tight for a
+    share whose per-round value swings between 0 and 1 over a short episode,
+    and far too loose for a rate that concentrates hard.
+
+    The floor keeps a degenerate quantity (``p`` of 0 or 1, where the sampling
+    error is exactly zero) from demanding bit-perfect equality of a float mean.
+
+    This band judges whether the *recorder wrote what the game did*. It is not
+    a test of estimator bias - the mutual-information table and the parity
+    check are what answer that, at a precision this deliberately does not.
+    """
+
+    if expected is None:
+        return None
+    variance = max(expected * (1.0 - expected), 0.0)
+    return max(0.02, 4.0 * math.sqrt(variance / max(samples, 1)))
+
+
+def metric_check(
+    run_dir: str | Path, truth: GroundTruth, *, warmup_rounds: int = DEFAULT_WINDOW
+) -> pd.DataFrame:
+    """The ordinary choice metrics, next to what they analytically had to be.
+
+    The mutual-information table answers "is the estimator right". This answers
+    the more mundane and equally necessary question: did the *recorder* write
+    the numbers the game actually produced. Every row is a metric the game
+    declared; `expected` is filled wherever `ground_truth()` has a closed form
+    for it and left blank where it genuinely has none, rather than inventing a
+    target to compare against.
+
+    Streaming metrics are reduced to a time-average, which is what converges to
+    the closed form. The rolling ones skip the first ``warmup_rounds``, because
+    a trailing window is still filling up over exactly that many rounds and its
+    values there are not estimates of anything.
+
+    Skipping only the warm-up, rather than a fixed fraction of the episode,
+    matters more than it sounds. For a rare event - unanimity at 3% - throwing
+    away half the rounds turns a good estimate into a noisy one, and an episode
+    whose few unanimous rounds happened to fall early then reads as a flat zero
+    against a correct closed form. That is a measurement artifact masquerading
+    as a discrepancy, in exactly the place we are trying to detect real ones.
+    """
+
+    frame = read_streaming_metrics(run_dir)
+    final = read_final_metrics(run_dir)
+    rows: list[dict[str, Any]] = []
+
+    def _expected(name: str, subject: Sequence[str] = ()) -> float | None:
+        try:
+            return truth.value(name, subject)
+        except KeyError:
+            return None
+
+    if not frame.empty:
+        warm = frame[frame["round_index"] > warmup_rounds]
+        for name, group in frame.groupby("metric_name", sort=True):
+            if name == ACTION_METRIC_NAME:
+                continue  # a categorical passthrough; it has no meaningful mean
+            rolling = name.startswith("rolling_")
+            source = (warm if rolling else frame)
+            source = source[source["metric_name"] == name]
+            for series, part in source.groupby(source["series"].fillna(""), sort=True):
+                observed = pd.to_numeric(part["value"], errors="coerce").mean()
+                subject = (str(series),) if series else ()
+                expected = (
+                    _expected("expected_action_share", subject)
+                    if name.endswith("action_share_per_option")
+                    else _expected("unanimity_probability")
+                    if name == "rolling_coordination_rate"
+                    else _expected("expected_dominant_action_share")
+                    if name == "dominant_action_share"
+                    else None
+                )
+                rows.append(
+                    {
+                        "metric": name,
+                        "series": str(series),
+                        "kind": "streaming (time-mean)",
+                        "observed": None if pd.isna(observed) else float(observed),
+                        "expected": expected,
+                        "tolerance": _tolerance(expected, len(part)),
+                        # Carried as its own flag rather than inferred from
+                        # `expected` later: these rows become a DataFrame, and a
+                        # None in a float column silently becomes NaN - which
+                        # would turn "no closed form for this metric" into a
+                        # failed comparison against nothing.
+                        "has_expected": expected is not None,
+                        "judged": True,
+                        "note": f"after {warmup_rounds}-round window warm-up" if rolling else "",
+                    }
+                )
+
+    # Final metrics are matched by exact name, never by substring. The two
+    # consensus metrics measure genuinely different things and have different
+    # answer keys, and matching on "consensus" would silently hold one of them
+    # to the other's target - which is exactly the mistake that makes a metric
+    # look broken when it is behaving correctly.
+    must_converge = _expected("expected_consensus_by_success_rate")
+    chance_round = _expected("expected_first_chance_unanimity_round")
+    for name, value in sorted(final.items()):
+        expected: Any = None
+        judged = True
+        note = ""
+        if name in ("first_consensus_time_by_success_rate", "consensus_action_by_success_rate"):
+            if must_converge is not None:
+                expected = "fires" if must_converge == 1.0 else "None"
+            note = "rolling window at threshold; needs sustained agreement"
+        elif name == "first_consensus_time_by_action_share":
+            # A standing-share criterion with no persistence requirement, so a
+            # single lucky round satisfies it. Reported against its own closed
+            # form but left unjudged: the waiting time is geometric, and one
+            # episode is a single draw whose spread equals its own mean.
+            expected = chance_round
+            judged = False
+            note = "no persistence requirement; geometric waiting time, one draw"
+        rows.append(
+            {
+                "metric": name,
+                "series": "",
+                "kind": "final",
+                "observed": value,
+                "expected": expected,
+                "tolerance": None,
+                "has_expected": expected is not None,
+                "judged": judged,
+                "note": note,
+            }
+        )
+
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+
+    def _agrees(row: Mapping[str, Any]) -> Any:
+        # Blank rather than True wherever there is no closed form, or where the
+        # quantity is too dispersed for one episode to judge - "no target" and
+        # "too noisy to call" must never read as "checked and fine".
+        expected, observed = row["expected"], row["observed"]
+        if not row["has_expected"] or not row["judged"]:
+            return None
+        if isinstance(expected, str):
+            fired = observed not in (None, "None", "")
+            return (expected == "fires") == fired
+        if observed is None:
+            return False
+        return abs(float(observed) - float(expected)) <= float(row["tolerance"])
+
+    result["agrees"] = result.apply(_agrees, axis=1)
+    return result
 
 
 def series_to_indices(
@@ -438,7 +618,10 @@ __all__ = [
     "calibration_curve",
     "compare_modes",
     "episode_summary",
+    "metric_check",
     "null_distribution",
+    "read_final_metrics",
+    "read_streaming_metrics",
     "pairwise_counts",
     "pairwise_estimates",
     "plot_calibration",

@@ -1,0 +1,84 @@
+schema_version: 1
+# The METRICS config. Nothing to do with mutual information — this one exists to
+# exercise the ordinary choice-game metric pipeline (streaming CSV, final CSV,
+# binned trajectory tables, plots) on a game whose metric values we can predict.
+#
+# epsilon = 0.0 means every agent reports the latent signal exactly, so:
+#
+#   rolling_coordination_rate           1.0 every round (always unanimous)
+#   dominant_action_share               1.0 every round
+#   population_action_share_per_option  flips 1/0 <-> 0/1, because the *signal*
+#                                       is still a fair coin
+#   first_consensus_time_by_success_rate  fires at round 25 (the first full window)
+#   consensus_action_by_success_rate      whichever word led that window
+#
+# That combination is the interesting part, and it is not a quirk: the
+# population agrees perfectly every single round while never settling on a word.
+# It is the concrete case behind the note in the consensus metric's docstring
+# that "success rate alone says the population agreed but not on what". If a
+# metric ever reports a stable convention here, it is measuring the wrong thing.
+#
+# Compare against synthetic_bernoulli_never_converges.yaml, where the same
+# metrics must all say the opposite.
+llm_provider:
+  component: ../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../components/games/synthetic_bernoulli.yaml
+  overrides:
+    population_size: 6
+    horizon: 300
+    options:
+      epsilon: 0.0
+execution:
+  schema_version: 1
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    options:
+      show_metrics: true
+      prompt_examples:
+        count: 2
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  # One population round is one round in this game (everyone acts every round),
+  # so the trajectory bin is set explicitly rather than defaulting to N.
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-bernoulli-metrics
+  description: >-
+    Perfectly coordinated but never settled: epsilon = 0 makes every round
+    unanimous while the chosen word keeps flipping. Exercises the choice-metric
+    pipeline against predictable values.
+  tags:
+    - synthetic
+    - metrics
+    - always-unanimous

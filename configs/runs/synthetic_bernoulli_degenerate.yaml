@@ -1,0 +1,79 @@
+schema_version: 1
+# The degenerate config from the plan's "Additional configurations" table.
+#
+# latent_bias = 1.0 pins the signal high forever and epsilon = 0 stops anyone
+# flipping, so every agent reports "M" on every round for the whole episode.
+# Entropy is exactly zero and the mutual information is a genuine 0/0.
+#
+# The check is that nothing silently returns NaN or 1.0 where the answer is 0:
+#
+#   marginal_entropy                    0 bits
+#   mutual_information                  0 bits  (0/0, resolved by the limit)
+#   dominant_action_share               1.0
+#   population_action_share_per_option  M = 1.0, Q = 0.0
+#   rolling_coordination_rate           1.0
+#
+# Worth reading the smoothed estimator column here rather than only the
+# unsmoothed one: Jeffreys adds half a count to every cell of the contingency
+# table, including the three that are structurally empty, so it reports a small
+# positive mutual information for a population that provably carries none. That
+# is not a bug, it is what smoothing costs, and this is the config that makes
+# the cost legible.
+llm_provider:
+  component: ../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../components/games/synthetic_bernoulli.yaml
+  overrides:
+    population_size: 4
+    horizon: 200
+    options:
+      epsilon: 0.0
+      latent_bias: 1.0
+execution:
+  schema_version: 1
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    options:
+      show_metrics: true
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-bernoulli-degenerate
+  description: >-
+    Zero entropy: every agent locked to one action forever. Checks that a 0/0
+    mutual information comes back as 0 rather than NaN or 1.
+  tags:
+    - synthetic
+    - metrics
+    - degenerate

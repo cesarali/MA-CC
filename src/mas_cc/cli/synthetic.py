@@ -1,6 +1,6 @@
 """``mas-cc synthetic`` — run the games whose answers we already know.
 
-Four commands, in the order the work actually goes:
+Five commands, in the order the work actually goes:
 
 ``truth``     print the closed form for a config without running anything.
 ``sweep``     speed mode. The null distribution at eps = 0.5 (what MI the
@@ -13,6 +13,10 @@ Four commands, in the order the work actually goes:
 ``parity``    both modes on the same seeds, demanding the same trajectory. This
               is what makes speed mode trustworthy enough to sweep in - and if
               it fails, it has found a pipeline bug, which is the point.
+``empowerment`` the family-2 answer key: exact ``I(C;O)`` and
+              ``I(C;S_t+h | S_t)`` for a *sweep* rather than a single config,
+              because those depend on the grid you chose - which is the channel
+              input distribution, and something we know exactly.
 
 No preflight, no pricing, no budget guard: a synthetic run makes no billable
 call, so gating it on a cost estimate would be theatre. Comet stays wherever
@@ -38,6 +42,7 @@ from mas_cc.games.synthetic import (
     compare_modes,
     create_synthetic_provider_registry,
     episode_summary,
+    metric_check,
     null_distribution,
     pairwise_estimates,
     plot_calibration,
@@ -239,6 +244,10 @@ def run_synthetic_episode(
     frame.to_csv(destination / "metrics" / "mi_estimates.csv", index=False)
     summary = episode_summary(frame)
     _write(destination / "metrics" / "mi_summary.json", _json(summary))
+
+    checks = metric_check(destination, game.ground_truth(config.game))
+    if not checks.empty:
+        checks.to_csv(destination / "metrics" / "metric_check.csv", index=False)
     plotted = plot_streaming_metrics(
         destination / "metrics" / "streaming.csv", destination / "metrics" / "plots"
     )
@@ -252,12 +261,47 @@ def run_synthetic_episode(
         f"vs truth {summary['truth_mean']:.4f} bits "
         f"(gap {summary['gap_unsmoothed_mean']:+.4f})"
     )
+    _print_metric_check(checks)
     print(f"  ground truth: {destination / 'ground_truth.json'}")
     print(f"  estimates:    {destination / 'metrics' / 'mi_estimates.csv'}")
     if plotted:
         print(f"  metric plots ({len(plotted)}): {destination / 'metrics' / 'plots'}")
+    print(f"Comet: {recorder_comet_status(destination)}")
     print(f"Output: {destination}")
     return summary
+
+
+def recorder_comet_status(destination: Path) -> str:
+    """What the recorder's Comet sink actually did, read back from its own summary."""
+
+    path = destination / "comet_summary.json"
+    if not path.is_file():
+        return "not written"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    status, reason = payload.get("status"), payload.get("reason")
+    return status if not reason else f"{status} ({reason})"
+
+
+def _print_metric_check(checks: pd.DataFrame) -> None:
+    """The choice metrics next to their closed forms, as a readable block."""
+
+    if checks.empty:
+        return
+    print("  metrics vs. ground truth:")
+    for row in checks.to_dict("records"):
+        label = row["metric"] + (f" [{row['series']}]" if row["series"] else "")
+        observed = row["observed"]
+        shown = f"{observed:.4f}" if isinstance(observed, float) else str(observed)
+        if not row["has_expected"]:
+            print(f"    {label:<44} {shown:>8}   (no closed form)")
+            continue
+        expected = row["expected"]
+        target = f"{expected:.4f}" if isinstance(expected, float) else str(expected)
+        # "--" is not a soft pass: it marks a row that was deliberately not
+        # judged, so an unjudged row can never be mistaken for a passing one.
+        mark = "-- " if row["agrees"] is None else ("ok " if row["agrees"] else "OFF")
+        suffix = f"  ({row['note']})" if row["note"] else ""
+        print(f"    {label:<44} {shown:>8}   expected {target:<8} {mark}{suffix}")
 
 
 def run_synthetic_sweep(
@@ -299,6 +343,69 @@ def run_synthetic_sweep(
     print(f"Calibration curve ({len(curve)} epsilon points): {plot}")
     print(f"Output: {destination}")
     return {"null": null_summary, "calibration_points": int(len(curve)), "output_dir": str(destination)}
+
+
+def run_synthetic_empowerment(
+    config_path: str | Path,
+    output_dir: str | Path | None = None,
+    *,
+    condition: str = "epsilon",
+    values: Sequence[Any] = (),
+    repetitions: int = 50,
+    horizons: Sequence[int] = (1,),
+    macrostate_bins: int | None = None,
+) -> dict[str, Any]:
+    """The exact family-2 quantities for a sweep, without running the sweep.
+
+    This is the answer key for the empowerment statistics `analysis/pipeline.py`
+    estimates. It needs the grid, not just a config, because ``p(c)`` is a
+    property of what you swept and how many episodes each cell got.
+    """
+
+    from mas_cc.games.synthetic.empowerment import (
+        AnalysisSpec,
+        sweep_from_values,
+        sweep_ground_truth,
+    )
+
+    config, game = _load(config_path)
+    if not values:
+        raise ValueError("--values must list at least one condition value to sweep")
+    sweep = sweep_from_values(config.game, condition, values, repetitions=repetitions)
+    analysis = AnalysisSpec(
+        horizons=tuple(horizons), macrostate_bins=macrostate_bins
+    )
+    truth = sweep_ground_truth(game, sweep, analysis)
+
+    destination = _destination(
+        config, output_dir, run_id=f"{config.experiment.name}-empowerment"
+    )
+    payload = truth.to_dict()
+    _write(destination / "empowerment_ground_truth.json", _json(payload))
+
+    terminal = truth.value("terminal_mutual_information")
+    terminal_bias = truth.value("terminal_plugin_bias")
+    print(
+        f"Sweep: {condition} over {list(values)}, {repetitions} episode(s) per cell "
+        f"({truth.value('effective_sample_size'):.0f} total)"
+    )
+    print(
+        f"  |C| = {truth.value('condition_alphabet_size'):.0f}, "
+        f"|M| = {truth.value('macrostate_alphabet_size'):.0f} after binning, "
+        f"lumpable = {bool(truth.value('macrostate_is_lumpable'))}"
+    )
+    print(f"  terminal I(C;O)      = {terminal:.6f} bits   (plug-in bias {terminal_bias:.4f})")
+    print(f"  I(C;S)               = {truth.value('condition_state_mutual_information'):.6f} bits")
+    print("  lagged I(C;S_t+h|S_t):")
+    for horizon in horizons:
+        value = truth.value("lagged_conditional_mutual_information", (str(horizon),))
+        bias = truth.value("lagged_plugin_bias", (str(horizon),))
+        # Bias above signal is the headline, not a footnote: an unbinned
+        # macrostate can carry more degrees-of-freedom inflation than effect.
+        flag = "  <-- bias exceeds the signal" if bias > abs(value) else ""
+        print(f"    h={horizon:<3} {value:.6f} bits   (plug-in bias {bias:.4f}){flag}")
+    print(f"Output: {destination / 'empowerment_ground_truth.json'}")
+    return payload
 
 
 def run_synthetic_parity(

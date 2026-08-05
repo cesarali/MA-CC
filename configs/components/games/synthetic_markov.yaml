@@ -1,0 +1,22 @@
+schema_version: 1
+type: synthetic_markov
+# Six agents on a ring: agent i copies agent i-1's previous action, then flips
+# with probability epsilon. Small enough that the microstate chain is 2^6 = 64
+# states and every quantity is exact linear algebra.
+population_size: 6
+horizon: 400
+topology: complete
+options:
+  actions:
+    - Q
+    - M
+  # Who each agent observes. "ring" circulates influence so the population can
+  # coordinate; "chain" gives the data-processing configuration; "self" removes
+  # every edge and makes all cross-agent transfer entropy a structural zero.
+  # A list of source indices spells out an arbitrary graph.
+  coupling: ring
+  epsilon: 0.1
+  # Identity kernel by default (pure copying), so the coupling graph is the only
+  # thing shaping the dynamics. Set `kernel: [[a, 1-a], [b, 1-b]]` to add a
+  # second, independent knob.
+  initial_bias: 0.5

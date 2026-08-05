@@ -1,0 +1,52 @@
+schema_version: 1
+# Game 2 - coupled Markov dynamics on a ring.
+llm_provider:
+  component: ../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../components/games/synthetic_markov.yaml
+execution:
+  schema_version: 1
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    options:
+      show_metrics: true
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-markov
+  description: >-
+    Game 2 - coupled Markov dynamics on a ring.
+  tags:
+    - synthetic
+    - markov

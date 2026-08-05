@@ -149,6 +149,113 @@ class SimulatedEpisodes:
         return [[labels[index] for index in row] for row in self.actions[seed_index]]
 
 
+class ExactDynamics(ABC):
+    """One condition's exact laws, as needed by the sweep-level answer key.
+
+    This is the seam between the two families of mutual information the system
+    computes. Family 1 - within-episode ``I(A_i;A_j)`` - is a property of one
+    config, so it lives on the game as `ground_truth()`. Family 2 - the
+    empowerment statistics ``I(C;O)`` and ``I(C;S_{t+h} | S_t)`` - is *not*: a
+    single game instance has no idea what it is being swept against, because
+    the condition distribution ``p(c)`` is a property of the grid, not of any
+    one cell in it.
+
+    That is why family 2's truth lives one level up (`empowerment.py`) and this
+    object is what each cell contributes to it: the per-condition laws, from
+    which the sweep supplies ``p(c)`` and combines. "Depends on an
+    experimental-design choice" was never the same claim as "is not
+    analytically computable".
+
+    Every law here is over the **macrostate** - how many agents play each
+    action - but implementations must propagate in the *microstate* and lump at
+    the very end. The macrostate process is Markov only under strong
+    lumpability, which fails as soon as the coupling is asymmetric or the noise
+    levels differ; lumping first would then give a different and wrong answer.
+    """
+
+    @property
+    @abstractmethod
+    def population_size(self) -> int: ...
+
+    @property
+    @abstractmethod
+    def action_labels(self) -> tuple[str, ...]: ...
+
+    @property
+    @abstractmethod
+    def rounds(self) -> int: ...
+
+    @abstractmethod
+    def macrostate_law(self, round_index: int) -> np.ndarray:
+        """P(K = k) at ``round_index``, over k = 0..N agents playing the second action."""
+
+    @abstractmethod
+    def macrostate_pair_law(self, round_index: int, horizon: int) -> np.ndarray:
+        """P(K_t = k, K_{t+h} = k') as an (N+1) by (N+1) table."""
+
+    @property
+    def is_lumpable(self) -> bool:
+        """Whether the macrostate chain is itself Markov.
+
+        False does not mean the numbers are wrong - it means the shortcut of
+        computing on the lumped chain would have been, and that the macrostate
+        is discarding information the microstate had.
+        """
+
+        return True
+
+    def pooled_macrostate_law(self, window: tuple[int, int]) -> np.ndarray:
+        """The macrostate law averaged over the analysed rounds.
+
+        Averaged, not concatenated, because a pooled-count estimator builds one
+        contingency table from every round in the window - which is the average
+        of the per-round laws, and *then* a mutual information. Normalising
+        first and pooling after would be a different quantity.
+        """
+
+        first, last = window
+        total = np.zeros(self.population_size + 1, dtype=float)
+        for round_index in range(first, last + 1):
+            total += self.macrostate_law(round_index)
+        return total / max(last - first + 1, 1)
+
+    def pooled_macrostate_pair_law(
+        self, horizon: int, window: tuple[int, int]
+    ) -> np.ndarray:
+        """The lagged macrostate joint averaged over the analysed rounds.
+
+        Default implementation loops; a dynamics that can advance incrementally
+        should override this, because the loop re-propagates from round zero
+        every time.
+        """
+
+        first, last = window
+        total = np.zeros((self.population_size + 1,) * 2, dtype=float)
+        for round_index in range(first, last + 1):
+            total += self.macrostate_pair_law(round_index, horizon)
+        return total / max(last - first + 1, 1)
+
+    def terminal_outcome_law(self) -> np.ndarray:
+        """P(O = each action label) in the final round.
+
+        The tie-break is not a detail. `analysis/reader.py::_dominant_action`
+        picks the largest share with `idxmax`, which resolves an exact tie to
+        whichever option's row comes first - and rows follow the game's declared
+        action order. So every tie goes to ``action_labels[0]``.
+
+        With even N ties have positive probability, they all land on one label,
+        and the outcome marginal stops being symmetric. That is the whole
+        mechanism behind the spurious empowerment in the plan's §3.2, so the
+        answer key has to reproduce the convention exactly rather than an
+        idealized tie-free version of it.
+        """
+
+        law = self.macrostate_law(self.rounds)
+        size = self.population_size
+        first = float(sum(law[k] for k in range(size + 1) if k * 2 <= size))
+        return np.array([first, 1.0 - first], dtype=float)
+
+
 class SyntheticGame(Game, ABC):
     """A `Game` whose answers we already know."""
 
@@ -159,6 +266,10 @@ class SyntheticGame(Game, ABC):
     @abstractmethod
     def simulate(self, config: GameConfig, seeds: Sequence[int]) -> SimulatedEpisodes:
         """The same dynamics without the pipeline, vectorized across seeds."""
+
+    @abstractmethod
+    def exact_dynamics(self, config: GameConfig) -> ExactDynamics:
+        """This config's exact laws, for the sweep-level empowerment answer key."""
 
 
 class SyntheticTransition(Transition):

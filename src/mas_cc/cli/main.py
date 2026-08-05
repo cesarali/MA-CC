@@ -166,6 +166,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="noise levels to sweep (default: 0.0 to 0.5 in steps of 0.05)",
     )
 
+    synthetic_empowerment = synthetic_commands.add_parser(
+        "empowerment",
+        help="exact I(C;O) and I(C;S_t+h|S_t) for a sweep, without running the sweep",
+    )
+    synthetic_empowerment.add_argument("--config", type=Path, required=True)
+    synthetic_empowerment.add_argument("--output-dir", type=Path)
+    synthetic_empowerment.add_argument(
+        "--condition", default="epsilon",
+        help="the swept axis: a game.options key, or population_size/horizon",
+    )
+    synthetic_empowerment.add_argument(
+        "--values", nargs="+", required=True, help="the condition values making up the grid",
+    )
+    synthetic_empowerment.add_argument(
+        "--repetitions", type=int, default=50, help="episodes per cell (default: %(default)s)",
+    )
+    synthetic_empowerment.add_argument("--horizons", nargs="+", type=int, default=[1])
+    synthetic_empowerment.add_argument(
+        "--macrostate-bins", type=int,
+        help="bin the macrostate onto this many common levels; required when sweeping "
+        "population_size, and strongly advised otherwise (see the plug-in bias)",
+    )
+
     synthetic_parity = synthetic_commands.add_parser(
         "parity", help="run both modes on the same seeds and demand the same trajectory"
     )
@@ -344,6 +367,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "synthetic":
         from .synthetic import (
             DEFAULT_EPSILON_GRID,
+            run_synthetic_empowerment,
             run_synthetic_episode,
             run_synthetic_parity,
             run_synthetic_sweep,
@@ -355,6 +379,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                 run_synthetic_truth(args.config, args.output_dir)
             elif args.synthetic_command == "episode":
                 run_synthetic_episode(args.config, args.output_dir)
+            elif args.synthetic_command == "empowerment":
+                # Values arrive as strings; a numeric axis needs numbers, and a
+                # non-numeric one must survive untouched.
+                def _typed(raw: str):
+                    try:
+                        return int(raw)
+                    except ValueError:
+                        try:
+                            return float(raw)
+                        except ValueError:
+                            return raw
+
+                run_synthetic_empowerment(
+                    args.config, args.output_dir, condition=args.condition,
+                    values=[_typed(value) for value in args.values],
+                    repetitions=args.repetitions, horizons=tuple(args.horizons),
+                    macrostate_bins=args.macrostate_bins,
+                )
             elif args.synthetic_command == "sweep":
                 run_synthetic_sweep(
                     args.config, args.output_dir, seeds=args.seeds,

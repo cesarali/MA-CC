@@ -192,3 +192,41 @@ def bind_bernoulli_prompt(
     return synthetic_agent_prompt(actions=actions).bind(
         protocol=protocol, observation=observation
     )
+
+
+def bind_markov_prompt(
+    *, actions: tuple[str, ...], observation: Mapping[str, Any]
+) -> SyntheticAgentFullPrompt:
+    """Bind the Game 2 / Game 3 decoding rule and one round's observation.
+
+    The payload carries the partner's action *and* the realized kernel map, so
+    the agent does the coupling lookup itself. That is the point: if the game
+    renders the wrong partner, or last round's action instead of this one's,
+    the agent decodes something legal but wrong and the measured transfer
+    entropy misses its exact value - including the structural zeros, which is
+    precisely the direction-and-alignment bug this game exists to catch.
+
+    ``forced`` appears only in the controlled game, and overrides everything: a
+    controlled agent reports the control's action regardless of what it saw.
+    """
+
+    protocol = [
+        f"Your action is one of: {', '.join(actions)}.",
+        f"The line below starts with {OBSERVATION_MARKER} and is a JSON object.",
+    ]
+    if "forced" in observation:
+        protocol.append(
+            "If its 'forced' field is not null, report that action and stop; "
+            "ignore every other field."
+        )
+    protocol.extend(
+        [
+            "Read 'observed' - the action the agent you follow played last round.",
+            "Look that action up in the 'rule' object to get your target action.",
+            "If 'flip' is false, report the target. If 'flip' is true, report the other action.",
+            "Report nothing else.",
+        ]
+    )
+    return synthetic_agent_prompt(actions=actions).bind(
+        protocol=tuple(protocol), observation=observation
+    )

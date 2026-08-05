@@ -1,0 +1,86 @@
+schema_version: 1
+# ⚠ THIS CONFIG UPLOADS. It is the only synthetic config with Comet enabled, and
+# it is separate from the others precisely so that enabling Comet is a choice you
+# make by naming this file, never something you inherit by running a sweep.
+#
+# Running it needs COMET_API_KEY in the environment or a local .env, creates a
+# real experiment in the `mas-cc-synthetic` project, and streams the metric names
+# listed below. If the key is absent the run still completes and the recorder
+# reports `Comet: unavailable (COMET_API_KEY is not set)` — a dry run of the
+# wiring without the upload, which is the safe way to check the plumbing first.
+#
+# What reaches Comet is aggregate metrics only. The recorder's Comet sink never
+# sends prompts, blocks, messages or responses; see `CometMetricSink`.
+#
+# Same dynamics as synthetic_bernoulli_metrics.yaml, shortened, so the values
+# arriving in the Comet UI have the closed forms printed by
+# `mas-cc synthetic episode` to be checked against.
+llm_provider:
+  component: ../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../components/games/synthetic_bernoulli.yaml
+  overrides:
+    population_size: 6
+    horizon: 120
+    options:
+      epsilon: 0.2
+execution:
+  schema_version: 1
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    comet: true
+    options:
+      comet_project: mas-cc-synthetic
+      show_metrics: true
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  # Per-metric routing: each metric says for itself whether it leaves the
+  # machine, right next to its name, instead of in a separate list you have to
+  # cross-reference. Agent-scope metrics are never exported — one Comet series
+  # per agent is noise, and `agent_current_action` is categorical anyway.
+  available:
+    dominant_action_share:
+      comet: true
+    population_action_share_per_option:
+      comet: true
+    rolling_coordination_rate:
+      comet: true
+experiment:
+  schema_version: 1
+  name: synthetic-bernoulli-comet
+  description: >-
+    The only synthetic config that uploads. Streams three aggregate choice
+    metrics to Comet from a run whose closed forms are known.
+  tags:
+    - synthetic
+    - metrics
+    - comet

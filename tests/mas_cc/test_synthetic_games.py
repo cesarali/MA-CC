@@ -29,13 +29,20 @@ from mas_cc.games.synthetic import (
     SyntheticPromptError,
     compare_modes,
     create_synthetic_provider_registry,
+    metric_check,
     pairwise_estimates,
     read_action_series,
+    read_final_metrics,
     run_synthetic_game_sync,
     with_truth,
 )
 from mas_cc.games.synthetic.analysis import series_to_indices
 from mas_cc.games.synthetic.bernoulli import SyntheticBernoulliGame, binary_entropy
+from mas_cc.games.synthetic.bernoulli.game import (
+    flip_count_distribution,
+    mutual_information_bits,
+    pair_joint,
+)
 from mas_cc.games.synthetic.provider import decide, read_observation
 from mas_cc.llm_runtime.providers import CompletionRequest, create_llm_provider
 from mas_cc.llm_runtime.messages import Message, MessageRole
@@ -387,6 +394,145 @@ def test_binary_entropy_takes_the_limits_at_the_endpoints():
     assert binary_entropy(1.0) == 0.0
     assert binary_entropy(0.5) == pytest.approx(1.0)
     assert not math.isnan(binary_entropy(0.0))
+
+
+# -- the ordinary choice metrics ------------------------------------------
+
+
+def test_exact_joint_reduces_to_the_one_minus_h_shortcut_for_a_fair_latent():
+    """The general formula must agree with the special case it generalizes."""
+
+    for epsilon in (0.0, 0.1, 0.25, 0.5):
+        joint = pair_joint(0.5, epsilon, epsilon)
+        shortcut = 1.0 - binary_entropy(2 * epsilon * (1 - epsilon))
+        assert mutual_information_bits(joint) == pytest.approx(shortcut, abs=1e-12)
+
+
+def test_flip_count_distribution_is_a_proper_poisson_binomial():
+    symmetric = flip_count_distribution((0.5,) * 6)
+    assert symmetric.sum() == pytest.approx(1.0)
+    # Bin(6, 0.5) = [1, 6, 15, 20, 15, 6, 1] / 64
+    assert symmetric == pytest.approx(np.array([1, 6, 15, 20, 15, 6, 1]) / 64)
+
+    asymmetric = flip_count_distribution((0.0, 0.3, 1.0))
+    assert asymmetric.sum() == pytest.approx(1.0)
+    # One agent never flips and one always does, so exactly 1 or 2 flip.
+    assert asymmetric[0] == pytest.approx(0.0)
+    assert asymmetric[1] == pytest.approx(0.7)
+    assert asymmetric[2] == pytest.approx(0.3)
+
+
+def test_dominant_share_ground_truth_matches_the_hand_computation():
+    """E[max(k,6-k)/6] for k ~ Bin(6,0.5) = 252/384, worked out independently."""
+
+    game = SyntheticBernoulliGame()
+    config = replace(
+        _config().game, population_size=6, options={"actions": ["Q", "M"], "epsilon": 0.5}
+    )
+    truth = game.ground_truth(config)
+    assert truth.value("expected_dominant_action_share") == pytest.approx(252 / 384)
+    assert truth.value("unanimity_probability") == pytest.approx(2 / 64)
+
+
+def test_a_degenerate_population_gives_zero_not_nan_or_one():
+    """The plan's degenerate config: zero entropy, and MI is a genuine 0/0."""
+
+    game = SyntheticBernoulliGame()
+    config = replace(
+        _config().game, population_size=3, horizon=200,
+        options={"actions": ["Q", "M"], "epsilon": 0.0, "latent_bias": 1.0},
+    )
+    truth = game.ground_truth(config)
+    assert truth.value("marginal_entropy", ("agent-000",)) == 0.0
+    assert truth.value("mutual_information", ("agent-000", "agent-001")) == 0.0
+
+    episodes = game.simulate(config, (1,))
+    assert (episodes.actions == 1).all()  # everyone locked onto actions[1]
+    frame = with_truth(
+        pairwise_estimates(episodes.actions[0], ["agent-000", "agent-001", "agent-002"], 2),
+        truth,
+    )
+    assert (frame["unsmoothed"] == 0.0).all()
+    assert not frame["unsmoothed"].isna().any()
+    assert (frame["miller_madow"] == 0.0).all()
+    # Jeffreys smoothing puts half a count in structurally empty cells and so
+    # reports information that provably is not there. Pinned deliberately: it is
+    # the cost of smoothing, and this config is what makes it legible.
+    assert (frame["jeffreys"] > 0.0).all()
+
+
+@pytest.mark.parametrize(
+    "config_path,should_fire",
+    [
+        ("configs/runs/synthetic_bernoulli_metrics.yaml", True),
+        ("configs/runs/synthetic_bernoulli_never_converges.yaml", False),
+    ],
+)
+def test_choice_metrics_land_on_their_closed_forms(tmp_path, config_path, should_fire):
+    """The recorder's own output, checked against the answer key.
+
+    The two configs are opposite poles of the same metric set: eps = 0 makes
+    every round unanimous, eps = 0.5 makes convergence impossible. Both are run
+    end to end and every judged row must agree.
+    """
+
+    from mas_cc.cli.synthetic import _run_fidelity_episode
+
+    config = load_run_config(config_path, environment={})
+    # Shortened; the closed forms do not depend on the horizon.
+    config = replace(config, game=replace(config.game, horizon=120))
+    game = create_game(config.game)
+    _, destination = _run_fidelity_episode(config, game, tmp_path / "run")
+
+    checks = metric_check(destination, game.ground_truth(config.game))
+    judged = checks[checks["agrees"].notna()]
+    assert not judged.empty
+    disagreed = judged[~judged["agrees"].astype(bool)]
+    assert disagreed.empty, f"metrics missed their closed forms:\n{disagreed}"
+
+    final = read_final_metrics(destination)
+    # The pass/fail half: a sustained-agreement criterion must fire when the
+    # population is always unanimous and must stay None when it cannot converge.
+    assert (final["first_consensus_time_by_success_rate"] is not None) is should_fire
+    assert (final["consensus_action_by_success_rate"] is not None) is should_fire
+
+
+def test_the_two_consensus_criteria_disagree_on_a_memoryless_population(tmp_path):
+    """A finding worth pinning, not an accident.
+
+    `first_consensus_time_by_action_share` has no persistence requirement, so a
+    single lucky round where every agent happens to agree satisfies it — even
+    though a memoryless population never converges. The rolling-window
+    criterion correctly reports nothing. If these two ever agree here, one of
+    them has changed meaning.
+    """
+
+    from mas_cc.cli.synthetic import _run_fidelity_episode
+
+    config = load_run_config(
+        "configs/runs/synthetic_bernoulli_never_converges.yaml", environment={}
+    )
+    config = replace(config, game=replace(config.game, horizon=300))
+    game = create_game(config.game)
+    _, destination = _run_fidelity_episode(config, game, tmp_path / "run")
+
+    final = read_final_metrics(destination)
+    assert final["first_consensus_time_by_success_rate"] is None
+    assert final["first_consensus_time_by_action_share"] is not None
+
+
+def test_rolling_metrics_are_importable_from_both_old_and_new_homes():
+    """The move to `mas_cc.metrics.rolling` must not break existing imports."""
+
+    from mas_cc.games.naming_convention import metrics as convention
+    from mas_cc.metrics import rolling
+
+    for name in (
+        "RollingCoordinationRate",
+        "RollingActionSharePerOption",
+        "ConsensusFlipBySuccessRate",
+    ):
+        assert getattr(convention, name) is getattr(rolling, name)
 
 
 def test_invalid_configs_are_rejected_with_a_useful_message():

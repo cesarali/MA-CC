@@ -1,0 +1,28 @@
+schema_version: 1
+type: synthetic_controlled_markov
+# Game 2 plus an exogenous controller. This is the positive control: sweeping
+# epsilon or N gives an empowerment of exactly zero because those change how
+# noisy the population is, not which way it goes. `u` actually steers.
+population_size: 6
+horizon: 60
+topology: complete
+options:
+  actions:
+    - Q
+    - M
+  coupling: ring
+  epsilon: 0.05
+  initial_bias: 0.5
+  # The control alphabet: each entry is the action index this control value
+  # pushes toward, or -1 for a genuine do-nothing condition.
+  control_targets:
+    - 0
+    - 1
+  # Which value of u this cell runs. A sweep varies exactly this.
+  control_value: 0
+  # Probability that a controlled agent is overridden on any given round.
+  control_strength: 0.25
+  controlled_agents:
+    - 0
+    - 1
+    - 2

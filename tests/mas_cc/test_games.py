@@ -19,6 +19,8 @@ def test_default_registry_constructs_a_generic_game_lazily():
     assert registry.names() == (
         "naming_convention",
         "synthetic_bernoulli",
+        "synthetic_controlled_markov",
+        "synthetic_markov",
         "toy_coordination",
     )
     game = registry.create(config.game)

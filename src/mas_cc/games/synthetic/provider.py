@@ -63,7 +63,43 @@ def bernoulli_xor_v1(observation: Mapping[str, Any]) -> str:
     return next(action for action in actions if action != signal)
 
 
-POLICIES: dict[str, DecodingPolicy] = {"bernoulli_xor_v1": bernoulli_xor_v1}
+def markov_kernel_v1(observation: Mapping[str, Any]) -> str:
+    """Look the observed partner action up in this round's rule, then flip.
+
+    A control override, when present, short-circuits everything: a controlled
+    agent reports what it was told regardless of what it observed. Handled
+    first so the ordering matches what the protocol block states, since the
+    exact transition matrix assumes exactly this precedence.
+    """
+
+    actions = tuple(str(item) for item in observation["actions"])
+    if len(actions) != 2:
+        raise SyntheticPromptError("the Markov policy is defined for a binary alphabet")
+
+    forced = observation.get("forced")
+    if forced is not None:
+        if str(forced) not in actions:
+            raise SyntheticPromptError(f"forced action {forced!r} is not a declared action")
+        return str(forced)
+
+    observed = str(observation["observed"])
+    rule = observation["rule"]
+    if observed not in rule:
+        raise SyntheticPromptError(
+            f"this round's rule has no entry for the observed action {observed!r}"
+        )
+    target = str(rule[observed])
+    if target not in actions:
+        raise SyntheticPromptError(f"rule maps {observed!r} to unknown action {target!r}")
+    if not observation["flip"]:
+        return target
+    return next(action for action in actions if action != target)
+
+
+POLICIES: dict[str, DecodingPolicy] = {
+    "bernoulli_xor_v1": bernoulli_xor_v1,
+    "markov_kernel_v1": markov_kernel_v1,
+}
 """Decoding rules by name. Each synthetic game names the one its prompt asks for.
 
 Dispatching on a name carried in the payload - rather than on the provider's

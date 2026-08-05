@@ -74,6 +74,14 @@ def create_default_game_registry() -> GameRegistry:
         "synthetic_bernoulli",
         "mas_cc.games.synthetic.bernoulli.game:SyntheticBernoulliGame",
     )
+    registry.register(
+        "synthetic_markov",
+        "mas_cc.games.synthetic.markov.game:SyntheticMarkovGame",
+    )
+    registry.register(
+        "synthetic_controlled_markov",
+        "mas_cc.games.synthetic.controlled_markov.game:SyntheticControlledMarkovGame",
+    )
     return registry
 
 

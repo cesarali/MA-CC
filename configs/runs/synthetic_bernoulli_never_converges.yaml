@@ -1,0 +1,71 @@
+schema_version: 1
+# The opposite pole of synthetic_bernoulli_metrics.yaml, and the reason that one
+# is worth trusting. Same metrics, same population, same horizon; epsilon = 0.5
+# so every agent's word is an independent fair coin.
+#
+#   rolling_coordination_rate             ~2^-(N-1) = 0.031 for N = 6
+#   dominant_action_share                 hovers around 0.66, never reaches 0.95
+#   population_action_share_per_option    ~0.5 each, no drift
+#   first_consensus_time_by_success_rate  None  <-- must stay empty
+#   consensus_action_by_success_rate      None  <-- must stay empty
+#
+# The two None values are the point. A memoryless population cannot converge, so
+# a consensus metric that reports a flip time here has invented one out of
+# noise. This is the pass/fail companion to the "close enough" numbers.
+llm_provider:
+  component: ../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../components/games/synthetic_bernoulli.yaml
+  overrides:
+    population_size: 6
+    horizon: 300
+    options:
+      epsilon: 0.5
+execution:
+  schema_version: 1
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../components/logging/default.yaml
+  overrides:
+    options:
+      show_metrics: true
+storage:
+  component: ../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-bernoulli-never-converges
+  description: >-
+    epsilon = 0.5, where no convention can form. Both consensus metrics must
+    report None; anything else is a metric inventing structure from noise.
+  tags:
+    - synthetic
+    - metrics
+    - never-converges

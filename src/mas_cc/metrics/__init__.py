@@ -11,18 +11,26 @@ from .generic import (
     RoundView,
 )
 from .plotting import plot_streaming_metrics
+from .rolling import (
+    ConsensusFlipBySuccessRate,
+    RollingActionSharePerOption,
+    RollingCoordinationRate,
+)
 
 __all__ = [
     "SCOPES",
     "ActionSharePerOption",
     "AgentAbsoluteError",
     "AgentCurrentValue",
+    "ConsensusFlipBySuccessRate",
     "DominantValueShare",
     "FinalMetric",
     "FirstConsensusTime",
     "MeanAbsoluteError",
     "Metric",
     "MetricKey",
+    "RollingActionSharePerOption",
+    "RollingCoordinationRate",
     "RoundView",
     "StreamingMetric",
     "plot_streaming_metrics",
