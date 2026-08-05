@@ -74,6 +74,38 @@ def format_grid_banner(
     return "\n".join(lines)
 
 
+def format_episode_banner(
+    *,
+    experiment_name: str,
+    game_type: str,
+    game_version: int,
+    provider: str,
+    model: str,
+    population_size: int,
+    horizon: int,
+    prompt_family: str,
+    prompt_version: int,
+    prompt_definition_hash: str,
+    budget_description: str,
+    preflight_expected_cost: str,
+    preflight_conservative_cost: str,
+    preflight_status: str,
+    output_dir: str,
+) -> str:
+    definition_prefix = prompt_definition_hash[:8] if prompt_definition_hash else "n/a"
+    lines = [
+        f"Episode: {experiment_name}",
+        f"  Game:          {game_type} v{game_version}  (population {population_size}, horizon {horizon})",
+        f"  Provider:      {provider} / {model}",
+        f"  Prompt:        {prompt_family} v{prompt_version}  [def:{definition_prefix}...]",
+        f"  Budget:        {budget_description}",
+        f"  Preflight:     expected {preflight_expected_cost} / conservative "
+        f"{preflight_conservative_cost} — {preflight_status}",
+        f"  Output:        {output_dir}",
+    ]
+    return "\n".join(lines)
+
+
 def print_banner(text: str) -> None:
     print(text)
     for line in text.splitlines():

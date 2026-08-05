@@ -208,6 +208,22 @@ async def run_naming_convention_game(
         raise ValueError("naming convention prompt requires merge_consecutive_roles")
     if config.prompt.block_separator is not None and config.prompt.block_separator != "\n\n":
         raise ValueError("naming convention prompt requires the registered block separator")
+    expected_prompt_contract_type = {
+        "json_reason": "paper_choice_reason", "choice_only": "choice_only",
+    }[rules.response_contract]
+    configured_prompt_contract_type = config.prompt.response_contract.get("type")
+    if (
+        configured_prompt_contract_type is not None
+        and configured_prompt_contract_type != expected_prompt_contract_type
+    ):
+        raise ValueError(
+            f"prompt.response_contract.type ({configured_prompt_contract_type!r}) does not match "
+            f"game.options.response_contract ({rules.response_contract!r}); "
+            f"the prompt actually sent is controlled by game.options.response_contract/"
+            f"parser_contract, not prompt.response_contract.type — set the game.options pair to "
+            f"switch modes, not just this field, or set this field to "
+            f"{expected_prompt_contract_type!r} to match what's actually configured"
+        )
     configured_actions = tuple(
         str(item)
         for item in config.prompt.response_contract.get("allowed_values", ())

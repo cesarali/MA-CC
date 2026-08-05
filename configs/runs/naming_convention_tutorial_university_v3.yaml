@@ -27,12 +27,12 @@ prompt:
   message_mode: merge_consecutive_roles
   block_separator: "\n\n"
   response_contract:
-    type: paper_choice_reason
+    type: choice_only # paper_choice_reason
     allowed_values: [Q, M]
 game:
   type: naming_convention
-  population_size: 4
-  horizon: 6
+  population_size: 10
+  horizon: 30
   topology: complete
   options:
     actions: [Q, M]
@@ -43,14 +43,14 @@ game:
     simultaneous_pair_decisions: true
     randomize_presented_action_order: true
     prompt_contract: naming_convention_decision
-    response_contract: json_reason
-    parser_contract: tolerant_paper_object_v1
+    response_contract: choice_only
+    parser_contract: choice_only_v1
     invalid_response_retries: 2
     expected_validation_failure_rate: 0.0
     representative_memory_size: 1
     stop_on_convergence: false
 execution:
-  seed: 20260803
+  seed: 20260807
   repetitions: 1
   parallelism: 1
   fail_fast: true
@@ -61,12 +61,18 @@ pricing:
   fallback_policy: deny
   explicit_unknown_price_override: false
 budget:
+  # Sized for population_size: 10, horizon: 30 above (2 decisions/interaction
+  # x 30 = 60 base requests; x3 with invalid_response_retries: 2 = 180
+  # conservative - was 36/6/6 x2/x3-sized for the original 4/6 tutorial size
+  # and denied preflight once horizon/population_size grew without this
+  # section growing to match. Re-check with `mas-cc game preflight` after
+  # changing population_size/horizon again.
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 0.25
   max_cost_per_run: 0.25
-  max_provider_requests: 36
+  max_provider_requests: 220
   max_input_tokens: 200000
-  max_output_tokens: 20000
+  max_output_tokens: 30000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO
@@ -75,6 +81,13 @@ logging:
   comet: true
   options:
     comet_project: mas-cc
+    # How many rounds get a full Markdown prompt example written to
+    # <output-dir>/.../prompts/round_NNN.md - one file per distinct round
+    # (the first decision seen in each), independent of detailed_prompt_audit
+    # below. 0 (or omitting this block entirely) writes none.
+    # See docs/howto/launch/running_an_episode.md section 3.
+    prompt_examples:
+      count: 3
 storage:
   output_dir: results
   format: jsonl
@@ -85,7 +98,32 @@ analysis:
   estimators: []
 metrics:
   enabled: true
-  comet_export: []
+  # Every metric this game computes (src/mas_cc/games/naming_convention/metrics.py's
+  # METRICS), listed explicitly so this file is the answer to "what metrics
+  # exist" as well as "which ones go to Comet." comet: true sends that metric's
+  # population-level value to Comet every round; comet: false (or omitting a
+  # metric here) keeps it local-only (still written to metrics/streaming.csv
+  # and metrics/final.csv either way - that's controlled by `enabled` above,
+  # not by this). agent_current_action is agent-scoped, not population-scoped,
+  # so it is never sent to Comet regardless of this setting.
+  # See docs/howto/configuring/creating_a_game_config.md section 1.
+  available:
+    population_action_share_q:
+      comet: true
+    population_action_share_m:
+      comet: true
+    dominant_action_share:
+      comet: true
+    first_consensus_time:
+      comet: true
+    rolling_coordination_rate:
+      comet: true
+    rolling_action_share_q:
+      comet: false
+    rolling_action_share_m:
+      comet: false
+    agent_current_action:
+      comet: false   # agent-scoped; Comet never receives per-agent values
 experiment:
   name: naming-convention-tutorial-university-walkthrough
   description: Small live N=4, H=6 example for docs/howto/building/building_a_game.md; not a paper replication, not sized for scientific results.

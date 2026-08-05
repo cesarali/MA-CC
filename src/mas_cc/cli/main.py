@@ -78,6 +78,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     game_run.add_argument("--output-dir", type=Path, required=True)
 
+    game_preflight = game_commands.add_parser(
+        "preflight", help="price exactly one episode of this config; no provider calls sent"
+    )
+    game_preflight.add_argument("--config", type=Path, required=True)
+    game_preflight.add_argument(
+        "--output-dir", type=Path,
+        help="artifact destination (default: this config's storage.output_dir)",
+    )
+
+    game_episode = game_commands.add_parser(
+        "episode",
+        help=(
+            "run exactly one episode; progress, Comet, metrics, and prompt-example display "
+            "are all read from the config's logging/metrics sections, not from flags"
+        ),
+    )
+    game_episode.add_argument("--config", type=Path, required=True)
+    game_episode.add_argument(
+        "--output-dir", type=Path,
+        help="artifact destination (default: this config's storage.output_dir)",
+    )
+    game_episode.add_argument(
+        "--no-preflight", dest="skip_preflight", action="store_true",
+        help="skip the cost/token estimate and its launch gate; runtime budget "
+        "enforcement stays on regardless",
+    )
+
     experiment = commands.add_parser(
         "experiment", help="price and run many concurrent episodes of one resolved game"
     )
@@ -218,6 +245,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(f"Game inspection {'passed' if passed else 'failed'}: {args.output_dir}")
         return 0 if passed else 1
+    if args.command == "game" and args.game_command == "preflight":
+        from .episode import run_game_preflight
+
+        try:
+            estimate = run_game_preflight(args.config, args.output_dir)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Game preflight {estimate.launch_status}: {args.config}")
+        return 0 if estimate.launch_status == "permitted" else 1
+    if args.command == "game" and args.game_command == "episode":
+        from .episode import run_game_episode
+
+        try:
+            run_game_episode(args.config, args.output_dir, skip_preflight=args.skip_preflight)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
     if args.command == "experiment" and args.experiment_command == "preflight":
         from mas_cc.planning import GridPreflightEstimate
 

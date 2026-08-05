@@ -146,6 +146,7 @@ def config_schema() -> dict[str, Any]:
                     "schema_version": {"const": 1},
                     "enabled": {"type": "boolean"},
                     "comet_export": {"type": "array", "items": {"type": "string"}},
+                    "available": options,
                 }
             ),
             "experiment": _simple_object(

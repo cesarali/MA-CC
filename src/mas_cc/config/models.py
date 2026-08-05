@@ -309,20 +309,40 @@ class MetricsConfig:
     Metric instances themselves live in code (``games/<game>/metrics.py``);
     this section only controls whether they run and which metric names are
     allowed off the machine, mirroring LoggingConfig's Comet privacy stance.
+
+    ``available`` is the per-metric way to say this: ``{metric_name: {comet:
+    true}}`` puts that metric's Comet routing right next to its name, rather
+    than in a separately-maintained flat list you have to cross-reference by
+    hand. ``comet_export`` (a flat list of names) still works too, for
+    backward compatibility — ``comet_export_names()`` returns the union of
+    both.
     """
 
     schema_version: int = 1
     enabled: bool = True
     comet_export: tuple[str, ...] = ()
+    available: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "comet_export", tuple(self.comet_export))
+        object.__setattr__(self, "available", _freeze(self.available))
+
+    def comet_export_names(self) -> tuple[str, ...]:
+        """Every metric name allowed to reach Comet, from either spelling."""
+
+        per_metric = {
+            name
+            for name, settings in self.available.items()
+            if isinstance(settings, Mapping) and settings.get("comet") is True
+        }
+        return tuple(sorted({*self.comet_export, *per_metric}))
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "enabled": self.enabled,
             "comet_export": list(self.comet_export),
+            "available": _thaw(self.available),
         }
 
 

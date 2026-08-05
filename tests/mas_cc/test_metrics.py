@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mas_cc.config import load_run_config
+from mas_cc.config import MetricsConfig, load_run_config
 from mas_cc.core import AgentId
 from mas_cc.games import create_game
 from mas_cc.games.naming_convention import (
@@ -14,6 +14,7 @@ from mas_cc.games.naming_convention import (
     run_naming_convention_game_sync,
     to_round_view,
 )
+from mas_cc.games.naming_convention.metrics import RollingActionShare, RollingCoordinationRate
 from mas_cc.llm_providers import CompletionResponse, ProviderCapabilities, ProviderUsage
 from mas_cc.metrics import (
     AgentAbsoluteError,
@@ -163,6 +164,52 @@ def test_default_metrics_export_matches_module_level_instance():
     assert [m.name for m in METRICS] == [m.name for m in build_metrics()]
 
 
+def test_to_round_view_carries_recent_history_for_rolling_metrics():
+    result = _run_all_q()
+    view = to_round_view(result.final_state)
+    assert len(view.recent_history) == len(result.interactions)
+    assert all(entry["success"] for entry in view.recent_history)  # every agent stays on Q
+
+
+# --- rolling metrics, against synthetic interaction history ----------------
+
+_HISTORY = (
+    {"interaction_index": 1, "actions": ["Q", "M"], "success": False},
+    {"interaction_index": 2, "actions": ["Q", "Q"], "success": True},
+    {"interaction_index": 3, "actions": ["M", "M"], "success": True},
+    {"interaction_index": 4, "actions": ["Q", "M"], "success": False},
+    {"interaction_index": 5, "actions": ["M", "M"], "success": True},
+)
+
+
+def test_rolling_coordination_rate_uses_only_the_window_tail():
+    view = RoundView(agent_values={}, recent_history=_HISTORY)
+    # last 4 entries (indices 2-5): success = T, T, F, T -> 3/4
+    assert RollingCoordinationRate(window=4).compute_round(view) == {None: 0.75}
+    # full history (5 entries): F, T, T, F, T -> 3/5
+    assert RollingCoordinationRate(window=100).compute_round(view) == {None: 0.6}
+
+
+def test_rolling_action_share_counts_played_actions_not_interactions():
+    view = RoundView(agent_values={}, recent_history=_HISTORY)
+    # last 4 entries' actions: Q,Q, M,M, Q,M, M,M -> 8 values, 3 Q / 5 M
+    assert RollingActionShare("Q", window=4).compute_round(view) == {None: 3 / 8}
+    assert RollingActionShare("M", window=4).compute_round(view) == {None: 5 / 8}
+
+
+def test_rolling_metrics_are_zero_with_no_history_yet():
+    empty_view = RoundView(agent_values={})
+    assert RollingCoordinationRate(window=4).compute_round(empty_view) == {None: 0.0}
+    assert RollingActionShare("Q", window=4).compute_round(empty_view) == {None: 0.0}
+
+
+def test_rolling_metrics_reject_nonpositive_window():
+    with pytest.raises(ValueError):
+        RollingCoordinationRate(window=0)
+    with pytest.raises(ValueError):
+        RollingActionShare("Q", window=0)
+
+
 # --- RunRecorder integration -----------------------------------------------
 
 
@@ -221,3 +268,32 @@ def test_metrics_config_defaults_when_section_omitted():
     config = load_run_config("configs/runs/naming_convention_smoke_test.yaml", environment={})
     assert config.metrics.enabled is True
     assert config.metrics.comet_export == ()
+
+
+def test_metrics_available_section_parses_from_yaml_and_selects_comet_export():
+    config = load_run_config(
+        "configs/runs/naming_convention_tutorial_university_v3.yaml", environment={}
+    )
+    assert config.metrics.available["population_action_share_q"]["comet"] is True
+    assert config.metrics.available["rolling_action_share_q"]["comet"] is False
+    names = config.metrics.comet_export_names()
+    assert "population_action_share_q" in names
+    assert "rolling_coordination_rate" in names
+    assert "rolling_action_share_q" not in names
+    assert "agent_current_action" not in names
+
+
+def test_comet_export_names_unions_legacy_list_and_per_metric_available():
+    config = MetricsConfig(
+        comet_export=("legacy_metric",),
+        available={
+            "new_metric": {"comet": True},
+            "quiet_metric": {"comet": False},
+            "untouched_metric": {},
+        },
+    )
+    assert config.comet_export_names() == ("legacy_metric", "new_metric")
+
+
+def test_comet_export_names_is_empty_by_default():
+    assert MetricsConfig().comet_export_names() == ()

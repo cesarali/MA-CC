@@ -28,6 +28,8 @@ def render_prompt_request_markdown(
     title: str = "Compiled LLM request",
     metadata: Mapping[str, Any] | None = None,
     include_block_index: bool = True,
+    response: Any | None = None,
+    validation_error: str | None = None,
 ) -> str:
     """Render the final ordered messages verbatim in one Markdown document."""
 
@@ -81,6 +83,29 @@ def render_prompt_request_markdown(
             "```",
         ]
     )
+    if response is not None:
+        content = getattr(response, "content", None)
+        lines.extend(
+            [
+                "",
+                "## Raw response received",
+                "",
+                f"- Provider: `{getattr(response, 'provider', 'unknown')}`",
+                f"- Model: `{getattr(response, 'model', 'unknown')}`",
+                f"- Finish reason: `{getattr(response, 'finish_reason', None)}`",
+                "",
+                _fenced(content if isinstance(content, str) else str(content)),
+            ]
+        )
+    if validation_error is not None:
+        lines.extend(
+            [
+                "",
+                "## Why this attempt was rejected",
+                "",
+                _fenced(validation_error),
+            ]
+        )
     if include_block_index:
         lines.extend(
             [
@@ -113,6 +138,8 @@ class PromptMarkdownLogger:
         *,
         title: str = "Compiled LLM request",
         metadata: Mapping[str, Any] | None = None,
+        response: Any | None = None,
+        validation_error: str | None = None,
     ) -> Path:
         if not isinstance(interaction_id, str) or not _LOG_NAME.fullmatch(interaction_id):
             raise ValueError(
@@ -127,6 +154,8 @@ class PromptMarkdownLogger:
                 instance,
                 title=title,
                 metadata=metadata,
+                response=response,
+                validation_error=validation_error,
             ),
             encoding="utf-8",
         )

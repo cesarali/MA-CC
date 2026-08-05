@@ -19,10 +19,21 @@ from mas_cc.metrics.base import FinalMetric, StreamingMetric
 
 @dataclass(frozen=True, slots=True)
 class RoundView:
-    """One round's per-agent state, in a game-neutral shape."""
+    """One round's per-agent state, in a game-neutral shape.
+
+    ``recent_history`` is optional and empty by default: a game whose
+    outcome is a discrete pairwise event (this round's participants, what
+    they each played, whether it counted as a success) may populate it with
+    one dict per past round/interaction, oldest first, so a rolling-window
+    metric can slice the tail it needs without every game having to define
+    its own equivalent. A game with no such per-round event concept just
+    leaves it empty; nothing about ``agent_values``/``agent_targets`` depends
+    on it.
+    """
 
     agent_values: Mapping[AgentId, Any]
     agent_targets: Mapping[AgentId, Any] | None = None
+    recent_history: tuple[Mapping[str, Any], ...] = ()
 
 
 class ValueShare(StreamingMetric):

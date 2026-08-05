@@ -634,11 +634,12 @@ def _parse_control(raw: Any, issues: list[ValidationIssue]) -> ControlConfig:
 def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
     path = "metrics"
     values = _as_mapping(raw, path, issues)
-    _unknown_fields(values, {"schema_version", "enabled", "comet_export"}, path, issues)
+    _unknown_fields(values, {"schema_version", "enabled", "comet_export", "available"}, path, issues)
     return MetricsConfig(
         schema_version=_schema_version(values, path, issues),
         enabled=_boolean(values, "enabled", path, issues, default=True),
         comet_export=_string_tuple(values, "comet_export", path, issues),
+        available=_as_mapping(values.get("available", {}), f"{path}.available", issues),
     )
 
 

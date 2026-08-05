@@ -104,15 +104,27 @@ class NamingConventionGameSpec:
             raise ValueError("the paper-faithful profile requires randomized action order")
         if self.prompt_contract != "naming_convention_decision":
             raise ValueError("prompt_contract must be naming_convention_decision")
-        if self.response_contract != "json_reason":
-            raise ValueError("the Phase 6 paper-faithful response_contract is json_reason")
+        if self.response_contract not in {"json_reason", "choice_only"}:
+            raise ValueError(
+                "response_contract must be 'json_reason' (the Phase 6 paper-faithful default) "
+                "or 'choice_only' (a deliberate departure from paper fidelity)"
+            )
         if self.success_payoff != 100 or self.failure_payoff != -50:
             raise ValueError("the Phase 6 paper-faithful payoff profile is +100/-50")
         if self.parser_contract not in {
             "strict_json_reason_v1",
             "tolerant_paper_object_v1",
+            "choice_only_v1",
         }:
             raise ValueError("unsupported naming-convention parser contract")
+        if self.response_contract == "choice_only" and self.parser_contract != "choice_only_v1":
+            raise ValueError(
+                "response_contract 'choice_only' requires parser_contract 'choice_only_v1'"
+            )
+        if self.response_contract == "json_reason" and self.parser_contract == "choice_only_v1":
+            raise ValueError(
+                "parser_contract 'choice_only_v1' requires response_contract 'choice_only'"
+            )
         if not math.isfinite(self.expected_validation_failure_rate) or not (
             0 <= self.expected_validation_failure_rate <= 1
         ):
@@ -270,6 +282,7 @@ class NamingConventionGame(Game):
             visible_score=int(observation.visible_state["visible_score"]),
             local_round=int(observation.visible_state["local_round"]),
             allowed_actions=rules.actions,
+            response_format=rules.response_contract,
         )
 
     def build_decision_requests(

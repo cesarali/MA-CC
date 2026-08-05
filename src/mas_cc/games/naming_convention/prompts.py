@@ -183,18 +183,44 @@ class VisibleScoreBlock(PromptBlock[Mapping[str, int]]):
         )
 
 
+def _response_instruction(response_format: str, actions: str) -> str:
+    if response_format == "choice_only":
+        return (
+            "Reply with exactly one word: the value you choose, and nothing else — "
+            "no punctuation, no quotes, no explanation, no surrounding text. "
+            f"The value must be exactly {actions}."
+        )
+    return (
+        "Put the decision before the explanation. Return only an object in this "
+        "answer-first form: {'value': '<ACTION>'; 'reason': '<YOUR REASON>'}. "
+        f"The value must be exactly {actions}. Do not add text outside the object."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NamingConventionResponseContract(ResponseContract):
+    """``response_format`` selects the paper-faithful ``json_reason`` mode (default) or
+    ``choice_only`` — a bare value, no JSON and no reason. ``choice_only`` is a deliberate
+    departure from paper fidelity for use with models that struggle to produce valid
+    structured output; see ``NamingConventionGameSpec.response_contract`` in ``game.py``."""
+
     type: str = field(init=False, default="paper_choice_reason")
     allowed_values: tuple[str, ...] = ("Q", "M")
+    response_format: str = "json_reason"
+
+    def __post_init__(self) -> None:
+        if self.response_format not in {"json_reason", "choice_only"}:
+            raise ValueError("response_format must be 'json_reason' or 'choice_only'")
+        if self.response_format == "choice_only":
+            object.__setattr__(self, "type", "choice_only")
+        # Explicit base-class call, not zero-arg super(): `@dataclass(slots=True)`
+        # rebuilds the class object after this method is defined, which breaks
+        # the `__class__` cell zero-arg super() relies on.
+        ResponseContract.__post_init__(self)
 
     def instruction_messages(self) -> tuple[tuple[MessageRole, str], ...]:
         actions = " or ".join(self.allowed_values)
-        output = (
-            "Put the decision before the explanation. Return only an object in this "
-            "answer-first form: {'value': '<ACTION>'; 'reason': '<YOUR REASON>'}. "
-            f"The value must be exactly {actions}. Do not add text outside the object."
-        )
+        output = _response_instruction(self.response_format, actions)
         return (
             (MessageRole.SYSTEM, output),
             (MessageRole.USER, "Answer saying which action Player 1 should play."),
@@ -226,12 +252,8 @@ class NamingConventionFullPrompt(FullPrompt):
         if len(messages) != 7 or messages[-1].role != MessageRole.USER:
             return super()._merge_messages(messages)
         presented = tuple(self.block("presented_actions").value)  # type: ignore[arg-type]
-        output_instruction = (
-            "Put the decision before the explanation. Return only an object in this "
-            "answer-first form: {'value': '<ACTION>'; 'reason': '<YOUR REASON>'}. "
-            f"The value must be exactly {' or '.join(presented)}. "
-            "Do not add text outside the object."
-        )
+        response_format = getattr(self.response_contract, "response_format", "json_reason")
+        output_instruction = _response_instruction(response_format, " or ".join(presented))
         system = (
             messages[0].content
             + "\n"
@@ -272,6 +294,8 @@ class NamingConventionFullPrompt(FullPrompt):
 
 def naming_convention_prompt(
     actions: tuple[str, ...] = ("Q", "M"),
+    *,
+    response_format: str = "json_reason",
 ) -> NamingConventionFullPrompt:
     return NamingConventionFullPrompt(
         family="naming_convention_decision",
@@ -283,7 +307,9 @@ def naming_convention_prompt(
             VisibleMemoryBlock(),
             VisibleScoreBlock(),
         ),
-        response_contract=NamingConventionResponseContract(allowed_values=actions),
+        response_contract=NamingConventionResponseContract(
+            allowed_values=actions, response_format=response_format
+        ),
         message_mode="merge_consecutive_roles",
         block_separator="\n\n",
     )
@@ -296,8 +322,9 @@ def bind_naming_convention_prompt(
     visible_score: int,
     local_round: int,
     allowed_actions: tuple[str, ...] = ("Q", "M"),
+    response_format: str = "json_reason",
 ) -> NamingConventionFullPrompt:
-    return naming_convention_prompt(tuple(allowed_actions)).bind(
+    return naming_convention_prompt(tuple(allowed_actions), response_format=response_format).bind(
         presented_actions=tuple(presented_actions),
         visible_memory=tuple(visible_memory),
         visible_score={"score": visible_score, "local_round": local_round},
