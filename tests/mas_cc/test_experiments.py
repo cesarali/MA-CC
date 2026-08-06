@@ -11,12 +11,12 @@ from mas_cc.planning import static_experiment_preflight, static_game_preflight
 
 
 def _toy_config(**execution_overrides):
-    config = load_run_config("configs/runs/toy_game_smoke_test.yaml", environment={})
+    config = load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={})
     return replace(config, execution=replace(config.execution, **execution_overrides))
 
 
 def _naming_convention_config(**execution_overrides):
-    config = load_run_config("configs/runs/naming_convention_smoke_test_v3.yaml", environment={})
+    config = load_run_config("configs/runs/old/naming_convention_smoke_test_v3.yaml", environment={})
     return replace(config, execution=replace(config.execution, **execution_overrides))
 
 

@@ -14,7 +14,7 @@ from mas_cc.planning import static_experiment_preflight, static_grid_preflight
 
 
 def _toy_config(**execution_overrides) -> RunConfig:
-    config = load_run_config("configs/runs/toy_game_smoke_test.yaml", environment={})
+    config = load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={})
     return replace(config, execution=replace(config.execution, **execution_overrides))
 
 
@@ -42,7 +42,7 @@ def test_grid_spec_expands_the_cartesian_product_in_stable_order():
     assert [cell.config.game.horizon for cell in cells] == [2, 2, 3, 3]
     assert [cell.config.llm_provider.temperature for cell in cells] == [0.0, 0.5, 0.0, 0.5]
     # The base config is untouched; only each cell's own config carries the override.
-    assert base.game.horizon == load_run_config("configs/runs/toy_game_smoke_test.yaml", environment={}).game.horizon
+    assert base.game.horizon == load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={}).game.horizon
     assert grid.grid_id == GridSpec(base=base, axes=grid.axes).grid_id  # deterministic
 
 

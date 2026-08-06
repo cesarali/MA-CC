@@ -24,35 +24,61 @@ Two numbers worth having, because they answer different questions:
   independent of how you chose to sample it. Comparing the two is what
   separates "the controller is weak" from "the grid was badly chosen".
 
-``u`` is held constant for an episode rather than redrawn each round, which is
-what makes it a *condition* in the sweep sense and lets the family-2 machinery
-in `empowerment.py` treat it with ``c := u``, exactly as the ground-truth
-document sets out.
+**Two control modes, and the gap between them.** ``control_mode`` decides when
+``u`` is drawn:
+
+``episode_fixed``  once per episode, held constant. This is what makes ``u`` a
+                   *condition* in the sweep sense and lets the family-2
+                   machinery in `empowerment.py` treat it with ``c := u``. It is
+                   also the default, so every config written before the mode
+                   existed replays bit-identically.
+``per_round``      redrawn from the policy at every round, which is what the
+                   empowerment paper's ``I(a_t; s_* | s_t)`` assumes.
+
+The distinction is not cosmetic. Under ``episode_fixed`` the state at round
+``t`` is causally downstream of ``u``, so conditioning on it blocks most of the
+effect being measured and the answer drifts with ``t``; under ``per_round``
+``u_t`` has not acted yet when ``s_t`` is observed. `effective_empowerment.py`
+computes both on the same chain and reports the difference as a number rather
+than leaving it an argument.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Sequence
 
 import numpy as np
 
 from mas_cc.config import GameConfig
-from mas_cc.core import AgentId
 from mas_cc.games.protocols import GameSpec, GameState
 
 from .. import exact
+from ..effective_empowerment import (
+    PER_ROUND,
+    EmpowermentReport,
+    EmpowermentSpec,
+    analyse,
+    empowerment_parameters,
+    empowerment_quantities,
+)
 from ..noise import episode_generator
 from ..markov.game import (
     MarkovSpec,
     SyntheticMarkovGame,
     initial_distribution,
-    pooled_laws,
     transition_matrix,
 )
 from ..protocols import GroundTruth, GroundTruthQuantity
 
 CONTROL_STREAM = "controlled_markov.control_application"
+
+CONTROL_VALUE_STREAM = "controlled_markov.control_value"
+"""Which control value is in force each round, under ``control_mode: per_round``.
+
+Its own stream, so an ``episode_fixed`` episode - which never reads it - keeps
+every other draw bit-identical to the day before this mode existed.
+"""
 
 NO_PUSH = -1
 """The control value meaning "apply no push this episode".
@@ -75,8 +101,7 @@ class ControlSpec:
     @classmethod
     def from_config(cls, config: GameConfig, population_size: int) -> "ControlSpec":
         options = config.options
-        raw_targets = options.get("control_targets", (0, 1))
-        targets = tuple(int(item) for item in raw_targets)
+        targets = _resolve_alphabet(options)
         value = int(options.get("control_value", 0))
         strength = float(options.get("control_strength", 0.5))
         raw_agents = options.get("controlled_agents")
@@ -113,7 +138,25 @@ class ControlSpec:
 
     @property
     def is_active(self) -> bool:
+        """Whether *this* control value pushes - the episode-fixed question."""
+
         return self.target_action != NO_PUSH and self.strength > 0.0 and bool(self.agents)
+
+    @property
+    def can_push(self) -> bool:
+        """Whether *any* control value pushes - the per-round question.
+
+        Distinct from `is_active` because a per-round controller cycles through
+        the whole alphabet, so an alphabet containing one do-nothing entry is
+        still a live controller; an alphabet of nothing but do-nothing entries,
+        or zero strength, is not.
+        """
+
+        return (
+            self.strength > 0.0
+            and bool(self.agents)
+            and any(target != NO_PUSH for target in self.targets)
+        )
 
     def chain_control(self, population_size: int) -> tuple | None:
         """``(strength, target)`` per agent, as the exact transition matrix needs it."""
@@ -136,6 +179,60 @@ class ControlSpec:
         }
 
 
+def _resolve_alphabet(options: Any) -> tuple[int, ...]:
+    """The control alphabet, written either as action labels or as target indices.
+
+    ``control_alphabet: [Q, M]`` is the readable spelling and the one the
+    extension document uses; ``control_targets: [0, 1]`` is the index spelling
+    the game has always taken. They mean the same thing, so declaring both is
+    refused rather than silently resolved in favour of one.
+    """
+
+    raw_alphabet = options.get("control_alphabet")
+    if raw_alphabet is None:
+        return tuple(int(item) for item in options.get("control_targets", (0, 1)))
+    if "control_targets" in options:
+        raise ValueError(
+            "game.options declares both control_alphabet and control_targets; they are "
+            "the same alphabet in two spellings, so declare exactly one"
+        )
+    if isinstance(raw_alphabet, (str, bytes)):
+        raise ValueError("game.options.control_alphabet must be a list of action labels")
+    labels = tuple(str(item) for item in options.get("actions", ("Q", "M")))
+    resolved: list[int] = []
+    for item in raw_alphabet:
+        if item is None or str(item).lower() == "none":
+            resolved.append(NO_PUSH)
+        elif str(item) in labels:
+            resolved.append(labels.index(str(item)))
+        else:
+            raise ValueError(
+                f"game.options.control_alphabet entry {item!r} is not one of the game's "
+                f"actions {list(labels)} nor a do-nothing entry (null)"
+            )
+    return tuple(resolved)
+
+
+def control_kernels(rules: MarkovSpec, control: ControlSpec) -> np.ndarray:
+    """``T_u`` for every value in the control alphabet, stacked.
+
+    The family the empowerment closed forms are taken over. Each kernel is a
+    product over agents, but their policy-average is not - a shared control
+    value correlates the agents it pushes - which is why callers must mix these
+    explicitly rather than averaging the per-agent push probability.
+    """
+
+    return np.stack(
+        [
+            transition_matrix(
+                rules,
+                replace(control, value=index).chain_control(rules.population_size),
+            )
+            for index in range(len(control.targets))
+        ]
+    )
+
+
 class SyntheticControlledMarkovGame(SyntheticMarkovGame):
     """Game 2 with an exogenous control input held constant across the episode."""
 
@@ -154,22 +251,78 @@ class SyntheticControlledMarkovGame(SyntheticMarkovGame):
     def control(self, config: GameConfig) -> ControlSpec:
         return ControlSpec.from_config(config, config.population_size)
 
+    def empowerment_spec(self, config: GameConfig) -> EmpowermentSpec:
+        return EmpowermentSpec.from_config(config.options, self.rules(config).rounds)
+
+    def control_policy(self, config: GameConfig) -> np.ndarray:
+        """``pi(u)`` over the control alphabet - uniform, and state-independent.
+
+        State-independence is what makes ``U_t`` exactly independent of ``S_t``:
+        no mediator, no backdoor, and the per-state empowerment is pure control
+        authority rather than a mixture of authority and selection.
+        """
+
+        size = len(self.control(config).targets)
+        return np.full(size, 1.0 / size)
+
     def chain_control(self, config: GameConfig) -> tuple | None:
+        if self.empowerment_spec(config).control_mode == PER_ROUND:
+            # No single control value is in force, so there is no per-agent push
+            # probability to report. `exact_transition` supplies the mixture.
+            return None
         return self.control(config).chain_control(config.population_size)
+
+    def exact_transition(self, config: GameConfig) -> np.ndarray | None:
+        if self.empowerment_spec(config).control_mode != PER_ROUND:
+            return None
+        return exact.policy_averaged_kernel(
+            control_kernels(self.rules(config), self.control(config)),
+            self.control_policy(config),
+        )
 
     def _control_tape(self, seed: int, rules: MarkovSpec) -> np.ndarray:
         return episode_generator(seed, CONTROL_STREAM).random(
             (rules.rounds, rules.population_size)
         )
 
+    def _control_values(
+        self, config: GameConfig, seed: int, rules: MarkovSpec, control: ControlSpec
+    ) -> np.ndarray | None:
+        """Which control value is in force at each round, or None if none ever is.
+
+        The episode-fixed branch returns a constant tape and never touches the
+        draw stream, so an episode that ran before ``control_mode`` existed
+        still replays cell for cell.
+        """
+
+        if self.empowerment_spec(config).control_mode != PER_ROUND:
+            return (
+                np.full(rules.rounds, control.value, dtype=int)
+                if control.is_active
+                else None
+            )
+        if not control.can_push:
+            return None
+        return episode_generator(seed, CONTROL_VALUE_STREAM).integers(
+            0, len(control.targets), rules.rounds
+        )
+
     def round_control(self, config: GameConfig, state: GameState) -> tuple | None:
         rules = self.rules(config)
         control = self.control(config)
-        if not control.is_active:
+        seed = int(state.data["seed"])
+        values = self._control_values(config, seed, rules, control)
+        if values is None:
             return None
-        tape = self._control_tape(int(state.data["seed"]), rules)
+        target = control.targets[int(values[state.turn])]
+        if target == NO_PUSH:
+            # The controller exists but drew its do-nothing value this round.
+            # Reported as a row of empty pushes rather than as no controller, so
+            # the prompt keeps one shape across the episode.
+            return tuple(None for _ in range(rules.population_size))
+        tape = self._control_tape(seed, rules)
         controlled = set(control.agents)
-        label = rules.actions[control.target_action]
+        label = rules.actions[target]
         return tuple(
             label
             if index in controlled and tape[state.turn, index] < control.strength
@@ -180,23 +333,56 @@ class SyntheticControlledMarkovGame(SyntheticMarkovGame):
     def simulation_control(self, config: GameConfig, seeds: Sequence[int]) -> Any:
         """Which (episode, round, agent) cells the controller pushes, and toward what.
 
-        Drawn from its own named stream, so introducing a controller leaves
+        Drawn from its own named streams, so introducing a controller leaves
         every uncontrolled episode's draws bit-identical - a Game 3 config with
         zero strength replays exactly as the Game 2 config it came from.
         """
 
         rules = self.rules(config)
         control = self.control(config)
-        if not control.is_active:
+        seed_list = tuple(int(seed) for seed in seeds)
+        values = [
+            self._control_values(config, seed, rules, control) for seed in seed_list
+        ]
+        if not seed_list or values[0] is None:
             return None
-        tape = np.stack([self._control_tape(seed, rules) for seed in seeds])
+        alphabet = np.asarray(control.targets, dtype=np.int8)
+        targets = alphabet[np.stack(values)]
+        tape = np.stack([self._control_tape(seed, rules) for seed in seed_list])
         mask = np.zeros(rules.population_size, dtype=bool)
         mask[list(control.agents)] = True
-        return (tape < control.strength) & mask[None, None, :], control.target_action
+        applies = (
+            (tape < control.strength)
+            & mask[None, None, :]
+            & (targets != NO_PUSH)[:, :, None]
+        )
+        # NO_PUSH rounds are already masked out of `applies`, so the target they
+        # carry is never read; clamping keeps it a valid action index anyway.
+        return applies, np.maximum(targets, 0)
 
     def apply_control(self, profile: np.ndarray, control: Any, round_index: int) -> np.ndarray:
-        applies, target = control
-        return np.where(applies[:, round_index, :], np.int8(target), profile).astype(np.int8)
+        applies, targets = control
+        return np.where(
+            applies[:, round_index, :], targets[:, round_index, None], profile
+        ).astype(np.int8)
+
+    def effective_empowerment(
+        self, config: GameConfig
+    ) -> tuple[EmpowermentReport, EmpowermentSpec]:
+        """The paper's ``E(pi)`` and the episode-fixed curve, on the same chain."""
+
+        rules = self.rules(config)
+        spec = self.empowerment_spec(config)
+        return (
+            analyse(
+                control_kernels(rules, self.control(config)),
+                initial_distribution(rules),
+                exact.bit_table(rules.population_size, rules.n_states),
+                spec,
+                policy=self.control_policy(config),
+            ),
+            spec,
+        )
 
     def ground_truth(self, config: GameConfig) -> GroundTruth:
         """Game 2's quantities, plus what the control input is worth."""
@@ -252,9 +438,20 @@ class SyntheticControlledMarkovGame(SyntheticMarkovGame):
                 ),
             )
         )
+
+        # Effective empowerment as the paper defines it, plus the episode-fixed
+        # curve it is being contrasted against. Computed on every Game 3 config
+        # rather than behind a flag: the two variants disagreeing is the finding,
+        # and a finding that only appears when asked for is one nobody sees.
+        report, empowerment = self.effective_empowerment(config)
+        quantities.extend(empowerment_quantities(report, empowerment))
         return GroundTruth(
             game_type=self.spec.game_type,
-            parameters={**truth.parameters, **control.to_dict()},
+            parameters={
+                **truth.parameters,
+                **control.to_dict(),
+                **empowerment_parameters(report, empowerment),
+            },
             quantities=tuple(quantities),
         )
 
@@ -269,15 +466,9 @@ def control_channel(
     """
 
     bits = exact.bit_table(rules.population_size, rules.n_states)
-    micro = np.zeros((len(control.targets), rules.n_states), dtype=float)
-    macro = np.zeros((len(control.targets), rules.population_size + 1), dtype=float)
-    for index in range(len(control.targets)):
-        variant = ControlSpec(
-            value=index, targets=control.targets,
-            strength=control.strength, agents=control.agents,
-        )
-        matrix = transition_matrix(rules, variant.chain_control(rules.population_size))
-        law = exact.propagate(initial_distribution(rules), matrix, rounds)
-        micro[index] = law
-        macro[index] = exact.macrostate_law(law, bits)
+    kernels = control_kernels(rules, control)
+    micro = np.stack(
+        [exact.propagate(initial_distribution(rules), kernel, rounds) for kernel in kernels]
+    )
+    macro = np.stack([exact.macrostate_law(law, bits) for law in micro])
     return micro, macro

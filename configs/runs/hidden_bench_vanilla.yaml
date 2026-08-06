@@ -1,0 +1,138 @@
+# HiddenBench, the paper's own protocol: N agents, round-robin plenary
+# discussion, a vote before and after.
+#
+# Li, Naito & Shirado, "Systematic Failures in Collective Reasoning under
+# Distributed Information in Multi-Agent LLMs" (ICML 2026).
+#
+# Written fully expanded and self-contained, like
+# configs/runs/naming_convention_tutorial_university_v3.yaml, so the file can be
+# read without chasing `component:` references.
+#
+# Cost: 4 + 10*4 + 4 = 48 provider calls per episode (N pre-votes, T*N speaking
+# turns, N post-votes) before validation retries. `mas-cc experiment preflight`
+# computes this from the game's own call_plan - do not hand-maintain it here.
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 512
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  # This game switches prompt family by phase (hidden_bench_discussion for
+  # speaking turns, hidden_bench_vote for the two votes). The family named here
+  # is the decision-bearing one - the vote - and the runtime accepts either.
+  prompt_family: hidden_bench_vote
+  prompt_version: 1
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"
+  response_contract:
+    type: hidden_bench_json_vote
+    # Filled from the task's own possible_answers at bind time; listed here so
+    # the resolved config records what the run actually accepted.
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_vanilla
+  population_size: 4
+  # Not used by this game: the interaction count is derived from `rounds` and
+  # `n_agents` (1 pre-vote + T*N turns + 1 post-vote = 42 steps). Set to the
+  # derived value for readability only; pricing reads call_plan, not this.
+  horizon: 42
+  topology: complete
+  options:
+    task_set: vanilla # vanilla (65 upstream tasks) | expanded (prebuilt N>4 populations)
+    task_id: evacuation_west_city
+    n_agents: 4
+    profile: hidden # hidden | full - `full` with rounds: 0 measures Y_full
+    assignment_scheme: bijective # the paper's N == C baseline
+    rounds: 10 # T
+    # false: T counts full round-robin passes (the brief's unit, T*N turns).
+    # true:  T counts speaking turns (the paper runner's unit, T turns total).
+    # Set this to true, with rounds: 15, to reproduce the paper literally.
+    rounds_are_speaking_turns: false
+    extra_prompt: null # the %extra% strategy hook; sweep it for ablations
+    dissenter_extra_prompt: null # per-agent persona for group-composition runs
+    dissenter_fraction: 0.0
+    aggregation: average # average | majority - reporting only; both are recorded
+    shuffle_facts: true
+    decoy: null # null derives it per round as the modal wrong option
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.0
+control:
+  # `none` is the only mechanism wired for this game today. Reveal-All,
+  # Secretary and Structured are message-level interventions and need a
+  # message hook on the Control protocol first - see docs/hidden_bench/README.md.
+  mechanism: none
+execution:
+  seed: 20260805
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  # 48 calls/episode x 1 episode, x3 for invalid_response_retries: 2.
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 1.0
+  max_cost_per_run: 1.0
+  max_provider_requests: 150
+  max_input_tokens: 400000
+  max_output_tokens: 80000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 3
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  enabled: true
+  available:
+    population_action_share_per_option:
+      comet: true
+    dominant_action_share:
+      comet: true
+    accuracy_average:
+      comet: true
+    accuracy_majority:
+      comet: true
+    decoy_share:
+      comet: true
+    unshared_disclosure_rate:
+      comet: true # the paper's central diagnostic
+    first_consensus_time_by_action_share:
+      comet: false
+    y_pre:
+      comet: true
+    y_post:
+      comet: true
+    improvement:
+      comet: true
+    final_unshared_disclosure_rate:
+      comet: true
+    agent_current_action:
+      comet: false # agent-scoped; Comet never receives per-agent values
+experiment:
+  name: hidden-bench-vanilla-single-task
+  description: One HiddenBench task, N=4, T=10 round-robin passes, hidden profile.
+  tags: [hidden-bench, vanilla, hidden-profile]

@@ -75,6 +75,62 @@ metrics:
   bin_size_interactions: 25
   partial_final_bin: drop
   comet_export: []
+aggregation:
+  # How this cell's 100 episodes become one answer. These are correctness
+  # rules, not preferences - each removes a specific bias, and the reasoning
+  # lives on mas_cc.metrics.AggregationPolicy. Aggregation is derived from the
+  # episode files, so any of them can be changed afterwards with
+  # `mas-cc experiment aggregate --run-dir <dir> --config <other.yaml>`
+  # without re-running a single episode.
+  schema_version: 1
+  # Episodes end at different rounds because consensus is absorbing. Averaging
+  # only over the runs still going conditions on "hasn't converged yet" and
+  # puts a spurious dip in the middle of every curve.
+  forward_fill: absorbing
+  # Half the episodes end on Q and half on M, so the raw per-option mean
+  # flatlines at 0.5 and looks like nothing happened. Aligning each episode on
+  # its own winner keeps the loser's trajectory instead of cancelling it.
+  relabel_by_winner: true
+  # The share is bounded in [0,1] and bimodal for much of a run: a mean +/- std
+  # band leaves the unit interval and draws two humps as one wide one.
+  percentiles: [10, 50, 90]
+  # Applied WITHIN each episode, before aggregating across them. The other
+  # order is a different, and wrong, quantity.
+  rolling_window: 20
+  cell_metrics:
+    - dominant_action_share
+    - action_share_relabelled
+    - active_fraction
+    - consensus_round
+    - converged_fraction
+  # Re-run on every cell completion, from the per-cell count tables only, so a
+  # partial MI estimate appears and tightens as the grid fills rather than
+  # arriving only at the end. `mi_ground_truth_gap` works here and nowhere else
+  # in this repo: this game has a closed form for exactly this sweep.
+  sweep_metrics:
+    - terminal_mi
+    - lagged_cmi
+    - mi_null_band
+    - mi_ground_truth_gap
+  horizons: [1]
+  null_permutations: 200
+observability:
+  # Shape of the master's live monitoring. Inert on this config because
+  # `logging.comet` above is false - a calibration run uploads nothing - but
+  # recorded anyway so a run's own config states how it would have been
+  # watched.
+  schema_version: 1
+  comet:
+    # The only legal value. Workers write episode files and nothing else, which
+    # is what leaves one writer per Comet experiment key and therefore no race
+    # on its step counter.
+    writer: master_only
+    # A timer, not a completion hook: a metric that only moves when an episode
+    # finishes cannot tell a dead master from a slow one.
+    heartbeat_seconds: 60
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_experiments: false
 experiment:
   schema_version: 1
   name: synthetic-controlled-markov-empowerment

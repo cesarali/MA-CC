@@ -16,7 +16,7 @@ from mas_cc.experiments import run_experiment_grid_sync
 
 
 def test_control_grid_produces_a_high_mi_estimate_and_a_near_zero_null(tmp_path: Path):
-    base = load_run_config("configs/runs/naming_convention_smoke_test.yaml", environment={})
+    base = load_run_config("configs/runs/old/naming_convention_smoke_test.yaml", environment={})
     base = replace(
         base,
         budget=replace(

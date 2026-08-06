@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -32,6 +33,19 @@ on-disk schema, which is exactly what the header comparison in
 """
 
 
+_SECRET_FIELD = re.compile(
+    r"(?:^|_)(?:api_key|access_token|auth_token|authorization|bearer|client_secret|"
+    r"private_key|secret|password|credential|credentials)(?:$|_)",
+    re.IGNORECASE,
+)
+"""Parameter names that must never leave the machine, even as a config value.
+
+Deliberately a copy of the loader's check rather than an import of it: the
+config layer refuses to *load* such a field, and this refuses to *send* one.
+Two independent guards on the same class of mistake is the point.
+"""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -50,6 +64,7 @@ class CometMetricSink:
         self.status = "disabled" if not enabled else "unavailable"
         self.reason: str | None = None
         self.reference: str | None = None
+        self.url: str | None = None
         if not enabled:
             return
         key = os.environ.get("COMET_API_KEY") or self._key_from_local_dotenv()
@@ -85,6 +100,14 @@ class CometMetricSink:
             self._experiment.set_name(run_name)
             self.status = "active"
             self.reference = getattr(self._experiment, "get_key", lambda: None)()
+            # The clickable link, so a run says where it is being watched rather
+            # than leaving you to find it. Defensive because it is the one piece
+            # of this that is pure convenience: an SDK without it must not turn
+            # a working run into a failed one.
+            try:
+                self.url = self._experiment.url
+            except Exception:
+                self.url = None
         except Exception as exc:  # local runs must remain useful without Comet
             # SDK exceptions can include request URLs or headers; never persist
             # their text because the connector may have seen the credential.
@@ -105,6 +128,40 @@ class CometMetricSink:
     def log_metrics(self, metrics: Mapping[str, float], step: int) -> None:
         if self._experiment is not None:
             self._experiment.log_metrics(dict(metrics), step=step)
+
+    def log_parameters(self, parameters: Mapping[str, Any]) -> None:
+        """Send scalar run parameters — never prompt content, never secrets.
+
+        Callers are expected to have flattened whatever they want recorded into
+        scalars already; anything else is dropped here rather than serialized,
+        so a nested structure can never smuggle a prompt or a credential onto
+        the remote surface by accident.
+        """
+
+        if self._experiment is None:
+            return
+        safe = {
+            str(key): value
+            for key, value in parameters.items()
+            if isinstance(value, (str, int, float, bool)) and not _SECRET_FIELD.search(str(key))
+        }
+        if safe:
+            self._experiment.log_parameters(safe)
+
+    def log_figure(self, figure: Any, *, name: str, step: int) -> None:
+        """Log a rendered matplotlib figure as a stepped image asset.
+
+        Comet's Image Panel exposes a stepper over same-named images, so a
+        figure re-logged under one name at increasing steps scrubs as an
+        animation rather than piling up as unrelated assets.
+        """
+
+        if self._experiment is not None:
+            self._experiment.log_figure(figure_name=name, figure=figure, step=step)
+
+    def add_tags(self, tags: Sequence[str]) -> None:
+        if self._experiment is not None and tags:
+            self._experiment.add_tags([str(tag) for tag in tags])
 
     def close(self) -> dict[str, Any]:
         if self._experiment is not None:
@@ -334,9 +391,16 @@ class RunRecorder:
         if self._binning is None or not self._round_views:
             return
         view = self._round_views[-1]
+        # Only rounds that actually *are* pairwise interaction outcomes. A game
+        # with a uniform per-round outcome (naming_convention) declares
+        # `interaction_index` and `actions` on every entry and is unaffected; a
+        # phase-structured game (hidden_bench) declares them only on its
+        # outcome-bearing rounds, so its discussion turns are skipped instead of
+        # being binned into a success rate that would mix votes with messages.
         records = [
             InteractionOutcome.from_evaluator_entry(entry)
             for entry in getattr(view, "recent_history", ())
+            if "interaction_index" in entry and "actions" in entry
         ]
         if not records:
             return

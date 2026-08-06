@@ -74,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     game_run.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/runs/toy_game_smoke_test.yaml"),
+        default=Path("configs/runs/old/toy_game_smoke_test.yaml"),
         help="run configuration (default: %(default)s)",
     )
     game_run.add_argument("--output-dir", type=Path, required=True)
@@ -114,12 +114,18 @@ def build_parser() -> argparse.ArgumentParser:
         "preflight", help="estimate total calls/tokens/cost/runtime without provider I/O"
     )
     experiment_preflight.add_argument("--config", type=Path, required=True)
-    experiment_preflight.add_argument("--output-dir", type=Path, required=True)
+    experiment_preflight.add_argument(
+        "--output-dir", type=Path,
+        help="artifact destination (default: this config's storage.output_dir)",
+    )
     experiment_run = experiment_commands.add_parser(
         "run", help="run config.execution.repetitions episodes concurrently"
     )
     experiment_run.add_argument("--config", type=Path, required=True)
-    experiment_run.add_argument("--output-dir", type=Path, required=True)
+    experiment_run.add_argument(
+        "--output-dir", type=Path,
+        help="artifact destination (default: this config's storage.output_dir)",
+    )
     experiment_run.add_argument(
         "--approve-preflight", type=Path,
         help="path to a preflight_id.txt written by `experiment preflight`",
@@ -135,6 +141,19 @@ def build_parser() -> argparse.ArgumentParser:
     experiment_run.add_argument(
         "--no-progress", dest="show_progress", action="store_false", default=True,
         help="disable tqdm progress bars; log one line per completed episode instead",
+    )
+    experiment_aggregate = experiment_commands.add_parser(
+        "aggregate",
+        help="recompute a finished run's cell aggregates from its episode files only",
+    )
+    experiment_aggregate.add_argument(
+        "--run-dir", type=Path, required=True,
+        help="an `experiment run` output directory (a grid's, or a single experiment's)",
+    )
+    experiment_aggregate.add_argument(
+        "--config", type=Path,
+        help="take the aggregation: section from this config instead of the run's own; "
+        "use to re-band, re-window, or change the fill rule without re-running episodes",
     )
 
     synthetic = commands.add_parser(
@@ -329,22 +348,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "experiment" and args.experiment_command == "preflight":
         from mas_cc.planning import GridPreflightEstimate
 
-        from .experiment import run_experiment_preflight
+        from .experiment import resolve_output_dir, run_experiment_preflight
 
         try:
             estimate = run_experiment_preflight(args.config, args.output_dir)
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        destination = resolve_output_dir(args.config, args.output_dir)
         if isinstance(estimate, GridPreflightEstimate):
             print(
                 f"Grid preflight {estimate.launch_status}: {estimate.cell_count} cell(s), "
-                f"{estimate.total_episode_count} episode(s) total, {args.output_dir}"
+                f"{estimate.total_episode_count} episode(s) total, {destination}"
             )
         else:
             print(
                 f"Experiment preflight {estimate.launch_status}: {estimate.episode_count} "
-                f"episode(s), {args.output_dir}"
+                f"episode(s), {destination}"
             )
         return 0 if estimate.launch_status == "permitted" else 1
     if args.command == "experiment" and args.experiment_command == "run":
@@ -364,6 +384,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{result.output_dir}"
         )
         return 0 if result.failed == 0 else 1
+    if args.command == "experiment" and args.experiment_command == "aggregate":
+        from .experiment import run_aggregate_command
+
+        try:
+            summary = run_aggregate_command(args.run_dir, args.config)
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Aggregated {len(summary['cells_aggregated'])} cell(s) from {args.run_dir}"
+        )
+        for name, value in sorted(summary["sweep_metrics"].items()):
+            print(f"  {name}: {value}")
+        return 0 if summary["cells_aggregated"] else 1
     if args.command == "synthetic":
         from .synthetic import (
             DEFAULT_EPSILON_GRID,
@@ -436,7 +470,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 passed = inspect_phase_1(output_dir)
             elif args.number == 2:
                 passed = inspect_phase_2(
-                    args.config or Path("configs/runs/provider_smoke_test.yaml"), output_dir
+                    args.config or Path("configs/runs/old/provider_smoke_test.yaml"), output_dir
                 )
             elif args.number == 3:
                 passed = inspect_phase_3(args.prompt, output_dir)
@@ -445,7 +479,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     from .provider_economics import inspect_phase_4_amendment
 
                     passed = inspect_phase_4_amendment(
-                        args.config or Path("configs/runs/provider_smoke_test.yaml"),
+                        args.config or Path("configs/runs/old/provider_smoke_test.yaml"),
                         output_dir, provider=args.provider,
                         pricing_mode=args.pricing_mode, cache_path=args.pricing_cache,
                         live_completion=args.live_completion,
@@ -458,21 +492,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 from .game import run_game_inspection
 
                 passed = run_game_inspection(
-                    args.config or Path("configs/runs/toy_game_smoke_test.yaml"), output_dir
+                    args.config or Path("configs/runs/old/toy_game_smoke_test.yaml"), output_dir
                 )
             elif args.number == 6:
                 from .game import run_game_inspection
 
                 passed = run_game_inspection(
                     args.config
-                    or Path("configs/runs/naming_convention_smoke_test.yaml"),
+                    or Path("configs/runs/old/naming_convention_smoke_test.yaml"),
                     output_dir,
                 )
             else:
                 from .phase7 import run_phase_7_inspection
 
                 passed = run_phase_7_inspection(
-                    args.config or Path("configs/runs/naming_convention_smoke_test_v3.yaml"),
+                    args.config or Path("configs/runs/old/naming_convention_smoke_test_v3.yaml"),
                     output_dir,
                 )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:

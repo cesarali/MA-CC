@@ -1,0 +1,134 @@
+# Empowerment extension of naming_convention_tutorial_university_v3.yaml -
+# same game (5 agents, 20 interactions, live University proxy), plus a
+# `control:` intervention and a `grid:` that sweeps it. This is the PRIMARY
+# arm only: the 2-level directional contrast {push Q, push M}. It answers
+#
+#   I(C ; O),               C = control.options.forced_value (Q or M)
+#   I(C ; macrostate_{t+h} | macrostate_t),   the lagged/conditional form
+#
+# both estimated post-hoc by `mas-cc analysis empowerment` over the completed
+# grid directory - NOT during the run, and NOT a per-episode quantity, only
+# across the grid's two cells.
+#
+# The `no_committee` baseline is deliberately NOT a third grid cell here -
+# see naming_convention_tutorial_empowerment_baseline_university_v3.yaml and
+# docs/tdd/architecture/03082026_committee_empowerment_plan.md, Workstream 2:
+# folding "did I push at all" into the same contingency table as "which way
+# did I push" conflates two questions into one number that answers neither.
+# Run the baseline as its own arm and compare against it separately.
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  prompt_family: naming_convention_decision
+  prompt_version: 1
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"
+  response_contract:
+    type: choice_only
+    allowed_values: [Q, M]
+game:
+  type: naming_convention
+  population_size: 5
+  horizon: 20
+  topology: complete
+  options:
+    actions: [Q, M]
+    memory_size: 3
+    success_payoff: 100
+    failure_payoff: -50
+    pair_sampling: uniform_two_distinct
+    simultaneous_pair_decisions: true
+    randomize_presented_action_order: true
+    prompt_contract: naming_convention_decision
+    response_contract: choice_only
+    parser_contract: choice_only_v1
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.0
+    representative_memory_size: 1
+    stop_on_convergence: false
+# The intervention. agent-000 of five is a committed 1/5 minority - the probe
+# regime (1-2 agents; see the plan doc's Part I), not the drive regime. Held
+# to one word for every interaction. `forced_value` below is a placeholder -
+# the `grid:` section at the bottom sets it per cell, and that swept path is
+# what becomes the MI's condition variable C. A forced decision short-circuits
+# the provider entirely (runtime/loop_runtime.py), so agent-000 never costs a
+# request - the budget below is conservative by roughly a fifth.
+control:
+  mechanism: forced_action
+  options:
+    agent_ids: [agent-000]
+    forced_value: Q
+    until_interaction: null   # null = committed for the whole episode
+execution:
+  seed: 20260808
+  repetitions: 10   # episodes PER CELL -> 2 cells x 10 = 20 episodes total
+  # 5 episodes in flight at once, across the whole grid. Paired with
+  # simultaneous_pair_decisions (2 concurrent decisions per episode) this sits
+  # exactly at llm_provider.request_concurrency: 10 - raise both together or
+  # neither, otherwise the extra episodes just queue.
+  parallelism: 5
+  fail_fast: true
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  # The single-episode tutorial config was sized to 220 requests / $0.25 /
+  # 200k input / 30k output at this exact population_size/horizon. This is
+  # that number x 20 episodes, plus ~15% headroom - the whole grid shares ONE
+  # budget guard, not one per cell or per episode. Re-check with
+  # `mas-cc experiment preflight` before spending; it reports the exact
+  # multiplied demand for this file, not this estimate.
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 5.75
+  max_cost_per_run: 5.75
+  max_provider_requests: 5000
+  max_input_tokens: 4600000
+  max_output_tokens: 700000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  # false on purpose: `mas-cc experiment run` does not wire Comet per episode
+  # for a grid - `true` here would be a config value with no effect. See
+  # docs/howto/launch/running_an_experiment.md section 7.
+  comet: false
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  # Must stay true: analysis/reader.py rebuilds each episode's per-round
+  # macrostate from the `population_action_share_per_option` rows in
+  # metrics/streaming.csv - the lagged MI has no input otherwise.
+  enabled: true
+  comet_export: []
+experiment:
+  name: naming-convention-tutorial-empowerment-university
+  description: >-
+    2-cell (forced word Q vs M) x 10-episode empowerment grid at N=5, H=20,
+    extending naming_convention_tutorial_university_v3.yaml with a
+    forced-action committee. Primary directional contrast only - pair with
+    the _baseline_ config for the no_committee arm.
+  tags: [empowerment, mutual-information, grid, university, tutorial]
+grid:
+  # One axis, two levels -> the binary condition variable C in I(C ; O).
+  control.options.forced_value: [Q, M]

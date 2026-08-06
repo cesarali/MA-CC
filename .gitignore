@@ -17,3 +17,6 @@ venv/
 
 # Generated benchmark artifacts
 results/
+
+# Local data folder
+data/

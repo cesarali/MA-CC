@@ -1,0 +1,156 @@
+schema_version: 1
+# =============================================================================
+# EXAMPLE 3 (optional) — A TWO-AXIS GRID, FOR THE GRID PICTURE.
+#
+# Siblings: synthetic_controlled_markov_repeated.yaml           (no grid)
+#           synthetic_controlled_markov_empowerment_lagged.yaml (one axis)
+# =============================================================================
+#
+# Two axes, three levels each = 9 cells, which is the shape the grid-progress
+# image was designed for: population size down the rows, committee size across
+# the columns, colour = how full each cell is. The image lands at
+# <run-dir>/grid_progress.png and, if Comet is on, on the sweep experiment.
+#
+#   population size  = how many agents are in the game
+#   committee size   = how many of them the controller may push, spelled as the
+#                      list of controlled agent indices, so its LENGTH is the
+#                      committee size
+#
+# The committee levels are chosen to fit inside the SMALLEST population on the
+# other axis. `controlled_agents` must index real agents, so a committee of
+# five against a population of four is a config error, not a cell that quietly
+# does something else.
+#
+# WHAT THIS GRID IS AND IS NOT ABOUT. `control_value` is fixed at 0, so every
+# cell pushes toward the same action Q. The axes therefore change *how fast and
+# how reliably* the population gets there, not *where* it ends up. The finding
+# lives in the per-cell scalars - `converged_fraction` and
+# `median_consensus_round`. `terminal_mi` is still requested below and is
+# expected to come out small and INSIDE its own null band: that is the correct
+# answer for a grid whose axes do not steer the outcome, and seeing the null
+# band catch it is worth more than not asking.
+#
+# `mi_ground_truth_gap` is deliberately absent: the closed form is defined for
+# ONE condition variable and this grid has two. The one-axis sibling is where
+# the answer key applies.
+#
+# WHY THE POPULATION AXIS STOPS AT 8. This game's `ground_truth()` is exact
+# linear algebra on the 2^N microstate chain, and the synthetic runtime calls
+# it once PER EPISODE. Measured on this machine:
+#
+#     N = 5      0.05 s per episode
+#     N = 6      0.10 s
+#     N = 8      0.94 s
+#     N = 10    24.0  s      <- 20 episodes of one such cell is eight minutes
+#
+# It is a cliff, not a slope. Sweeping population size past 8 turns a
+# two-minute grid into an hour without changing what the grid demonstrates, so
+# this file stops at 8. If you do need N = 10, cut `repetitions` to match.
+# =============================================================================
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov.yaml
+  overrides:
+    population_size: 6        # overwritten per cell by `grid:` below
+    horizon: 40
+    options:
+      actions: [Q, M]
+      coupling: ring
+      epsilon: 0.08
+      initial_bias: 0.5
+      control_alphabet: [Q, M]
+      control_value: 0        # every cell pushes toward Q; see the header
+      control_mode: episode_fixed
+      control_strength: 0.3
+      controlled_agents: [0]  # overwritten per cell by `grid:` below
+execution:
+  schema_version: 1
+  seed: 20260807
+  # Episodes PER CELL. 9 cells x 20 = 180 episodes total.
+  repetitions: 20
+  parallelism: 16
+  fail_fast: false
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 500000
+  max_input_tokens: 500000000
+  max_output_tokens: 20000000
+  allow_unbounded_paid_requests: true
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    # MASTER LOGGING, SWITCH 1 of 2: ON / OFF. ON by design; see the sibling
+    # files. A real upload, no extra flags needed.
+    comet: true
+    options:
+      comet_project: mas-cc-synthetic
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 10
+  partial_final_bin: drop
+  comet_export: []
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: true
+  percentiles: [10, 50, 90]
+  rolling_window: 5
+  cell_metrics:
+    - dominant_action_share
+    - action_share_relabelled
+    - active_fraction
+    - consensus_round
+    - converged_fraction
+  sweep_metrics:
+    - terminal_mi
+    - mi_null_band
+  horizons: [1]
+  null_permutations: 500
+observability:
+  schema_version: 1
+  comet:
+    # MASTER LOGGING, SWITCH 2 of 2: SHAPE. Only read when comet: true above.
+    writer: master_only
+    heartbeat_seconds: 20
+    grid_image_every_n_episodes: 15
+    sweep_experiment: true
+    cell_experiments: false
+experiment:
+  schema_version: 1
+  name: synthetic-controlled-markov-size-and-committee
+  description: >-
+    Controlled-Markov sweep over population size and the size of the controlled
+    committee, used to check the two-dimensional grid-progress image and the
+    per-cell convergence scalars.
+  tags:
+    - synthetic
+    - controlled-markov
+    - grid
+    - two-axis
+grid:
+  # Rows of the grid image. Stops at 8 on purpose - see the header's cost note.
+  game.population_size: [5, 6, 8]
+  # Columns. Each value is the list of agent indices the controller may push,
+  # so its LENGTH is the committee size: 1, 3, 5.
+  game.options.controlled_agents: [[0], [0, 1, 2], [0, 1, 2, 3, 4]]

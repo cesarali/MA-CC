@@ -4,7 +4,7 @@
 # models and this runtime cannot request the paper's K-sampling parameter.
 schema_version: 1
 llm_provider:
-  component: ../components/llm_providers/university.yaml
+  component: ../../components/llm_providers/university.yaml
   overrides:
     model: microsoft/gpt-5.4-nano
     request_concurrency: 2
@@ -17,9 +17,9 @@ llm_provider:
     options:
       estimated_latency_seconds: 3.0
 prompt:
-  component: ../components/prompts/naming_convention_v3.yaml
+  component: ../../components/prompts/naming_convention_v3.yaml
 game:
-  component: ../components/games/naming_convention.yaml
+  component: ../../components/games/naming_convention.yaml
   overrides:
     population_size: 24
     horizon: 360 # 15 population rounds, matching the reported convergence scale
@@ -50,7 +50,7 @@ budget:
   max_output_tokens: 552960
   allow_unbounded_paid_requests: false
 logging:
-  component: ../components/logging/default.yaml
+  component: ../../components/logging/default.yaml
   overrides:
     comet: true
     options:
@@ -64,7 +64,7 @@ logging:
         max_logged_prompts_per_game: 25
         max_logged_prompts_per_run: 25
 storage:
-  component: ../components/storage/local.yaml
+  component: ../../components/storage/local.yaml
 analysis:
   schema_version: 1
   enabled: false

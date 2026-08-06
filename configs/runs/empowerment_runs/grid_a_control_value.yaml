@@ -1,0 +1,144 @@
+schema_version: 1
+# GRID A - "does the master Comet logging work, and is the MI estimate right?"
+#
+# One axis, three levels. Small on purpose: ~2 minutes offline, no provider, no
+# money. Its job is to exercise the whole master-logging path end to end on a
+# problem whose answer we already know in closed form.
+#
+# The axis is the exogenous control input `u`. Level 0 pushes the population
+# toward action Q, level 1 toward M, level 2 is a genuine do-nothing condition
+# (control_targets entry -1). So the condition genuinely steers the outcome,
+# and I(C ; terminal outcome) is meaningfully non-zero.
+#
+# ONE axis is deliberate, and buys two things a two-axis grid cannot have:
+#   * `mi_ground_truth_gap` works. The closed form is computed from the
+#     resolved sweep (see mas_cc/games/synthetic/empowerment.py), and that
+#     function takes one condition variable. With two axes there is no single
+#     C to be the channel input, so the gap metric reports nothing rather than
+#     a wrong number.
+#   * the estimate is checkable by hand against
+#     `mas-cc synthetic empowerment`, which prints the same closed form
+#     without running anything.
+#
+# Run it:
+#   mas-cc experiment run --config configs/runs/grids/grid_a_control_value.yaml \
+#                         --output-dir results
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov.yaml
+  overrides:
+    population_size: 6
+    horizon: 40
+    options:
+      actions: [Q, M]
+      coupling: ring
+      epsilon: 0.05
+      initial_bias: 0.5
+      # Three control levels: push to Q, push to M, push nowhere.
+      control_targets: [0, 1, -1]
+      control_value: 0          # overwritten per cell by the grid below
+      control_strength: 0.35
+      controlled_agents: [0, 1, 2]
+execution:
+  schema_version: 1
+  seed: 20260806
+  # Episodes PER CELL. 3 cells x 40 = 120 episodes total. The MI estimate's
+  # sampling unit is the EPISODE, not the round, so this number - not the
+  # horizon - is what buys statistical power.
+  repetitions: 40
+  parallelism: 12
+  fail_fast: false
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  # The synthetic agent is a lookup table with no published price, so the
+  # preflight gate would otherwise refuse to launch. Safe here and only here.
+  explicit_unknown_price_override: true
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 200000
+  max_input_tokens: 200000000
+  max_output_tokens: 10000000
+  allow_unbounded_paid_requests: true
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    # ---------------------------------------------------------------------
+    # THE ONE SWITCH. `true` uploads to Comet for real, under your API key.
+    # Left false so cloning this config never surprises anyone; flip it when
+    # you actually want to watch a run.
+    # ---------------------------------------------------------------------
+    comet: false
+    options:
+      comet_project: mas-cc-grids
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  # Must stay true. Every cell aggregate is rebuilt from the per-round
+  # `population_action_share_per_option` rows in metrics/streaming.csv; turn
+  # metrics off and there is nothing to aggregate.
+  enabled: true
+  bin_size_interactions: 10
+  partial_final_bin: drop
+  comet_export: []
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: true
+  percentiles: [10, 50, 90]
+  rolling_window: 5
+  cell_metrics:
+    - dominant_action_share
+    - action_share_relabelled
+    - active_fraction
+    - consensus_round
+    - converged_fraction
+  # The full MI block. `mi_ground_truth_gap` is the reason this grid has one
+  # axis; see the header.
+  sweep_metrics:
+    - terminal_mi
+    - lagged_cmi
+    - mi_null_band
+    - mi_ground_truth_gap
+  horizons: [1]
+  null_permutations: 200
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    # Short so you can see the heartbeat move within a run this size. 60s is
+    # the sensible default for a day-long job.
+    heartbeat_seconds: 15
+    grid_image_every_n_episodes: 10
+    sweep_experiment: true
+    cell_experiments: true
+experiment:
+  schema_version: 1
+  name: grid-a-control-value
+  description: >-
+    One-axis controlled-Markov sweep over the exogenous control input, used to
+    check master-only Comet logging and to compare the live MI estimate against
+    the closed form for the same sweep.
+  tags:
+    - synthetic
+    - controlled-markov
+    - grid
+    - master-logging
+grid:
+  # 0 -> pushes toward Q, 1 -> pushes toward M, 2 -> pushes nowhere.
+  game.options.control_value: [0, 1, 2]

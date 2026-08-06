@@ -191,7 +191,7 @@ def test_prompt_schema_v2_exports_registered_order_and_v1_has_diagnostics():
     assert component.schema_version == 2
     assert component.blocks == ()
     config = load_run_config(
-        "configs/runs/naming_convention_smoke_test.yaml", environment={}
+        "configs/runs/old/naming_convention_smoke_test.yaml", environment={}
     )
     rendered = resolved_config_yaml(config)
     assert "resolved_block_manifest:" in rendered
@@ -230,8 +230,8 @@ def test_prompt_json_schema_encodes_v1_and_v2_block_order_rules():
 
 def test_prescribed_v3_run_configs_load_without_environment_or_provider_work():
     for path in (
-        "configs/runs/provider_smoke_test_v3.yaml",
-        "configs/runs/toy_game_smoke_test_v3.yaml",
-        "configs/runs/naming_convention_smoke_test_v3.yaml",
+        "configs/runs/old/provider_smoke_test_v3.yaml",
+        "configs/runs/old/toy_game_smoke_test_v3.yaml",
+        "configs/runs/old/naming_convention_smoke_test_v3.yaml",
     ):
         assert load_run_config(path, environment={}).prompt.schema_version == 2

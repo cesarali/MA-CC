@@ -149,6 +149,44 @@ def config_schema() -> dict[str, Any]:
                     "available": options,
                 }
             ),
+            "aggregation": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "forward_fill": {"enum": ["absorbing", "truncate", "none"]},
+                    "relabel_by_winner": {"type": "boolean"},
+                    "percentiles": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"type": "integer", "minimum": 0, "maximum": 100},
+                    },
+                    "rolling_window": {"type": "integer", "minimum": 1},
+                    "cell_metrics": {"type": "array", "items": {"type": "string"}},
+                    "sweep_metrics": {"type": "array", "items": {"type": "string"}},
+                    "horizons": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"type": "integer", "minimum": 1},
+                    },
+                    "null_permutations": {"type": "integer", "minimum": 0},
+                }
+            ),
+            "observability": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "comet": _simple_object(
+                        {
+                            # One legal writer: workers write episode files, the
+                            # master writes Comet, so there is one writer per
+                            # experiment key and no step-counter race.
+                            "writer": {"const": "master_only"},
+                            "heartbeat_seconds": {"type": "number", "exclusiveMinimum": 0},
+                            "grid_image_every_n_episodes": {"type": "integer", "minimum": 1},
+                            "sweep_experiment": {"type": "boolean"},
+                            "cell_experiments": {"type": "boolean"},
+                        }
+                    ),
+                }
+            ),
             "experiment": _simple_object(
                 {
                     "schema_version": {"const": 1},

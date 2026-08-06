@@ -47,8 +47,8 @@ from mas_cc.games.synthetic.provider import decide, read_observation
 from mas_cc.llm_runtime.providers import CompletionRequest, create_llm_provider
 from mas_cc.llm_runtime.messages import Message, MessageRole
 
-FIDELITY_CONFIG = "configs/runs/synthetic_bernoulli_fidelity.yaml"
-NULL_CONFIG = "configs/runs/synthetic_bernoulli_null.yaml"
+FIDELITY_CONFIG = "configs/runs/synthetic_games/synthetic_bernoulli_fidelity.yaml"
+NULL_CONFIG = "configs/runs/synthetic_games/synthetic_bernoulli_null.yaml"
 
 
 def _config(path: str = FIDELITY_CONFIG):
@@ -366,7 +366,7 @@ def test_metrics_are_discovered_from_a_nested_game_package():
 
     # The games that live at games/<game_type>/ must still resolve unchanged.
     naming = create_game(
-        load_run_config("configs/runs/naming_convention_smoke_test_v3.yaml", environment={}).game
+        load_run_config("configs/runs/old/naming_convention_smoke_test_v3.yaml", environment={}).game
     )
     naming_metrics, naming_view = game_metrics(naming)
     assert naming_view is not None and naming_metrics
@@ -464,8 +464,8 @@ def test_a_degenerate_population_gives_zero_not_nan_or_one():
 @pytest.mark.parametrize(
     "config_path,should_fire",
     [
-        ("configs/runs/synthetic_bernoulli_metrics.yaml", True),
-        ("configs/runs/synthetic_bernoulli_never_converges.yaml", False),
+        ("configs/runs/synthetic_games/synthetic_bernoulli_metrics.yaml", True),
+        ("configs/runs/synthetic_games/synthetic_bernoulli_never_converges.yaml", False),
     ],
 )
 def test_choice_metrics_land_on_their_closed_forms(tmp_path, config_path, should_fire):
@@ -510,7 +510,7 @@ def test_the_two_consensus_criteria_disagree_on_a_memoryless_population(tmp_path
     from mas_cc.cli.synthetic import _run_fidelity_episode
 
     config = load_run_config(
-        "configs/runs/synthetic_bernoulli_never_converges.yaml", environment={}
+        "configs/runs/synthetic_games/synthetic_bernoulli_never_converges.yaml", environment={}
     )
     config = replace(config, game=replace(config.game, horizon=300))
     game = create_game(config.game)

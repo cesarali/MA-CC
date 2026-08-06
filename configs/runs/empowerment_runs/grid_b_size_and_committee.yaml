@@ -1,0 +1,138 @@
+schema_version: 1
+# GRID B - "does the 2-D grid image work, and does committee size matter?"
+#
+# Two axes, three levels each = 9 cells, which is the shape the grid-progress
+# image was designed for: population size down the rows, committee size across
+# the columns, colour = how full each cell is.
+#
+#   population size  = how many agents are in the game
+#   committee size   = how many of them the exogenous controller can push,
+#                      spelled as the list of controlled agent indices, so
+#                      [0] is a committee of one and [0,1,2,3,4] is five
+#
+# The committee levels are chosen to fit inside the SMALLEST population on the
+# other axis. `controlled_agents` must index real agents, so a committee of
+# five against a population of four is a config error, not a cell that quietly
+# does something else.
+#
+# WHAT THIS GRID IS AND IS NOT ABOUT. `control_value` is fixed at 0, so every
+# cell pushes toward the same action Q. The axes therefore change *how fast and
+# how reliably* the population gets there, not *where* it ends up. The finding
+# lives in the per-cell scalars - `converged_fraction` and
+# `median_consensus_round` - which is what the sweep experiment plots one point
+# per cell of. `terminal_mi` is still requested below, and is expected to come
+# out small and inside its own null band: that is the correct answer for a grid
+# whose axes do not steer the outcome, and seeing it is more useful than not
+# asking. Grid A is the one where the MI is the point.
+#
+# Run it:
+#   mas-cc experiment run --config configs/runs/grids/grid_b_size_and_committee.yaml \
+#                         --output-dir results
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov.yaml
+  overrides:
+    population_size: 6        # overwritten per cell by the grid below
+    horizon: 40
+    options:
+      actions: [Q, M]
+      coupling: ring
+      epsilon: 0.08
+      initial_bias: 0.5
+      control_targets: [0, 1]
+      control_value: 0        # every cell pushes toward Q; see the header
+      control_strength: 0.3
+      controlled_agents: [0]  # overwritten per cell by the grid below
+execution:
+  schema_version: 1
+  seed: 20260806
+  # Episodes PER CELL. 9 cells x 20 = 180 episodes total.
+  repetitions: 20
+  parallelism: 12
+  fail_fast: false
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 200000
+  max_input_tokens: 200000000
+  max_output_tokens: 10000000
+  allow_unbounded_paid_requests: true
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    # See grid A: `true` uploads for real under your API key.
+    comet: false
+    options:
+      comet_project: mas-cc-grids
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 10
+  partial_final_bin: drop
+  comet_export: []
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: true
+  percentiles: [10, 50, 90]
+  rolling_window: 5
+  cell_metrics:
+    - dominant_action_share
+    - action_share_relabelled
+    - active_fraction
+    - consensus_round
+    - converged_fraction
+  # No `mi_ground_truth_gap`: the closed form is defined for one condition
+  # variable, and this grid has two. It would report nothing anyway, but
+  # leaving it out says so on purpose rather than by accident.
+  sweep_metrics:
+    - terminal_mi
+    - mi_null_band
+  horizons: [1]
+  null_permutations: 200
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 15
+    grid_image_every_n_episodes: 15
+    sweep_experiment: true
+    cell_experiments: true
+experiment:
+  schema_version: 1
+  name: grid-b-size-and-committee
+  description: >-
+    Controlled-Markov sweep over population size and the size of the controlled
+    committee, used to check the two-dimensional grid-progress image and the
+    per-cell convergence scalars.
+  tags:
+    - synthetic
+    - controlled-markov
+    - grid
+    - master-logging
+    - two-axis
+grid:
+  # Rows of the grid image.
+  game.population_size: [6, 8, 10]
+  # Columns. Each value is the list of agent indices the controller may push,
+  # so its LENGTH is the committee size: 1, 3, 5.
+  game.options.controlled_agents: [[0], [0, 1, 2], [0, 1, 2, 3, 4]]

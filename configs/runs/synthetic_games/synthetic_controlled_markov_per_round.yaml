@@ -1,0 +1,64 @@
+schema_version: 1
+# Game 3 with the control input resampled every round - variant 3b of
+# docs/tdd/architecture/06082026_game3_empowerment_extension.md, which is the
+# quantity Song et al. define as effective empowerment.
+#
+# `mas-cc synthetic truth --config <this>` prints the whole answer key without
+# running anything: the per-horizon curve E_h, the gamma-weighted scalar with
+# its logged truncation residual, the macrostate profile, and - on the same
+# chain - the episode-fixed curve I^3a_h(t) this variant is being contrasted
+# against. The gap between the two is reported as `empowerment_gap`, so the
+# choice between the two designs is a number rather than an argument.
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov_per_round.yaml
+execution:
+  schema_version: 1
+  seed: 20260806
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  allow_unbounded_paid_requests: false
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    options:
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  enabled: true
+  bin_size_interactions: 25
+  partial_final_bin: drop
+  comet_export: []
+experiment:
+  schema_version: 1
+  name: synthetic-controlled-markov-per-round
+  description: >-
+    Game 3 with u redrawn every round: effective empowerment as the paper
+    defines it, next to the episode-fixed curve it replaces.
+  tags:
+    - synthetic
+    - controlled-markov
+    - empowerment
+    - effective-empowerment

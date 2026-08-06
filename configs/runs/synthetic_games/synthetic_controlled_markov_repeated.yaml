@@ -1,0 +1,179 @@
+schema_version: 1
+# =============================================================================
+# EXAMPLE 1 of 2 — ONE CONDITION, MANY EPISODES.  No grid.
+#
+# Companion: synthetic_controlled_markov_empowerment_lagged.yaml (the grid).
+# Read both headers together; they are the two halves of one explanation.
+# =============================================================================
+#
+# WHAT THIS IS
+# One fixed configuration (control pushes toward Q, always), run 200 times.
+# There is no `grid:` section at the bottom of this file, and that absence is
+# the entire structural difference between this file and its companion.
+#
+#   mas-cc experiment run --config <this file>   ->  200 episodes, 1 cell
+#   mas-cc game episode   --config <this file>   ->    1 episode
+#
+# WHAT YOU GET, AND WHAT YOU DELIBERATELY DO NOT
+# You get every AGGREGATE metric: the share-of-decisions bands across the 200
+# episodes, how many converged, how fast. That is the `aggregation.cell_metrics`
+# list below, and it is computed automatically at the end of the run.
+#
+# You do NOT get empowerment, and not because it was left switched off:
+#
+#     Empowerment is I(C ; outcome) — the information the CONDITION carries
+#     about the outcome. This run has exactly one condition. A variable with
+#     one value has zero entropy, so there is nothing for the outcome to be
+#     informative about. The answer is not "small", it is UNDEFINED.
+#
+# That is why `aggregation.sweep_metrics` is empty here. Requesting them would
+# not be an error; they would simply report NaN, every time, by construction.
+# To get empowerment you need at least two conditions to contrast — which is
+# exactly what the companion grid file provides.
+#
+# WHAT TO LOOK AT IN COMET (logging.comet is already true below)
+# Two experiments appear, and they mean different things:
+#   * "<run-id>"       stepped by EPISODES DONE — the liveness dashboard:
+#                      heartbeat, progress, ETA. Watch this to see it is alive.
+#   * "<run-id>/run"   stepped by ROUND — the aggregate curves over all 200
+#                      episodes. This is the scientific content.
+# The suffix is literally "run" because a plain experiment is a one-cell grid;
+# in the companion file you get one such experiment per cell instead.
+# =============================================================================
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov.yaml
+  overrides:
+    population_size: 6
+    horizon: 60
+    options:
+      actions: [Q, M]
+      coupling: ring
+      epsilon: 0.05
+      initial_bias: 0.5
+      # The control alphabet, written as action labels. `null` would be a
+      # do-nothing value; there is no point in one here, since this file never
+      # varies the control anyway.
+      control_alphabet: [Q, M]
+      # FIXED. Never varied in this file - that is the point of this example.
+      # It indexes control_alphabet, so 0 means "push toward Q".
+      control_value: 0
+      # Drawn once and held for the whole episode. See the companion file.
+      control_mode: episode_fixed
+      control_strength: 0.35
+      controlled_agents: [0, 1, 2]
+execution:
+  schema_version: 1
+  seed: 20260806
+  # THE "MANY TIMES" KNOB. Nothing else in this file controls how many
+  # episodes run. Note this is episodes, not rounds: `game.horizon` above is
+  # rounds WITHIN one episode and buys no extra samples for anything measured
+  # across episodes.
+  repetitions: 200
+  parallelism: 10
+  fail_fast: false
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  # The synthetic agent is a lookup table with no published price, so the
+  # preflight gate would otherwise refuse to launch. Safe here and only here:
+  # this provider bills nothing and opens no socket.
+  explicit_unknown_price_override: true
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 500000
+  max_input_tokens: 500000000
+  max_output_tokens: 20000000
+  allow_unbounded_paid_requests: true
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    # -------------------------------------------------------------------
+    # MASTER LOGGING, SWITCH 1 of 2: ON / OFF.  ON by design in this file.
+    # true = a REAL upload under whatever COMET_API_KEY is in scope. Nothing
+    # else is needed to make it happen - no flag, no env var, no second
+    # command. Set false for a run you do not want on the dashboard.
+    # Mocking the provider does NOT disable this; the two are independent.
+    # The run prints "Comet: ..." in its banner saying whether it connected.
+    # -------------------------------------------------------------------
+    comet: true
+    options:
+      comet_project: mas-cc-synthetic
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  # Must stay true. Every aggregate below is rebuilt from the per-round rows in
+  # each episode's metrics/streaming.csv; turn this off and there is nothing to
+  # aggregate.
+  enabled: true
+  bin_size_interactions: 10
+  partial_final_bin: drop
+  comet_export: []
+aggregation:
+  # -----------------------------------------------------------------------
+  # THE "AT THE END" METRICS. Nothing here runs during an episode; all of it
+  # runs once, over the finished episode files, when the run completes. That
+  # also makes it re-runnable without re-running any episode:
+  #     mas-cc experiment aggregate --run-dir <run-dir>
+  # -----------------------------------------------------------------------
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: true
+  percentiles: [10, 50, 90]
+  rolling_window: 5
+  # "Proportions of the decisions" — the share of the population standing on
+  # each action, aggregated across all 200 episodes as p10/p50/p90 bands.
+  cell_metrics:
+    - dominant_action_share      # curve: the leading action's share
+    - action_share_relabelled    # curve: winner-aligned, so the two do not cancel
+    - active_fraction            # curve: how many episodes are still running
+    - consensus_round            # scalars: median + IQR of the convergence round
+    - converged_fraction         # scalar: what fraction converged at all
+  # EMPTY ON PURPOSE. See the header: one condition means empowerment is
+  # undefined, not small. The companion grid file is where these belong.
+  sweep_metrics: []
+observability:
+  schema_version: 1
+  comet:
+    # -------------------------------------------------------------------
+    # MASTER LOGGING, SWITCH 2 of 2: SHAPE. Only read when comet: true above.
+    # `writer` has one legal value: workers write episode files and never
+    # touch Comet, so there is one writer per experiment key and no race on
+    # its step counter.
+    # -------------------------------------------------------------------
+    writer: master_only
+    # A timer, not a completion hook: a metric that only moves when an episode
+    # finishes cannot tell a dead master from a slow one.
+    heartbeat_seconds: 20
+    # Irrelevant here (no axes = no grid image), kept so both files read alike.
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true      # false = no liveness dashboard
+    cell_experiments: true      # false = no aggregate curves in Comet
+experiment:
+  schema_version: 1
+  name: synthetic-controlled-markov-repeated
+  description: >-
+    One fixed control condition of the controlled-Markov game, repeated 200
+    times. Shows what a single-cell run reports and why empowerment is
+    undefined without a second condition to contrast against.
+  tags:
+    - synthetic
+    - controlled-markov
+    - repeated
+    - single-condition
+# NO `grid:` SECTION. That absence is what makes this a single-cell run.

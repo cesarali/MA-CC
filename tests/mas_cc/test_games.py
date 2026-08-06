@@ -10,7 +10,7 @@ from mas_cc.planning import static_game_preflight
 
 
 def _config():
-    return load_run_config("configs/runs/toy_game_smoke_test.yaml", environment={})
+    return load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={})
 
 
 def test_default_registry_constructs_a_generic_game_lazily():

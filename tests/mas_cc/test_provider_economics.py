@@ -258,7 +258,7 @@ def test_phase_4_amendment_bundle_is_complete_and_preflight_only(tmp_path: Path)
     ])
     output = tmp_path / "phase_04_amendment"
     assert inspect_phase_4_amendment(
-        "configs/runs/provider_smoke_test.yaml", output,
+        "configs/runs/old/provider_smoke_test.yaml", output,
         pricing_mode="live", run_regressions=False,
         environment={"POTSDAM_API_KEY": "inspection-secret-key",
                      "BASE_POTSDAM_LLM_URL": "https://internal.invalid"},

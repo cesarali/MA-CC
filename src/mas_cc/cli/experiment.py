@@ -33,6 +33,23 @@ def _json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _output_dir(source: RunConfig | GridSpec, output_dir: str | Path | None) -> Path:
+    if output_dir is not None:
+        return Path(output_dir)
+    base = source.base if isinstance(source, GridSpec) else source
+    return Path(base.storage.output_dir)
+
+
+def resolve_output_dir(config_path: str | Path, output_dir: str | Path | None = None) -> Path:
+    """The directory a preflight/run against ``config_path`` will land in.
+
+    Lets the CLI report the resolved destination in its own status line
+    without duplicating the flag-or-``storage.output_dir`` fallback logic.
+    """
+
+    return _output_dir(load_run_config_or_grid(config_path), output_dir)
+
+
 def compute_preflight_id(config: RunConfig, quote: PricingQuote) -> str:
     """Bind approval to the resolved config, prompt, and pricing snapshot only.
 
@@ -154,12 +171,12 @@ def _run_grid_preflight(grid: GridSpec, destination: Path) -> GridPreflightEstim
 
 
 def run_experiment_preflight(
-    config_path: str | Path, output_dir: str | Path
+    config_path: str | Path, output_dir: str | Path | None = None
 ) -> ExperimentPreflightEstimate | GridPreflightEstimate:
     """Estimate the whole experiment's (or grid's) calls/tokens/cost/runtime; no provider I/O."""
 
     source = load_run_config_or_grid(config_path)
-    destination = Path(output_dir)
+    destination = _output_dir(source, output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     if isinstance(source, GridSpec):
         return _run_grid_preflight(source, destination)
@@ -181,19 +198,41 @@ def _approve(base_config: RunConfig, quote: PricingQuote, approve_preflight: str
         )
 
 
+def run_aggregate_command(
+    run_dir: str | Path, config_path: str | Path | None = None
+) -> dict[str, Any]:
+    """Recompute a finished run's aggregates from disk, touching no provider.
+
+    The point of a separate command is that aggregation is *derived*: changing
+    a percentile band, a rolling window, or the fill rule is a re-read of files
+    that already exist, not a re-run of a day of episodes. Passing `--config`
+    swaps in a different `aggregation:` section, which is the deliberate act
+    that makes the two sets of curves comparable rather than confusable.
+    """
+
+    from mas_cc.experiments.aggregation import aggregate_grid_directory
+
+    aggregation = None
+    if config_path is not None:
+        source = load_run_config_or_grid(config_path)
+        aggregation = (source.base if isinstance(source, GridSpec) else source).aggregation
+    return aggregate_grid_directory(run_dir, aggregation)
+
+
 def run_experiment_command(
     config_path: str | Path,
-    output_dir: str | Path,
+    output_dir: str | Path | None = None,
     *,
     resume: bool = True,
     show_progress: bool = True,
     approve_preflight: str | Path | None = None,
 ) -> ExperimentResult | GridResult:
     source = load_run_config_or_grid(config_path)
+    destination = _output_dir(source, output_dir)
     if isinstance(source, GridSpec):
         quote = _quote(source.base)
         _approve(source.base, quote, approve_preflight, grid=source)
-        return run_experiment_grid_sync(source, output_dir, resume=resume, show_progress=show_progress)
+        return run_experiment_grid_sync(source, destination, resume=resume, show_progress=show_progress)
     quote = _quote(source)
     _approve(source, quote, approve_preflight, grid=None)
-    return run_experiment_sync(source, output_dir, resume=resume, show_progress=show_progress)
+    return run_experiment_sync(source, destination, resume=resume, show_progress=show_progress)

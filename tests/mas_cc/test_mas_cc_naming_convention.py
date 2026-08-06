@@ -20,7 +20,7 @@ from mas_cc.llm_runtime.prompts import RegexTokenCounter
 
 def _config(*, population_size=6, horizon=12, memory_size=3):
     config = load_run_config(
-        "configs/runs/naming_convention_smoke_test.yaml", environment={}
+        "configs/runs/old/naming_convention_smoke_test.yaml", environment={}
     )
     game = replace(
         config.game,

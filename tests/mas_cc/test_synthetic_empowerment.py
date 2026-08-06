@@ -213,7 +213,14 @@ def test_a_disabled_controller_replays_the_uncontrolled_game_exactly():
 
 @pytest.mark.parametrize(
     "config_path",
-    ["configs/runs/synthetic_markov.yaml", "configs/runs/synthetic_controlled_markov.yaml"],
+    [
+        "configs/runs/synthetic_games/synthetic_markov.yaml",
+        "configs/runs/synthetic_games/synthetic_controlled_markov.yaml",
+        # The per-round controller draws which control value is in force from a
+        # second stream, so parity here is checking that both modes read that
+        # tape the same way as well as the push tape.
+        "configs/runs/synthetic_games/synthetic_controlled_markov_per_round.yaml",
+    ],
 )
 def test_fidelity_and_speed_modes_agree_bit_for_bit(config_path):
     config = load_run_config(config_path, environment={})

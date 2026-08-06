@@ -1,0 +1,225 @@
+schema_version: 1
+# =============================================================================
+# EXAMPLE 2 of 2 — A GRID OF CONDITIONS, WITH THE EMPOWERMENT COMPUTED IN-RUN.
+#
+# Companion: synthetic_controlled_markov_repeated.yaml (one condition, no grid).
+# Read both headers together; they are the two halves of one explanation.
+# =============================================================================
+#
+# WHAT THIS IS
+# The same game as the companion file, but the control input is SWEPT over
+# three levels (see `grid:` at the bottom). Each level is a separate "cell",
+# and each cell runs its own 60 episodes. Three cells x 60 = 180 episodes.
+#
+# The three levels are the condition variable C of the empowerment:
+#     0 -> the controller pushes the population toward action Q
+#     1 -> it pushes toward action M
+#     2 -> it pushes nowhere (control_targets entry -1: a real do-nothing arm)
+#
+# THE EMPOWERMENT IS COMPUTED BY THE RUN ITSELF. NOT AFTERWARDS.
+# `aggregation.sweep_metrics` below is a list of metrics that execute at the
+# end of the run, inside the same process, and write their answers to
+# <run-dir>/sweep_metrics.json. You do not run a second command. There are
+# four tiers of metric in this codebase and these are the last two:
+#
+#   StreamingMetric   one value per ROUND        (during the episode)
+#   FinalMetric       one value per EPISODE      (at episode end)
+#   AggregateMetric   one value per CELL         <- `cell_metrics` below
+#   SweepMetric       one value per GRID         <- `sweep_metrics` below
+#
+# Both of the last two run automatically, at the end, from the episode files.
+# That also means they can be recomputed later with different settings without
+# re-running a single episode:
+#     mas-cc experiment aggregate --run-dir <run-dir>
+#
+# WHAT THE FOUR SWEEP METRICS ANSWER
+#   terminal_mi           I(C ; final action) — does the condition decide where
+#                         the population ends up?
+#   lagged_cmi            I(C ; S_{t+h} | S_t) — the LAGGED empowerment. Given
+#                         where the population is NOW, how much does the
+#                         condition tell you about where it will be h rounds
+#                         later? Conditioning on S_t is the point: without it
+#                         the number mostly measures that the population is
+#                         where it already was. One value per entry in
+#                         `horizons` below.
+#   mi_null_band          how much of that is finite-sample noise. A plug-in MI
+#                         is positive in expectation even when C does nothing.
+#                         If the estimate is not clearly above null_p95, there
+#                         is no effect to report.
+#   mi_ground_truth_gap   estimate minus the exact closed form for THIS sweep.
+#                         This works only because the game is synthetic and the
+#                         grid has exactly ONE axis - the closed form is defined
+#                         for one condition variable C. Add a second axis and
+#                         this metric correctly reports nothing rather than a
+#                         wrong number.
+#
+# You can print that same closed form without running anything:
+#     mas-cc synthetic empowerment --config <this file> \
+#            --condition control_value --values 0 1 2 --repetitions 60 \
+#            --horizons 1 2 5 10
+#
+# WHAT TO LOOK AT IN COMET (logging.comet is already true below)
+# One experiment for the sweep, plus one PER CELL:
+#   * "<run-id>"            stepped by EPISODES DONE — heartbeat, progress,
+#                           ETA, the grid-progress image, and the MI block as
+#                           it firms up while cells land.
+#   * "<run-id>/cell-0000"  stepped by ROUND — that cell's aggregate curves.
+#     "<run-id>/cell-0001"  Because every cell uses the round as its step axis,
+#     "<run-id>/cell-0002"  Comet overlays them against each other natively.
+#                           That overlay is the comparison this grid exists for.
+# =============================================================================
+llm_provider:
+  component: ../../components/llm_providers/synthetic_agent.yaml
+prompt:
+  component: ../../components/prompts/synthetic_agent_v1.yaml
+game:
+  component: ../../components/games/synthetic_controlled_markov.yaml
+  overrides:
+    population_size: 6
+    horizon: 60
+    options:
+      actions: [Q, M]
+      coupling: ring
+      epsilon: 0.05
+      initial_bias: 0.5
+      # The control alphabet, written as action labels: push toward Q, push
+      # toward M, or `null` for a genuine do-nothing arm. Including the
+      # do-nothing arm is the cleanest way to see whether the estimator
+      # recovers *zero* influence where there is none.
+      control_alphabet: [Q, M, null]
+      # Indexes control_alphabet. Overwritten per cell by `grid:` at the bottom.
+      control_value: 0
+      # Drawn once per episode and held fixed, which is what makes `u` a
+      # sweepable CONDITION and what `lagged_cmi` below estimates (quantity 3a
+      # in games/synthetic/effective_empowerment.py). The alternative,
+      # `per_round`, is the empowerment paper's own setting and a different
+      # quantity - see the note under `horizons` below.
+      control_mode: episode_fixed
+      control_strength: 0.35
+      controlled_agents: [0, 1, 2]
+execution:
+  schema_version: 1
+  seed: 20260806
+  # Episodes PER CELL, so 3 x 60 = 180 in total. The sampling unit of every
+  # mutual information here is the EPISODE, not the round - within-episode
+  # rounds are correlated and buy no independent samples for I(C;O). This
+  # number, not `game.horizon`, is what tightens the estimate.
+  repetitions: 60
+  parallelism: 16
+  fail_fast: false
+pricing:
+  schema_version: 1
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 500000
+  max_input_tokens: 500000000
+  max_output_tokens: 20000000
+  allow_unbounded_paid_requests: true
+logging:
+  component: ../../components/logging/default.yaml
+  overrides:
+    # -------------------------------------------------------------------
+    # MASTER LOGGING, SWITCH 1 of 2: ON / OFF.  ON by design; see the sibling
+    # files. A real upload, no extra flags needed.
+    # -------------------------------------------------------------------
+    comet: true
+    options:
+      comet_project: mas-cc-synthetic
+      show_metrics: true
+storage:
+  component: ../../components/storage/local.yaml
+analysis:
+  schema_version: 1
+  # Stays false. This section is the SEPARATE, after-the-fact analysis pass -
+  # exactly the thing this file exists to avoid needing. The empowerment below
+  # is computed by the run itself.
+  enabled: false
+  estimators: []
+metrics:
+  schema_version: 1
+  # Must stay true. The macrostate every mutual information is computed from is
+  # rebuilt from the per-round `population_action_share_per_option` rows in
+  # metrics/streaming.csv. Turn this off and the empowerment has no input.
+  enabled: true
+  bin_size_interactions: 10
+  partial_final_bin: drop
+  comet_export: []
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: true
+  percentiles: [10, 50, 90]
+  rolling_window: 5
+  # Per-cell, "proportions of the decisions" — identical to the companion file.
+  cell_metrics:
+    - dominant_action_share
+    - action_share_relabelled
+    - active_fraction
+    - consensus_round
+    - converged_fraction
+  # Per-grid. THIS is the empowerment, and it runs at the end of this same run.
+  sweep_metrics:
+    - terminal_mi
+    - lagged_cmi
+    - mi_null_band
+    - mi_ground_truth_gap
+  # The lags h for `lagged_cmi`, in rounds. One estimate per entry. These are
+  # also what the cell tier counts transition pairs at, so adding a lag here is
+  # all that is needed - there is no second place to keep in sync.
+  #
+  # WHICH EMPOWERMENT THIS IS. The codebase now has two, and they are not the
+  # same number (see games/synthetic/effective_empowerment.py):
+  #   3a  I(C ; S_t+h | S_t) with C drawn once per episode. ESTIMATED FROM THE
+  #       EPISODES, which is why it can run inside this run. That is
+  #       `lagged_cmi`, and it is what this file computes.
+  #   3b  E[I(a_t ; s_* | s_t)] with tau ~ Geom(1-gamma), the empowerment paper's
+  #       own quantity. It needs `control_mode: per_round`, and it is EXACT
+  #       LINEAR ALGEBRA on the microstate chain rather than an estimate - so it
+  #       is produced by `mas-cc synthetic truth --config <this file>`, which
+  #       runs no episodes, not by an experiment.
+  # Matching `horizons` here to the component's `empowerment.report_horizons`
+  # keeps the estimate and the closed form on the same lags, which is the only
+  # way the two are comparable.
+  horizons: [1, 2, 5, 10]
+  # Label-shuffle draws behind `mi_null_band`. More draws = a tighter estimate
+  # of the noise floor; 200 is enough to read, 1000 to quote.
+  null_permutations: 500
+observability:
+  schema_version: 1
+  comet:
+    # -------------------------------------------------------------------
+    # MASTER LOGGING, SWITCH 2 of 2: SHAPE.  Only read when comet: true.
+    # -------------------------------------------------------------------
+    writer: master_only
+    heartbeat_seconds: 20
+    # Re-render the grid picture every N finished episodes. Comet's Image Panel
+    # steppers through same-named images, so this scrubs as an animation of the
+    # grid filling in.
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true      # false = no liveness dashboard
+    cell_experiments: false      # false = no per-cell curves in Comet
+experiment:
+  schema_version: 1
+  name: synthetic-controlled-markov-empowerment-lagged
+  description: >-
+    Controlled-Markov grid over the exogenous control input, with the terminal
+    and lagged empowerment, its null band, and its gap to the closed form all
+    computed by the run itself rather than by a separate analysis pass.
+  tags:
+    - synthetic
+    - controlled-markov
+    - grid
+    - empowerment
+    - lagged
+grid:
+  # ONE axis. This is the condition variable C. Three levels: push to Q, push
+  # to M, push nowhere. One axis is required for `mi_ground_truth_gap` above.
+  game.options.control_value: [0, 1, 2]

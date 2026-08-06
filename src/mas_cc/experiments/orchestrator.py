@@ -49,7 +49,8 @@ from mas_cc.planning import (
 )
 from mas_cc.storage import results_run_dir
 
-from .comet_monitor import RunLevelCometMonitor
+from .aggregation import GridAggregator, aggregation_ground_truth
+from .comet_monitor import CellLayout, MasterMonitor, SweepLayout, sweep_parameters
 from .console import ExperimentProgress, format_banner, format_grid_banner, format_money, print_banner
 
 LOGGER = logging.getLogger("mas_cc.experiment")
@@ -159,24 +160,47 @@ def _provider_registry():
     return create_synthetic_provider_registry()
 
 
-def _run_level_monitor(
-    config: RunConfig, run_id: str, total_episodes: int, cell_ids: tuple[str, ...] = ()
-) -> RunLevelCometMonitor:
-    """Build the one run-level Comet experiment from `logging.comet`.
+def _master_monitor(
+    config: RunConfig, run_id: str, total_episodes: int, layout: SweepLayout | None = None
+) -> MasterMonitor:
+    """Build the run's one sweep-level Comet experiment from `logging.comet`.
 
     On this path `logging.comet` used to be inert - episode recorders hard-code
     `comet_enabled=False` so that N episodes do not become N remote
-    experiments. The flag now means "publish run-level progress", which is the
-    only Comet object an experiment or grid ever creates.
+    experiments. The flag now means "publish master-level progress"; the shape
+    of that publishing is `observability.comet`, and the master is the only
+    writer either way.
     """
 
-    return RunLevelCometMonitor(
+    return MasterMonitor(
         config.logging.comet,
         project_name=str(config.logging.options.get("comet_project", "mas-cc")),
         run_name=run_id,
+        layout=layout,
         total_episodes=total_episodes,
-        cell_ids=cell_ids,
+        settings=config.observability.comet,
     )
+
+
+class _CellCompletion:
+    """Fires once per cell, on the episode that brings it to its expected count.
+
+    Counting terminal episodes rather than watching the filesystem keeps the
+    trigger exact under `execution.parallelism`: episodes finish out of order,
+    and "the directory looks full" is a race while "the last of N reported in"
+    is not. Skipped-on-resume episodes count — a resumed cell is complete, and
+    its aggregates are recomputed from the files that already exist.
+    """
+
+    def __init__(self, expected: Mapping[str, int]) -> None:
+        self._expected = dict(expected)
+        self._seen: dict[str, int] = {cell_id: 0 for cell_id in expected}
+
+    def record(self, cell_id: str) -> bool:
+        if cell_id not in self._expected:
+            return False
+        self._seen[cell_id] += 1
+        return self._seen[cell_id] == self._expected[cell_id]
 
 
 class _RoundTickingObserver:
@@ -307,6 +331,18 @@ def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: A
             game, episode_config, guarded_provider, observer=observer, control=control
         )
 
+    if episode_config.game.type in {"hidden_bench_vanilla", "hidden_bench_naming"}:
+        # Both HiddenBench games share one runtime; it dispatches on the game's
+        # own phase, not on its type. `control` is not wired: the message-level
+        # interventions HiddenBench wants (reveal-all, secretary, structured
+        # exchange) inject a *message*, and `Control.override` returns an
+        # *action* - see docs/hidden_bench/README.md for the open decision.
+        from mas_cc.games.hidden_bench import run_hidden_bench_game
+
+        return lambda observer: run_hidden_bench_game(
+            game, episode_config, guarded_provider, observer=observer
+        )
+
     from mas_cc.games.synthetic import SyntheticGame, run_synthetic_game
 
     if isinstance(game, SyntheticGame):
@@ -376,17 +412,38 @@ async def _run_episode_task(
     price_hash: str,
     checkpoint_enabled: bool,
     progress: ExperimentProgress,
-    monitor: RunLevelCometMonitor | None = None,
+    monitor: MasterMonitor | None = None,
+    aggregator: GridAggregator | None = None,
+    completion: "_CellCompletion | None" = None,
 ) -> EpisodeOutcome:
     manifest_path = task.episode_dir / "manifest.json"
     label = task.episode_id if task.cell_id is None else f"{task.cell_id}/{task.episode_id}"
 
     def _finished(outcome: EpisodeOutcome) -> None:
-        """Local console bar and remote run-level monitor, always together."""
+        """Local console bar and remote master monitor, always together."""
         progress.episode_done(label, outcome.status)
         if monitor is not None:
             monitor.episode_finished(
                 status=outcome.status, cell_id=task.cell_id, budget_status=guard.status(),
+            )
+
+    async def _maybe_close_cell() -> None:
+        """Aggregate and publish this cell if that episode was its last.
+
+        Off the event loop: aggregating a cell reads every episode's metric
+        files, and blocking the loop for that would stall the episodes still
+        running in the other cells.
+        """
+
+        if aggregator is None or completion is None or task.cell_id is None:
+            return
+        if not completion.record(task.cell_id):
+            return
+        try:
+            await asyncio.to_thread(aggregator.aggregate, task.cell_id)
+        except Exception as exc:  # aggregates are derived; a failure must not lose episodes
+            LOGGER.error(
+                "aggregating cell %s failed: %s: %s", task.cell_id, type(exc).__name__, exc
             )
 
     if resume and manifest_path.exists():
@@ -394,11 +451,13 @@ async def _run_episode_task(
         if manifest.get("status") == "completed":
             outcome = replace(EpisodeOutcome.from_dict(manifest), status="skipped_resumed")
             _finished(outcome)
+            await _maybe_close_cell()
             return outcome
     async with semaphore:
         if fail_fast and abort.is_set():
             outcome = EpisodeOutcome(task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id)
             _finished(outcome)
+            await _maybe_close_cell()
             return outcome
         try:
             interactions, termination_reason = await _execute_episode(
@@ -420,13 +479,31 @@ async def _run_episode_task(
             LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
         _write(manifest_path, _json(outcome.to_dict()))
         _finished(outcome)
-        return outcome
+    # Outside the semaphore: aggregating a completed cell must not hold a slot
+    # that a queued episode of another cell could be running in.
+    await _maybe_close_cell()
+    return outcome
 
 
 async def _run_task_batch(
     tasks: list[_EpisodeTask], **kwargs: Any
 ) -> tuple[EpisodeOutcome, ...]:
     return tuple(await asyncio.gather(*(_run_episode_task(task, **kwargs) for task in tasks)))
+
+
+def _aggregate_quietly(aggregator: GridAggregator, cell_id: str | None) -> None:
+    """Aggregate one cell, logging rather than raising on failure.
+
+    Called from the run's `finally` block, where the episodes are already
+    safely on disk: a bug in a derived statistic must not turn a finished run
+    into a failed one, and the same aggregation can be re-run from the
+    directory afterwards.
+    """
+
+    try:
+        aggregator.aggregate(cell_id)
+    except Exception as exc:
+        LOGGER.error("final aggregation failed: %s: %s", type(exc).__name__, exc)
 
 
 def _write_experiment_summary(run_dir: Path, config: RunConfig, result: ExperimentResult) -> None:
@@ -518,6 +595,10 @@ async def run_experiment(
             preflight_status=preflight.launch_status,
         )
     )
+    # Printed unconditionally and up front: this is the one line that answers
+    # "where do I look for the results" without waiting for the run to finish
+    # or grepping logs.
+    print_banner(f"  Results:       {run_dir}")
 
     effective_budget = resolve_budget_limits(system_budget, run_budget)
     guard = RuntimeBudgetGuard(effective_budget)
@@ -548,7 +629,18 @@ async def run_experiment(
         total_rounds=plan.interactions.expected * config.execution.repetitions,
         show=show_progress,
     )
-    monitor = _run_level_monitor(config, run_id, config.execution.repetitions)
+    monitor = _master_monitor(config, run_id, config.execution.repetitions)
+    monitor.start(sweep_parameters(config))
+    # Printed after `start`, so it reports whether Comet actually connected
+    # rather than what the config asked for. Those differ exactly when it
+    # matters - a missing API key - and that case used to be silent.
+    print_banner(f"  Comet:         {monitor.describe()}")
+    # N episodes of one resolved config *are* one grid cell, so they get the
+    # same aggregation rather than a second implementation of it - just at the
+    # end, since there is no earlier completion event to hang it on.
+    aggregator = GridAggregator(
+        run_dir, config.aggregation, monitor=monitor, seed=config.execution.seed
+    )
     semaphore = asyncio.Semaphore(config.execution.parallelism)
     abort = asyncio.Event()
     started_at = _now()
@@ -564,6 +656,7 @@ async def run_experiment(
     finally:
         guarded_provider.close()
         progress.close()
+        _aggregate_quietly(aggregator, None)
         _write(run_dir / "comet_run_summary.json", _json(monitor.close()))
 
     result = ExperimentResult(
@@ -751,6 +844,10 @@ async def run_experiment_grid(
             preflight_status=preflight.launch_status,
         )
     )
+    # Printed unconditionally and up front: this is the one line that answers
+    # "where do I look for the results" without waiting for the run to finish
+    # or grepping logs.
+    print_banner(f"  Results:       {grid_dir}")
 
     effective_budget = resolve_budget_limits(system_budget, run_budget)
     guard = RuntimeBudgetGuard(effective_budget)
@@ -789,10 +886,31 @@ async def run_experiment_grid(
     progress = ExperimentProgress(
         total_episodes=len(all_tasks), total_rounds=total_rounds, show=show_progress,
     )
-    # One remote experiment for the whole grid. Episode-level Comet stays off
-    # (see `_execute_episode`); this is the run-level view a long unattended
-    # Slurm job is watched through.
-    monitor = _run_level_monitor(base, run_id, len(all_tasks), tuple(cell.cell_id for cell in cells))
+    # One sweep experiment for the whole grid, plus one experiment per cell at
+    # that cell's completion. Episode-level Comet stays off (see
+    # `_execute_episode`); the master is the only writer, which is what keeps
+    # the step counters unraced and Comet a view rather than the store.
+    axes = tuple((axis.path, tuple(axis.values)) for axis in grid.axes)
+    layout = SweepLayout(
+        axes=axes,
+        cells={
+            cell.cell_id: CellLayout(
+                coordinates=tuple(cell.overrides.get(path) for path, _ in axes),
+                episodes=cell.config.execution.repetitions,
+            )
+            for cell in cells
+        },
+    )
+    monitor = _master_monitor(base, run_id, len(all_tasks), layout)
+    monitor.start(sweep_parameters(base, axes))
+    print_banner(f"  Comet:         {monitor.describe()}")
+    aggregator = GridAggregator(
+        grid_dir, base.aggregation, monitor=monitor,
+        ground_truth=aggregation_ground_truth(base, grid, game), seed=base.execution.seed,
+    )
+    completion = _CellCompletion(
+        {cell.cell_id: cell.config.execution.repetitions for cell in cells}
+    )
     semaphore = asyncio.Semaphore(base.execution.parallelism)
     abort = asyncio.Event()
     started_at = _now()
@@ -803,11 +921,19 @@ async def run_experiment_grid(
             semaphore=semaphore, abort=abort, fail_fast=base.execution.fail_fast,
             resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
             price_hash=price_hash, checkpoint_enabled=base.storage.checkpoints, progress=progress,
-            monitor=monitor,
+            monitor=monitor, aggregator=aggregator, completion=completion,
         )
     finally:
         guarded_provider.close()
         progress.close()
+        aggregator.finish()
+        # The same figure the dashboard gets, written locally regardless of
+        # whether Comet is on - so the picture is checkable, and a cluster job
+        # with no outbound network is still watchable by tailing this file.
+        try:
+            monitor.save_grid_figure(grid_dir / "grid_progress.png")
+        except Exception as exc:
+            LOGGER.warning("could not render the grid image (%s)", type(exc).__name__)
         _write(grid_dir / "comet_run_summary.json", _json(monitor.close()))
 
     by_cell: dict[str, list[EpisodeOutcome]] = {cell.cell_id: [] for cell in cells}

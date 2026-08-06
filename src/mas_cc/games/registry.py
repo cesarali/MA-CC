@@ -82,6 +82,14 @@ def create_default_game_registry() -> GameRegistry:
         "synthetic_controlled_markov",
         "mas_cc.games.synthetic.controlled_markov.game:SyntheticControlledMarkovGame",
     )
+    registry.register(
+        "hidden_bench_vanilla",
+        "mas_cc.games.hidden_bench.vanilla.game:HiddenBenchVanillaGame",
+    )
+    registry.register(
+        "hidden_bench_naming",
+        "mas_cc.games.hidden_bench.naming.game:HiddenBenchNamingGame",
+    )
     return registry
 
 
@@ -109,6 +117,14 @@ def create_default_prompt_registry() -> PromptRegistry:
 def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     """Register concrete prompts at the application boundary that owns the games."""
 
+    from .hidden_bench.naming.prompts import (
+        hidden_bench_naming_commit_prompt,
+        hidden_bench_naming_message_prompt,
+    )
+    from .hidden_bench.vanilla.prompts import (
+        hidden_bench_discussion_prompt,
+        hidden_bench_vote_prompt,
+    )
     from .naming_convention.prompts import naming_convention_prompt
     from .synthetic.prompts import synthetic_agent_decision_prompt
     from .toy_coordination.prompts import toy_coordination_prompt
@@ -116,6 +132,11 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     registry.register(naming_convention_prompt)
     registry.register(toy_coordination_prompt)
     registry.register(synthetic_agent_decision_prompt)
+    # Two families per HiddenBench game: the games switch between them by phase.
+    registry.register(hidden_bench_discussion_prompt)
+    registry.register(hidden_bench_vote_prompt)
+    registry.register(hidden_bench_naming_message_prompt)
+    registry.register(hidden_bench_naming_commit_prompt)
     return registry
 
 

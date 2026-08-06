@@ -1,0 +1,165 @@
+schema_version: 1
+# Naming-convention EMPOWERMENT phase diagram, REASONING arm.
+#
+# Extends naming_convention_tutorial_university_v3.yaml's game (live University
+# proxy, {Q,M} convention) into a one-axis grid over population size, with the
+# json_reason response contract: every agent returns {'value': ..., 'reason':
+# ...}, so max_output_tokens is sized for a short natural-language explanation,
+# not just one word.
+#
+# Its companion, naming_convention_empowerment_choice_only_university_v3.yaml,
+# is identical except response_contract: choice_only and a much smaller
+# max_output_tokens. The two arms are DELIBERATELY separate files rather than
+# a second grid axis on this one: prompt.response_contract.type is resolved
+# once per file (see runtime.py's cross-check against
+# game.options.response_contract), so a single grid file cannot carry both
+# json_reason and choice_only cells without half of them failing that check
+# mid-run. Run both files and compare their aggregation output for the
+# reasoning-vs-not contrast; each file alone answers the population-size axis.
+#
+# There is no forced-action committee here, unlike
+# naming_convention_tutorial_empowerment_university_v3.yaml. The condition
+# variable C for terminal_mi/lagged_cmi below is the grid cell itself
+# (population_size), not an intervention - same pattern as
+# configs/runs/empowerment_runs/grid_b_size_and_committee.yaml. Population
+# size is not expected to steer WHICH convention wins (Q vs M stay symmetric,
+# which is why relabel_by_winner: true matters in aggregation below); the
+# phase-diagram signal is in HOW FAST and HOW RELIABLY consensus forms at each
+# size - read consensus_round / converged_fraction / active_fraction per cell,
+# and treat a small, null-band-consistent terminal_mi as the expected,
+# correct answer rather than a broken estimator.
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  # json_reason asks for a short explanation alongside the choice; 256 leaves
+  # headroom the way naming_convention_paper_w2_gpt54nano_v3.yaml's 256 does
+  # for the same response_format, well above the 64-128 that suffices for
+  # choice_only alone.
+  max_output_tokens: 3000
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  prompt_family: naming_convention_decision
+  prompt_version: 1
+  message_mode: merge_consecutive_roles
+  block_separator: "\n\n"
+  response_contract:
+    type: paper_choice_reason
+    allowed_values: [Q, M]
+game:
+  type: naming_convention
+  population_size: 10   # overwritten per cell by the grid below; [10, 20]
+  horizon: 100
+  topology: complete
+  options:
+    actions: [Q, M]
+    memory_size: 3
+    success_payoff: 100
+    failure_payoff: -50
+    pair_sampling: uniform_two_distinct
+    simultaneous_pair_decisions: true
+    randomize_presented_action_order: true
+    prompt_contract: naming_convention_decision
+    response_contract: json_reason
+    parser_contract: tolerant_paper_object_v1
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.0
+    representative_memory_size: 1
+    stop_on_convergence: false
+execution:
+  seed: 20260806
+  # Episodes PER CELL. 2 cells (population_size 10, 20) x 10 = 20 episodes.
+  repetitions: 10
+  # Paired with simultaneous_pair_decisions (2 concurrent decisions per
+  # episode) against llm_provider.request_concurrency: 10, matching the ratio
+  # naming_convention_tutorial_empowerment_university_v3.yaml uses.
+  parallelism: 5
+  fail_fast: true
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  # Measured with `static_grid_preflight` against an offline stub quote (no
+  # network, no price): conservative demand for this file is 12000 provider
+  # requests / 3,732,000 input tokens / 3,072,000 output tokens across the
+  # 2-cell x 10-episode grid. The caps below are that conservative figure
+  # +~15%. Dollar cost still needs a live preflight against the University
+  # proxy - `mas-cc experiment preflight --config <this file>` - which this
+  # sandbox cannot reach; re-check before running.
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 15.0
+  max_cost_per_run: 15.0
+  max_provider_requests: 14000
+  max_input_tokens: 4300000
+  max_output_tokens: 3600000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  # false on purpose: `mas-cc experiment run` does not wire Comet per episode
+  # for a grid (see naming_convention_tutorial_empowerment_university_v3.yaml)
+  # - `true` here would be a config value with no effect, and there is no
+  # per-cell Comet session either way.
+  comet: false
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  # Must stay true: analysis/reader.py and the cell aggregator both rebuild
+  # each episode's per-round macrostate from the
+  # `population_action_share_per_option` rows in metrics/streaming.csv.
+  enabled: true
+  comet_export: []
+aggregation:
+  forward_fill: absorbing
+  relabel_by_winner: true
+  percentiles: [10, 50, 90]
+  rolling_window: 5
+  cell_metrics:
+    - dominant_action_share
+    - action_share_relabelled
+    - active_fraction
+    - consensus_round
+    - converged_fraction
+  # No mi_ground_truth_gap: that closed form only exists for the synthetic
+  # controlled-Markov game (see mas_cc/games/synthetic/empowerment.py); for a
+  # real LLM game it would just report nothing, so it is left out on purpose.
+  sweep_metrics:
+    - terminal_mi
+    - lagged_cmi
+    - mi_null_band
+  horizons: [1]
+  null_permutations: 200
+experiment:
+  name: naming-convention-empowerment-reasoning
+  description: >-
+    Naming-convention empowerment phase diagram, reasoning arm: population
+    size {10, 20} x json_reason response contract, live University proxy.
+    Companion to the choice_only arm; compare aggregation output between the
+    two files for the reasoning-vs-not contrast.
+  tags:
+    - empowerment
+    - mutual-information
+    - grid
+    - university
+    - phase-diagram
+    - reasoning
+    - population-size
+grid:
+  game.population_size: [10, 20]

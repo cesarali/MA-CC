@@ -70,11 +70,11 @@ So, in practice:
 ## The five commands
 
 ```bash
-mas-cc synthetic truth   --config configs/runs/synthetic_bernoulli_fidelity.yaml
-mas-cc synthetic sweep   --config configs/runs/synthetic_bernoulli_null.yaml --seeds 200
-mas-cc synthetic episode --config configs/runs/synthetic_bernoulli_fidelity.yaml
-mas-cc synthetic parity  --config configs/runs/synthetic_bernoulli_fidelity.yaml --seeds 5
-mas-cc synthetic empowerment --config configs/runs/synthetic_controlled_markov.yaml \
+mas-cc synthetic truth   --config configs/runs/synthetic_games/synthetic_bernoulli_fidelity.yaml
+mas-cc synthetic sweep   --config configs/runs/synthetic_games/synthetic_bernoulli_null.yaml --seeds 200
+mas-cc synthetic episode --config configs/runs/synthetic_games/synthetic_bernoulli_fidelity.yaml
+mas-cc synthetic parity  --config configs/runs/synthetic_games/synthetic_bernoulli_fidelity.yaml --seeds 5
+mas-cc synthetic empowerment --config configs/runs/synthetic_games/synthetic_controlled_markov.yaml \
   --condition control_value --values 0 1 --repetitions 50 --horizons 1 5 --macrostate-bins 4
 ```
 
@@ -181,6 +181,99 @@ sampled it. A gap between them means the grid was chosen badly, not that the
 controller is weak. `control_microstate_capacity` bounds the macrostate one;
 the difference is what coarse-graining discards.
 
+## Effective empowerment — and the gap the old design was hiding
+
+Holding `u` fixed for the whole episode has a cost that is easy to miss. The
+state at round `t` is then *causally downstream* of `u`, so conditioning on it
+blocks most of the effect being measured: the reported CMI decays with `t` for
+design reasons rather than dynamical ones, and the number you publish depends on
+which rounds you happened to pool. The empowerment paper's `a_t` is drawn *at*
+round `t`, so `s_t` is pre-action and the conditioning is clean.
+
+Rather than swap one for the other, both run on the same chain and the
+difference is reported as a number. `game.options.control_mode` picks which one
+the *simulation* does; the closed forms for both are computed either way.
+
+| Mode | `u` drawn | Is |
+|---|---|---|
+| `episode_fixed` (default) | once per episode | a sweepable *condition*, `c := u` — what every config here has always done |
+| `per_round` | every round, from `pi(u)` | the paper's `I(a_t; s_* \| s_t)` |
+
+```bash
+mas-cc synthetic truth --config configs/runs/synthetic_games/synthetic_controlled_markov_per_round.yaml
+```
+
+On the shipped config (N = 6, ring coupling, ε = 0.05, three agents pushed at
+strength 0.25, γ = 0.9):
+
+```
+                      h = 1     2       3       5       10
+  E_h (microstate)    0.2481  0.1063  0.0712  0.0305  0.0022
+  I(U;M'|M) (macro)   0.1774  0.0561  0.0306  0.0130  0.0009
+
+  I^3a_1(t)           t = 1   10      30      60
+                      0.2159  0.0534  0.0386  0.0385   <- decays for design reasons
+
+  effective empowerment   0.0478 bits   (macrostate 0.0285, gap 0.0193)
+  truncation              H = 66, residual gamma^H = 9.55e-04 < 1e-3
+```
+
+Four things in that block are worth naming:
+
+- **The curve is the primary output.** The scalar is recoverable from
+  `{E_h}`; `{E_h}` is not recoverable from the scalar. Both ship, the curve in
+  full and the scalar as `effective_empowerment`.
+- **The truncation residual is logged, not assumed.** `H` is derived from the
+  declared `horizon_tolerance` as `ceil(ln(tol)/ln(gamma))`, and `gamma^H` ships
+  next to the answer as `effective_empowerment_truncation_residual`.
+- **`I^3a_1(t)` decaying in `t` is the contamination**, not a finding about the
+  dynamics. `episode_fixed_decays_with_round` is 1 when it decays as the exact
+  algebra predicts; if it were flat, the kernel would not be applied from round 0.
+- **Both state representations, no assumed inequality.** `coarse_graining_gap`
+  is measured exactly — EELMA has to use InfoNCE on embeddings precisely because
+  it cannot enumerate states. There is no general ordering between the two:
+  coarse-graining the *conditioning* variable can raise a conditional MI as
+  easily as lower it, so a "violation" is not a bug signal.
+
+### The absorbing-chain trap
+
+`empowerment.state_distribution` must not be `stationary`. This chain can be
+made absorbing, and its stationary law then sits entirely on consensus states
+where empowerment is zero — you get `E ≈ 0` trivially and for the wrong reason.
+The default is `visitation`, the flat average over the declared
+`analysis_window`; `discounted_visitation` is the other admissible answer. The
+stationary value ships anyway, as `stationary_effective_empowerment`, so the
+trap stays visible. On a noiseless ring with a do-nothing alternative the two
+read `0.0205` and `0.0000` — if they ever agree, the visitation distribution is
+being computed wrong.
+
+`analysis_window` was promoted from an incidental choice to a declared config
+parameter for the same reason: the measured value moves with it.
+
+### What was verified
+
+Every check in
+[`06082026_game3_empowerment_extension.md`](../../tdd/architecture/06082026_game3_empowerment_extension.md)
+§9, in
+[`test_game3_effective_empowerment.py`](../../../tests/mas_cc/test_game3_effective_empowerment.py):
+
+| Claim | Result |
+|---|---|
+| The KL closed form equals a brute-force enumeration of `p(s,u,s')` | agrees to 1e-12 at h = 1,2,3,5 |
+| `sum_u pi(u\|s)[T_u T̄^{h-1}] = [T̄^h]` | max deviation `1.7e-16` |
+| `I^3a_h(t)` decreases monotonically in `t` | holds at h = 1,2,5,10 |
+| No control input → `E = 0` at **every** horizon | `0.000e+00`, structural |
+| `stationary` and `visitation` disagree, stationary ≈ 0 | `0.0000` vs `0.0205` |
+| Logged residual `gamma^H` below the declared tolerance | holds at tol = 1e-2, 1e-3, 1e-4 |
+| `control_strength: 0` → `E_h(s) = 0` for all `s, h` | `0.000e+00`, structural |
+
+One implementation note that is easy to get wrong: **the policy-averaged kernel
+is a mixture of product kernels, not a product kernel.** A fixed `u` pushes every
+controlled agent toward the same target, so averaging over `u` correlates them.
+Substituting the mean target into the per-agent push probability gives a
+different and wrong chain, which is why `per_round` mode hands `MarkovDynamics`
+an explicit matrix rather than a per-agent `forced` tuple.
+
 ## Empowerment — the family-2 answer key
 
 The system computes two families of mutual information. Family 1
@@ -200,7 +293,7 @@ being swept against, so this cannot live on the game. It lives at
 the resolved grid and analysis settings:
 
 ```bash
-mas-cc synthetic empowerment --config configs/runs/synthetic_bernoulli_fidelity.yaml \
+mas-cc synthetic empowerment --config configs/runs/synthetic_games/synthetic_bernoulli_fidelity.yaml \
   --condition epsilon --values 0.05 0.15 0.3 0.45 \
   --repetitions 50 --horizons 1 2 5 --macrostate-bins 4
 ```
@@ -305,7 +398,7 @@ bug; the cost of smoothing, made legible.
 
 ### Comet
 
-`configs/runs/synthetic_bernoulli_comet.yaml` is the **only** synthetic config
+`configs/runs/synthetic_games/synthetic_bernoulli_comet.yaml` is the **only** synthetic config
 with Comet enabled, kept separate so uploading is something you opt into by
 naming that file, never something a sweep inherits.
 
@@ -320,7 +413,7 @@ is not set)`. That is the safe way to check the plumbing first:
 
 ```bash
 cd "$(mktemp -d)" && env -u COMET_API_KEY \
-  mas-cc synthetic episode --config /abs/path/configs/runs/synthetic_bernoulli_comet.yaml
+  mas-cc synthetic episode --config /abs/path/configs/runs/synthetic_games/synthetic_bernoulli_comet.yaml
 ```
 
 Routing is per-metric, next to each metric's name rather than in a separate
@@ -414,14 +507,15 @@ Two readings, both worth having:
 | `configs/components/games/synthetic_bernoulli.yaml` | 8 agents, 500 rounds, `epsilon: 0.5` |
 | `configs/components/prompts/synthetic_agent_v1.yaml` | The `synthetic_agent_decision` family |
 | `configs/components/llm_providers/synthetic_agent.yaml` | The lookup-table "provider" |
-| `configs/runs/synthetic_bernoulli_null.yaml` | The null anchor, for `sweep` |
-| `configs/runs/synthetic_bernoulli_fidelity.yaml` | `eps = 0.15`, for `episode` and `parity` |
-| `configs/runs/synthetic_bernoulli_metrics.yaml` | `eps = 0`: always unanimous, never settled |
-| `configs/runs/synthetic_bernoulli_never_converges.yaml` | `eps = 0.5`: consensus metrics must stay `None` |
-| `configs/runs/synthetic_bernoulli_degenerate.yaml` | Zero entropy; MI is a genuine 0/0 |
-| `configs/runs/synthetic_bernoulli_comet.yaml` | **The only one that uploads** |
-| `configs/runs/synthetic_markov.yaml` | Game 2: 6 agents on a ring |
-| `configs/runs/synthetic_controlled_markov.yaml` | Game 3: the positive control |
+| `configs/runs/synthetic_games/synthetic_bernoulli_null.yaml` | The null anchor, for `sweep` |
+| `configs/runs/synthetic_games/synthetic_bernoulli_fidelity.yaml` | `eps = 0.15`, for `episode` and `parity` |
+| `configs/runs/synthetic_games/synthetic_bernoulli_metrics.yaml` | `eps = 0`: always unanimous, never settled |
+| `configs/runs/synthetic_games/synthetic_bernoulli_never_converges.yaml` | `eps = 0.5`: consensus metrics must stay `None` |
+| `configs/runs/synthetic_games/synthetic_bernoulli_degenerate.yaml` | Zero entropy; MI is a genuine 0/0 |
+| `configs/runs/synthetic_games/synthetic_bernoulli_comet.yaml` | **The only one that uploads** |
+| `configs/runs/synthetic_games/synthetic_markov.yaml` | Game 2: 6 agents on a ring |
+| `configs/runs/synthetic_games/synthetic_controlled_markov.yaml` | Game 3: the positive control, `u` fixed per episode |
+| `configs/runs/synthetic_games/synthetic_controlled_markov_per_round.yaml` | Game 3 with `u` redrawn each round: effective empowerment as the paper defines it |
 
 Set `epsilons: [...]` instead of `epsilon:` for a per-agent asymmetric config;
 the ground truth then differs per pair and the comparison table joins on the

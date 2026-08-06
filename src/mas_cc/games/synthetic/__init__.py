@@ -31,6 +31,7 @@ from .analysis import (
     simulate_estimates,
     with_truth,
 )
+from .effective_empowerment import EmpowermentReport, EmpowermentSpec
 from .protocols import (
     GroundTruth,
     GroundTruthQuantity,
@@ -45,6 +46,8 @@ from .provider import SyntheticAgentProvider, SyntheticPromptError
 from .runtime import run_synthetic_game, run_synthetic_game_sync
 
 __all__ = [
+    "EmpowermentReport",
+    "EmpowermentSpec",
     "GroundTruth",
     "GroundTruthQuantity",
     "ParityResult",

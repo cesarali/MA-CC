@@ -13,11 +13,12 @@ options:
   coupling: ring
   epsilon: 0.05
   initial_bias: 0.5
-  # The control alphabet: each entry is the action index this control value
-  # pushes toward, or -1 for a genuine do-nothing condition.
-  control_targets:
-    - 0
-    - 1
+  # The control alphabet, in action labels. `control_alphabet: [Q, M]` and
+  # `control_targets: [0, 1]` are the same declaration in two spellings, so
+  # exactly one of them may appear. A null entry is a genuine do-nothing value.
+  control_alphabet:
+    - Q
+    - M
   # Which value of u this cell runs. A sweep varies exactly this.
   control_value: 0
   # Probability that a controlled agent is overridden on any given round.
@@ -26,3 +27,35 @@ options:
     - 0
     - 1
     - 2
+  # When u is drawn. `episode_fixed` holds it for the whole episode, which is
+  # what makes it a sweepable *condition* and what every config here has always
+  # done; `per_round` redraws it each round, which is the assumption behind the
+  # empowerment paper's I(a_t; s_* | s_t). Both closed forms are computed
+  # regardless of this setting - it decides what the simulation does.
+  control_mode: episode_fixed
+  # How u is chosen. Uniform and state-independent, so U_t is exactly
+  # independent of S_t: no mediator, no backdoor.
+  policy: uniform
+  empowerment:
+    # tau ~ Geom(1-gamma). H is derived as ceil(ln(tolerance)/ln(gamma)) and the
+    # residual gamma^H is reported, so the truncation error is visible.
+    gamma: 0.9
+    horizon_tolerance: 1.0e-3
+    # NOT `stationary`. This chain can be made absorbing, and its stationary law
+    # then sits on consensus states where empowerment is zero - the answer comes
+    # out at ~0 trivially and for the wrong reason. The stationary value is
+    # reported alongside anyway so the trap stays visible.
+    state_distribution: visitation
+    # Promoted from an incidental choice to a declared one: the measured value
+    # moves with which rounds were pooled. Defaults to the whole episode.
+    analysis_window: [1, 60]
+    report_per_state_profile: true
+    # Both, on the same run. The gap between them is the cost of coarse-graining,
+    # measured exactly rather than estimated on embeddings.
+    state_representation:
+      - microstate
+      - macrostate
+    # Which horizons get their own episode-fixed curve in t. A subset, because
+    # that quantity is a curve in t as well as h; the full array still lands in
+    # the ground truth's parameters.
+    report_horizons: [1, 2, 5, 10]

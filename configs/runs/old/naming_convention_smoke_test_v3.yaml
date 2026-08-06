@@ -1,6 +1,6 @@
 schema_version: 1
 llm_provider:
-  component: ../components/llm_providers/mock.yaml
+  component: ../../components/llm_providers/mock.yaml
   overrides:
     request_concurrency: 2
     temperature: 0.5
@@ -11,9 +11,9 @@ llm_provider:
       estimated_latency_seconds: 0.001
       top_k: 10
 prompt:
-  component: ../components/prompts/naming_convention_v3.yaml
+  component: ../../components/prompts/naming_convention_v3.yaml
 game:
-  component: ../components/games/naming_convention.yaml
+  component: ../../components/games/naming_convention.yaml
   overrides:
     population_size: 6
     horizon: 12
@@ -47,7 +47,7 @@ budget:
   max_output_tokens: 1000
   allow_unbounded_paid_requests: false
 logging:
-  component: ../components/logging/default.yaml
+  component: ../../components/logging/default.yaml
   overrides:
     comet: true
     options:
@@ -60,7 +60,7 @@ logging:
         max_logged_prompts_per_game: 5
         max_logged_prompts_per_run: 8
 storage:
-  component: ../components/storage/local.yaml
+  component: ../../components/storage/local.yaml
 analysis:
   schema_version: 1
   enabled: false

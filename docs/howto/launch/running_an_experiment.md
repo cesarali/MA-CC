@@ -8,7 +8,7 @@ on the console while they run. As in the companion manual, each concept gets two
 lab-notebook analogy.
 
 **Accompanying config:**
-[`configs/runs/naming_convention_experiment_tutorial_university_v3.yaml`](../../../configs/runs/naming_convention_experiment_tutorial_university_v3.yaml) —
+[`configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml`](../../../configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml) —
 the exact same small game as the single-run tutorial config (4 agents, 6 interactions), turned into
 a 5-episode experiment. Section 4 below shows the CLI commands that run it.
 
@@ -63,9 +63,13 @@ concurrency, and the console feedback around it.
 **Technical:**
 
 ```bash
-mas-cc experiment preflight --config <run-config.yaml> --output-dir <dir>
-mas-cc experiment run       --config <run-config.yaml> --output-dir <dir> [--approve-preflight <path>] [--resume|--no-resume] [--no-progress]
+mas-cc experiment preflight --config <run-config.yaml> [--output-dir <dir>]
+mas-cc experiment run       --config <run-config.yaml> [--output-dir <dir>] [--approve-preflight <path>] [--resume|--no-resume] [--no-progress]
 ```
+
+`--output-dir` is optional on both commands: pass it to override where artifacts land, or omit it to
+use the config's own `storage.output_dir` (which itself defaults to `results/`, already covered by
+`.gitignore`).
 
 `preflight` performs **no provider I/O at all** — no model call, no client, nothing billable. It
 reads the config, builds the game's provider-neutral call plan, multiplies it by
@@ -137,7 +141,7 @@ The accompanying config points at the real University provider and needs `POTSDA
 
 ```bash
 conda run -n MA-CC mas-cc experiment preflight \
-  --config configs/runs/naming_convention_experiment_tutorial_university_v3.yaml \
+  --config configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml \
   --output-dir inspection/experiment_tutorial/preflight
 ```
 
@@ -160,7 +164,7 @@ ID, so you can hand its path straight to the next command.
 
 ```bash
 conda run --live-stream -n MA-CC mas-cc experiment run \
-  --config configs/runs/naming_convention_experiment_tutorial_university_v3.yaml \
+  --config configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml \
   --output-dir results \
   --approve-preflight inspection/experiment_tutorial/preflight/preflight_id.txt
 ```
@@ -245,7 +249,7 @@ episode from scratch.
 ```bash
 # interrupted partway through episode 3 of 5 - re-running the same command:
 conda run --live-stream -n MA-CC mas-cc experiment run \
-  --config configs/runs/naming_convention_experiment_tutorial_university_v3.yaml \
+  --config configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml \
   --output-dir results
 # -> "Episodes: 2 skipped (resumed)" for the two already-completed episodes,
 #    then continues with episode 3 onward
@@ -310,13 +314,13 @@ shared oven with a fixed number of racks (one concurrency limit, one budget), so
 of recipe variations is priced and capped together, not recipe by recipe.
 
 **Example**, sweeping the companion single-cell config's `game.horizon` over two values:
-[`configs/runs/naming_convention_grid_tutorial_university_v3.yaml`](../../../configs/runs/naming_convention_grid_tutorial_university_v3.yaml) —
+[`configs/runs/old/naming_convention_grid_tutorial_university_v3.yaml`](../../../configs/runs/old/naming_convention_grid_tutorial_university_v3.yaml) —
 identical to `naming_convention_experiment_tutorial_university_v3.yaml` in every other field, plus
 the `grid:` section above and a budget scaled for the combined demand of both cells.
 
 ```bash
 mas-cc experiment preflight \
-  --config configs/runs/naming_convention_grid_tutorial_university_v3.yaml \
+  --config configs/runs/old/naming_convention_grid_tutorial_university_v3.yaml \
   --output-dir inspection/grid_tutorial/preflight
 ```
 
@@ -327,7 +331,7 @@ shape to a single-cell experiment:
 
 ```bash
 mas-cc experiment run \
-  --config configs/runs/naming_convention_grid_tutorial_university_v3.yaml \
+  --config configs/runs/old/naming_convention_grid_tutorial_university_v3.yaml \
   --output-dir results \
   --approve-preflight inspection/grid_tutorial/preflight/preflight_id.txt
 ```

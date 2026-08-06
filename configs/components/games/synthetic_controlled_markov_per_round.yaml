@@ -1,0 +1,46 @@
+schema_version: 1
+type: synthetic_controlled_markov
+# Game 3 with the control input redrawn every round - the assumption behind the
+# empowerment paper's E(pi) = E[I(a_t; s_* | s_t)].
+#
+# The difference from the episode-fixed component next to this one is one line,
+# `control_mode`, and it is not cosmetic. With u held for the whole episode the
+# state at round t is causally downstream of it, so conditioning on S_t blocks
+# most of the effect being measured and the answer drifts with t. With u redrawn
+# at round t it has not acted yet when S_t is observed, and the conditioning is
+# clean. Both closed forms are computed on either config; this one makes the
+# paper's variant the thing that actually runs.
+#
+# Note this config is NOT sweepable over `control_value`: u is drawn from the
+# policy here, so `control_value` is ignored and a grid over it would run the
+# same dynamics in every cell. Use the episode-fixed component for sweeps.
+population_size: 6
+horizon: 60
+topology: complete
+options:
+  actions:
+    - Q
+    - M
+  coupling: ring
+  epsilon: 0.05
+  initial_bias: 0.5
+  control_alphabet:
+    - Q
+    - M
+  control_strength: 0.25
+  controlled_agents:
+    - 0
+    - 1
+    - 2
+  control_mode: per_round
+  policy: uniform
+  empowerment:
+    gamma: 0.9
+    horizon_tolerance: 1.0e-3
+    state_distribution: visitation
+    analysis_window: [1, 60]
+    report_per_state_profile: true
+    state_representation:
+      - microstate
+      - macrostate
+    report_horizons: [1, 2, 5, 10]

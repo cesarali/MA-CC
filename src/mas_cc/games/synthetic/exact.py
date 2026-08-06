@@ -230,6 +230,146 @@ def lumping_gap(transition: np.ndarray, bits: np.ndarray) -> float:
     return worst
 
 
+def kl_divergence_rows(rows: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Row-wise ``D_KL(rows[s] || reference[s])`` in bits, with 0 log 0 = 0.
+
+    Absolute continuity is not checked because the only caller cannot violate
+    it: the reference is a mixture that includes the row with positive weight,
+    so ``reference > 0`` wherever ``rows > 0``.
+    """
+
+    rows = np.asarray(rows, dtype=float)
+    reference = np.asarray(reference, dtype=float)
+    support = rows > _TOLERANCE
+    safe_rows = np.where(support, rows, 1.0)
+    safe_reference = np.where(reference > _TOLERANCE, reference, 1.0)
+    terms = np.where(support, rows * (np.log2(safe_rows) - np.log2(safe_reference)), 0.0)
+    return np.maximum(terms.sum(axis=1), 0.0)
+
+
+def policy_weights(policy: np.ndarray, n_controls: int, n_states: int) -> np.ndarray:
+    """``pi(u|s)`` as a full ``(|U|, |S|)`` table.
+
+    A length-``|U|`` vector is the state-independent policy of the extension
+    document's section 2 - the case where ``U_t`` is exactly independent of
+    ``S_t``, so there is no mediator and no backdoor. A ``(|U|, |S|)`` table is
+    the state-dependent generalisation, which every function here already
+    handles so that adding it later is a config change rather than an algebra
+    change.
+    """
+
+    weights = np.asarray(policy, dtype=float)
+    if weights.ndim == 1:
+        weights = np.broadcast_to(weights[:, None], (n_controls, n_states))
+    if weights.shape != (n_controls, n_states):
+        raise ValueError("a policy must be pi(u) of length |U| or pi(u|s) of shape (|U|, |S|)")
+    return np.asarray(weights, dtype=float) / weights.sum(axis=0, keepdims=True)
+
+
+def policy_averaged_kernel(kernels: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """``T-bar[s,s'] = sum_u pi(u|s) T_u[s,s']``.
+
+    Note this is *not* the kernel of any single control value, and for a
+    population it is not a product over agents either: a fixed ``u`` pushes
+    every controlled agent toward the same target, so averaging over ``u``
+    correlates them. Building it as an explicit mixture rather than by putting
+    the mean target into the per-agent formula is what keeps that correlation.
+    """
+
+    kernels = np.asarray(kernels, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    if weights.ndim == 1:
+        weights = weights[:, None]
+    return (weights[:, :, None] * kernels).sum(axis=0)
+
+
+def control_conditioned_kernels(kernels: np.ndarray, tail: np.ndarray) -> np.ndarray:
+    """``[T_u T-bar^{h-1}]`` for every u, given ``tail = T-bar^{h-1}``.
+
+    The tail is passed in rather than recomputed because the caller walks the
+    horizon upward and can advance it with one matrix product per step; taking
+    a fresh matrix power per horizon would be cubic work repeated H times.
+    """
+
+    return np.asarray(kernels, dtype=float) @ np.asarray(tail, dtype=float)
+
+
+def per_state_empowerment(
+    forward: np.ndarray, baseline: np.ndarray, weights: np.ndarray
+) -> np.ndarray:
+    """``E_h(s)``, the policy-weighted KL of the extension document's section 2.
+
+    ``forward[u]`` is ``T_u T-bar^{h-1}``, ``baseline`` is ``T-bar^h``, and the
+    result is ``sum_u pi(u|s) D_KL(forward[u][s] || baseline[s])`` - which is
+    ``I(U_t; S_{t+h} | S_t = s)`` exactly, because marginalising ``forward``
+    against the policy *is* ``baseline``.
+    """
+
+    forward = np.asarray(forward, dtype=float)
+    total = np.zeros(forward.shape[1], dtype=float)
+    for index in range(forward.shape[0]):
+        total += weights[index] * kl_divergence_rows(forward[index], baseline)
+    return total
+
+
+def visitation_distribution(
+    initial: np.ndarray, transition: np.ndarray, window: tuple[int, int]
+) -> np.ndarray:
+    """``d(s) = (1/|W|) sum_{t in W} p_t(s)`` - states encountered under the policy.
+
+    **Not the stationary distribution.** The naming game is absorbing, so its
+    stationary law sits entirely on consensus states where empowerment is zero;
+    averaging over it returns ``E ~ 0`` trivially and for the wrong reason. The
+    window is the rounds actually analysed, which is why it is a declared config
+    parameter rather than an incidental choice.
+    """
+
+    first, last = window
+    if last < first:
+        raise ValueError("the analysis window must not be empty")
+    law = propagate(initial, transition, first)
+    total = np.zeros_like(law)
+    for round_index in range(first, last + 1):
+        total += law
+        if round_index < last:
+            law = law @ transition
+    return total / total.sum()
+
+
+def discounted_visitation(
+    initial: np.ndarray, transition: np.ndarray, gamma: float, horizon: int
+) -> np.ndarray:
+    """``d_gamma(s) = (1-gamma) sum_t gamma^t p_t(s)``, truncated at ``horizon``.
+
+    The other admissible answer to "states encountered under the policy". On an
+    absorbing chain the two disagree, and the config has to say which it meant.
+    """
+
+    law = np.asarray(initial, dtype=float)
+    law = law / law.sum()
+    total = np.zeros_like(law)
+    for step in range(horizon + 1):
+        total += (1.0 - gamma) * gamma**step * law
+        law = law @ transition
+    return total / total.sum()
+
+
+def geometric_truncation(gamma: float, tolerance: float) -> int:
+    """The smallest ``H`` with ``gamma^H <= tolerance``.
+
+    ``tau ~ Geom(1-gamma)`` has unbounded support, so the gamma-weighted scalar
+    is a truncated sum whose residual mass is ``gamma^H``. Deriving H from a
+    declared tolerance, and reporting the residual next to the answer, is what
+    keeps the truncation error visible rather than assumed.
+    """
+
+    if not 0.0 < gamma < 1.0:
+        raise ValueError("the empowerment discount must lie strictly in (0, 1)")
+    if not 0.0 < tolerance < 1.0:
+        raise ValueError("the horizon tolerance must lie strictly in (0, 1)")
+    return max(1, int(math.ceil(math.log(tolerance) / math.log(gamma))))
+
+
 def blahut_arimoto(
     channel: np.ndarray, *, tolerance: float = 1e-12, max_iterations: int = 10_000
 ) -> tuple[float, np.ndarray]:
@@ -309,18 +449,26 @@ __all__ = [
     "bit_table",
     "blahut_arimoto",
     "conditional_mutual_information",
+    "control_conditioned_kernels",
     "cross_agent_mutual_information",
     "design_mutual_information",
     "directed_conditional_mutual_information",
+    "discounted_visitation",
     "entropy",
     "entropy_rate",
+    "geometric_truncation",
+    "kl_divergence_rows",
     "lumping_gap",
     "macrostate_law",
     "macrostate_pair_law",
     "mutual_information",
+    "per_state_empowerment",
     "plugin_bias_bits",
+    "policy_averaged_kernel",
+    "policy_weights",
     "project",
     "propagate",
     "stationary_distribution",
     "transition_joint",
+    "visitation_distribution",
 ]

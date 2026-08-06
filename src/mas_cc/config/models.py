@@ -275,6 +275,149 @@ class MetricsConfig:
         }
 
 
+DEFAULT_CELL_METRICS = (
+    "dominant_action_share",
+    "action_share_relabelled",
+    "active_fraction",
+    "consensus_round",
+    "converged_fraction",
+)
+"""The cell-level metrics computed at every cell completion unless overridden."""
+
+
+@dataclass(frozen=True, slots=True)
+class AggregationConfig:
+    """How a cell's episodes are combined, and which cross-episode metrics run.
+
+    Separate from ``metrics:`` on purpose. That section governs what each
+    *episode* records; this one governs how many finished episodes become one
+    answer, which is a different decision made at a different time — after the
+    episodes exist, and re-makeable without re-running them.
+
+    The first four fields are correctness rules rather than preferences; each
+    one's reasoning lives on :class:`mas_cc.metrics.AggregationPolicy`, which
+    is what they resolve into. ``horizons`` and ``null_permutations`` are here
+    because the sweep metrics that need them (`lagged_cmi`, `mi_null_band`)
+    have no other place to be told, and both change what the reported number
+    means.
+    """
+
+    schema_version: int = 1
+    forward_fill: str = "absorbing"
+    relabel_by_winner: bool = True
+    percentiles: tuple[int, ...] = (10, 50, 90)
+    rolling_window: int = 20
+    cell_metrics: tuple[str, ...] = DEFAULT_CELL_METRICS
+    sweep_metrics: tuple[str, ...] = ()
+    horizons: tuple[int, ...] = (1,)
+    null_permutations: int = 200
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "percentiles", tuple(int(p) for p in self.percentiles))
+        object.__setattr__(self, "cell_metrics", tuple(self.cell_metrics))
+        object.__setattr__(self, "sweep_metrics", tuple(self.sweep_metrics))
+        object.__setattr__(self, "horizons", tuple(int(h) for h in self.horizons))
+
+    def policy(self) -> "Any":
+        """The resolved :class:`mas_cc.metrics.AggregationPolicy`.
+
+        Imported inside the method so this module keeps its "standard library
+        only, constructs nothing" property.
+        """
+
+        from mas_cc.metrics import AggregationPolicy
+
+        return AggregationPolicy(
+            forward_fill=self.forward_fill,
+            relabel_by_winner=self.relabel_by_winner,
+            percentiles=self.percentiles,
+            rolling_window=self.rolling_window,
+        )
+
+    def resolved_cell_metrics(self) -> tuple[str, ...]:
+        """``cell_metrics``, plus the count tables the configured sweep metrics need.
+
+        A `SweepMetric` reads only what the cell tier put in
+        ``AggregateResult.counts``, so asking for `terminal_mi` without also
+        asking for `macrostate_counts` would silently produce NaN. Adding the
+        dependency here rather than making the user list it keeps the YAML
+        matching the spec while making the broken pair unconfigurable.
+        """
+
+        if not self.sweep_metrics or "macrostate_counts" in self.cell_metrics:
+            return self.cell_metrics
+        return (*self.cell_metrics, "macrostate_counts")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "forward_fill": self.forward_fill,
+            "relabel_by_winner": self.relabel_by_winner,
+            "percentiles": list(self.percentiles),
+            "rolling_window": self.rolling_window,
+            "cell_metrics": list(self.cell_metrics),
+            "sweep_metrics": list(self.sweep_metrics),
+            "horizons": list(self.horizons),
+            "null_permutations": self.null_permutations,
+        }
+
+
+COMET_WRITERS = ("master_only",)
+"""Who may talk to Comet. Only the master ever does — see `CometObservability`."""
+
+
+@dataclass(frozen=True, slots=True)
+class CometObservability:
+    """Shape of the master's remote reporting; ``logging.comet`` is the on/off switch.
+
+    ``writer`` has exactly one legal value, and that is the point. Workers
+    write episode files and nothing else, so there is one writer per Comet
+    experiment key and therefore no race on its step counter. Comet becomes a
+    *view* rather than a store: if it fails, the run is unaffected and the same
+    numbers can be re-logged later from the episode files.
+
+    ``heartbeat_seconds`` is a timer, not a completion hook, because the
+    question it answers is "is this job alive" — a metric that only moves when
+    an episode finishes cannot distinguish a dead master from a slow one.
+    """
+
+    writer: str = "master_only"
+    heartbeat_seconds: float = 60.0
+    grid_image_every_n_episodes: int = 25
+    sweep_experiment: bool = True
+    cell_experiments: bool = True
+
+    def __post_init__(self) -> None:
+        if self.writer not in COMET_WRITERS:
+            raise ValueError(
+                f"observability.comet.writer must be one of {COMET_WRITERS}, got {self.writer!r}"
+            )
+        if self.heartbeat_seconds <= 0:
+            raise ValueError("observability.comet.heartbeat_seconds must be positive")
+        if self.grid_image_every_n_episodes < 1:
+            raise ValueError("observability.comet.grid_image_every_n_episodes must be at least 1")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "writer": self.writer,
+            "heartbeat_seconds": self.heartbeat_seconds,
+            "grid_image_every_n_episodes": self.grid_image_every_n_episodes,
+            "sweep_experiment": self.sweep_experiment,
+            "cell_experiments": self.cell_experiments,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObservabilityConfig:
+    """Live-monitoring policy for a long unattended run."""
+
+    schema_version: int = 1
+    comet: CometObservability = field(default_factory=CometObservability)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"schema_version": self.schema_version, "comet": self.comet.to_dict()}
+
+
 @dataclass(frozen=True, slots=True)
 class ExperimentConfig:
     """Human-facing experiment identity and grouping metadata."""
@@ -362,6 +505,8 @@ class RunConfig:
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     control: ControlConfig = field(default_factory=ControlConfig)
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
+    aggregation: AggregationConfig = field(default_factory=AggregationConfig)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
     pricing: PricingConfig = field(default_factory=PricingConfig)
     budget: BudgetConfig = field(default_factory=BudgetConfig)
@@ -387,6 +532,8 @@ class RunConfig:
             "analysis": self.analysis.to_dict(),
             "control": self.control.to_dict(),
             "metrics": self.metrics.to_dict(),
+            "aggregation": self.aggregation.to_dict(),
+            "observability": self.observability.to_dict(),
             "experiment": self.experiment.to_dict(),
             "pricing": self.pricing.to_dict(),
             "budget": self.budget.to_dict(),

@@ -140,7 +140,7 @@ class ScriptedProvider:
 
 
 def _config(*, population_size=4, horizon=4, memory_size=3):
-    config = load_run_config("configs/runs/naming_convention_smoke_test_v3.yaml", environment={})
+    config = load_run_config("configs/runs/old/naming_convention_smoke_test_v3.yaml", environment={})
     game = replace(
         config.game, population_size=population_size, horizon=horizon,
         options={**dict(config.game.options), "memory_size": memory_size},
@@ -472,14 +472,14 @@ def test_binning_policy_is_none_when_metrics_are_disabled():
 
 
 def test_metrics_config_section_parses_from_yaml():
-    config = load_run_config("configs/runs/naming_convention_smoke_test_v3.yaml", environment={})
+    config = load_run_config("configs/runs/old/naming_convention_smoke_test_v3.yaml", environment={})
     assert config.metrics.enabled is True
     assert "population_action_share_per_option" in config.metrics.comet_export
 
 
 def test_metrics_config_defaults_when_section_omitted():
     # This legacy (pre-v3) config file has no `metrics:` section at all.
-    config = load_run_config("configs/runs/naming_convention_smoke_test.yaml", environment={})
+    config = load_run_config("configs/runs/old/naming_convention_smoke_test.yaml", environment={})
     assert config.metrics.enabled is True
     assert config.metrics.comet_export == ()
 

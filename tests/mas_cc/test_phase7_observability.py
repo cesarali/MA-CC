@@ -52,7 +52,7 @@ def test_phase_7_inspection_writes_bounded_local_first_artifacts(tmp_path: Path,
 
     monkeypatch.setattr("mas_cc.observability.recorder.CometMetricSink", LocalComet)
     output = tmp_path / "phase_07"
-    assert run_phase_7_inspection("configs/runs/naming_convention_smoke_test_v3.yaml", output)
+    assert run_phase_7_inspection("configs/runs/old/naming_convention_smoke_test_v3.yaml", output)
     expected = {
         "report.md", "manifest.json", "resolved_config.yaml", "experiment.log",
         "events.jsonl", "api_call_status.jsonl", "audit_traces.jsonl",

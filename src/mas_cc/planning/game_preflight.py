@@ -102,6 +102,7 @@ def static_game_preflight(
     scenarios: list[dict[str, Any]] = []
     maximum_request: CompletionRequest | None = None
     maximum_per_call_tokens = -1
+    priced_prompts: set[tuple[str, int]] = set()
 
     for stage in plan.decision_stages:
         if stage.requests_per_interaction == 0:
@@ -111,14 +112,23 @@ def static_game_preflight(
                 f"decision stage {stage.name!r} must define representative and maximum prompts"
             )
         lower_scenario = stage.lower_prompt or stage.representative_prompt
-        for scenario in (lower_scenario, stage.representative_prompt, stage.maximum_prompt):
-            if (
-                scenario.bound_prompt.family != prompt_config.prompt_family
-                or scenario.bound_prompt.version != prompt_config.prompt_version
-            ):
-                raise ValueError(
-                    f"decision stage {stage.name!r} prompt scenario does not match resolved prompt selection"
-                )
+        # Every scenario within one stage must describe the same prompt, or the
+        # lower/representative/maximum bounds would be bounds on three different
+        # things. Across stages the family may differ: a phase-structured game
+        # (hidden_bench) genuinely sends a different prompt for a discussion
+        # turn than for a vote, and pricing only one of them would under-count
+        # the run. The resolved `prompt.prompt_family` is checked against the
+        # set of stage families after the loop instead of per stage.
+        stage_families = {
+            (scenario.bound_prompt.family, scenario.bound_prompt.version)
+            for scenario in (lower_scenario, stage.representative_prompt, stage.maximum_prompt)
+        }
+        if len(stage_families) != 1:
+            raise ValueError(
+                f"decision stage {stage.name!r} mixes prompt families across its "
+                f"lower/representative/maximum scenarios: {sorted(stage_families)}"
+            )
+        priced_prompts.add(next(iter(stage_families)))
         lower_prompt = lower_scenario.bound_prompt.compile(counter)
         representative_prompt = stage.representative_prompt.bound_prompt.compile(counter)
         maximum_prompt = stage.maximum_prompt.bound_prompt.compile(counter)
@@ -213,6 +223,17 @@ def static_game_preflight(
     request_counts = plan.provider_requests
     if maximum_request is None or request_counts.maximum < 1:
         raise ValueError("game call plan contains no provider-backed decisions")
+    selected = (prompt_config.prompt_family, prompt_config.prompt_version)
+    if selected not in priced_prompts:
+        # The original guarantee, kept: the resolved prompt selection has to be
+        # one this plan actually prices. A single-prompt game therefore behaves
+        # exactly as before; a phase-structured one must still name one of its
+        # own families rather than an unrelated game's.
+        raise ValueError(
+            f"resolved prompt selection {selected[0]!r}@{selected[1]} is not priced by any "
+            f"decision stage of {plan.game_type!r}; stages price "
+            f"{sorted(f'{family}@{version}' for family, version in priced_prompts)}"
+        )
     conservative_check = static_preflight(
         maximum_request,
         provider_config,

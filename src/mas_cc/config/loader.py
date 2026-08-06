@@ -11,13 +11,20 @@ from typing import Any
 import yaml
 
 from mas_cc.llm_runtime.exceptions import ConfigurationError
+from mas_cc.metrics.aggregate import FORWARD_FILL_MODES
+from mas_cc.metrics.cell import CELL_METRICS
 from mas_cc.metrics.interactions import PARTIAL_BIN_POLICIES
+from mas_cc.metrics.sweep import SWEEP_METRICS
 from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
 
 from .grid import GridSpec, parse_grid_axes
 from .models import (
+    DEFAULT_CELL_METRICS,
+    AggregationConfig,
     AnalysisConfig,
     BudgetConfig,
+    CometObservability,
+    COMET_WRITERS,
     ControlConfig,
     ExecutionConfig,
     ExperimentConfig,
@@ -25,6 +32,7 @@ from .models import (
     LLMProviderConfig,
     LoggingConfig,
     MetricsConfig,
+    ObservabilityConfig,
     PromptConfig,
     PricingConfig,
     RunConfig,
@@ -40,6 +48,8 @@ ConfigSection = (
     | StorageConfig
     | AnalysisConfig
     | ControlConfig
+    | AggregationConfig
+    | ObservabilityConfig
     | ExperimentConfig
 )
 
@@ -59,7 +69,7 @@ _ENV_NAME_FIELDS = frozenset(
 _COMPONENT_SECTIONS = frozenset(
     {
         "llm_provider", "provider", "prompt", "game", "execution", "logging",
-        "storage", "analysis", "control", "experiment",
+        "storage", "analysis", "control", "experiment", "aggregation", "observability",
     }
 )
 
@@ -674,6 +684,136 @@ def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
     )
 
 
+def _integer_tuple(
+    values: Mapping[str, Any],
+    key: str,
+    path: str,
+    issues: list[ValidationIssue],
+    *,
+    default: tuple[int, ...],
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> tuple[int, ...]:
+    field = f"{path}.{key}" if path else key
+    if key not in values:
+        return default
+    value = values[key]
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        _issue(issues, field, "must be a list of integers", value)
+        return default
+    result: list[int] = []
+    for index, item in enumerate(value):
+        if isinstance(item, bool) or not isinstance(item, int):
+            _issue(issues, f"{field}[{index}]", "must be an integer", item)
+        elif minimum is not None and item < minimum:
+            _issue(issues, f"{field}[{index}]", f"must be at least {minimum}", item)
+        elif maximum is not None and item > maximum:
+            _issue(issues, f"{field}[{index}]", f"must be at most {maximum}", item)
+        else:
+            result.append(item)
+    if not result:
+        _issue(issues, field, "must contain at least one integer", value)
+        return default
+    return tuple(result)
+
+
+def _parse_aggregation(raw: Any, issues: list[ValidationIssue]) -> AggregationConfig:
+    path = "aggregation"
+    values = _as_mapping(raw, path, issues)
+    _unknown_fields(
+        values,
+        {
+            "schema_version", "forward_fill", "relabel_by_winner", "percentiles",
+            "rolling_window", "cell_metrics", "sweep_metrics", "horizons",
+            "null_permutations",
+        },
+        path,
+        issues,
+    )
+    forward_fill = _string(values, "forward_fill", path, issues, default="absorbing") or "absorbing"
+    if forward_fill not in FORWARD_FILL_MODES:
+        _issue(
+            issues, f"{path}.forward_fill",
+            f"must be one of {', '.join(FORWARD_FILL_MODES)}", forward_fill,
+        )
+        forward_fill = "absorbing"
+    # Metric names are validated here, not at first use: a typo in a day-long
+    # Slurm job must fail at config load, not at the first cell completion
+    # several hours in.
+    cell_metrics = (
+        _string_tuple(values, "cell_metrics", path, issues)
+        if "cell_metrics" in values
+        else DEFAULT_CELL_METRICS
+    )
+    sweep_metrics = _string_tuple(values, "sweep_metrics", path, issues)
+    for field_name, names, known in (
+        ("cell_metrics", cell_metrics, CELL_METRICS),
+        ("sweep_metrics", sweep_metrics, SWEEP_METRICS),
+    ):
+        for name in names:
+            if name not in known:
+                _issue(
+                    issues, f"{path}.{field_name}",
+                    f"unknown metric {name!r}; available: {', '.join(sorted(known))}", name,
+                )
+    return AggregationConfig(
+        schema_version=_schema_version(values, path, issues),
+        forward_fill=forward_fill,
+        relabel_by_winner=_boolean(values, "relabel_by_winner", path, issues, default=True),
+        percentiles=_integer_tuple(
+            values, "percentiles", path, issues, default=(10, 50, 90), minimum=0, maximum=100
+        ),
+        rolling_window=_integer(values, "rolling_window", path, issues, default=20, minimum=1),
+        cell_metrics=cell_metrics,
+        sweep_metrics=sweep_metrics,
+        horizons=_integer_tuple(values, "horizons", path, issues, default=(1,), minimum=1),
+        null_permutations=_integer(
+            values, "null_permutations", path, issues, default=200, minimum=0
+        ),
+    )
+
+
+def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> ObservabilityConfig:
+    path = "observability"
+    values = _as_mapping(raw, path, issues)
+    _unknown_fields(values, {"schema_version", "comet"}, path, issues)
+    comet_path = f"{path}.comet"
+    comet = _as_mapping(values.get("comet", {}), comet_path, issues)
+    _unknown_fields(
+        comet,
+        {
+            "writer", "heartbeat_seconds", "grid_image_every_n_episodes",
+            "sweep_experiment", "cell_experiments",
+        },
+        comet_path,
+        issues,
+    )
+    writer = _string(comet, "writer", comet_path, issues, default="master_only") or "master_only"
+    if writer not in COMET_WRITERS:
+        _issue(
+            issues, f"{comet_path}.writer",
+            f"must be one of {', '.join(COMET_WRITERS)}; workers never write to Comet", writer,
+        )
+        writer = "master_only"
+    return ObservabilityConfig(
+        schema_version=_schema_version(values, path, issues),
+        comet=CometObservability(
+            writer=writer,
+            heartbeat_seconds=_number(
+                comet, "heartbeat_seconds", comet_path, issues, default=60.0, minimum=0.001
+            )
+            or 60.0,
+            grid_image_every_n_episodes=_integer(
+                comet, "grid_image_every_n_episodes", comet_path, issues, default=25, minimum=1
+            ),
+            sweep_experiment=_boolean(
+                comet, "sweep_experiment", comet_path, issues, default=True
+            ),
+            cell_experiments=_boolean(comet, "cell_experiments", comet_path, issues, default=True),
+        ),
+    )
+
+
 def _parse_experiment(raw: Any, issues: list[ValidationIssue]) -> ExperimentConfig:
     path = "experiment"
     values = _as_mapping(raw, path, issues)
@@ -697,7 +837,8 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
     values = {str(key): value for key, value in raw.items()}
     allowed = {
         "schema_version", "llm_provider", "prompt", "game", "execution",
-        "logging", "storage", "analysis", "control", "metrics", "experiment", "pricing", "budget",
+        "logging", "storage", "analysis", "control", "metrics", "aggregation",
+        "observability", "experiment", "pricing", "budget",
     }
     _unknown_fields(values, allowed, "", issues)
     schema_version = _schema_version(values, "", issues)
@@ -717,12 +858,31 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         analysis=_parse_analysis(values.get("analysis", {}), issues),
         control=_parse_control(values.get("control", {}), issues),
         metrics=_parse_metrics(values.get("metrics", {}), issues),
+        aggregation=_parse_aggregation(values.get("aggregation", {}), issues),
+        observability=_parse_observability(values.get("observability", {}), issues),
         experiment=_parse_experiment(values.get("experiment", {}), issues),
         pricing=_parse_pricing(values.get("pricing", {}), issues),
         budget=_parse_budget(values.get("budget", {}), issues),
     )
     if issues:
         raise ConfigurationError(issues, context="configuration validation")
+    return config
+
+
+def parse_aggregation_config(raw: Any) -> AggregationConfig:
+    """Validate one ``aggregation:`` section on its own.
+
+    Needed because a *resolved* config on disk is a superset of a loadable one
+    — the export carries derived provenance fields such as the prompt's
+    definition hash — so re-reading a finished run's whole config would fail on
+    fields it deliberately recorded. Reading back only the section that governs
+    aggregation is both sufficient and immune to that.
+    """
+
+    issues: list[ValidationIssue] = []
+    config = _parse_aggregation(raw, issues)
+    if issues:
+        raise ConfigurationError(issues, context="aggregation configuration")
     return config
 
 
@@ -774,6 +934,8 @@ class ConfigLoader:
             "storage": _parse_storage,
             "analysis": _parse_analysis,
             "control": _parse_control,
+            "aggregation": _parse_aggregation,
+            "observability": _parse_observability,
             "experiment": _parse_experiment,
         }
         parser = parsers.get(component_type)

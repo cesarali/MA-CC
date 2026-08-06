@@ -15,7 +15,7 @@ def test_version_command(capsys):
 
 def test_phase_2_inspection_contract(tmp_path: Path):
     output = tmp_path / "phase_02"
-    assert inspect_phase_2("configs/runs/provider_smoke_test.yaml", output)
+    assert inspect_phase_2("configs/runs/old/provider_smoke_test.yaml", output)
     expected = {
         "report.md",
         "manifest.json",
@@ -113,8 +113,8 @@ def test_phase_4_mock_provider_inspection_contract(tmp_path: Path):
 def test_phase_5_game_inspection_contract_and_deterministic_artifacts(tmp_path: Path):
     first = tmp_path / "first" / "phase_05"
     second = tmp_path / "second" / "phase_05"
-    assert run_game_inspection("configs/runs/toy_game_smoke_test.yaml", first)
-    assert run_game_inspection("configs/runs/toy_game_smoke_test.yaml", second)
+    assert run_game_inspection("configs/runs/old/toy_game_smoke_test.yaml", first)
+    assert run_game_inspection("configs/runs/old/toy_game_smoke_test.yaml", second)
     expected = {
         "report.md",
         "manifest.json",
@@ -161,7 +161,7 @@ def test_phase_5_cli_aliases(tmp_path: Path, capsys):
             "game",
             "run",
             "--config",
-            "configs/runs/toy_game_smoke_test.yaml",
+            "configs/runs/old/toy_game_smoke_test.yaml",
             "--output-dir",
             str(direct),
         ]
@@ -177,10 +177,10 @@ def test_phase_6_inspection_contract_audit_and_determinism(tmp_path: Path):
     first = tmp_path / "first" / "phase_06"
     second = tmp_path / "second" / "phase_06"
     assert run_game_inspection(
-        "configs/runs/naming_convention_smoke_test.yaml", first
+        "configs/runs/old/naming_convention_smoke_test.yaml", first
     )
     assert run_game_inspection(
-        "configs/runs/naming_convention_smoke_test.yaml", second
+        "configs/runs/old/naming_convention_smoke_test.yaml", second
     )
     expected = {
         "report.md",

@@ -296,10 +296,7 @@ class PooledLaws:
     transition: np.ndarray
 
 
-@lru_cache(maxsize=8)
-def _pooled(key: tuple, forced: tuple | None = None) -> PooledLaws:
-    spec = MarkovSpec(*key)
-    matrix = transition_matrix(spec, forced)
+def _pooled_from_matrix(spec: MarkovSpec, matrix: np.ndarray) -> PooledLaws:
     law = initial_distribution(spec)
     single = np.zeros_like(law)
     pair = np.zeros((spec.n_states, spec.n_states), dtype=float)
@@ -315,17 +312,42 @@ def _pooled(key: tuple, forced: tuple | None = None) -> PooledLaws:
     return PooledLaws(single, pair, exact.stationary_distribution(matrix), matrix)
 
 
-def pooled_laws(spec: MarkovSpec, forced: tuple | None = None) -> PooledLaws:
-    return _pooled(spec.key, forced)
+@lru_cache(maxsize=8)
+def _pooled(key: tuple, forced: tuple | None = None) -> PooledLaws:
+    spec = MarkovSpec(*key)
+    return _pooled_from_matrix(spec, transition_matrix(spec, forced))
+
+
+def pooled_laws(
+    spec: MarkovSpec, forced: tuple | None = None, matrix: np.ndarray | None = None
+) -> PooledLaws:
+    """The pooled laws for this spec, optionally under an explicit kernel.
+
+    ``matrix`` exists because not every controller's kernel is expressible as a
+    per-agent ``forced`` probability. A control resampled each round pushes every
+    controlled agent toward the *same* target, so averaging over the control
+    correlates them: the policy-averaged kernel is a mixture of product kernels
+    and not itself a product kernel. Passing the mixture in is the only way to
+    keep the derived quantities honest for that mode.
+    """
+
+    if matrix is None:
+        return _pooled(spec.key, forced)
+    return _pooled_from_matrix(spec, np.asarray(matrix, dtype=float))
 
 
 class MarkovDynamics(ExactDynamics):
     """Exact macrostate laws for one resolved Markov condition."""
 
-    def __init__(self, spec: MarkovSpec, forced: tuple | None = None) -> None:
+    def __init__(
+        self,
+        spec: MarkovSpec,
+        forced: tuple | None = None,
+        transition: np.ndarray | None = None,
+    ) -> None:
         self._spec = spec
         self._forced = forced
-        self._laws = pooled_laws(spec, forced)
+        self._laws = pooled_laws(spec, forced, transition)
         self._bits = exact.bit_table(spec.population_size, spec.n_states)
 
     @property
@@ -683,10 +705,23 @@ class SyntheticMarkovGame(SyntheticGame):
 
         return None
 
+    def exact_transition(self, config: GameConfig) -> np.ndarray | None:
+        """An explicit microstate kernel, when the product form cannot express one.
+
+        Game 2 has none: its agents decide independently given the profile, so
+        `transition_matrix` builds the kernel as a product over agents. Game 3
+        with a control resampled every round does need one, because the
+        policy-averaged kernel is a *mixture* of product kernels - a shared
+        control value correlates the agents it pushes - and a mixture of
+        products is not a product.
+        """
+
+        return None
+
     def ground_truth(self, config: GameConfig) -> GroundTruth:
         rules = self.rules(config)
         forced = self.chain_control(config)
-        laws = pooled_laws(rules, forced)
+        laws = pooled_laws(rules, forced, self.exact_transition(config))
         bits = exact.bit_table(rules.population_size, rules.n_states)
         size = rules.population_size
         quantities: list[GroundTruthQuantity] = []
@@ -893,7 +928,9 @@ class SyntheticMarkovGame(SyntheticGame):
         )
 
     def exact_dynamics(self, config: GameConfig) -> ExactDynamics:
-        return MarkovDynamics(self.rules(config), self.chain_control(config))
+        return MarkovDynamics(
+            self.rules(config), self.chain_control(config), self.exact_transition(config)
+        )
 
     def simulate(self, config: GameConfig, seeds: Sequence[int]) -> SimulatedEpisodes:
         """Speed mode: the same tapes, the same rule, vectorized across seeds.

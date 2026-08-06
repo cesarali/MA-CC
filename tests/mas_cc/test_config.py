@@ -106,7 +106,7 @@ def test_reusable_component_loads_and_validates_independently():
 
 
 def test_repo_smoke_config_resolves_deterministically_and_without_secret_values():
-    path = Path("configs/runs/provider_smoke_test.yaml")
+    path = Path("configs/runs/old/provider_smoke_test.yaml")
     first = load_run_config(path, environment={})
     second = load_run_config(path, environment={})
     rendered = resolved_config_yaml(first)
@@ -165,3 +165,72 @@ def test_schema_describes_resolved_version_one():
     assert schema["properties"]["schema_version"] == {"const": 1}
     assert set(schema["required"]) >= {"llm_provider", "prompt", "game"}
     assert schema["properties"]["llm_provider"]["additionalProperties"] is False
+
+
+def test_aggregation_defaults_to_the_correctness_rules_not_to_off():
+    """The section is optional, but its defaults are the unbiased ones.
+
+    A config that says nothing about aggregation must still forward-fill,
+    relabel, and band by percentile — the biased variants have to be asked for
+    explicitly, never fallen into.
+    """
+
+    config = parse_run_config(_resolved_mapping())
+
+    assert config.aggregation.forward_fill == "absorbing"
+    assert config.aggregation.relabel_by_winner is True
+    assert config.aggregation.percentiles == (10, 50, 90)
+    assert config.observability.comet.writer == "master_only"
+
+
+def test_an_unknown_aggregation_metric_fails_at_load_not_at_the_first_cell():
+    """A typo in a day-long Slurm job must not surface six hours in."""
+
+    raw = _resolved_mapping()
+    raw["aggregation"] = {"cell_metrics": ["dominant_action_share", "dominat_action_share"]}
+
+    with pytest.raises(ConfigurationError) as captured:
+        parse_run_config(raw)
+
+    assert any(issue.field == "aggregation.cell_metrics" for issue in captured.value.issues)
+
+
+@pytest.mark.parametrize(
+    ("section", "value", "field"),
+    [
+        ({"forward_fill": "carry"}, None, "aggregation.forward_fill"),
+        ({"percentiles": [10, 150]}, None, "aggregation.percentiles[1]"),
+        ({"rolling_window": 0}, None, "aggregation.rolling_window"),
+        ({"sweep_metrics": ["terminal_mutual_information"]}, None, "aggregation.sweep_metrics"),
+    ],
+)
+def test_aggregation_validation_names_the_exact_invalid_field(section, value, field):
+    raw = _resolved_mapping()
+    raw["aggregation"] = section
+
+    with pytest.raises(ConfigurationError) as captured:
+        parse_run_config(raw)
+
+    assert any(issue.field == field for issue in captured.value.issues)
+
+
+def test_only_the_master_may_be_configured_as_a_comet_writer():
+    """One writer per experiment key is what keeps the step counters unraced."""
+
+    raw = _resolved_mapping()
+    raw["observability"] = {"comet": {"writer": "workers"}}
+
+    with pytest.raises(ConfigurationError) as captured:
+        parse_run_config(raw)
+
+    assert any(issue.field == "observability.comet.writer" for issue in captured.value.issues)
+
+
+def test_resolved_config_records_the_aggregation_and_observability_sections():
+    """Both change what a reported number means, so a run must carry its own."""
+
+    exported = resolved_config_yaml(parse_run_config(_resolved_mapping()))
+    reloaded = yaml.safe_load(exported)
+
+    assert reloaded["aggregation"]["forward_fill"] == "absorbing"
+    assert reloaded["observability"]["comet"]["heartbeat_seconds"] == 60.0
