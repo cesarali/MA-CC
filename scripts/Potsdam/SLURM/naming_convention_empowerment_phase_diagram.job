@@ -1,0 +1,182 @@
+#!/bin/bash
+###############################################################################
+# Run ONE arm of the naming-convention empowerment phase diagram on Slurm:
+# sweep population_size {10, 20} -> run every episode -> estimate the mutual
+# information (population size ; terminal convention).
+#
+# Two arms share this one script, chosen with RUN_MODE:
+#   sbatch --export=ALL,RUN_MODE=reasoning   scripts/Potsdam/SLURM/naming_convention_empowerment_phase_diagram.job
+#   sbatch --export=ALL,RUN_MODE=choice-only scripts/Potsdam/SLURM/naming_convention_empowerment_phase_diagram.job
+#
+# RUN_MODE values: reasoning (json_reason response contract), choice-only
+# (bare Q/M, no explanation). Configs:
+#   configs/runs/empowerment_runs/naming_convention_empowerment_reasoning.yaml
+#   configs/runs/empowerment_runs/naming_convention_empowerment_choice_only.yaml
+# Submit both to get the full 2 (size) x 2 (reasoning) picture - they are
+# separate files on purpose (see either config's header comment for why the
+# reasoning/no-reasoning split cannot be a second grid axis on one file).
+#
+# Both arms are live-only against the University proxy; there is no mock
+# rehearsal mode here (unlike empowerment_grid.job's mock/pilot split) - both
+# configs already set logging.comet: false unconditionally, so there is
+# nothing to accidentally publish while rehearsing.
+#
+# GENERIC PATHS: REPO_ROOT is derived from this script's own location, so it
+# works regardless of whose home directory the repo is checked out under.
+# RESULTS_ROOT and CONDA_BIN default from that, but almost certainly need a
+# per-account override on a real cluster - see the readonly block below and
+# pass e.g. --export=ALL,RUN_MODE=reasoning,RESULTS_ROOT=/work/<you>/... to
+# override. Submit from the repository root (or anywhere - REPO_ROOT no
+# longer depends on the submission directory), and see the .env check below
+# for the one thing you cannot skip: University credentials.
+###############################################################################
+#SBATCH --job-name=mascc-nc-empowerment
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+#SBATCH --time=04:00:00
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=slurm-%x-%j.out
+#SBATCH --error=slurm-%x-%j.err
+###############################################################################
+
+set -euo pipefail
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+
+# Derived from this file's own path: scripts/Potsdam/SLURM/<this file> is
+# always 3 directories below the repo root, regardless of whose account it
+# runs under.
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+readonly RESULTS_ROOT="${RESULTS_ROOT:-${REPO_ROOT}/results}"
+readonly CONDA_BIN="${CONDA_BIN:-$(command -v conda || echo "${HOME}/miniconda3/bin/conda")}"
+readonly RUN_MODE="${RUN_MODE:-reasoning}"
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+# Analysis knobs, overridable at submit time:
+#   sbatch --export=ALL,RUN_MODE=reasoning,NULL_PERMUTATIONS=2000 ...
+# Only horizon 1 is requested by default, matching aggregation.horizons: [1]
+# in both configs - the live sweep_metrics estimate during the run and this
+# offline pass then agree on what "the lag" means.
+readonly HORIZONS="${HORIZONS:-1}"
+readonly BOOTSTRAP_RESAMPLES="${BOOTSTRAP_RESAMPLES:-1000}"
+readonly NULL_PERMUTATIONS="${NULL_PERMUTATIONS:-1000}"
+
+readonly GAME_TYPE=naming_convention
+readonly SEED=20260806   # must match both configs' execution.seed
+
+case "${RUN_MODE}" in
+  reasoning)
+    CONFIG=configs/runs/empowerment_runs/naming_convention_empowerment_reasoning.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/naming_convention_empowerment_reasoning
+    EXPERIMENT_NAME=naming-convention-empowerment-reasoning
+    ;;
+  choice-only)
+    CONFIG=configs/runs/empowerment_runs/naming_convention_empowerment_choice_only.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/naming_convention_empowerment_choice_only
+    EXPERIMENT_NAME=naming-convention-empowerment-choice-only
+    ;;
+  *)
+    echo "[error] RUN_MODE must be reasoning or choice-only; got: ${RUN_MODE}" >&2
+    exit 2
+    ;;
+esac
+
+# `mas-cc experiment run` composes its own output path underneath --output-dir:
+#   <output-dir>/<game.type>/<experiment.name>/<experiment.name>-<execution.seed>/
+readonly GRID_DIR="${OUTPUT_DIR}/${GAME_TYPE}/${EXPERIMENT_NAME}/${EXPERIMENT_NAME}-${SEED}"
+
+if [[ ! -x "${CONDA_BIN}" ]]; then
+  echo "[error] Conda is unavailable at ${CONDA_BIN} - override with --export=ALL,CONDA_BIN=/path/to/conda" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/${CONFIG}" ]]; then
+  echo "[error] Grid config is missing: ${REPO_ROOT}/${CONFIG}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/.env" ]]; then
+  echo "[error] Repository credential file is missing: ${REPO_ROOT}/.env (needs POTSDAM_API_KEY, BASE_POTSDAM_LLM_URL)" >&2
+  exit 1
+fi
+
+mkdir -p "${RESULTS_ROOT}" "${OUTPUT_DIR}"
+cd "${REPO_ROOT}"
+
+# Human-readable H:M:S from a second count, for the timing report at the end.
+format_duration() {
+  local total=$1
+  printf '%02dh:%02dm:%02ds' $((total / 3600)) $((total % 3600 / 60)) $((total % 60))
+}
+
+echo "[run] arm=${RUN_MODE}"
+echo "[run] repo_root=${REPO_ROOT}"
+echo "[run] config=${REPO_ROOT}/${CONFIG}"
+echo "[run] output_dir=${OUTPUT_DIR}"
+echo "[run] grid_dir=${GRID_DIR}"
+echo "[run] slurm_job_id=${SLURM_JOB_ID:-manual}"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+###############################################################################
+# Step 1 - price the grid without sending anything. `experiment run` repeats
+# this gate internally and refuses to launch unless it returns "permitted", so
+# this call is for the human-readable report.md/grid_estimate.json artifacts.
+#
+# NOTE: do NOT wire --approve-preflight here. With pricing.mode: live the
+# preflight ID hashes provenance timestamps (retrieved_at/fresh_until) that
+# change on every re-fetch, so the approval can never match and the run
+# aborts - see scripts/Potsdam/SLURM/empowerment_grid_hpc_runbook.md.
+###############################################################################
+STEP_MARK=$SECONDS
+echo "[step] 1/3 preflight"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment preflight \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}/preflight"
+echo "[time] preflight: $(format_duration $((SECONDS - STEP_MARK)))"
+
+###############################################################################
+# Step 2 - run every cell's episodes under one shared concurrency/budget pool.
+# --no-progress because a Slurm log is not a TTY. Resume is left ON (no
+# --no-resume): a job that hits the wall clock can be resubmitted and will
+# pick up the episodes it already finished. Delete ${GRID_DIR} to force a
+# genuine re-run.
+###############################################################################
+STEP_MARK=$SECONDS
+echo "[step] 2/3 run"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --no-progress
+echo "[time] run: $(format_duration $((SECONDS - STEP_MARK)))"
+
+###############################################################################
+# Step 3 - the mutual information itself, over the completed grid: a separate
+# offline pass with a bootstrap CI and a label-permutation null, independent
+# of the live per-cell estimate the run itself already wrote.
+###############################################################################
+if [[ ! -d "${GRID_DIR}/cells" ]]; then
+  echo "[error] No cells/ under ${GRID_DIR} - did experiment.name or execution.seed change?" >&2
+  exit 1
+fi
+
+STEP_MARK=$SECONDS
+echo "[step] 3/3 analysis"
+# shellcheck disable=SC2086  # HORIZONS is an intentional multi-value argument
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc analysis empowerment \
+  --grid-dir "${GRID_DIR}" \
+  --horizons ${HORIZONS} \
+  --bootstrap-resamples "${BOOTSTRAP_RESAMPLES}" \
+  --null-permutations "${NULL_PERMUTATIONS}"
+echo "[time] analysis: $(format_duration $((SECONDS - STEP_MARK)))"
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "[done] grid=${GRID_DIR}"
+echo "[done] analysis=${GRID_DIR}/analysis"
+echo "[done] total_wall_clock: $(format_duration ${SECONDS}) (${SECONDS}s)"

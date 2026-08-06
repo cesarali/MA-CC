@@ -80,7 +80,7 @@ execution:
   # Paired with simultaneous_pair_decisions (2 concurrent decisions per
   # episode) against llm_provider.request_concurrency: 10, matching the ratio
   # naming_convention_tutorial_empowerment_university_v3.yaml uses.
-  parallelism: 5
+  parallelism: 10
   fail_fast: true
 pricing:
   mode: live
