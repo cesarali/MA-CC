@@ -598,6 +598,9 @@ observability:
                                   # heartbeat during a long grid run — a timer, not tied to episode
                                   # completions, so it can distinguish "dead master" from "slow
                                   # master."
+    progress_metrics: []             # Optional metric-name allowlist for the master heartbeat.
+                                  # Empty means all progress, rate, ETA, and budget metrics. Use
+                                  # [episodes_done] for a completion-count-only live dashboard.
     grid_image_every_n_episodes: 25  # Integer >= 1. How often the master renders and uploads a
                                   # grid-progress image to Comet, in units of completed episodes.
     sweep_experiment: true           # Boolean. Whether the grid-wide (sweep-level) Comet experiment
@@ -611,11 +614,13 @@ observability:
 | Name | What it reports |
 | --- | --- |
 | `dominant_action_share` | Band (median + percentile spread) of the leading option's share across the cell's episodes — the curve that converges to 1.0. |
+| `population_action_share_per_option` | Per-option population-share bands under the actual option labels. |
 | `action_share_relabelled` | Per-*rank* share bands (`_option_1`, `_option_2`, …) after aligning each episode on its own winner — keeps the loser's trajectory visible instead of washing it out. |
 | `active_fraction` | Fraction of the cell's episodes still running at each round — distinguishes "these runs agree" from "these runs are mostly padding" after forward-fill. |
 | `consensus_round` | Median/IQR of the round each episode converged on, over the converged subset only. |
 | `converged_fraction` | Fraction of the cell's episodes that reached consensus at all. |
 | `macrostate_counts` | Not a curve — the raw contingency tables (`terminal_outcome`, `macrostate_transition_h<N>`) a sweep metric needs. Auto-added when any `sweep_metrics` entry is requested. |
+| `m_ctrl`, `m_truth`, `m_order` | Percentile bands across episodes for the controller-target, truth-aligned, and winner-agnostic population order parameters. |
 
 **Sweep-level (grid) metrics** (`aggregation.sweep_metrics`, from `src/mas_cc/metrics/sweep.py`) —
 this is where mutual-information estimates actually live:
@@ -645,7 +650,7 @@ experiment:
 
 ---
 
-## 11. Fields that exist but currently do nothing
+## 11. Fields with limited implementations
 
 Parsed successfully, present in the schema, but not read by any code path today — set them if you
 like for future-proofing or clarity, but don't expect a behavior change:
@@ -655,9 +660,10 @@ like for future-proofing or clarity, but don't expect a behavior change:
 - `storage.format` — the recorder always writes JSONL regardless of this value.
 - `storage.overwrite` — not wired into the recorder's write path (a separate, unrelated
   `overwrite` flag exists internally for the prompt-example reporter).
-- `analysis.enabled` / `analysis.estimators` — the real grid-level MI pipeline is
-  `aggregation.sweep_metrics` (section 9) plus the `mas-cc analysis empowerment` CLI command, which
-  reads a completed grid's files directly rather than this config section.
+- `analysis.enabled` / `analysis.estimators` — for `hidden_bench_imitation`, enabling this section
+  runs the selected sensing/actuation MI statistics automatically after an experiment or grid and
+  writes `hidden_bench_imitation_analysis/`. Other games still use
+  `aggregation.sweep_metrics` (section 9) or their explicit `mas-cc analysis ...` command.
 
 If you're relying on any of these for something, that's a sign the feature needs wiring up in code
 — not a config problem.

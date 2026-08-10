@@ -73,3 +73,54 @@ all existing direct-counting variants and identifies the unsmoothed value as
 the main estimate; support, sparsity, action-degeneracy, episode-bootstrap, and
 within-episode temporal-null diagnostics are stored beside it.  No InfoNCE
 estimator or output is created.
+
+## Separate 10-episode behavior runs
+
+For inspecting each dynamics mode independently, these otherwise matched
+controlled configs run 10 episodes each. The preflight writes the cost report
+and approval ID; `--no-capture-output` plus `logging.console: true` keeps the
+run's banner, progress, and completion messages visible.
+
+Reasoning preflight and run:
+
+```bash
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+  --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
+  --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+  --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
+  --output-dir results \
+  --approve-preflight inspection/hidden_bench_imitation_reasoning_control_10_preflight/preflight_id.txt
+```
+
+Classical/no-reasoning preflight and run:
+
+```bash
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+  --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
+  --output-dir inspection/hidden_bench_imitation_classical_control_10_preflight
+
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+  --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
+  --output-dir results \
+  --approve-preflight inspection/hidden_bench_imitation_classical_control_10_preflight/preflight_id.txt
+```
+
+Every episode writes the 12 behavioral diagnostics directly to
+`metrics/streaming.csv`. To pool the 10 episodes and produce event,
+episode-level, and run-level CSVs, analyze each completed run separately:
+
+```bash
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main analysis hidden-bench-imitation \
+  --run-dir results/hidden_bench_imitation/hidden-bench-imitation-reasoning-control-10/hidden-bench-imitation-reasoning-control-10-20260810
+
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main analysis hidden-bench-imitation \
+  --run-dir results/hidden_bench_imitation/hidden-bench-imitation-classical-control-10/hidden-bench-imitation-classical-control-10-20260810
+```
+
+The most direct outputs are `event_metrics.csv`, `episode_summaries.csv`,
+`cell_summaries.csv`, and `order_parameter_trajectories.csv` in each analysis
+directory. The classical configuration retains the requested university
+provider declaration for parity, but its call plan and runtime make zero
+provider requests.

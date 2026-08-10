@@ -386,6 +386,7 @@ class CometObservability:
     grid_image_every_n_episodes: int = 25
     sweep_experiment: bool = True
     cell_experiments: bool = True
+    progress_metrics: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.writer not in COMET_WRITERS:
@@ -396,6 +397,7 @@ class CometObservability:
             raise ValueError("observability.comet.heartbeat_seconds must be positive")
         if self.grid_image_every_n_episodes < 1:
             raise ValueError("observability.comet.grid_image_every_n_episodes must be at least 1")
+        object.__setattr__(self, "progress_metrics", tuple(self.progress_metrics))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -404,6 +406,7 @@ class CometObservability:
             "grid_image_every_n_episodes": self.grid_image_every_n_episodes,
             "sweep_experiment": self.sweep_experiment,
             "cell_experiments": self.cell_experiments,
+            "progress_metrics": list(self.progress_metrics),
         }
 
 

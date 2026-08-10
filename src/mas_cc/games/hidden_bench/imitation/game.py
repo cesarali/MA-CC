@@ -631,7 +631,7 @@ class HiddenBenchImitationGame(Game):
 
     @staticmethod
     def _termination_reason(votes: Sequence[str], turn: int, rules: ImitationRules) -> str | None:
-        if turn >= rules.interactions:
+        if turn >= rules.horizon:
             return "max_interactions_reached"
         if rules.stop_on_consensus and len(set(votes)) == 1:
             return "consensus_reached"
@@ -699,7 +699,7 @@ class HiddenBenchImitationGame(Game):
                 DecisionStagePlan(
                     name="classical_provider_free_jump",
                     requests_per_interaction=0,
-                    provider_free_decisions_per_interaction=rules.interactions,
+                    provider_free_decisions_per_interaction=rules.horizon,
                     assumptions=("All initialization and jumps are provider-free.",),
                 ),
             )
@@ -734,7 +734,7 @@ class HiddenBenchImitationGame(Game):
                 DecisionStagePlan(
                     name="private_exchange",
                     requests_per_interaction=(
-                        rules.interactions * 2 * rules.messages_per_agent
+                        rules.horizon * 2 * rules.messages_per_agent
                     ),
                     retry_bound=rules.invalid_response_retries,
                     expected_attempts_per_request=expected_attempts,
@@ -750,7 +750,7 @@ class HiddenBenchImitationGame(Game):
                 ),
                 DecisionStagePlan(
                     name="focal_update",
-                    requests_per_interaction=rules.interactions,
+                    requests_per_interaction=rules.horizon,
                     retry_bound=rules.invalid_response_retries,
                     expected_attempts_per_request=expected_attempts,
                     concurrency_within_stage=1,
@@ -767,13 +767,13 @@ class HiddenBenchImitationGame(Game):
             interactions=interaction_count,
             decision_stages=stages,
             stopping_condition_assumptions=(
-                f"At most {rules.interactions} elementary focal-agent events.",
+                f"At most {rules.horizon} elementary focal-agent steps.",
                 "Default stop_on_consensus is false; equal horizons are preserved.",
             ),
             metadata={
                 "population_size": rules.n_agents,
                 "dynamics_mode": rules.dynamics_mode,
-                "elementary_interactions": rules.interactions,
+                "interactions_per_episode": rules.horizon,
                 "messages_per_agent": rules.messages_per_agent,
                 "initial_votes_provider_supplied": rules.initial_votes is not None,
                 "embedded_jump_chain": rules.dynamics_mode == "classical",

@@ -47,7 +47,7 @@ prompt:
 game:
   type: hidden_bench_vanilla
   population_size: 4
-  horizon: 42
+  horizon: 200
   topology: complete
   options:
     task_set: vanilla
@@ -72,7 +72,7 @@ control:
   mechanism: none
 execution:
   seed: 20260805
-  repetitions: 2 # episodes PER CELL, not in total
+  repetitions: 200 # episodes PER CELL, not in total
   parallelism: 4
   fail_fast: false
 pricing:

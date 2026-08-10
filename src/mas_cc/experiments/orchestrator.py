@@ -39,9 +39,11 @@ from mas_cc.llm_runtime.providers import (
     create_llm_provider,
     resolve_budget_limits,
 )
+from mas_cc.llm_runtime.prompts import PromptMarkdownLogger
 from mas_cc.observability import DetailedAuditPolicy, RunRecorder, price_snapshot_hash
 from mas_cc.planning import (
     ExperimentPreflightEstimate,
+    GameCallPlan,
     GridPreflightEstimate,
     estimate_input_tokens,
     static_experiment_preflight,
@@ -51,6 +53,7 @@ from mas_cc.storage import results_run_dir
 
 from .aggregation import GridAggregator, aggregation_ground_truth
 from .comet_monitor import CellLayout, MasterMonitor, SweepLayout, sweep_parameters
+from .configured_analysis import run_configured_analysis, validate_configured_analysis
 from .console import ExperimentProgress, format_banner, format_grid_banner, format_money, print_banner
 
 LOGGER = logging.getLogger("mas_cc.experiment")
@@ -142,6 +145,12 @@ def _pricing_terms(quote: PricingQuote) -> dict[str, Any] | None:
     return terms
 
 
+def _steps_per_episode(plan: GameCallPlan) -> int:
+    """Return the user-visible steps represented by one episode."""
+
+    return int(plan.metadata.get("interactions_per_episode", plan.interactions.expected))
+
+
 def _provider_registry():
     """The kernel's provider registry plus the game-layer synthetic agent.
 
@@ -204,19 +213,49 @@ class _CellCompletion:
 
 
 class _RoundTickingObserver:
-    """Adds budget state and progress ticks at the runtime callback boundary."""
+    """Adds budget/progress ticks and optional prompt Markdown at runtime."""
 
-    def __init__(self, recorder: RunRecorder, guard: RuntimeBudgetGuard, progress: ExperimentProgress, episode_label: str) -> None:
+    def __init__(
+        self,
+        recorder: RunRecorder,
+        guard: RuntimeBudgetGuard,
+        progress: ExperimentProgress,
+        episode_label: str,
+        *,
+        prompt_logger: PromptMarkdownLogger | None = None,
+        prompt_example_rounds: int = 0,
+    ) -> None:
         self.recorder = recorder
         self.guard = guard
         self.progress = progress
         self.episode_label = episode_label
+        self.prompt_logger = prompt_logger
+        self.prompt_example_rounds = prompt_example_rounds
+        self._logged_rounds: set[int] = set()
 
     def event(self, event_type: str, **payload: Any) -> None:
         self.recorder.event(event_type, **payload)
 
     def record_attempt(self, **payload: Any) -> None:
         self.recorder.record_attempt(**payload, budget_status=self.guard.status())
+        round_index = payload.get("round_index")
+        attempt = payload.get("attempt")
+        if (
+            self.prompt_logger is not None
+            and attempt == 1
+            and round_index not in self._logged_rounds
+            and len(self._logged_rounds) < self.prompt_example_rounds
+        ):
+            agent_id = payload["request"].metadata.get("agent_id")
+            self.prompt_logger.log(
+                payload["prompt"],
+                interaction_id=f"round_{round_index:03d}",
+                title=f"Round {round_index} — agent {agent_id}",
+                metadata={"round_index": round_index, "agent_id": str(agent_id)},
+                response=payload.get("response"),
+                validation_error=payload.get("validation_error"),
+            )
+            self._logged_rounds.add(round_index)
 
     def record_interaction(self, **payload: Any) -> None:
         self.recorder.record_interaction(**payload, budget_status=self.guard.checkpoint_state())
@@ -395,7 +434,24 @@ async def _execute_episode(
             price_snapshot_hash=price_hash, metrics=metrics, to_round_view=to_round_view,
             binning=episode_config.metrics.binning_policy(episode_config.game.population_size),
         )
-        observer = _RoundTickingObserver(recorder, guard, progress, episode_label)
+        prompt_example_rounds = int(
+            dict(episode_config.logging.options.get("prompt_examples", {}) or {}).get(
+                "count", 0
+            )
+        )
+        prompt_logger = (
+            PromptMarkdownLogger(episode_dir / "prompts", overwrite=True)
+            if prompt_example_rounds > 0
+            else None
+        )
+        observer = _RoundTickingObserver(
+            recorder,
+            guard,
+            progress,
+            episode_label,
+            prompt_logger=prompt_logger,
+            prompt_example_rounds=prompt_example_rounds,
+        )
         try:
             result = await runtime(observer)
         except Exception as exc:
@@ -554,6 +610,7 @@ async def run_experiment(
 
     if config.execution.repetitions < 1:
         raise ValueError("config.execution.repetitions must be at least 1")
+    validate_configured_analysis(config)
     override = (
         config.pricing.explicit_unknown_price_override
         if explicit_override is None else explicit_override
@@ -641,7 +698,7 @@ async def run_experiment(
 
     progress = ExperimentProgress(
         total_episodes=config.execution.repetitions,
-        total_rounds=plan.interactions.expected * config.execution.repetitions,
+        total_rounds=_steps_per_episode(plan) * config.execution.repetitions,
         show=show_progress,
     )
     monitor = _master_monitor(config, run_id, config.execution.repetitions)
@@ -680,6 +737,12 @@ async def run_experiment(
         preflight=preflight, budget_status=guard.status(), started_at=started_at, finished_at=_now(),
     )
     _write_experiment_summary(run_dir, config, result)
+    # Analysis needs at least one completed trajectory. If every episode failed
+    # before its first step, preserve the episode/provider failures in the
+    # returned result instead of masking them with a secondary missing-file
+    # exception.
+    if result.completed or result.skipped_resumed:
+        run_configured_analysis(config, run_dir)
     return result
 
 
@@ -813,6 +876,7 @@ async def run_experiment_grid(
     """
 
     cells = grid.cells
+    validate_configured_analysis(grid.base)
     for cell in cells:
         if cell.config.execution.repetitions < 1:
             raise ValueError("every cell's execution.repetitions must be at least 1")
@@ -886,7 +950,7 @@ async def run_experiment_grid(
         _write(cell_dir / "overrides.json", _json(cell.to_dict()))
         episodes_dir = cell_dir / "data" / "episodes"
         plan = game.call_plan(cell.config.game)
-        total_rounds += plan.interactions.expected * cell.config.execution.repetitions
+        total_rounds += _steps_per_episode(plan) * cell.config.execution.repetitions
         for index in range(cell.config.execution.repetitions):
             episode_seed = int(cell_seed.derive(f"episode:{index}"))
             episode_id = f"{cell.cell_id}-{index:04d}"
@@ -978,6 +1042,7 @@ async def run_experiment_grid(
                 }
             ),
         )
+    run_configured_analysis(base, grid_dir)
     return result
 
 

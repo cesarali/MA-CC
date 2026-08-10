@@ -127,11 +127,17 @@ def test_run_experiment_fail_fast_aborts_remaining_episodes(tmp_path: Path, monk
         return await real_run_game(game, episode_config, provider, **kwargs)
 
     monkeypatch.setattr("mas_cc.experiments.orchestrator.run_game", flaky_run_game)
+    analysis_calls: list[Path] = []
+    monkeypatch.setattr(
+        "mas_cc.experiments.orchestrator.run_configured_analysis",
+        lambda _config, run_dir: analysis_calls.append(Path(run_dir)),
+    )
 
     result = run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
     statuses = [outcome.status for outcome in result.outcomes]
     assert statuses == ["failed", "skipped_aborted", "skipped_aborted"]
     assert len(calls) == 1  # aborted episodes never even attempted a provider call
+    assert analysis_calls == []  # no secondary missing-trajectory error masks the failure
 
 
 def test_run_experiment_denies_launch_when_total_demand_exceeds_budget(tmp_path: Path):
@@ -166,3 +172,29 @@ def test_run_experiment_naming_convention_dispatch_wires_recorder_and_metrics(tm
         assert (episode_dir / "metrics" / "final.csv").is_file()
         comet_summary = (episode_dir / "comet_summary.json").read_text(encoding="utf-8")
         assert '"status": "disabled"' in comet_summary  # per-episode Comet is deliberately off
+
+
+def test_run_experiment_writes_one_prompt_and_response_markdown_per_configured_round(
+    tmp_path: Path,
+):
+    config = _with_ample_budget(_naming_convention_config(repetitions=1, parallelism=1))
+    config = replace(
+        config,
+        logging=replace(
+            config.logging,
+            options={**config.logging.options, "prompt_examples": {"count": 12}},
+        ),
+    )
+
+    result = run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
+
+    episode_dir = next((result.output_dir / "data" / "episodes").iterdir())
+    prompt_files = sorted((episode_dir / "prompts").glob("round_*.md"))
+    assert [path.name for path in prompt_files] == [
+        f"round_{round_index:03d}.md" for round_index in range(1, 13)
+    ]
+    for path in prompt_files:
+        markdown = path.read_text(encoding="utf-8")
+        assert "## Exact messages sent to the LLM" in markdown
+        assert "## Raw response received" in markdown
+        assert '{"value":"Q","reason":"seeded mock"}' in markdown

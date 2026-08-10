@@ -96,6 +96,21 @@ def test_the_sweep_experiment_steps_by_episodes_done(sinks):
     assert last["progress_fraction"] == pytest.approx(0.5)
 
 
+def test_progress_metrics_can_be_limited_to_episode_count(sinks):
+    monitor = _monitor(
+        settings=CometObservability(
+            heartbeat_seconds=3600.0,
+            progress_metrics=("episodes_done",),
+        )
+    )
+    monitor.start()
+    monitor.episode_finished(status="completed", cell_id="cell-0000")
+
+    metrics, step = sinks[0].metrics[-1]
+    assert metrics == {"episodes_done": 1.0}
+    assert step == 1
+
+
 def test_the_heartbeat_ticks_on_a_timer_even_when_nothing_completes(sinks):
     """Spec acceptance check 5, and the whole reason the heartbeat is a timer.
 

@@ -23,7 +23,7 @@ def _mapping(value: Any, field: str) -> Mapping[str, Any]:
 @dataclass(frozen=True, slots=True)
 class ImitationRules:
     n_agents: int
-    interactions: int
+    horizon: int
     dynamics_mode: str
     task_set: str
     task_id: str | None
@@ -56,12 +56,14 @@ class ImitationRules:
         n_agents = int(options.get("n_agents", config.population_size))
         if n_agents != config.population_size:
             raise ValueError("game.options.n_agents must equal game.population_size")
-        interactions = options.get("interactions", config.horizon)
+        if "interactions" in options:
+            raise ValueError(
+                "game.options.interactions is no longer supported; use game.horizon"
+            )
         messages = options.get("messages_per_agent", options.get("messages_per_turn", 1))
         memory_size = options.get("memory_size", 0)
         retries = options.get("invalid_response_retries", 0)
         for field, value, minimum in (
-            ("interactions", interactions, 0),
             ("messages_per_agent", messages, 0),
             ("memory_size", memory_size, 0),
             ("invalid_response_retries", retries, 0),
@@ -122,7 +124,7 @@ class ImitationRules:
 
         return cls(
             n_agents=n_agents,
-            interactions=int(interactions),
+            horizon=config.horizon,
             dynamics_mode=mode,
             task_set=str(options.get("task_set", "vanilla")),
             task_id=(None if options.get("task_id") is None else str(options["task_id"])),

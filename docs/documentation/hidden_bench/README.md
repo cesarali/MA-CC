@@ -10,6 +10,11 @@ Reasoning under Distributed Information in Multi-Agent LLMs* (ICML 2026).
 | `hidden_bench_naming` | [`games/hidden_bench/naming/`](../../src/mas_cc/games/hidden_bench/naming/) | Dyadic: private pairs, private per-partner memory, on the expanded (N > 4) populations. |
 | `hidden_bench_imitation` | [`games/hidden_bench/imitation/`](../../src/mas_cc/games/hidden_bench/imitation/) | One-focal opinion dynamics with matched LLM-reasoning and provider-free classical kernels plus partial-observation feedback control. |
 
+The complete reference for the imitation game, including all metric
+definitions, MI/CMI equations, estimator variants, report files, and executable
+Conda commands, is
+[`hidden_bench_imitation.md`](hidden_bench_imitation.md).
+
 The corpus is **not** produced here — see
 [`data_provenance.md`](data_provenance.md), which also records which parts of the
 upstream preprocessing are still unfinished. For the complete generation,

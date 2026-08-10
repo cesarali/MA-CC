@@ -30,12 +30,16 @@ CLASSICAL_CONFIG = "configs/runs/hidden_bench/hidden_bench_imitation_classical.y
 REASONING_CONFIG = "configs/runs/hidden_bench/hidden_bench_imitation_reasoning_mock.yaml"
 
 
-def _config(path: str, **options):
+def _config(path: str, *, horizon: int | None = None, **options):
     config = load_run_config(path, environment={})
-    if options:
+    if options or horizon is not None:
         config = replace(
             config,
-            game=replace(config.game, options={**dict(config.game.options), **options}),
+            game=replace(
+                config.game,
+                horizon=config.game.horizon if horizon is None else horizon,
+                options={**dict(config.game.options), **options},
+            ),
         )
     return config
 
@@ -54,6 +58,21 @@ def test_game_is_registered_and_shipped_configs_load():
     assert "hidden_bench_imitation" in create_default_game_registry().names()
     assert _config(CLASSICAL_CONFIG).game.type == "hidden_bench_imitation"
     assert _config(REASONING_CONFIG).game.type == "hidden_bench_imitation"
+
+
+def test_horizon_is_the_only_step_limit():
+    config = _config(CLASSICAL_CONFIG, horizon=3)
+    assert len(_run(config, control=NoneControl()).interactions) == 3
+
+    legacy = replace(
+        config,
+        game=replace(
+            config.game,
+            options={**dict(config.game.options), "interactions": 1},
+        ),
+    )
+    with pytest.raises(ValueError, match="use game.horizon"):
+        HiddenBenchImitationGame().rules(legacy.game)
 
 
 def test_order_parameters_are_correct_for_uniform_three_and_four_option_states():
@@ -76,7 +95,7 @@ def test_classical_mode_is_provider_free_deterministic_and_one_focal_per_jump():
         calls += 1
         raise AssertionError("classical mode called the provider")
 
-    config = _config(CLASSICAL_CONFIG, interactions=12)
+    config = _config(CLASSICAL_CONFIG, horizon=12)
     provider = MockLLMProvider(config.llm_provider, response_factory=forbidden)
     first = _run(config, provider=provider, control=create_control(config.control))
     second = _run(
@@ -111,7 +130,7 @@ def test_classical_supports_a_four_option_task_end_to_end():
     config = _config(
         CLASSICAL_CONFIG,
         task_id="scientists_animal_base_decision",
-        interactions=5,
+        horizon=5,
         initialization={"mode": "explicit", "initial_votes": list(options)},
     )
     result = _run(config, control=NoneControl())
@@ -126,7 +145,7 @@ def test_exact_replication_initializes_the_frozen_scaled_population():
         task_set="expanded",
         assignment_scheme="exact_replication",
         n_agents=32,
-        interactions=1,
+        horizon=1,
         initialization={
             "mode": "distribution",
             "initial_votes": None,
@@ -140,7 +159,7 @@ def test_exact_replication_initializes_the_frozen_scaled_population():
 
 
 def test_reasoning_initializes_every_agent_before_events_and_only_focal_vote_changes():
-    config = _config(REASONING_CONFIG, interactions=3)
+    config = _config(REASONING_CONFIG, horizon=3)
     result = _run(config)
     assert len(result.initial_decisions) == config.game.population_size
     assert all(agent.committed_action is not None for agent in result.initial_state.agents)
@@ -158,7 +177,7 @@ def test_reasoning_initializes_every_agent_before_events_and_only_focal_vote_cha
 
 
 def test_private_observation_contains_only_the_agents_assigned_evidence():
-    config = _config(REASONING_CONFIG, interactions=1)
+    config = _config(REASONING_CONFIG, horizon=1)
     game = HiddenBenchImitationGame()
     state = game.initialize(config.game, config.execution.seed)
     focal = state.agents[0].agent_id
@@ -177,7 +196,7 @@ def test_private_observation_contains_only_the_agents_assigned_evidence():
 
 
 def test_controller_measurement_drives_both_actions_and_logs_feedback_tuple():
-    config = _config(CLASSICAL_CONFIG, interactions=20)
+    config = _config(CLASSICAL_CONFIG, horizon=20)
     result = _run(config, control=create_control(config.control))
     actions = {item.transition.event["controller_action"] for item in result.interactions}
     assert actions == {"NO_OP", "ADVOCATE_Z"}
@@ -198,7 +217,6 @@ def test_reasoning_controller_advocacy_never_forces_the_vote():
             base.game,
             options={
                 **dict(base.game.options),
-                "interactions": 1,
                 "initialization": {
                     "mode": "explicit",
                     "initial_votes": [wrong] * 4,
@@ -216,6 +234,7 @@ def test_reasoning_controller_advocacy_never_forces_the_vote():
             options={"response": '{"vote": "East Town", "rationale": "I reject it"}'},
         ),
     )
+    config = replace(config, game=replace(config.game, horizon=1))
     result = _run(config, control=create_control(config.control))
     event = result.interactions[0].transition.event
     assert event["controller_action"] == "ADVOCATE_Z"
@@ -224,7 +243,7 @@ def test_reasoning_controller_advocacy_never_forces_the_vote():
 
 
 def test_none_control_is_exactly_the_uncontrolled_path():
-    config = _config(CLASSICAL_CONFIG, interactions=8)
+    config = _config(CLASSICAL_CONFIG, horizon=8)
     config = replace(config, control=replace(config.control, mechanism="none", options={}))
     without_argument = _run(config)
     explicit_none = _run(config, control=NoneControl())

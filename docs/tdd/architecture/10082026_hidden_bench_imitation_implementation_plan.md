@@ -130,6 +130,7 @@ At minimum support:
 game:
   type: hidden_bench_imitation
   population_size: 4
+  horizon: 20                  # maximum elementary focal-agent update steps
   options:
     task_set: vanilla           # vanilla | expanded
     task_id: null
@@ -138,7 +139,6 @@ game:
 
     dynamics_mode: reasoning    # reasoning | classical
 
-    interactions: 20            # number of elementary focal-agent update events
     pairing: uniform_two_distinct
     messages_per_agent: 1       # reasoning mode only
     memory_size: 0              # 0 = unbounded, if current conventions use this

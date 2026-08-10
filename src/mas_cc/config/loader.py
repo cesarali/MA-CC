@@ -807,7 +807,7 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
         comet,
         {
             "writer", "heartbeat_seconds", "grid_image_every_n_episodes",
-            "sweep_experiment", "cell_experiments",
+            "sweep_experiment", "cell_experiments", "progress_metrics",
         },
         comet_path,
         issues,
@@ -834,6 +834,7 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
                 comet, "sweep_experiment", comet_path, issues, default=True
             ),
             cell_experiments=_boolean(comet, "cell_experiments", comet_path, issues, default=True),
+            progress_metrics=_string_tuple(comet, "progress_metrics", comet_path, issues),
         ),
     )
 

@@ -263,6 +263,9 @@ class MasterMonitor:
             }
         )
         metrics.update(_budget_metrics(self._budget))
+        if self.settings.progress_metrics:
+            requested = set(self.settings.progress_metrics)
+            return {name: value for name, value in metrics.items() if name in requested}
         return metrics
 
     def _publish(self) -> None:

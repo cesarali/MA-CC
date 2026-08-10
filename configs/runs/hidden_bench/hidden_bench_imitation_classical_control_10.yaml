@@ -1,0 +1,170 @@
+# Standalone 10-episode provider-free classical run for the same diagnostics.
+# Preflight and run from the repository root with console output visible:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
+#     --output-dir inspection/hidden_bench_imitation_classical_control_10_preflight
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
+#     --output-dir results \
+#     --approve-preflight inspection/hidden_bench_imitation_classical_control_10_preflight/preflight_id.txt
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation
+  population_size: 4
+  horizon: 500
+  topology: complete
+  options:
+    task_set: vanilla
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: bijective
+    dynamics_mode: classical
+    pairing: uniform_two_distinct
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    stop_on_consensus: false
+    initialization:
+      mode: explicit
+      initial_votes: [East Town, East Town, North Hill, West City]
+    classical:
+      kernel: irisarri_multi_opinion
+      forward_rate: 1.0
+      reverse_rate: 1.0
+      interaction_factor: destination_count_plus_offset
+      interaction_offset: 1.0
+      control_strength: 2.0
+control:
+  mechanism: threshold_target
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: threshold_target
+    threshold: 0.5
+execution:
+  seed: 20260811
+  repetitions: 10
+  parallelism: 4
+  fail_fast: false
+pricing:
+  # This dynamics mode has an exact zero-call plan. The shared university
+  # provider has no offline catalogue price, so allow that unknown price only
+  # for this provider-free run; the zero request/token budgets below remain
+  # hard runtime guards.
+  mode: offline
+  max_age_seconds: 86400
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  max_provider_requests: 0
+  max_input_tokens: 0
+  max_output_tokens: 0
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  # MASTER LOGGING, SWITCH 1 of 2: ON / OFF.
+  comet: true
+  options:
+    show_metrics: true
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: true
+  estimators:
+    - sensing_mi
+    - population_actuation_cmi
+    - target_actuation_cmi
+    - focal_actuation_cmi
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260810
+metrics:
+  enabled: true
+  # These are recorded in every episode. The aggregation section below turns
+  # them into one percentile curve per metric for this 10-episode experiment.
+  comet_export:
+    - delta_m_ctrl
+    - delta_m_truth
+    - delta_m_order
+    - delta_H_vote
+    - focal_changed
+    - focal_adopted_target
+    - focal_left_target
+    - u_advocate
+    - sensor_target_share
+    - population_target_share
+    - sensor_target_error
+    - sensor_target_abs_error
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  # Explicitly replace the generic defaults that produced the unrelated
+  # dominant/action-share/active-fraction plots.
+  cell_metrics:
+    - delta_m_ctrl
+    - delta_m_truth
+    - delta_m_order
+    - delta_H_vote
+    - focal_changed
+    - focal_adopted_target
+    - focal_left_target
+    - u_advocate
+    - sensor_target_share
+    - population_target_share
+    - sensor_target_error
+    - sensor_target_abs_error
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+observability:
+  schema_version: 1
+  comet:
+    # -------------------------------------------------------------------
+    # MASTER LOGGING, SWITCH 2 of 2: SHAPE. Only read when comet: true.
+    # -------------------------------------------------------------------
+    writer: master_only
+    heartbeat_seconds: 20
+    # Re-render the grid picture every N finished episodes. Comet's Image Panel
+    # steps through same-named images, so this scrubs as an animation of the
+    # grid filling in.
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true       # false = no liveness dashboard
+    # Required for the round-stepped aggregate curves above. For this non-grid
+    # run, the single cell is the complete 10-episode experiment.
+    cell_experiments: true
+experiment:
+  name: hidden-bench-imitation-classical-control-10
+  description: Ten provider-free controlled classical episodes with pooled response diagnostics.
+  tags: [hidden-bench, imitation, classical, control, diagnostics]

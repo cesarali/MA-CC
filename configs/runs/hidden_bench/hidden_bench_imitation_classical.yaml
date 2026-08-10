@@ -24,7 +24,6 @@ game:
     profile: hidden
     assignment_scheme: bijective
     dynamics_mode: classical
-    interactions: 20
     pairing: uniform_two_distinct
     messages_per_agent: 1
     memory_size: 0
@@ -84,4 +83,3 @@ experiment:
   name: hidden-bench-imitation-classical-smoke
   description: Provider-free controlled multi-opinion HiddenBench imitation trajectory.
   tags: [hidden-bench, imitation, classical, control, smoke]
-

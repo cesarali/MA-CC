@@ -160,6 +160,32 @@ class ActiveFraction(AggregateMetric):
         )
 
 
+class PopulationMetricBand(AggregateMetric):
+    """Percentile band for one recorded population-scope streaming metric.
+
+    This is the generic bridge from an episode metric in ``streaming.csv`` to
+    a run/cell curve.  In particular, it lets behavioral event diagnostics be
+    aggregated and published by the master without enabling one Comet writer
+    per episode.
+    """
+
+    def __init__(self, source: str, *, name: str | None = None) -> None:
+        super().__init__(name or source)
+        self.source = source
+
+    def compute(
+        self, episodes: Sequence[EpisodeFrame], policy: AggregationPolicy
+    ) -> AggregateResult:
+        series = [
+            values
+            for frame in episodes
+            if (values := frame.population.get(self.source, ()))
+        ]
+        if not series:
+            return AggregateResult()
+        return AggregateResult(curves={self.name: band_curve(series, policy)})
+
+
 def _consensus_round(frame: EpisodeFrame, threshold: float) -> float | None:
     """This episode's consensus round, or ``None`` if it never converged.
 
@@ -286,13 +312,38 @@ class MacrostateCounts(AggregateMetric):
         )
 
 
+BEHAVIORAL_EVENT_METRICS = (
+    "delta_m_ctrl",
+    "delta_m_truth",
+    "delta_m_order",
+    "delta_H_vote",
+    "focal_changed",
+    "focal_adopted_target",
+    "focal_left_target",
+    "u_advocate",
+    "sensor_target_share",
+    "population_target_share",
+    "sensor_target_error",
+    "sensor_target_abs_error",
+)
+
+POPULATION_BAND_METRICS = (
+    "m_ctrl",
+    "m_truth",
+    "m_order",
+    *BEHAVIORAL_EVENT_METRICS,
+)
+
+
 CELL_METRICS = {
     "dominant_action_share": DominantActionShare,
+    "population_action_share_per_option": ActionShareRelabelled,
     "action_share_relabelled": ActionShareRelabelled,
     "active_fraction": ActiveFraction,
     "consensus_round": ConsensusRound,
     "converged_fraction": ConvergedFraction,
     "macrostate_counts": MacrostateCounts,
+    **{name: PopulationMetricBand for name in POPULATION_BAND_METRICS},
 }
 """Config name -> class, for resolving ``aggregation.cell_metrics``."""
 
@@ -315,7 +366,13 @@ def create_cell_metrics(
             f"unknown aggregation.cell_metrics: {', '.join(unknown)}; "
             f"available: {', '.join(sorted(CELL_METRICS))}"
         )
-    arguments: dict[str, dict[str, Any]] = {"macrostate_counts": {"horizons": tuple(horizons)}}
+    arguments: dict[str, dict[str, Any]] = {
+        "macrostate_counts": {"horizons": tuple(horizons)},
+        "population_action_share_per_option": {
+            "name": "population_action_share_per_option"
+        },
+        **{name: {"source": name} for name in POPULATION_BAND_METRICS},
+    }
     return tuple(CELL_METRICS[name](**arguments.get(name, {})) for name in names)
 
 
@@ -329,5 +386,6 @@ __all__ = [
     "ConvergedFraction",
     "DominantActionShare",
     "MacrostateCounts",
+    "PopulationMetricBand",
     "create_cell_metrics",
 ]

@@ -1,0 +1,171 @@
+# Standalone 10-episode reasoning run for inspecting controller response metrics.
+#
+# Run this from a terminal. First enter the repository (change this path if your
+# checkout lives somewhere else):
+#   cd /home/cesarali/LanguageGames/MA-CC
+#
+# The commands below use the MA-CC Conda environment without requiring you to
+# activate it. `--no-capture-output` is important: it keeps logs, progress bars,
+# provider errors, and the final result path visible while the command runs.
+# Make sure the repository-root .env contains POTSDAM_API_KEY and
+# BASE_POTSDAM_LLM_URL before launching.
+#
+# 1. Check availability, pricing, request counts, and budget (no model calls):
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
+#     --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+#
+# 2. Run all 10 episodes with live console output:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
+#     --output-dir results
+#
+# The run performs its own fresh pricing and runtime-budget checks. The optional
+# --approve-preflight flag is intentionally omitted here because live pricing
+# metadata currently changes the approval fingerprint between the two commands.
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 60
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation
+  population_size: 4
+  horizon: 100
+  topology: complete
+  options:
+    task_set: vanilla
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: bijective
+    dynamics_mode: reasoning
+    pairing: uniform_two_distinct
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    stop_on_consensus: false
+    initialization:
+      mode: explicit
+      initial_votes: [East Town, East Town, North Hill, West City]
+    classical:
+      kernel: irisarri_multi_opinion
+      forward_rate: 1.0
+      reverse_rate: 1.0
+      interaction_factor: destination_count_plus_offset
+      interaction_offset: 1.0
+      control_strength: 2.0
+control:
+  mechanism: threshold_target
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: threshold_target
+    threshold: 0.5
+execution:
+  seed: 20260840
+  repetitions: 5
+  parallelism: 5
+  fail_fast: false
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 50.0
+  max_cost_per_run: 50.0
+  max_provider_requests: 2500
+  max_input_tokens: 10000000
+  max_output_tokens: 500000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  # MASTER LOGGING, SWITCH 1 of 2: ON / OFF.
+  comet: true
+  options:
+    show_metrics: true
+    prompt_examples:
+      # One prompt/response Markdown file for every interaction step in each
+      # episode: data/episodes/<episode-id>/prompts/round_NNN.md.
+      count: 20
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  # Run all across-episode sensing/control information channels automatically.
+  # Results are written below the run directory in
+  # hidden_bench_imitation_analysis/information_estimates.csv.
+  enabled: true
+  estimators:
+    - sensing_mi
+    - population_actuation_cmi
+    - target_actuation_cmi
+    - focal_actuation_cmi
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260813
+metrics:
+  enabled: true
+  # Parallel episodes have independent interaction timelines. Record their
+  # metrics locally, but do not stream any per-episode series to Comet.
+  comet_export: []
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  # Once all episodes finish, aggregate only the population-order trajectories
+  # needed to assess consensus and target/truth alignment.
+  cell_metrics:
+    - m_ctrl
+    - m_truth
+    - m_order
+    - population_action_share_per_option
+    - dominant_action_share
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+observability:
+  schema_version: 1
+  comet:
+    # -------------------------------------------------------------------
+    # MASTER LOGGING, SWITCH 2 of 2: SHAPE. Only read when comet: true.
+    # -------------------------------------------------------------------
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    # Re-render the grid picture every N finished episodes. Comet's Image Panel
+    # steps through same-named images, so this scrubs as an animation of the
+    # grid filling in.
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true       # false = no liveness dashboard
+    # Publish one statistically aggregated experiment only after all configured
+    # episodes in this single cell have finished.
+    cell_experiments: true
+experiment:
+  name: hidden-bench-imitation-reasoning-control-10
+  description: Ten controlled reasoning episodes with event and pooled response diagnostics.
+  tags: [hidden-bench, imitation, reasoning, control, diagnostics]

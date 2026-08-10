@@ -141,7 +141,7 @@ async def run_hidden_bench_imitation_game(
     )
 
     interactions: list[ImitationInteractionRecord] = []
-    while state.turn < rules.interactions and not state.terminated:
+    while state.turn < rules.horizon and not state.terminated:
         focal, sampled_peer = game.select_participants(state, config.game, participant_rng)
         signal = None
         if resolved_control is not None:

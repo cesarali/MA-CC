@@ -95,6 +95,35 @@ def test_episode_without_streaming_metrics_is_skipped_rather_than_counted(tmp_pa
     assert read_episode_frame(tmp_path / "ep") is None
 
 
+def test_population_metric_band_aggregates_a_recorded_event_metric(tmp_path: Path):
+    cell = write_cell(
+        tmp_path / "cell",
+        [{"Q": [0.5, 0.7], "M": [0.5, 0.3]}] * 2,
+    )
+    episode_dirs = sorted((cell / "data" / "episodes").iterdir())
+    values = ([0.0, 0.5], [0.0, 1.0])
+    for episode_dir, episode_values in zip(episode_dirs, values):
+        with (episode_dir / "metrics" / "streaming.csv").open(
+            "a", newline="", encoding="utf-8"
+        ) as stream:
+            writer = csv.writer(stream)
+            for round_index, value in enumerate(episode_values, start=1):
+                writer.writerow(
+                    [round_index, episode_dir.name, "", "", "delta_m_ctrl", value]
+                )
+
+    result = aggregate_cell(
+        read_cell_episodes(cell),
+        create_cell_metrics(("delta_m_ctrl",)),
+        AggregationPolicy(percentiles=(0, 50, 100), rolling_window=1),
+    )
+
+    assert result.curves["delta_m_ctrl"].points == {
+        1: (0.0, 0.0, 0.0),
+        2: (0.5, 0.75, 1.0),
+    }
+
+
 # --- 4.1 forward-fill absorbed episodes --------------------------------------
 
 
@@ -188,7 +217,7 @@ def test_relabelled_curves_stay_symmetric_when_no_option_systematically_wins(tmp
     assert winner[3] == pytest.approx(1.0)
 
 
-def test_without_relabelling_the_same_cell_washes_out_to_a_flat_half(tmp_path: Path):
+def test_population_action_share_uses_actual_option_labels(tmp_path: Path):
     """The bias 4.2 exists to remove, demonstrated on the same data."""
 
     to_q = {"Q": [0.5, 0.7, 1.0], "M": [0.5, 0.3, 0.0]}
@@ -197,11 +226,13 @@ def test_without_relabelling_the_same_cell_washes_out_to_a_flat_half(tmp_path: P
 
     result = aggregate_cell(
         read_cell_episodes(cell),
-        create_cell_metrics(("action_share_relabelled",)),
+        create_cell_metrics(("population_action_share_per_option",)),
         AggregationPolicy(rolling_window=1, relabel_by_winner=False),
     )
 
-    terminal = dict(result.curves["action_share_relabelled_Q"].level("p50"))[3]
+    terminal = dict(
+        result.curves["population_action_share_per_option_Q"].level("p50")
+    )[3]
     assert terminal == pytest.approx(0.5)  # "nothing happened", which is false
 
 

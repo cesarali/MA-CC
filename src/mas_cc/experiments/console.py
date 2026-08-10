@@ -131,14 +131,14 @@ class ExperimentProgress:
                 dynamic_ncols=True, position=0, mininterval=0.25,
             )
             self._round_bar = tqdm(
-                total=total_rounds, desc="Rounds", unit="round",
+                total=total_rounds, desc="Steps", unit="step",
                 dynamic_ncols=True, position=1, mininterval=0.25,
             )
 
     def round_tick(self, episode_id: str, round_index: int | None, count: int = 1) -> None:
         if self._round_bar is not None:
             if round_index is not None:
-                self._round_bar.set_postfix_str(f"{episode_id} | round {round_index}", refresh=False)
+                self._round_bar.set_postfix_str(f"{episode_id} | step {round_index}", refresh=False)
             self._round_bar.update(count)
 
     def episode_done(self, episode_id: str, status: str) -> None:

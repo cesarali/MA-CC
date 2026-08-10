@@ -29,6 +29,12 @@ from .metrics import behavioral_transition_metrics, population_observables
 
 MAIN_ESTIMATOR_VARIANT = "unsmoothed"
 ACTION_ENTROPY_EPSILON_BITS = 1e-6
+INFORMATION_STATISTICS = (
+    "sensing_mi",
+    "population_actuation_cmi",
+    "target_actuation_cmi",
+    "focal_actuation_cmi",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,17 +455,21 @@ def information_analysis(
     null_permutations: int = 1000,
     confidence: float = 0.95,
     seed: int = 1,
+    statistics: Sequence[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Estimate the four requested channels with episode bootstrap and temporal nulls."""
 
     if not 0 < confidence < 1:
         raise ValueError("confidence must be between zero and one")
-    names = (
-        "sensing_mi",
-        "population_actuation_cmi",
-        "target_actuation_cmi",
-        "focal_actuation_cmi",
-    )
+    names = tuple(INFORMATION_STATISTICS if statistics is None else statistics)
+    unknown = sorted(set(names) - set(INFORMATION_STATISTICS))
+    if unknown:
+        raise ValueError(
+            "unknown HiddenBench imitation information statistic(s): "
+            + ", ".join(unknown)
+        )
+    if not names:
+        raise ValueError("at least one HiddenBench imitation information statistic is required")
     estimates: list[dict[str, Any]] = []
     null_rows: list[dict[str, Any]] = []
     alpha = (1 - confidence) / 2
@@ -657,6 +667,7 @@ def analyze_hidden_bench_imitation(
     null_permutations: int = 1000,
     confidence: float = 0.95,
     seed: int = 1,
+    statistics: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Write the first-pilot behavioral, response, support, MI, and null report."""
 
@@ -722,6 +733,7 @@ def analyze_hidden_bench_imitation(
             null_permutations=null_permutations,
             confidence=confidence,
             seed=seed,
+            statistics=statistics,
         )
         cell_row = next(row for row in cell_rows if row["cell_id"] == cell_id)
         common = {
@@ -779,6 +791,9 @@ def analyze_hidden_bench_imitation(
         "scientific_cells": sorted(row["scientific_cell"] for row in cell_rows if row["scientific_cell"]),
         "matched_initial_state_across_cells": len(initial_states) == 1,
         "main_estimator_variant": MAIN_ESTIMATOR_VARIANT,
+        "information_statistics": list(
+            INFORMATION_STATISTICS if statistics is None else statistics
+        ),
         "auc_convention": "equal_event_spacing_mean_including_initial_state",
         "output_dir": str(destination),
     }
@@ -791,6 +806,7 @@ def analyze_hidden_bench_imitation(
 __all__ = [
     "ACTION_ENTROPY_EPSILON_BITS",
     "ImitationEvent",
+    "INFORMATION_STATISTICS",
     "MAIN_ESTIMATOR_VARIANT",
     "adapt_event",
     "analyze_hidden_bench_imitation",

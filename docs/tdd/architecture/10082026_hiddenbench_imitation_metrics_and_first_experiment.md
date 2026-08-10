@@ -337,12 +337,12 @@ Use:
 game:
   type: hidden_bench_imitation
   population_size: 4
+  horizon: 20
   options:
     task_set: vanilla
     task_id: evacuation_north_hill
     profile: hidden
     assignment_scheme: bijective
-    interactions: 20
     pairing: uniform_two_distinct
     messages_per_agent: 1
     memory_size: 0

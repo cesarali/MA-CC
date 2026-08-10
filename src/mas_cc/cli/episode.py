@@ -203,6 +203,8 @@ class _EpisodeObserver:
                 interaction_id=f"round_{round_index:03d}",
                 title=f"Round {round_index} — agent {agent_id}",
                 metadata={"round_index": round_index, "agent_id": str(agent_id)},
+                response=payload.get("response"),
+                validation_error=payload.get("validation_error"),
             )
             self._logged_rounds.add(round_index)
         provider_error = payload.get("provider_error")

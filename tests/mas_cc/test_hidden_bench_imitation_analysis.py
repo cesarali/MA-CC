@@ -15,12 +15,14 @@ from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
 from mas_cc.games.hidden_bench.imitation import run_hidden_bench_imitation_game
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
 from mas_cc.games.hidden_bench.imitation.analysis import (
+    INFORMATION_STATISTICS,
     adapt_event,
     binary_action_entropy_bits,
     bootstrap_episode_ids,
     information_analysis,
 )
 from mas_cc.games.hidden_bench.imitation.metrics import (
+    METRICS,
     behavioral_transition_metrics,
     population_observables,
 )
@@ -251,7 +253,7 @@ def test_first_control_grid_resolves_exactly_four_matched_cells_and_provider():
     assert provider.options["estimated_latency_seconds"] == 3.0
     assert config.base.execution.repetitions == 12
     assert config.base.game.options["task_id"] == "evacuation_north_hill"
-    assert config.base.game.options["interactions"] == 20
+    assert config.base.game.horizon == 20
     assert config.base.control.options["sensor_sample_size"] == 2
 
 
@@ -280,7 +282,6 @@ def test_classical_cells_from_first_grid_make_zero_provider_calls():
             game=replace(
                 cell.config.game,
                 horizon=3,
-                options={**dict(cell.config.game.options), "interactions": 3},
             ),
             llm_provider=replace(cell.config.llm_provider, type="mock", model="fixture"),
         )
@@ -295,3 +296,50 @@ def test_classical_cells_from_first_grid_make_zero_provider_calls():
         )
         assert result.logical_decisions == 0
     assert calls == 0
+
+
+def test_standalone_behavior_configs_export_their_selected_monitoring_metrics():
+    event_metrics = {
+        "delta_m_ctrl",
+        "delta_m_truth",
+        "delta_m_order",
+        "delta_H_vote",
+        "focal_changed",
+        "focal_adopted_target",
+        "focal_left_target",
+        "u_advocate",
+        "sensor_target_share",
+        "population_target_share",
+        "sensor_target_error",
+        "sensor_target_abs_error",
+    }
+    paths = (
+        "configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml",
+        "configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml",
+    )
+    reasoning, classical = [load_run_config_or_grid(path, environment={}) for path in paths]
+    assert reasoning.game.options["dynamics_mode"] == "reasoning"
+    assert classical.game.options["dynamics_mode"] == "classical"
+    assert reasoning.game.options["initialization"] == classical.game.options["initialization"]
+    assert reasoning.control == classical.control
+    assert reasoning.llm_provider == classical.llm_provider
+    state_metrics = {"m_ctrl", "m_truth", "m_order"}
+    assert event_metrics | state_metrics <= {metric.name for metric in METRICS}
+    assert reasoning.metrics.comet_export_names() == ()
+    assert set(reasoning.aggregation.cell_metrics) == state_metrics | {
+        "population_action_share_per_option",
+        "dominant_action_share",
+    }
+    assert reasoning.observability.comet.cell_experiments is True
+    assert set(classical.metrics.comet_export_names()) == event_metrics
+    assert reasoning.analysis.enabled is True
+    assert classical.analysis.enabled is True
+    assert reasoning.analysis.estimators == INFORMATION_STATISTICS
+    assert classical.analysis.estimators == INFORMATION_STATISTICS
+    assert reasoning.analysis.options["bootstrap_resamples"] == 1000
+    assert reasoning.analysis.options["null_permutations"] == 1000
+    assert (
+        create_game(reasoning.game).call_plan(reasoning.game).provider_requests.maximum
+        == 3 * reasoning.game.horizon
+    )
+    assert create_game(classical.game).call_plan(classical.game).provider_requests.maximum == 0

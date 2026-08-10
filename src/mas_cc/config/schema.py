@@ -180,6 +180,10 @@ def config_schema() -> dict[str, Any]:
                             # experiment key and no step-counter race.
                             "writer": {"const": "master_only"},
                             "heartbeat_seconds": {"type": "number", "exclusiveMinimum": 0},
+                            "progress_metrics": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                             "grid_image_every_n_episodes": {"type": "integer", "minimum": 1},
                             "sweep_experiment": {"type": "boolean"},
                             "cell_experiments": {"type": "boolean"},
