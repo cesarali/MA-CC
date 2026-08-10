@@ -222,6 +222,9 @@ class _RoundTickingObserver:
         self.recorder.record_interaction(**payload, budget_status=self.guard.checkpoint_state())
         self.progress.round_tick(self.episode_label, payload.get("round_index"))
 
+    def record_trajectory(self, **payload: Any) -> None:
+        self.recorder.record_trajectory(**payload)
+
 
 @dataclass(frozen=True, slots=True)
 class EpisodeOutcome:
@@ -341,6 +344,18 @@ def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: A
 
         return lambda observer: run_hidden_bench_game(
             game, episode_config, guarded_provider, observer=observer
+        )
+
+    if episode_config.game.type == "hidden_bench_imitation":
+        from mas_cc.games.hidden_bench.imitation import run_hidden_bench_imitation_game
+
+        control = create_control(episode_config.control)
+        return lambda observer: run_hidden_bench_imitation_game(
+            game,
+            episode_config,
+            guarded_provider,
+            observer=observer,
+            control=control,
         )
 
     from mas_cc.games.synthetic import SyntheticGame, run_synthetic_game

@@ -1,6 +1,6 @@
 # HiddenBench in `mas_cc`
 
-Two games built on the Hidden Profile paradigm (Stasser & Titus, 1985) as
+Three games built on the Hidden Profile paradigm (Stasser & Titus, 1985) as
 operationalized by Li, Naito & Shirado, *Systematic Failures in Collective
 Reasoning under Distributed Information in Multi-Agent LLMs* (ICML 2026).
 
@@ -8,10 +8,14 @@ Reasoning under Distributed Information in Multi-Agent LLMs* (ICML 2026).
 | --- | --- | --- |
 | `hidden_bench_vanilla` | [`games/hidden_bench/vanilla/`](../../src/mas_cc/games/hidden_bench/vanilla/) | The paper's own: N agents, round-robin plenary discussion, a vote before and after. |
 | `hidden_bench_naming` | [`games/hidden_bench/naming/`](../../src/mas_cc/games/hidden_bench/naming/) | Dyadic: private pairs, private per-partner memory, on the expanded (N > 4) populations. |
+| `hidden_bench_imitation` | [`games/hidden_bench/imitation/`](../../src/mas_cc/games/hidden_bench/imitation/) | One-focal opinion dynamics with matched LLM-reasoning and provider-free classical kernels plus partial-observation feedback control. |
 
 The corpus is **not** produced here — see
 [`data_provenance.md`](data_provenance.md), which also records which parts of the
-upstream preprocessing are still unfinished.
+upstream preprocessing are still unfinished. For the complete generation,
+verification, and population-allocation procedure behind the two semantic
+scaling methods, see
+[`paraphrase_and_factorization_pipeline.md`](paraphrase_and_factorization_pipeline.md).
 
 ---
 

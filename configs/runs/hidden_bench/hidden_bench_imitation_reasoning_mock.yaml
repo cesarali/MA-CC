@@ -1,0 +1,81 @@
+# Cheap reasoning-mode smoke run.  Replace the mock provider component for a
+# real pilot only after this trajectory validates end to end.
+llm_provider:
+  type: mock
+  model: deterministic-v1
+  max_output_tokens: 128
+  options:
+    response: '{"vote": "West City", "rationale": "mock local reasoning"}'
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation
+  population_size: 4
+  horizon: 4
+  topology: complete
+  options:
+    task_set: vanilla
+    task_id: evacuation_west_city
+    profile: hidden
+    assignment_scheme: bijective
+    dynamics_mode: reasoning
+    interactions: 4
+    pairing: uniform_two_distinct
+    messages_per_agent: 0
+    memory_size: 0
+    allow_relay: true
+    stop_on_consensus: false
+    initialization:
+      mode: local_vote
+      initial_votes: null
+      initial_distribution: null
+    classical:
+      kernel: irisarri_multi_opinion
+      forward_rate: 1.0
+      reverse_rate: 1.0
+      interaction_factor: destination_count_plus_offset
+      interaction_offset: 1.0
+      control_strength: 2.0
+control:
+  mechanism: none
+execution:
+  seed: 20260810
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+pricing:
+  mode: offline
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 50
+  max_input_tokens: 100000
+  max_output_tokens: 10000
+  allow_unbounded_paid_requests: true
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  enabled: true
+  comet_export: []
+experiment:
+  name: hidden-bench-imitation-reasoning-mock-smoke
+  description: Mock-provider focal reasoning trajectory with local pre-interaction votes.
+  tags: [hidden-bench, imitation, reasoning, mock, smoke]

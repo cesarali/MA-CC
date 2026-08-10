@@ -59,6 +59,10 @@ def create_default_control_registry() -> ControlRegistry:
     registry = ControlRegistry()
     registry.register("none", "mas_cc.control.forced_action:create_none_control")
     registry.register("forced_action", "mas_cc.control.forced_action:create_forced_action_control")
+    registry.register(
+        "threshold_target",
+        "mas_cc.games.hidden_bench.imitation.controller:create_threshold_target_control",
+    )
     return registry
 
 

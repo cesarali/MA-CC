@@ -89,6 +89,29 @@ def static_game_preflight(
 
     if assumed_output_tokens < 1:
         raise ValueError("assumed_output_tokens must be positive")
+    request_counts = plan.provider_requests
+    if request_counts.maximum == 0:
+        zero = EstimateRange(0, 0, 0)
+        return GamePreflightEstimate(
+            game_type=plan.game_type,
+            provider=provider_config.type,
+            model=provider_config.model,
+            provider_requests=zero,
+            input_tokens=zero,
+            output_tokens=zero,
+            costs=MonetaryEstimateRange(None, None, None),
+            prompt_scenarios=(),
+            pricing={
+                "mode": "not_applicable",
+                "status": "provider_free",
+                "source": "game_call_plan",
+                "version": "1",
+                "retrieved_at": None,
+                "fresh_until": None,
+            },
+            launch_status="permitted",
+            warnings=("Game call plan is provider-free; no LLM requests are priced.",),
+        )
     counter = RegexTokenCounter()
     quote = pricing_quote or OfflinePricingSource().fetch(
         provider_config.type, provider_config.model
@@ -220,7 +243,6 @@ def static_game_preflight(
             maximum_request = maximum_stage_request
             maximum_per_call_tokens = maximum_input
 
-    request_counts = plan.provider_requests
     if maximum_request is None or request_counts.maximum < 1:
         raise ValueError("game call plan contains no provider-backed decisions")
     selected = (prompt_config.prompt_family, prompt_config.prompt_version)

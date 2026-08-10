@@ -212,6 +212,7 @@ class RunRecorder:
         self._budget_path = self.output_dir / "budget_events.jsonl"
         self._audit_path = self.output_dir / "audit_traces.jsonl"
         self._blocks_path = self.output_dir / "prompt_block_traces.jsonl"
+        self._trajectory_path = self.output_dir / "trajectory.jsonl"
         self._detailed_created = False
         self._metric_rows: list[dict[str, Any]] = []
         self._checkpoint_store = AtomicCheckpointStore(self.output_dir / ".checkpoints")
@@ -296,6 +297,19 @@ class RunRecorder:
         if self.checkpoint_enabled:
             self._checkpoint_store.write(Checkpoint(self.run_id, round_index, self.config_hash, state, budget_status, prompt_definitions))
             self.event("checkpoint_written", completed_rounds=round_index)
+
+    def record_trajectory(self, *, record: Any) -> None:
+        """Persist a game-supplied rich trajectory row locally.
+
+        Only runtimes that need more than the shared interaction metrics call
+        this optional hook.  It deliberately never reaches Comet.
+        """
+
+        payload = record.to_dict() if hasattr(record, "to_dict") else dict(record)
+        _jsonl(
+            self._trajectory_path,
+            {"schema_version": self.schema_version, "run_id": self.run_id, **payload},
+        )
 
     def _existing_streaming_header(self) -> list[str] | None:
         """The header of an already-written streaming.csv, or None if there isn't one."""

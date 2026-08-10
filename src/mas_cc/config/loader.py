@@ -101,6 +101,30 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     return {str(key): value for key, value in raw.items()}
 
 
+def _run_config_source(path: str | Path) -> Path:
+    """Resolve a run config, including the run-directory migration.
+
+    HiddenBench run files moved from ``configs/runs/*.yaml`` into the
+    ``configs/runs/hidden_bench/`` namespace.  Keeping this narrow fallback
+    makes previously recorded commands and manifests replayable while the new
+    location remains canonical.  The same replay guarantee applies to configs
+    archived under ``runs/old``.
+    """
+
+    source = Path(path).resolve()
+    if source.exists():
+        return source
+    if source.parent.name == "runs" and source.name.startswith("hidden_bench_"):
+        migrated = source.parent / "hidden_bench" / source.name
+        if migrated.exists():
+            return migrated.resolve()
+    if source.parent.name == "runs":
+        archived = source.parent / "old" / source.name
+        if archived.exists():
+            return archived.resolve()
+    return source
+
+
 def _deep_merge(base: Mapping[str, Any], overrides: Mapping[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in overrides.items():
@@ -903,7 +927,7 @@ class ConfigLoader:
         self._environment = dict(os.environ if environment is None else environment)
 
     def load(self, path: str | Path) -> RunConfig:
-        source = Path(path).resolve()
+        source = _run_config_source(path)
         raw = _read_yaml(source)
         resolved = _resolve_components(raw, source)
         issues: list[ValidationIssue] = []
@@ -976,7 +1000,7 @@ def load_run_config_or_grid(
     loadable as a single run — the grid section only says which fields to additionally sweep.
     """
 
-    source = Path(path).resolve()
+    source = _run_config_source(path)
     raw = dict(_read_yaml(source))
     grid_raw = raw.pop("grid", None)
     resolved = _resolve_components(raw, source)

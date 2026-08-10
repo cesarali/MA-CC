@@ -90,6 +90,10 @@ def create_default_game_registry() -> GameRegistry:
         "hidden_bench_naming",
         "mas_cc.games.hidden_bench.naming.game:HiddenBenchNamingGame",
     )
+    registry.register(
+        "hidden_bench_imitation",
+        "mas_cc.games.hidden_bench.imitation.game:HiddenBenchImitationGame",
+    )
     return registry
 
 
@@ -125,6 +129,11 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
         hidden_bench_discussion_prompt,
         hidden_bench_vote_prompt,
     )
+    from .hidden_bench.imitation.prompts import (
+        hidden_bench_imitation_initial_prompt,
+        hidden_bench_imitation_message_prompt,
+        hidden_bench_imitation_update_prompt,
+    )
     from .naming_convention.prompts import naming_convention_prompt
     from .synthetic.prompts import synthetic_agent_decision_prompt
     from .toy_coordination.prompts import toy_coordination_prompt
@@ -137,6 +146,9 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     registry.register(hidden_bench_vote_prompt)
     registry.register(hidden_bench_naming_message_prompt)
     registry.register(hidden_bench_naming_commit_prompt)
+    registry.register(hidden_bench_imitation_initial_prompt)
+    registry.register(hidden_bench_imitation_message_prompt)
+    registry.register(hidden_bench_imitation_update_prompt)
     return registry
 
 

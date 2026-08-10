@@ -3,9 +3,9 @@
 A `Control` may override one agent's action for one interaction before the
 decision loop ever asks the LLM for it — the generic hook every game's
 runtime checks in `run_validated_decision` (`runtime/loop_runtime.py`). This
-covers action-forcing control mechanisms; a mechanism that instead shapes
-payoffs/transitions rather than actions would need a different hook, added
-when a concrete use case needs it, not speculatively now.
+covers action-forcing control mechanisms. ``interaction_signal`` is the
+backward-compatible companion hook for a measured intervention that shapes a
+message or transition without overwriting the resulting action.
 
 `override` returns the forced action *value* (a plain string), not a full
 `Action` object: a `Control` has no view of a game's own `Action.metadata`
@@ -17,7 +17,9 @@ shape, so it stays responsible for wrapping the forced value into one.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:
     # Deferred: `mas_cc.games.naming_convention.runtime` imports this module,
@@ -25,6 +27,28 @@ if TYPE_CHECKING:
     # the same TYPE_CHECKING guard in `runtime/loop_runtime.py`.
     from mas_cc.core import AgentId
     from mas_cc.games.protocols import GameState
+
+
+@dataclass(frozen=True, slots=True)
+class InteractionControlSignal:
+    """A measured, auditable intervention that does not force an action.
+
+    Games that support message- or transition-level control may consume this
+    optional signal.  Existing action-forcing controls continue to use
+    :meth:`Control.override` and need not implement the new hook.
+    """
+
+    action: str
+    target: str | None = None
+    message: str | None = None
+    observation: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.action, str) or not self.action.strip():
+            raise ValueError("InteractionControlSignal.action must be non-empty")
+        object.__setattr__(self, "observation", MappingProxyType(dict(self.observation)))
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
 
 class Control(ABC):
@@ -38,3 +62,20 @@ class Control(ABC):
 
         `None` means: let the normal LLM-backed decision proceed unchanged.
         """
+
+    def interaction_signal(
+        self,
+        *,
+        agent_id: "AgentId",
+        interaction_index: int,
+        state: "GameState",
+        rng: Any,
+    ) -> InteractionControlSignal | None:
+        """Optionally measure state and shape one local interaction.
+
+        The default is deliberately inert, preserving every existing control
+        and runtime.  ``rng`` is supplied by the game runtime so sensing is
+        reproducible from the episode seed without controls owning global RNG.
+        """
+
+        return None

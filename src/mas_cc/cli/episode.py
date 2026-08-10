@@ -224,6 +224,9 @@ class _EpisodeObserver:
         self.recorder.record_interaction(**payload, budget_status=self.guard.checkpoint_state())
         self.progress.round_tick(payload.get("round_index"))
 
+    def record_trajectory(self, **payload: Any) -> None:
+        self.recorder.record_trajectory(**payload)
+
 
 def _print_final_metrics(result: Any, metrics: tuple[Any, ...], to_round_view: Any) -> None:
     views = tuple(to_round_view(interaction.transition.next_state) for interaction in result.interactions)
