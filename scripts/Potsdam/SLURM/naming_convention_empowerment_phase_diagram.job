@@ -4,36 +4,47 @@
 # sweep population_size {10, 20} -> run every episode -> estimate the mutual
 # information (population size ; terminal convention).
 #
-# Two arms share this one script, chosen with RUN_MODE:
+# Four arms share this one script, chosen with RUN_MODE:
 #   sbatch --export=ALL,RUN_MODE=reasoning   scripts/Potsdam/SLURM/naming_convention_empowerment_phase_diagram.job
 #   sbatch --export=ALL,RUN_MODE=choice-only scripts/Potsdam/SLURM/naming_convention_empowerment_phase_diagram.job
+# Plus 2-episode/cell smoketest variants (own configs, own output dirs) to
+# check the job actually runs before committing to the full grid:
+#   sbatch --export=ALL,RUN_MODE=reasoning-smoketest    scripts/Potsdam/SLURM/naming_convention_empowerment_phase_diagram.job
+#   sbatch --export=ALL,RUN_MODE=choice-only-smoketest  scripts/Potsdam/SLURM/naming_convention_empowerment_phase_diagram.job
 #
 # RUN_MODE values: reasoning (json_reason response contract), choice-only
 # (bare Q/M, no explanation). Configs:
 #   configs/runs/empowerment_runs/naming_convention_empowerment_reasoning.yaml
 #   configs/runs/empowerment_runs/naming_convention_empowerment_choice_only.yaml
-# Submit both to get the full 2 (size) x 2 (reasoning) picture - they are
-# separate files on purpose (see either config's header comment for why the
-# reasoning/no-reasoning split cannot be a second grid axis on one file).
+#   configs/runs/empowerment_runs/naming_convention_empowerment_reasoning_smoketest.yaml
+#   configs/runs/empowerment_runs/naming_convention_empowerment_choice_only_smoketest.yaml
+# Submit both full arms to get the full 2 (size) x 2 (reasoning) picture -
+# they are separate files on purpose (see either config's header comment for
+# why the reasoning/no-reasoning split cannot be a second grid axis on one
+# file).
+#
+# --cpus-per-task=10 matches both full configs' execution.parallelism: 10, so
+# up to 10 episodes actually run concurrently rather than being CPU-starved.
 #
 # Both arms are live-only against the University proxy; there is no mock
 # rehearsal mode here (unlike empowerment_grid.job's mock/pilot split) - both
 # configs already set logging.comet: false unconditionally, so there is
 # nothing to accidentally publish while rehearsing.
 #
-# GENERIC PATHS: REPO_ROOT is derived from this script's own location, so it
-# works regardless of whose home directory the repo is checked out under.
-# RESULTS_ROOT and CONDA_BIN default from that, but almost certainly need a
-# per-account override on a real cluster - see the readonly block below and
-# pass e.g. --export=ALL,RUN_MODE=reasoning,RESULTS_ROOT=/work/<you>/... to
-# override. Submit from the repository root (or anywhere - REPO_ROOT no
-# longer depends on the submission directory), and see the .env check below
-# for the one thing you cannot skip: University credentials.
+# GENERIC PATHS: REPO_ROOT defaults to $SLURM_SUBMIT_DIR (the directory
+# `sbatch` was invoked from), since sbatch spools a copy of this script
+# elsewhere before running it - ${BASH_SOURCE[0]} does not point back into
+# the checkout under Slurm. SUBMIT FROM THE REPOSITORY ROOT, or pass
+# --export=ALL,RUN_MODE=reasoning,REPO_ROOT=/path/to/checkout to override.
+# RESULTS_ROOT and CONDA_BIN default from REPO_ROOT/$HOME, but almost
+# certainly need a per-account override on a real cluster - see the readonly
+# block below. See the .env check below for the one thing you cannot skip:
+# University credentials.
 ###############################################################################
 #SBATCH --job-name=mascc-nc-empowerment
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=10
 #SBATCH --mem=8G
 #SBATCH --time=04:00:00
 #SBATCH --mail-type=END,FAIL
@@ -47,13 +58,20 @@ export http_proxy=http://proxy2.uni-potsdam.de:3128
 export https_proxy=http://proxy2.uni-potsdam.de:3128
 export ftp_proxy=http://proxy2.uni-potsdam.de:3128
 
-# Derived from this file's own path: scripts/Potsdam/SLURM/<this file> is
-# always 3 directories below the repo root, regardless of whose account it
-# runs under.
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+# sbatch copies the submitted script into a spool directory before running
+# it, so ${BASH_SOURCE[0]} does NOT point back into the repo checkout under
+# Slurm (it resolves under e.g. /var/spool/...). Prefer $SLURM_SUBMIT_DIR -
+# the directory `sbatch` was invoked from - which Slurm always sets
+# correctly; only fall back to BASH_SOURCE for a manual, non-Slurm run of
+# this script.
+if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+  readonly REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR}}"
+else
+  readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  readonly REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+fi
 readonly RESULTS_ROOT="${RESULTS_ROOT:-${REPO_ROOT}/results}"
-readonly CONDA_BIN="${CONDA_BIN:-$(command -v conda || echo "${HOME}/miniconda3/bin/conda")}"
+readonly CONDA_BIN="${CONDA_BIN:-${HOME}/.local/share/miniforge3/bin/conda}"
 readonly RUN_MODE="${RUN_MODE:-reasoning}"
 
 export OMP_NUM_THREADS=1
@@ -84,8 +102,21 @@ case "${RUN_MODE}" in
     OUTPUT_DIR=${RESULTS_ROOT}/naming_convention_empowerment_choice_only
     EXPERIMENT_NAME=naming-convention-empowerment-choice-only
     ;;
+  # SMOKETEST arms: 2 episodes/cell instead of 10, separate output dirs, so
+  # they cannot collide with (or be mistaken for) the full grid above. See
+  # the *_smoketest.yaml configs' headers.
+  reasoning-smoketest)
+    CONFIG=configs/runs/empowerment_runs/naming_convention_empowerment_reasoning_smoketest.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/naming_convention_empowerment_reasoning_smoketest
+    EXPERIMENT_NAME=naming-convention-empowerment-reasoning-smoketest
+    ;;
+  choice-only-smoketest)
+    CONFIG=configs/runs/empowerment_runs/naming_convention_empowerment_choice_only_smoketest.yaml
+    OUTPUT_DIR=${RESULTS_ROOT}/naming_convention_empowerment_choice_only_smoketest
+    EXPERIMENT_NAME=naming-convention-empowerment-choice-only-smoketest
+    ;;
   *)
-    echo "[error] RUN_MODE must be reasoning or choice-only; got: ${RUN_MODE}" >&2
+    echo "[error] RUN_MODE must be reasoning, choice-only, reasoning-smoketest, or choice-only-smoketest; got: ${RUN_MODE}" >&2
     exit 2
     ;;
 esac

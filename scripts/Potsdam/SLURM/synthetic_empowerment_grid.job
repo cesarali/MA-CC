@@ -145,7 +145,7 @@ echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # is set, because a lookup table has no published price.
 ###############################################################################
 echo "[step] 1/4 preflight"
-"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment preflight \
+"${CONDA_BIN}" run --live-stream -n MA-CC python -m mas_cc.cli.main experiment preflight \
   --config "${CONFIG}" \
   --output-dir "${OUTPUT_DIR}/preflight"
 
@@ -184,7 +184,7 @@ if swept != truth:
 print("  game config matches the swept base: ok")
 PYTHON
 
-"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc synthetic empowerment \
+"${CONDA_BIN}" run --live-stream -n MA-CC python -m mas_cc.cli.main synthetic empowerment \
   --config "${TRUTH_CONFIG}" \
   --output-dir "${TRUTH_DIR}" \
   --condition "${CONDITION_KEY}" \
@@ -203,7 +203,7 @@ PYTHON
 # ${GRID_DIR} to force a genuine re-run.
 ###############################################################################
 echo "[step] 3/4 run ${REPETITIONS_PER_CELL} episodes per cell"
-"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+"${CONDA_BIN}" run --live-stream -n MA-CC python -m mas_cc.cli.main experiment run \
   --config "${CONFIG}" \
   --output-dir "${OUTPUT_DIR}" \
   --no-progress
@@ -233,7 +233,7 @@ fi
 
 echo "[step] 4/4 mutual information"
 # shellcheck disable=SC2086  # HORIZONS is an intentional multi-value argument
-"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc analysis empowerment \
+"${CONDA_BIN}" run --live-stream -n MA-CC python -m mas_cc.cli.main analysis empowerment \
   --grid-dir "${GRID_DIR}" \
   --horizons ${HORIZONS} \
   --bootstrap-resamples "${BOOTSTRAP_RESAMPLES}" \

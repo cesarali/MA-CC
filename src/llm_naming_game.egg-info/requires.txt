@@ -2,10 +2,23 @@ python-dotenv>=1.0
 PyYAML>=6.0
 requests>=2.31
 numpy>=2.0
+torch>=2.2
+sentence-transformers>=3.0
+scikit-learn>=1.5
 pandas>=2.2
 pyarrow>=17.0
 matplotlib>=3.9
 tqdm>=4.66
+
+[comet]
+comet_ml<4,>=3.58
+
+[gemma4]
+accelerate>=1.0
+huggingface-hub>=0.30
+safetensors>=0.4
+transformers>=5.5
+torchvision
 
 [test]
 pytest>=8.0

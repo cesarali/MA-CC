@@ -51,8 +51,10 @@ game:
     stop_on_convergence: false
 execution:
   seed: 20260806
-  # Episodes PER CELL. 2 cells (population_size 10, 20) x 10 = 20 episodes.
-  repetitions: 10
+  # SMOKETEST: 2 episodes PER CELL, not 10 - just enough to confirm the job
+  # actually runs end to end (preflight -> run -> analysis) before submitting
+  # the full grid. 2 cells (population_size 10, 20) x 2 = 4 episodes.
+  repetitions: 2
   parallelism: 10
   fail_fast: true
 pricing:
@@ -62,20 +64,16 @@ pricing:
   fallback_policy: deny
   explicit_unknown_price_override: false
 budget:
-  # Measured with `static_grid_preflight` against an offline stub quote (no
-  # network, no price): conservative demand for this file is 12000 provider
-  # requests / 3,480,000 input tokens / 768,000 output tokens across the
-  # 2-cell x 10-episode grid - same request count as the reasoning arm, far
-  # fewer output tokens (64 vs 256 per request). Caps below are that
-  # conservative figure +~15%. Dollar cost still needs a live preflight
-  # against the University proxy, which this sandbox cannot reach; re-check
-  # with `mas-cc experiment preflight --config <this file>` before running.
+  # SMOKETEST: caps scaled down from the full 10-rep file's 12000
+  # requests / 3,480,000 input / 768,000 output for a 2-cell x 2-episode
+  # grid (1/5 the episodes), with margin. Live preflight still verifies the
+  # real number before anything sends.
   accounting_unit: proxy_accounting_unit
-  system_max_cost_per_run: 6.0
-  max_cost_per_run: 6.0
-  max_provider_requests: 14000
-  max_input_tokens: 4000000
-  max_output_tokens: 900000
+  system_max_cost_per_run: 1.5
+  max_cost_per_run: 1.5
+  max_provider_requests: 3000
+  max_input_tokens: 900000
+  max_output_tokens: 200000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO
@@ -113,12 +111,11 @@ aggregation:
   horizons: [1]
   null_permutations: 200
 experiment:
-  name: naming-convention-empowerment-choice-only
+  name: naming-convention-empowerment-choice-only-smoketest
   description: >-
-    Naming-convention empowerment phase diagram, choice-only arm: population
-    size {10, 20} x choice_only response contract (no reasoning), live
-    University proxy. Companion to the reasoning arm; compare aggregation
-    output between the two files for the reasoning-vs-not contrast.
+    SMOKETEST (2 episodes/cell) for the naming-convention empowerment phase
+    diagram, choice-only arm. Verifies the job runs end to end against the
+    live University proxy before submitting the full 10-episode/cell grid.
   tags:
     - empowerment
     - mutual-information
@@ -127,5 +124,6 @@ experiment:
     - phase-diagram
     - choice-only
     - population-size
+    - smoketest
 grid:
   game.population_size: [10, 20]
