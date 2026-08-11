@@ -135,7 +135,7 @@ observability:
     heartbeat_seconds: 20
     grid_image_every_n_episodes: 15
     sweep_experiment: true
-    cell_experiments: false
+    cell_reporting: disabled
 experiment:
   schema_version: 1
   name: synthetic-controlled-markov-size-and-committee

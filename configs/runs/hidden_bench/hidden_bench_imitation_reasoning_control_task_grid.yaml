@@ -1,6 +1,32 @@
 # Multi-task grid version of hidden_bench_imitation_reasoning_control_10.yaml:
-# the same v2 controlled reasoning run, swept over game.options.task_id.
-# Starts with the original task plus the two requested additions.
+# the same v2 controlled reasoning run, swept over game.options.task_id **and**
+# over the two feedback controllers.
+#
+# Cells: 3 tasks x 2 control mechanisms = 6.
+#
+#                     threshold_target        soft_target
+#   evacuation_north_hill      .                   .
+#   evacuate_park_dilemma      .                   .
+#   Laboratory Theft Deduction .                   .
+#
+# The control axis is the one this grid was extended for. `threshold_target`
+# decides its action from the sampled target share; `soft_target` draws it from
+# a sigmoid of the same comparison, so both actions occur in comparable
+# population states. That is what makes
+#
+#   target_actuation_cmi = I(U_t; n_Z(t+1) | n_Z(t))
+#
+# estimable: under the deterministic policy the extreme conditioning slices see
+# only one action and contribute nothing, however many episodes are run. See
+# section 3.4.1 of docs/documentation/hidden_bench/hidden_bench_imitation.md,
+# and the provider-free smoke check
+# configs/runs/hidden_bench/hidden_bench_imitation_classical_soft_control_smoke.yaml
+# where the same swap took events-in-single-action-slices from 31.7% to 0%.
+#
+# Everything except the policy is held matched across the two control arms -
+# same tasks, seeds, horizon, target, sensor sample size, threshold, and
+# controller text version - so a difference between the arms is attributable to
+# the policy and nothing else.
 #
 # Adapting a single-task run into a task grid means every field that named
 # that task's own answer strings by hand has to go, because those strings are
@@ -127,15 +153,34 @@ game:
       interaction_offset: 1.0
       control_strength: 2.0
 control:
+  # Swept below in `grid:`, like task_id above. This base value is only what the
+  # pre-grid validation pass binds against.
   mechanism: threshold_target
+  # Shared by both control arms, which is the point: the two cells of a task row
+  # differ in the policy and in nothing else.
   options:
     target: correct
     sensor_sample_size: 2
-    policy: threshold_target
+    # `policy` is deliberately absent. It is an audit echo that must equal the
+    # mechanism's own name, so a hardcoded `threshold_target` here would be
+    # rejected outright by the soft_target cells. Omitted, it defaults to
+    # whichever mechanism the grid bound, which is what a swept axis needs.
     threshold: 0.5
+    # Inverse policy temperature for soft_target: P(ADVOCATE_Z) =
+    # sigma[beta * (threshold - sampled target share)]. Large beta converges on
+    # threshold_target, so 4.0 is chosen to be clearly softer than that while
+    # still tracking the population. A first-experiment value, not a tuned one.
+    # The threshold_target cells ignore this field.
+    beta: 4.0
     # v2 (4 of 4), doc section 2.  1 announces "the external controller"; 2
     # speaks as an ordinary peer, arguing from the shared facts only, drawn
     # from a four-paraphrase bank whose ID is logged per event.
+    #
+    # Held at 2 for BOTH arms, overriding soft_target's own default of 3. The
+    # default exists to keep U_t -> M_t deterministic when the policy is
+    # random; here matching the arms matters more, because a controller-text
+    # difference between them would confound exactly the contrast this grid is
+    # measuring. It also keeps these cells comparable with every earlier v2 run.
     template_version: 2
 execution:
   seed: 20260840
@@ -149,16 +194,19 @@ pricing:
   fallback_policy: deny
   explicit_unknown_price_override: false
 budget:
-  # Sized for the whole grid (3 task_id cells x 3 repetitions), not one cell -
-  # scaled 3x off the single-task run's budget, plus headroom for the extra
-  # population_size (4) local_vote calls per episode. Re-check with
-  # `experiment preflight` before raising `repetitions` or the task list.
+  # Sized for the whole grid (3 task_id x 2 control mechanisms = 6 cells), not
+  # one cell - scaled 6x off the single-task run's budget, plus headroom for the
+  # extra population_size (4) local_vote calls per episode. Doubled from the
+  # task-only version of this grid when the control axis was added; the two
+  # control arms cost the same, because a controller message is assembled
+  # locally and never costs a provider call in either arm. Re-check with
+  # `experiment preflight` before raising `repetitions` or either axis.
   accounting_unit: proxy_accounting_unit
-  system_max_cost_per_run: 150.0
-  max_cost_per_run: 150.0
-  max_provider_requests: 7500
-  max_input_tokens: 100000000
-  max_output_tokens: 4500000
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 15000
+  max_input_tokens: 200000000
+  max_output_tokens: 9000000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO
@@ -252,22 +300,59 @@ observability:
     # grid filling in.
     grid_image_every_n_episodes: 5
     sweep_experiment: true       # false = no liveness dashboard
-    # This run now has multiple cells (one per task_id): give each its own
-    # experiment so aggregate curves for one task don't overlay another's.
-    cell_experiments: true
+    # Everything for this run lands on the one master experiment: the grid
+    # image above, every cell's curves, its metric PNGs as that cell finishes,
+    # and the post-run information report. One link to open rather than eight.
+    #
+    # The cost of `master`, and it is a real one: cell series are prefixed with
+    # the cell id to keep six cells from colliding, so the curve is
+    # `cell-0000_m_ctrl` and its image `metric_plot_cell-0000_m_ctrl` - not the
+    # bare `m_ctrl` a single-cell run produces. `cells/cell-000N/` on disk and
+    # `grid_summary.json` both say which cell is which.
+    #
+    # Switch to `experiments` to get one child experiment per cell with bare
+    # metric names, which is what lets Comet overlay threshold_target against
+    # soft_target on one chart.
+    cell_reporting: master
     # Upload the locally rendered aggregate metric PNGs (m_order, m_ctrl,
-    # m_truth, dominant_action_share, and the per-option share plots).
+    # m_truth, dominant_action_share, and the per-option share plots). They are
+    # sent once per cell, when that cell's last episode lands.
     metric_plots: true
-    # One experiment for the whole run: the aggregate curves, those PNGs, and
-    # the post-run information report all land on the master rather than on
-    # `<run>/run` and `<run>/analysis` siblings.
-    master_aggregates: true
 experiment:
-  name: hidden-bench-imitation-reasoning-control-task-grid-v2
-  description: Ten controlled reasoning episodes under the v2 prompt and peer-style controller text, swept across HiddenBench tasks, with event and pooled response diagnostics.
-  tags: [hidden-bench, imitation, reasoning, control, diagnostics, prompt-v2, task-grid]
+  # Renamed when the control axis was added. The task-only version of this grid
+  # has already run to completion under the old name, and `wipe_and_recompute`
+  # below deletes the run directory it matches - so reusing the name would
+  # destroy those results rather than sit beside them.
+  name: hidden-bench-imitation-reasoning-control-task-control-grid-v2
+  description: Controlled reasoning episodes under the v2 prompt and peer-style controller text, swept across HiddenBench tasks and across the deterministic and soft feedback controllers.
+  tags: [hidden-bench, imitation, reasoning, control, soft-target, diagnostics, prompt-v2, task-grid]
 grid:
   game.options.task_id:
     - "evacuation_north_hill"
     - "evacuate_park_dilemma"
     - "Laboratory Theft Deduction"
+    - "critical_vaccine_route"
+    - "Critical Sample Transfer"
+    - "Safe Haven After the Spill"
+    - "the_safe_shelter"
+    - "datacenter_emergency_migration"
+    - "emergency_warehouse_selection"
+    - "storm_recovery_clinic_site_selection"
+    - "emergency_aircraft_landing_site"
+    - "emergency_hospital_transfer"
+    - "Space Evacuation Decision"
+    - "safe_haven_decision"
+    - "The Artifact Delivery"
+    - "Choosing the Safe Offsite Venue"
+    - "Safe Lab Choice After Earthquake"
+    - "emergency_evacuation_center_choice"
+    - "Find the Missing Prototype"
+    - "missing_lab_sample"
+    - "choosing_the_safe_field_station"
+    - "secure_meeting_room_decision"
+    - "emergency_supply_distribution"
+    - "mountain_storm_shelter"
+    - "sensor_placement_decision"
+  control.mechanism:
+    - threshold_target
+    - soft_target

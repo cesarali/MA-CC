@@ -205,7 +205,7 @@ observability:
     # grid filling in.
     grid_image_every_n_episodes: 25
     sweep_experiment: true      # false = no liveness dashboard
-    cell_experiments: false      # false = no per-cell curves in Comet
+    cell_reporting: disabled
 experiment:
   schema_version: 1
   name: synthetic-controlled-markov-empowerment-lagged

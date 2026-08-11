@@ -369,6 +369,14 @@ class AggregationConfig:
 COMET_WRITERS = ("master_only",)
 """Who may talk to Comet. Only the master ever does — see `CometObservability`."""
 
+CELL_REPORTING_MODES = ("experiments", "master", "disabled")
+"""Where a finished cell's curves and plots go. See `CometObservability`.
+
+``disabled`` rather than the more natural ``off``: YAML 1.1 resolves a bare
+``off`` (and ``no``) to boolean false, so ``cell_reporting: off`` would arrive
+as ``False`` and fail type validation for a reason the config does not show.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class CometObservability:
@@ -386,32 +394,48 @@ class CometObservability:
 
     ``metric_plots`` opts completed cells into uploading the same aggregate
     PNGs that are always rendered locally. It defaults off so image upload is
-    explicit even when numeric cell experiments are enabled.
+    explicit even when cell reporting is on.
 
-    ``master_aggregates`` collapses a run onto a single remote experiment: the
-    cell curves, the metric PNGs, and the post-run analysis report all publish
-    to the master rather than to `<run>/<cell>` and `<run>/analysis` siblings.
-    A grid wants the default (``False``) — separate cell experiments are what
-    lets Comet overlay one cell against another, which is the comparison a
-    sweep exists to make. A single-cell run has nothing to overlay against, so
-    the split only scatters its output across three experiments and leaves the
-    one you open nearly empty. Off by default because turning it on changes
-    which experiment a run's numbers land in.
+    ``cell_reporting`` says *where* a finished cell's curves, scalars and PNGs
+    go — one setting with three values rather than two booleans, because two
+    booleans describe four states when only three exist, and the fourth has to
+    resolve silently in favour of one of them:
+
+    - ``experiments`` (default) — one child experiment per cell, named
+      ``<run>/<cell_id>``. Metric names stay bare (``m_ctrl``), so Comet can
+      overlay one cell against another. This is the comparison a sweep exists
+      to make, and it is what a grid usually wants.
+    - ``master`` — everything lands on the master instead, prefixed by cell id
+      (``cell-0000_m_ctrl``). One experiment holds the whole run: the grid
+      image, every cell's curves and PNGs, and the post-run analysis report.
+      Right for a single-cell run, which has nothing to overlay against and
+      would otherwise scatter its output over three near-empty experiments —
+      and right for any run you would rather read in one place.
+    - ``disabled`` — the master keeps its progress series and grid image, and
+      no cell curves are uploaded at all.
+
+    Cell reporting is orthogonal to ``sweep_experiment``, which is what decides
+    whether the master exists; the grid image belongs to the master and is
+    published under every one of these three modes.
     """
 
     writer: str = "master_only"
     heartbeat_seconds: float = 60.0
     grid_image_every_n_episodes: int = 25
     sweep_experiment: bool = True
-    cell_experiments: bool = True
+    cell_reporting: str = "experiments"
     metric_plots: bool = False
-    master_aggregates: bool = False
     progress_metrics: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.writer not in COMET_WRITERS:
             raise ValueError(
                 f"observability.comet.writer must be one of {COMET_WRITERS}, got {self.writer!r}"
+            )
+        if self.cell_reporting not in CELL_REPORTING_MODES:
+            raise ValueError(
+                "observability.comet.cell_reporting must be one of "
+                f"{CELL_REPORTING_MODES}, got {self.cell_reporting!r}"
             )
         if self.heartbeat_seconds <= 0:
             raise ValueError("observability.comet.heartbeat_seconds must be positive")
@@ -425,9 +449,8 @@ class CometObservability:
             "heartbeat_seconds": self.heartbeat_seconds,
             "grid_image_every_n_episodes": self.grid_image_every_n_episodes,
             "sweep_experiment": self.sweep_experiment,
-            "cell_experiments": self.cell_experiments,
+            "cell_reporting": self.cell_reporting,
             "metric_plots": self.metric_plots,
-            "master_aggregates": self.master_aggregates,
             "progress_metrics": list(self.progress_metrics),
         }
 

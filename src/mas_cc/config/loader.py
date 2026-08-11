@@ -24,6 +24,7 @@ from .models import (
     AnalysisConfig,
     BudgetConfig,
     CometObservability,
+    CELL_REPORTING_MODES,
     COMET_WRITERS,
     ControlConfig,
     ExecutionConfig,
@@ -810,12 +811,31 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
     _unknown_fields(values, {"schema_version", "comet"}, path, issues)
     comet_path = f"{path}.comet"
     comet = _as_mapping(values.get("comet", {}), comet_path, issues)
+    # `cell_experiments` and `master_aggregates` were one setting pretending to
+    # be two: with both true the second silently won and no child experiment was
+    # ever created.  Named here so a stale config gets the migration rather than
+    # a bare "unknown field".
+    for retired, replacement in (
+        ("cell_experiments", "cell_reporting: experiments (true) / disabled (false)"),
+        ("master_aggregates", "cell_reporting: master (true)"),
+    ):
+        if retired in comet:
+            _issue(
+                issues,
+                f"{comet_path}.{retired}",
+                f"was replaced by {comet_path}.cell_reporting; use {replacement}",
+                comet[retired],
+            )
     _unknown_fields(
         comet,
         {
             "writer", "heartbeat_seconds", "grid_image_every_n_episodes",
-            "sweep_experiment", "cell_experiments", "metric_plots", "master_aggregates",
+            "sweep_experiment", "cell_reporting", "metric_plots",
             "progress_metrics",
+            # Listed so the loop above is the only thing that reports them,
+            # rather than the migration message arriving next to a duplicate
+            # "unknown field" for the same key.
+            "cell_experiments", "master_aggregates",
         },
         comet_path,
         issues,
@@ -827,6 +847,27 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
             f"must be one of {', '.join(COMET_WRITERS)}; workers never write to Comet", writer,
         )
         writer = "master_only"
+    if isinstance(comet.get("cell_reporting"), bool):
+        # YAML 1.1 resolves a bare `off`/`no` to false, so the most natural way
+        # to write "do not report cells" arrives here as a boolean. Say that,
+        # instead of "must be a string" about a line that looks like a word.
+        _issue(
+            issues, f"{comet_path}.cell_reporting",
+            "reads as a boolean: YAML treats a bare off/no/on/yes that way. "
+            f"Use one of {', '.join(CELL_REPORTING_MODES)}",
+            comet["cell_reporting"],
+        )
+        comet = {key: value for key, value in comet.items() if key != "cell_reporting"}
+    cell_reporting = (
+        _string(comet, "cell_reporting", comet_path, issues, default="experiments")
+        or "experiments"
+    )
+    if cell_reporting not in CELL_REPORTING_MODES:
+        _issue(
+            issues, f"{comet_path}.cell_reporting",
+            f"must be one of {', '.join(CELL_REPORTING_MODES)}", cell_reporting,
+        )
+        cell_reporting = "experiments"
     return ObservabilityConfig(
         schema_version=_schema_version(values, path, issues),
         comet=CometObservability(
@@ -841,11 +882,8 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
             sweep_experiment=_boolean(
                 comet, "sweep_experiment", comet_path, issues, default=True
             ),
-            cell_experiments=_boolean(comet, "cell_experiments", comet_path, issues, default=True),
+            cell_reporting=cell_reporting,
             metric_plots=_boolean(comet, "metric_plots", comet_path, issues, default=False),
-            master_aggregates=_boolean(
-                comet, "master_aggregates", comet_path, issues, default=False
-            ),
             progress_metrics=_string_tuple(comet, "progress_metrics", comet_path, issues),
         ),
     )

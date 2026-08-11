@@ -166,7 +166,7 @@ observability:
     sweep_experiment: true       # false = no liveness dashboard
     # Publish one statistically aggregated experiment only after all configured
     # episodes in this single cell have finished.
-    cell_experiments: true
+    cell_reporting: experiments
 experiment:
   # Use a fresh run identity so the corrected request settings cannot resume
   # into the failed temperature=0 attempt's directory.

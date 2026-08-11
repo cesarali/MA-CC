@@ -130,7 +130,7 @@ observability:
     heartbeat_seconds: 60
     grid_image_every_n_episodes: 25
     sweep_experiment: true
-    cell_experiments: false
+    cell_reporting: disabled
 experiment:
   schema_version: 1
   name: synthetic-controlled-markov-empowerment

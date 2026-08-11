@@ -736,7 +736,7 @@ async def run_experiment(
 
     # The master experiment is closed in the outer `finally`, *after* the
     # post-run analysis rather than before it. Under
-    # `observability.comet.master_aggregates` the analysis publishes onto that
+    # `observability.comet.cell_reporting: master` the analysis publishes onto that
     # same experiment, and a sink closed first would silently swallow it.
     analysis_summary = None
     try:
@@ -785,7 +785,7 @@ def _print_comet_destinations(
     to the other two, so a user watching the printed link saw none of them and
     reasonably concluded nothing had been uploaded.
 
-    Under ``master_aggregates`` there is only the master, so the cell and
+    Under ``cell_reporting: master`` there is only the master, so the cell and
     analysis lines report what landed on it rather than repeating its URL
     three times.
     """

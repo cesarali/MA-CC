@@ -337,8 +337,7 @@ def test_standalone_behavior_configs_export_their_selected_monitoring_metrics():
     }
     # A single-cell run publishes everything onto one experiment: no sibling
     # `<run>/run` or `<run>/analysis` to hunt through for the aggregate plots.
-    assert reasoning.observability.comet.cell_experiments is False
-    assert reasoning.observability.comet.master_aggregates is True
+    assert reasoning.observability.comet.cell_reporting == "master"
     assert reasoning.observability.comet.metric_plots is True
     assert set(classical.metrics.comet_export_names()) == event_metrics
     assert reasoning.analysis.enabled is True

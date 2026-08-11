@@ -287,9 +287,9 @@ def test_a_disabled_monitor_is_inert_but_still_safe_to_call(sinks):
     assert monitor.close()["episodes_finished"] == 1
 
 
-def test_cell_experiments_can_be_switched_off_without_losing_the_sweep_dashboard(sinks):
+def test_cell_reporting_disabled_does_not_lose_the_sweep_dashboard(sinks):
     monitor = _monitor(
-        settings=CometObservability(heartbeat_seconds=3600.0, cell_experiments=False)
+        settings=CometObservability(heartbeat_seconds=3600.0, cell_reporting="disabled")
     )
     monitor.start()
 
@@ -299,12 +299,12 @@ def test_cell_experiments_can_be_switched_off_without_losing_the_sweep_dashboard
     assert any("cell_cell-0000_converged_fraction" in metrics for metrics, _ in sinks[0].metrics)
 
 
-def test_master_aggregates_puts_a_single_cells_curves_and_plots_on_the_master(sinks, tmp_path):
+def test_cell_reporting_master_puts_a_single_cells_curves_and_plots_on_the_master(sinks, tmp_path):
     """One experiment for a one-cell run: nothing to overlay, nothing to split."""
 
     monitor = _monitor(
         settings=CometObservability(
-            heartbeat_seconds=3600.0, metric_plots=True, master_aggregates=True
+            heartbeat_seconds=3600.0, metric_plots=True, cell_reporting="master"
         )
     )
     monitor.start()
@@ -333,9 +333,9 @@ def test_master_aggregates_puts_a_single_cells_curves_and_plots_on_the_master(si
     assert published["m_ctrl"] == 0.8
 
 
-def test_master_aggregates_prefixes_grid_cells_so_they_cannot_collide(sinks):
+def test_cell_reporting_master_prefixes_grid_cells_so_they_cannot_collide(sinks):
     monitor = _monitor(
-        settings=CometObservability(heartbeat_seconds=3600.0, master_aggregates=True)
+        settings=CometObservability(heartbeat_seconds=3600.0, cell_reporting="master")
     )
     monitor.start()
     curve = {"m_order": Curve(levels=("value",), points={1: (0.5,)})}
@@ -349,13 +349,13 @@ def test_master_aggregates_prefixes_grid_cells_so_they_cannot_collide(sinks):
     assert "cell-0001_m_order" in published
 
 
-def test_analysis_sink_is_only_offered_under_master_aggregates(sinks):
+def test_analysis_sink_is_only_offered_under_cell_reporting_master(sinks):
     plain = _monitor()
     plain.start()
     assert plain.analysis_sink is None
 
     consolidated = _monitor(
-        settings=CometObservability(heartbeat_seconds=3600.0, master_aggregates=True)
+        settings=CometObservability(heartbeat_seconds=3600.0, cell_reporting="master")
     )
     consolidated.start()
     # The master's own sink, so the analysis report joins the run it describes.

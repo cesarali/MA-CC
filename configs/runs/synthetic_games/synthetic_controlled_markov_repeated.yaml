@@ -163,7 +163,7 @@ observability:
     # Irrelevant here (no axes = no grid image), kept so both files read alike.
     grid_image_every_n_episodes: 25
     sweep_experiment: true      # false = no liveness dashboard
-    cell_experiments: true      # false = no aggregate curves in Comet
+    cell_reporting: experiments
 experiment:
   schema_version: 1
   name: synthetic-controlled-markov-repeated

@@ -116,7 +116,7 @@ observability:
     heartbeat_seconds: 15
     grid_image_every_n_episodes: 15
     sweep_experiment: true
-    cell_experiments: true
+    cell_reporting: experiments
 experiment:
   schema_version: 1
   name: grid-b-size-and-committee

@@ -1073,7 +1073,7 @@ def _export_information_estimates_to_comet(
     dashboard at all.
 
     ``sink`` lets the caller supply an experiment that is already open — the
-    run's master, under ``observability.comet.master_aggregates`` — so the
+    run's master, under ``observability.comet.cell_reporting: master`` — so the
     report lands on the run it describes instead of a sibling experiment. A
     borrowed sink is never closed here: the master owns its own lifetime, and
     ending it early would silently drop everything logged afterwards.

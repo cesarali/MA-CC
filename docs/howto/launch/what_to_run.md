@@ -311,7 +311,8 @@ observability:
   comet:                              # SWITCH 2 — shape. Only read when switch 1 is true.
     heartbeat_seconds: 20
     sweep_experiment: true            # false = no liveness dashboard
-    cell_experiments: true            # false = no aggregate curves in Comet
+    cell_reporting: experiments       # one experiment per cell. `master` puts them on the
+                                      # master instead; `disabled` uploads no cell curves.
 ```
 
 > **This is a real upload.** It has caught us out before: a validation run with a *mocked

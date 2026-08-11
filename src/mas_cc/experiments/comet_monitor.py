@@ -132,12 +132,13 @@ class MasterMonitor:
         """The master's own sink when the post-run analysis should publish onto it.
 
         ``None`` means "open your own experiment", which is the default and the
-        right answer for a grid: one analysis over many cells is its own object
-        of study. Under ``master_aggregates`` the report joins the run it
-        describes instead, so there is a single experiment to open.
+        right answer for a grid reporting per cell: one analysis over many cells
+        is its own object of study. Under ``cell_reporting: master`` the report
+        joins the run it describes instead, so there is a single experiment to
+        open.
         """
 
-        if not self._enabled or not self.settings.master_aggregates:
+        if not self._enabled or self.settings.cell_reporting != "master":
             return None
         return self._sink
 
@@ -156,8 +157,12 @@ class MasterMonitor:
         if self._sink.status != "active":
             return f"{self._sink.status}  ({self._sink.reason or 'no reason reported'})"
         target = self._sink.url or self._sink.reference or "(no link reported)"
-        cells = "on" if self.settings.cell_experiments else "off"
-        return f"master -> project {self._project!r}, cell experiments {cells}\n                 {target}"
+        cells = {
+            "experiments": "one experiment per cell",
+            "master": "cells on this master",
+            "disabled": "cells not reported",
+        }[self.settings.cell_reporting]
+        return f"master -> project {self._project!r}, {cells}\n                 {target}"
 
     def start(self, parameters: Mapping[str, Any] | None = None) -> None:
         """Log the run's parameters and start the heartbeat timer."""
@@ -367,22 +372,15 @@ class MasterMonitor:
     ) -> dict[str, Any]:
         """One Comet experiment for one completed cell, stepped by round index."""
 
-        if not self._enabled:
+        if not self._enabled or self.settings.cell_reporting == "disabled":
             return {
                 "cell_id": cell_id,
                 "status": "disabled",
                 "curves": len(result.curves),
                 "metric_plots": 0,
             }
-        if self.settings.master_aggregates:
+        if self.settings.cell_reporting == "master":
             return self._log_cell_onto_master(cell_id, result, metric_plots)
-        if not self.settings.cell_experiments:
-            return {
-                "cell_id": cell_id,
-                "status": "disabled",
-                "curves": len(result.curves),
-                "metric_plots": 0,
-            }
         sink = CometMetricSink(
             True, project_name=self._project, run_name=f"{self.run_name}/{cell_id}"
         )

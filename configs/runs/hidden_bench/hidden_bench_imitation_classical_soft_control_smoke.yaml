@@ -154,7 +154,7 @@ observability:
     writer: master_only
     heartbeat_seconds: 20
     sweep_experiment: false
-    cell_experiments: false
+    cell_reporting: disabled
 experiment:
   name: hidden-bench-imitation-classical-soft-control-smoke
   description: Provider-free smoke check that the soft feedback controller restores within-slice action overlap.

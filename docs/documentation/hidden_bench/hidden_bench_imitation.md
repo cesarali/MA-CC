@@ -1067,7 +1067,7 @@ people, because only the first is named in the banner at launch:
 | Experiment | Named | Carries |
 | --- | --- | --- |
 | `<run-id>` (master) | at launch, and again at the end | Liveness: episode progress, heartbeat, the grid image. **No aggregate curves and no plots.** |
-| `<run-id>/<cell>` | at the end | The aggregate curves stepped by round, the headline scalars, and every PNG under `metrics/plots/` — enabled by `observability.comet.cell_experiments` and `metric_plots`. |
+| `<run-id>/<cell>` | at the end | The aggregate curves stepped by round, the headline scalars, and every PNG under `metrics/plots/` — enabled by `observability.comet.cell_reporting: experiments` and `metric_plots`. Under `cell_reporting: master` this row's contents move onto the master, prefixed by cell id, and no child experiment is created. |
 | `<run-id>/analysis` | at the end | The MI/CMI estimates as metrics, the information figures, and the report files — enabled by `analysis.comet_export`. |
 
 If you watch only the launch link you will see progress bars and conclude the

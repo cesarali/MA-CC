@@ -172,7 +172,7 @@ observability:
     sweep_experiment: true       # false = no liveness dashboard
     # Required for the round-stepped aggregate curves above. For this non-grid
     # run, the single cell is the complete 10-episode experiment.
-    cell_experiments: true
+    cell_reporting: experiments
 experiment:
   name: hidden-bench-imitation-classical-control-10
   description: Ten provider-free controlled classical episodes with pooled response diagnostics.

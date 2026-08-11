@@ -188,9 +188,10 @@ def config_schema() -> dict[str, Any]:
                             },
                             "grid_image_every_n_episodes": {"type": "integer", "minimum": 1},
                             "sweep_experiment": {"type": "boolean"},
-                            "cell_experiments": {"type": "boolean"},
+                            "cell_reporting": {
+                                "enum": ["experiments", "master", "disabled"]
+                            },
                             "metric_plots": {"type": "boolean"},
-                            "master_aggregates": {"type": "boolean"},
                         }
                     ),
                 }

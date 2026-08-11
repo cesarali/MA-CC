@@ -230,14 +230,13 @@ observability:
     # This run is a single cell, so there is no second cell to overlay it
     # against and nothing is gained by giving it its own experiment. Keep the
     # child experiments off and let the master publish everything.
-    cell_experiments: false
+    cell_reporting: master
     # Upload the locally rendered aggregate metric PNGs (m_order, m_ctrl,
     # m_truth, dominant_action_share, and the per-option share plots).
     metric_plots: true
     # One experiment for the whole run: the aggregate curves, those PNGs, and
     # the post-run information report all land on the master rather than on
     # `<run>/run` and `<run>/analysis` siblings.
-    master_aggregates: true
 experiment:
   # Renamed on the v1 -> v2 switch so this run cannot resume into, or be
   # confused with, the v1 results already under

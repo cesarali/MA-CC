@@ -618,26 +618,35 @@ observability:
                                   # grid-progress image to Comet, in units of completed episodes.
     sweep_experiment: true           # Boolean. Whether the grid-wide (sweep-level) Comet experiment
                                   # is created at all.
-    cell_experiments: true           # Boolean. Whether each individual cell also gets its own Comet
-                                  # experiment, in addition to the sweep-level one.
+    cell_reporting: experiments      # experiments | master | disabled. Where a finished cell's
+                                  # curves, scalars, and metric PNGs are published.
+                                  #   experiments — one child Comet experiment per cell, named
+                                  #     `<run>/<cell_id>`, with bare metric names (`m_ctrl`). This
+                                  #     is what lets Comet overlay one cell against another.
+                                  #   master — all of it onto the sweep experiment instead, along
+                                  #     with the post-run analysis report, prefixed by cell id
+                                  #     (`cell-0000_m_ctrl`). No child experiments are created.
+                                  #   disabled — no cell curves uploaded; the master keeps its
+                                  #     progress series and grid image.
+                                  # NOTE: write `disabled`, not `off` — YAML reads a bare `off`
+                                  # (and `no`) as boolean false.
     metric_plots: false              # Boolean. Upload each cell's locally rendered aggregate metric
-                                  # PNGs to the experiment that carries its curves. Disabled by
-                                  # default to keep image upload opt-in.
-    master_aggregates: false         # Boolean. Publish the cell curves, those metric PNGs, and the
-                                  # post-run analysis report onto the master experiment instead of
-                                  # `<run>/<cell>` and `<run>/analysis` siblings, and create no
-                                  # child experiments. Takes precedence over cell_experiments.
-                                  # A grid wants the default: separate cell experiments are what
-                                  # let Comet overlay one cell against another. A single-cell run
-                                  # has nothing to overlay, so the split only scatters its output
-                                  # across three experiments.
+                                  # PNGs to the experiment that carries its curves, once per cell
+                                  # as that cell's last episode lands. Disabled by default to keep
+                                  # image upload opt-in.
 ```
 
-With `master_aggregates: false` (the default) one run writes to up to three Comet
-experiments — the master, one per completed cell, and one for the post-run
-analysis. The aggregate plots and MI estimates live on the latter two, so
-opening only the master shows little more than the progress counter. Turn
-`master_aggregates` on for a single-cell run to get all of it in one place.
+`cell_reporting` decides how many experiments a run writes to. Under
+`experiments` (the default) one run writes to up to three — the master, one per
+completed cell, and one for the post-run analysis. The aggregate plots and MI
+estimates live on the latter two, so opening only the master shows little more
+than the progress counter. Under `master` there is exactly one experiment
+holding everything, which is right for a single-cell run, and right for any grid
+you would rather read in one place than overlay.
+
+`cell_reporting` is independent of `sweep_experiment`, which decides whether the
+master exists at all. The grid-progress image belongs to the master and is
+published under all three modes.
 
 **Cell-level metrics** (`aggregation.cell_metrics`, from `src/mas_cc/metrics/cell.py`):
 

@@ -178,7 +178,7 @@ observability:
     sweep_experiment: true       # false = no liveness dashboard
     # Publish one statistically aggregated experiment only after all configured
     # episodes in this single cell have finished.
-    cell_experiments: true
+    cell_reporting: experiments
     # Upload the locally rendered aggregate metric PNGs to that cell experiment.
     metric_plots: true
 experiment:
