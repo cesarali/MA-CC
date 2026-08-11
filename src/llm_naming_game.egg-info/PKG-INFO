@@ -8,12 +8,23 @@ Requires-Dist: python-dotenv>=1.0
 Requires-Dist: PyYAML>=6.0
 Requires-Dist: requests>=2.31
 Requires-Dist: numpy>=2.0
+Requires-Dist: torch>=2.2
+Requires-Dist: sentence-transformers>=3.0
+Requires-Dist: scikit-learn>=1.5
 Requires-Dist: pandas>=2.2
 Requires-Dist: pyarrow>=17.0
 Requires-Dist: matplotlib>=3.9
 Requires-Dist: tqdm>=4.66
 Provides-Extra: test
 Requires-Dist: pytest>=8.0; extra == "test"
+Provides-Extra: comet
+Requires-Dist: comet_ml<4,>=3.58; extra == "comet"
+Provides-Extra: gemma4
+Requires-Dist: accelerate>=1.0; extra == "gemma4"
+Requires-Dist: huggingface-hub>=0.30; extra == "gemma4"
+Requires-Dist: safetensors>=0.4; extra == "gemma4"
+Requires-Dist: transformers>=5.5; extra == "gemma4"
+Requires-Dist: torchvision; extra == "gemma4"
 
 # LLM Naming Game benchmark
 
@@ -119,6 +130,10 @@ The committee probe is a separate path around the repeated convention game.
 Agent memory, temporary interventions, stored observations, derived states, and
 statistical analysis remain separate layers. Run the small configuration with
 the deterministic provider first:
+
+For the local GPU-backed Gemma 4 API, direct Python usage, diagnostics, and
+small-game commands, see
+[`docs/gemma4_local_api.md`](docs/gemma4_local_api.md).
 
 For the game intuition, complete configuration reference, provider selection,
 commands, and result-file guide, see
