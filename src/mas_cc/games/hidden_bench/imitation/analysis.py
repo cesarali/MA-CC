@@ -279,6 +279,22 @@ def adapt_event(
     )
 
 
+def control_mechanism_of(event: ImitationEvent) -> str:
+    """Which controller produced this event.
+
+    A grid cell records `control.mechanism` in its `overrides.json`, but a
+    single-cell run has no overrides at all, so the event's own
+    `controller_policy` is the next authority. The literal is only reached for
+    events written before either field existed, when `threshold_target` was the
+    one mechanism there was.
+    """
+
+    fallback = event.event.get("controller_policy")
+    if fallback is None:
+        fallback = "threshold_target" if event.U_t else "none"
+    return str(event.overrides.get("control.mechanism", fallback))
+
+
 def binary_action_entropy_bits(actions: Sequence[str]) -> float | None:
     """Shannon entropy of observed controller actions, or NA without a controller."""
 
@@ -434,10 +450,7 @@ def cell_summary(events: Sequence[ImitationEvent]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "cell_id": first.cell_id,
         "dynamics_mode": first.event.get("dynamics_mode"),
-        "control_mechanism": first.overrides.get(
-            "control.mechanism",
-            "threshold_target" if first.U_t is not None else "none",
-        ),
+        "control_mechanism": control_mechanism_of(first),
         "n_episodes": len(episodes),
         "n_events": len(events),
         "initial_state": episodes[0]["initial_state"],
@@ -775,9 +788,7 @@ def _trajectory_rows(events: Sequence[ImitationEvent]) -> tuple[list[dict[str, A
                 "episode_id": ordered[0].episode_id,
                 "state_index": state_index,
                 "dynamics_mode": ordered[0].event.get("dynamics_mode"),
-                "control_mechanism": ordered[0].overrides.get(
-                    "control.mechanism", "threshold_target" if ordered[0].U_t else "none"
-                ),
+                "control_mechanism": control_mechanism_of(ordered[0]),
             }
             shares.extend(
                 {**common, "option": option, "share": state_shares[option]}
@@ -1134,9 +1145,7 @@ def analyze_hidden_bench_imitation(
             "episode_id": event.episode_id,
             "interaction_index": event.interaction_index,
             "dynamics_mode": event.event.get("dynamics_mode"),
-            "control_mechanism": event.overrides.get(
-                "control.mechanism", "threshold_target" if event.U_t else "none"
-            ),
+            "control_mechanism": control_mechanism_of(event),
             "N_t": json.dumps(event.N_t),
             "N_t1": json.dumps(event.N_t1),
             "Y_t": None if event.Y_t is None else json.dumps(event.Y_t),
@@ -1155,6 +1164,8 @@ def analyze_hidden_bench_imitation(
             "focal_changed", "focal_adopted_target", "focal_left_target",
             "u_advocate", "sensor_target_share", "population_target_share",
             "sensor_target_error", "sensor_target_abs_error",
+            "controller_threshold", "controller_beta",
+            "controller_advocacy_probability",
         ):
             row[field] = event.event.get(field)
         event_rows.append(row)

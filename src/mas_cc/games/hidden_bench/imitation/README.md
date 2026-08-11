@@ -24,6 +24,20 @@ Reasoning mode receives a fixed advocacy message and still chooses its own
 vote. Classical mode adds a separately logged local transition weight toward
 the target.
 
+`soft_target` is the same sensor and the same two actuators with a stochastic
+policy in between: `P(ADVOCATE_Z | Y_t) = sigma[beta * (threshold - sampled
+target share)]`, drawn from the episode's seeded sensor RNG. It exists because
+`threshold_target` saturates — with everyone off the target it always
+advocates, with the target dominant it never does — so those conditioning
+slices carry one action and `I(U_t; n_Z(t+1) | n_Z(t))` cannot be estimated
+from them at any sample size. `beta` is the inverse policy temperature: large
+`beta` recovers `threshold_target`, smaller `beta` buys action overlap.
+Advocacy defaults to `template_version: 3`, one fixed line that argues for the
+target and asserts nothing about the task. Every event logs
+`controller_threshold`, `controller_beta`, and
+`controller_advocacy_probability`, so the realized action sequence can be
+audited against the policy it claims to follow.
+
 Every event records the full pre/post vote vectors and occupation states,
 sensor observation, controller action, focal/peer identities, order parameters,
 evidence disclosure diagnostics, and classical channel data. Consequently
@@ -41,13 +55,24 @@ mas-cc experiment run --config configs/runs/hidden_bench/hidden_bench_imitation_
 The mock reasoning smoke configuration is
 `configs/runs/hidden_bench/hidden_bench_imitation_reasoning_mock.yaml`.
 
+The soft controller has its own provider-free smoke configuration,
+`configs/runs/hidden_bench/hidden_bench_imitation_classical_soft_control_smoke.yaml`.
+Run it before any provider sweep that uses `soft_target`. The thing to check is
+not `H(U) > 0` — the hard controller had that too — but whether both actions
+occur inside the same `Z_t` slice. On the shipped smoke settings
+(`N=4`, `sensor_sample_size=2`, `threshold=0.5`, `beta=4.0`, 1600 events) all
+5 target slices and all 15 occupation states see both actions, against 2 of 5
+and 7 of 15 under `threshold_target` — 31.7% of events unusable, down to 0%.
+
 ## First control pilot and offline report
 
 The matched four-cell pilot is
 `configs/runs/hidden_bench/hidden_bench_imitation_first_control_grid.yaml`.
 It crosses reasoning/classical dynamics with none/threshold-target control,
 uses the same explicit initial votes in every cell, and runs 12 episodes per
-cell.  Preflight and run it with:
+cell.  `hidden_bench_imitation_soft_control_grid.yaml` is the same grid with
+`soft_target` in place of `threshold_target`, so the two pilots differ in the
+policy alone.  Preflight and run either with:
 
 ```bash
 mas-cc experiment preflight \

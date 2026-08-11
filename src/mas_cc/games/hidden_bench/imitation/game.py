@@ -573,6 +573,15 @@ class HiddenBenchImitationGame(Game):
             "sensor_observed_opinions": sensor.get("sampled_opinions", []),
             "sensor_count_vector": sensor_count_vector,
             "controller_policy": None if signal is None else signal.metadata.get("policy"),
+            "controller_threshold": None if signal is None else signal.metadata.get("threshold"),
+            # `None` under the deterministic mechanism, a positive inverse
+            # temperature under `soft_target`.
+            "controller_beta": None if signal is None else signal.metadata.get("beta"),
+            # The probability `ADVOCATE_Z` was drawn with, so the realized action
+            # sequence can be checked against the policy it claims to follow.
+            "controller_advocacy_probability": (
+                None if signal is None else signal.metadata.get("advocacy_probability")
+            ),
             "controller_action": None if signal is None else signal.action,
             "controller_applied": bool(signal is not None and signal.message is not None),
             # Part 4: which paraphrase fired, so no single variant can silently

@@ -1,0 +1,143 @@
+# Matched 2 x 2 HiddenBench imitation pilot under the **soft** feedback
+# controller.  Section 10 of docs/tdd/architecture/
+# 11082026_soft_feedback_controller_implementation.md.
+#
+# Scientific cells produced by the two axes at the bottom:
+#   A reasoning + none              B reasoning + soft_target
+#   C classical + none              D classical + soft_target
+#
+# This is hidden_bench_imitation_first_control_grid.yaml with exactly one
+# change - `threshold_target` becomes `soft_target` - so B/D here and B/D there
+# are comparable, and any difference in `target_actuation_cmi` is attributable
+# to the policy rather than to the task, the prompt, or the initial state.
+#
+# Everything held matched across cells: task, initial vote vector, population
+# size, controller target, sensor sample size, threshold, beta, horizon, and
+# the seed (each cell derives its episode seeds from the same root).
+#
+# Run this only after the provider-free smoke check passes:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_classical_soft_control_smoke.yaml \
+#     --output-dir results
+# It is the cheap way to see whether the action-support collapse is actually
+# gone; a provider sweep that starts with collapsed slices only buys expensive
+# unidentifiable estimates.
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 256
+  options:
+    estimated_latency_seconds: 3.0
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation
+  population_size: 4
+  horizon: 20
+  topology: complete
+  options:
+    task_set: vanilla
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: bijective
+    dynamics_mode: reasoning
+    pairing: uniform_two_distinct
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    stop_on_consensus: false
+    initialization:
+      mode: explicit
+      initial_votes:
+        - East Town
+        - East Town
+        - North Hill
+        - West City
+    classical:
+      kernel: irisarri_multi_opinion
+      forward_rate: 1.0
+      reverse_rate: 1.0
+      interaction_factor: destination_count_plus_offset
+      interaction_offset: 1.0
+      control_strength: 2.0
+control:
+  mechanism: soft_target
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: soft_target
+    threshold: 0.5
+    # P(ADVOCATE_Z) = sigma[beta * (threshold - sampled target share)].
+    # beta -> infinity recovers threshold_target; 4.0 is the first-experiment
+    # starting point, deliberately not tuned (section 11).
+    beta: 4.0
+    # The single fixed advocacy line: it argues for the target and asserts
+    # nothing about the task, so cell B measures social pressure rather than
+    # injected evidence.
+    template_version: 3
+  # The `none` cells ignore this whole options block.
+execution:
+  seed: 20260810
+  repetitions: 12
+  parallelism: 10
+  fail_fast: false
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 100.0
+  max_cost_per_run: 100.0
+  max_provider_requests: 5000
+  max_input_tokens: 20000000
+  max_output_tokens: 1000000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 1
+storage:
+  output_dir: results
+  format: jsonl
+  checkpoints: true
+  overwrite: false
+analysis:
+  enabled: true
+  estimators:
+    - sensing_mi
+    - population_actuation_cmi
+    - target_actuation_cmi
+    - focal_actuation_cmi
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260810
+metrics:
+  enabled: true
+  comet_export: []
+experiment:
+  name: hidden-bench-imitation-soft-control-grid
+  description: Matched reasoning/classical by no-control/soft-control pilot.
+  tags: [hidden-bench, imitation, control, soft-target, reasoning, classical, pilot]
+grid:
+  game.options.dynamics_mode: [reasoning, classical]
+  control.mechanism: [none, soft_target]

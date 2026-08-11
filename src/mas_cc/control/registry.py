@@ -63,6 +63,10 @@ def create_default_control_registry() -> ControlRegistry:
         "threshold_target",
         "mas_cc.games.hidden_bench.imitation.controller:create_threshold_target_control",
     )
+    registry.register(
+        "soft_target",
+        "mas_cc.games.hidden_bench.imitation.controller:create_soft_target_control",
+    )
     return registry
 
 

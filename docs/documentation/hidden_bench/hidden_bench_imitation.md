@@ -29,6 +29,7 @@ No InfoNCE estimator is implemented or emitted.
    - [`none`: uncontrolled behavior](#32-none-uncontrolled-behavior)
    - [`threshold_target`: measured feedback](#33-threshold_target-measured-feedback)
    - [Every `threshold_target` field](#34-every-threshold_target-field)
+   - [`soft_target`: the stochastic policy](#341-soft_target-the-stochastic-policy)
    - [Choosing another target](#35-choosing-another-target)
    - [Worked sensor/action examples](#36-worked-sensoraction-examples)
    - [Effect in reasoning and classical modes](#37-effect-in-reasoning-and-classical-modes)
@@ -198,9 +199,12 @@ For `hidden_bench_imitation`, use one of these effective mechanisms:
 | --- | --- | --- | --- |
 | `none` | No | No | Runs the ordinary reasoning or classical dynamics without a controller. |
 | `threshold_target` | Yes | `ADVOCATE_Z` or `NO_OP` | Samples current opinions and advocates the configured target when sampled support is below a threshold. |
+| `soft_target` | Yes | `ADVOCATE_Z` or `NO_OP` | The same sensor and the same actuators, but the action is *drawn* from a sigmoid of the same threshold comparison instead of being decided by it. |
 
 The first matched grid varies this field between `none` and
-`threshold_target` while holding the initial state and dynamics mode fixed.
+`threshold_target` while holding the initial state and dynamics mode fixed;
+`hidden_bench_imitation_soft_control_grid.yaml` is the same grid with
+`soft_target`, so the two differ in the policy alone.
 
 ### 3.2 `none`: uncontrolled behavior
 
@@ -255,7 +259,7 @@ or inject hidden task evidence.
 | `options.sensor_sample_size` | Integer `>= 1` and `<= N` | `1` | Number of agents sampled without replacement at every event. Larger samples are more accurate but reduce sensor variation; `N` reveals the full population share. |
 | `options.policy` | Exactly `threshold_target` | `threshold_target` | Audit label and policy selector. No other policy is implemented; another value is rejected during control creation. |
 | `options.threshold` | Number in `[0, 1]` | `0.5` | Advocacy cutoff. The comparison is strict: advocate when measured target share `< threshold`. |
-| `options.template_version` | `1` or `2` | `1` | Wording of the advocacy message. `1` announces the controller; `2` speaks as an ordinary peer. See section 3.9. |
+| `options.template_version` | `1`, `2`, or `3` | `1` (`3` under `soft_target`) | Wording of the advocacy message. `1` announces the controller; `2` speaks as an ordinary peer drawing on the shared facts; `3` is one fixed factless line. See section 3.9. |
 
 Useful threshold edge cases:
 
@@ -269,6 +273,77 @@ Useful threshold edge cases:
 Both actions need nontrivial support for meaningful actuation MI/CMI. Always
 inspect `controller_action_entropy_bits`, `n_advocate`, and `n_noop` before
 interpreting an actuation estimate.
+
+### 3.4.1 `soft_target`: the stochastic policy
+
+`threshold_target` has a structural problem that no amount of data fixes. Its
+action is a deterministic function of the sampled share, and the sampled share
+is strongly determined by the population state, so the extreme conditioning
+slices are saturated: with nobody on the target it always advocates, with the
+target dominant it never does. A conditioning slice that only ever saw one
+action contributes nothing to
+
+```text
+target_actuation_cmi = I(U_t; n_Z(t+1) | n_Z(t)),
+```
+
+because the estimator has no within-slice contrast to measure. Those events are
+not noisy — they are unusable.
+
+`soft_target` keeps every other part of the controller and replaces step 4 of
+section 3.3 with a draw:
+
+```text
+P(ADVOCATE_Z | Y_t) = sigmoid[beta * (threshold - sampled target share)]
+```
+
+so advocacy is very likely far below the threshold, very unlikely far above it,
+and near a coin flip at it. The intervention means the same thing; only its
+identifiability changes.
+
+```yaml
+control:
+  mechanism: soft_target
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    template_version: 3
+```
+
+| YAML field | Legal values | Default | Meaning and effect |
+| --- | --- | --- | --- |
+| `options.beta` | Number `> 0` | `4.0` | Inverse policy temperature. Large `beta` converges on `threshold_target`; small `beta` flattens the policy toward a coin flip regardless of state. It is a first-experiment setting, not a tuned one. |
+
+`target`, `sensor_sample_size`, and `threshold` mean exactly what they mean in
+section 3.4. `options.policy` must read `soft_target`, and `template_version`
+defaults to `3`, the single fixed advocacy line.
+
+The draw uses the episode's seeded sensor RNG — the same stream the sensor
+sample comes from — so a run replays exactly from `execution.seed`.
+
+Every controlled event additionally records `controller_threshold`,
+`controller_beta`, and `controller_advocacy_probability`. The last is the audit
+hook: the realized action sequence can be checked against the policy it claims
+to follow, and under `threshold_target` it is `1.0` or `0.0`, so one query
+covers both mechanisms.
+
+Before spending provider budget on a `soft_target` sweep, run
+`configs/runs/hidden_bench/hidden_bench_imitation_classical_soft_control_smoke.yaml`.
+The diagnostic is not `H(U) > 0`, which the hard controller already satisfied,
+but whether both actions appear *inside the same* conditioning slice. On the
+shipped smoke settings (`N=4`, `sensor_sample_size=2`, `threshold=0.5`,
+`beta=4.0`, 4 episodes x 400 events):
+
+| Mechanism | `Z_t` slices with both actions | `N_t` states with both actions | Events in single-action slices |
+| --- | --- | --- | --- |
+| `threshold_target` | 2 of 5 | 7 of 15 | 31.7% |
+| `soft_target` | 5 of 5 | 15 of 15 | 0.0% |
+
+If a soft configuration does not materially improve that, do not proceed to the
+provider sweep — lower `beta` first.
 
 ### 3.5 Choosing another target
 
@@ -505,6 +580,24 @@ Before quoting an `R_ctrl` from a `template_version: 2` run, do the manipulation
 check: take twenty controller messages and twenty peer messages, strip the
 labels, and ask a fresh model to tell them apart. Above chance means the
 controller is still detectable.
+
+#### What `control.options.template_version: 3` changes
+
+`template_version: 3` is a single fixed line that argues for the target and
+cites nothing at all. It obeys the same peer-style rules as v2 — bolded option
+name, first person, ending `I'm voting **Z**`, never the identity words — but
+it has no `{fact}` slot and no paraphrase bank, so `controller_fact_index` is
+always `null` and `controller_template_id` is always `fixed-advocacy-v3`.
+
+It is the default under `soft_target` for a specific reason. That mechanism
+already puts the run's randomness in `Y_t -> U_t`, which is where the actuation
+estimate reads it. Drawing a paraphrase and a fact on top of that would make
+`U_t -> M_t` a second random channel, and no estimate could then say which of
+the two the population responded to. Under `threshold_target`, where the action
+is deterministic, the v2 bank costs nothing and stays the better choice.
+
+All three versions remain selectable under both mechanisms; a run records which
+one it used.
 
 ### 3.10 Event scheduling invariants
 
@@ -1200,6 +1293,9 @@ detailed definitions and interpretation rules remain in Sections 4–7.
 | `population_target_share` | controlled transition | True population target share before actuation. |
 | `sensor_target_error` | controlled transition | `sensor_target_share - population_target_share`. |
 | `sensor_target_abs_error` | controlled transition | Absolute sensor target error. |
+| `controller_advocacy_probability` | controlled transition | The probability `ADVOCATE_Z` was drawn with. Strictly between 0 and 1 under `soft_target`; exactly `1.0` or `0.0` under `threshold_target`. |
+| `controller_threshold` | controlled transition | The configured advocacy cutoff, echoed per event. |
+| `controller_beta` | controlled transition | The configured inverse policy temperature, or NA under a deterministic mechanism. |
 | `unshared_disclosure_rate` | event | Keyword-detected fraction of hidden facts disclosed in messages so far. |
 | `disclosure_reach` | event, one series per fact | Number of agents whose recorded knowledge contains a hidden fact. |
 
