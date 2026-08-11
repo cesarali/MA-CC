@@ -15,6 +15,7 @@ import asyncio
 import csv
 import json
 import logging
+import shutil
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
@@ -70,6 +71,19 @@ def _json(value: Any) -> str:
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _wipe_run_dir_if_requested(run_dir: Path, *, wipe_and_recompute: bool, label: str) -> None:
+    """Delete a stale run directory before it is recreated.
+
+    ``storage.wipe_and_recompute`` overrides ``resume``: the point of wiping
+    is to discard every prior manifest/episode/aggregate so nothing gets
+    skipped as already-completed.
+    """
+
+    if wipe_and_recompute and run_dir.exists():
+        LOGGER.warning("storage.wipe_and_recompute=true: deleting %s (%s)", run_dir, label)
+        shutil.rmtree(run_dir)
 
 
 # --- Pricing/budget resolution, duplicated in miniature from cli/game.py -----
@@ -646,6 +660,9 @@ async def run_experiment(
     run_dir = results_run_dir(
         output_dir, game=config.game.type, experiment=config.experiment.name, run_id=run_id
     )
+    _wipe_run_dir_if_requested(
+        run_dir, wipe_and_recompute=config.storage.wipe_and_recompute, label=run_id
+    )
     episodes_dir = run_dir / "data" / "episodes"
     episodes_dir.mkdir(parents=True, exist_ok=True)
 
@@ -717,33 +734,86 @@ async def run_experiment(
     abort = asyncio.Event()
     started_at = _now()
 
+    # The master experiment is closed in the outer `finally`, *after* the
+    # post-run analysis rather than before it. Under
+    # `observability.comet.master_aggregates` the analysis publishes onto that
+    # same experiment, and a sink closed first would silently swallow it.
+    analysis_summary = None
     try:
-        outcomes = await _run_task_batch(
-            tasks, game=game, guarded_provider=guarded_provider, guard=guard,
-            semaphore=semaphore, abort=abort, fail_fast=config.execution.fail_fast,
-            resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
-            price_hash=price_hash, checkpoint_enabled=config.storage.checkpoints, progress=progress,
-            monitor=monitor,
-        )
-    finally:
-        guarded_provider.close()
-        progress.close()
-        _aggregate_quietly(aggregator, None)
-        _write(run_dir / "comet_run_summary.json", _json(monitor.close()))
+        try:
+            outcomes = await _run_task_batch(
+                tasks, game=game, guarded_provider=guarded_provider, guard=guard,
+                semaphore=semaphore, abort=abort, fail_fast=config.execution.fail_fast,
+                resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
+                price_hash=price_hash, checkpoint_enabled=config.storage.checkpoints,
+                progress=progress, monitor=monitor,
+            )
+        finally:
+            guarded_provider.close()
+            progress.close()
+            _aggregate_quietly(aggregator, None)
 
-    result = ExperimentResult(
-        run_id=run_id, experiment_name=config.experiment.name, game_type=config.game.type,
-        episode_count=config.execution.repetitions, output_dir=run_dir, outcomes=outcomes,
-        preflight=preflight, budget_status=guard.status(), started_at=started_at, finished_at=_now(),
-    )
-    _write_experiment_summary(run_dir, config, result)
-    # Analysis needs at least one completed trajectory. If every episode failed
-    # before its first step, preserve the episode/provider failures in the
-    # returned result instead of masking them with a secondary missing-file
-    # exception.
-    if result.completed or result.skipped_resumed:
-        run_configured_analysis(config, run_dir)
+        result = ExperimentResult(
+            run_id=run_id, experiment_name=config.experiment.name, game_type=config.game.type,
+            episode_count=config.execution.repetitions, output_dir=run_dir, outcomes=outcomes,
+            preflight=preflight, budget_status=guard.status(), started_at=started_at,
+            finished_at=_now(),
+        )
+        _write_experiment_summary(run_dir, config, result)
+        # Analysis needs at least one completed trajectory. If every episode
+        # failed before its first step, preserve the episode/provider failures
+        # in the returned result instead of masking them with a secondary
+        # missing-file exception.
+        if result.completed or result.skipped_resumed:
+            analysis_summary = run_configured_analysis(config, run_dir, monitor.analysis_sink)
+    finally:
+        comet_summary = monitor.close()
+        _write(run_dir / "comet_run_summary.json", _json(comet_summary))
+
+    _print_comet_destinations(comet_summary, analysis_summary)
     return result
+
+
+def _print_comet_destinations(
+    comet_summary: Mapping[str, Any] | None, analysis: Mapping[str, Any] | None
+) -> None:
+    """Say where everything was published, not only where the master lives.
+
+    One run writes to up to three Comet experiments - the master, one per
+    completed cell, and one for the post-run information analysis - and the
+    banner used to name only the first. Aggregate plots and MI estimates went
+    to the other two, so a user watching the printed link saw none of them and
+    reasonably concluded nothing had been uploaded.
+
+    Under ``master_aggregates`` there is only the master, so the cell and
+    analysis lines report what landed on it rather than repeating its URL
+    three times.
+    """
+
+    lines: list[str] = []
+    if (comet_summary or {}).get("url"):
+        lines.append(f"  Comet master:   {comet_summary['url']}")
+    for cell in (comet_summary or {}).get("cell_experiments", ()) or ():
+        if not isinstance(cell, Mapping):
+            continue
+        if cell.get("published_to") == "master":
+            lines.append(
+                f"  Comet cell {cell.get('cell_id')}: on master  "
+                f"({cell.get('curves', 0)} curves, {cell.get('metric_plots', 0)} plot(s))"
+            )
+        elif cell.get("url"):
+            lines.append(f"  Comet cell {cell.get('cell_id')}: {cell['url']}")
+    if analysis and isinstance(analysis.get("comet"), Mapping):
+        published = analysis["comet"]
+        detail = (
+            f"({published.get('metrics', 0)} metrics, {published.get('images', 0)} image(s))"
+        )
+        if published.get("published_to") == "master":
+            lines.append(f"  Comet analysis: on master  {detail}")
+        elif published.get("url"):
+            lines.append(f"  Comet analysis: {published['url']}  {detail}")
+    for line in lines:
+        print_banner(line)
 
 
 def run_experiment_sync(*args: Any, **kwargs: Any) -> ExperimentResult:
@@ -907,6 +977,9 @@ async def run_experiment_grid(
     run_id = f"{base.experiment.name}-{base.execution.seed}"
     grid_dir = results_run_dir(
         output_dir, game=base.game.type, experiment=base.experiment.name, run_id=run_id
+    )
+    _wipe_run_dir_if_requested(
+        grid_dir, wipe_and_recompute=base.storage.wipe_and_recompute, label=run_id
     )
     cells_dir = grid_dir / "cells"
     cells_dir.mkdir(parents=True, exist_ok=True)

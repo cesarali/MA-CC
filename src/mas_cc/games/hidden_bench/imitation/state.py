@@ -10,6 +10,7 @@ from mas_cc.config import GameConfig
 from mas_cc.games.protocols import _thaw
 
 from ..records import HiddenBenchGameState, HiddenBenchTransition
+from .prompts import PROMPT_VERSIONS, SCENARIO_VARIANTS, PromptStyle
 
 
 def _mapping(value: Any, field: str) -> Mapping[str, Any]:
@@ -33,6 +34,9 @@ class ImitationRules:
     messages_per_agent: int
     memory_size: int
     allow_relay: bool
+    prompt_version: int
+    inform_asymmetry: bool
+    scenario_variant: int
     stop_on_consensus: bool
     initialization_mode: str
     initial_votes: tuple[str, ...] | None
@@ -76,6 +80,21 @@ class ImitationRules:
         pairing = str(options.get("pairing", "uniform_two_distinct"))
         if pairing != "uniform_two_distinct":
             raise ValueError("only pairing 'uniform_two_distinct' is implemented")
+
+        # Prompt text is a study condition, not a detail: v2 pushes directly on
+        # how much information an agent volunteers, so it defaults to off and is
+        # recorded in `rules` on every episode.  See `prompts.py`.
+        prompt_version = options.get("prompt_version", 1)
+        if isinstance(prompt_version, bool) or prompt_version not in PROMPT_VERSIONS:
+            raise ValueError(f"game.options.prompt_version must be one of {list(PROMPT_VERSIONS)}")
+        inform_asymmetry = bool(options.get("inform_asymmetry", False))
+        if inform_asymmetry and prompt_version == 1:
+            raise ValueError("game.options.inform_asymmetry requires prompt_version 2")
+        scenario_variant = options.get("scenario_variant", 1)
+        if isinstance(scenario_variant, bool) or scenario_variant not in SCENARIO_VARIANTS:
+            raise ValueError(
+                f"game.options.scenario_variant must be one of {list(SCENARIO_VARIANTS)}"
+            )
 
         initialization = _mapping(options.get("initialization"), "game.options.initialization")
         initial_votes_raw = initialization.get("initial_votes")
@@ -134,6 +153,9 @@ class ImitationRules:
             messages_per_agent=int(messages),
             memory_size=int(memory_size),
             allow_relay=bool(options.get("allow_relay", True)),
+            prompt_version=int(prompt_version),
+            inform_asymmetry=inform_asymmetry,
+            scenario_variant=int(scenario_variant),
             stop_on_consensus=bool(options.get("stop_on_consensus", False)),
             initialization_mode=str(initialization.get("mode", "local_vote")),
             initial_votes=initial_votes,
@@ -149,6 +171,10 @@ class ImitationRules:
             expected_validation_failure_rate=expected_failure,
             corpus_root=(None if options.get("corpus_root") is None else str(options["corpus_root"])),
         )
+
+    @property
+    def prompt_style(self) -> PromptStyle:
+        return PromptStyle(version=self.prompt_version, inform_asymmetry=self.inform_asymmetry)
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -9,6 +9,7 @@ biased version.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from mas_cc.metrics import (
     align,
     band_curve,
     create_cell_metrics,
+    excluded_cell_episodes,
     grid_progress_figure,
     read_cell_episodes,
     read_episode_frame,
@@ -373,6 +375,25 @@ def test_aggregating_a_cell_writes_its_result_before_anything_is_published(tmp_p
     assert (tmp_path / "cells" / "cell-0000" / "aggregate.json").exists()
 
 
+def test_aggregating_passes_rendered_metric_plots_to_the_master_monitor(tmp_path: Path):
+    class RecordingMonitor:
+        def __init__(self):
+            self.metric_plots = ()
+
+        def cell_completed(self, cell_id, result, sweep, *, metric_plots=()):
+            self.metric_plots = tuple(metric_plots)
+
+    write_cell(tmp_path, [{"Q": [0.5, 1.0], "M": [0.5, 0.0]}] * 2)
+    monitor = RecordingMonitor()
+    aggregator = GridAggregator(tmp_path, AggregationConfig(), monitor=monitor)
+
+    aggregator.aggregate(None)
+
+    assert monitor.metric_plots
+    assert all(path.is_file() for path in monitor.metric_plots)
+    assert {path.parent for path in monitor.metric_plots} == {tmp_path / "metrics" / "plots"}
+
+
 def test_reaggregating_from_disk_reproduces_identical_curves(tmp_path: Path):
     """Spec acceptance check 2: aggregates are derived, so they are recomputable."""
 
@@ -461,3 +482,84 @@ def test_a_lagged_cmi_horizon_the_cells_never_counted_is_nan_not_zero():
 
     assert scalars["lagged_cmi_h1_estimate"] > 0
     assert math.isnan(scalars["lagged_cmi_h7_estimate"])
+
+
+# --- failed episodes must not reach the curves -------------------------------
+
+
+def _mark(directory: Path, status: str) -> Path:
+    (directory / "manifest.json").write_text(
+        json.dumps({"episode_id": directory.name, "status": status}), encoding="utf-8"
+    )
+    return directory
+
+
+def test_an_episode_that_died_partway_is_excluded_rather_than_frozen_into_the_curve(
+    tmp_path: Path,
+):
+    """The bias this removes, not the filter that removes it.
+
+    A provider timeout at round 2 of 4 leaves two rows of real metrics behind.
+    Aggregation densifies every series onto the full round axis by carrying the
+    last value forward, so reading those rows back enters the cell as a
+    four-round episode that froze at round 2 - dragging the mean toward
+    whatever the population happened to be doing when the network hiccupped.
+    Here the healthy episodes end at Q = 1.0 and the dead one froze at Q = 0.0,
+    so a contaminated round-4 mean would be visibly below 1.0.
+    """
+
+    cell = tmp_path / "cell"
+    episodes = cell / "data" / "episodes"
+    for index in range(2):
+        _mark(
+            write_episode(episodes / f"ep-{index:03d}", {"Q": [0.4, 0.6, 0.8, 1.0]}),
+            "completed",
+        )
+    _mark(write_episode(episodes / "ep-002", {"Q": [0.0, 0.0]}), "failed")
+
+    frames = read_cell_episodes(cell)
+    assert [frame.episode_id for frame in frames] == ["ep-000", "ep-001"]
+
+    result = aggregate_cell(
+        frames,
+        create_cell_metrics((SHARE,)),
+        AggregationPolicy(rolling_window=1, relabel_by_winner=False),
+    )
+    assert dict(result.curves[f"{SHARE}_Q"].level("p50"))[4] == pytest.approx(1.0)
+
+
+def test_the_exclusion_is_reported_rather_than_showing_up_as_an_unexplained_n(
+    tmp_path: Path,
+):
+    cell = tmp_path / "cell"
+    episodes = cell / "data" / "episodes"
+    _mark(write_episode(episodes / "ep-000", {"Q": [0.5, 1.0]}), "completed")
+    _mark(write_episode(episodes / "ep-001", {"Q": [0.5]}), "failed")
+    _mark(write_episode(episodes / "ep-002", {"Q": [0.5]}), "skipped_aborted")
+
+    assert excluded_cell_episodes(cell) == (
+        ("ep-001", "failed"),
+        ("ep-002", "skipped_aborted"),
+    )
+
+    aggregator = GridAggregator(cell, AggregationConfig(cell_metrics=(SHARE,)))
+    aggregator.aggregate(None)
+    written = json.loads((cell / "aggregate.json").read_text(encoding="utf-8"))
+    assert written["episodes_aggregated"] == 1
+    assert written["episodes_excluded"] == [
+        {"episode_id": "ep-001", "status": "failed"},
+        {"episode_id": "ep-002", "status": "skipped_aborted"},
+    ]
+
+
+def test_an_episode_with_no_manifest_is_still_aggregated(tmp_path: Path):
+    """Older runs and hand-built directories predate the status file.
+
+    Treating a missing manifest as "failed" would silently empty every cell
+    produced before this filter existed.
+    """
+
+    cell = tmp_path / "cell"
+    write_episode(cell / "data" / "episodes" / "ep-000", {"Q": [0.5, 1.0]})
+    assert [frame.episode_id for frame in read_cell_episodes(cell)] == ["ep-000"]
+    assert excluded_cell_episodes(cell) == ()

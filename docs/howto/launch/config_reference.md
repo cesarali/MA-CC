@@ -385,6 +385,11 @@ storage:
                                   # entirely — a crash means starting over.
   overwrite: false                 # Boolean. Parsed but not currently wired to the recorder's own
                                   # write path — see section 11.
+  wipe_and_recompute: false        # Boolean. If true, the entire run (or grid) output directory
+                                  # under `output_dir` is deleted before the run starts, ignoring
+                                  # `resume`/`checkpoints` entirely — nothing is treated as
+                                  # already-completed. Use this when you need a clean recompute
+                                  # instead of the default resume-by-episode behavior.
 ```
 
 ---
@@ -583,11 +588,19 @@ aggregation:
                                   # finite-sample noise rather than a real effect. More permutations
                                   # = a tighter, slower null-band estimate.
 analysis:
-  enabled: false                   # Parsed but not currently consumed by any code path — see
-                                  # section 11. The real grid-level MI machinery is
-                                  # aggregation.sweep_metrics above plus the `mas-cc analysis
-                                  # empowerment` CLI command, not this section.
-  estimators: []                   # Same caveat — see section 11.
+  enabled: false                   # Boolean. Only consumed for game.type: hidden_bench_imitation —
+                                  # runs the four MI/CMI statistics below automatically after the run
+                                  # finishes. For every other game, aggregation.sweep_metrics above
+                                  # plus the `mas-cc analysis empowerment` CLI command are the real
+                                  # grid-level MI machinery instead.
+  estimators: []                   # List of names from sensing_mi, population_actuation_cmi,
+                                  # target_actuation_cmi, focal_actuation_cmi. Required (non-empty)
+                                  # when enabled is true.
+  options: {}                      # bootstrap_resamples, null_permutations, confidence, seed — see
+                                  # docs/documentation/hidden_bench/hidden_bench_imitation.md section 7.
+  comet_export: false              # Boolean. Upload the rendered information_estimates.md report to
+                                  # Comet as a run asset once the analysis finishes. Only takes effect
+                                  # when logging.comet (the master switch) is also true.
 observability:
   comet:
     writer: master_only             # LOCKED to master_only — the only legal value. Workers write
@@ -607,7 +620,24 @@ observability:
                                   # is created at all.
     cell_experiments: true           # Boolean. Whether each individual cell also gets its own Comet
                                   # experiment, in addition to the sweep-level one.
+    metric_plots: false              # Boolean. Upload each cell's locally rendered aggregate metric
+                                  # PNGs to the experiment that carries its curves. Disabled by
+                                  # default to keep image upload opt-in.
+    master_aggregates: false         # Boolean. Publish the cell curves, those metric PNGs, and the
+                                  # post-run analysis report onto the master experiment instead of
+                                  # `<run>/<cell>` and `<run>/analysis` siblings, and create no
+                                  # child experiments. Takes precedence over cell_experiments.
+                                  # A grid wants the default: separate cell experiments are what
+                                  # let Comet overlay one cell against another. A single-cell run
+                                  # has nothing to overlay, so the split only scatters its output
+                                  # across three experiments.
 ```
+
+With `master_aggregates: false` (the default) one run writes to up to three Comet
+experiments — the master, one per completed cell, and one for the post-run
+analysis. The aggregate plots and MI estimates live on the latter two, so
+opening only the master shows little more than the progress counter. Turn
+`master_aggregates` on for a single-cell run to get all of it in one place.
 
 **Cell-level metrics** (`aggregation.cell_metrics`, from `src/mas_cc/metrics/cell.py`):
 

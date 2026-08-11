@@ -1,4 +1,10 @@
-# Standalone 10-episode reasoning run for inspecting controller response metrics.
+# Standalone 10-episode reasoning run for inspecting controller response metrics,
+# under the **v2** prompt and controller text (the four settings marked "v2"
+# below).  v2 is an intervention, not a bug fix: it pushes directly on how much
+# information an agent volunteers, which is the quantity this study measures.
+# See docs/tdd/misselaneous/11082026_prompt_modifications_v2.md and section 3.9
+# of docs/documentation/hidden_bench/hidden_bench_imitation.md.  Report which
+# version produced any number you quote.
 #
 # Run this from a terminal. First enter the repository (change this path if your
 # checkout lives somewhere else):
@@ -13,7 +19,7 @@
 # 1. Check availability, pricing, request counts, and budget (no model calls):
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
-#     --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+#     --output-dir inspection/hidden_bench_imitation_reasoning_control_10_v2_preflight
 #
 # 2. Run all 10 episodes with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
@@ -28,24 +34,42 @@ llm_provider:
   model: gwdg/qwen3-30b-a3b-instruct-2507
   credentials_env: POTSDAM_API_KEY
   base_url_env: BASE_POTSDAM_LLM_URL
-  timeout_seconds: 60
+  # A 30B model behind a shared proxy at concurrency 10 needs well over 60s in
+  # the tail.  Run ...-v2-20260840 died on exactly this: the last good call at
+  # 10:56:04, the timeout at 10:57:01, 57 seconds later.  The deadline has to
+  # cover generating `max_output_tokens`, not the median reply.
+  timeout_seconds: 180
   max_retries: 2
   request_concurrency: 10
   temperature: 0.0
-  max_output_tokens: 128
+  # Sized for v2, not v1.  v2 replies cite a fact and state a vote, and the
+  # private history grows every event, so they run 100-130 tokens by the tenth
+  # round where v1 ran 60-80.  At 128 the focal_update JSON was truncated with
+  # no closing brace, which the vote contract correctly rejects; discussion
+  # turns were cut mid-sentence silently, which corrupts the disclosure
+  # measurement instead of failing loudly.
+  #
+  # 256 is ~2x the longest observed valid reply.  Do not raise this without
+  # raising timeout_seconds with it: the cap bounds how long one generation can
+  # take, so a large cap converts truncation failures into timeout failures.
+  # It also feeds preflight's conservative request bound, so a very large value
+  # makes the budget line below stop being a real guard.
+  max_output_tokens: 256
   options:
     estimated_latency_seconds: 3.0
 prompt:
   schema_version: 2
   prompt_family: hidden_bench_imitation_update
-  prompt_version: 1
+  # v2 (1 of 4).  Must equal game.options.prompt_version; the run refuses to
+  # start otherwise, because preflight prices whatever this section names.
+  prompt_version: 2
   response_contract:
     type: hidden_bench_json_vote
     allowed_values: [West City, East Town, North Hill]
 game:
   type: hidden_bench_imitation
   population_size: 4
-  horizon: 100
+  horizon: 30
   topology: complete
   options:
     task_set: vanilla
@@ -55,8 +79,21 @@ game:
     dynamics_mode: reasoning
     pairing: uniform_two_distinct
     messages_per_agent: 1
+    # memory_size 0 means "all of it".  Under v2 the agent finally sees its own
+    # past messages in that history, which is what makes "mention something you
+    # have not mentioned yet" a followable instruction (doc section 1.3).
     memory_size: 0
     allow_relay: true
+    # v2 (2 of 4).  Longer replies, one new fact per turn, an explicit stated
+    # vote, and a history that no longer says "partner/controller".
+    prompt_version: 2
+    # v2 (3 of 4), doc section 1.2 - the paper's "Informing Asymmetry" arm.
+    # Set to true to tell agents information is unevenly held.  It never marks
+    # *which* facts are unique; that would end the hidden-profile task.
+    inform_asymmetry: false
+    # doc section 1.5.  1 keeps the canonical coordination bonus, which is this
+    # study's imitation coupling strength written in English.  2 removes it.
+    scenario_variant: 1
     stop_on_consensus: false
     initialization:
       mode: explicit
@@ -75,9 +112,13 @@ control:
     sensor_sample_size: 2
     policy: threshold_target
     threshold: 0.5
+    # v2 (4 of 4), doc section 2.  1 announces "the external controller"; 2
+    # speaks as an ordinary peer, arguing from the shared facts only, drawn
+    # from a four-paraphrase bank whose ID is logged per event.
+    template_version: 2
 execution:
   seed: 20260840
-  repetitions: 5
+  repetitions: 3
   parallelism: 5
   fail_fast: false
 pricing:
@@ -91,8 +132,8 @@ budget:
   system_max_cost_per_run: 50.0
   max_cost_per_run: 50.0
   max_provider_requests: 2500
-  max_input_tokens: 10000000
-  max_output_tokens: 500000
+  max_input_tokens: 100000000
+  max_output_tokens: 1500000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO
@@ -109,23 +150,47 @@ logging:
 storage:
   output_dir: results
   format: jsonl
-  checkpoints: true
-  overwrite: false
+  checkpoints: false
+  overwrite: true
+  wipe_and_recompute: true
 analysis:
   # Run all across-episode sensing/control information channels automatically.
-  # Results are written below the run directory in
-  # hidden_bench_imitation_analysis/information_estimates.csv.
+  # Results are written below the run directory as a human-readable table in
+  # hidden_bench_imitation_analysis/information_estimates.md.
   enabled: true
   estimators:
+    # The count-vector channels: the sensor and the action measured against the
+    # full occupation state N_t.
     - sensing_mi
     - population_actuation_cmi
     - target_actuation_cmi
     - focal_actuation_cmi
+    # The same two questions asked against the macroscopic order parameters
+    # instead of N_t.  Each order parameter is recorded as the integer headcount
+    # it is a strictly monotone function of, so the estimate is exactly the one
+    # you would get from the float without the float-equality hazard:
+    #   m_ctrl  <-> count on the controller's target option
+    #   m_truth <-> count on the correct answer
+    #   m_order <-> the largest count over options (consensus, whichever option)
+    # These coarsen a 14-state alphabet to a 5-state one, which is the direct
+    # remedy for the conditioning-slice collapse documented in
+    # docs/documentation/imitation_mutual_information.md section 8.
+    # Note m_ctrl_actuation_cmi is target_actuation_cmi under a second name:
+    # identical by construction, kept so the order-parameter family is complete.
+    - sensing_mi_m_ctrl
+    - sensing_mi_m_truth
+    - sensing_mi_m_order
+    - m_ctrl_actuation_cmi
+    - m_truth_actuation_cmi
+    - m_order_actuation_cmi
   options:
     bootstrap_resamples: 1000
     null_permutations: 1000
     confidence: 0.95
     seed: 20260813
+  # Upload information_estimates.md to Comet as a run asset once analysis
+  # finishes. Only takes effect when logging.comet (the master switch) is on.
+  comet_export: true
 metrics:
   enabled: true
   # Parallel episodes have independent interaction timelines. Record their
@@ -162,10 +227,21 @@ observability:
     # grid filling in.
     grid_image_every_n_episodes: 25
     sweep_experiment: true       # false = no liveness dashboard
-    # Publish one statistically aggregated experiment only after all configured
-    # episodes in this single cell have finished.
-    cell_experiments: true
+    # This run is a single cell, so there is no second cell to overlay it
+    # against and nothing is gained by giving it its own experiment. Keep the
+    # child experiments off and let the master publish everything.
+    cell_experiments: false
+    # Upload the locally rendered aggregate metric PNGs (m_order, m_ctrl,
+    # m_truth, dominant_action_share, and the per-option share plots).
+    metric_plots: true
+    # One experiment for the whole run: the aggregate curves, those PNGs, and
+    # the post-run information report all land on the master rather than on
+    # `<run>/run` and `<run>/analysis` siblings.
+    master_aggregates: true
 experiment:
-  name: hidden-bench-imitation-reasoning-control-10
-  description: Ten controlled reasoning episodes with event and pooled response diagnostics.
-  tags: [hidden-bench, imitation, reasoning, control, diagnostics]
+  # Renamed on the v1 -> v2 switch so this run cannot resume into, or be
+  # confused with, the v1 results already under
+  # results/hidden_bench_imitation/hidden-bench-imitation-reasoning-control-10/.
+  name: hidden-bench-imitation-reasoning-control-10-v2
+  description: Ten controlled reasoning episodes under the v2 prompt and peer-style controller text, with event and pooled response diagnostics.
+  tags: [hidden-bench, imitation, reasoning, control, diagnostics, prompt-v2]

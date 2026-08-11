@@ -29,12 +29,109 @@ from .metrics import behavioral_transition_metrics, population_observables
 
 MAIN_ESTIMATOR_VARIANT = "unsmoothed"
 ACTION_ENTROPY_EPSILON_BITS = 1e-6
+
+ORDER_PARAMETER_COUNT_FIELDS: Mapping[str, tuple[str, str]] = {
+    "m_ctrl": ("Z_t", "Z_t1"),
+    "m_truth": ("Mtruth_t", "Mtruth_t1"),
+    "m_order": ("Morder_t", "Morder_t1"),
+}
+"""Integer headcount each order parameter is a strictly monotone function of.
+
+``m_ctrl``, ``m_truth`` and ``m_order`` are floats, and a float is not a safe
+contingency-table category.  For a cell's fixed ``N`` and ``K`` each is an
+affine, strictly increasing function of one integer headcount -- the target
+count, the correct-answer count, and the largest count respectively -- so
+counting on the integer gives exactly the same partition of events, and
+therefore exactly the same mutual information, with none of the float-equality
+hazard.  ``m_ctrl`` reuses ``Z_t``: the target count *is* the ``m_ctrl``
+coordinate, which makes ``m_ctrl_actuation_cmi`` and ``target_actuation_cmi``
+the same estimate under two names.
+"""
+
 INFORMATION_STATISTICS = (
     "sensing_mi",
     "population_actuation_cmi",
     "target_actuation_cmi",
     "focal_actuation_cmi",
+    "sensing_mi_m_ctrl",
+    "sensing_mi_m_truth",
+    "sensing_mi_m_order",
+    "m_ctrl_actuation_cmi",
+    "m_truth_actuation_cmi",
+    "m_order_actuation_cmi",
 )
+INFORMATION_STATISTIC_DESCRIPTIONS: Mapping[str, str] = {
+    "sensing_mi": (
+        "Mutual information between the population's true opinion counts before the interaction "
+        "(`N_t`) and the controller's noisy sample of them (`Y_t`). How much the controller's sensor "
+        "actually tells it about the true population state."
+    ),
+    "population_actuation_cmi": (
+        "Conditional mutual information between the controller's action (`U_t`) and the population's "
+        "opinion counts after the interaction (`N_t1`), conditioned on the counts before (`N_t`). How "
+        "much of the change in the whole population's opinion distribution the controller's action "
+        "explains, beyond what the starting state already predicts."
+    ),
+    "target_actuation_cmi": (
+        "Conditional mutual information between the controller's action (`U_t`) and whether the "
+        "target option's count after the interaction (`Z_t1`) differs from before (`Z_t`), conditioned "
+        "on `Z_t`. A narrower version of `population_actuation_cmi` focused only on the option the "
+        "controller is trying to promote."
+    ),
+    "focal_actuation_cmi": (
+        "Conditional mutual information between the controller's action (`U_t`) and the focal agent's "
+        "opinion after the interaction (`Xf_t1`), conditioned on the focal agent's opinion before and "
+        "the population counts before (`Xf_t, N_t`). Whether the controller's action changes what the "
+        "one agent it is nudging actually ends up believing."
+    ),
+    "sensing_mi_m_ctrl": (
+        "Mutual information between the target-alignment order parameter before the interaction "
+        "(`m_ctrl`, encoded as the target option's headcount) and the controller's sensor sample "
+        "(`Y_t`). How much the sensor tells the controller about the one macroscopic quantity it is "
+        "trying to raise, rather than about the full count vector."
+    ),
+    "sensing_mi_m_truth": (
+        "Mutual information between the truth-alignment order parameter before the interaction "
+        "(`m_truth`, encoded as the correct answer's headcount) and the sensor sample (`Y_t`). How "
+        "much the sensor reveals about how close the population is to the right answer."
+    ),
+    "sensing_mi_m_order": (
+        "Mutual information between the consensus order parameter before the interaction "
+        "(`m_order`, encoded as the largest option headcount) and the sensor sample (`Y_t`). How "
+        "much the sensor reveals about how ordered the population is, irrespective of which option "
+        "it has settled on."
+    ),
+    "m_ctrl_actuation_cmi": (
+        "Conditional mutual information between the controller's action (`U_t`) and the "
+        "target-alignment order parameter after the interaction, conditioned on its value before. "
+        "The `population_actuation_cmi` question projected onto `m_ctrl`; identical by construction "
+        "to `target_actuation_cmi`, since `m_ctrl` and the target headcount are one-to-one."
+    ),
+    "m_truth_actuation_cmi": (
+        "Conditional mutual information between the controller's action (`U_t`) and the "
+        "truth-alignment order parameter after the interaction, conditioned on its value before. "
+        "Whether advocating moves the population toward or away from the correct answer, which "
+        "differs from `m_ctrl` whenever the controller's target is not the correct answer."
+    ),
+    "m_order_actuation_cmi": (
+        "Conditional mutual information between the controller's action (`U_t`) and the consensus "
+        "order parameter after the interaction, conditioned on its value before. Whether advocating "
+        "changes how ordered the population becomes, regardless of which option wins."
+    ),
+}
+
+
+def _is_sensing_statistic(name: str) -> bool:
+    return name.startswith("sensing_mi")
+
+
+def _order_parameter_of(name: str) -> str | None:
+    """Return the order parameter a statistic projects onto, or ``None``."""
+
+    for parameter in ORDER_PARAMETER_COUNT_FIELDS:
+        if name in (f"sensing_mi_{parameter}", f"{parameter}_actuation_cmi"):
+            return parameter
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +148,10 @@ class ImitationEvent:
     U_t: str | None
     Z_t: int
     Z_t1: int
+    Mtruth_t: int
+    Mtruth_t1: int
+    Morder_t: int
+    Morder_t1: int
     Xf_t: str
     Xf_t1: str
     target: str
@@ -151,6 +252,10 @@ def adapt_event(
             raise ValueError("sensor count vector must sum to sensor_sample_size")
     target = str(row["analysis_target"])
     target_index = options.index(target)
+    correct = str(row["correct_answer"])
+    if correct not in options:
+        raise ValueError(f"correct_answer {correct!r} is outside possible_answers")
+    correct_index = options.index(correct)
     return ImitationEvent(
         episode_id=str(episode_id or row["episode_id"]),
         cell_id=str(cell_id),
@@ -162,6 +267,10 @@ def adapt_event(
         U_t=action,
         Z_t=before[target_index],
         Z_t1=after[target_index],
+        Mtruth_t=before[correct_index],
+        Mtruth_t1=after[correct_index],
+        Morder_t=max(before),
+        Morder_t1=max(after),
         Xf_t=str(row["focal_opinion_before"]),
         Xf_t1=str(row["focal_opinion_after"]),
         target=target,
@@ -367,6 +476,17 @@ def _group_events(
 
 
 def _estimate_for(name: str, events: Sequence[ImitationEvent]) -> Estimate:
+    parameter = _order_parameter_of(name)
+    if parameter is not None:
+        before_field, after_field = ORDER_PARAMETER_COUNT_FIELDS[parameter]
+        before = [getattr(event, before_field) for event in events]
+        if _is_sensing_statistic(name):
+            return mutual_information(before, [event.Y_t for event in events])
+        return conditional_mutual_information(
+            [event.U_t for event in events],
+            [getattr(event, after_field) for event in events],
+            before,
+        )
     if name == "sensing_mi":
         return mutual_information([event.N_t for event in events], [event.Y_t for event in events])
     if name == "population_actuation_cmi":
@@ -387,8 +507,12 @@ def _estimate_for(name: str, events: Sequence[ImitationEvent]) -> Estimate:
 
 
 def _conditioning_values(name: str, events: Sequence[ImitationEvent]) -> list[Hashable]:
-    if name == "sensing_mi":
+    if _is_sensing_statistic(name):
         return []
+    parameter = _order_parameter_of(name)
+    if parameter is not None:
+        before_field, _ = ORDER_PARAMETER_COUNT_FIELDS[parameter]
+        return [getattr(event, before_field) for event in events]
     if name == "population_actuation_cmi":
         return [event.N_t for event in events]
     if name == "target_actuation_cmi":
@@ -420,7 +544,7 @@ def _support_diagnostics(name: str, events: Sequence[ImitationEvent]) -> dict[st
         ),
         "controller_degenerate": (
             None
-            if name == "sensing_mi"
+            if _is_sensing_statistic(name)
             else len(set(actions)) < 2
             or entropy is None
             or entropy <= ACTION_ENTROPY_EPSILON_BITS
@@ -457,7 +581,7 @@ def information_analysis(
     seed: int = 1,
     statistics: Sequence[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Estimate the four requested channels with episode bootstrap and temporal nulls."""
+    """Estimate the requested channels with episode bootstrap and temporal nulls."""
 
     if not 0 < confidence < 1:
         raise ValueError("confidence must be between zero and one")
@@ -478,7 +602,11 @@ def information_analysis(
         eligible = [
             event
             for event in events
-            if (event.Y_t is not None if name == "sensing_mi" else event.U_t is not None)
+            if (
+                event.Y_t is not None
+                if _is_sensing_statistic(name)
+                else event.U_t is not None
+            )
         ]
         support = _support_diagnostics(name, eligible)
         if not eligible:
@@ -525,7 +653,7 @@ def information_analysis(
             rng = np.random.default_rng(seed + 10_000 * (name_index + 1) + permutation)
             perturbed = _perturb_within_episode(
                 eligible,
-                field="Y_t" if name == "sensing_mi" else "U_t",
+                field="Y_t" if _is_sensing_statistic(name) else "U_t",
                 rng=rng,
             )
             null_estimate = _estimate_for(name, perturbed)
@@ -536,7 +664,7 @@ def information_analysis(
                 "permutation": permutation,
                 "null_type": (
                     "within_episode_sensor_permutation"
-                    if name == "sensing_mi"
+                    if _is_sensing_statistic(name)
                     else "within_episode_controller_action_permutation"
                 ),
                 **asdict(null_estimate),
@@ -563,7 +691,7 @@ def information_analysis(
             "null_mean": math.nan if not len(finite_null) else float(finite_null.mean()),
             "null_ci_low": null_interval[0],
             "null_ci_high": null_interval[1],
-            "scientifically_interpretable": name == "sensing_mi" or not degenerate,
+            "scientifically_interpretable": _is_sensing_statistic(name) or not degenerate,
             **support,
         })
     return estimates, null_rows
@@ -659,6 +787,326 @@ def _trajectory_rows(events: Sequence[ImitationEvent]) -> tuple[list[dict[str, A
     return shares, observables
 
 
+def _format_bits(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    return f"{number:.4f}" if math.isfinite(number) else "—"
+
+
+def _format_ci(low: Any, high: Any) -> str:
+    low_text, high_text = _format_bits(low), _format_bits(high)
+    return "—" if low_text == "—" and high_text == "—" else f"[{low_text}, {high_text}]"
+
+
+def _format_bool(value: Any) -> str:
+    return "—" if value is None else ("yes" if value else "no")
+
+
+def _format_number(value: Any) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        return "—" if not math.isfinite(value) else f"{value:g}"
+    return str(value)
+
+
+def _write_information_estimates_markdown(
+    rows: Sequence[Mapping[str, Any]], destination: Path
+) -> None:
+    """Human-readable replacement for the wide, hard-to-scan information_estimates.csv.
+
+    One table of headline numbers plus one table of support diagnostics per
+    cell, instead of one ~25-column table where the two kinds of information
+    are interleaved.
+    """
+
+    lines: list[str] = [
+        "# Information-theoretic estimates",
+        "",
+        "Discrete mutual-information channels estimated from this run's imitation events, "
+        "measured in bits. Higher means the controller's action (or sensor) carries more "
+        "information about that piece of population/opinion state.",
+        "",
+        "## Statistics",
+        "",
+    ]
+    reported = {row.get("statistic") for row in rows}
+    for name in INFORMATION_STATISTICS:
+        if name not in reported:
+            continue
+        description = INFORMATION_STATISTIC_DESCRIPTIONS.get(name, "")
+        lines.append(f"- **`{name}`** — {description}")
+    lines.extend(
+        [
+            "",
+            "Each estimate's headline value uses the `unsmoothed` (direct-counting) plug-in "
+            "entropy estimator; `jeffreys` and `miller-madow` are bias-corrected alternatives shown "
+            "for sensitivity checking. **Bootstrap CI** resamples whole episodes (never individual "
+            "events) into a 95% interval around the headline estimate. **Null mean/CI** comes from "
+            "permuting the controller's action (or the sensor sample, for `sensing_mi`) independently "
+            "within each episode — an estimate that does not clear the null band is not "
+            "distinguishable from chance. **Interpretable** is `no` when the controller never varied "
+            "its action in that cell (e.g. always advocated, or never did), which makes the "
+            "conditional statistics undefined rather than merely small.",
+            "",
+        ]
+    )
+    by_cell: dict[tuple[Any, Any], list[Mapping[str, Any]]] = {}
+    for row in rows:
+        by_cell.setdefault((row.get("cell_id"), row.get("scientific_cell")), []).append(row)
+    for (cell_id, scientific_cell), cell_rows in by_cell.items():
+        label = f"Cell `{cell_id}`"
+        if scientific_cell:
+            label += f" (scientific cell {scientific_cell})"
+        first = cell_rows[0]
+        lines.append(f"## {label}")
+        lines.append("")
+        lines.append(
+            f"Dynamics: `{first.get('dynamics_mode')}` · Control: `{first.get('control_mechanism')}`"
+        )
+        lines.append("")
+        lines.append(
+            "| Statistic | Estimate (bits) | 95% bootstrap CI | Null mean (bits) | 95% null CI "
+            "| unsmoothed / jeffreys / miller-madow | Interpretable | Episodes | Events |"
+        )
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        for row in cell_rows:
+            variants = " / ".join(
+                _format_bits(row.get(name)) for name in ("unsmoothed", "jeffreys", "miller_madow")
+            )
+            lines.append(
+                "| `{statistic}` | {estimate} | {bootstrap_ci} | {null_mean} | {null_ci} | "
+                "{variants} | {interpretable} | {episodes} | {events} |".format(
+                    statistic=row.get("statistic"),
+                    estimate=_format_bits(row.get("estimate")),
+                    bootstrap_ci=_format_ci(row.get("bootstrap_ci_low"), row.get("bootstrap_ci_high")),
+                    null_mean=_format_bits(row.get("null_mean")),
+                    null_ci=_format_ci(row.get("null_ci_low"), row.get("null_ci_high")),
+                    variants=variants,
+                    interpretable=_format_bool(row.get("scientifically_interpretable")),
+                    episodes=_format_number(row.get("n_episodes")),
+                    events=_format_number(row.get("n_events")),
+                )
+            )
+        lines.append("")
+        lines.append(
+            "| Statistic | Conditioning states | Events/state (min / median / max) "
+            "| Singleton states | Sparse table | Controller degenerate |"
+        )
+        lines.append("|---|---|---|---|---|---|")
+        for row in cell_rows:
+            singleton = row.get("fraction_events_singleton_conditioning_states")
+            singleton_text = "—" if singleton is None else f"{float(singleton) * 100:.0f}%"
+            events_per_state = "{} / {} / {}".format(
+                _format_number(row.get("min_events_per_conditioning_state")),
+                _format_number(row.get("median_events_per_conditioning_state")),
+                _format_number(row.get("max_events_per_conditioning_state")),
+            )
+            lines.append(
+                "| `{statistic}` | {states} | {events_per_state} | {singleton} | {sparse} "
+                "| {degenerate} |".format(
+                    statistic=row.get("statistic"),
+                    states=_format_number(row.get("occupied_conditioning_states")),
+                    events_per_state=events_per_state,
+                    singleton=singleton_text,
+                    sparse=_format_bool(row.get("sparse_conditioning_table")),
+                    degenerate=_format_bool(row.get("controller_degenerate")),
+                )
+            )
+        lines.append("")
+    destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+INFORMATION_COMET_FIELDS = (
+    "estimate",
+    "bootstrap_ci_low",
+    "bootstrap_ci_high",
+    "null_mean",
+    "excess_over_null",
+    "n_episodes",
+    "n_events",
+)
+"""What each statistic contributes as *numbers* rather than as a report."""
+
+
+def _comet_metric_name(cell_id: Any, statistic: str, field: str) -> str:
+    label = str(cell_id or "run").replace("/", "_").replace(" ", "_")
+    return f"information/{label}/{statistic}/{field}"
+
+
+def information_comet_metrics(
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, float]:
+    """Flatten the estimate table into loggable scalars.
+
+    `excess_over_null` is derived here rather than left to the reader: an MI
+    value on its own is not a result, because a permutation null is rarely
+    zero. The quantity that answers "is there a channel" is estimate minus
+    null mean, so it is the one that gets its own series.
+    """
+
+    metrics: dict[str, float] = {}
+    for row in rows:
+        statistic = str(row.get("statistic") or "")
+        if not statistic:
+            continue
+        estimate, null_mean = row.get("estimate"), row.get("null_mean")
+        derived = dict(row)
+        if isinstance(estimate, (int, float)) and isinstance(null_mean, (int, float)):
+            derived["excess_over_null"] = float(estimate) - float(null_mean)
+        for field in INFORMATION_COMET_FIELDS:
+            value = derived.get(field)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if math.isnan(float(value)):
+                continue
+            metrics[_comet_metric_name(row.get("cell_id"), statistic, field)] = float(value)
+        interpretable = row.get("scientifically_interpretable")
+        if isinstance(interpretable, bool):
+            metrics[
+                _comet_metric_name(row.get("cell_id"), statistic, "scientifically_interpretable")
+            ] = float(interpretable)
+    return metrics
+
+
+def plot_information_estimates(
+    rows: Sequence[Mapping[str, Any]], destination: Path
+) -> list[Path]:
+    """One figure per cell: each estimate with its CI, against its null mean.
+
+    The null is drawn on the same axis on purpose. A bare bar chart of MI
+    values invites reading height as evidence, when the only thing that counts
+    as a channel is the gap between the estimate and the permutation null.
+    """
+
+    if not rows:
+        return []
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib import pyplot as plt
+
+    destination.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for cell_id, group in _group_rows_by_cell(rows).items():
+        usable = [row for row in group if isinstance(row.get("estimate"), (int, float))]
+        if not usable:
+            continue
+        labels = [str(row.get("statistic")) for row in usable]
+        estimates = [float(row["estimate"]) for row in usable]
+        positions = list(range(len(usable)))
+        lower = [
+            max(0.0, value - float(row.get("bootstrap_ci_low") or value))
+            for value, row in zip(estimates, usable)
+        ]
+        upper = [
+            max(0.0, float(row.get("bootstrap_ci_high") or value) - value)
+            for value, row in zip(estimates, usable)
+        ]
+        figure, axis = plt.subplots(figsize=(7, 4), dpi=120)
+        axis.bar(positions, estimates, yerr=[lower, upper], capsize=4, alpha=0.75, label="estimate")
+        nulls = [
+            (index, float(row["null_mean"]))
+            for index, row in enumerate(usable)
+            if isinstance(row.get("null_mean"), (int, float))
+        ]
+        if nulls:
+            axis.scatter(
+                [index for index, _ in nulls],
+                [value for _, value in nulls],
+                marker="_", s=400, color="crimson", zorder=3, label="permutation null mean",
+            )
+        axis.set_xticks(positions)
+        axis.set_xticklabels(labels, rotation=20, ha="right", fontsize="small")
+        axis.set_ylabel("bits")
+        axis.set_title(f"Information estimates — {cell_id or 'run'}")
+        axis.grid(alpha=0.25, axis="y")
+        axis.legend(frameon=False, fontsize="small")
+        figure.tight_layout()
+        label = str(cell_id or "run").replace("/", "_").replace(" ", "_")
+        path = destination / f"information_estimates_{label}.png"
+        figure.savefig(path)
+        plt.close(figure)
+        written.append(path)
+    return written
+
+
+def _group_rows_by_cell(
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[Any, list[Mapping[str, Any]]]:
+    grouped: dict[Any, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(row.get("cell_id"), []).append(row)
+    return grouped
+
+
+def _export_information_estimates_to_comet(
+    rows: Sequence[Mapping[str, Any]],
+    assets: Sequence[Path],
+    images: Sequence[Path],
+    *,
+    enabled: bool,
+    project_name: str,
+    run_name: str,
+    sink: Any | None = None,
+) -> dict[str, Any]:
+    """Publish the estimates as metrics, figures and assets, if requested.
+
+    Metrics, not only the report. The markdown attachment was the whole export
+    before, which meant the numbers this analysis exists to produce were
+    downloadable but never plottable, comparable across runs, or visible on the
+    dashboard at all.
+
+    ``sink`` lets the caller supply an experiment that is already open — the
+    run's master, under ``observability.comet.master_aggregates`` — so the
+    report lands on the run it describes instead of a sibling experiment. A
+    borrowed sink is never closed here: the master owns its own lifetime, and
+    ending it early would silently drop everything logged afterwards.
+
+    A local import: this module has no other reason to depend on the
+    observability stack, and most runs never request a Comet export.
+    """
+
+    if not enabled:
+        return {"status": "disabled", "metrics": 0, "images": 0, "assets": 0, "url": None}
+    borrowed = sink is not None
+    if sink is None:
+        from mas_cc.observability.recorder import CometMetricSink
+
+        sink = CometMetricSink(True, project_name=project_name, run_name=run_name)
+    metrics = information_comet_metrics(rows)
+    uploaded_images = 0
+    uploaded_assets = 0
+    try:
+        sink.add_tags(("analysis", "information"))
+        if metrics:
+            sink.log_metrics(metrics, 0)
+        for image in images:
+            if Path(image).is_file():
+                sink.log_image(image, name=Path(image).stem, step=0)
+                uploaded_images += 1
+        for asset in assets:
+            if Path(asset).is_file():
+                sink.log_asset(asset, name=Path(asset).name)
+                uploaded_assets += 1
+        summary = {
+            "status": sink.status,
+            "metrics": len(metrics),
+            "images": uploaded_images,
+            "assets": uploaded_assets,
+            "url": sink.url,
+            "published_to": "master" if borrowed else "analysis_experiment",
+        }
+    finally:
+        if not borrowed:
+            sink.close()
+    return summary
+
+
 def analyze_hidden_bench_imitation(
     run_dir: str | Path,
     output_dir: str | Path,
@@ -668,6 +1116,10 @@ def analyze_hidden_bench_imitation(
     confidence: float = 0.95,
     seed: int = 1,
     statistics: Sequence[str] | None = None,
+    comet_export: bool = False,
+    comet_project: str = "mas-cc",
+    comet_run_name: str | None = None,
+    comet_sink: Any | None = None,
 ) -> dict[str, Any]:
     """Write the first-pilot behavioral, response, support, MI, and null report."""
 
@@ -691,6 +1143,10 @@ def analyze_hidden_bench_imitation(
             "U_t": event.U_t,
             "Z_t": event.Z_t,
             "Z_t1": event.Z_t1,
+            "Mtruth_t": event.Mtruth_t,
+            "Mtruth_t1": event.Mtruth_t1,
+            "Morder_t": event.Morder_t,
+            "Morder_t1": event.Morder_t1,
             "Xf_t": event.Xf_t,
             "Xf_t1": event.Xf_t1,
         }
@@ -744,8 +1200,13 @@ def analyze_hidden_bench_imitation(
         }
         information_rows.extend({**common, **row} for row in cell_estimates)
         null_rows.extend({**common, **row} for row in cell_nulls)
+    _write_information_estimates_markdown(information_rows, destination / "information_estimates.md")
+    # The markdown is for reading; this is for everything else. Without it the
+    # numbers this analysis exists to produce are only recoverable by parsing a
+    # table out of prose, which is why the Comet export could never send them.
     pd.DataFrame(information_rows).to_csv(destination / "information_estimates.csv", index=False)
     pd.DataFrame(null_rows).to_csv(destination / "information_nulls.csv", index=False)
+    information_plots = plot_information_estimates(information_rows, destination / "plots")
     support_fields = [
         "cell_id", "scientific_cell", "statistic", "n_episodes", "n_events",
         "unique_N_t_states", "unique_Y_t_states", "number_of_U_t_classes_observed",
@@ -800,6 +1261,23 @@ def analyze_hidden_bench_imitation(
     (destination / "analysis_summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    summary["information_plots"] = [str(path) for path in information_plots]
+    summary["comet"] = _export_information_estimates_to_comet(
+        information_rows,
+        (
+            destination / "information_estimates.md",
+            destination / "information_estimates.csv",
+            destination / "support_diagnostics.csv",
+        ),
+        information_plots,
+        enabled=comet_export,
+        project_name=comet_project,
+        run_name=comet_run_name or destination.name,
+        sink=comet_sink,
+    )
+    (destination / "analysis_summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return summary
 
 
@@ -808,6 +1286,7 @@ __all__ = [
     "ImitationEvent",
     "INFORMATION_STATISTICS",
     "MAIN_ESTIMATOR_VARIANT",
+    "ORDER_PARAMETER_COUNT_FIELDS",
     "adapt_event",
     "analyze_hidden_bench_imitation",
     "binary_action_entropy_bits",

@@ -33,6 +33,8 @@ No InfoNCE estimator is implemented or emitted.
    - [Worked sensor/action examples](#36-worked-sensoraction-examples)
    - [Effect in reasoning and classical modes](#37-effect-in-reasoning-and-classical-modes)
    - [Unsupported and compatibility forms](#38-unsupported-and-compatibility-forms)
+   - [Prompt and controller text versions](#39-prompt-and-controller-text-versions)
+   - [Event scheduling invariants](#310-event-scheduling-invariants)
 4. [Population observables](#4-population-observables)
    - [Per-option counts and shares](#41-per-option-counts-and-shares)
    - [Truth and controller-target projections](#42-truth-and-controller-target-projections)
@@ -59,6 +61,7 @@ No InfoNCE estimator is implemented or emitted.
    - [Temporal nulls](#76-temporal-nulls)
    - [Support diagnostics](#77-support-and-sparsity-diagnostics)
 8. [Analysis output files](#8-analysis-output-files)
+   - [Where a run publishes to Comet](#81-where-a-run-publishes-to-comet)
 9. [Ready-to-run configurations](#9-ready-to-run-configurations)
    - [Separate reasoning run](#91-separate-reasoning-run-10-episodes)
    - [Separate classical run](#92-separate-classicalno-reasoning-run-10-episodes)
@@ -252,6 +255,7 @@ or inject hidden task evidence.
 | `options.sensor_sample_size` | Integer `>= 1` and `<= N` | `1` | Number of agents sampled without replacement at every event. Larger samples are more accurate but reduce sensor variation; `N` reveals the full population share. |
 | `options.policy` | Exactly `threshold_target` | `threshold_target` | Audit label and policy selector. No other policy is implemented; another value is rejected during control creation. |
 | `options.threshold` | Number in `[0, 1]` | `0.5` | Advocacy cutoff. The comparison is strict: advocate when measured target share `< threshold`. |
+| `options.template_version` | `1` or `2` | `1` | Wording of the advocacy message. `1` announces the controller; `2` speaks as an ordinary peer. See section 3.9. |
 
 Useful threshold edge cases:
 
@@ -360,9 +364,11 @@ dynamics modes, but the actuator differs.
 
 In reasoning mode:
 
-- `ADVOCATE_Z` replaces the ordinary peer exchange with the fixed message
-  `The external controller currently advocates option <Z>. Reconsider your
-  current position before committing your next vote.`;
+- `ADVOCATE_Z` replaces the ordinary peer exchange with the advocacy message
+  chosen by `control.options.template_version` (section 3.9); under the default
+  `template_version: 1` that is the fixed text `The external controller
+  currently advocates option <Z>. Reconsider your current position before
+  committing your next vote.`;
 - the focal LLM still chooses and validates its own vote;
 - `NO_OP` leaves the ordinary focal/peer exchange in place;
 - the controller never directly overwrites an opinion.
@@ -404,6 +410,127 @@ game:
 New configurations should not use it. Prefer the top-level `control` section,
 because that is the canonical experiment/grid axis and is recorded consistently
 in cell overrides. Do not configure both forms.
+
+### 3.9 Prompt and controller text versions
+
+Every string an agent reads is versioned, because in this game the prompt text
+is a study condition rather than an implementation detail. Three of the four
+settings below push directly on how much information an agent volunteers, which
+is the quantity the study measures. **All four default to the original wording,
+and all four are recorded on every episode** — in `state.data["rules"]` and on
+each event — so any number can be attributed to the text that produced it.
+
+The rationale for each change is in
+`docs/tdd/misselaneous/11082026_prompt_modifications_v2.md`.
+
+| YAML field | Legal values | Default | Meaning |
+| --- | --- | --- | --- |
+| `prompt.prompt_version` | `1` or `2` | `1` | What preflight prices and the audit record carries. Must equal `game.options.prompt_version`; a run whose two sections disagree is refused before the first request. |
+| `game.options.prompt_version` | `1` or `2` | `1` | The text the game actually builds. |
+| `game.options.inform_asymmetry` | `true` / `false` | `false` | Appends the "Informing Asymmetry" notice to the fact list. Requires `prompt_version: 2`. |
+| `game.options.scenario_variant` | `1` or `2` | `1` | `2` removes the coordination bonus from the scenario. |
+
+#### What `prompt_version: 2` changes
+
+| Block | v1 | v2 |
+| --- | --- | --- |
+| `response_style` (message turns only) | "Keep your response concise-just one or two sentences." | Two to four sentences, one not-yet-mentioned fact per turn, and an explicit stated vote. |
+| `private_history` | `- Event 15: partner/controller said <text>; you committed East Town.` | `- Event 15: the other participant said <text>; you replied <your text>; you committed East Town.` |
+| `interaction` | "You may relay information learned in earlier interactions." | "Tell them what you know, including anything you have not yet told anyone, and say how you are voting." |
+| controller turn in the update prompt | `External controller message: <text>` | Rendered exactly like a peer exchange. |
+
+Four notes:
+
+- **The v2 `response_style` conditions speaking turns only.** The vote turns
+  (`initial_vote`, `focal_update`) keep the terse v1 line at both versions.
+  "Each time you speak … end by saying which option you are voting for" is a
+  discussion instruction; a vote turn returns a JSON object whose `vote` field
+  already states the opinion. Applying it there inflates the `rationale` until
+  the JSON is truncated at `max_output_tokens` with no closing brace — which is
+  what killed every episode of run
+  `hidden-bench-imitation-reasoning-control-10-v2-20260840` — and it conditions
+  the measurement instrument, which `bind_vote_prompt` in the vanilla game
+  already refuses to do.
+- **Budget `llm_provider.max_output_tokens` for v2, not v1.** v2 replies cite a
+  fact and state a vote, and the private history grows every event, so they run
+  100–130 tokens by the tenth round where v1 ran 60–80. The shipped v2 configs
+  use 512. A discussion turn that overruns is worse than a vote that overruns:
+  the vote fails loudly against its contract, whereas the message is silently
+  cut mid-sentence and quietly corrupts the disclosure measurement.
+- v2 is close to the paper's **"Share All Information"** condition, which moved
+  GPT-4.1 from 0.233 to 0.467. It is an intervention, not a bug fix.
+- Only the reasoning arm has prompts, so every text change shifts the reasoning
+  cells relative to the classical ones. Freeze a version before a pilot and
+  report it alongside the results.
+- The v2 `response_style` says "which **option** you are voting for" where the
+  source document says "which location". The corpus also contains tasks whose
+  options are companies, people and routes; nothing else in the paragraph is
+  changed.
+
+`inform_asymmetry` is the paper's second condition (0.367 vs 0.233) and is kept
+separate so it can be reported separately. It states only that information is
+unevenly held. It never marks which facts are unique, and it must not be
+extended to: an agent that can recover its own private facts is no longer doing
+a hidden-profile task.
+
+`scenario_variant: 2` removes the bullet awarding a bonus when everyone agrees,
+plus the sentence "This means that coordinating with others is critical to
+maximize your rewards." The individual-accuracy payoff and the options survive.
+That paragraph is an explicit instruction to conform sitting in the system
+prompt — this study's imitation coupling strength, written in English — so
+varying it is the semantic analogue of a classical conformity parameter. Only 7
+of the 65 corpus tasks carry the clause; on the other 58 the variant is a no-op
+and says so through `task.coordination_bonus_removed` in the episode state.
+
+#### What `control.options.template_version: 2` changes
+
+`template_version: 1` names the controller in the message text, which lets an
+agent discount the turn as an outside voice. `R_ctrl` measured that way is not
+social control.
+
+`template_version: 2` speaks as a peer: two to four sentences, a bolded option
+name, first person, ending `I'm voting **Z**`, and never the words *controller*,
+*external*, *experiment* or *simulation*. Its reason comes from **the shared
+facts every agent already holds, and nothing else** — the controller does not
+receive the hidden facts and must not, because a controller that invents
+evidence turns "the population moved toward Z" into "an agent believed a new
+fact", and contaminates the truth measurement too.
+
+Four paraphrases are drawn from a bank with stable IDs, so no single wording can
+silently carry the whole effect. Every control event logs
+`controller_template_version`, `controller_template_id`, `controller_fact_index`
+and `controller_message`.
+
+Before quoting an `R_ctrl` from a `template_version: 2` run, do the manipulation
+check: take twenty controller messages and twenty peer messages, strip the
+labels, and ask a fresh model to tell them apart. Above chance means the
+controller is still detectable.
+
+### 3.10 Event scheduling invariants
+
+A control event **replaces** the peer conversation; it never adds one. Adding
+would give the controlled group more conversations than the uncontrolled group,
+and any difference could then be "more talking happened" rather than control.
+Replacement costs a real peer exchange — which is where facts spread — but that
+cost is visible afterwards in `disclosure_events`, whereas unequal event counts
+would be baked into the design and impossible to untangle.
+
+The substitution happens above the reasoning/classical branch in
+`imitation/runtime.py`, so it is identical in both arms. Three invariants follow
+and are asserted in `tests/mas_cc/test_hidden_bench_imitation_prompts_v2.py`:
+
+1. for a given seed and horizon, total events are identical across all four
+   cells (reasoning/classical x control on/off);
+2. `peer_interactions == total_events - control_events` in **both** dynamics
+   modes;
+3. the event schedule replays: the same focal agent meets the same partner in
+   the same order whether or not control is on. This is checkable only against
+   `sampled_peer_agent_id`, which records the pair the scheduler drew before
+   control substitution; `peer_agent_id` is `null` on a control event.
+
+Invariant 3 goes beyond replaying the initial condition `X_0`. Matched initial
+conditions do not buy a matched comparison if the interaction schedule differs
+between arms.
 
 ## 4. Population observables
 
@@ -662,6 +789,13 @@ The information analysis is post-hoc over persisted `trajectory.jsonl` files.
 It does not consume independent streaming rows and does not make provider
 calls.
 
+> For a worked, end-to-end walkthrough of these four statistics — every count
+> table shown explicitly, the arithmetic recomputed from a real run, why
+> `unsmoothed` is the headline variant, how to read an estimate that falls below
+> its null, and how these differ from the grid-level sweep metrics — see
+> [`imitation_mutual_information.md`](../imitation_mutual_information.md).
+> This section is the specification; that document is the explanation.
+
 ### 7.1 Canonical event adapter
 
 For every event, the adapter constructs:
@@ -817,7 +951,9 @@ being silently treated as evidence of control.
 | `cell_summaries.csv` | Pooled summary for each grid cell, or one pooled row for a standalone run. |
 | `option_share_trajectories.csv` | Long-form option-share trajectories including state 0. |
 | `order_parameter_trajectories.csv` | `m_ctrl`, `m_truth`, `m_order`, and `H_vote` trajectories including state 0. |
-| `information_estimates.csv` | Four MI/CMI estimates, bootstrap intervals, null summaries, and support fields. |
+| `information_estimates.md` | Human-readable report: the four MI/CMI estimates, bootstrap intervals, and null summaries in one table per cell, a diagnostics table, and prose explaining every statistic and column. |
+| `information_estimates.csv` | The same estimates, machine-readable. This is what the Comet export, plots, and any downstream comparison read; the markdown is for humans only. |
+| `plots/information_estimates_<cell>.png` | One figure per cell: each estimate with its bootstrap interval, and its permutation-null mean marked on the same axis. |
 | `information_nulls.csv` | One row per statistic and null permutation. |
 | `support_diagnostics.csv` | Compact support, sparsity, entropy, and interpretability view. |
 | `cell_contrasts.csv` | Four-grid contrasts for final and trajectory-average response metrics. |
@@ -829,6 +965,41 @@ data/episodes/<episode-id>/trajectory.jsonl
 data/episodes/<episode-id>/events.jsonl
 data/episodes/<episode-id>/metrics/streaming.csv
 ```
+
+### 8.1 Where a run publishes to Comet
+
+**One run writes to up to three separate Comet experiments.** This surprises
+people, because only the first is named in the banner at launch:
+
+| Experiment | Named | Carries |
+| --- | --- | --- |
+| `<run-id>` (master) | at launch, and again at the end | Liveness: episode progress, heartbeat, the grid image. **No aggregate curves and no plots.** |
+| `<run-id>/<cell>` | at the end | The aggregate curves stepped by round, the headline scalars, and every PNG under `metrics/plots/` — enabled by `observability.comet.cell_experiments` and `metric_plots`. |
+| `<run-id>/analysis` | at the end | The MI/CMI estimates as metrics, the information figures, and the report files — enabled by `analysis.comet_export`. |
+
+If you watch only the launch link you will see progress bars and conclude the
+aggregates and MI never uploaded. They did; they are on the other two. Every
+URL is printed at the end of the run and stored in `comet_run_summary.json`.
+
+`analysis.comet_export: true` publishes, per cell and statistic:
+
+```text
+information/<cell>/<statistic>/estimate
+information/<cell>/<statistic>/bootstrap_ci_low
+information/<cell>/<statistic>/bootstrap_ci_high
+information/<cell>/<statistic>/null_mean
+information/<cell>/<statistic>/excess_over_null
+information/<cell>/<statistic>/n_episodes
+information/<cell>/<statistic>/n_events
+information/<cell>/<statistic>/scientifically_interpretable
+```
+
+`excess_over_null` is the one to read first. A permutation null is rarely zero,
+so bare estimates across statistics are quantities with different floors; the
+gap over the null is what answers "is there a channel here at all".
+
+All of this only takes effect when `logging.comet` (the master switch) is also
+on — turning that off disables every Comet integration, this one included.
 
 ## 9. Ready-to-run configurations
 
@@ -967,6 +1138,17 @@ Change both `reasoning` path components to `classical` for the classical run.
 
 Before treating an MI/CMI value as a control result, check in this order:
 
+0. **every episode you think ran, ran.** Open `aggregate.json` and read
+   `episodes_aggregated` and `episodes_excluded`. An episode that dies partway
+   — a provider timeout, an aborted run — is excluded from the curves rather
+   than frozen into them, so a run that reports fewer episodes than
+   `execution.repetitions` is telling you something. Chase the cause in
+   `data/episodes/<id>/api_call_status.jsonl`, which records `provider_error`
+   and `validation_error` per call. Two failure signatures are worth knowing:
+   an `out` token count exactly equal to `llm_provider.max_output_tokens` is a
+   truncated response, not a bad one; and a `provider_error` with no HTTP
+   status is a transport timeout, whose gap from the previous successful call
+   will be about `llm_provider.timeout_seconds`.
 1. both `ADVOCATE_Z` and `NO_OP` occur;
 2. `controller_action_entropy_bits` is not approximately zero;
 3. sensor target shares vary and sensor error is consistent with the finite
@@ -1020,6 +1202,24 @@ detailed definitions and interpretation rules remain in Sections 4–7.
 | `sensor_target_abs_error` | controlled transition | Absolute sensor target error. |
 | `unshared_disclosure_rate` | event | Keyword-detected fraction of hidden facts disclosed in messages so far. |
 | `disclosure_reach` | event, one series per fact | Number of agents whose recorded knowledge contains a hidden fact. |
+
+Every event additionally carries the following non-metric record fields. They
+exist to let explanations be told apart after the fact — in particular to
+separate "control starved the conversation" from "control was adversarial",
+which the replacement scheduling of section 3.10 otherwise leaves ambiguous.
+
+| Field | Meaning |
+| --- | --- |
+| `disclosure_events` | One entry per hidden fact disclosed in this event: `fact_index`, `speaker_agent_id`, `interaction_index`, and `first_disclosure`. Gives shared-vs-unshared diffusion curves. |
+| `focal_message`, `peer_message` | The message text each participant produced. Fact detection runs as a separate pass over these afterwards; asking an agent to list the facts it used would itself increase disclosure and contaminate the measurement. |
+| `sampled_peer_agent_id` | The partner the scheduler drew, before control substitution. `peer_agent_id` is `null` on a control event; this is not. |
+| `peer_interaction` | Whether this event contained a peer exchange. |
+| `controller_message` | The exact advocacy text delivered. |
+| `controller_template_version`, `controller_template_id`, `controller_fact_index` | Which advocacy wording fired, and which shared fact it cited. Rules out a single paraphrase carrying the whole effect. |
+| `prompt_version`, `inform_asymmetry`, `scenario_variant` | The prompt text condition this event ran under (section 3.9). |
+
+The agent-visible history in `agent.memory` gains `own_message` for the same
+reason: without it an agent cannot tell whether it has already shared something.
 
 The twelve transition/controller metrics requested for direct inspection are
 therefore:

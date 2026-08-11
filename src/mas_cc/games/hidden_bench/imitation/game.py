@@ -18,7 +18,12 @@ from ..data import assign, assert_union_invariant, disclosed_facts, load_task_se
 from ..records import HiddenBenchAgentState
 from ..vanilla.prompts import extract_json_object, normalize_vote, shuffled_information
 from .metrics import behavioral_transition_metrics, population_observables
-from .prompts import bind_initial_prompt, bind_message_prompt, bind_update_prompt
+from .prompts import (
+    bind_initial_prompt,
+    bind_message_prompt,
+    bind_update_prompt,
+    scenario_for_variant,
+)
 from .state import ImitationGameState, ImitationRules, ImitationTransition
 
 INITIAL_VOTE = "initial_vote"
@@ -61,6 +66,9 @@ class HiddenBenchImitationGame(Game):
             prebuilt=task_set.prebuilt_allocations.get(task.task_id),
         )
         assert_union_invariant(task, assignment)
+        description, bonus_removed = scenario_for_variant(
+            task.description_for(rules.n_agents), rules.scenario_variant
+        )
         initial_votes = self._provider_free_initial_votes(rules, task.possible_answers, root)
         agents = []
         for index, (agent_id, info) in enumerate(assignment.items()):
@@ -105,7 +113,9 @@ class HiddenBenchImitationGame(Game):
                 "task": {
                     "task_id": task.task_id,
                     "name": task.name,
-                    "description": task.description_for(rules.n_agents),
+                    "description": description,
+                    "scenario_variant": rules.scenario_variant,
+                    "coordination_bonus_removed": bonus_removed,
                     "possible_answers": list(task.possible_answers),
                     "correct_answer": task.correct_answer,
                     "hidden_information": list(task.unshared_information),
@@ -249,6 +259,7 @@ class HiddenBenchImitationGame(Game):
                         scenario=str(visible["scenario"]),
                         information=visible["presented_information"],
                         possible_answers=visible["possible_answers"],
+                        style=rules.prompt_style,
                     ),
                     retry_bound=rules.invalid_response_retries,
                 )
@@ -286,6 +297,7 @@ class HiddenBenchImitationGame(Game):
                         history=visible["private_history"],
                         dialogue=own_dialogue,
                         allow_relay=rules.allow_relay,
+                        style=rules.prompt_style,
                     ),
                     retry_bound=rules.invalid_response_retries,
                 )
@@ -328,6 +340,7 @@ class HiddenBenchImitationGame(Game):
                 current_vote=str(visible["current_vote"]),
                 dialogue=own_dialogue,
                 controller_message=controller_message,
+                style=rules.prompt_style,
             ),
             retry_bound=rules.invalid_response_retries,
         )
@@ -406,6 +419,7 @@ class HiddenBenchImitationGame(Game):
         signal: InteractionControlSignal | None,
         dialogue: Sequence[Mapping[str, Any]] = (),
         classical: Mapping[str, Any] | None = None,
+        sampled_peer: AgentId | None = None,
     ) -> ImitationTransition:
         rules = self.rules(config)
         before = [str(agent.committed_action) for agent in state.agents]
@@ -439,10 +453,15 @@ class HiddenBenchImitationGame(Game):
                 set(focal_attributes.get("known_facts", ()))
                 | {index for index, flag in enumerate(heard_facts) if flag}
             )
+        focal_message = self._spoken_message(focal, dialogue)
         focal_memory = (*focal_agent.memory, {
             "event": state.turn + 1,
             "partner_id": None if peer is None else str(peer),
             "received_message": received,
+            # §1.3: the agent has to see what *it* said, otherwise "mention
+            # something you have not mentioned yet" is unfollowable and it
+            # cannot notice it has never voiced its own private fact.
+            "own_message": focal_message,
             "own_vote_before": before_focal,
             "own_vote_after": action.value,
             "controller_action": None if signal is None else signal.action,
@@ -472,6 +491,7 @@ class HiddenBenchImitationGame(Game):
                     "event": state.turn + 1,
                     "partner_id": str(focal),
                     "received_message": heard,
+                    "own_message": self._spoken_message(peer, dialogue),
                     "own_vote_before": peer_agent.committed_action,
                     "own_vote_after": peer_agent.committed_action,
                     "controller_action": None,
@@ -537,6 +557,12 @@ class HiddenBenchImitationGame(Game):
             "H_vote_before": before_obs["H_vote"],
             "focal_agent_id": str(focal),
             "focal_opinion_before": before_focal,
+            # The pair the scheduler drew, before control substitution.  §3.4
+            # invariant 3 - "the event sequence replays" - is only checkable
+            # against this, because `peer_agent_id` is None on a control event.
+            "sampled_peer_agent_id": (
+                None if sampled_peer is None else str(sampled_peer)
+            ),
             "peer_agent_id": None if peer is None else str(peer),
             "peer_opinion_before": None if peer is None else state.hidden_bench_agent(peer).committed_action,
             "controller_enabled": signal is not None,
@@ -549,6 +575,19 @@ class HiddenBenchImitationGame(Game):
             "controller_policy": None if signal is None else signal.metadata.get("policy"),
             "controller_action": None if signal is None else signal.action,
             "controller_applied": bool(signal is not None and signal.message is not None),
+            # Part 4: which paraphrase fired, so no single variant can silently
+            # carry the whole effect without that being visible afterwards.
+            "controller_template_version": (
+                None if signal is None else signal.metadata.get("message_template_version")
+            ),
+            "controller_template_id": (
+                None if signal is None else signal.metadata.get("message_template_id")
+            ),
+            "controller_fact_index": (
+                None if signal is None else signal.metadata.get("message_fact_index")
+            ),
+            "controller_message": None if signal is None else signal.message,
+            "peer_interaction": peer is not None,
             "focal_opinion_after": action.value,
             "population_state_after": after,
             "occupation_counts_after": after_obs["occupation_counts"],
@@ -564,6 +603,20 @@ class HiddenBenchImitationGame(Game):
             "disclosed_hidden_facts_this_event": list(disclosed),
             "disclosed_hidden_facts": list(disclosed_all),
             "disclosure_reach": disclosure_reach,
+            "disclosure_events": self._disclosure_events(
+                state.hidden_information,
+                [str(item["message"]) for item in state.transcript],
+                dialogue,
+                next_index,
+            ),
+            # Part 4: needed to detect which facts an agent cited, in a separate
+            # pass afterwards.  Asking the agent to list them in its own reply
+            # would itself increase disclosure and contaminate the measurement.
+            "focal_message": focal_message,
+            "peer_message": None if peer is None else self._spoken_message(peer, dialogue),
+            "prompt_version": rules.prompt_version,
+            "inform_asymmetry": rules.inform_asymmetry,
+            "scenario_variant": rules.scenario_variant,
             "unshared_disclosure_rate": (
                 sum(disclosed_all) / len(disclosed_all) if disclosed_all else 0.0
             ),
@@ -614,6 +667,51 @@ class HiddenBenchImitationGame(Game):
             termination_reason=reason,
             event=event,
         )
+
+    @staticmethod
+    def _spoken_message(
+        speaker: AgentId, dialogue: Sequence[Mapping[str, Any]]
+    ) -> str | None:
+        spoken = [
+            str(item["message"]) for item in dialogue if str(item["agent_id"]) == str(speaker)
+        ]
+        return "\n".join(spoken) if spoken else None
+
+    @staticmethod
+    def _disclosure_events(
+        hidden_information: Sequence[str],
+        prior_messages: Sequence[str],
+        dialogue: Sequence[Mapping[str, Any]],
+        interaction_index: int,
+    ) -> list[dict[str, Any]]:
+        """Which fact entered circulation, from whom, when (Part 4).
+
+        `first_disclosure` is what turns this into shared-vs-unshared diffusion
+        curves: the running set means a fact repeated by the second speaker in
+        the same event is not counted as entering circulation twice.
+        """
+
+        already = {
+            index
+            for index, flag in enumerate(disclosed_facts(hidden_information, prior_messages))
+            if flag
+        }
+        events: list[dict[str, Any]] = []
+        for item in dialogue:
+            flags = disclosed_facts(hidden_information, [str(item["message"])])
+            for index, flag in enumerate(flags):
+                if not flag:
+                    continue
+                events.append(
+                    {
+                        "fact_index": index,
+                        "speaker_agent_id": str(item["agent_id"]),
+                        "interaction_index": interaction_index,
+                        "first_disclosure": index not in already,
+                    }
+                )
+                already.add(index)
+        return events
 
     @staticmethod
     def _received_message(
@@ -671,6 +769,7 @@ class HiddenBenchImitationGame(Game):
                 scenario="A representative HiddenBench scenario.",
                 information=information,
                 possible_answers=options,
+                style=rules.prompt_style,
             ),
         )
         message = PromptScenario(
@@ -681,6 +780,7 @@ class HiddenBenchImitationGame(Game):
                 history=(),
                 dialogue=(),
                 allow_relay=rules.allow_relay,
+                style=rules.prompt_style,
             ),
         )
         update = PromptScenario(
@@ -692,6 +792,7 @@ class HiddenBenchImitationGame(Game):
                 possible_answers=options,
                 current_vote=options[0],
                 dialogue=({"is_self": False, "message": "A representative peer message."},),
+                style=rules.prompt_style,
             ),
         )
         if rules.dynamics_mode == "classical":

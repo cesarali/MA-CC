@@ -54,12 +54,18 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     confidence = _number_option(options, "confidence", 0.95)
     if not 0 < confidence < 1:
         raise ValueError("analysis.options.confidence must be between zero and one")
+    run_id = f"{config.experiment.name}-{config.execution.seed}"
     return {
         "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
         "null_permutations": _integer_option(options, "null_permutations", 1000),
         "confidence": confidence,
         "seed": _integer_option(options, "seed", config.execution.seed),
         "statistics": statistics,
+        # `analysis.comet_export` opts the report in; the logging master switch
+        # can still veto it, same as every other Comet integration.
+        "comet_export": analysis.comet_export and config.logging.comet,
+        "comet_project": str(config.logging.options.get("comet_project", "mas-cc")),
+        "comet_run_name": f"{run_id}/analysis",
     }
 
 
@@ -69,8 +75,15 @@ def validate_configured_analysis(config: RunConfig) -> None:
     _configured_arguments(config)
 
 
-def run_configured_analysis(config: RunConfig, run_dir: str | Path) -> dict[str, Any] | None:
-    """Run configured across-episode analysis after trajectories are persisted."""
+def run_configured_analysis(
+    config: RunConfig, run_dir: str | Path, comet_sink: Any | None = None
+) -> dict[str, Any] | None:
+    """Run configured across-episode analysis after trajectories are persisted.
+
+    ``comet_sink`` is the run's already-open master experiment when the config
+    asked for a single consolidated one; ``None`` keeps the historical
+    behaviour of opening a dedicated ``<run>/analysis`` experiment.
+    """
 
     arguments = _configured_arguments(config)
     if arguments is None:
@@ -81,6 +94,7 @@ def run_configured_analysis(config: RunConfig, run_dir: str | Path) -> dict[str,
     return analyze_hidden_bench_imitation(
         root,
         root / "hidden_bench_imitation_analysis",
+        comet_sink=comet_sink,
         **arguments,
     )
 

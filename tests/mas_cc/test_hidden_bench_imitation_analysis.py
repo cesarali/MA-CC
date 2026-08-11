@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import asyncio
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -16,10 +17,14 @@ from mas_cc.games.hidden_bench.imitation import run_hidden_bench_imitation_game
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
 from mas_cc.games.hidden_bench.imitation.analysis import (
     INFORMATION_STATISTICS,
+    _export_information_estimates_to_comet,
+    _write_information_estimates_markdown,
     adapt_event,
     binary_action_entropy_bits,
     bootstrap_episode_ids,
     information_analysis,
+    information_comet_metrics,
+    plot_information_estimates,
 )
 from mas_cc.games.hidden_bench.imitation.metrics import (
     METRICS,
@@ -330,12 +335,23 @@ def test_standalone_behavior_configs_export_their_selected_monitoring_metrics():
         "population_action_share_per_option",
         "dominant_action_share",
     }
-    assert reasoning.observability.comet.cell_experiments is True
+    # A single-cell run publishes everything onto one experiment: no sibling
+    # `<run>/run` or `<run>/analysis` to hunt through for the aggregate plots.
+    assert reasoning.observability.comet.cell_experiments is False
+    assert reasoning.observability.comet.master_aggregates is True
+    assert reasoning.observability.comet.metric_plots is True
     assert set(classical.metrics.comet_export_names()) == event_metrics
     assert reasoning.analysis.enabled is True
     assert classical.analysis.enabled is True
     assert reasoning.analysis.estimators == INFORMATION_STATISTICS
-    assert classical.analysis.estimators == INFORMATION_STATISTICS
+    # The classical comparator still runs only the count-vector channels; the
+    # reasoning cell additionally projects them onto the order parameters.
+    assert classical.analysis.estimators == (
+        "sensing_mi",
+        "population_actuation_cmi",
+        "target_actuation_cmi",
+        "focal_actuation_cmi",
+    )
     assert reasoning.analysis.options["bootstrap_resamples"] == 1000
     assert reasoning.analysis.options["null_permutations"] == 1000
     assert (
@@ -343,3 +359,240 @@ def test_standalone_behavior_configs_export_their_selected_monitoring_metrics():
         == 3 * reasoning.game.horizon
     )
     assert create_game(classical.game).call_plan(classical.game).provider_requests.maximum == 0
+    assert reasoning.analysis.comet_export is True
+    assert classical.analysis.comet_export is False
+
+
+def _information_rows_fixture():
+    events = []
+    before = ("A", "A", "B", "C")
+    for episode_index in range(4):
+        for interaction_index in range(4):
+            action = "ADVOCATE_Z" if interaction_index % 2 == 0 else "NO_OP"
+            after = ("C", "A", "B", "C") if action == "ADVOCATE_Z" else before
+            events.append(
+                adapt_event(
+                    _event(
+                        before,
+                        after,
+                        action=action,
+                        episode=f"episode-{episode_index}",
+                        index=interaction_index + 1,
+                    )
+                )
+            )
+    estimates, _ = information_analysis(events, bootstrap_resamples=5, null_permutations=5, seed=1)
+    return [
+        {
+            "cell_id": "run",
+            "scientific_cell": None,
+            "dynamics_mode": "classical",
+            "control_mechanism": "threshold_target",
+            **row,
+        }
+        for row in estimates
+    ]
+
+
+def test_information_estimates_markdown_reports_every_statistic_and_its_meaning(tmp_path):
+    destination = tmp_path / "information_estimates.md"
+
+    _write_information_estimates_markdown(_information_rows_fixture(), destination)
+
+    text = destination.read_text(encoding="utf-8")
+    for name in INFORMATION_STATISTICS:
+        assert f"`{name}`" in text
+    assert "Cell `run`" in text
+    assert "Bootstrap CI" in text
+    assert "Null mean" in text
+    assert "|" in text  # rendered as markdown tables, not a raw CSV dump
+
+
+def test_information_estimates_markdown_handles_missing_values(tmp_path):
+    destination = tmp_path / "information_estimates.md"
+    rows = [
+        {
+            "cell_id": "cell-0000",
+            "scientific_cell": "A",
+            "dynamics_mode": "reasoning",
+            "control_mechanism": "none",
+            "statistic": "sensing_mi",
+            "estimate": float("nan"),
+            "unsmoothed": float("nan"),
+            "jeffreys": float("nan"),
+            "miller_madow": float("nan"),
+            "bootstrap_ci_low": float("nan"),
+            "bootstrap_ci_high": float("nan"),
+            "null_mean": float("nan"),
+            "null_ci_low": float("nan"),
+            "null_ci_high": float("nan"),
+            "scientifically_interpretable": False,
+            "n_episodes": 0,
+            "n_events": 0,
+            "occupied_conditioning_states": 0,
+            "min_events_per_conditioning_state": None,
+            "median_events_per_conditioning_state": None,
+            "max_events_per_conditioning_state": None,
+            "fraction_events_singleton_conditioning_states": None,
+            "sparse_conditioning_table": False,
+            "controller_degenerate": None,
+        }
+    ]
+
+    _write_information_estimates_markdown(rows, destination)
+
+    text = destination.read_text(encoding="utf-8")
+    assert "—" in text
+    assert "nan" not in text.lower()
+
+
+class _FakeSink:
+    """Records the calls an export makes, in order."""
+
+    def __init__(self, calls, enabled, *, project_name, run_name):
+        self.calls = calls
+        self.status = "active"
+        self.url = "https://comet.invalid/analysis"
+        calls.append(("init", enabled, project_name, run_name))
+
+    def add_tags(self, tags):
+        self.calls.append(("add_tags", tuple(tags)))
+
+    def log_metrics(self, metrics, step):
+        self.calls.append(("log_metrics", dict(metrics), step))
+
+    def log_image(self, path, *, name, step):
+        self.calls.append(("log_image", Path(path).name, name, step))
+
+    def log_asset(self, path, *, name):
+        self.calls.append(("log_asset", name))
+
+    def close(self):
+        self.calls.append(("close",))
+        return {"status": self.status}
+
+
+def _patch_sink(monkeypatch, calls):
+    monkeypatch.setattr(
+        "mas_cc.observability.recorder.CometMetricSink",
+        lambda enabled, **kwargs: _FakeSink(calls, enabled, **kwargs),
+    )
+
+
+def test_information_estimates_are_not_exported_to_comet_by_default(tmp_path, monkeypatch):
+    calls = []
+    _patch_sink(monkeypatch, calls)
+
+    summary = _export_information_estimates_to_comet(
+        _information_rows_fixture(), (), (),
+        enabled=False, project_name="mas-cc", run_name="run/analysis",
+    )
+
+    assert calls == []
+    assert summary["status"] == "disabled"
+
+
+def test_the_export_sends_the_numbers_not_only_the_report(tmp_path, monkeypatch):
+    """The report was once the whole export.
+
+    That made every quantity this analysis exists to produce downloadable but
+    never plottable, never comparable across runs, and invisible on the
+    dashboard - which reads exactly like "the analysis did not run".
+    """
+
+    calls = []
+    _patch_sink(monkeypatch, calls)
+    report = tmp_path / "information_estimates.md"
+    report.write_text("# report\n", encoding="utf-8")
+    figure = tmp_path / "information_estimates_run.png"
+    figure.write_bytes(b"\x89PNG")
+    rows = _information_rows_fixture()
+
+    summary = _export_information_estimates_to_comet(
+        rows, (report,), (figure,),
+        enabled=True, project_name="mas-cc", run_name="run/analysis",
+    )
+
+    kinds = [call[0] for call in calls]
+    assert kinds[0] == "init" and kinds[-1] == "close"
+    assert "log_metrics" in kinds
+    logged = next(call[1] for call in calls if call[0] == "log_metrics")
+    assert logged, "the estimates must reach Comet as metrics"
+    assert all(name.startswith("information/run/") for name in logged)
+    assert ("log_image", figure.name, figure.stem, 0) in calls
+    assert ("log_asset", "information_estimates.md") in calls
+    assert summary["metrics"] == len(logged)
+    assert summary["images"] == 1
+    assert summary["url"] == "https://comet.invalid/analysis"
+
+
+def test_a_missing_asset_or_image_is_skipped_rather_than_failing_the_export(
+    tmp_path, monkeypatch
+):
+    calls = []
+    _patch_sink(monkeypatch, calls)
+
+    summary = _export_information_estimates_to_comet(
+        _information_rows_fixture(),
+        (tmp_path / "missing.md",),
+        (tmp_path / "missing.png",),
+        enabled=True, project_name="mas-cc", run_name="run/analysis",
+    )
+
+    assert summary["assets"] == 0
+    assert summary["images"] == 0
+    assert summary["metrics"] > 0
+    assert not any(call[0] in {"log_asset", "log_image"} for call in calls)
+
+
+def test_comet_metrics_derive_the_excess_over_the_permutation_null():
+    """An MI value on its own is not a result; the gap over the null is.
+
+    A permutation null is rarely zero, so a reader comparing bare estimates
+    across statistics is comparing quantities with different floors.
+    """
+
+    rows = [
+        {
+            "cell_id": "run",
+            "statistic": "sensing_mi",
+            "estimate": 1.25,
+            "null_mean": 0.5,
+            "bootstrap_ci_low": 1.0,
+            "bootstrap_ci_high": 1.4,
+            "scientifically_interpretable": True,
+        }
+    ]
+
+    metrics = information_comet_metrics(rows)
+
+    assert metrics["information/run/sensing_mi/estimate"] == pytest.approx(1.25)
+    assert metrics["information/run/sensing_mi/excess_over_null"] == pytest.approx(0.75)
+    assert metrics["information/run/sensing_mi/scientifically_interpretable"] == 1.0
+
+
+def test_a_statistic_with_no_estimate_contributes_no_metric():
+    metrics = information_comet_metrics(
+        [{"cell_id": "run", "statistic": "sensing_mi", "estimate": None, "null_mean": None}]
+    )
+    assert metrics == {}
+
+
+def test_one_information_figure_is_written_per_cell(tmp_path):
+    rows = [
+        {**row, "cell_id": cell}
+        for cell in ("A", "B")
+        for row in _information_rows_fixture()
+    ]
+
+    written = plot_information_estimates(rows, tmp_path)
+
+    assert sorted(path.name for path in written) == [
+        "information_estimates_A.png",
+        "information_estimates_B.png",
+    ]
+    assert all(path.stat().st_size > 0 for path in written)
+
+
+def test_no_estimates_means_no_figure(tmp_path):
+    assert plot_information_estimates((), tmp_path) == []

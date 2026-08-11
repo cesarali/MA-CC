@@ -44,6 +44,7 @@ def test_parse_applies_all_section_defaults_and_is_immutable():
     assert config.logging.level == "INFO"
     assert config.storage.output_dir == "results"
     assert config.analysis.estimators == ()
+    assert config.analysis.comet_export is False
     assert config.experiment.name == "unnamed-experiment"
     with pytest.raises(TypeError):
         config.llm_provider.options["x"] = 1
@@ -234,3 +235,4 @@ def test_resolved_config_records_the_aggregation_and_observability_sections():
 
     assert reloaded["aggregation"]["forward_fill"] == "absorbing"
     assert reloaded["observability"]["comet"]["heartbeat_seconds"] == 60.0
+    assert reloaded["observability"]["comet"]["metric_plots"] is False

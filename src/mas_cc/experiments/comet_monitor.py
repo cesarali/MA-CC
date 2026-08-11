@@ -27,9 +27,10 @@ running" dashboard: heartbeat, progress, ETA, the grid image, and each cell's
 headline scalars as it lands.
 
 *Cell experiment* (one per cell, created when the cell completes) —
-``step = round``. The aggregate curves. Because the step axis is unambiguously
-the round index, Comet overlays cells against each other natively, which is the
-comparison the whole sweep exists to make.
+``step = round``. The aggregate curves and, when requested, their rendered
+plots. Because the step axis is unambiguously the round index, Comet overlays
+cells against each other natively, which is the comparison the whole sweep
+exists to make.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ import threading
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from mas_cc.config import CometObservability
@@ -124,6 +126,20 @@ class MasterMonitor:
     @property
     def episodes_done(self) -> int:
         return self._finished
+
+    @property
+    def analysis_sink(self) -> CometMetricSink | None:
+        """The master's own sink when the post-run analysis should publish onto it.
+
+        ``None`` means "open your own experiment", which is the default and the
+        right answer for a grid: one analysis over many cells is its own object
+        of study. Under ``master_aggregates`` the report joins the run it
+        describes instead, so there is a single experiment to open.
+        """
+
+        if not self._enabled or not self.settings.master_aggregates:
+            return None
+        return self._sink
 
     def describe(self) -> str:
         """One console line saying where this run is being watched, or why it isn't.
@@ -214,9 +230,14 @@ class MasterMonitor:
             self._log_grid_image()
 
     def cell_completed(
-        self, cell_id: str, result: AggregateResult, sweep: SweepResult | None = None
+        self,
+        cell_id: str,
+        result: AggregateResult,
+        sweep: SweepResult | None = None,
+        *,
+        metric_plots: Sequence[str | Path] = (),
     ) -> dict[str, Any]:
-        """Publish one finished cell: its own experiment, plus its headline scalars.
+        """Publish one finished cell: curves, requested plots, and headline scalars.
 
         Returns the cell experiment's status summary so the caller can persist
         it — the record of what was published belongs on disk with the run, not
@@ -225,7 +246,7 @@ class MasterMonitor:
 
         with self._lock:
             self._cells_complete += 1
-        summary = self._log_cell_experiment(cell_id, result)
+        summary = self._log_cell_experiment(cell_id, result, metric_plots)
         headline = {
             f"cell_{cell_id}_{name}": float(value)
             for name, value in result.scalars.items()
@@ -338,11 +359,30 @@ class MasterMonitor:
             title = f"{self.run_name} — {self._finished}/{self._total} episodes"
         return grid_progress_figure(self.layout.axes, cells, title=title)
 
-    def _log_cell_experiment(self, cell_id: str, result: AggregateResult) -> dict[str, Any]:
+    def _log_cell_experiment(
+        self,
+        cell_id: str,
+        result: AggregateResult,
+        metric_plots: Sequence[str | Path] = (),
+    ) -> dict[str, Any]:
         """One Comet experiment for one completed cell, stepped by round index."""
 
-        if not self._enabled or not self.settings.cell_experiments:
-            return {"cell_id": cell_id, "status": "disabled", "curves": len(result.curves)}
+        if not self._enabled:
+            return {
+                "cell_id": cell_id,
+                "status": "disabled",
+                "curves": len(result.curves),
+                "metric_plots": 0,
+            }
+        if self.settings.master_aggregates:
+            return self._log_cell_onto_master(cell_id, result, metric_plots)
+        if not self.settings.cell_experiments:
+            return {
+                "cell_id": cell_id,
+                "status": "disabled",
+                "curves": len(result.curves),
+                "metric_plots": 0,
+            }
         sink = CometMetricSink(
             True, project_name=self._project, run_name=f"{self.run_name}/{cell_id}"
         )
@@ -362,6 +402,55 @@ class MasterMonitor:
             )
         )
         self._guarded(lambda: sink.add_tags(("cell", self.run_name)))
+        uploaded_plots = self._publish_cell_series(sink, result, metric_plots)
+        summary = sink.close()
+        return {
+            "cell_id": cell_id,
+            "curves": len(result.curves),
+            "metric_plots": uploaded_plots,
+            **summary,
+        }
+
+    def _log_cell_onto_master(
+        self,
+        cell_id: str,
+        result: AggregateResult,
+        metric_plots: Sequence[str | Path] = (),
+    ) -> dict[str, Any]:
+        """Publish a finished cell onto the master experiment, no child created.
+
+        The master's own progress series are stepped by ``episodes_done`` and
+        these curves are stepped by ``round``. Comet keeps one step axis per
+        metric name, so the two coexist; what they must not do is *share* a
+        name, which is why a grid's cells are prefixed with their cell id here.
+        A single-cell run keeps the bare metric names, so its charts read the
+        same as they would on a dedicated cell experiment.
+        """
+
+        prefix = "" if cell_id in ("run", "") else f"{cell_id}_"
+        uploaded_plots = self._publish_cell_series(
+            self._sink, result, metric_plots, prefix=prefix
+        )
+        return {
+            "cell_id": cell_id,
+            "curves": len(result.curves),
+            "metric_plots": uploaded_plots,
+            "status": self._sink.status,
+            "reference": self._sink.reference,
+            "url": self._sink.url,
+            "published_to": "master",
+        }
+
+    def _publish_cell_series(
+        self,
+        sink: CometMetricSink,
+        result: AggregateResult,
+        metric_plots: Sequence[str | Path] = (),
+        *,
+        prefix: str = "",
+    ) -> int:
+        """Log one cell's curves, scalars and plots to `sink`; return plots sent."""
+
         # Curves are transposed to one log_metrics call per round rather than
         # one per point: the step axis is the round, and Comet's line charts
         # only overlay cells cleanly when every series shares that axis.
@@ -371,16 +460,28 @@ class MasterMonitor:
                 row = by_round.setdefault(round_index, {})
                 for level, value in zip(curve.levels, values):
                     key = name if level == "value" else f"{name}_{level}"
-                    row[key] = float(value)
+                    row[f"{prefix}{key}"] = float(value)
         for round_index in sorted(by_round):
             values = by_round[round_index]
             self._guarded(lambda: sink.log_metrics(values, round_index))
+        last = max(by_round) if by_round else 0
         if result.scalars:
-            last = max(by_round) if by_round else 0
-            scalars = {name: float(value) for name, value in result.scalars.items()}
+            scalars = {f"{prefix}{name}": float(value) for name, value in result.scalars.items()}
             self._guarded(lambda: sink.log_metrics(scalars, last))
-        summary = sink.close()
-        return {"cell_id": cell_id, "curves": len(result.curves), **summary}
+        uploaded_plots = 0
+        if self.settings.metric_plots:
+            for plot in metric_plots:
+                path = Path(plot)
+                if not path.is_file():
+                    LOGGER.warning("metric plot does not exist; skipping %s", path)
+                    continue
+                self._guarded(
+                    lambda path=path: sink.log_image(
+                        path, name=f"metric_plot_{prefix}{path.stem}", step=last
+                    )
+                )
+                uploaded_plots += 1
+        return uploaded_plots
 
     def _guarded(self, call: Any) -> None:
         """Run a remote call, downgrading any failure to a log line.

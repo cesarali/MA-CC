@@ -130,6 +130,7 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
         hidden_bench_vote_prompt,
     )
     from .hidden_bench.imitation.prompts import (
+        PromptStyle,
         hidden_bench_imitation_initial_prompt,
         hidden_bench_imitation_message_prompt,
         hidden_bench_imitation_update_prompt,
@@ -149,6 +150,20 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     registry.register(hidden_bench_imitation_initial_prompt)
     registry.register(hidden_bench_imitation_message_prompt)
     registry.register(hidden_bench_imitation_update_prompt)
+    # The imitation game is the one game whose prompt *text* is a study
+    # condition, so it ships two versions of each family and both must be
+    # registered.  A run at `prompt_version: 2` otherwise completes its
+    # episodes and then dies in config export on "not registered".
+    #
+    # `inform_asymmetry` is deliberately not a third key: it is a variant of
+    # v2, not a version of its own, and the registry holds exactly one prompt
+    # per family@version.  The exported definition therefore shows the v2 shape
+    # without the asymmetry notice; the bound prompts in the run carry their
+    # own definition hashes either way.
+    imitation_v2 = PromptStyle(version=2)
+    registry.register(lambda: hidden_bench_imitation_initial_prompt(style=imitation_v2))
+    registry.register(lambda: hidden_bench_imitation_message_prompt(imitation_v2))
+    registry.register(lambda: hidden_bench_imitation_update_prompt(style=imitation_v2))
     return registry
 
 

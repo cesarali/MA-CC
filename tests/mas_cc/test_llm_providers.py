@@ -240,3 +240,93 @@ def test_provider_creation_errors_are_normalized_and_secret_safe():
         create_llm_provider(config, environment={})
     assert captured.value.to_dict()["code"] == "configuration_error"
     assert "Bearer" not in str(captured.value)
+
+
+class _Timeout:
+    """A post that never produces a response, the way a read timeout does."""
+
+    def __init__(self, exc):
+        self.exc = exc
+
+
+def _timeout_session(posts):
+    session = _Session(posts)
+    original = session.post
+
+    def post(url, **kwargs):
+        item = session.posts[0]
+        if isinstance(item, _Timeout):
+            session.posts.pop(0)
+            session.post_calls.append((url, kwargs))
+            raise item.exc
+        return original(url, **kwargs)
+
+    session.post = post
+    return session
+
+
+def test_a_transport_timeout_is_retried_like_any_other_transient_failure():
+    """Regression: `max_retries` used to buy nothing against the commonest fault.
+
+    A connect or read timeout produces no response, so `status_code` is None.
+    The retry branch required `status is not None`, so the single most likely
+    failure against a shared proxy - and the most obviously transient - was the
+    one case that skipped retries entirely. One slow generation then killed a
+    whole episode, and a failed episode contaminates the aggregate curves.
+    """
+
+    body = {
+        "id": "req-1",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+    }
+    session = _timeout_session([_Timeout(TimeoutError("read timed out")), _Response(200, body)])
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY", max_retries=2
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+    )
+    response = asyncio.run(provider.complete(_request()))
+    provider.close()
+    assert response.content == "A"
+    assert response.retries == 1
+    assert len(session.post_calls) == 2
+
+
+def test_an_exhausted_timeout_reports_itself_as_retryable_and_never_leaks_the_key():
+    session = _timeout_session([_Timeout(TimeoutError("read timed out"))] * 2)
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY", max_retries=1
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+    )
+    with pytest.raises(ProviderError) as captured:
+        asyncio.run(provider.complete(_request()))
+    assert captured.value.code == "connection_error"
+    assert captured.value.retryable is True
+    assert captured.value.status_code is None
+    assert "test-secret" not in str(captured.value)
+    assert len(session.post_calls) == 2
+
+
+def test_authentication_and_client_errors_are_never_retried():
+    """The other half of the rule: retrying a 401 just burns the budget."""
+
+    session = _Session([_Response(401, {}), _Response(400, {})])
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY", max_retries=3
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+    )
+    with pytest.raises(ProviderError) as captured:
+        asyncio.run(provider.complete(_request()))
+    assert captured.value.code == "authentication_failed"
+    assert captured.value.retryable is False
+    assert len(session.post_calls) == 1

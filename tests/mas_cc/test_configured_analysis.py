@@ -36,6 +36,31 @@ def test_configured_hidden_bench_analysis_forwards_every_setting(tmp_path, monke
     assert captured["null_permutations"] == 1000
     assert captured["confidence"] == 0.95
     assert captured["seed"] == 20260810
+    # This run config has both analysis.comet_export and the logging.comet
+    # master switch on, so the combined flag forwarded to the analysis
+    # function is true too.
+    assert captured["comet_export"] is True
+    assert captured["comet_project"] == "mas-cc"
+    assert captured["comet_run_name"] == "hidden-bench-imitation-reasoning-control-10-20260810/analysis"
+
+
+def test_comet_export_is_off_when_the_logging_master_switch_is_off(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_analyze(run_dir, output_dir, **kwargs):
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(
+        "mas_cc.games.hidden_bench.imitation.analysis.analyze_hidden_bench_imitation",
+        fake_analyze,
+    )
+    config = _config()
+    config = replace(config, logging=replace(config.logging, comet=False))
+
+    run_configured_analysis(config, tmp_path)
+
+    assert captured["comet_export"] is False
 
 
 def test_disabled_configured_analysis_is_a_noop(tmp_path):

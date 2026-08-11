@@ -123,6 +123,7 @@ def config_schema() -> dict[str, Any]:
                     "format": {"type": "string", "minLength": 1},
                     "checkpoints": {"type": "boolean"},
                     "overwrite": {"type": "boolean"},
+                    "wipe_and_recompute": {"type": "boolean"},
                     "options": options,
                 }
             ),
@@ -132,6 +133,7 @@ def config_schema() -> dict[str, Any]:
                     "enabled": {"type": "boolean"},
                     "estimators": {"type": "array", "items": {"type": "string"}},
                     "options": options,
+                    "comet_export": {"type": "boolean"},
                 }
             ),
             "control": _simple_object(
@@ -187,6 +189,8 @@ def config_schema() -> dict[str, Any]:
                             "grid_image_every_n_episodes": {"type": "integer", "minimum": 1},
                             "sweep_experiment": {"type": "boolean"},
                             "cell_experiments": {"type": "boolean"},
+                            "metric_plots": {"type": "boolean"},
+                            "master_aggregates": {"type": "boolean"},
                         }
                     ),
                 }

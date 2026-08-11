@@ -74,7 +74,7 @@ class CometMetricSink:
         try:
             from comet_ml import Experiment  # imported only for an enabled run
 
-            # The remote surface is intentionally metrics-only.  In particular,
+            # The remote surface is intentionally aggregate-only. In particular,
             # do not let SDK defaults collect source files, git patches, command
             # arguments, output, or machine/environment details.
             self._experiment = Experiment(
@@ -159,6 +159,18 @@ class CometMetricSink:
         if self._experiment is not None:
             self._experiment.log_figure(figure_name=name, figure=figure, step=step)
 
+    def log_image(self, path: str | Path, *, name: str, step: int) -> None:
+        """Upload an already-rendered aggregate plot as a stepped image asset."""
+
+        if self._experiment is not None:
+            self._experiment.log_image(image_data=str(path), name=name, step=step)
+
+    def log_asset(self, path: str | Path, *, name: str) -> None:
+        """Upload an arbitrary already-written file (e.g. a report) as a run asset."""
+
+        if self._experiment is not None:
+            self._experiment.log_asset(str(path), file_name=name)
+
     def add_tags(self, tags: Sequence[str]) -> None:
         if self._experiment is not None and tags:
             self._experiment.add_tags([str(tag) for tag in tags])
@@ -174,8 +186,14 @@ class CometMetricSink:
             "schema_version": 1,
             "status": self.status,
             "reference": self.reference,
+            # The clickable link, not only the opaque key. A run publishes to
+            # more than one experiment - the master, one per cell, one for the
+            # post-run analysis - and only the master's URL was ever shown, so
+            # everything uploaded to the others looked like it had not been
+            # uploaded at all.
+            "url": self.url,
             "reason": self.reason,
-            "privacy": "aggregate metrics only; prompts, blocks, messages, and responses are never sent",
+            "privacy": "aggregate metrics, requested plots, and requested reports only; prompts, blocks, messages, and responses are never sent",
         }
 
 

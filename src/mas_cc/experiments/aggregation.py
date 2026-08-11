@@ -32,6 +32,7 @@ from mas_cc.metrics import (
     create_cell_metrics,
     create_sweep_metrics,
     plot_cell_curves,
+    excluded_cell_episodes,
     read_cell_episodes,
     sweep_over_cells,
 )
@@ -117,20 +118,43 @@ class GridAggregator:
 
         directory = self.cell_directory(cell_id)
         episodes = read_cell_episodes(directory)
+        # An episode that died partway through is left out of the curves (see
+        # `read_cell_episodes`), which means the aggregate's N can be smaller
+        # than the configured repetitions. Recording *which* episodes and why,
+        # next to the numbers they are absent from, is what stops that looking
+        # like an unexplained sample size later.
+        excluded = excluded_cell_episodes(directory)
         result = aggregate_cell(episodes, self._cell_metrics, self.policy)
+        label = cell_id or "run"
+        if excluded:
+            LOGGER.warning(
+                "cell %s aggregated %d episode(s); excluded %d incomplete: %s",
+                label,
+                len(episodes),
+                len(excluded),
+                ", ".join(f"{episode} ({status})" for episode, status in excluded),
+            )
         # The cell's own file first, and unconditionally: it must survive the
         # sweep estimate failing, Comet being unreachable, and the run being
         # killed on the next episode.
         _write_json(
             directory / "aggregate.json",
-            {**result.to_dict(), "cell_id": cell_id, "aggregation": self.config.to_dict()},
+            {
+                **result.to_dict(),
+                "cell_id": cell_id,
+                "aggregation": self.config.to_dict(),
+                "episodes_aggregated": len(episodes),
+                "episodes_excluded": [
+                    {"episode_id": episode, "status": status} for episode, status in excluded
+                ],
+            },
         )
-        label = cell_id or "run"
         # Best-effort: a plotting failure (e.g. a matplotlib backend issue on a
         # headless node) must not take down a run whose real output — the JSON
         # just written above — is already correct and on disk.
+        plot_paths: list[Path] = []
         try:
-            plot_cell_curves(result, directory / "metrics" / "plots")
+            plot_paths = plot_cell_curves(result, directory / "metrics" / "plots")
         except Exception as exc:
             LOGGER.warning("could not render cell curve plots for %s (%s)", label, type(exc).__name__)
         with self._lock:
@@ -143,7 +167,7 @@ class GridAggregator:
             # nothing to be compared against. Logging them on their own
             # experiment rather than onto the sweep experiment keeps `step`
             # meaning one thing per experiment: rounds here, episodes there.
-            self.monitor.cell_completed(label, result, sweep)
+            self.monitor.cell_completed(label, result, sweep, metric_plots=plot_paths)
         return result
 
     def finish(self) -> SweepResult:

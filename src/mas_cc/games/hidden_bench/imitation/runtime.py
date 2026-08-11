@@ -97,6 +97,15 @@ async def run_hidden_bench_imitation_game(
             f"prompt.prompt_family must be one of {PROMPT_FAMILIES}; "
             f"got {config.prompt.prompt_family!r}"
         )
+    if config.prompt.prompt_version != rules.prompt_version:
+        # Two places name the prompt version and both are load-bearing:
+        # `prompt.prompt_version` is what preflight prices and what the audit
+        # record carries, `game.options.prompt_version` is what the game builds.
+        # A silent disagreement would price v1 and run v2.
+        raise ValueError(
+            f"prompt.prompt_version is {config.prompt.prompt_version} but "
+            f"game.options.prompt_version is {rules.prompt_version}; they must match"
+        )
     counter = token_counter or RegexTokenCounter()
     root = Seed(config.execution.seed)
     participant_rng = root.derive("imitation-focal-and-peer-selection").create_random()
@@ -151,6 +160,18 @@ async def run_hidden_bench_imitation_game(
                 state=state,
                 rng=sensor_rng,
             )
+        # Part 3.1: a control event **replaces** the peer conversation, it never
+        # adds one.  Adding would give the controlled group more conversations
+        # than the uncontrolled group, and any difference could then be "more
+        # talking happened" rather than control.  Replacement costs a real peer
+        # exchange - which is where facts spread - but that cost is visible in
+        # `disclosure_events` afterwards, whereas unequal event counts would be
+        # baked into the design and untanglable.
+        #
+        # Part 3.3: this line sits *above* the mode branch on purpose, so the
+        # substitution is identical in reasoning and classical mode.  Classical
+        # control additionally tilts the transition weight toward Z, but it
+        # consumes the same peer slot, which is what keeps B - D unconfounded.
         peer = None if signal is not None and signal.action == ADVOCATE_TARGET else sampled_peer
         decisions: list[HiddenBenchDecision] = []
         dialogue: list[Mapping[str, Any]] = []
@@ -244,6 +265,7 @@ async def run_hidden_bench_imitation_game(
             signal=signal,
             dialogue=tuple(dialogue),
             classical=classical_metadata,
+            sampled_peer=sampled_peer,
         )
         participants = (focal,) if peer is None else (focal, peer)
         record = ImitationInteractionRecord(

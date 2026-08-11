@@ -1,4 +1,19 @@
-# Standalone 5-episode reasoning run for inspecting controller response metrics.
+# Standalone 10-episode reasoning run on the company_acquisition_decision task.
+#
+# Copied from hidden_bench_imitation_reasoning_control_10.yaml to demonstrate
+# swapping in a different HiddenBench task WITHOUT knowing its answer options
+# ahead of time:
+#   - prompt.response_contract has no `allowed_values` — the game derives the
+#     real options from the task's own `possible_answers` in the corpus at
+#     run time (src/mas_cc/games/hidden_bench/imitation/game.py). If you do
+#     set `allowed_values`, it's only checked against that real value; a
+#     mismatch raises an error, it never overrides the task.
+#   - game.options.initialization is omitted, so initialization_mode defaults
+#     to `local_vote`: with dynamics_mode: reasoning that means each agent's
+#     initial vote comes from its own LLM call, not a hardcoded vote list
+#     (which would otherwise need to name the task's exact option strings).
+#   - control.options.target: correct resolves to the task's own
+#     `correct_answer`, also never typed here.
 #
 # Run this from a terminal. First enter the repository (change this path if your
 # checkout lives somewhere else):
@@ -12,12 +27,12 @@
 #
 # 1. Check availability, pricing, request counts, and budget (no model calls):
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
-#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_gpt54nano.yaml \
-#     --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_company_acquisition.yaml \
+#     --output-dir inspection/hidden_bench_imitation_reasoning_control_company_acquisition_preflight
 #
-# 2. Run all 5 episodes with live console output:
+# 2. Run all 10 episodes with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
-#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_gpt54nano.yaml \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_company_acquisition.yaml \
 #     --output-dir results
 #
 # The run performs its own fresh pricing and runtime-budget checks. The optional
@@ -25,16 +40,14 @@
 # metadata currently changes the approval fingerprint between the two commands.
 llm_provider:
   type: university
-  model: microsoft/gpt-5.4-nano
+  model: gwdg/qwen3-30b-a3b-instruct-2507
   credentials_env: POTSDAM_API_KEY
   base_url_env: BASE_POTSDAM_LLM_URL
   timeout_seconds: 60
   max_retries: 2
   request_concurrency: 10
-  # The University proxy accepts only temperature=1 for GPT-5.4-nano.
-  temperature: 1.0
-  # Allow enough room for the model's rationale and complete JSON object.
-  max_output_tokens: 256
+  temperature: 0.0
+  max_output_tokens: 128
   options:
     estimated_latency_seconds: 3.0
 prompt:
@@ -43,7 +56,6 @@ prompt:
   prompt_version: 1
   response_contract:
     type: hidden_bench_json_vote
-    allowed_values: [West City, East Town, North Hill]
 game:
   type: hidden_bench_imitation
   population_size: 4
@@ -51,7 +63,7 @@ game:
   topology: complete
   options:
     task_set: vanilla
-    task_id: evacuation_north_hill
+    task_id: company_acquisition_decision
     profile: hidden
     assignment_scheme: bijective
     dynamics_mode: reasoning
@@ -60,9 +72,6 @@ game:
     memory_size: 0
     allow_relay: true
     stop_on_consensus: false
-    initialization:
-      mode: explicit
-      initial_votes: [East Town, East Town, North Hill, West City]
     classical:
       kernel: irisarri_multi_opinion
       forward_rate: 1.0
@@ -128,6 +137,9 @@ analysis:
     null_permutations: 1000
     confidence: 0.95
     seed: 20260813
+  # Upload information_estimates.md to Comet as a run asset once analysis
+  # finishes. Only takes effect when logging.comet (the master switch) is on.
+  comet_export: true
 metrics:
   enabled: true
   # Parallel episodes have independent interaction timelines. Record their
@@ -167,9 +179,9 @@ observability:
     # Publish one statistically aggregated experiment only after all configured
     # episodes in this single cell have finished.
     cell_experiments: true
+    # Upload the locally rendered aggregate metric PNGs to that cell experiment.
+    metric_plots: true
 experiment:
-  # Use a fresh run identity so the corrected request settings cannot resume
-  # into the failed temperature=0 attempt's directory.
-  name: hidden-bench-imitation-reasoning-control-gpt54nano-v2
-  description: Five controlled reasoning episodes using GPT-5.4 Nano with event and pooled response diagnostics.
-  tags: [hidden-bench, imitation, reasoning, control, diagnostics, gpt-5.4-nano]
+  name: hidden-bench-imitation-reasoning-control-company-acquisition
+  description: Ten controlled reasoning episodes on company_acquisition_decision, options resolved from the task corpus rather than hardcoded.
+  tags: [hidden-bench, imitation, reasoning, control, diagnostics]

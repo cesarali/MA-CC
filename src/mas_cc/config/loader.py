@@ -629,7 +629,10 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
         values,
-        {"schema_version", "output_dir", "format", "checkpoints", "overwrite", "options"},
+        {
+            "schema_version", "output_dir", "format", "checkpoints", "overwrite",
+            "wipe_and_recompute", "options",
+        },
         path,
         issues,
     )
@@ -639,6 +642,7 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
         format=_string(values, "format", path, issues, default="jsonl", required=True) or "jsonl",
         checkpoints=_boolean(values, "checkpoints", path, issues, default=True),
         overwrite=_boolean(values, "overwrite", path, issues, default=False),
+        wipe_and_recompute=_boolean(values, "wipe_and_recompute", path, issues, default=False),
         options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
     )
 
@@ -646,12 +650,15 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
 def _parse_analysis(raw: Any, issues: list[ValidationIssue]) -> AnalysisConfig:
     path = "analysis"
     values = _as_mapping(raw, path, issues)
-    _unknown_fields(values, {"schema_version", "enabled", "estimators", "options"}, path, issues)
+    _unknown_fields(
+        values, {"schema_version", "enabled", "estimators", "options", "comet_export"}, path, issues
+    )
     return AnalysisConfig(
         schema_version=_schema_version(values, path, issues),
         enabled=_boolean(values, "enabled", path, issues, default=False),
         estimators=_string_tuple(values, "estimators", path, issues),
         options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
+        comet_export=_boolean(values, "comet_export", path, issues, default=False),
     )
 
 
@@ -807,7 +814,8 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
         comet,
         {
             "writer", "heartbeat_seconds", "grid_image_every_n_episodes",
-            "sweep_experiment", "cell_experiments", "progress_metrics",
+            "sweep_experiment", "cell_experiments", "metric_plots", "master_aggregates",
+            "progress_metrics",
         },
         comet_path,
         issues,
@@ -834,6 +842,10 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
                 comet, "sweep_experiment", comet_path, issues, default=True
             ),
             cell_experiments=_boolean(comet, "cell_experiments", comet_path, issues, default=True),
+            metric_plots=_boolean(comet, "metric_plots", comet_path, issues, default=False),
+            master_aggregates=_boolean(
+                comet, "master_aggregates", comet_path, issues, default=False
+            ),
             progress_metrics=_string_tuple(comet, "progress_metrics", comet_path, issues),
         ),
     )

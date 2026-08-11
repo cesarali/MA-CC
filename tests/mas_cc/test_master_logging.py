@@ -32,9 +32,14 @@ class FakeSink:
         self.project_name = project_name
         self.run_name = run_name
         self.status = "active" if enabled else "disabled"
+        # The real sink sets both in `__init__`; `describe()` and the cell
+        # summaries read them, so the stand-in has to carry them too.
+        self.reference: str | None = f"key-{len(FakeSink.instances)}" if enabled else None
+        self.url: str | None = f"https://comet.test/{run_name}" if enabled else None
         self.metrics: list[tuple[dict[str, float], int]] = []
         self.parameters: dict[str, object] = {}
         self.figures: list[tuple[str, int]] = []
+        self.images: list[tuple[Path, str, int]] = []
         self.tags: list[str] = []
         self.closed = False
         FakeSink.instances.append(self)
@@ -47,6 +52,9 @@ class FakeSink:
 
     def log_figure(self, figure, *, name, step):
         self.figures.append((name, step))
+
+    def log_image(self, path, *, name, step):
+        self.images.append((Path(path), name, step))
 
     def add_tags(self, tags):
         self.tags.extend(tags)
@@ -192,6 +200,44 @@ def test_a_completed_cell_gets_its_own_experiment_stepped_by_round(sinks):
     assert cell_sink.closed
 
 
+def test_metric_plots_are_uploaded_to_the_cell_experiment_when_requested(sinks, tmp_path):
+    monitor = _monitor(
+        settings=CometObservability(heartbeat_seconds=3600.0, metric_plots=True)
+    )
+    monitor.start()
+    plot = tmp_path / "dominant_action_share.png"
+    plot.write_bytes(b"png")
+    result = AggregateResult(
+        curves={
+            "dominant_action_share": Curve(
+                levels=("value",), points={1: (0.5,), 2: (0.9,)}
+            )
+        },
+        episodes=2,
+    )
+
+    summary = monitor.cell_completed("cell-0000", result, metric_plots=(plot,))
+
+    cell_sink = next(sink for sink in sinks if sink.run_name == "sweep-1/cell-0000")
+    assert cell_sink.images == [(plot, "metric_plot_dominant_action_share", 2)]
+    assert summary["metric_plots"] == 1
+
+
+def test_metric_plots_are_not_uploaded_by_default(sinks, tmp_path):
+    monitor = _monitor()
+    monitor.start()
+    plot = tmp_path / "dominant_action_share.png"
+    plot.write_bytes(b"png")
+
+    summary = monitor.cell_completed(
+        "cell-0000", AggregateResult(episodes=2), metric_plots=(plot,)
+    )
+
+    cell_sink = next(sink for sink in sinks if sink.run_name == "sweep-1/cell-0000")
+    assert cell_sink.images == []
+    assert summary["metric_plots"] == 0
+
+
 def test_a_completed_cells_headline_scalars_land_on_the_sweep_experiment(sinks):
     monitor = _monitor()
     monitor.start()
@@ -251,6 +297,75 @@ def test_cell_experiments_can_be_switched_off_without_losing_the_sweep_dashboard
 
     assert len(sinks) == 1
     assert any("cell_cell-0000_converged_fraction" in metrics for metrics, _ in sinks[0].metrics)
+
+
+def test_master_aggregates_puts_a_single_cells_curves_and_plots_on_the_master(sinks, tmp_path):
+    """One experiment for a one-cell run: nothing to overlay, nothing to split."""
+
+    monitor = _monitor(
+        settings=CometObservability(
+            heartbeat_seconds=3600.0, metric_plots=True, master_aggregates=True
+        )
+    )
+    monitor.start()
+    plot = tmp_path / "m_order.png"
+    plot.write_bytes(b"png")
+    result = AggregateResult(
+        curves={
+            "m_order": Curve(levels=("p10", "p50", "p90"), points={1: (0.4, 0.5, 0.6)}),
+            "m_ctrl": Curve(levels=("value",), points={1: (0.7,), 2: (0.8,)}),
+        },
+        scalars={"converged_fraction": 0.75},
+        episodes=3,
+    )
+
+    summary = monitor.cell_completed("run", result, metric_plots=(plot,))
+
+    # No child experiment was opened at all.
+    assert len(sinks) == 1
+    assert summary["published_to"] == "master"
+    assert summary["metric_plots"] == 1
+    assert sinks[0].images == [(plot, "metric_plot_m_order", 2)]
+    published = {key: value for metrics, _ in sinks[0].metrics for key, value in metrics.items()}
+    # A single cell keeps bare metric names, so the charts read as they would
+    # have on a dedicated cell experiment.
+    assert published["m_order_p50"] == 0.5
+    assert published["m_ctrl"] == 0.8
+
+
+def test_master_aggregates_prefixes_grid_cells_so_they_cannot_collide(sinks):
+    monitor = _monitor(
+        settings=CometObservability(heartbeat_seconds=3600.0, master_aggregates=True)
+    )
+    monitor.start()
+    curve = {"m_order": Curve(levels=("value",), points={1: (0.5,)})}
+
+    monitor.cell_completed("cell-0000", AggregateResult(curves=curve, episodes=1))
+    monitor.cell_completed("cell-0001", AggregateResult(curves=curve, episodes=1))
+
+    assert len(sinks) == 1
+    published = {key for metrics, _ in sinks[0].metrics for key in metrics}
+    assert "cell-0000_m_order" in published
+    assert "cell-0001_m_order" in published
+
+
+def test_analysis_sink_is_only_offered_under_master_aggregates(sinks):
+    plain = _monitor()
+    plain.start()
+    assert plain.analysis_sink is None
+
+    consolidated = _monitor(
+        settings=CometObservability(heartbeat_seconds=3600.0, master_aggregates=True)
+    )
+    consolidated.start()
+    # The master's own sink, so the analysis report joins the run it describes.
+    assert consolidated.analysis_sink is sinks[-1]
+
+
+def test_a_disabled_monitor_offers_no_analysis_sink():
+    monitor = MasterMonitor(False, project_name="mas-cc", run_name="sweep-1", layout=_layout())
+    monitor.start()
+    assert monitor.analysis_sink is None
 
 
 def test_sweep_parameters_describe_the_grid_and_the_aggregation_rules():

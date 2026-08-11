@@ -1,5 +1,14 @@
-# Standalone 5-episode reasoning run for inspecting controller response metrics.
+# Standalone 5-episode reasoning run under the **v2** prompt and controller text.
 #
+# Identical to hidden_bench_imitation_reasoning_control_gpt54nano.yaml in every
+# way except the four settings marked "v2" below.  It exists so the two text
+# versions can be run and reported side by side; see
+# docs/tdd/misselaneous/11082026_prompt_modifications_v2.md and section 3.9 of
+# docs/documentation/hidden_bench/hidden_bench_imitation.md.
+#
+# v2 is an intervention, not a bug fix: it pushes directly on how much
+# information an agent volunteers, which is the quantity this study measures.
+# Report which version produced any number you quote.
 # Run this from a terminal. First enter the repository (change this path if your
 # checkout lives somewhere else):
 #   cd /home/cesarali/LanguageGames/MA-CC
@@ -12,12 +21,12 @@
 #
 # 1. Check availability, pricing, request counts, and budget (no model calls):
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
-#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_gpt54nano.yaml \
-#     --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_gpt54nano_v2.yaml \
+#     --output-dir inspection/hidden_bench_imitation_reasoning_control_v2_preflight
 #
 # 2. Run all 5 episodes with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
-#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_gpt54nano.yaml \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_gpt54nano_v2.yaml \
 #     --output-dir results
 #
 # The run performs its own fresh pricing and runtime-budget checks. The optional
@@ -28,19 +37,35 @@ llm_provider:
   model: microsoft/gpt-5.4-nano
   credentials_env: POTSDAM_API_KEY
   base_url_env: BASE_POTSDAM_LLM_URL
-  timeout_seconds: 60
+  # A 30B model behind a shared proxy at concurrency 10 needs well over 60s in
+  # the tail.  Run ...-v2-20260840 died on exactly this: the last good call at
+  # 10:56:04, the timeout at 10:57:01, 57 seconds later.  The deadline has to
+  # cover generating `max_output_tokens`, not the median reply.
+  timeout_seconds: 180
   max_retries: 2
   request_concurrency: 10
   # The University proxy accepts only temperature=1 for GPT-5.4-nano.
   temperature: 1.0
   # Allow enough room for the model's rationale and complete JSON object.
+  # Sized for v2, not v1.  v2 replies cite a fact and state a vote, and the
+  # private history grows every event, so they run 100-130 tokens by the tenth
+  # round where v1 ran 60-80.  At 128 the focal_update JSON was truncated with
+  # no closing brace, which the vote contract correctly rejects; discussion
+  # turns were cut mid-sentence silently, which corrupts the disclosure
+  # measurement instead of failing loudly.
+  #
+  # 256 is ~2x the longest observed valid reply.  Do not raise this without
+  # raising timeout_seconds with it: the cap bounds how long one generation can
+  # take, so a large cap converts truncation failures into timeout failures.
   max_output_tokens: 256
   options:
     estimated_latency_seconds: 3.0
 prompt:
   schema_version: 2
   prompt_family: hidden_bench_imitation_update
-  prompt_version: 1
+  # v2 (1 of 4).  Must equal game.options.prompt_version; the run refuses to
+  # start otherwise, because preflight prices whatever this section names.
+  prompt_version: 2
   response_contract:
     type: hidden_bench_json_vote
     allowed_values: [West City, East Town, North Hill]
@@ -57,8 +82,21 @@ game:
     dynamics_mode: reasoning
     pairing: uniform_two_distinct
     messages_per_agent: 1
+    # memory_size 0 means "all of it".  Under v2 the agent finally sees its own
+    # past messages in that history, which is what makes "mention something you
+    # have not mentioned yet" a followable instruction (doc section 1.3).
     memory_size: 0
     allow_relay: true
+    # v2 (2 of 4).  Longer replies, one new fact per turn, an explicit stated
+    # vote, and a history that no longer says "partner/controller".
+    prompt_version: 2
+    # v2 (3 of 4), doc section 1.2 - the paper's "Informing Asymmetry" arm.
+    # Set to true to tell agents information is unevenly held.  It never marks
+    # *which* facts are unique; that would end the hidden-profile task.
+    inform_asymmetry: false
+    # doc section 1.5.  1 keeps the canonical coordination bonus, which is this
+    # study's imitation coupling strength written in English.  2 removes it.
+    scenario_variant: 1
     stop_on_consensus: false
     initialization:
       mode: explicit
@@ -77,6 +115,10 @@ control:
     sensor_sample_size: 2
     policy: threshold_target
     threshold: 0.5
+    # v2 (4 of 4), doc section 2.  1 announces "the external controller"; 2
+    # speaks as an ordinary peer, arguing from the shared facts only, drawn
+    # from a four-paraphrase bank whose ID is logged per event.
+    template_version: 2
 execution:
   seed: 20260840
   repetitions: 5
@@ -94,7 +136,7 @@ budget:
   max_cost_per_run: 50.0
   max_provider_requests: 2500
   max_input_tokens: 10000000
-  max_output_tokens: 500000
+  max_output_tokens: 1500000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO
@@ -111,8 +153,8 @@ logging:
 storage:
   output_dir: results
   format: jsonl
-  checkpoints: true
-  overwrite: false
+  checkpoints: false
+  overwrite: true
 analysis:
   # Run all across-episode sensing/control information channels automatically.
   # Results are written below the run directory as a human-readable table in
@@ -171,5 +213,5 @@ experiment:
   # Use a fresh run identity so the corrected request settings cannot resume
   # into the failed temperature=0 attempt's directory.
   name: hidden-bench-imitation-reasoning-control-gpt54nano-v2
-  description: Five controlled reasoning episodes using GPT-5.4 Nano with event and pooled response diagnostics.
-  tags: [hidden-bench, imitation, reasoning, control, diagnostics, gpt-5.4-nano]
+  description: Five controlled reasoning episodes using GPT-5.4 Nano under the v2 prompt and peer-style controller text.
+  tags: [hidden-bench, imitation, reasoning, control, diagnostics, gpt-5.4-nano, prompt-v2]

@@ -12,11 +12,15 @@ llm_provider:
   model: gwdg/qwen3-30b-a3b-instruct-2507
   credentials_env: POTSDAM_API_KEY
   base_url_env: BASE_POTSDAM_LLM_URL
-  timeout_seconds: 60
+  # Kept identical to the reasoning arm.  This cell is provider-free, so these
+  # three settings never take effect here - but the matched 2x2 design compares
+  # B against D, and tests/mas_cc/test_hidden_bench_imitation_analysis.py
+  # asserts the two configs declare the same provider and the same controller.
+  timeout_seconds: 180
   max_retries: 2
   request_concurrency: 10
   temperature: 0.0
-  max_output_tokens: 128
+  max_output_tokens: 256
   options:
     estimated_latency_seconds: 3.0
 prompt:
@@ -59,6 +63,11 @@ control:
     sensor_sample_size: 2
     policy: threshold_target
     threshold: 0.5
+    # Matched to the reasoning arm.  The classical actuator adds a control
+    # weight and never reads the message text, so this changes no classical
+    # dynamics; it keeps `controller_template_version` consistent across the
+    # two cells so a B - D contrast is not comparing two different controllers.
+    template_version: 2
 execution:
   seed: 20260811
   repetitions: 10

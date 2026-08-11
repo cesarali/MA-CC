@@ -524,7 +524,11 @@ The live sweep metrics and the offline pipeline estimate the **same quantities f
 estimators and must agree**. Where they could diverge — the macrostate tie rule — the cell tier
 deliberately matches `analysis/reader.py`.
 
-**Related documents:** [`metrics.md`](metrics.md) (the per-round and per-episode metric reference),
+**Related documents:**
+[`imitation_mutual_information.md`](imitation_mutual_information.md) (the HiddenBench imitation
+sensing/actuation estimators — same estimator code, endogenous rather than swept channel input;
+its §13 explains why the two families of numbers are not comparable),
+[`metrics.md`](metrics.md) (the per-round and per-episode metric reference),
 [`05082026_empowerment_ground_truth.md`](../tdd/architecture/05082026_empowerment_ground_truth.md)
 (the ground-truth design doc), and
 [`06082026_game3_empowerment_extension.md`](../tdd/architecture/06082026_game3_empowerment_extension.md).

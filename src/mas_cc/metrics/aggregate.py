@@ -30,6 +30,7 @@ preferences; each one's docstring says which bias it removes.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -147,14 +148,69 @@ def read_episode_frame(episode_dir: str | Path) -> EpisodeFrame | None:
     )
 
 
+EXCLUDED_EPISODE_STATUSES = ("failed", "skipped_aborted")
+"""Statuses whose partial series must never reach an aggregate curve."""
+
+
+def episode_status(directory: str | Path) -> str | None:
+    """One episode's recorded outcome, or None when it was never written."""
+
+    manifest = Path(directory) / "manifest.json"
+    if not manifest.is_file():
+        return None
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    status = payload.get("status") if isinstance(payload, Mapping) else None
+    return str(status) if isinstance(status, str) else None
+
+
+def excluded_cell_episodes(cell_dir: str | Path) -> tuple[tuple[str, str], ...]:
+    """`(episode_id, status)` for every episode aggregation leaves out."""
+
+    episodes_dir = Path(cell_dir) / "data" / "episodes"
+    if not episodes_dir.is_dir():
+        return ()
+    excluded = []
+    for path in sorted(episodes_dir.iterdir()):
+        if not path.is_dir():
+            continue
+        status = episode_status(path)
+        if status in EXCLUDED_EPISODE_STATUSES:
+            excluded.append((path.name, str(status)))
+    return tuple(excluded)
+
+
 def read_cell_episodes(cell_dir: str | Path) -> tuple[EpisodeFrame, ...]:
-    """Every completed episode under one grid cell, in stable episode-id order."""
+    """Every *completed* episode under one grid cell, in stable episode-id order.
+
+    The status filter is load-bearing, not defensive. An episode that dies at
+    round 7 of 100 - a provider timeout, an aborted run - still leaves seven
+    rows of real metrics on disk. Reading them back is not the harmless
+    "smaller sample" it looks like: aggregation densifies every series to the
+    full round axis by carrying the last value forward, so a seven-round
+    episode enters the curves as a hundred-round episode that froze at round
+    seven. That silently drags every mean, band and final-value toward whatever
+    the population happened to be doing when the network hiccupped.
+
+    Dropping the episode is the unbiased choice *for these failure modes*,
+    which are infrastructure faults independent of the dynamics. It would not
+    be if episodes could fail *because* of the state they reached; if that ever
+    becomes possible, this filter has to be revisited rather than trusted.
+
+    Callers that report sample sizes should pair this with
+    `excluded_cell_episodes`, so an exclusion is visible in the output instead
+    of showing up as an unexplained drop in N.
+    """
 
     episodes_dir = Path(cell_dir) / "data" / "episodes"
     if not episodes_dir.is_dir():
         return ()
     frames = (
-        read_episode_frame(path) for path in sorted(episodes_dir.iterdir()) if path.is_dir()
+        read_episode_frame(path)
+        for path in sorted(episodes_dir.iterdir())
+        if path.is_dir() and episode_status(path) not in EXCLUDED_EPISODE_STATUSES
     )
     return tuple(frame for frame in frames if frame is not None)
 

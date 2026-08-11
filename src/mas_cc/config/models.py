@@ -127,6 +127,7 @@ class StorageConfig:
     format: str = "jsonl"
     checkpoints: bool = True
     overwrite: bool = False
+    wipe_and_recompute: bool = False
     options: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -139,6 +140,7 @@ class StorageConfig:
             "format": self.format,
             "checkpoints": self.checkpoints,
             "overwrite": self.overwrite,
+            "wipe_and_recompute": self.wipe_and_recompute,
             "options": _thaw(self.options),
         }
 
@@ -151,6 +153,7 @@ class AnalysisConfig:
     enabled: bool = False
     estimators: tuple[str, ...] = ()
     options: Mapping[str, Any] = field(default_factory=dict)
+    comet_export: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "estimators", tuple(self.estimators))
@@ -162,6 +165,7 @@ class AnalysisConfig:
             "enabled": self.enabled,
             "estimators": list(self.estimators),
             "options": _thaw(self.options),
+            "comet_export": self.comet_export,
         }
 
 
@@ -379,6 +383,20 @@ class CometObservability:
     ``heartbeat_seconds`` is a timer, not a completion hook, because the
     question it answers is "is this job alive" — a metric that only moves when
     an episode finishes cannot distinguish a dead master from a slow one.
+
+    ``metric_plots`` opts completed cells into uploading the same aggregate
+    PNGs that are always rendered locally. It defaults off so image upload is
+    explicit even when numeric cell experiments are enabled.
+
+    ``master_aggregates`` collapses a run onto a single remote experiment: the
+    cell curves, the metric PNGs, and the post-run analysis report all publish
+    to the master rather than to `<run>/<cell>` and `<run>/analysis` siblings.
+    A grid wants the default (``False``) — separate cell experiments are what
+    lets Comet overlay one cell against another, which is the comparison a
+    sweep exists to make. A single-cell run has nothing to overlay against, so
+    the split only scatters its output across three experiments and leaves the
+    one you open nearly empty. Off by default because turning it on changes
+    which experiment a run's numbers land in.
     """
 
     writer: str = "master_only"
@@ -386,6 +404,8 @@ class CometObservability:
     grid_image_every_n_episodes: int = 25
     sweep_experiment: bool = True
     cell_experiments: bool = True
+    metric_plots: bool = False
+    master_aggregates: bool = False
     progress_metrics: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -406,6 +426,8 @@ class CometObservability:
             "grid_image_every_n_episodes": self.grid_image_every_n_episodes,
             "sweep_experiment": self.sweep_experiment,
             "cell_experiments": self.cell_experiments,
+            "metric_plots": self.metric_plots,
+            "master_aggregates": self.master_aggregates,
             "progress_metrics": list(self.progress_metrics),
         }
 

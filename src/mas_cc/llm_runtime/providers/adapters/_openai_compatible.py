@@ -189,8 +189,7 @@ class OpenAICompatibleProvider:
                         json=payload,
                         timeout=self._timeout,
                     )
-                    retryable = response.status_code == 429 or response.status_code >= 500
-                    if retryable and retry < self._max_retries:
+                    if self._is_retryable(response.status_code) and retry < self._max_retries:
                         await asyncio.sleep(self._retry_delay(response, retry))
                         continue
                     response.raise_for_status()
@@ -221,7 +220,15 @@ class OpenAICompatibleProvider:
                     ) from exc
                 except Exception as exc:
                     status = getattr(response, "status_code", None)
-                    if status is not None and (status == 429 or status >= 500) and retry < self._max_retries:
+                    # `status is None` means the request never produced a
+                    # response at all: a connect or read timeout, a dropped
+                    # connection, a VPN blip.  That is the *most* common
+                    # failure against a shared university proxy and the most
+                    # obviously transient, yet it used to be the one case that
+                    # skipped the retry loop entirely - so a configured
+                    # `max_retries: 2` silently bought nothing, and one slow
+                    # generation killed a whole episode.
+                    if self._is_retryable(status) and retry < self._max_retries:
                         await asyncio.sleep(self._retry_delay(response, retry))
                         continue
                     raise self._normalize_transport_error(
@@ -229,11 +236,17 @@ class OpenAICompatibleProvider:
                     ) from exc
         raise AssertionError("unreachable")
 
+    @staticmethod
+    def _is_retryable(status: int | None) -> bool:
+        """No response at all, rate limiting, or a server fault."""
+
+        return status is None or status == 429 or status >= 500
+
     def _normalize_transport_error(
         self, exc: Exception, *, operation: str, status_code: int | None = None
     ) -> ProviderError:
         status = status_code if isinstance(status_code, int) else None
-        retryable = status == 429 or (status is not None and status >= 500)
+        retryable = self._is_retryable(status)
         if status in (401, 403):
             code = "authentication_failed"
         elif status == 429:
