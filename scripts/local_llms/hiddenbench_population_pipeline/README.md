@@ -565,3 +565,22 @@ Record:
 - speaker-order rule.
 
 The generated source metadata and result JSON files store most of this automatically.
+
+### Freezing a complete task subset from an unfinished pool
+
+Do not mark an incomplete global annotation file frozen. When selected tasks
+are complete, create a deterministic task-scoped release instead:
+
+```bash
+python scripts/freeze_paraphrase_subset.py \
+  --annotations annotations/paraphrases.json \
+  --task-ids 2 --agents 4 8 16 32 \
+  --output annotations/paraphrases_task_2_frozen.json
+```
+
+The command checks every canonical evidence type, accepted-variant uniqueness,
+source-text identity, and the capacity required by the largest requested
+population. It adds stable IDs to accepted legacy variants that lack them and
+preserves their generation and verification metadata. The release records the
+source annotation SHA-256, selected tasks, populations, and required capacity;
+only this validated subset receives `status: frozen`.

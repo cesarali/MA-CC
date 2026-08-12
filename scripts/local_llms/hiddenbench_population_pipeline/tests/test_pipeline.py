@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -12,6 +14,8 @@ from hiddenbench_common import (
     source_hidden_texts,
 )
 from hiddenbench_llm_api import LLMClient, LLMConfig, temperature_for_model
+from freeze_paraphrase_subset import freeze_subset
+from hiddenbench_common import ValidationError
 
 
 def sample_source_task():
@@ -44,6 +48,78 @@ def test_balanced_assignment_covers_all_types():
     assert set(labels) == {0, 1, 2, 3}
     counts = [labels.count(index) for index in range(4)]
     assert max(counts) - min(counts) <= 1
+
+
+def _paraphrase_release_fixture(variants_per_type=2):
+    canonical = {
+        "tasks": [
+            {
+                "task_id": 2,
+                "name": "fixture",
+                "hidden_information": [
+                    {"evidence_type": index, "source_text": f"source-{index}"}
+                    for index in range(4)
+                ],
+            }
+        ]
+    }
+    annotations = {
+        "schema_version": "1.0",
+        "kind": "paraphrase_pool",
+        "generator_model": "generator",
+        "verifier_model": "verifier",
+        "tasks": {
+            "2": {
+                "name": "fixture",
+                "evidence_types": {
+                    str(index): {
+                        "source_text": f"source-{index}",
+                        "variants": [
+                            {
+                                "variant_id": None,
+                                "text": f"paraphrase-{index}-{variant}",
+                                "accepted": True,
+                                "generation_metadata": {"model": "generator"},
+                                "verification_metadata": {"model": "verifier"},
+                            }
+                            for variant in range(variants_per_type)
+                        ],
+                    }
+                    for index in range(4)
+                },
+            }
+        },
+    }
+    return annotations, canonical
+
+
+def test_freezing_a_complete_task_subset_preserves_provenance_and_assigns_stable_ids():
+    annotations, canonical = _paraphrase_release_fixture(variants_per_type=2)
+    frozen = freeze_subset(
+        annotations,
+        canonical,
+        task_ids=[2],
+        population_sizes=[4, 8],
+        source_sha256="abc",
+    )
+    assert frozen["status"] == "frozen"
+    assert set(frozen["tasks"]) == {"2"}
+    assert frozen["release_provenance"]["source_annotations_sha256"] == "abc"
+    variants = frozen["tasks"]["2"]["evidence_types"]["0"]["variants"]
+    assert [item["variant_id"] for item in variants] == ["2-0-000", "2-0-001"]
+    assert variants[0]["generation_metadata"]["model"] == "generator"
+    assert variants[0]["verification_metadata"]["model"] == "verifier"
+
+
+def test_freezing_refuses_insufficient_paraphrase_capacity():
+    annotations, canonical = _paraphrase_release_fixture(variants_per_type=1)
+    with pytest.raises(ValidationError, match="needs 2 accepted variants"):
+        freeze_subset(
+            annotations,
+            canonical,
+            task_ids=[2],
+            population_sizes=[8],
+        )
 
 
 def test_factor_allocation_covers_every_component():

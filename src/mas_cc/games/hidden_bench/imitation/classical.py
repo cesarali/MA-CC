@@ -32,6 +32,20 @@ class ClassicalJump:
     candidate_channels: tuple[dict[str, Any], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ClassicalSocialContext:
+    """Sampled q-peer context reserved for a future explicit q-voter kernel.
+
+    The current linear Irisarri kernel intentionally ignores this object.  It
+    is nevertheless a typed boundary now, so extending the transition law does
+    not require redesigning the scheduler or persisted event schema.
+    """
+
+    peer_ids: tuple[str, ...]
+    peer_opinions: tuple[str, ...]
+    replaced_peer_slot: int | None
+
+
 def _interaction_factor(
     destination_count: int, population_size: int, rules: ImitationRules
 ) -> float:
@@ -67,8 +81,11 @@ def sample_jump(
     rules: ImitationRules,
     rng: random.Random,
     signal: InteractionControlSignal | None = None,
+    social_context: ClassicalSocialContext | None = None,
 ) -> ClassicalJump:
-    """Sample B for one already-selected focal A using explicit channel weights."""
+    """Sample B for one selected focal A; v1 deliberately ignores q-context."""
+
+    _ = social_context
 
     source = votes[focal_index]
     counts = Counter(votes)

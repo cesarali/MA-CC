@@ -34,6 +34,7 @@ import hashlib
 import json
 import random
 import re
+from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -158,10 +159,71 @@ def _canonical_task(record: Mapping[str, Any]) -> HiddenProfileTask:
     )
 
 
-def _scaled_task(record: Mapping[str, Any], method: str) -> tuple[HiddenProfileTask, tuple[Mapping[str, Any], ...]]:
+def _scaled_task(
+    record: Mapping[str, Any], method: str, n_agents: int
+) -> tuple[HiddenProfileTask, tuple[Mapping[str, Any], ...]]:
     """A prebuilt scaled task plus its frozen per-agent allocation."""
 
     population = record["population"]
+    agents = tuple(record["agents"])
+    if str(population.get("method")) != method:
+        raise HiddenBenchDataError(
+            f"scaled task {record.get('name')!r} declares method "
+            f"{population.get('method')!r}, expected {method!r}"
+        )
+    if int(population.get("num_agents", -1)) != n_agents or len(agents) != n_agents:
+        raise HiddenBenchDataError(
+            f"scaled task {record.get('name')!r} does not contain exactly N={n_agents} agents"
+        )
+    if method == "paraphrased_replication":
+        source_hidden = tuple(str(item) for item in record.get("source_hidden_information", ()))
+        if not source_hidden:
+            raise HiddenBenchDataError(
+                f"scaled task {record.get('name')!r} has no source hidden evidence"
+            )
+        raw_variants = [agent.get("variant_id") for agent in agents]
+        if not all(isinstance(value, str) and value.strip() for value in raw_variants):
+            raise HiddenBenchDataError(
+                f"scaled task {record.get('name')!r} has a paraphrase without variant_id"
+            )
+        variants = [str(value) for value in raw_variants]
+        reuse_allowed = bool(
+            population.get("diagnostics", {}).get("variant_reuse_allowed", False)
+        )
+        if not reuse_allowed and len(set(variants)) != len(variants):
+            raise HiddenBenchDataError(
+                f"scaled task {record.get('name')!r} reuses paraphrase variants without "
+                "variant_reuse_allowed"
+            )
+        if any(agent.get("transformation") != "validated_paraphrase" for agent in agents):
+            raise HiddenBenchDataError(
+                f"scaled task {record.get('name')!r} contains an unvalidated paraphrase"
+            )
+        type_counts = Counter(int(agent["evidence_type"]) for agent in agents)
+        expected_types = set(range(len(source_hidden)))
+        if set(type_counts) != expected_types:
+            raise HiddenBenchDataError(
+                f"scaled task {record.get('name')!r} does not cover every evidence type"
+            )
+        if max(type_counts.values()) - min(type_counts.values()) > 1:
+            raise HiddenBenchDataError(
+                f"scaled task {record.get('name')!r} does not balance evidence types"
+            )
+        for agent in agents:
+            evidence_type = int(agent["evidence_type"])
+            private = agent.get("private_information")
+            if not isinstance(private, list) or len(private) != 1 or not str(private[0]).strip():
+                raise HiddenBenchDataError(
+                    f"scaled task {record.get('name')!r} must give each paraphrased agent one fact"
+                )
+            if [int(item) for item in agent.get("source_hidden_indices", ())] != [evidence_type]:
+                raise HiddenBenchDataError(
+                    f"scaled task {record.get('name')!r} has inconsistent source evidence IDs"
+                )
+            if str(agent.get("source_text")) != source_hidden[evidence_type]:
+                raise HiddenBenchDataError(
+                    f"scaled task {record.get('name')!r} has inconsistent paraphrase source text"
+                )
     task = HiddenProfileTask(
         task_id=int(record["task_id"]),
         name=str(record["name"]),
@@ -176,7 +238,7 @@ def _scaled_task(record: Mapping[str, Any], method: str) -> tuple[HiddenProfileT
         rationale=record.get("rationale"),
         population_instruction=str(record["population_instruction"]),
     )
-    return task, tuple(record["agents"])
+    return task, agents
 
 
 @lru_cache(maxsize=8)
@@ -197,7 +259,15 @@ def _load_scaled(corpus_root: str, method: str, n_agents: int) -> tuple[tuple[Hi
             + ("" if method == "exact_replication" else "\n  (also needs --annotations; see that directory's README §6-7)")
         )
     payload = _read_json(path)
-    return tuple(_scaled_task(item, method) for item in payload["tasks"])
+    metadata = payload.get("metadata", {})
+    if metadata.get("scaling_method") != method or int(metadata.get("num_agents", -1)) != n_agents:
+        raise HiddenBenchDataError(
+            f"scaled population metadata at {path} does not match method={method!r}, N={n_agents}"
+        )
+    tasks = payload.get("tasks")
+    if not isinstance(tasks, list) or not tasks:
+        raise HiddenBenchDataError(f"scaled population at {path} contains no tasks")
+    return tuple(_scaled_task(item, method, n_agents) for item in tasks)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,12 +356,23 @@ def _from_prebuilt(
             f"task {task.name!r}: prebuilt allocation has {len(allocation)} agents, run wants {n_agents}"
         )
     ids = _agent_ids(n_agents)
+    numeric_ids = [int(record["agent_id"]) for record in allocation]
+    if sorted(numeric_ids) != list(range(n_agents)):
+        raise HiddenBenchDataError(
+            f"task {task.name!r}: prebuilt allocation agent_id values must be exactly "
+            f"0..{n_agents - 1}"
+        )
     return {
         ids[int(record["agent_id"])]: AgentInfoSet(
             shared=task.shared_information,
             private=tuple(str(item) for item in record["private_information"]),
             evidence_types=tuple(int(item) for item in record.get("source_hidden_indices", ())),
             transformation=str(record.get("transformation", "identity")),
+            provenance={
+                key: value
+                for key, value in record.items()
+                if key not in {"agent_id", "private_information"}
+            },
         )
         for record in allocation
     }

@@ -35,6 +35,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
 
     from mas_cc.games.hidden_bench.imitation.analysis import (
         CONTROLLER_DIAGNOSTIC_STATISTICS,
+        CURRENT_STATISTICS,
         INFORMATION_STATISTICS,
     )
 
@@ -43,7 +44,10 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     # different machinery, but a run author thinks of them as one request.
     requested = tuple(analysis.estimators)
     unknown = sorted(
-        set(requested) - set(INFORMATION_STATISTICS) - set(CONTROLLER_DIAGNOSTIC_STATISTICS)
+        set(requested)
+        - set(INFORMATION_STATISTICS)
+        - set(CONTROLLER_DIAGNOSTIC_STATISTICS)
+        - set(CURRENT_STATISTICS)
     )
     if unknown:
         raise ValueError(
@@ -54,6 +58,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     diagnostics = tuple(
         name for name in requested if name in CONTROLLER_DIAGNOSTIC_STATISTICS
     )
+    current_statistics = tuple(name for name in requested if name in CURRENT_STATISTICS)
 
     options = dict(analysis.options)
     allowed_options = {"bootstrap_resamples", "null_permutations", "confidence", "seed"}
@@ -74,6 +79,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         "seed": _integer_option(options, "seed", config.execution.seed),
         "statistics": statistics,
         "diagnostics": diagnostics,
+        "current_statistics": current_statistics,
         # `analysis.comet_export` opts the report in; the logging master switch
         # can still veto it, same as every other Comet integration.
         "comet_export": analysis.comet_export and config.logging.comet,

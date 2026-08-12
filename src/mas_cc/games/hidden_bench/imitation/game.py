@@ -93,6 +93,7 @@ class HiddenBenchImitationGame(Game):
                         "presented_information": list(presented),
                         "evidence_types": list(info.evidence_types),
                         "transformation": info.transformation,
+                        "evidence_provenance": dict(info.provenance),
                         "known_facts": sorted(info.evidence_types),
                         "committed_action": vote,
                         "pre_vote": vote,
@@ -197,8 +198,15 @@ class HiddenBenchImitationGame(Game):
     def select_participants(
         self, state: ImitationGameState, config: GameConfig, rng: random.Random
     ) -> tuple[AgentId, ...]:
-        focal, peer = rng.sample([agent.agent_id for agent in state.agents], 2)
-        return focal, peer
+        rules = self.rules(config)
+        # Drawing all q + 1 participants in one sample keeps q=1 byte-for-byte
+        # compatible with the former ``rng.sample(population, 2)`` scheduler.
+        return tuple(
+            rng.sample(
+                [agent.agent_id for agent in state.agents],
+                rules.social_group_size + 1,
+            )
+        )
 
     def construct_observations(
         self,
@@ -308,13 +316,15 @@ class HiddenBenchImitationGame(Game):
         self,
         state: ImitationGameState,
         focal: AgentId,
-        peer: AgentId | None,
+        peers: Sequence[AgentId],
         dialogue: Sequence[Mapping[str, Any]],
         controller_message: str | None,
         config: GameConfig,
+        *,
+        influence_slots: Sequence[Mapping[str, Any]] = (),
     ) -> DecisionRequest:
         rules = self.rules(config)
-        participants = (focal,) if peer is None else (focal, peer)
+        participants = (focal, *peers)
         interaction_id = InteractionId(f"interaction-{state.turn + 1:04d}")
         visible = self._visible_state(state, focal, rules)
         observation = Observation(
@@ -340,6 +350,9 @@ class HiddenBenchImitationGame(Game):
                 current_vote=str(visible["current_vote"]),
                 dialogue=own_dialogue,
                 controller_message=controller_message,
+                influence_inputs=(
+                    tuple(influence_slots) if rules.social_group_size > 1 else None
+                ),
                 style=rules.prompt_style,
             ),
             retry_bound=rules.invalid_response_retries,
@@ -413,15 +426,20 @@ class HiddenBenchImitationGame(Game):
         state: ImitationGameState,
         *,
         focal: AgentId,
-        peer: AgentId | None,
+        peers: Sequence[AgentId],
         action: Action,
         config: GameConfig,
         signal: InteractionControlSignal | None,
         dialogue: Sequence[Mapping[str, Any]] = (),
         classical: Mapping[str, Any] | None = None,
-        sampled_peer: AgentId | None = None,
+        sampled_peers: Sequence[AgentId] = (),
+        replaced_peer: AgentId | None = None,
+        replaced_peer_slot: int | None = None,
+        influence_slots: Sequence[Mapping[str, Any]] = (),
     ) -> ImitationTransition:
         rules = self.rules(config)
+        active_peers = tuple(peers)
+        sampled_social_peers = tuple(sampled_peers or active_peers)
         before = [str(agent.committed_action) for agent in state.agents]
         focal_index = next(index for index, agent in enumerate(state.agents) if agent.agent_id == focal)
         before_focal = before[focal_index]
@@ -429,7 +447,9 @@ class HiddenBenchImitationGame(Game):
             raise ValueError("focal transition destination is outside the task option alphabet")
         agents = list(state.agents)
         focal_agent = state.hidden_bench_agent(focal)
-        received = self._received_message(focal, peer, dialogue, signal)
+        received = self._received_influence_messages(
+            active_peers, dialogue, signal, influence_slots
+        )
         focal_attributes = dict(focal_agent.attributes)
         focal_attributes["committed_action"] = action.value
         focal_attributes["post_vote"] = action.value
@@ -442,11 +462,11 @@ class HiddenBenchImitationGame(Game):
                 "rationale": action.metadata.get("rationale"),
             },
         ]
-        if peer is not None:
+        if active_peers:
             peer_messages = [
                 str(item["message"])
                 for item in dialogue
-                if str(item["agent_id"]) == str(peer)
+                if any(str(item["agent_id"]) == str(peer) for peer in active_peers)
             ]
             heard_facts = disclosed_facts(state.hidden_information, peer_messages)
             focal_attributes["known_facts"] = sorted(
@@ -456,7 +476,10 @@ class HiddenBenchImitationGame(Game):
         focal_message = self._spoken_message(focal, dialogue)
         focal_memory = (*focal_agent.memory, {
             "event": state.turn + 1,
-            "partner_id": None if peer is None else str(peer),
+            "partner_id": (
+                str(active_peers[0]) if len(active_peers) == 1 else None
+            ),
+            "partner_ids": [str(peer) for peer in active_peers],
             "received_message": received,
             # §1.3: the agent has to see what *it* said, otherwise "mention
             # something you have not mentioned yet" is unfollowable and it
@@ -469,13 +492,17 @@ class HiddenBenchImitationGame(Game):
         agents[focal_index] = replace(
             focal_agent, attributes=focal_attributes, memory=focal_memory
         )
-        if peer is not None:
+        for peer in active_peers:
             peer_index = next(index for index, agent in enumerate(state.agents) if agent.agent_id == peer)
             peer_agent = state.hidden_bench_agent(peer)
-            heard = self._received_message(peer, focal, dialogue, None)
+            peer_slot = sampled_social_peers.index(peer)
+            peer_dialogue = tuple(
+                item for item in dialogue if item.get("social_peer_slot") == peer_slot
+            )
+            heard = self._received_message(peer, focal, peer_dialogue, None)
             focal_messages = [
                 str(item["message"])
-                for item in dialogue
+                for item in peer_dialogue
                 if str(item["agent_id"]) == str(focal)
             ]
             heard_facts = disclosed_facts(state.hidden_information, focal_messages)
@@ -491,7 +518,7 @@ class HiddenBenchImitationGame(Game):
                     "event": state.turn + 1,
                     "partner_id": str(focal),
                     "received_message": heard,
-                    "own_message": self._spoken_message(peer, dialogue),
+                    "own_message": self._spoken_message(peer, peer_dialogue),
                     "own_vote_before": peer_agent.committed_action,
                     "own_vote_after": peer_agent.committed_action,
                     "controller_action": None,
@@ -537,6 +564,25 @@ class HiddenBenchImitationGame(Game):
             sensor_count_vector=sensor_count_vector,
             sensor_sample_size=sensor.get("sample_size"),
         )
+        truth_current_increment = (
+            int(action.value == state.correct_answer)
+            - int(before_focal == state.correct_answer)
+        )
+        social_peer_ids = [str(peer) for peer in sampled_social_peers]
+        social_peer_votes = [
+            state.hidden_bench_agent(peer).committed_action for peer in sampled_social_peers
+        ]
+        social_peer_messages = [
+            None
+            if peer == replaced_peer
+            else self._spoken_message(peer, dialogue)
+            for peer in sampled_social_peers
+        ]
+        sensor_agent_ids = list(sensor.get("sampled_agent_ids", []))
+        sensor_votes = list(sensor.get("sampled_opinions", []))
+        sensor_social_overlap = sorted(set(sensor_agent_ids) & set(social_peer_ids))
+        legacy_peer = active_peers[0] if active_peers else None
+        sampled_legacy_peer = sampled_social_peers[0] if sampled_social_peers else None
         event: dict[str, Any] = {
             "episode_id": f"{state.task['task_id']}-{state.data['seed']}",
             "interaction_index": next_index,
@@ -545,6 +591,12 @@ class HiddenBenchImitationGame(Game):
             "task_id": state.task["task_id"],
             "K": len(state.possible_answers),
             "N": len(state.agents),
+            "population_size": len(state.agents),
+            "social_group_size": rules.social_group_size,
+            "social_peer_ids": social_peer_ids,
+            "social_peer_votes_before": social_peer_votes,
+            "social_peer_messages": social_peer_messages,
+            "influence_slots": [dict(item) for item in influence_slots],
             "dynamics_mode": rules.dynamics_mode,
             "population_state_before": before,
             "occupation_counts_before": before_obs["occupation_counts"],
@@ -557,20 +609,33 @@ class HiddenBenchImitationGame(Game):
             "H_vote_before": before_obs["H_vote"],
             "focal_agent_id": str(focal),
             "focal_opinion_before": before_focal,
+            "focal_vote_before": before_focal,
             # The pair the scheduler drew, before control substitution.  §3.4
             # invariant 3 - "the event sequence replays" - is only checkable
             # against this, because `peer_agent_id` is None on a control event.
             "sampled_peer_agent_id": (
-                None if sampled_peer is None else str(sampled_peer)
+                None if sampled_legacy_peer is None else str(sampled_legacy_peer)
             ),
-            "peer_agent_id": None if peer is None else str(peer),
-            "peer_opinion_before": None if peer is None else state.hidden_bench_agent(peer).committed_action,
+            "peer_agent_id": None if legacy_peer is None else str(legacy_peer),
+            "peer_opinion_before": (
+                None if legacy_peer is None else state.hidden_bench_agent(legacy_peer).committed_action
+            ),
+            "replaced_peer_id": None if replaced_peer is None else str(replaced_peer),
+            "replaced_peer_slot": replaced_peer_slot,
             "controller_enabled": signal is not None,
             "controller_target": target,
             "analysis_target": analysis_target,
             "sensor_sample_size": sensor.get("sample_size"),
-            "sensor_agent_ids": sensor.get("sampled_agent_ids", []),
-            "sensor_observed_opinions": sensor.get("sampled_opinions", []),
+            "sensor_agent_ids": sensor_agent_ids,
+            "sensor_observed_opinions": sensor_votes,
+            "controller_sensor_sample_size": sensor.get("sample_size"),
+            "controller_sensor_ids": sensor_agent_ids,
+            "controller_sensor_votes": sensor_votes,
+            "controller_target_support": (
+                None if signal is None else signal.metadata.get("target_support")
+            ),
+            "controller_sensor_social_overlap_ids": sensor_social_overlap,
+            "controller_sensor_includes_focal": str(focal) in sensor_agent_ids,
             "sensor_count_vector": sensor_count_vector,
             "controller_policy": None if signal is None else signal.metadata.get("policy"),
             "controller_threshold": None if signal is None else signal.metadata.get("threshold"),
@@ -592,12 +657,19 @@ class HiddenBenchImitationGame(Game):
             "controller_template_id": (
                 None if signal is None else signal.metadata.get("message_template_id")
             ),
+            "controller_message_template": (
+                None if signal is None else signal.metadata.get("message_template_id")
+            ),
             "controller_fact_index": (
                 None if signal is None else signal.metadata.get("message_fact_index")
             ),
             "controller_message": None if signal is None else signal.message,
-            "peer_interaction": peer is not None,
+            "peer_interaction": bool(active_peers),
             "focal_opinion_after": action.value,
+            "focal_vote_after": action.value,
+            "truth_current_increment": truth_current_increment,
+            "truth_switch_toward": truth_current_increment == 1,
+            "truth_switch_away": truth_current_increment == -1,
             "population_state_after": after,
             "occupation_counts_after": after_obs["occupation_counts"],
             "population_shares_after": after_obs["population_shares"],
@@ -609,6 +681,8 @@ class HiddenBenchImitationGame(Game):
             "H_vote": after_obs["H_vote"],
             "possible_answers": list(state.possible_answers),
             "correct_answer": state.correct_answer,
+            "population_counts_before": before_obs["occupation_counts"],
+            "population_counts_after": after_obs["occupation_counts"],
             "disclosed_hidden_facts_this_event": list(disclosed),
             "disclosed_hidden_facts": list(disclosed_all),
             "disclosure_reach": disclosure_reach,
@@ -622,7 +696,9 @@ class HiddenBenchImitationGame(Game):
             # pass afterwards.  Asking the agent to list them in its own reply
             # would itself increase disclosure and contaminate the measurement.
             "focal_message": focal_message,
-            "peer_message": None if peer is None else self._spoken_message(peer, dialogue),
+            "peer_message": (
+                None if legacy_peer is None else self._spoken_message(legacy_peer, dialogue)
+            ),
             "prompt_version": rules.prompt_version,
             "inform_asymmetry": rules.inform_asymmetry,
             "scenario_variant": rules.scenario_variant,
@@ -672,7 +748,12 @@ class HiddenBenchImitationGame(Game):
             actions=(action,),
             payoffs={str(focal): 0.0},
             next_state=next_state,
-            matched=(None if peer is None else action.value == state.hidden_bench_agent(peer).committed_action),
+            matched=(
+                None
+                if not active_peers
+                else action.value
+                in {state.hidden_bench_agent(peer).committed_action for peer in active_peers}
+            ),
             termination_reason=reason,
             event=event,
         )
@@ -736,6 +817,23 @@ class HiddenBenchImitationGame(Game):
         heard = [str(item["message"]) for item in dialogue if str(item["agent_id"]) == str(speaker)]
         return "\n".join(heard) if heard else None
 
+    @classmethod
+    def _received_influence_messages(
+        cls,
+        peers: Sequence[AgentId],
+        dialogue: Sequence[Mapping[str, Any]],
+        signal: InteractionControlSignal | None,
+        influence_slots: Sequence[Mapping[str, Any]],
+    ) -> str | None:
+        if influence_slots:
+            messages = [str(item["message"]) for item in influence_slots if item.get("message")]
+            return "\n".join(messages) if messages else None
+        if signal is not None and signal.message is not None:
+            return signal.message
+        messages = [cls._spoken_message(peer, dialogue) for peer in peers]
+        heard = [message for message in messages if message]
+        return "\n".join(heard) if heard else None
+
     @staticmethod
     def _termination_reason(votes: Sequence[str], turn: int, rules: ImitationRules) -> str | None:
         if turn >= rules.horizon:
@@ -754,7 +852,7 @@ class HiddenBenchImitationGame(Game):
         return self.apply_event_transition(
             state,
             focal=participants[0],
-            peer=(participants[1] if len(participants) > 1 else None),
+            peers=participants[1:],
             action=actions[-1],
             config=config,
             signal=None,
@@ -844,7 +942,10 @@ class HiddenBenchImitationGame(Game):
                 DecisionStagePlan(
                     name="private_exchange",
                     requests_per_interaction=(
-                        rules.horizon * 2 * rules.messages_per_agent
+                        rules.horizon
+                        * 2
+                        * rules.messages_per_agent
+                        * rules.social_group_size
                     ),
                     retry_bound=rules.invalid_response_retries,
                     expected_attempts_per_request=expected_attempts,
@@ -855,7 +956,7 @@ class HiddenBenchImitationGame(Game):
                     prompt_scenarios=(message,),
                     assumptions=(
                         "This is an exact count without feedback control and a conservative "
-                        "maximum when ADVOCATE_Z substitutes for an ordinary peer exchange.",
+                        "maximum when ADVOCATE_Z substitutes for one ordinary social slot.",
                     ),
                 ),
                 DecisionStagePlan(
@@ -884,6 +985,8 @@ class HiddenBenchImitationGame(Game):
                 "population_size": rules.n_agents,
                 "dynamics_mode": rules.dynamics_mode,
                 "interactions_per_episode": rules.horizon,
+                "population_sweeps": rules.horizon / rules.n_agents,
+                "social_group_size": rules.social_group_size,
                 "messages_per_agent": rules.messages_per_agent,
                 "initial_votes_provider_supplied": rules.initial_votes is not None,
                 "embedded_jump_chain": rules.dynamics_mode == "classical",

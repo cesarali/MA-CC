@@ -70,6 +70,8 @@ INFORMATION_STATISTICS = (
     "m_truth_actuation_cmi",
     "m_order_actuation_cmi",
 )
+CURRENT_STATISTICS = ("truth_current", "truth_current_fano")
+"""Post-hoc trajectory statistics; unlike the channels above they have no action-shuffle null."""
 INFORMATION_STATISTIC_DESCRIPTIONS: Mapping[str, str] = {
     "sensing_mi": (
         "Mutual information between the population's true opinion counts before the interaction "
@@ -548,6 +550,32 @@ def _behavioral_action_summary(events: Sequence[ImitationEvent]) -> dict[str, An
     }
 
 
+def _controller_exposure_summary(events: Sequence[ImitationEvent]) -> dict[str, Any]:
+    """Finite controller resource/exposure diagnostics, without energetic labels."""
+
+    if not events:
+        return {}
+    controlled = _controlled_events(events)
+    population_size = sum(events[0].N_t)
+    advocated = [event for event in controlled if event.U_t == ADVOCATE_TARGET]
+    exposed_focals = {
+        str(event.event["focal_agent_id"])
+        for event in advocated
+        if event.event.get("focal_agent_id") is not None
+    }
+    return {
+        "controller_decision_count": len(controlled),
+        "controller_advocacy_count": len(advocated),
+        "controller_noop_count": len(controlled) - len(advocated),
+        "controller_decisions_per_agent": len(controlled) / population_size,
+        "controller_advocacies_per_agent": len(advocated) / population_size,
+        "unique_focal_agents_exposed_to_controller": len(exposed_focals),
+        "fraction_population_ever_exposed_to_controller": (
+            len(exposed_focals) / population_size
+        ),
+    }
+
+
 def episode_summary(events: Sequence[ImitationEvent]) -> dict[str, Any]:
     """Summarize one episode; trajectory means include state 0 and all post states."""
 
@@ -564,6 +592,13 @@ def episode_summary(events: Sequence[ImitationEvent]) -> dict[str, Any]:
     m_truth = trajectory("m_truth")
     m_order = trajectory("m_order")
     entropy = trajectory("H_vote")
+    truth_steps = [
+        int(event.Xf_t1 == event.event["correct_answer"])
+        - int(event.Xf_t == event.event["correct_answer"])
+        for event in ordered
+    ]
+    truth_toward = sum(step == 1 for step in truth_steps)
+    truth_away = sum(step == -1 for step in truth_steps)
     result = {
         "cell_id": ordered[0].cell_id,
         "episode_id": ordered[0].episode_id,
@@ -583,8 +618,12 @@ def episode_summary(events: Sequence[ImitationEvent]) -> dict[str, Any]:
         "auc_convention": "equal_event_spacing_mean_including_initial_state",
         "initial_state": json.dumps(ordered[0].event["population_state_before"]),
         "final_state": json.dumps(last["population_state_after"]),
+        "truth_current": truth_toward - truth_away,
+        "truth_switches_toward": truth_toward,
+        "truth_switches_away": truth_away,
     }
     result.update(_behavioral_action_summary(ordered))
+    result.update(_controller_exposure_summary(ordered))
     return result
 
 
@@ -614,6 +653,117 @@ def cell_summary(events: Sequence[ImitationEvent]) -> dict[str, Any]:
     }
     result.update({field: _mean([row[field] for row in episodes]) for field in population_fields})
     result.update(_behavioral_action_summary(events))
+    # Exposure is a path property, so aggregate the episode diagnostics rather
+    # than treating repeated agent labels across episodes as the same person.
+    exposure_mean_fields = (
+        "controller_decisions_per_agent",
+        "controller_advocacies_per_agent",
+        "unique_focal_agents_exposed_to_controller",
+        "fraction_population_ever_exposed_to_controller",
+    )
+    for field in exposure_mean_fields:
+        result[field] = _mean([row[field] for row in episodes])
+    result["controller_decision_count"] = sum(
+        int(row["controller_decision_count"]) for row in episodes
+    )
+    result["controller_advocacy_count"] = sum(
+        int(row["controller_advocacy_count"]) for row in episodes
+    )
+    result["controller_noop_count"] = sum(
+        int(row["controller_noop_count"]) for row in episodes
+    )
+    result.update(_truth_current_cell_fields(episodes, population_size=sum(first.N_t)))
+    return result
+
+
+def _truth_current_cell_fields(
+    episodes: Sequence[Mapping[str, Any]], *, population_size: int
+) -> dict[str, Any]:
+    currents = np.asarray([float(row["truth_current"]) for row in episodes], dtype=float)
+    mean = float(np.mean(currents)) if len(currents) else math.nan
+    variance = float(np.var(currents, ddof=1)) if len(currents) >= 2 else math.nan
+    fixed_horizon = len({int(row["n_events"]) for row in episodes}) <= 1
+    zero_dispersion = bool(math.isfinite(variance) and variance == 0.0)
+    undefined_reason = None
+    if not fixed_horizon:
+        fano = math.nan
+        undefined_reason = "variable_horizon"
+    elif not math.isfinite(variance):
+        fano = math.nan
+        undefined_reason = "fewer_than_two_episodes"
+    elif variance == 0.0 and abs(mean) > 0.0:
+        fano = math.inf
+    elif variance == 0.0:
+        fano = math.nan
+        undefined_reason = "zero_mean_and_zero_dispersion"
+    else:
+        fano = abs(mean) / variance
+    return {
+        "truth_current_mean": mean,
+        "truth_current_variance": variance,
+        "truth_current_fano": fano,
+        "truth_current_mean_per_agent": mean / population_size,
+        "episodes": len(episodes),
+        "fixed_horizon": fixed_horizon,
+        "zero_dispersion": zero_dispersion,
+        "truth_current_fano_undefined_reason": undefined_reason,
+    }
+
+
+def truth_current_analysis(
+    events: Sequence[ImitationEvent],
+    *,
+    bootstrap_resamples: int = 1000,
+    confidence: float = 0.95,
+    seed: int = 1,
+    statistics: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Episode truth displacement and its across-episode precision ratio."""
+
+    names = tuple(CURRENT_STATISTICS if statistics is None else statistics)
+    unknown = sorted(set(names) - set(CURRENT_STATISTICS))
+    if unknown:
+        raise ValueError("unknown truth-current statistic(s): " + ", ".join(unknown))
+    if not names:
+        raise ValueError("at least one truth-current statistic is required")
+    if bootstrap_resamples < 0:
+        raise ValueError("bootstrap_resamples cannot be negative")
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between zero and one")
+    episode_rows = [
+        episode_summary(group)
+        for group in _group_events(events, key=lambda event: event.episode_id).values()
+    ]
+    if not episode_rows:
+        raise ValueError("truth_current_analysis requires at least one episode")
+    result = _truth_current_cell_fields(
+        episode_rows, population_size=sum(events[0].N_t)
+    )
+    result["statistics"] = list(names)
+    result["bootstrap_resamples"] = bootstrap_resamples
+    result["confidence"] = confidence
+    result["bootstrap_unit"] = "episode"
+    result["null_model"] = None
+
+    rng = np.random.default_rng(seed)
+    means: list[float] = []
+    fanos: list[float] = []
+    for _ in range(bootstrap_resamples):
+        indices = rng.choice(len(episode_rows), size=len(episode_rows), replace=True)
+        drawn = [episode_rows[int(index)] for index in indices]
+        fields = _truth_current_cell_fields(drawn, population_size=sum(events[0].N_t))
+        if math.isfinite(float(fields["truth_current_mean"])):
+            means.append(float(fields["truth_current_mean"]))
+        if math.isfinite(float(fields["truth_current_fano"])):
+            fanos.append(float(fields["truth_current_fano"]))
+    alpha = (1.0 - confidence) / 2.0
+    result["truth_current_mean_ci_low"], result["truth_current_mean_ci_high"] = _quantiles(
+        means, alpha
+    )
+    result["truth_current_fano_ci_low"], result["truth_current_fano_ci_high"] = _quantiles(
+        fanos, alpha
+    )
+    result["truth_current_fano_bootstrap_valid_replicates"] = len(fanos)
     return result
 
 
@@ -1359,6 +1509,52 @@ def _format_reason(value: Any) -> str:
     return "—" if not value else f"`{value}`"
 
 
+def _format_current(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if math.isinf(number):
+        return "+∞" if number > 0 else "−∞"
+    return f"{number:.6g}" if math.isfinite(number) else "—"
+
+
+def _write_truth_current_markdown(
+    rows: Sequence[Mapping[str, Any]], destination: Path
+) -> None:
+    lines = [
+        "# Truth-current estimates",
+        "",
+        "`truth_current` is switches toward the correct answer minus switches away. "
+        "Because only the focal vote can change, it telescopes to final minus initial "
+        "truth headcount. `truth_current_fano` is `abs(mean current) / sample variance` "
+        "across equal-horizon episodes; it is a precision ratio, not a TUR claim.",
+        "",
+        "| Cell | Mean J | Sample variance | Fano / precision | Episodes | Fixed horizon "
+        "| Zero dispersion | Mean 95% bootstrap CI | Fano 95% bootstrap CI | Undefined because |",
+        "|---|---:|---:|---:|---:|---|---|---|---|---|",
+    ]
+    for row in rows:
+        lines.append(
+            "| `{cell}` | {mean} | {variance} | {fano} | {episodes} | {fixed} | {zero} "
+            "| [{mean_low}, {mean_high}] | [{fano_low}, {fano_high}] | {reason} |".format(
+                cell=row.get("cell_id", "run"),
+                mean=_format_current(row.get("truth_current_mean")),
+                variance=_format_current(row.get("truth_current_variance")),
+                fano=_format_current(row.get("truth_current_fano")),
+                episodes=row.get("episodes", "—"),
+                fixed="yes" if row.get("fixed_horizon") else "no",
+                zero="yes" if row.get("zero_dispersion") else "no",
+                mean_low=_format_current(row.get("truth_current_mean_ci_low")),
+                mean_high=_format_current(row.get("truth_current_mean_ci_high")),
+                fano_low=_format_current(row.get("truth_current_fano_ci_low")),
+                fano_high=_format_current(row.get("truth_current_fano_ci_high")),
+                reason=_format_reason(row.get("truth_current_fano_undefined_reason")),
+            )
+        )
+    destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def _controller_diagnostic_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
     """Render one cell's controller diagnostics as four small, purposeful tables.
 
@@ -1898,6 +2094,7 @@ def analyze_hidden_bench_imitation(
     seed: int = 1,
     statistics: Sequence[str] | None = None,
     diagnostics: Sequence[str] | None = None,
+    current_statistics: Sequence[str] | None = None,
     comet_export: bool = False,
     comet_project: str = "mas-cc",
     comet_run_name: str | None = None,
@@ -1939,6 +2136,7 @@ def analyze_hidden_bench_imitation(
             "sensor_target_error", "sensor_target_abs_error",
             "controller_threshold", "controller_beta",
             "controller_advocacy_probability",
+            "truth_current_increment", "truth_switch_toward", "truth_switch_away",
         ):
             row[field] = event.event.get(field)
         event_rows.append(row)
@@ -1957,6 +2155,37 @@ def analyze_hidden_bench_imitation(
     for row in cell_rows:
         row["scientific_cell"] = _cell_label(row)
     pd.DataFrame(cell_rows).to_csv(destination / "cell_summaries.csv", index=False)
+
+    requested_currents = tuple(
+        CURRENT_STATISTICS if current_statistics is None else current_statistics
+    )
+    unknown_currents = sorted(set(requested_currents) - set(CURRENT_STATISTICS))
+    if unknown_currents:
+        raise ValueError(
+            "unknown HiddenBench imitation current statistic(s): "
+            + ", ".join(unknown_currents)
+        )
+    current_rows: list[dict[str, Any]] = []
+    if requested_currents:
+        for cell_id, group in _group_events(events, key=lambda event: event.cell_id).items():
+            current_rows.append(
+                {
+                    "cell_id": cell_id,
+                    **truth_current_analysis(
+                        group,
+                        bootstrap_resamples=bootstrap_resamples,
+                        confidence=confidence,
+                        seed=seed,
+                        statistics=requested_currents,
+                    ),
+                }
+            )
+        pd.DataFrame(current_rows).to_csv(
+            destination / "truth_current_estimates.csv", index=False
+        )
+        _write_truth_current_markdown(
+            current_rows, destination / "truth_current_estimates.md"
+        )
 
     share_rows, observable_rows = _trajectory_rows(events)
     pd.DataFrame(share_rows).to_csv(destination / "option_share_trajectories.csv", index=False)
@@ -2057,6 +2286,7 @@ def analyze_hidden_bench_imitation(
         "diagnostics": list(
             CONTROLLER_DIAGNOSTIC_STATISTICS if diagnostics is None else diagnostics
         ),
+        "current_statistics": list(requested_currents),
     }
     summary = {
         "n_cells": len(cell_rows),
@@ -2067,6 +2297,7 @@ def analyze_hidden_bench_imitation(
         "main_estimator_variant": MAIN_ESTIMATOR_VARIANT,
         "information_statistics": analysis_settings["statistics"],
         "controller_diagnostics": analysis_settings["diagnostics"],
+        "current_statistics": analysis_settings["current_statistics"],
         "bootstrap_resamples": bootstrap_resamples,
         "null_permutations": null_permutations,
         "confidence": confidence,
@@ -2086,14 +2317,22 @@ def analyze_hidden_bench_imitation(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     summary["information_plots"] = [str(path) for path in information_plots]
+    export_assets = [
+        destination / "information_estimates.md",
+        destination / "information_estimates.csv",
+        destination / "support_diagnostics.csv",
+        destination / "controller_diagnostics.csv",
+    ]
+    if requested_currents:
+        export_assets.extend(
+            (
+                destination / "truth_current_estimates.md",
+                destination / "truth_current_estimates.csv",
+            )
+        )
     summary["comet"] = _export_information_estimates_to_comet(
         information_rows,
-        (
-            destination / "information_estimates.md",
-            destination / "information_estimates.csv",
-            destination / "support_diagnostics.csv",
-            destination / "controller_diagnostics.csv",
-        ),
+        export_assets,
         information_plots,
         enabled=comet_export,
         project_name=comet_project,
@@ -2130,6 +2369,7 @@ __all__ = [
     "DiagnosticValue",
     "ENTROPY_BOUND_TOLERANCE_BITS",
     "ImitationEvent",
+    "CURRENT_STATISTICS",
     "INFORMATION_STATISTICS",
     "MAIN_ESTIMATOR_VARIANT",
     "ORDER_PARAMETER_COUNT_FIELDS",
@@ -2146,6 +2386,7 @@ __all__ = [
     "enrich_event",
     "episode_summary",
     "information_analysis",
+    "truth_current_analysis",
     "read_imitation_events",
     "signed_actuation_response",
 ]

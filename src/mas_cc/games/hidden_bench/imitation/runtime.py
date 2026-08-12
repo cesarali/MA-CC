@@ -14,7 +14,7 @@ from mas_cc.llm_runtime.prompts import RegexTokenCounter, TokenCounter
 from mas_cc.llm_runtime.providers import LLMProvider
 
 from ..runtime import HiddenBenchDecision, _execute_decision, _notify
-from .classical import sample_jump
+from .classical import ClassicalSocialContext, sample_jump
 from .controller import ADVOCATE_TARGET, controller_from_game_options
 from .game import FOCAL_UPDATE, HiddenBenchImitationGame
 from .state import ImitationGameState, ImitationTransition
@@ -111,7 +111,11 @@ async def run_hidden_bench_imitation_game(
     participant_rng = root.derive("imitation-focal-and-peer-selection").create_random()
     transition_rng = root.derive("imitation-classical-transition").create_random()
     sensor_rng = root.derive("imitation-controller-sensor").create_random()
+    replacement_rng = root.derive("imitation-controller-replacement").create_random()
     resolved_control = _resolved_control(config, control)
+    sensor_sample_size = getattr(resolved_control, "sensor_sample_size", None)
+    if sensor_sample_size is not None and int(sensor_sample_size) > rules.n_agents:
+        raise ValueError("controller sensor_sample_size cannot exceed the population size")
     state = game.initialize(config.game, config.execution.seed)
     _notify(
         observer,
@@ -151,7 +155,8 @@ async def run_hidden_bench_imitation_game(
 
     interactions: list[ImitationInteractionRecord] = []
     while state.turn < rules.horizon and not state.terminated:
-        focal, sampled_peer = game.select_participants(state, config.game, participant_rng)
+        selected = game.select_participants(state, config.game, participant_rng)
+        focal, sampled_peers = selected[0], tuple(selected[1:])
         signal = None
         if resolved_control is not None:
             signal = resolved_control.interaction_signal(
@@ -160,28 +165,35 @@ async def run_hidden_bench_imitation_game(
                 state=state,
                 rng=sensor_rng,
             )
-        # Part 3.1: a control event **replaces** the peer conversation, it never
-        # adds one.  Adding would give the controlled group more conversations
-        # than the uncontrolled group, and any difference could then be "more
-        # talking happened" rather than control.  Replacement costs a real peer
-        # exchange - which is where facts spread - but that cost is visible in
-        # `disclosure_events` afterwards, whereas unequal event counts would be
-        # baked into the design and untanglable.
-        #
-        # Part 3.3: this line sits *above* the mode branch on purpose, so the
-        # substitution is identical in reasoning and classical mode.  Classical
-        # control additionally tilts the transition weight toward Z, but it
-        # consumes the same peer slot, which is what keeps B - D unconfounded.
-        peer = None if signal is not None and signal.action == ADVOCATE_TARGET else sampled_peer
+        # ADVOCATE_Z occupies exactly one of the q social slots.  q=1 uses slot
+        # zero without consuming a new random draw, preserving the legacy RNG
+        # streams; q>1 draws the replaced slot from its own episode-seeded
+        # stream so sensing remains independent of social replacement.
+        replaced_peer_slot = None
+        if signal is not None and signal.action == ADVOCATE_TARGET:
+            replaced_peer_slot = (
+                0 if rules.social_group_size == 1 else replacement_rng.randrange(len(sampled_peers))
+            )
+        replaced_peer = (
+            None if replaced_peer_slot is None else sampled_peers[replaced_peer_slot]
+        )
+        active_peers = tuple(
+            peer
+            for slot, peer in enumerate(sampled_peers)
+            if slot != replaced_peer_slot
+        )
         decisions: list[HiddenBenchDecision] = []
         dialogue: list[Mapping[str, Any]] = []
 
         if rules.dynamics_mode == "reasoning":
-            if peer is not None:
+            for peer_slot, peer in enumerate(sampled_peers):
+                if peer_slot == replaced_peer_slot:
+                    continue
                 participants = (focal, peer)
+                pair_dialogue: list[Mapping[str, Any]] = []
                 for _ in range(rules.messages_per_agent):
                     requests = game.message_requests(
-                        state, participants, tuple(dialogue), config.game
+                        state, participants, tuple(pair_dialogue), config.game
                     )
                     message_decisions = tuple(
                         await asyncio.gather(
@@ -201,22 +213,38 @@ async def run_hidden_bench_imitation_game(
                         )
                     )
                     decisions.extend(message_decisions)
-                    dialogue.extend(
+                    messages = tuple(
                         {
                             "agent_id": str(decision.action.agent_id),
                             "message": decision.action.value,
                             "interaction_index": state.turn + 1,
                             "private": True,
+                            "social_peer_slot": peer_slot,
                         }
                         for decision in message_decisions
                     )
+                    pair_dialogue.extend(messages)
+                    dialogue.extend(messages)
+            influence_slots = tuple(
+                {
+                    "slot": slot,
+                    "kind": "controller" if slot == replaced_peer_slot else "peer",
+                    "peer_agent_id": str(peer),
+                    "peer_vote_before": state.hidden_bench_agent(peer).committed_action,
+                    "message": (
+                        None if signal is None else signal.message
+                    ) if slot == replaced_peer_slot else game._spoken_message(peer, dialogue),
+                }
+                for slot, peer in enumerate(sampled_peers)
+            )
             request = game.focal_update_request(
                 state,
                 focal,
-                peer,
+                active_peers,
                 tuple(dialogue),
                 None if signal is None else signal.message,
                 config.game,
+                influence_slots=influence_slots,
             )
             update = await _execute_decision(
                 game, request, state, config, provider, counter, root, observer
@@ -225,6 +253,18 @@ async def run_hidden_bench_imitation_game(
             action = update.action
             classical_metadata = None
         else:
+            influence_slots = tuple(
+                {
+                    "slot": slot,
+                    "kind": "controller" if slot == replaced_peer_slot else "peer",
+                    "peer_agent_id": str(peer),
+                    "peer_vote_before": state.hidden_bench_agent(peer).committed_action,
+                    "message": (
+                        None if signal is None else signal.message
+                    ) if slot == replaced_peer_slot else None,
+                }
+                for slot, peer in enumerate(sampled_peers)
+            )
             votes = [str(agent.committed_action) for agent in state.agents]
             focal_index = next(
                 index for index, agent in enumerate(state.agents) if agent.agent_id == focal
@@ -236,6 +276,14 @@ async def run_hidden_bench_imitation_game(
                 rules,
                 transition_rng,
                 signal,
+                ClassicalSocialContext(
+                    peer_ids=tuple(str(peer) for peer in sampled_peers),
+                    peer_opinions=tuple(
+                        str(state.hidden_bench_agent(peer).committed_action)
+                        for peer in sampled_peers
+                    ),
+                    replaced_peer_slot=replaced_peer_slot,
+                ),
             )
             action = Action(
                 focal,
@@ -254,20 +302,24 @@ async def run_hidden_bench_imitation_game(
                 "classical_candidate_channels": list(jump.candidate_channels),
                 "physical_time_increment": None,
                 "time_convention": "focal_conditioned_embedded_jump_chain",
+                "classical_social_context_consumed": False,
             }
 
         transition = game.apply_event_transition(
             state,
             focal=focal,
-            peer=peer,
+            peers=active_peers,
             action=action,
             config=config.game,
             signal=signal,
             dialogue=tuple(dialogue),
             classical=classical_metadata,
-            sampled_peer=sampled_peer,
+            sampled_peers=sampled_peers,
+            replaced_peer=replaced_peer,
+            replaced_peer_slot=replaced_peer_slot,
+            influence_slots=influence_slots,
         )
-        participants = (focal,) if peer is None else (focal, peer)
+        participants = (focal, *active_peers)
         record = ImitationInteractionRecord(
             interaction_id=transition.interaction_id,
             interaction_index=state.turn + 1,

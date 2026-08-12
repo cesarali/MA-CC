@@ -149,3 +149,46 @@ The most direct outputs are `event_metrics.csv`, `episode_summaries.csv`,
 directory. The classical configuration retains the requested university
 provider declaration for parity, but its call plan and runtime make zero
 provider requests.
+
+## Scaled `imitation_N` protocol
+
+`game.options.social_group_size` is the social interaction order `q` and
+defaults to `1`. One focal agent and `q` distinct ordinary peers are sampled
+without replacement. Under `NO_OP`, all `q` peer slots remain. Under
+`ADVOCATE_Z`, one logged slot is replaced by the external controller, leaving
+`q-1` ordinary peer inputs and exactly `q` total influence inputs. The
+controller remains outside the population. `control.options.sensor_sample_size`
+is the independent sensing budget `q_c`; sensor/social overlap and inclusion of
+the focal agent are allowed and logged.
+
+Reasoning mode performs one dyadic exchange with every retained peer in sampled
+slot order, then one focal update over the ordered group input. Classical mode
+samples and logs the same context but deliberately retains the existing linear
+`irisarri_multi_opinion` transition kernel: peer opinions do not yet define a
+new q-voter rate.
+
+Every event includes `population_size`, `social_group_size`, ordered peer IDs,
+votes and messages, ordered `influence_slots`, controller sensor IDs/votes,
+replacement ID/slot, and the pre/post occupation state. Raw event time remains
+the discrete interaction index; `tau = interaction_index / N` is population
+sweep time, not continuous physical time.
+
+Scaled semantic populations use `task_set: expanded` with
+`assignment_scheme: paraphrased_replication`. The freezer/build commands are
+documented in the `imitation_N` grid config. Agent assignments retain the
+frozen `variant_id`, source evidence indices/text, and transformation
+provenance.
+
+The post-hoc estimators `truth_current` and `truth_current_fano` add, per
+episode, switches toward truth minus switches away and, per cell,
+`abs(mean(J_truth)) / sample_variance(J_truth)`. The net current telescopes to
+the final minus initial truth headcount, so the directional switch counts are
+also stored. Zero dispersion with nonzero mean is reported as `+inf`; zero mean
+and zero dispersion is `NaN`. Uncertainty resamples whole episodes and there is
+no action-label shuffle null.
+
+The provider-free validation config is
+`configs/runs/hidden_bench/hidden_bench_imitation_scaled_q_qc_classical_smoke.yaml`.
+The nine-cell reasoning grid is
+`configs/runs/hidden_bench/hidden_bench_imitation_N_q_qc_phase_grid.yaml` and
+crosses `q in {1,2,4}` with `q_c in {2,8,32}` at `N=32` for ten sweeps.

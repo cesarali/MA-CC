@@ -1,0 +1,196 @@
+# `imitation_N`: a 3 x 3 phase-diagram grid over social group size q and
+# controller sensing size q_c at fixed N=32.  Ten population sweeps means
+# T=10N=320 elementary focal updates in every episode.
+#
+# Prepare the validated task-2 population family before preflight (this grid
+# consumes N=32; the smaller builds support the staged finite-size checks):
+#   conda run -n MA-CC --no-capture-output python \
+#     scripts/local_llms/hiddenbench_population_pipeline/scripts/freeze_paraphrase_subset.py \
+#     --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases.json \
+#     --task-ids 2 --agents 4 8 16 32 \
+#     --output scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json
+#   conda run -n MA-CC --no-capture-output python \
+#     scripts/local_llms/hiddenbench_population_pipeline/scripts/prepare_hiddenbench.py \
+#     --agents 4 8 16 32 --method paraphrased_replication --task-ids 2 \
+#     --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json \
+#     --data-root data/hidden_bench
+#
+# Then inspect cost and launch:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_N_q_qc_phase_grid.yaml \
+#     --output-dir inspection/imitation_N_q_qc_phase_grid_preflight
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_N_q_qc_phase_grid.yaml \
+#     --output-dir results
+
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 256
+  options:
+    estimated_latency_seconds: 3.0
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 2
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+
+game:
+  type: hidden_bench_imitation
+  population_size: 32
+  horizon: 320
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    dynamics_mode: reasoning
+    pairing: uniform_two_distinct
+    # Base value only; the grid below resolves q to 1, 2, or 4.
+    social_group_size: 1
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 2
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    classical:
+      kernel: irisarri_multi_opinion
+      forward_rate: 1.0
+      reverse_rate: 1.0
+      interaction_factor: destination_count_plus_offset
+      interaction_offset: 1.0
+      control_strength: 2.0
+
+control:
+  mechanism: soft_target
+  options:
+    target: correct
+    # Base value only; the grid below resolves q_c to 2, 8, or 32.
+    sensor_sample_size: 2
+    threshold: 0.5
+    beta: 4.0
+    template_version: 2
+
+execution:
+  seed: 20260812
+  repetitions: 40
+  parallelism: 10
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  # q=4 is the expensive edge. The exact call plan is checked at preflight;
+  # this bound covers 4 repetitions across all nine cells with headroom.
+  max_provider_requests: 75000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    show_metrics: true
+    prompt_examples:
+      count: 2
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  # Full trajectories retain ordered peer/controller messages and provenance;
+  # compact results alone intentionally omit free text.
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+  wipe_and_recompute: false
+
+analysis:
+  enabled: true
+  estimators:
+    - sensing_mi
+    - population_actuation_cmi
+    - target_actuation_cmi
+    - focal_actuation_cmi
+    - sensing_mi_m_ctrl
+    - sensing_mi_m_truth
+    - sensing_mi_m_order
+    - m_ctrl_actuation_cmi
+    - m_truth_actuation_cmi
+    - m_order_actuation_cmi
+    - controller_action_entropy
+    - controller_action_entropy_given_population
+    - controller_action_entropy_given_m_ctrl
+    - controller_action_entropy_given_m_truth
+    - controller_action_entropy_given_m_order
+    - population_action_overlap
+    - m_ctrl_action_overlap
+    - m_truth_action_overlap
+    - m_order_action_overlap
+    - truth_current
+    - truth_current_fano
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260812
+  comet_export: true
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 4
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: imitation_N
+  description: N=32 HiddenBench imitation phase diagram over social group size q and controller sensing budget q_c, using validated paraphrased replication.
+  tags: [hidden-bench, imitation-N, reasoning, q-grid, qc-grid, paraphrased-replication, truth-current]
+  metadata:
+    population_sweeps: 10
+    actuation_slots: 1
+
+grid:
+  game.options.social_group_size: [1, 2, 4]
+  control.options.sensor_sample_size: [2, 8, 32]

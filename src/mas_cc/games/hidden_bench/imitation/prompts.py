@@ -382,9 +382,27 @@ def bind_update_prompt(
     current_vote: str,
     dialogue: Sequence[Mapping[str, Any]],
     controller_message: str | None = None,
+    influence_inputs: Sequence[Mapping[str, Any]] | None = None,
     style: PromptStyle = DEFAULT_STYLE,
 ) -> ImitationUpdatePrompt:
-    if controller_message is not None:
+    if influence_inputs is not None:
+        # q>1 is a group interaction with a fixed number of ordered influence
+        # slots.  Controller and peer inputs use the same label deliberately:
+        # the controller acts like a peer locally while remaining external to
+        # the voting population.  Slot order is the scheduler's logged order.
+        lines = [
+            f"The other participant in slot {int(item['slot']) + 1}: "
+            f"{item.get('message') or '(no message)'}"
+            for item in influence_inputs
+        ]
+        own_messages = [str(item["message"]) for item in dialogue if item.get("is_self")]
+        own = ""
+        if own_messages:
+            own = "\nYour messages in these exchanges:\n" + "\n".join(
+                f"You: {message}" for message in own_messages
+            )
+        current = "Private group exchange:\n" + "\n".join(lines) + own
+    elif controller_message is not None:
         # v1 labels the source; v2 must not, because "External controller
         # message:" is leak 1 of §2.1 and is by itself enough for the agent to
         # discount the turn as an outside voice.

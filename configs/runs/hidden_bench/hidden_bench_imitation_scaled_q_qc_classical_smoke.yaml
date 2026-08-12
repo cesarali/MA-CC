@@ -1,0 +1,114 @@
+# Provider-free validation of scaled paraphrased loading, q-peer sampling,
+# q_c sensing, single-slot replacement, and truth-current analysis.
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 32
+  options:
+    response: smoke
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 2
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation
+  population_size: 16
+  horizon: 32
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    dynamics_mode: classical
+    pairing: uniform_two_distinct
+    social_group_size: 2
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 2
+    stop_on_consensus: false
+    initialization:
+      mode: distribution
+      initial_distribution:
+        West City: 1.0
+        East Town: 1.0
+        North Hill: 1.0
+    classical:
+      kernel: irisarri_multi_opinion
+      forward_rate: 1.0
+      reverse_rate: 1.0
+      interaction_factor: destination_count_plus_offset
+      interaction_offset: 1.0
+      control_strength: 2.0
+control:
+  mechanism: soft_target
+  options:
+    target: correct
+    sensor_sample_size: 4
+    threshold: 0.5
+    beta: 4.0
+    template_version: 3
+execution:
+  seed: 20260812
+  repetitions: 4
+  parallelism: 4
+  fail_fast: true
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  max_provider_requests: 0
+  max_input_tokens: 0
+  max_output_tokens: 0
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+  wipe_and_recompute: true
+analysis:
+  enabled: true
+  estimators:
+    - sensing_mi
+    - target_actuation_cmi
+    - truth_current
+    - truth_current_fano
+  options:
+    bootstrap_resamples: 100
+    null_permutations: 100
+    confidence: 0.95
+    seed: 20260812
+metrics:
+  enabled: true
+  comet_export: []
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+experiment:
+  name: imitation_N-runtime-smoke
+  description: Provider-free scaled q/q_c runtime and truth-current smoke test.
+  tags: [hidden-bench, imitation-N, classical, smoke, paraphrased-replication]

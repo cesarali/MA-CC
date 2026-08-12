@@ -13,7 +13,12 @@ Reasoning under Distributed Information in Multi-Agent LLMs* (ICML 2026).
 The complete reference for the imitation game, including all metric
 definitions, MI/CMI equations, estimator variants, report files, and executable
 Conda commands, is
-[`hidden_bench_imitation.md`](hidden_bench_imitation.md).
+[`hidden_bench_imitation.md`](hidden_bench_imitation.md). For what the
+`classical` dynamics mode *means* — its relation to the nonlinear (*q*-) voter
+model of Irisarri et al., why `interaction_offset: 1.0` is the exact
+local-detailed-balance value, and how the provider-free arm serves as a physical
+null model for the LLM arm — see
+[`classical_dynamics_and_the_imitation_model.md`](classical_dynamics_and_the_imitation_model.md).
 
 The corpus is **not** produced here — see
 [`data_provenance.md`](data_provenance.md), which also records which parts of the

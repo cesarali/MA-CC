@@ -25,6 +25,7 @@ def _mapping(value: Any, field: str) -> Mapping[str, Any]:
 class ImitationRules:
     n_agents: int
     horizon: int
+    social_group_size: int
     dynamics_mode: str
     task_set: str
     task_id: str | None
@@ -80,6 +81,16 @@ class ImitationRules:
         pairing = str(options.get("pairing", "uniform_two_distinct"))
         if pairing != "uniform_two_distinct":
             raise ValueError("only pairing 'uniform_two_distinct' is implemented")
+        social_group_size = options.get("social_group_size", 1)
+        if (
+            isinstance(social_group_size, bool)
+            or not isinstance(social_group_size, int)
+            or not 1 <= social_group_size <= n_agents - 1
+        ):
+            raise ValueError(
+                "game.options.social_group_size must be an integer between 1 "
+                "and game.population_size - 1"
+            )
 
         # Prompt text is a study condition, not a detail: v2 pushes directly on
         # how much information an agent volunteers, so it defaults to off and is
@@ -144,6 +155,7 @@ class ImitationRules:
         return cls(
             n_agents=n_agents,
             horizon=config.horizon,
+            social_group_size=int(social_group_size),
             dynamics_mode=mode,
             task_set=str(options.get("task_set", "vanilla")),
             task_id=(None if options.get("task_id") is None else str(options["task_id"])),

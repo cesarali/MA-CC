@@ -1378,3 +1378,97 @@ The most important audit fields are `number_of_U_t_classes_observed`,
 `sparse_conditioning_table`, `controller_degenerate`, and
 `scientifically_interpretable`. Do not interpret an actuation estimate as
 control evidence when `scientifically_interpretable` is false.
+
+## 12. Scaled population and independent `q`, `q_c` controls
+
+The scaled protocol distinguishes three quantities:
+
+```text
+N   = voting population size
+q   = game.options.social_group_size
+q_c = control.options.sensor_sample_size
+```
+
+At each discrete event the scheduler selects one focal population agent and
+samples `q` distinct ordinary peers without replacement from the other `N-1`
+agents. The controller independently samples `q_c` population agents without
+replacement. Its sample may contain the focal or any social peer; the event
+records both overlaps. Validation requires `1 <= q <= N-1` and
+`1 <= q_c <= N`.
+
+`NO_OP` presents all `q` ordinary social slots. `ADVOCATE_Z` replaces exactly
+one slot, so the focal still receives exactly `q` inputs: `q-1` ordinary peer
+messages and one peer-style controller message. The replaced peer ID and
+zero-based slot are logged. At `q=1`, no replacement random draw is consumed
+and the former dyadic protocol is recovered. Only the focal vote can change,
+and the controller never receives evidence or joins the occupation vector.
+
+Reasoning mode visits retained peers in the scheduler's logged order, runs the
+existing dyadic exchange once per peer, and performs one final focal vote call.
+The current classical kernel samples/logs the same `q`-peer context but does not
+yet use those peer opinions in its rate. It remains the existing linear
+`irisarri_multi_opinion` model until a q-voter kernel is specified.
+
+The event index is discrete. Comparisons across population size should hold the
+number of sweeps `S` fixed, set `T=SN`, and use `tau=t/N`. `tau` is normalized
+sweep time, not physical time.
+
+### 12.1 Paraphrased population preparation
+
+Large populations use frozen, validated private-evidence paraphrases rather
+than duplicating canonical text or factorizing facts. A complete task subset is
+cut from a possibly unfinished global pool before population construction:
+
+```bash
+python scripts/local_llms/hiddenbench_population_pipeline/scripts/freeze_paraphrase_subset.py \
+  --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases.json \
+  --task-ids 2 --agents 4 8 16 32 \
+  --output scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json
+
+python scripts/local_llms/hiddenbench_population_pipeline/scripts/prepare_hiddenbench.py \
+  --agents 4 8 16 32 --method paraphrased_replication --task-ids 2 \
+  --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json \
+  --data-root data/hidden_bench
+```
+
+The freezer validates complete evidence-type coverage, unique accepted
+variants, source-text identity, and capacity `ceil(N_max/E)`. The population
+loader rejects mismatched methods/sizes, unvalidated transformations,
+unbalanced evidence types, and undeclared paraphrase reuse. Agent state retains
+the stable variant ID, source evidence indices/text, and transformation. Run
+`run_information_sufficiency_audit.py` on each generated `N_*.json` before a
+scientific run; building the files is not itself a sufficiency result.
+
+### 12.2 Truth current and fluctuation ratio
+
+For every focal transition,
+
+\[
+j_t^{\rm truth}=\mathbf 1[X_t^f\ne Y^*,X_{t+1}^f=Y^*]
+-\mathbf 1[X_t^f=Y^*,X_{t+1}^f\ne Y^*].
+\]
+
+The episode report stores `truth_current = sum_t j_t`,
+`truth_switches_toward`, and `truth_switches_away`. Because only the focal vote
+changes, the net current telescopes to the final minus initial truth headcount;
+it is not by itself a volatility measure.
+
+Across equal-horizon episodes the cell report uses sample variance and writes
+
+\[
+F_{\rm truth}=\frac{|\langle J_{\rm truth}\rangle|}
+{\widehat{\operatorname{Var}}(J_{\rm truth})}.
+\]
+
+The output files are `truth_current_estimates.csv` and
+`truth_current_estimates.md`. Whole episodes are the bootstrap unit. Nonzero
+mean with zero dispersion is `+inf` with `zero_dispersion=true`; zero mean and
+zero dispersion is undefined/`NaN`. There is no action-shuffle null, and this
+ratio is not claimed to satisfy a thermodynamic uncertainty relation.
+
+### 12.3 Shipped experiment pair
+
+`hidden_bench_imitation_scaled_q_qc_classical_smoke.yaml` is the provider-free
+runtime check. `hidden_bench_imitation_N_q_qc_phase_grid.yaml` is the
+`imitation_N` reasoning experiment: fixed `N=32`, ten sweeps, and the nine-cell
+Cartesian product `q in {1,2,4}` by `q_c in {2,8,32}`.

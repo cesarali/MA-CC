@@ -17,7 +17,8 @@ Distributed Information in Multi-Agent LLMs* (ICML 2026).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 
@@ -157,6 +158,7 @@ class AgentInfoSet:
     private: tuple[str, ...]
     evidence_types: tuple[int, ...] = ()
     transformation: str = "identity"
+    provenance: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "shared", _texts(self.shared, "AgentInfoSet.shared"))
@@ -166,6 +168,7 @@ class AgentInfoSet:
             raise HiddenBenchDataError("AgentInfoSet.private must be a sequence of strings")
         object.__setattr__(self, "private", tuple(str(item) for item in self.private))
         object.__setattr__(self, "evidence_types", tuple(int(item) for item in self.evidence_types))
+        object.__setattr__(self, "provenance", MappingProxyType(dict(self.provenance)))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -173,4 +176,5 @@ class AgentInfoSet:
             "private": list(self.private),
             "evidence_types": list(self.evidence_types),
             "transformation": self.transformation,
+            "provenance": dict(self.provenance),
         }
