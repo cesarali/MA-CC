@@ -192,3 +192,19 @@ The provider-free validation config is
 The nine-cell reasoning grid is
 `configs/runs/hidden_bench/hidden_bench_imitation_N_q_qc_phase_grid.yaml` and
 crosses `q in {1,2,4}` with `q_c in {2,8,32}` at `N=32` for ten sweeps.
+
+That grid uses `artifact_profile: results_only`. Each completed cell retains a
+compact `scientific_events.parquet`, its aggregate/plots, two sampled prompts,
+and immediate human-readable reports under `cells/<cell-id>/reports/`. Report
+filenames include the cell ID and resolved `N`, `q`, and `q_c`, for example
+`information_estimates__cell-0007__N-32__q-4__qc-8.md`. Per-cell bootstrap/null
+analyses are serialized to bound local CPU and memory use; provider execution
+in unfinished cells can continue. These local reports do not open extra Comet
+experiments. The final combined grid analysis and its single configured Comet
+export still run after all cells complete.
+
+Compact scientific rows retain the population/sensor/action/focal variables
+needed by every configured MI, entropy, controller diagnostic, and truth-current
+estimator. They intentionally omit full transcripts, ordered peer/controller
+messages, individual sensor IDs and overlaps, and most per-episode raw files;
+use the full-profile smoke run when those protocol-audit details are needed.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -61,12 +63,20 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     current_statistics = tuple(name for name in requested if name in CURRENT_STATISTICS)
 
     options = dict(analysis.options)
-    allowed_options = {"bootstrap_resamples", "null_permutations", "confidence", "seed"}
+    allowed_options = {
+        "bootstrap_resamples",
+        "null_permutations",
+        "confidence",
+        "seed",
+        "per_cell_reports",
+    }
     unknown_options = sorted(set(options) - allowed_options)
     if unknown_options:
         raise ValueError(
             "unknown HiddenBench imitation analysis option(s): " + ", ".join(unknown_options)
         )
+    if not isinstance(options.get("per_cell_reports", False), bool):
+        raise ValueError("analysis.options.per_cell_reports must be a boolean")
 
     confidence = _number_option(options, "confidence", 0.95)
     if not 0 < confidence < 1:
@@ -86,6 +96,26 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         "comet_project": str(config.logging.options.get("comet_project", "mas-cc")),
         "comet_run_name": f"{run_id}/analysis",
     }
+
+
+def per_cell_reports_enabled(config: RunConfig) -> bool:
+    """Whether a grid should render configured analysis as each cell closes."""
+
+    if not config.analysis.enabled:
+        return False
+    value = config.analysis.options.get("per_cell_reports", False)
+    if not isinstance(value, bool):
+        raise ValueError("analysis.options.per_cell_reports must be a boolean")
+    return value
+
+
+def _report_slug(config: RunConfig, cell_id: str) -> str:
+    """Readable, filesystem-safe identity for one HiddenBench q/q_c cell."""
+
+    q = config.game.options.get("social_group_size", 1)
+    q_c = config.control.options.get("sensor_sample_size", "none")
+    raw = f"{cell_id}__N-{config.game.population_size}__q-{q}__qc-{q_c}"
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("-.")
 
 
 def validate_configured_analysis(config: RunConfig) -> None:
@@ -121,4 +151,60 @@ def run_configured_analysis(
     )
 
 
-__all__ = ["run_configured_analysis", "validate_configured_analysis"]
+def run_configured_cell_analysis(
+    config: RunConfig,
+    cell_dir: str | Path,
+    cell_id: str,
+) -> dict[str, Any] | None:
+    """Render the two compact human-readable reports for one completed grid cell.
+
+    The normal analyzer also creates machine-readable tables and plots.  Those
+    remain useful in the final whole-grid analysis, but retaining a second copy
+    under every cell would defeat ``results_only``.  Cell completion therefore
+    runs the exact configured estimators in a temporary directory and keeps
+    only the MI/controller-diagnostic and truth-current Markdown reports.
+
+    Per-cell reports are local-only.  The final grid analysis remains the one
+    Comet export, avoiding nine additional experiments or concurrent writers.
+    """
+
+    arguments = _configured_arguments(config)
+    if arguments is None:
+        return None
+    from mas_cc.games.hidden_bench.imitation.analysis import analyze_hidden_bench_imitation
+    from mas_cc.storage import canonical_hash
+
+    root = Path(cell_dir)
+    reports = root / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    slug = _report_slug(config, cell_id)
+    arguments["comet_export"] = False
+    retained: list[str] = []
+    with tempfile.TemporaryDirectory(prefix=".cell-analysis-", dir=root) as temporary:
+        destination = Path(temporary)
+        summary = analyze_hidden_bench_imitation(
+            root,
+            destination,
+            artifact_profile=config.storage.artifact_profile,
+            resolved_config_hash=canonical_hash(config.to_dict()),
+            **arguments,
+        )
+        for source_name in (
+            "information_estimates.md",
+            "truth_current_estimates.md",
+        ):
+            source = destination / source_name
+            if not source.is_file():
+                continue
+            target = reports / f"{source.stem}__{slug}{source.suffix}"
+            source.replace(target)
+            retained.append(str(target))
+    return {**summary, "cell_report_slug": slug, "cell_reports": retained}
+
+
+__all__ = [
+    "per_cell_reports_enabled",
+    "run_configured_analysis",
+    "run_configured_cell_analysis",
+    "validate_configured_analysis",
+]

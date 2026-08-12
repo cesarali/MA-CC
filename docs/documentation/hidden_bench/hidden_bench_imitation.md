@@ -1472,3 +1472,13 @@ ratio is not claimed to satisfy a thermodynamic uncertainty relation.
 runtime check. `hidden_bench_imitation_N_q_qc_phase_grid.yaml` is the
 `imitation_N` reasoning experiment: fixed `N=32`, ten sweeps, and the nine-cell
 Cartesian product `q in {1,2,4}` by `q_c in {2,8,32}`.
+
+The reasoning grid uses compact `results_only` storage and
+`analysis.options.per_cell_reports: true`. When the last repetition of a cell
+finishes, its compact scientific table is sealed and its configured analysis is
+run immediately. The two retained Markdown files live under that cell's
+`reports/` directory and encode the resolved parameters in their names, such as
+`information_estimates__cell-0000__N-32__q-1__qc-2.md` and the corresponding
+`truth_current_estimates` report. Cell analyses run one at a time to avoid a
+burst of bootstrap/null CPU and memory use. The combined grid report is still
+created after all nine cells finish.

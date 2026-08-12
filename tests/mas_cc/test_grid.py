@@ -118,6 +118,65 @@ def test_run_experiment_grid_runs_every_cell_and_resumes_per_episode(tmp_path: P
     assert third.completed == 4
 
 
+def test_grid_runs_requested_configured_analysis_at_each_cell_completion(
+    tmp_path: Path, monkeypatch
+):
+    base = _with_ample_budget(_toy_config(repetitions=1, parallelism=2))
+    base = replace(
+        base,
+        analysis=replace(
+            base.analysis,
+            enabled=True,
+            estimators=("fixture",),
+            options={"per_cell_reports": True},
+        ),
+    )
+    grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3)),))
+    calls = []
+
+    monkeypatch.setattr(
+        "mas_cc.experiments.orchestrator.validate_configured_analysis",
+        lambda _config: None,
+    )
+    monkeypatch.setattr(
+        "mas_cc.experiments.orchestrator.run_configured_analysis",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def record_cell(config, cell_dir, cell_id):
+        calls.append((cell_id, config.game.horizon, Path(cell_dir)))
+        return {"cell_id": cell_id}
+
+    monkeypatch.setattr(
+        "mas_cc.experiments.orchestrator.run_configured_cell_analysis",
+        record_cell,
+    )
+
+    result = run_experiment_grid_sync(
+        grid, tmp_path, resume=False, show_progress=False
+    )
+
+    assert result.completed == 2
+    assert sorted((cell_id, horizon) for cell_id, horizon, _ in calls) == [
+        ("cell-0000", 2),
+        ("cell-0001", 3),
+    ]
+    assert {path for _, _, path in calls} == {
+        result.output_dir / "cells" / "cell-0000",
+        result.output_dir / "cells" / "cell-0001",
+    }
+
+    calls.clear()
+    resumed = run_experiment_grid_sync(
+        grid, tmp_path, resume=True, show_progress=False
+    )
+    assert resumed.skipped_resumed == 2
+    assert sorted((cell_id, horizon) for cell_id, horizon, _ in calls) == [
+        ("cell-0000", 2),
+        ("cell-0001", 3),
+    ]
+
+
 def test_run_experiment_grid_fail_fast_aborts_across_every_cell_not_just_one(tmp_path: Path, monkeypatch):
     base = _with_ample_budget(_toy_config(repetitions=1, parallelism=1, fail_fast=True))
     grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3, 4)),))  # 3 cells x 1 episode = 3 tasks

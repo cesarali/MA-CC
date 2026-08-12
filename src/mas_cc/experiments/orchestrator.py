@@ -78,7 +78,12 @@ from mas_cc.storage import (
 
 from .aggregation import GridAggregator, aggregation_ground_truth
 from .comet_monitor import CellLayout, MasterMonitor, SweepLayout, sweep_parameters
-from .configured_analysis import run_configured_analysis, validate_configured_analysis
+from .configured_analysis import (
+    per_cell_reports_enabled,
+    run_configured_analysis,
+    run_configured_cell_analysis,
+    validate_configured_analysis,
+)
 from .console import ExperimentProgress, format_banner, format_grid_banner, format_money, print_banner
 
 LOGGER = logging.getLogger("mas_cc.experiment")
@@ -1101,6 +1106,36 @@ class _ResultsOnlyFinalizer:
             return summary
 
 
+class _PerCellAnalysisReporter:
+    """Serialize local configured analysis as grid cells become complete.
+
+    Bootstrap/null analysis is CPU-heavy and cell completions can race under
+    the shared episode concurrency pool.  One lock keeps those analyses from
+    multiplying CPU and memory pressure while provider work in other cells is
+    still free to continue.
+    """
+
+    def __init__(self, cells: Sequence[Any], cells_dir: Path) -> None:
+        self._configs = {cell.cell_id: cell.config for cell in cells}
+        self._cells_dir = cells_dir
+        self._lock = threading.Lock()
+
+    def write(self, cell_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            summary = run_configured_cell_analysis(
+                self._configs[cell_id],
+                self._cells_dir / cell_id,
+                cell_id,
+            )
+            if summary is not None:
+                LOGGER.info(
+                    "cell %s configured analysis ready: %s",
+                    cell_id,
+                    ", ".join(summary.get("cell_reports", ())),
+                )
+            return summary
+
+
 def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: Any):
     """This game's observer-aware runtime, or ``None`` if it has none.
 
@@ -1302,6 +1337,7 @@ async def _run_episode_task(
     completion: "_CellCompletion | None" = None,
     prompt_sampler: _CellPromptSampler | None = None,
     finalizer: _ResultsOnlyFinalizer | None = None,
+    cell_analysis: _PerCellAnalysisReporter | None = None,
 ) -> EpisodeOutcome:
     manifest_path = task.manifest_path
     label = task.episode_id if task.cell_id is None else f"{task.cell_id}/{task.episode_id}"
@@ -1340,6 +1376,8 @@ async def _run_episode_task(
             if finalizer is not None:
                 await asyncio.to_thread(finalizer.seal, task.cell_id)
             await asyncio.to_thread(aggregator.aggregate, task.cell_id)
+            if cell_analysis is not None:
+                await asyncio.to_thread(cell_analysis.write, task.cell_id)
             if finalizer is not None:
                 await asyncio.to_thread(
                     _record_cell_hashes, task.cell_dir or task.episode_dir
@@ -1457,6 +1495,7 @@ async def _prime_resumed_outcomes(
     completion: _CellCompletion | None = None,
     aggregator: GridAggregator | None = None,
     finalizer: _ResultsOnlyFinalizer | None = None,
+    cell_analysis: _PerCellAnalysisReporter | None = None,
 ) -> None:
     """Reflect validated checkpoints in progress and cell-completion state."""
 
@@ -1480,6 +1519,8 @@ async def _prime_resumed_outcomes(
             await asyncio.to_thread(finalizer.seal, outcome.cell_id)
         if aggregator is not None:
             await asyncio.to_thread(aggregator.aggregate, outcome.cell_id)
+            if cell_analysis is not None:
+                await asyncio.to_thread(cell_analysis.write, outcome.cell_id)
             if finalizer is not None:
                 await asyncio.to_thread(
                     _record_cell_hashes, aggregator.cell_directory(outcome.cell_id)
@@ -2126,6 +2167,11 @@ async def run_experiment_grid(
         if base.storage.retention_policy.compact_scientific
         else None
     )
+    cell_analysis = (
+        _PerCellAnalysisReporter(cells, cells_dir)
+        if per_cell_reports_enabled(base)
+        else None
+    )
     semaphore = asyncio.Semaphore(base.execution.parallelism)
     abort = asyncio.Event()
     budget_abort = asyncio.Event()
@@ -2141,6 +2187,7 @@ async def run_experiment_grid(
             completion=completion,
             aggregator=aggregator,
             finalizer=finalizer,
+            cell_analysis=cell_analysis,
         )
         fresh_outcomes = await _with_spend_watch(
             watcher,
@@ -2152,6 +2199,7 @@ async def run_experiment_grid(
                 price_hash=price_hash, checkpoint_enabled=base.storage.checkpoints, progress=progress,
                 monitor=monitor, aggregator=aggregator, completion=completion,
                 prompt_sampler=prompt_sampler, finalizer=finalizer,
+                cell_analysis=cell_analysis,
             ),
         )
         by_id = {

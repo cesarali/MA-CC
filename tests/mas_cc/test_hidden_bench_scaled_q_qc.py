@@ -86,6 +86,8 @@ def test_imitation_n_grid_is_exactly_the_requested_three_by_three_phase_diagram(
         cell.config.game.options["assignment_scheme"] == "paraphrased_replication"
         for cell in spec.cells
     )
+    assert spec.base.storage.artifact_profile == "results_only"
+    assert spec.base.analysis.options["per_cell_reports"] is True
     assert spec.base.analysis.estimators[-2:] == (
         "truth_current",
         "truth_current_fano",

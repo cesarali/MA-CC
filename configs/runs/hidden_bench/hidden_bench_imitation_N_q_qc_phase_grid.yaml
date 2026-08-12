@@ -119,9 +119,10 @@ logging:
 storage:
   output_dir: results
   format: jsonl
-  # Full trajectories retain ordered peer/controller messages and provenance;
-  # compact results alone intentionally omit free text.
-  artifact_profile: full
+  # Retain the compact scientific transition table needed by every configured
+  # estimator, plus two sampled prompts per cell; omit full transcripts and
+  # per-episode raw event trees from this large grid.
+  artifact_profile: results_only
   checkpoint_mode: episode
   overwrite: false
   wipe_and_recompute: false
@@ -155,6 +156,9 @@ analysis:
     null_permutations: 1000
     confidence: 0.95
     seed: 20260812
+    # As soon as all repetitions of one cell finish, write its local MI and
+    # truth-current Markdown reports. Analyses are serialized to bound CPU/RAM.
+    per_cell_reports: true
   comet_export: true
 
 metrics:
