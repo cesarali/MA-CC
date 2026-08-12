@@ -1,0 +1,122 @@
+#!/bin/bash
+###############################################################################
+# Sequential calibration of episode parallelism with provider concurrency fixed
+# at 10. Sequential arms avoid making the candidates compete with one another.
+# Submit from the repository root:
+#   sbatch scripts/Potsdam/SLURM/hidden_bench_imitation_parallelism_timing_study.job
+###############################################################################
+#SBATCH --job-name=mascc-hb-par-timing
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=8G
+#SBATCH --time=04:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/slurm-%x-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/slurm-%x-%j.err
+###############################################################################
+set -euo pipefail
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly RESULTS_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/parallelism_timing_study
+readonly GENERATED_CONFIG_ROOT=${RESULTS_ROOT}/generated_configs
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly BASE_CONFIG=configs/runs/hidden_bench/hidden_bench_imitation_parallelism_timing_study.yaml
+readonly CANDIDATES="2 5 10 20 50"
+
+mkdir -p "${RESULTS_ROOT}" "${GENERATED_CONFIG_ROOT}"
+cd "${REPO_ROOT}"
+
+if [[ ! -x "${CONDA_BIN}" || ! -f "${BASE_CONFIG}" || ! -f .env ]]; then
+  echo "[error] Missing Conda, base config, or repository .env" >&2
+  exit 1
+fi
+
+echo "[run] candidates=${CANDIDATES}"
+echo "[run] request_concurrency=10"
+echo "[run] repetitions_per_arm=50 horizon=5"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+for parallelism in ${CANDIDATES}; do
+  seed=$((20260860 + parallelism))
+  experiment_name="hidden-bench-imitation-parallelism-timing-p${parallelism}"
+  config_path="${GENERATED_CONFIG_ROOT}/parallelism_${parallelism}.yaml"
+
+  "${CONDA_BIN}" run --no-capture-output -n MA-CC python - "${BASE_CONFIG}" "${config_path}" \
+    "${parallelism}" "${seed}" "${experiment_name}" <<'PYTHON'
+import sys
+from pathlib import Path
+import yaml
+
+source, destination, parallelism, seed, name = sys.argv[1:]
+config = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
+config["execution"]["parallelism"] = int(parallelism)
+config["execution"]["seed"] = int(seed)
+config["experiment"]["name"] = name
+Path(destination).write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+PYTHON
+
+  echo "[arm] parallelism=${parallelism} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  "${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+    --config "${config_path}" \
+    --output-dir "${RESULTS_ROOT}" \
+    --no-progress
+  echo "[arm] parallelism=${parallelism} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+done
+
+"${CONDA_BIN}" run --no-capture-output -n MA-CC python - "${RESULTS_ROOT}" ${CANDIDATES} <<'PYTHON'
+import csv
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+root = Path(sys.argv[1])
+candidates = [int(value) for value in sys.argv[2:]]
+rows = []
+for parallelism in candidates:
+    seed = 20260860 + parallelism
+    name = f"hidden-bench-imitation-parallelism-timing-p{parallelism}"
+    run = root / "hidden_bench_imitation" / name / f"{name}-{seed}"
+    manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+    started = datetime.fromisoformat(manifest["started_at"].replace("Z", "+00:00"))
+    finished = datetime.fromisoformat(manifest["finished_at"].replace("Z", "+00:00"))
+    wall = (finished - started).total_seconds()
+    with (run / "timing_study.csv").open(newline="", encoding="utf-8") as stream:
+        episodes = list(csv.DictReader(stream))
+    durations = [float(row["duration_seconds"]) for row in episodes if row["duration_seconds"]]
+    budget = json.loads((run / "budget_state.json").read_text(encoding="utf-8"))
+    requests = int(budget["committed_requests"])
+    rows.append((parallelism, wall, sum(durations) / len(durations), requests, requests / wall))
+
+best = max(rows, key=lambda row: row[4])
+lines = [
+    "# Parallelism timing benchmark",
+    "",
+    "Provider request concurrency was fixed at 10. Each arm ran 50 episodes at horizon 5, sequentially.",
+    "",
+    "| Episode parallelism | Wall time (s) | Mean episode (s) | Requests | Requests/s |",
+    "|---:|---:|---:|---:|---:|",
+]
+for parallelism, wall, mean, requests, rate in rows:
+    lines.append(f"| {parallelism} | {wall:.3f} | {mean:.3f} | {requests} | {rate:.3f} |")
+lines.extend([
+    "",
+    f"Highest measured request throughput: **parallelism {best[0]}** ({best[4]:.3f} requests/s).",
+    "Choose the smallest candidate within 5% of the highest throughput to favor earlier episode completion and lower memory use.",
+    "",
+])
+(root / "parallelism_timing_summary.md").write_text("\n".join(lines), encoding="utf-8")
+PYTHON
+
+echo "[done] summary=${RESULTS_ROOT}/parallelism_timing_summary.md"
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

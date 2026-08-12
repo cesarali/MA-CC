@@ -135,7 +135,7 @@ def config_schema() -> dict[str, Any]:
                     "output_dir": {"type": "string", "minLength": 1},
                     "format": {"type": "string", "minLength": 1},
                     "checkpoints": {"type": "boolean"},
-                    "artifact_profile": {"enum": ["full", "results_only"]},
+                    "artifact_profile": {"enum": ["full", "results_only", "timing_study"]},
                     "checkpoint_mode": {"enum": ["off", "episode"]},
                     "overwrite": {"type": "boolean"},
                     "wipe_and_recompute": {"type": "boolean"},

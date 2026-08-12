@@ -621,6 +621,7 @@ def _parse_logging(
     raw: Any, issues: list[ValidationIssue], *, artifact_profile: str = "full"
 ) -> LoggingConfig:
     path = "logging"
+    compact_profile = artifact_profile in {"results_only", "timing_study"}
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
         values, {"schema_version", "level", "console", "audit", "comet", "options"}, path, issues
@@ -641,8 +642,8 @@ def _parse_logging(
             "scope",
             examples_path,
             issues,
-            default="cell" if artifact_profile == "results_only" else "episode",
-        ) or ("cell" if artifact_profile == "results_only" else "episode")
+            default="cell" if compact_profile else "episode",
+        ) or ("cell" if compact_profile else "episode")
         if scope not in {"episode", "cell"}:
             _issue(
                 issues,
@@ -650,17 +651,17 @@ def _parse_logging(
                 "must be one of episode, cell",
                 scope,
             )
-            scope = "cell" if artifact_profile == "results_only" else "episode"
-        if artifact_profile == "results_only" and explicit_scope and scope != "cell":
+            scope = "cell" if compact_profile else "episode"
+        if compact_profile and explicit_scope and scope != "cell":
             _issue(
                 issues,
                 f"{examples_path}.scope",
-                "must be cell when storage.artifact_profile is results_only",
+                "must be cell for compact storage artifact profiles",
                 scope,
             )
             scope = "cell"
         options["prompt_examples"] = {"count": count, "scope": scope}
-    elif artifact_profile == "results_only":
+    elif compact_profile:
         # Make the effective scope visible in resolved configs even when the
         # sample is disabled.
         options["prompt_examples"] = {"count": 0, "scope": "cell"}
@@ -696,11 +697,11 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
     profile = _string(
         values, "artifact_profile", path, issues, default="full", required=True
     ) or "full"
-    if profile not in {"full", "results_only"}:
+    if profile not in {"full", "results_only", "timing_study"}:
         _issue(
             issues,
             f"{path}.artifact_profile",
-            "must be one of full, results_only",
+            "must be one of full, results_only, timing_study",
             profile,
         )
         profile = "full"
