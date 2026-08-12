@@ -164,13 +164,13 @@ LLM verifier.
 
 ```bash
 python scripts/generate_semantic_annotations.py \
-  --input data/hidden_bench/canonical/tasks.json --output-dir annotations \
+  --input data/hidden_bench/canonical/tasks.json --output-dir data/hidden_bench/annotations \
   --mode both --paraphrases-per-type 10 --factorization-alternatives 4 \
   --max-components 4 --resume
 python scripts/prepare_hiddenbench.py --agents 32 --method paraphrased_replication \
-  --annotations annotations/paraphrases.json --data-root data/hidden_bench
+  --annotations data/hidden_bench/annotations/paraphrases.json --data-root data/hidden_bench
 python scripts/prepare_hiddenbench.py --agents 32 --method factorized_evidence \
-  --annotations annotations/factorizations.json --data-root data/hidden_bench
+  --annotations data/hidden_bench/annotations/factorizations.json --data-root data/hidden_bench
 python scripts/run_information_sufficiency_audit.py \
   --input data/hidden_bench/canonical/tasks.json \
   --output results/canonical_information_sufficiency.json

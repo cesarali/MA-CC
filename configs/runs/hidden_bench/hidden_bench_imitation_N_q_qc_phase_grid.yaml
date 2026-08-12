@@ -2,17 +2,17 @@
 # controller sensing size q_c at fixed N=32.  Ten population sweeps means
 # T=10N=320 elementary focal updates in every episode.
 #
-# Prepare the validated task-2 population family before preflight (this grid
-# consumes N=32; the smaller builds support the staged finite-size checks):
+# Prepare the validated task-1/task-2 population family before preflight (this
+# grid selects task 1; retaining task 2 keeps the scaled smoke config runnable):
 #   conda run -n MA-CC --no-capture-output python \
 #     scripts/local_llms/hiddenbench_population_pipeline/scripts/freeze_paraphrase_subset.py \
-#     --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases.json \
-#     --task-ids 2 --agents 4 8 16 32 \
-#     --output scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json
+#     --annotations data/hidden_bench/annotations/paraphrases.json \
+#     --task-ids 1 2 --agents 4 8 16 32 \
+#     --output data/hidden_bench/annotations/paraphrases_tasks_1_2_frozen.json
 #   conda run -n MA-CC --no-capture-output python \
 #     scripts/local_llms/hiddenbench_population_pipeline/scripts/prepare_hiddenbench.py \
-#     --agents 4 8 16 32 --method paraphrased_replication --task-ids 2 \
-#     --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json \
+#     --agents 4 8 16 32 --method paraphrased_replication --task-ids 1 2 \
+#     --annotations data/hidden_bench/annotations/paraphrases_tasks_1_2_frozen.json \
 #     --data-root data/hidden_bench
 #
 # Then inspect cost and launch:
@@ -42,7 +42,6 @@ prompt:
   prompt_version: 2
   response_contract:
     type: hidden_bench_json_vote
-    allowed_values: [West City, East Town, North Hill]
 
 game:
   type: hidden_bench_imitation
@@ -51,7 +50,7 @@ game:
   topology: complete
   options:
     task_set: expanded
-    task_id: evacuation_north_hill
+    task_id: evacuation_west_city
     profile: hidden
     assignment_scheme: paraphrased_replication
     dynamics_mode: reasoning
@@ -189,7 +188,7 @@ observability:
 
 experiment:
   name: imitation_N
-  description: N=32 HiddenBench imitation phase diagram over social group size q and controller sensing budget q_c, using validated paraphrased replication.
+  description: N=32 evacuation_west_city imitation phase diagram over social group size q and controller sensing budget q_c, using validated paraphrased replication.
   tags: [hidden-bench, imitation-N, reasoning, q-grid, qc-grid, paraphrased-replication, truth-current]
   metadata:
     population_sweeps: 10

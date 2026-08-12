@@ -191,13 +191,18 @@ The provider-free validation config is
 `configs/runs/hidden_bench/hidden_bench_imitation_scaled_q_qc_classical_smoke.yaml`.
 The nine-cell reasoning grid is
 `configs/runs/hidden_bench/hidden_bench_imitation_N_q_qc_phase_grid.yaml` and
-crosses `q in {1,2,4}` with `q_c in {2,8,32}` at `N=32` for ten sweeps.
+crosses `q in {1,2,4}` with `q_c in {2,8,32}` at `N=32` for ten sweeps. It
+selects `evacuation_west_city`; all four evidence types have 10 accepted unique
+paraphrases, versus 8 required per type. Its schema-v2 response contract omits
+`allowed_values` intentionally: the selected task supplies the answer alphabet
+to the concrete runtime prompts and validators.
 
 That grid uses `artifact_profile: results_only`. Each completed cell retains a
 compact `scientific_events.parquet`, its aggregate/plots, two sampled prompts,
 and immediate human-readable reports under `cells/<cell-id>/reports/`. Report
-filenames include the cell ID and resolved `N`, `q`, and `q_c`, for example
-`information_estimates__cell-0007__N-32__q-4__qc-8.md`. Per-cell bootstrap/null
+filenames include the cell ID, task, and resolved `N`, `q`, and `q_c`, for example
+`information_estimates__cell-0007__task-evacuation_west_city__N-32__q-4__qc-8.md`.
+Per-cell bootstrap/null
 analyses are serialized to bound local CPU and memory use; provider execution
 in unfinished cells can continue. These local reports do not open extra Comet
 experiments. The final combined grid analysis and its single configured Comet

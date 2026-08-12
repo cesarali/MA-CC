@@ -62,7 +62,7 @@ Generation proceeds one task at a time and writes an evidence-level checkpoint
 after each unit. `--resume` keeps accepted paraphrases and completed
 factorizations instead of generating them again. Every API call and its token,
 model, response, and verification metadata is also recorded in
-`annotations/generation_audit.jsonl` and inside the annotation JSON.
+`data/hidden_bench/annotations/generation_audit.jsonl` and inside the annotation JSON.
 
 After a complete traversal, the script adds `status: "frozen"`. The population
 builder deliberately refuses annotation files without this marker. This avoids
@@ -236,10 +236,10 @@ the original hidden facts across agents but does not modify their text.
 
 | File | Current state |
 | --- | --- |
-| `annotations/paraphrases.json` | 42 tasks complete; task 43 partially complete; tasks 44–65 absent; not frozen |
-| `annotations/factorizations.json` | Tasks 1–42 complete; tasks 43–65 absent; not frozen |
-| `annotations/generation_audit.jsonl` | Detailed generation and verification audit trail |
-| `annotations/gpt5mini_full_run.log` | Console log from the interrupted run |
+| `data/hidden_bench/annotations/paraphrases.json` | 42 tasks complete; task 43 partially complete; tasks 44–65 absent; not frozen |
+| `data/hidden_bench/annotations/factorizations.json` | Tasks 1–42 complete; tasks 43–65 absent; not frozen |
+| `data/hidden_bench/annotations/generation_audit.jsonl` | Detailed generation and verification audit trail |
+| `scripts/local_llms/hiddenbench_population_pipeline/annotations/gpt5mini_full_run.log` | Console log from the interrupted run |
 | `data/hidden_bench/scaled/exact_replication/N_32.json` | Complete 65-task, 32-agent exact-replication dataset |
 | `data/hidden_bench/scaled/paraphrased_replication/N_32.json` | Not built |
 | `data/hidden_bench/scaled/factorized_evidence/N_32.json` | Not built |
@@ -265,7 +265,7 @@ Generate or resume both annotation types:
 ```bash
 python scripts/generate_semantic_annotations.py \
   --input data/hidden_bench/canonical/tasks.json \
-  --output-dir annotations \
+  --output-dir data/hidden_bench/annotations \
   --mode both \
   --paraphrases-per-type 10 \
   --factorization-alternatives 4 \
@@ -281,13 +281,13 @@ two 32-agent population datasets:
 python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method paraphrased_replication \
-  --annotations annotations/paraphrases.json \
+  --annotations data/hidden_bench/annotations/paraphrases.json \
   --data-root data/hidden_bench
 
 python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method factorized_evidence \
-  --annotations annotations/factorizations.json \
+  --annotations data/hidden_bench/annotations/factorizations.json \
   --data-root data/hidden_bench
 ```
 

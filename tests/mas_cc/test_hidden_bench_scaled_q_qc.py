@@ -72,6 +72,8 @@ def test_imitation_n_grid_is_exactly_the_requested_three_by_three_phase_diagram(
         environment={},
     )
     assert spec.base.experiment.name == "imitation_N"
+    assert spec.base.game.options["task_id"] == "evacuation_west_city"
+    assert "allowed_values" not in spec.base.prompt.response_contract
     assert len(spec.cells) == 9
     assert {
         (

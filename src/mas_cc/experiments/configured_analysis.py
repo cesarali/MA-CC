@@ -112,9 +112,13 @@ def per_cell_reports_enabled(config: RunConfig) -> bool:
 def _report_slug(config: RunConfig, cell_id: str) -> str:
     """Readable, filesystem-safe identity for one HiddenBench q/q_c cell."""
 
+    task = config.game.options.get("task_id", "task-unspecified")
     q = config.game.options.get("social_group_size", 1)
     q_c = config.control.options.get("sensor_sample_size", "none")
-    raw = f"{cell_id}__N-{config.game.population_size}__q-{q}__qc-{q_c}"
+    raw = (
+        f"{cell_id}__task-{task}__N-{config.game.population_size}"
+        f"__q-{q}__qc-{q_c}"
+    )
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("-.")
 
 

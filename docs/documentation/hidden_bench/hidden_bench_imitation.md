@@ -1421,15 +1421,23 @@ cut from a possibly unfinished global pool before population construction:
 
 ```bash
 python scripts/local_llms/hiddenbench_population_pipeline/scripts/freeze_paraphrase_subset.py \
-  --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases.json \
-  --task-ids 2 --agents 4 8 16 32 \
-  --output scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json
+  --annotations data/hidden_bench/annotations/paraphrases.json \
+  --task-ids 1 2 --agents 4 8 16 32 \
+  --output data/hidden_bench/annotations/paraphrases_tasks_1_2_frozen.json
 
 python scripts/local_llms/hiddenbench_population_pipeline/scripts/prepare_hiddenbench.py \
-  --agents 4 8 16 32 --method paraphrased_replication --task-ids 2 \
-  --annotations scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases_task_2_frozen.json \
+  --agents 4 8 16 32 --method paraphrased_replication --task-ids 1 2 \
+  --annotations data/hidden_bench/annotations/paraphrases_tasks_1_2_frozen.json \
   --data-root data/hidden_bench
 ```
+
+The shipped `imitation_N` grid selects task 1, `evacuation_west_city`. Its four
+evidence types each have 10 accepted unique paraphrases, while `N=32` requires
+8 per type. Task 2 remains in the frozen/build subset so the scaled classical
+smoke config can use the same generated population family. The schema-v2 prompt
+configuration declares only `type: hidden_bench_json_vote`; its allowed answer
+values are bound from the selected task at runtime rather than duplicated in
+the YAML.
 
 The freezer validates complete evidence-type coverage, unique accepted
 variants, source-text identity, and capacity `ceil(N_max/E)`. The population
@@ -1478,7 +1486,8 @@ The reasoning grid uses compact `results_only` storage and
 finishes, its compact scientific table is sealed and its configured analysis is
 run immediately. The two retained Markdown files live under that cell's
 `reports/` directory and encode the resolved parameters in their names, such as
-`information_estimates__cell-0000__N-32__q-1__qc-2.md` and the corresponding
+`information_estimates__cell-0000__task-evacuation_west_city__N-32__q-1__qc-2.md`
+and the corresponding
 `truth_current_estimates` report. Cell analyses run one at a time to avoid a
 burst of bootstrap/null CPU and memory use. The combined grid report is still
 created after all nine cells finish.

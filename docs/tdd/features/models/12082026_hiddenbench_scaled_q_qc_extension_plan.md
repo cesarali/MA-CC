@@ -271,7 +271,7 @@ complete 65-task paraphrased release.
 The relevant local artifact is:
 
 ```text
-scripts/local_llms/hiddenbench_population_pipeline/annotations/paraphrases.json
+data/hidden_bench/annotations/paraphrases.json
 ```
 
 Its current contents are:

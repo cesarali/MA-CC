@@ -36,9 +36,10 @@ first with `conda activate MA-CC`.
 
 **Every default path is anchored to the repository, not to the working
 directory**, so a command produces the same files wherever it is launched from.
-The corpus goes to the repository's `data/hidden_bench/` - the one location
-`mas_cc` reads it from - while `annotations/` and `results/` stay inside this
-directory. The path examples below are written relative to the repository root;
+The corpus and semantic annotations go to the repository's
+`data/hidden_bench/` - the one location `mas_cc` reads HiddenBench data from -
+while `results/` stays inside this directory. The path examples below are
+written relative to the repository root;
 `--data-root` and `--input` only need passing when overriding a default.
 
 API-backed scripts use the repository-root `.env` (never commit it):
@@ -103,6 +104,10 @@ data/hidden_bench/
 │   └── source_metadata.json
 ├── canonical/
 │   └── tasks.json
+├── annotations/
+│   ├── paraphrases.json
+│   ├── factorizations.json
+│   └── generation_audit.jsonl
 └── scaled/
     ├── exact_replication/
     │   └── N_32.json
@@ -110,15 +115,6 @@ data/hidden_bench/
     │   └── ...
     └── factorized_evidence/
         └── ...
-```
-
-Semantic annotations are stored independently:
-
-```text
-annotations/
-├── paraphrases.json
-├── factorizations.json
-└── generation_audit.jsonl
 ```
 
 Experimental outputs are stored separately:
@@ -161,7 +157,7 @@ unless it has been explicitly requested.
 ```bash
 python scripts/prepare_hiddenbench.py --agents 0 --data-root data/hidden_bench
 python scripts/generate_semantic_annotations.py \
-  --input data/hidden_bench/canonical/tasks.json --output-dir annotations \
+  --input data/hidden_bench/canonical/tasks.json --output-dir data/hidden_bench/annotations \
   --mode both --paraphrases-per-type 10 --factorization-alternatives 4 \
   --max-components 4 --resume
 python scripts/run_information_sufficiency_audit.py \
@@ -170,9 +166,9 @@ python scripts/run_information_sufficiency_audit.py \
 python scripts/prepare_hiddenbench.py --agents 32 --method exact_replication \
   --data-root data/hidden_bench
 python scripts/prepare_hiddenbench.py --agents 32 --method paraphrased_replication \
-  --annotations annotations/paraphrases.json --data-root data/hidden_bench
+  --annotations data/hidden_bench/annotations/paraphrases.json --data-root data/hidden_bench
 python scripts/prepare_hiddenbench.py --agents 32 --method factorized_evidence \
-  --annotations annotations/factorizations.json --data-root data/hidden_bench
+  --annotations data/hidden_bench/annotations/factorizations.json --data-root data/hidden_bench
 python scripts/run_information_sufficiency_audit.py \
   --input data/hidden_bench/scaled/paraphrased_replication/N_32.json \
   --output results/paraphrased_N32_information_sufficiency.json
@@ -183,8 +179,9 @@ python scripts/run_information_sufficiency_audit.py \
 
 The original source benchmark remains untouched in `data/hidden_bench/source/`;
 canonical tasks live in `data/hidden_bench/canonical/`; all derived datasets are
-under `data/hidden_bench/scaled/*/N_32.json`; and generated audit material lives
-under `annotations/` and `results/`.
+under `data/hidden_bench/scaled/*/N_32.json`; semantic-annotation audit material
+lives under `data/hidden_bench/annotations/`, and experiment results live under
+`results/`.
 
 ### Current execution record
 
@@ -221,7 +218,7 @@ The source facts are not changed. Only their population multiplicity changes.
 ```bash
 python scripts/generate_semantic_annotations.py \
   --input data/hidden_bench/canonical/tasks.json \
-  --output-dir annotations \
+  --output-dir data/hidden_bench/annotations \
   --mode both \
   --paraphrases-per-type 10 \
   --factorization-alternatives 4 \
@@ -233,7 +230,7 @@ For initial development, restrict the call:
 ```bash
 python scripts/generate_semantic_annotations.py \
   --input data/hidden_bench/canonical/tasks.json \
-  --output-dir annotations \
+  --output-dir data/hidden_bench/annotations \
   --mode both \
   --task-ids 1 2 3 \
   --paraphrases-per-type 10
@@ -244,7 +241,7 @@ To continue a partially completed pool:
 ```bash
 python scripts/generate_semantic_annotations.py \
   --input data/hidden_bench/canonical/tasks.json \
-  --output-dir annotations \
+  --output-dir data/hidden_bench/annotations \
   --mode paraphrases \
   --paraphrases-per-type 10 \
   --resume
@@ -275,7 +272,8 @@ current evidence item, accepted paraphrase count, factorization alternatives,
 verification result, and task checkpoint. Re-run the same command with
 `--resume` after an interruption; accepted variants and finalized evidence
 records are retained without another generation call. A completed traversal
-marks `annotations/paraphrases.json` and `annotations/factorizations.json` as
+marks `data/hidden_bench/annotations/paraphrases.json` and
+`data/hidden_bench/annotations/factorizations.json` as
 `frozen`; build datasets only from these frozen files.
 
 ### Why 10 paraphrases support the 32-agent condition
@@ -324,7 +322,7 @@ Some clues are not meaningfully factorizable. The generator is instructed to mar
 python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method paraphrased_replication \
-  --annotations annotations/paraphrases.json \
+  --annotations data/hidden_bench/annotations/paraphrases.json \
   --data-root data/hidden_bench
 ```
 
@@ -334,7 +332,7 @@ By default, a paraphrase is not reused within one task/population. If the reques
 python scripts/prepare_hiddenbench.py \
   --agents 256 \
   --method paraphrased_replication \
-  --annotations annotations/paraphrases.json \
+  --annotations data/hidden_bench/annotations/paraphrases.json \
   --allow-paraphrase-reuse \
   --data-root data/hidden_bench
 ```
@@ -349,7 +347,7 @@ For controlled experiments, generating a larger pool is preferable to reuse.
 python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method factorized_evidence \
-  --annotations annotations/factorizations.json \
+  --annotations data/hidden_bench/annotations/factorizations.json \
   --data-root data/hidden_bench
 ```
 
@@ -573,9 +571,9 @@ are complete, create a deterministic task-scoped release instead:
 
 ```bash
 python scripts/freeze_paraphrase_subset.py \
-  --annotations annotations/paraphrases.json \
+  --annotations data/hidden_bench/annotations/paraphrases.json \
   --task-ids 2 --agents 4 8 16 32 \
-  --output annotations/paraphrases_task_2_frozen.json
+  --output data/hidden_bench/annotations/paraphrases_task_2_frozen.json
 ```
 
 The command checks every canonical evidence type, accepted-variant uniqueness,

@@ -121,7 +121,7 @@ def test_cell_analysis_keeps_only_parameter_named_markdown_reports(tmp_path, mon
 
     summary = run_configured_cell_analysis(config, tmp_path, "cell-0007")
 
-    suffix = "cell-0007__N-32__q-4__qc-8"
+    suffix = "cell-0007__task-evacuation_north_hill__N-32__q-4__qc-8"
     reports = tmp_path / "reports"
     assert summary is not None
     assert summary["cell_report_slug"] == suffix

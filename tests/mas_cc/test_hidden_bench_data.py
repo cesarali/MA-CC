@@ -181,8 +181,8 @@ def test_union_invariant_catches_a_missing_fact(tasks):
 _SCALED = DEFAULT_CORPUS_ROOT / "scaled" / "exact_replication" / "N_32.json"
 
 
-def test_producer_and_consumer_agree_on_where_the_corpus_lives():
-    """The pipeline writes exactly where `data.py` reads.
+def test_producer_and_consumer_agree_on_where_hidden_bench_data_lives():
+    """The pipeline writes the corpus and annotations under the shared data root.
 
     The two constants are declared in different trees (the pipeline's `scripts/`
     is not an importable package), so nothing but this test stops them drifting
@@ -202,6 +202,7 @@ def test_producer_and_consumer_agree_on_where_the_corpus_lives():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.DEFAULT_DATA_ROOT == DEFAULT_CORPUS_ROOT
+    assert module.DEFAULT_ANNOTATIONS_DIR == DEFAULT_CORPUS_ROOT / "annotations"
 
 
 @pytest.mark.skipif(not _SCALED.exists(), reason="prebuilt N_32 population not present")

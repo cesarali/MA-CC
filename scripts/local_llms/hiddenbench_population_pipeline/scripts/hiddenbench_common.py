@@ -27,13 +27,12 @@ in one place no matter where the script is invoked from. It is the same path as
 
 DEFAULT_CANONICAL_TASKS = DEFAULT_DATA_ROOT / "canonical" / "tasks.json"
 
-DEFAULT_ANNOTATIONS_DIR = PIPELINE_ROOT / "annotations"
+DEFAULT_ANNOTATIONS_DIR = DEFAULT_DATA_ROOT / "annotations"
 DEFAULT_RESULTS_DIR = PIPELINE_ROOT / "results"
-"""Annotations and audit output stay with the tool that produces them.
+"""Semantic annotations live with the HiddenBench corpus data.
 
-Only the corpus is a shared artifact and therefore lives in `data/hidden_bench/`.
-These are anchored too so every path a script touches is independent of the
-directory it was launched from.
+Results stay with the tool that produces them. Both paths are anchored so every
+path a script touches is independent of the directory it was launched from.
 """
 
 
