@@ -26,14 +26,20 @@ The raw `benchmark.json` is preserved unchanged. All transformations are written
 conda env update -n MA-CC -f environment.yml
 cd scripts/local_llms/hiddenbench_population_pipeline
 conda run --live-stream -n MA-CC python \
-  scripts/prepare_hiddenbench.py \
-  --agents 0 --data-root data/hiddenbench
+  scripts/prepare_hiddenbench.py --agents 0
 ```
 
 No local installation or virtual environment is needed. The scripts use the
-project's `MA-CC` conda environment. Run commands from this directory; either
-prefix each command with `conda run --live-stream -n MA-CC`, as above, or
-activate that environment first with `conda activate MA-CC`.
+project's `MA-CC` conda environment; either prefix each command with
+`conda run --live-stream -n MA-CC`, as above, or activate that environment
+first with `conda activate MA-CC`.
+
+**Every default path is anchored to the repository, not to the working
+directory**, so a command produces the same files wherever it is launched from.
+The corpus goes to the repository's `data/hidden_bench/` - the one location
+`mas_cc` reads it from - while `annotations/` and `results/` stay inside this
+directory. The path examples below are written relative to the repository root;
+`--data-root` and `--input` only need passing when overriding a default.
 
 API-backed scripts use the repository-root `.env` (never commit it):
 
@@ -91,7 +97,7 @@ LLM_PROTOCOL=responses
 The preparation script creates:
 
 ```text
-data/hiddenbench/
+data/hidden_bench/
 ├── source/
 │   ├── benchmark.json
 │   └── source_metadata.json
@@ -133,7 +139,7 @@ The agreed interface is:
 conda run --live-stream -n MA-CC python \
   scripts/local_llms/hiddenbench_population_pipeline/scripts/prepare_hiddenbench.py \
   --agents 0 \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 ```
 
 `--agents 0` means:
@@ -153,31 +159,31 @@ this bundle; do not run the expensive `run_hiddenbench_standard.py` protocol
 unless it has been explicitly requested.
 
 ```bash
-python scripts/prepare_hiddenbench.py --agents 0 --data-root data/hiddenbench
+python scripts/prepare_hiddenbench.py --agents 0 --data-root data/hidden_bench
 python scripts/generate_semantic_annotations.py \
-  --input data/hiddenbench/canonical/tasks.json --output-dir annotations \
+  --input data/hidden_bench/canonical/tasks.json --output-dir annotations \
   --mode both --paraphrases-per-type 10 --factorization-alternatives 4 \
   --max-components 4 --resume
 python scripts/run_information_sufficiency_audit.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output results/canonical_information_sufficiency.json
 python scripts/prepare_hiddenbench.py --agents 32 --method exact_replication \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 python scripts/prepare_hiddenbench.py --agents 32 --method paraphrased_replication \
-  --annotations annotations/paraphrases.json --data-root data/hiddenbench
+  --annotations annotations/paraphrases.json --data-root data/hidden_bench
 python scripts/prepare_hiddenbench.py --agents 32 --method factorized_evidence \
-  --annotations annotations/factorizations.json --data-root data/hiddenbench
+  --annotations annotations/factorizations.json --data-root data/hidden_bench
 python scripts/run_information_sufficiency_audit.py \
-  --input data/hiddenbench/scaled/paraphrased_replication/N_32.json \
+  --input data/hidden_bench/scaled/paraphrased_replication/N_32.json \
   --output results/paraphrased_N32_information_sufficiency.json
 python scripts/run_information_sufficiency_audit.py \
-  --input data/hiddenbench/scaled/factorized_evidence/N_32.json \
+  --input data/hidden_bench/scaled/factorized_evidence/N_32.json \
   --output results/factorized_N32_information_sufficiency.json
 ```
 
-The original source benchmark remains untouched in `data/hiddenbench/source/`;
-canonical tasks live in `data/hiddenbench/canonical/`; all derived datasets are
-under `data/hiddenbench/scaled/*/N_32.json`; and generated audit material lives
+The original source benchmark remains untouched in `data/hidden_bench/source/`;
+canonical tasks live in `data/hidden_bench/canonical/`; all derived datasets are
+under `data/hidden_bench/scaled/*/N_32.json`; and generated audit material lives
 under `annotations/` and `results/`.
 
 ### Current execution record
@@ -199,7 +205,7 @@ Exact replication requires no LLM-generated annotation.
 python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method exact_replication \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 ```
 
 For an original task with \(C=4\) hidden evidence types and \(N=16\), the script assigns approximately four agents to each type.
@@ -214,7 +220,7 @@ The source facts are not changed. Only their population multiplicity changes.
 
 ```bash
 python scripts/generate_semantic_annotations.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output-dir annotations \
   --mode both \
   --paraphrases-per-type 10 \
@@ -226,7 +232,7 @@ For initial development, restrict the call:
 
 ```bash
 python scripts/generate_semantic_annotations.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output-dir annotations \
   --mode both \
   --task-ids 1 2 3 \
@@ -237,7 +243,7 @@ To continue a partially completed pool:
 
 ```bash
 python scripts/generate_semantic_annotations.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output-dir annotations \
   --mode paraphrases \
   --paraphrases-per-type 10 \
@@ -319,7 +325,7 @@ python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method paraphrased_replication \
   --annotations annotations/paraphrases.json \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 ```
 
 By default, a paraphrase is not reused within one task/population. If the requested population exceeds the available pool:
@@ -330,7 +336,7 @@ python scripts/prepare_hiddenbench.py \
   --method paraphrased_replication \
   --annotations annotations/paraphrases.json \
   --allow-paraphrase-reuse \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 ```
 
 For controlled experiments, generating a larger pool is preferable to reuse.
@@ -344,7 +350,7 @@ python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method factorized_evidence \
   --annotations annotations/factorizations.json \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 ```
 
 The factorization and the division over agents are separate objects:
@@ -380,7 +386,7 @@ The allocation must still be empirically audited: a bundle of several components
 
 ```bash
 python scripts/run_information_sufficiency_audit.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output results/original_sufficiency.json \
   --sessions 10
 ```
@@ -389,7 +395,7 @@ python scripts/run_information_sufficiency_audit.py \
 
 ```bash
 python scripts/run_information_sufficiency_audit.py \
-  --input data/hiddenbench/scaled/factorized_evidence/N_32.json \
+  --input data/hidden_bench/scaled/factorized_evidence/N_32.json \
   --output results/factorized_N32_sufficiency.json \
   --sessions 10
 ```
@@ -431,7 +437,7 @@ A transformed dataset that fails this audit should not enter the multi-agent exp
 
 ```bash
 python scripts/run_hiddenbench_standard.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output results/original_standard.json \
   --sessions 10 \
   --rounds 15
@@ -441,7 +447,7 @@ python scripts/run_hiddenbench_standard.py \
 
 ```bash
 python scripts/run_hiddenbench_standard.py \
-  --input data/hiddenbench/scaled/exact_replication/N_32.json \
+  --input data/hidden_bench/scaled/exact_replication/N_32.json \
   --output results/exact_N32_standard.json \
   --sessions 10 \
   --rounds 15
@@ -451,7 +457,7 @@ python scripts/run_hiddenbench_standard.py \
 
 ```bash
 python scripts/run_hiddenbench_standard.py \
-  --input data/hiddenbench/scaled/paraphrased_replication/N_32.json \
+  --input data/hidden_bench/scaled/paraphrased_replication/N_32.json \
   --output results/paraphrased_N32_standard.json \
   --sessions 10 \
   --rounds 15

@@ -8,6 +8,8 @@ import pytest
 from mas_cc.config import LLMProviderConfig
 from mas_cc.llm_runtime.messages import Message
 from mas_cc.llm_runtime.providers import (
+    BUDGET_STOP_CODES,
+    BudgetExpectation,
     BudgetLimits,
     CachedPricingSource,
     CompletionRequest,
@@ -235,6 +237,72 @@ def test_runtime_guard_atomic_reservations_cannot_overspend():
             conservative_cost=None, input_tokens=1, output_tokens=1
         )
     assert captured.value.code == "budget_unbounded"
+
+
+def test_unset_token_limits_are_advisory_and_never_stop_a_run(caplog):
+    """A guessed token count must not be able to kill a run inside its cost budget.
+
+    This is the regression guard for results/DIAGNOSIS.md: a run configured
+    with a static `max_input_tokens` hit it two cells into a 50-cell grid and
+    failed the remaining 4,235 episodes. With the limit unset the same
+    overshoot must produce a warning and nothing else.
+    """
+
+    guard = RuntimeBudgetGuard(
+        BudgetLimits(max_cost=money(100)),
+        expectation=BudgetExpectation(requests=2, input_tokens=20, output_tokens=10),
+    )
+    with caplog.at_level("WARNING", logger="mas_cc.budget"):
+        for _ in range(5):
+            guard.reserve(conservative_cost=money(0.1), input_tokens=30, output_tokens=15)
+
+    status = guard.status()
+    assert status["stop_count"] == 0, "advisory expectations must never deny"
+    assert status["used_and_reserved"]["input_tokens"] == 150
+    assert status["preflight_expectation"]["input_tokens"] == 20
+    # One warning per resource, not one per call: five overshooting reserves
+    # must not produce fifteen lines of log.
+    advisory = [record for record in caplog.records if "advisory" in record.message]
+    assert len(advisory) == 3
+    assert {"request", "input-token", "output-token"} == {
+        record.args[0] for record in advisory
+    }
+
+
+def test_a_requested_stop_denies_every_later_call_with_a_reportable_reason():
+    """`request_stop` is how live spend halts a run, so it must be terminal."""
+
+    guard = RuntimeBudgetGuard(BudgetLimits(max_cost=money(100)))
+    guard.reserve(conservative_cost=money(1), input_tokens=1, output_tokens=1)
+    guard.request_stop("provider-reported spend reached the ceiling")
+    # Later stops never overwrite the first reason: the run stopped once.
+    guard.request_stop("a second, later reason")
+
+    for _ in range(3):
+        with pytest.raises(ProviderError) as captured:
+            guard.reserve(conservative_cost=money(1), input_tokens=1, output_tokens=1)
+        assert captured.value.code == "budget_stopped"
+        assert captured.value.code in BUDGET_STOP_CODES
+    assert guard.stop_reason == "provider-reported spend reached the ceiling"
+    assert guard.status()["stop_reason"] == "provider-reported spend reached the ceiling"
+    with pytest.raises(ValueError, match="reason"):
+        RuntimeBudgetGuard(BudgetLimits()).request_stop("")
+
+
+def test_account_spend_can_be_read_without_paying_for_a_pricing_round_trip():
+    """The poll must cost one request, and must honour the launch-time unit."""
+
+    session = Session([Response({"max_budget": 40, "spend": 12.5, "api_key": "top-secret-value"})])
+    budget = live_source(session).fetch_account_budget(unit="proxy_accounting_unit")
+
+    assert budget is not None
+    assert budget.spent.amount == pytest.approx(12.5)
+    assert budget.remaining.amount == pytest.approx(27.5)
+    assert budget.spent.unit == "proxy_accounting_unit"
+    assert [call[0].split("internal.invalid", 1)[1] for call in session.calls] == ["/user/info"]
+
+    # An account with no budget fields is not an error; it just cannot be watched.
+    assert live_source(Session([Response({"user_id": "someone"})])).fetch_account_budget() is None
 
 
 def test_estimate_cost_returns_typed_amount_not_implicit_currency():

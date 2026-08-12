@@ -14,6 +14,8 @@ from .loader import (
     resolve_run_config,
 )
 from .models import (
+    ARTIFACT_PROFILES,
+    CHECKPOINT_MODES,
     COMET_WRITERS,
     DEFAULT_CELL_METRICS,
     AggregationConfig,
@@ -30,6 +32,7 @@ from .models import (
     ObservabilityConfig,
     PromptConfig,
     PricingConfig,
+    RetentionPolicy,
     ProviderConfig,
     RunConfig,
     StorageConfig,
@@ -37,6 +40,8 @@ from .models import (
 from .schema import config_schema
 
 __all__ = [
+    "ARTIFACT_PROFILES",
+    "CHECKPOINT_MODES",
     "COMET_WRITERS",
     "DEFAULT_CELL_METRICS",
     "AggregationConfig",
@@ -57,6 +62,7 @@ __all__ = [
     "ObservabilityConfig",
     "PromptConfig",
     "PricingConfig",
+    "RetentionPolicy",
     "ProviderConfig",
     "RunConfig",
     "SUPPORTED_SCHEMA_VERSIONS",

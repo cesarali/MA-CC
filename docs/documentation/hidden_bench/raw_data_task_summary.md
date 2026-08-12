@@ -4,7 +4,7 @@
 
 This report describes the unchanged raw source file:
 
-`scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/source/benchmark.json`
+`data/hidden_bench/source/benchmark.json`
 
 It does **not** use the canonicalized tasks, expanded populations, generated
 paraphrases, or experiment results. The accompanying metadata identifies the

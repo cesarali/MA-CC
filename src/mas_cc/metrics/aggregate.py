@@ -148,6 +148,90 @@ def read_episode_frame(episode_dir: str | Path) -> EpisodeFrame | None:
     )
 
 
+def read_scientific_episode_frames(cell_dir: str | Path) -> tuple[EpisodeFrame, ...]:
+    """Read completed episode frames from the compact scientific schema.
+
+    The recorder stores the exact per-round metric outputs in each transition
+    row, so this adapter and the legacy CSV adapter feed the same
+    ``EpisodeFrame`` abstraction to every aggregate metric.
+    """
+
+    directory = Path(cell_dir)
+    direct = directory / "scientific_events.parquet"
+    paths = [direct] if direct.is_file() else sorted(
+        directory.glob(".resume/*/scientific_events.parquet")
+    )
+    if not paths:
+        return ()
+    try:
+        import pandas as pd
+
+        frame = pd.concat(
+            [pd.read_parquet(path, engine="pyarrow") for path in paths], ignore_index=True
+        )
+    except Exception as exc:
+        raise ValueError(
+            f"cannot read compact scientific metrics under {directory}: {type(exc).__name__}"
+        ) from exc
+    if frame.empty:
+        return ()
+    frame = frame[frame["status"].astype(str) == "completed"]
+    results: list[EpisodeFrame] = []
+    for episode_id, group in frame.groupby("episode_id", sort=True):
+        ordered = group.sort_values("interaction_index")
+        rounds = tuple(int(value) for value in ordered["interaction_index"].tolist())
+        population_points: dict[str, dict[int, float]] = {}
+        option_points: dict[str, dict[str, dict[int, float]]] = {}
+        for round_index, raw_population, raw_options in zip(
+            rounds,
+            ordered["population_metrics_json"],
+            ordered["option_metrics_json"],
+            strict=True,
+        ):
+            population_row = (
+                {} if not isinstance(raw_population, str) else json.loads(raw_population)
+            )
+            option_row = {} if not isinstance(raw_options, str) else json.loads(raw_options)
+            for name, value in population_row.items():
+                population_points.setdefault(str(name), {})[round_index] = float(value)
+            for name, by_series in option_row.items():
+                for series, value in by_series.items():
+                    option_points.setdefault(str(name), {}).setdefault(
+                        str(series), {}
+                    )[round_index] = float(value)
+
+        def densify(points: Mapping[int, float]) -> tuple[float, ...]:
+            values: list[float] = []
+            previous = math.nan
+            for round_index in rounds:
+                previous = points.get(round_index, previous)
+                values.append(previous)
+            return tuple(values)
+
+        final_raw = ordered.iloc[-1].get("final_metrics_json")
+        final_values = {} if not isinstance(final_raw, str) else json.loads(final_raw)
+        results.append(
+            EpisodeFrame(
+                episode_id=str(episode_id),
+                rounds=rounds,
+                population={
+                    name: densify(points) for name, points in population_points.items()
+                },
+                options={
+                    name: {
+                        series: densify(points) for series, points in by_series.items()
+                    }
+                    for name, by_series in option_points.items()
+                },
+                final={
+                    str(name): _number(value)
+                    for name, value in final_values.items()
+                },
+            )
+        )
+    return tuple(results)
+
+
 EXCLUDED_EPISODE_STATUSES = ("failed", "skipped_aborted")
 """Statuses whose partial series must never reach an aggregate curve."""
 
@@ -170,8 +254,31 @@ def excluded_cell_episodes(cell_dir: str | Path) -> tuple[tuple[str, str], ...]:
     """`(episode_id, status)` for every episode aggregation leaves out."""
 
     episodes_dir = Path(cell_dir) / "data" / "episodes"
+    compact_failures = []
+    for manifest in sorted(Path(cell_dir).glob(".resume/*/manifest.json")):
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        status = payload.get("status") if isinstance(payload, Mapping) else None
+        if status in EXCLUDED_EPISODE_STATUSES:
+            compact_failures.append((manifest.parent.name, str(status)))
+    if compact_failures:
+        return tuple(compact_failures)
     if not episodes_dir.is_dir():
-        return ()
+        summary = Path(cell_dir) / "cell_summary.json"
+        if not summary.is_file():
+            return ()
+        try:
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return ()
+        failures = payload.get("failures", ()) if isinstance(payload, Mapping) else ()
+        return tuple(
+            (str(item["episode_id"]), str(item.get("status", "failed")))
+            for item in failures
+            if isinstance(item, Mapping) and item.get("episode_id")
+        )
     excluded = []
     for path in sorted(episodes_dir.iterdir()):
         if not path.is_dir():
@@ -204,6 +311,9 @@ def read_cell_episodes(cell_dir: str | Path) -> tuple[EpisodeFrame, ...]:
     of showing up as an unexplained drop in N.
     """
 
+    compact = read_scientific_episode_frames(cell_dir)
+    if compact:
+        return compact
     episodes_dir = Path(cell_dir) / "data" / "episodes"
     if not episodes_dir.is_dir():
         return ()

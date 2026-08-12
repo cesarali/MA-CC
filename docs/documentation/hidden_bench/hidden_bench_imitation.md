@@ -1044,8 +1044,9 @@ being silently treated as evidence of control.
 | `cell_summaries.csv` | Pooled summary for each grid cell, or one pooled row for a standalone run. |
 | `option_share_trajectories.csv` | Long-form option-share trajectories including state 0. |
 | `order_parameter_trajectories.csv` | `m_ctrl`, `m_truth`, `m_order`, and `H_vote` trajectories including state 0. |
-| `information_estimates.md` | Human-readable report: the four MI/CMI estimates, bootstrap intervals, and null summaries in one table per cell, a diagnostics table, and prose explaining every statistic and column. |
+| `information_estimates.md` | Human-readable report: the MI/CMI estimates, bootstrap intervals, and null summaries in one table per cell, a diagnostics table, the controller-diagnostic tables described below, and prose explaining every statistic and column. |
 | `information_estimates.csv` | The same estimates, machine-readable. This is what the Comet export, plots, and any downstream comparison read; the markdown is for humans only. |
+| `controller_diagnostics.csv` | Controller entropies, actuation information fractions, signed actuation responses, and action-overlap counts — the quantities that say whether a small actuation CMI means a weak controller or a controller with no action entropy left at fixed state, and which direction the population actually moved. Machine-readable twin of the controller sections of the report. |
 | `plots/information_estimates_<cell>.png` | One figure per cell: each estimate with its bootstrap interval, and its permutation-null mean marked on the same axis. |
 | `information_nulls.csv` | One row per statistic and null permutation. |
 | `support_diagnostics.csv` | Compact support, sparsity, entropy, and interpretability view. |

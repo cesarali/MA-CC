@@ -16,10 +16,18 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from mas_cc.llm_runtime.config import LLMProviderConfig, PromptConfig, ProviderConfig
+from mas_cc.llm_runtime.config import (  # noqa: F401 - public compatibility re-export
+    LLMProviderConfig,
+    PromptConfig,
+    ProviderConfig,
+)
 from mas_cc.metrics.interactions import PARTIAL_BIN_POLICIES, BinnedTrajectoryPolicy
 
 __all_reexported__ = ("LLMProviderConfig", "PromptConfig", "ProviderConfig")
+
+ARTIFACT_PROFILES = ("full", "results_only")
+CHECKPOINT_MODES = ("off", "episode")
+PROMPT_EXAMPLE_SCOPES = ("episode", "cell")
 
 
 def _freeze(value: Any) -> Any:
@@ -125,24 +133,70 @@ class StorageConfig:
     schema_version: int = 1
     output_dir: str = "results"
     format: str = "jsonl"
-    checkpoints: bool = True
+    artifact_profile: str = "full"
+    checkpoint_mode: str = "episode"
     overwrite: bool = False
     wipe_and_recompute: bool = False
     options: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if self.artifact_profile not in ARTIFACT_PROFILES:
+            raise ValueError(
+                f"artifact_profile must be one of {', '.join(ARTIFACT_PROFILES)}"
+            )
+        if self.checkpoint_mode not in CHECKPOINT_MODES:
+            raise ValueError(
+                f"checkpoint_mode must be one of {', '.join(CHECKPOINT_MODES)}"
+            )
         object.__setattr__(self, "options", _freeze(self.options))
+
+    @property
+    def checkpoints(self) -> bool:
+        """Compatibility view for callers not yet migrated to the named mode."""
+
+        return self.checkpoint_mode == "episode"
+
+    @property
+    def retention_policy(self) -> "RetentionPolicy":
+        return RetentionPolicy.for_profile(self.artifact_profile)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "output_dir": self.output_dir,
             "format": self.format,
-            "checkpoints": self.checkpoints,
+            "artifact_profile": self.artifact_profile,
+            "checkpoint_mode": self.checkpoint_mode,
             "overwrite": self.overwrite,
             "wipe_and_recompute": self.wipe_and_recompute,
             "options": _thaw(self.options),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class RetentionPolicy:
+    """Resolved local-retention behavior used by artifact writers.
+
+    Keeping this policy typed prevents individual writers from growing their
+    own interpretations of ``artifact_profile``.
+    """
+
+    profile: str
+    verbose_episode_history: bool
+    rich_analysis_intermediates: bool
+    per_episode_prompt_files: bool
+
+    @classmethod
+    def for_profile(cls, profile: str) -> "RetentionPolicy":
+        if profile not in ARTIFACT_PROFILES:
+            raise ValueError(f"unknown artifact profile {profile!r}")
+        full = profile == "full"
+        return cls(
+            profile=profile,
+            verbose_episode_history=full,
+            rich_analysis_intermediates=full,
+            per_episode_prompt_files=full,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -526,6 +580,7 @@ class BudgetConfig:
     max_input_tokens: int | None = None
     max_output_tokens: int | None = None
     allow_unbounded_paid_requests: bool = False
+    live_spend_poll_seconds: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -537,6 +592,7 @@ class BudgetConfig:
             "max_input_tokens": self.max_input_tokens,
             "max_output_tokens": self.max_output_tokens,
             "allow_unbounded_paid_requests": self.allow_unbounded_paid_requests,
+            "live_spend_poll_seconds": self.live_spend_poll_seconds,
         }
 
 

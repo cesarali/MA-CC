@@ -12,15 +12,18 @@ of every cell. See
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import csv
+import gzip
 import json
 import logging
+import os
 import shutil
+import threading
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from mas_cc.config import GridSpec, RunConfig, resolved_config_yaml
 from mas_cc.control import create_control
@@ -29,19 +32,23 @@ from mas_cc.games import Game, create_game, game_metrics
 from mas_cc.games.naming_convention.runtime import run_naming_convention_game
 from mas_cc.games.runner import run_game
 from mas_cc.llm_runtime.providers import (
+    AtomicBudgetStateStore,
+    BUDGET_STOP_CODES,
+    BudgetExpectation,
     BudgetGuardedProvider,
     BudgetLimits,
     CachedPricingSource,
     MonetaryAmount,
     OfflinePricingSource,
     PricingQuote,
+    ProviderError,
     RuntimeBudgetGuard,
     UniversityPricingSource,
     create_llm_provider,
     resolve_budget_limits,
 )
-from mas_cc.llm_runtime.prompts import PromptMarkdownLogger
-from mas_cc.observability import DetailedAuditPolicy, RunRecorder, price_snapshot_hash
+from mas_cc.llm_runtime.prompts import PromptMarkdownLogger, render_prompt_request_markdown
+from mas_cc.observability import DetailedAuditPolicy, RunRecorder
 from mas_cc.planning import (
     ExperimentPreflightEstimate,
     GameCallPlan,
@@ -50,7 +57,21 @@ from mas_cc.planning import (
     static_experiment_preflight,
     static_grid_preflight,
 )
-from mas_cc.storage import results_run_dir
+from mas_cc.storage import (
+    SCIENTIFIC_SCHEMA_VERSION,
+    ScientificIdentity,
+    canonical_hash,
+    discover_episode_artifact,
+    episode_shard_path,
+    file_sha256,
+    merge_cell_scientific_tables,
+    merge_episode_artifacts,
+    prompt_definition_hash,
+    results_run_dir,
+    validate_cell_artifact,
+    validate_episode_artifact,
+    validate_episode_frame,
+)
 
 from .aggregation import GridAggregator, aggregation_ground_truth
 from .comet_monitor import CellLayout, MasterMonitor, SweepLayout, sweep_parameters
@@ -71,6 +92,86 @@ def _json(value: Any) -> str:
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w", encoding="utf-8") as stream:
+        stream.write(text)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    try:
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        pass
+
+
+def _record_cell_hashes(cell_dir: Path) -> None:
+    """Add every retained cell result to an already-durable completion seal."""
+
+    seal_path = cell_dir / "cell_complete.json"
+    if not seal_path.is_file():
+        return
+    seal = json.loads(seal_path.read_text(encoding="utf-8"))
+    artifacts = {}
+    for path in sorted(cell_dir.rglob("*")):
+        if (
+            not path.is_file()
+            or path == seal_path
+            or path.name == "manifest.json"
+            or ".resume" in path.parts
+            or path.name.endswith(".tmp")
+            or path.name.endswith(":Zone.Identifier")
+        ):
+            continue
+        artifacts[str(path.relative_to(cell_dir))] = {
+            "bytes": path.stat().st_size,
+            "sha256": file_sha256(path),
+        }
+    seal["artifacts"] = artifacts
+    _write_atomic(seal_path, _json(seal))
+
+
+def _record_results_only_hashes(run_dir: Path) -> None:
+    """Finish the run manifest with hashes of every retained result artifact."""
+
+    manifest_path = run_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return
+    cells_dir = run_dir / "cells"
+    if cells_dir.is_dir():
+        cells = [path for path in cells_dir.iterdir() if path.is_dir()]
+        if any(not (cell / "cell_complete.json").is_file() for cell in cells):
+            return
+        for cell in cells:
+            _record_cell_hashes(cell)
+    elif not (run_dir / "cell_complete.json").is_file():
+        return
+    else:
+        _record_cell_hashes(run_dir)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifacts = {}
+    for path in sorted(run_dir.rglob("*")):
+        if (
+            not path.is_file()
+            or path == manifest_path
+            or ".resume" in path.parts
+            or path.name.endswith(".tmp")
+            or path.name.endswith(":Zone.Identifier")
+        ):
+            continue
+        artifacts[str(path.relative_to(run_dir))] = {
+            "bytes": path.stat().st_size,
+            "sha256": file_sha256(path),
+        }
+    manifest["artifacts"] = artifacts
+    _write_atomic(manifest_path, _json(manifest))
 
 
 def _wipe_run_dir_if_requested(run_dir: Path, *, wipe_and_recompute: bool, label: str) -> None:
@@ -150,6 +251,162 @@ def _budgets(config: RunConfig, quote: PricingQuote) -> tuple[BudgetLimits, Budg
     return system, run
 
 
+def _configure_durable_budget(
+    config: RunConfig,
+    run_dir: Path,
+    guard: RuntimeBudgetGuard,
+    *,
+    price_hash: str,
+    resume: bool,
+) -> AtomicBudgetStateStore | None:
+    if config.storage.artifact_profile != "results_only":
+        return None
+    store = AtomicBudgetStateStore(
+        run_dir / "budget_state.json",
+        resolved_budget_hash=canonical_hash(config.budget.to_dict()),
+        pricing_snapshot_hash=price_hash,
+    )
+    if resume and config.storage.checkpoint_mode == "episode":
+        store.restore(guard)
+    guard.set_durable_state_sink(store.write)
+    return store
+
+
+def _expectation(preflight: Any) -> BudgetExpectation:
+    """Preflight's conservative totals, handed to the guard as advisory only.
+
+    Both the experiment and grid estimates expose the same three
+    `EstimateRange` totals, so one helper covers both callers.
+    """
+
+    return BudgetExpectation(
+        requests=preflight.total_provider_requests.conservative,
+        input_tokens=preflight.total_input_tokens.conservative,
+        output_tokens=preflight.total_output_tokens.conservative,
+    )
+
+
+class _LiveSpendWatcher:
+    """Stops a run when the provider's own accounting says it has spent enough.
+
+    The guard's internal cost counter is only as good as the price table it was
+    built from. This is the independent check: it asks the provider what the
+    account has actually been charged, and compares the *delta since launch*
+    against `budget.max_cost_per_run`. Measuring the delta rather than the
+    absolute balance is what keeps a per-run ceiling meaningful on a key that
+    other people are also spending against.
+
+    Failures to poll are logged and retried, never fatal - losing sight of the
+    live number leaves the run under the guard's own cost ceiling, which is
+    still enforced, so a flaky metadata endpoint must not kill a healthy run.
+    """
+
+    def __init__(
+        self,
+        source: UniversityPricingSource,
+        guard: RuntimeBudgetGuard,
+        *,
+        unit: str,
+        ceiling: float | None,
+        poll_seconds: int,
+    ) -> None:
+        self._source = source
+        self._guard = guard
+        self._unit = unit
+        self._ceiling = ceiling
+        self._poll_seconds = poll_seconds
+        self._baseline: float | None = None
+
+    async def _read_spend(self) -> float | None:
+        budget = await asyncio.to_thread(self._source.fetch_account_budget, unit=self._unit)
+        if budget is None or budget.spent is None:
+            return None
+        if budget.spent.unit != self._unit:
+            # Comparing two different accounting units would produce a
+            # confident wrong answer, so the watcher declines to compare at all.
+            LOGGER.warning(
+                "live spend is reported in %r but the budget is in %r; not comparing",
+                budget.spent.unit, self._unit,
+            )
+            return None
+        return budget.spent.amount
+
+    async def start(self) -> None:
+        """Record the launch baseline. Raises nothing; disables itself on error."""
+
+        try:
+            self._baseline = await self._read_spend()
+        except Exception as exc:
+            LOGGER.warning(
+                "could not read the launch spend baseline (%s); live spend watching is off",
+                type(exc).__name__,
+            )
+            self._baseline = None
+        if self._baseline is None:
+            LOGGER.info("provider reports no account spend; live spend watching is off")
+        else:
+            LOGGER.info("live spend baseline at launch: %.4f %s", self._baseline, self._unit)
+
+    async def run(self) -> None:
+        if self._baseline is None:
+            return
+        while True:
+            await asyncio.sleep(self._poll_seconds)
+            try:
+                current = await self._read_spend()
+            except Exception as exc:
+                LOGGER.warning("live spend poll failed (%s); retrying", type(exc).__name__)
+                continue
+            if current is None:
+                continue
+            spent = max(0.0, current - self._baseline)
+            self._guard.record_account_spend(
+                {
+                    "unit": self._unit,
+                    "baseline_at_launch": self._baseline,
+                    "latest_total": current,
+                    "spent_by_this_run": spent,
+                    "observed_at": _now(),
+                }
+            )
+            LOGGER.info("live spend so far this run: %.4f %s", spent, self._unit)
+            if self._ceiling is not None and spent >= self._ceiling:
+                self._guard.request_stop(
+                    f"provider-reported spend for this run ({spent:.4f} {self._unit}) "
+                    f"reached the {self._ceiling:.4f} {self._unit} ceiling"
+                )
+                return
+
+
+def _spend_watcher(
+    config: RunConfig, guard: RuntimeBudgetGuard, limits: BudgetLimits
+) -> _LiveSpendWatcher | None:
+    """Build the watcher when the config asks for it and the provider can serve it."""
+
+    poll_seconds = config.budget.live_spend_poll_seconds
+    if poll_seconds is None:
+        return None
+    if config.llm_provider.type != "university":
+        # Only the university proxy exposes a spend endpoint today. Say so
+        # rather than silently running without the protection that was asked for.
+        LOGGER.warning(
+            "budget.live_spend_poll_seconds is set but provider %r reports no account "
+            "spend; the run relies on its own cost ceiling",
+            config.llm_provider.type,
+        )
+        return None
+    return _LiveSpendWatcher(
+        UniversityPricingSource(
+            config.llm_provider,
+            freshness=timedelta(seconds=config.pricing.max_age_seconds),
+        ),
+        guard,
+        unit=config.budget.accounting_unit,
+        ceiling=None if limits.max_cost is None else limits.max_cost.amount,
+        poll_seconds=poll_seconds,
+    )
+
+
 def _pricing_terms(quote: PricingQuote) -> dict[str, Any] | None:
     if quote.pricing is None:
         return None
@@ -157,6 +414,19 @@ def _pricing_terms(quote: PricingQuote) -> dict[str, Any] | None:
     for provenance_field in ("source", "retrieved_at", "version"):
         terms.pop(provenance_field, None)
     return terms
+
+
+def _pricing_identity(quote: PricingQuote) -> str:
+    """Stable identity of approved rates, excluding retrieval-time metadata."""
+
+    return canonical_hash(
+        {
+            "provider": quote.provider,
+            "model": quote.model,
+            "available": quote.available,
+            "pricing_terms": _pricing_terms(quote),
+        }
+    )
 
 
 def _steps_per_episode(plan: GameCallPlan) -> int:
@@ -238,6 +508,9 @@ class _RoundTickingObserver:
         *,
         prompt_logger: PromptMarkdownLogger | None = None,
         prompt_example_rounds: int = 0,
+        prompt_sampler: "_CellPromptSampler | None" = None,
+        prompt_cell_dir: Path | None = None,
+        prompt_episode_id: str | None = None,
     ) -> None:
         self.recorder = recorder
         self.guard = guard
@@ -245,6 +518,9 @@ class _RoundTickingObserver:
         self.episode_label = episode_label
         self.prompt_logger = prompt_logger
         self.prompt_example_rounds = prompt_example_rounds
+        self.prompt_sampler = prompt_sampler
+        self.prompt_cell_dir = prompt_cell_dir
+        self.prompt_episode_id = prompt_episode_id or episode_label
         self._logged_rounds: set[int] = set()
 
     def event(self, event_type: str, **payload: Any) -> None:
@@ -270,6 +546,26 @@ class _RoundTickingObserver:
                 validation_error=payload.get("validation_error"),
             )
             self._logged_rounds.add(round_index)
+        if (
+            self.prompt_sampler is not None
+            and self.prompt_cell_dir is not None
+            and attempt == 1
+            and payload.get("valid")
+        ):
+            request = payload["request"]
+            agent_id = request.metadata.get("agent_id")
+            self.prompt_sampler.capture(
+                self.prompt_cell_dir,
+                self.prompt_episode_id,
+                int(round_index),
+                render_prompt_request_markdown(
+                    payload["prompt"],
+                    title=f"Round {round_index} — agent {agent_id}",
+                    metadata={"round_index": round_index, "agent_id": str(agent_id)},
+                    response=payload.get("response"),
+                    validation_error=payload.get("validation_error"),
+                ),
+            )
 
     def record_interaction(self, **payload: Any) -> None:
         self.recorder.record_interaction(**payload, budget_status=self.guard.checkpoint_state())
@@ -364,6 +660,249 @@ class _EpisodeTask:
     config: RunConfig
     episode_dir: Path
     cell_id: str | None = None
+    cell_dir: Path | None = None
+    scientific_identity: ScientificIdentity | None = None
+
+    @property
+    def scientific_path(self) -> Path | None:
+        if self.scientific_identity is None:
+            return None
+        return episode_shard_path(self.cell_dir or self.episode_dir.parent.parent.parent, self.episode_id)
+
+    @property
+    def manifest_path(self) -> Path:
+        if self.scientific_path is not None:
+            return self.scientific_path.parent / "manifest.json"
+        return self.episode_dir / "manifest.json"
+
+
+class _CellPromptSampler:
+    """Bounded deterministic prompt candidates, rendered once per cell."""
+
+    def __init__(self, count: int) -> None:
+        self.count = max(0, int(count))
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _path(cell_dir: Path, episode_id: str) -> Path:
+        return cell_dir / ".resume" / episode_id / "prompt_candidates.json.gz"
+
+    def capture(self, cell_dir: Path, episode_id: str, round_index: int, markdown: str) -> None:
+        if self.count == 0:
+            return
+        path = self._path(cell_dir, episode_id)
+        with self._lock:
+            candidates: list[dict[str, Any]] = []
+            if path.is_file():
+                try:
+                    with gzip.open(path, "rt", encoding="utf-8") as stream:
+                        candidates = list(json.load(stream))
+                except (OSError, ValueError, TypeError):
+                    candidates = []
+            item = {"round_index": int(round_index), "markdown": markdown}
+            if len(candidates) < self.count:
+                candidates.append(item)
+            elif self.count == 1:
+                # A single example is deliberately the initial prompt shape.
+                return
+            else:
+                # Preserve the earliest count-1 and continually replace the
+                # final slot, yielding an early/late sample for count=2.
+                candidates[-1] = item
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_name(path.name + ".tmp")
+            with gzip.open(temporary, "wt", encoding="utf-8") as stream:
+                json.dump(candidates, stream, ensure_ascii=False)
+            temporary.replace(path)
+
+    def render(
+        self, cell_dir: Path, completed_episode_ids: Sequence[str]
+    ) -> Path | None:
+        if self.count == 0:
+            return None
+        for episode_id in sorted(completed_episode_ids):
+            path = self._path(cell_dir, episode_id)
+            if not path.is_file():
+                continue
+            with gzip.open(path, "rt", encoding="utf-8") as stream:
+                candidates = list(json.load(stream))[: self.count]
+            if not candidates:
+                continue
+            sections = [
+                "# Prompt examples",
+                "",
+                f"Deterministically selected from completed episode `{episode_id}`.",
+                "",
+            ]
+            for index, item in enumerate(candidates, start=1):
+                sections.extend(
+                    [
+                        f"## Example {index} (round {item['round_index']})",
+                        "",
+                        str(item["markdown"]).rstrip(),
+                        "",
+                    ]
+                )
+            destination = cell_dir / "prompt_examples.md"
+            _write(destination, "\n".join(sections).rstrip() + "\n")
+            return destination
+        return None
+
+
+def _scientific_identity(
+    task: _EpisodeTask, *, run_id: str, price_hash: str
+) -> ScientificIdentity:
+    options = task.config.game.options
+    return ScientificIdentity(
+        run_id=run_id,
+        cell_id=task.cell_id or "run",
+        episode_id=task.episode_id,
+        episode_seed=task.seed,
+        resolved_config_hash=canonical_hash(task.config.to_dict()),
+        prompt_definition_hashes_hash=prompt_definition_hash(task.config),
+        pricing_snapshot_hash=price_hash,
+        game_type=task.config.game.type,
+        dynamics_mode=(
+            None if options.get("dynamics_mode") is None else str(options["dynamics_mode"])
+        ),
+        control_mechanism=task.config.control.mechanism,
+        task_id=None if options.get("task_id") is None else str(options["task_id"]),
+    )
+
+
+def _with_scientific_identity(
+    task: _EpisodeTask, *, run_id: str, price_hash: str
+) -> _EpisodeTask:
+    if task.config.storage.artifact_profile != "results_only":
+        return task
+    return replace(task, scientific_identity=_scientific_identity(task, run_id=run_id, price_hash=price_hash))
+
+
+def _partition_resume_tasks(
+    tasks: Sequence[_EpisodeTask], *, resume: bool, price_hash: str
+) -> tuple[list[_EpisodeTask], list[EpisodeOutcome]]:
+    """Validate checkpoints and return only episodes that need provider work."""
+
+    scheduled: list[_EpisodeTask] = []
+    resumed: list[EpisodeOutcome] = []
+    sealed_frames: dict[Path, Any] = {}
+    for task in tasks:
+        if not resume or task.config.storage.checkpoint_mode != "episode":
+            scheduled.append(task)
+            continue
+        if task.scientific_identity is not None:
+            cell_dir = task.cell_dir or task.episode_dir
+            shard = episode_shard_path(cell_dir, task.episode_id)
+            final = cell_dir / "scientific_events.parquet"
+            if shard.is_file():
+                frame = validate_episode_artifact(shard, task.scientific_identity)
+            elif final.is_file():
+                if cell_dir not in sealed_frames:
+                    sealed_frames[cell_dir] = validate_cell_artifact(cell_dir)
+                frame = validate_episode_frame(
+                    sealed_frames[cell_dir], task.scientific_identity, source=final
+                )
+            else:
+                scheduled.append(task)
+                continue
+            resumed.append(
+                EpisodeOutcome(
+                    task.episode_id,
+                    task.seed,
+                    "skipped_resumed",
+                    interactions=len(frame),
+                    termination_reason=str(frame.iloc[-1]["termination_reason"]),
+                    cell_id=task.cell_id,
+                )
+            )
+            continue
+        manifest_path = task.manifest_path
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest.get("status") == "completed":
+                expected = {
+                    "episode_id": task.episode_id,
+                    "cell_id": task.cell_id,
+                    "seed": task.seed,
+                    "resolved_config_hash": canonical_hash(task.config.to_dict()),
+                    "prompt_definition_hashes_hash": prompt_definition_hash(task.config),
+                    "pricing_snapshot_hash": price_hash,
+                    "scientific_schema_version": SCIENTIFIC_SCHEMA_VERSION,
+                }
+                for field, value in expected.items():
+                    if field in manifest and manifest[field] != value:
+                        raise ValueError(
+                            f"incompatible episode checkpoint {task.episode_id}: "
+                            f"{field} does not match"
+                        )
+                resumed.append(
+                    replace(EpisodeOutcome.from_dict(manifest), status="skipped_resumed")
+                )
+                continue
+        scheduled.append(task)
+    return scheduled, resumed
+
+
+class _ResultsOnlyFinalizer:
+    """Seal compact cells before aggregate/analysis consumers are invoked."""
+
+    def __init__(
+        self,
+        tasks: Sequence[_EpisodeTask],
+        prompt_sampler: _CellPromptSampler | None,
+    ) -> None:
+        self._tasks: dict[str, list[_EpisodeTask]] = {}
+        for task in tasks:
+            self._tasks.setdefault(task.cell_id or "run", []).append(task)
+        self._sampler = prompt_sampler
+        self._locks = {cell_id: threading.Lock() for cell_id in self._tasks}
+
+    def seal(self, cell_id: str | None) -> dict[str, Any] | None:
+        label = cell_id or "run"
+        tasks = self._tasks.get(label, [])
+        if not tasks or tasks[0].scientific_identity is None:
+            return None
+        cell_dir = tasks[0].cell_dir or tasks[0].episode_dir
+        with self._locks[label]:
+            final = cell_dir / "scientific_events.parquet"
+            seal = cell_dir / "cell_complete.json"
+            if final.is_file() and seal.is_file():
+                frame = validate_cell_artifact(cell_dir)
+                for task in tasks:
+                    assert task.scientific_identity is not None
+                    validate_episode_frame(
+                        frame, task.scientific_identity, source=final
+                    )
+                return json.loads(seal.read_text(encoding="utf-8"))
+            identities: list[ScientificIdentity] = []
+            for task in tasks:
+                assert task.scientific_identity is not None
+                artifact = discover_episode_artifact(cell_dir, task.scientific_identity)
+                if artifact is not None:
+                    validate_episode_artifact(artifact, task.scientific_identity)
+                    identities.append(task.scientific_identity)
+                    continue
+                manifest = task.manifest_path
+                if manifest.is_file():
+                    payload = json.loads(manifest.read_text(encoding="utf-8"))
+                    if payload.get("status") == "completed":
+                        raise ValueError(
+                            f"episode {task.episode_id} is marked completed without a valid shard"
+                        )
+            if not identities or len(identities) != len(tasks):
+                # Successful shards remain durable and resumable, but a cell
+                # with failed/missing episodes is not falsely sealed whole.
+                return None
+            if self._sampler is not None:
+                self._sampler.render(cell_dir, [item.episode_id for item in identities])
+            summary = merge_episode_artifacts(cell_dir, identities, remove_shards=True)
+            episodes_dir = cell_dir / "data" / "episodes"
+            if episodes_dir.is_dir():
+                shutil.rmtree(episodes_dir)
+                data_dir = episodes_dir.parent
+                if data_dir.is_dir() and not any(data_dir.iterdir()):
+                    data_dir.rmdir()
+            return summary
 
 
 def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: Any):
@@ -434,28 +973,50 @@ async def _execute_episode(
     price_hash: str,
     checkpoint_enabled: bool,
     progress: ExperimentProgress,
+    retention_policy: Any,
+    scientific_identity: ScientificIdentity | None,
+    scientific_path: Path | None,
+    prompt_sampler: _CellPromptSampler | None,
+    prompt_cell_dir: Path,
+    prompt_episode_id: str,
 ) -> tuple[int | None, str | None]:
     """Run one episode; return ``(interaction_count, termination_reason)``."""
 
     runtime = _observer_runtime(game, episode_config, guarded_provider)
     if runtime is not None:
+        recorder_dir = (
+            scientific_path.parent
+            if retention_policy.profile == "results_only" and scientific_path is not None
+            else episode_dir
+        )
         recorder = RunRecorder(
-            episode_dir, run_id=episode_label, resolved_config=episode_config.to_dict(),
+            recorder_dir, run_id=episode_label, resolved_config=episode_config.to_dict(),
             policy=policy,
             # Per-episode Comet experiments are not wired here: one mas_cc
             # experiment would otherwise fan out into N remote experiments.
             comet_enabled=False, checkpoint_enabled=checkpoint_enabled,
             price_snapshot_hash=price_hash, metrics=metrics, to_round_view=to_round_view,
             binning=episode_config.metrics.binning_policy(episode_config.game.population_size),
+            retention_policy=retention_policy,
+            scientific_identity=scientific_identity,
+            scientific_path=scientific_path,
         )
         prompt_example_rounds = int(
             dict(episode_config.logging.options.get("prompt_examples", {}) or {}).get(
                 "count", 0
             )
         )
+        prompt_scope = str(
+            dict(episode_config.logging.options.get("prompt_examples", {}) or {}).get(
+                "scope",
+                "cell"
+                if episode_config.storage.artifact_profile == "results_only"
+                else "episode",
+            )
+        )
         prompt_logger = (
             PromptMarkdownLogger(episode_dir / "prompts", overwrite=True)
-            if prompt_example_rounds > 0
+            if prompt_example_rounds > 0 and prompt_scope == "episode"
             else None
         )
         observer = _RoundTickingObserver(
@@ -465,19 +1026,61 @@ async def _execute_episode(
             episode_label,
             prompt_logger=prompt_logger,
             prompt_example_rounds=prompt_example_rounds,
+            prompt_sampler=prompt_sampler if prompt_scope == "cell" else None,
+            prompt_cell_dir=prompt_cell_dir,
+            prompt_episode_id=prompt_episode_id,
         )
         try:
             result = await runtime(observer)
         except Exception as exc:
             recorder.event("run_failed", error_type=type(exc).__name__, error=str(exc))
-            recorder.finalize(status="failed", budget_status=guard.checkpoint_state())
+            recorder.finalize(
+                status="failed", budget_status=guard.checkpoint_state(), error=exc
+            )
             raise
-        recorder.finalize(status="completed", budget_status=guard.checkpoint_state())
+        recorder.finalize(
+            status="completed",
+            budget_status=guard.checkpoint_state(),
+            termination_reason=result.termination_reason,
+        )
         return len(result.interactions), result.termination_reason
 
     result = await run_game(game, episode_config, guarded_provider)
     progress.round_tick(episode_label, None, count=len(result.interactions))
-    _write(episode_dir / "result.json", _json(result.to_dict()))
+    if retention_policy.profile == "results_only":
+        recorder_dir = scientific_path.parent if scientific_path is not None else episode_dir
+        recorder = RunRecorder(
+            recorder_dir,
+            run_id=episode_label,
+            resolved_config=episode_config.to_dict(),
+            policy=policy,
+            comet_enabled=False,
+            checkpoint_enabled=False,
+            price_snapshot_hash=price_hash,
+            metrics=metrics,
+            to_round_view=to_round_view,
+            binning=episode_config.metrics.binning_policy(
+                episode_config.game.population_size
+            ),
+            retention_policy=retention_policy,
+            scientific_identity=scientific_identity,
+            scientific_path=scientific_path,
+        )
+        for index, interaction in enumerate(result.interactions, start=1):
+            recorder.record_interaction(
+                round_index=index,
+                interaction=interaction,
+                budget_status=guard.checkpoint_state(),
+                state=interaction.transition.next_state.to_dict(),
+                prompt_definitions={},
+            )
+        recorder.finalize(
+            status="completed",
+            budget_status=guard.checkpoint_state(),
+            termination_reason=result.termination_reason,
+        )
+    else:
+        _write(episode_dir / "result.json", _json(result.to_dict()))
     return len(result.interactions), result.termination_reason
 
 
@@ -489,6 +1092,7 @@ async def _run_episode_task(
     guard: RuntimeBudgetGuard,
     semaphore: asyncio.Semaphore,
     abort: asyncio.Event,
+    budget_abort: asyncio.Event,
     fail_fast: bool,
     resume: bool,
     policy: DetailedAuditPolicy,
@@ -500,8 +1104,10 @@ async def _run_episode_task(
     monitor: MasterMonitor | None = None,
     aggregator: GridAggregator | None = None,
     completion: "_CellCompletion | None" = None,
+    prompt_sampler: _CellPromptSampler | None = None,
+    finalizer: _ResultsOnlyFinalizer | None = None,
 ) -> EpisodeOutcome:
-    manifest_path = task.episode_dir / "manifest.json"
+    manifest_path = task.manifest_path
     label = task.episode_id if task.cell_id is None else f"{task.cell_id}/{task.episode_id}"
 
     def _finished(outcome: EpisodeOutcome) -> None:
@@ -511,6 +1117,16 @@ async def _run_episode_task(
             monitor.episode_finished(
                 status=outcome.status, cell_id=task.cell_id, budget_status=guard.status(),
             )
+
+    def _persist(outcome: EpisodeOutcome) -> None:
+        manifest = {
+            **outcome.to_dict(),
+            "resolved_config_hash": canonical_hash(task.config.to_dict()),
+            "prompt_definition_hashes_hash": prompt_definition_hash(task.config),
+            "pricing_snapshot_hash": price_hash,
+            "scientific_schema_version": SCIENTIFIC_SCHEMA_VERSION,
+        }
+        _write(manifest_path, _json(manifest))
 
     async def _maybe_close_cell() -> None:
         """Aggregate and publish this cell if that episode was its last.
@@ -525,7 +1141,13 @@ async def _run_episode_task(
         if not completion.record(task.cell_id):
             return
         try:
+            if finalizer is not None:
+                await asyncio.to_thread(finalizer.seal, task.cell_id)
             await asyncio.to_thread(aggregator.aggregate, task.cell_id)
+            if finalizer is not None:
+                await asyncio.to_thread(
+                    _record_cell_hashes, task.cell_dir or task.episode_dir
+                )
         except Exception as exc:  # aggregates are derived; a failure must not lose episodes
             LOGGER.error(
                 "aggregating cell %s failed: %s: %s", task.cell_id, type(exc).__name__, exc
@@ -539,8 +1161,25 @@ async def _run_episode_task(
             await _maybe_close_cell()
             return outcome
     async with semaphore:
+        # A budget stop aborts regardless of `fail_fast`. Once the guard is
+        # exhausted or stopped its counters only move one way, so every queued
+        # episode would dispatch, be refused on its first call, and be recorded
+        # as a failure. That is how one exhausted token budget turned into
+        # 4,235 "failed" episodes (results/DIAGNOSIS.md) and buried the fact
+        # that the run had simply run out of money. Skipping is the honest
+        # record: these episodes never ran.
+        if budget_abort.is_set():
+            outcome = EpisodeOutcome(
+                task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id,
+                error_type="BudgetStop", error=guard.stop_reason or "runtime budget exhausted",
+            )
+            _persist(outcome)
+            _finished(outcome)
+            await _maybe_close_cell()
+            return outcome
         if fail_fast and abort.is_set():
             outcome = EpisodeOutcome(task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id)
+            _persist(outcome)
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
@@ -549,6 +1188,12 @@ async def _run_episode_task(
                 game, task.config, guarded_provider, guard, task.episode_dir, label,
                 policy=policy, metrics=metrics, to_round_view=to_round_view,
                 price_hash=price_hash, checkpoint_enabled=checkpoint_enabled, progress=progress,
+                retention_policy=task.config.storage.retention_policy,
+                scientific_identity=task.scientific_identity,
+                scientific_path=task.scientific_path,
+                prompt_sampler=prompt_sampler,
+                prompt_cell_dir=task.cell_dir or task.episode_dir,
+                prompt_episode_id=task.episode_id,
             )
             outcome = EpisodeOutcome(
                 task.episode_id, task.seed, "completed", interactions=interactions,
@@ -557,12 +1202,19 @@ async def _run_episode_task(
         except Exception as exc:
             if fail_fast:
                 abort.set()
+            if isinstance(exc, ProviderError) and exc.code in BUDGET_STOP_CODES:
+                if not budget_abort.is_set():
+                    LOGGER.error(
+                        "budget stop at episode %s: %s - no further episodes will be started",
+                        label, exc,
+                    )
+                budget_abort.set()
             outcome = EpisodeOutcome(
                 task.episode_id, task.seed, "failed", error_type=type(exc).__name__,
                 error=str(exc), cell_id=task.cell_id,
             )
             LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
-        _write(manifest_path, _json(outcome.to_dict()))
+        _persist(outcome)
         _finished(outcome)
     # Outside the semaphore: aggregating a completed cell must not hold a slot
     # that a queued episode of another cell could be running in.
@@ -574,6 +1226,66 @@ async def _run_task_batch(
     tasks: list[_EpisodeTask], **kwargs: Any
 ) -> tuple[EpisodeOutcome, ...]:
     return tuple(await asyncio.gather(*(_run_episode_task(task, **kwargs) for task in tasks)))
+
+
+async def _prime_resumed_outcomes(
+    outcomes: Sequence[EpisodeOutcome],
+    *,
+    progress: ExperimentProgress,
+    monitor: MasterMonitor,
+    guard: RuntimeBudgetGuard,
+    completion: _CellCompletion | None = None,
+    aggregator: GridAggregator | None = None,
+    finalizer: _ResultsOnlyFinalizer | None = None,
+) -> None:
+    """Reflect validated checkpoints in progress and cell-completion state."""
+
+    for outcome in outcomes:
+        label = (
+            outcome.episode_id
+            if outcome.cell_id is None
+            else f"{outcome.cell_id}/{outcome.episode_id}"
+        )
+        progress.episode_done(label, outcome.status)
+        monitor.episode_finished(
+            status=outcome.status,
+            cell_id=outcome.cell_id,
+            budget_status=guard.status(),
+        )
+        if completion is None or outcome.cell_id is None:
+            continue
+        if not completion.record(outcome.cell_id):
+            continue
+        if finalizer is not None:
+            await asyncio.to_thread(finalizer.seal, outcome.cell_id)
+        if aggregator is not None:
+            await asyncio.to_thread(aggregator.aggregate, outcome.cell_id)
+            if finalizer is not None:
+                await asyncio.to_thread(
+                    _record_cell_hashes, aggregator.cell_directory(outcome.cell_id)
+                )
+
+
+async def _with_spend_watch(
+    watcher: "_LiveSpendWatcher | None", episodes: Any
+) -> tuple[EpisodeOutcome, ...]:
+    """Run the episodes with the spend poller alongside them.
+
+    The poller is a side channel, never a participant: it is cancelled the
+    moment the episodes finish, and it cannot fail the run. Its only effect on
+    the run is through `guard.request_stop`.
+    """
+
+    if watcher is None:
+        return await episodes
+    await watcher.start()
+    poller = asyncio.create_task(watcher.run())
+    try:
+        return await episodes
+    finally:
+        poller.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await poller
 
 
 def _aggregate_quietly(aggregator: GridAggregator, cell_id: str | None) -> None:
@@ -592,9 +1304,11 @@ def _aggregate_quietly(aggregator: GridAggregator, cell_id: str | None) -> None:
 
 
 def _write_experiment_summary(run_dir: Path, config: RunConfig, result: ExperimentResult) -> None:
-    _write(run_dir / "experiment_summary.json", _json(result.to_dict()))
+    results_only = config.storage.artifact_profile == "results_only"
+    if not results_only:
+        _write(run_dir / "experiment_summary.json", _json(result.to_dict()))
     fieldnames = ["episode_id", "seed", "status", "interactions", "termination_reason", "error_type", "error"]
-    output_path = run_dir / "experiment_summary.csv"
+    output_path = run_dir / ("run_summary.csv" if results_only else "experiment_summary.csv")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
@@ -607,6 +1321,12 @@ def _write_experiment_summary(run_dir: Path, config: RunConfig, result: Experime
         "schema_version": 1, "run_id": result.run_id, "experiment_name": result.experiment_name,
         "game_type": result.game_type, "episode_count": result.episode_count,
         "started_at": result.started_at, "finished_at": result.finished_at,
+        "artifact_profile": config.storage.artifact_profile,
+        "checkpoint_mode": config.storage.checkpoint_mode,
+        "completed": result.completed + result.skipped_resumed,
+        "failed": result.failed,
+        "skipped_aborted": result.skipped_aborted,
+        "budget_summary": dict(result.budget_status),
     }
     _write(run_dir / "manifest.json", _json(manifest))
     _write(run_dir / "resolved_config.yaml", resolved_config_yaml(config))
@@ -690,11 +1410,10 @@ async def run_experiment(
     print_banner(f"  Results:       {run_dir}")
 
     effective_budget = resolve_budget_limits(system_budget, run_budget)
-    guard = RuntimeBudgetGuard(effective_budget)
-    provider = create_llm_provider(config.llm_provider, registry=_provider_registry())
-    guarded_provider = BudgetGuardedProvider(
-        provider, guard, runtime_quote.pricing,
-        input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
+    guard = RuntimeBudgetGuard(effective_budget, expectation=_expectation(preflight))
+    price_hash = _pricing_identity(runtime_quote)
+    _configure_durable_budget(
+        config, run_dir, guard, price_hash=price_hash, resume=resume
     )
 
     root_seed = Seed(config.execution.seed)
@@ -706,12 +1425,42 @@ async def run_experiment(
             episode_id=episode_id, seed=seed,
             config=replace(config, execution=replace(config.execution, seed=seed)),
             episode_dir=episodes_dir / episode_id,
+            cell_dir=run_dir,
         )
 
-    tasks = [_episode_task(index) for index in range(config.execution.repetitions)]
+    tasks = [
+        _with_scientific_identity(
+            _episode_task(index), run_id=run_id, price_hash=price_hash
+        )
+        for index in range(config.execution.repetitions)
+    ]
+    scheduled_tasks, resumed_outcomes = _partition_resume_tasks(
+        tasks, resume=resume, price_hash=price_hash
+    )
+    guarded_provider = None
+    watcher = None
+    if scheduled_tasks:
+        provider = create_llm_provider(config.llm_provider, registry=_provider_registry())
+        guarded_provider = BudgetGuardedProvider(
+            provider, guard, runtime_quote.pricing,
+            input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
+        )
+        watcher = _spend_watcher(config, guard, effective_budget)
     metrics, to_round_view = game_metrics(game)
     policy = DetailedAuditPolicy.from_mapping(config.logging.options.get("detailed_prompt_audit"))
-    price_hash = price_snapshot_hash(runtime_quote.to_dict())
+    prompt_options = dict(config.logging.options.get("prompt_examples", {}) or {})
+    prompt_sampler = (
+        _CellPromptSampler(int(prompt_options.get("count", 0)))
+        if prompt_options.get(
+            "scope", "cell" if config.storage.artifact_profile == "results_only" else "episode"
+        ) == "cell"
+        else None
+    )
+    finalizer = (
+        _ResultsOnlyFinalizer(tasks, prompt_sampler)
+        if config.storage.artifact_profile == "results_only"
+        else None
+    )
 
     progress = ExperimentProgress(
         total_episodes=config.execution.repetitions,
@@ -732,7 +1481,9 @@ async def run_experiment(
     )
     semaphore = asyncio.Semaphore(config.execution.parallelism)
     abort = asyncio.Event()
+    budget_abort = asyncio.Event()
     started_at = _now()
+    outcomes: tuple[EpisodeOutcome, ...] = tuple(resumed_outcomes)
 
     # The master experiment is closed in the outer `finally`, *after* the
     # post-run analysis rather than before it. Under
@@ -741,16 +1492,44 @@ async def run_experiment(
     analysis_summary = None
     try:
         try:
-            outcomes = await _run_task_batch(
-                tasks, game=game, guarded_provider=guarded_provider, guard=guard,
-                semaphore=semaphore, abort=abort, fail_fast=config.execution.fail_fast,
-                resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
-                price_hash=price_hash, checkpoint_enabled=config.storage.checkpoints,
-                progress=progress, monitor=monitor,
+            await _prime_resumed_outcomes(
+                resumed_outcomes,
+                progress=progress,
+                monitor=monitor,
+                guard=guard,
             )
+            fresh_outcomes = await _with_spend_watch(
+                watcher,
+                _run_task_batch(
+                    scheduled_tasks, game=game, guarded_provider=guarded_provider, guard=guard,
+                    semaphore=semaphore, abort=abort, budget_abort=budget_abort,
+                    fail_fast=config.execution.fail_fast,
+                    resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
+                    price_hash=price_hash, checkpoint_enabled=config.storage.checkpoints,
+                    progress=progress, monitor=monitor, prompt_sampler=prompt_sampler,
+                    finalizer=finalizer,
+                ),
+            )
+            by_id = {
+                outcome.episode_id: outcome
+                for outcome in (*resumed_outcomes, *fresh_outcomes)
+            }
+            outcomes = tuple(by_id[task.episode_id] for task in tasks)
         finally:
-            guarded_provider.close()
+            if guarded_provider is not None:
+                guarded_provider.close()
             progress.close()
+            if finalizer is not None:
+                finalizer.seal(None)
+            elif prompt_sampler is not None:
+                prompt_sampler.render(
+                    run_dir,
+                    [
+                        outcome.episode_id
+                        for outcome in outcomes
+                        if outcome.status in {"completed", "skipped_resumed"}
+                    ],
+                )
             _aggregate_quietly(aggregator, None)
 
         result = ExperimentResult(
@@ -768,8 +1547,14 @@ async def run_experiment(
             analysis_summary = run_configured_analysis(config, run_dir, monitor.analysis_sink)
     finally:
         comet_summary = monitor.close()
-        _write(run_dir / "comet_run_summary.json", _json(comet_summary))
+        _write(
+            run_dir
+            / ("comet_summary.json" if config.storage.artifact_profile == "results_only" else "comet_run_summary.json"),
+            _json(comet_summary),
+        )
 
+    if config.storage.artifact_profile == "results_only":
+        _record_results_only_hashes(run_dir)
     _print_comet_destinations(comet_summary, analysis_summary)
     return result
 
@@ -904,7 +1689,9 @@ class GridResult:
 
 
 def _write_grid_summary(grid_dir: Path, grid: GridSpec, result: GridResult) -> None:
-    _write(grid_dir / "grid_summary.json", _json(result.to_dict()))
+    results_only = grid.base.storage.artifact_profile == "results_only"
+    if not results_only:
+        _write(grid_dir / "grid_summary.json", _json(result.to_dict()))
     fieldnames = ["cell_id", "completed", "failed", "skipped_resumed", "skipped_aborted", "overrides"]
     output_path = grid_dir / "grid_summary.csv"
     with output_path.open("w", newline="", encoding="utf-8") as stream:
@@ -923,6 +1710,12 @@ def _write_grid_summary(grid_dir: Path, grid: GridSpec, result: GridResult) -> N
         "experiment_name": result.experiment_name, "game_type": result.game_type,
         "cell_count": len(result.cells), "started_at": result.started_at,
         "finished_at": result.finished_at,
+        "artifact_profile": grid.base.storage.artifact_profile,
+        "checkpoint_mode": grid.base.storage.checkpoint_mode,
+        "completed": result.completed + result.skipped_resumed,
+        "failed": result.failed,
+        "skipped_aborted": result.skipped_aborted,
+        "budget_summary": dict(result.budget_status),
     }
     _write(grid_dir / "manifest.json", _json(manifest))
     _write(grid_dir / "resolved_base_config.yaml", resolved_config_yaml(grid.base))
@@ -1002,16 +1795,14 @@ async def run_experiment_grid(
     print_banner(f"  Results:       {grid_dir}")
 
     effective_budget = resolve_budget_limits(system_budget, run_budget)
-    guard = RuntimeBudgetGuard(effective_budget)
-    provider = create_llm_provider(base.llm_provider, registry=_provider_registry())
-    guarded_provider = BudgetGuardedProvider(
-        provider, guard, runtime_quote.pricing,
-        input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
-    )
+    guard = RuntimeBudgetGuard(effective_budget, expectation=_expectation(preflight))
 
     metrics, to_round_view = game_metrics(game)
     policy = DetailedAuditPolicy.from_mapping(base.logging.options.get("detailed_prompt_audit"))
-    price_hash = price_snapshot_hash(runtime_quote.to_dict())
+    price_hash = _pricing_identity(runtime_quote)
+    _configure_durable_budget(
+        base, grid_dir, guard, price_hash=price_hash, resume=resume
+    )
 
     grid_seed = Seed(base.execution.seed)
     all_tasks: list[_EpisodeTask] = []
@@ -1032,8 +1823,26 @@ async def run_experiment_grid(
                     episode_id=episode_id, seed=episode_seed,
                     config=replace(cell.config, execution=replace(cell.config.execution, seed=episode_seed)),
                     episode_dir=episodes_dir / episode_id, cell_id=cell.cell_id,
+                    cell_dir=cell_dir,
                 )
             )
+
+    all_tasks = [
+        _with_scientific_identity(task, run_id=run_id, price_hash=price_hash)
+        for task in all_tasks
+    ]
+    scheduled_tasks, resumed_outcomes = _partition_resume_tasks(
+        all_tasks, resume=resume, price_hash=price_hash
+    )
+    guarded_provider = None
+    watcher = None
+    if scheduled_tasks:
+        provider = create_llm_provider(base.llm_provider, registry=_provider_registry())
+        guarded_provider = BudgetGuardedProvider(
+            provider, guard, runtime_quote.pricing,
+            input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
+        )
+        watcher = _spend_watcher(base, guard, effective_budget)
 
     progress = ExperimentProgress(
         total_episodes=len(all_tasks), total_rounds=total_rounds, show=show_progress,
@@ -1063,21 +1872,67 @@ async def run_experiment_grid(
     completion = _CellCompletion(
         {cell.cell_id: cell.config.execution.repetitions for cell in cells}
     )
+    prompt_options = dict(base.logging.options.get("prompt_examples", {}) or {})
+    prompt_sampler = (
+        _CellPromptSampler(int(prompt_options.get("count", 0)))
+        if prompt_options.get(
+            "scope", "cell" if base.storage.artifact_profile == "results_only" else "episode"
+        ) == "cell"
+        else None
+    )
+    finalizer = (
+        _ResultsOnlyFinalizer(all_tasks, prompt_sampler)
+        if base.storage.artifact_profile == "results_only"
+        else None
+    )
     semaphore = asyncio.Semaphore(base.execution.parallelism)
     abort = asyncio.Event()
+    budget_abort = asyncio.Event()
     started_at = _now()
+    outcomes: tuple[EpisodeOutcome, ...] = tuple(resumed_outcomes)
 
     try:
-        outcomes = await _run_task_batch(
-            all_tasks, game=game, guarded_provider=guarded_provider, guard=guard,
-            semaphore=semaphore, abort=abort, fail_fast=base.execution.fail_fast,
-            resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
-            price_hash=price_hash, checkpoint_enabled=base.storage.checkpoints, progress=progress,
-            monitor=monitor, aggregator=aggregator, completion=completion,
+        await _prime_resumed_outcomes(
+            resumed_outcomes,
+            progress=progress,
+            monitor=monitor,
+            guard=guard,
+            completion=completion,
+            aggregator=aggregator,
+            finalizer=finalizer,
         )
+        fresh_outcomes = await _with_spend_watch(
+            watcher,
+            _run_task_batch(
+                scheduled_tasks, game=game, guarded_provider=guarded_provider, guard=guard,
+                semaphore=semaphore, abort=abort, budget_abort=budget_abort,
+                fail_fast=base.execution.fail_fast,
+                resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
+                price_hash=price_hash, checkpoint_enabled=base.storage.checkpoints, progress=progress,
+                monitor=monitor, aggregator=aggregator, completion=completion,
+                prompt_sampler=prompt_sampler, finalizer=finalizer,
+            ),
+        )
+        by_id = {
+            (outcome.cell_id, outcome.episode_id): outcome
+            for outcome in (*resumed_outcomes, *fresh_outcomes)
+        }
+        outcomes = tuple(by_id[(task.cell_id, task.episode_id)] for task in all_tasks)
     finally:
-        guarded_provider.close()
+        if guarded_provider is not None:
+            guarded_provider.close()
         progress.close()
+        if prompt_sampler is not None and finalizer is None:
+            for cell in cells:
+                prompt_sampler.render(
+                    cells_dir / cell.cell_id,
+                    [
+                        outcome.episode_id
+                        for outcome in outcomes
+                        if outcome.cell_id == cell.cell_id
+                        and outcome.status in {"completed", "skipped_resumed"}
+                    ],
+                )
         aggregator.finish()
         # The same figure the dashboard gets, written locally regardless of
         # whether Comet is on - so the picture is checkable, and a cluster job
@@ -1086,7 +1941,11 @@ async def run_experiment_grid(
             monitor.save_grid_figure(grid_dir / "grid_progress.png")
         except Exception as exc:
             LOGGER.warning("could not render the grid image (%s)", type(exc).__name__)
-        _write(grid_dir / "comet_run_summary.json", _json(monitor.close()))
+        _write(
+            grid_dir
+            / ("comet_summary.json" if base.storage.artifact_profile == "results_only" else "comet_run_summary.json"),
+            _json(monitor.close()),
+        )
 
     by_cell: dict[str, list[EpisodeOutcome]] = {cell.cell_id: [] for cell in cells}
     for outcome in outcomes:
@@ -1103,6 +1962,11 @@ async def run_experiment_grid(
     _write_grid_summary(grid_dir, grid, result)
     for cell, cell_result in zip(cells, cell_results):
         cell_dir = cells_dir / cell.cell_id
+        failures = [
+            outcome.to_dict()
+            for outcome in cell_result.outcomes
+            if outcome.status in {"failed", "skipped_aborted"}
+        ]
         _write(
             cell_dir / "cell_summary.json",
             _json(
@@ -1111,11 +1975,19 @@ async def run_experiment_grid(
                     "completed": cell_result.completed, "failed": cell_result.failed,
                     "skipped_resumed": cell_result.skipped_resumed,
                     "skipped_aborted": cell_result.skipped_aborted,
-                    "outcomes": [outcome.to_dict() for outcome in cell_result.outcomes],
+                    **(
+                        {"failures": failures}
+                        if base.storage.artifact_profile == "results_only"
+                        else {"outcomes": [outcome.to_dict() for outcome in cell_result.outcomes]}
+                    ),
                 }
             ),
         )
+    if base.storage.artifact_profile == "results_only":
+        merge_cell_scientific_tables(grid_dir)
     run_configured_analysis(base, grid_dir)
+    if base.storage.artifact_profile == "results_only":
+        _record_results_only_hashes(grid_dir)
     return result
 
 

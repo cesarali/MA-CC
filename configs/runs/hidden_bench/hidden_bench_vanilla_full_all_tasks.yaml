@@ -13,7 +13,7 @@
 #
 # `assignment_scheme: exact_replication` (not `bijective`) because the corpus
 # mixes N_native=3 and N_native=4 tasks (58 at 4, 7 at 3 -
-# scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/canonical/tasks.json);
+# data/hidden_bench/canonical/tasks.json);
 # bijective demands n_agents == the task's own native count, which breaks the
 # moment a fixed `population_size: 4` hits a 3-agent task. exact_replication
 # has no such constraint (it pads/duplicates evidence-type labels to reach N)
@@ -113,14 +113,16 @@ pricing:
   explicit_unknown_price_override: false
 budget:
   # Sized for the whole grid (65 cells x 1 repetition), not one cell - see the
-  # COST note above. Re-check with `experiment preflight` before raising
-  # `repetitions`.
+  # COST note above.
+  #
+  # Cost is the only ceiling; the token and request limits are deliberately
+  # unset. See the budget block in hidden_bench_vanilla_hidden_all_tasks.yaml
+  # and results/DIAGNOSIS.md for why a guessed token ceiling is a liability
+  # rather than a safeguard.
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 15.0
   max_cost_per_run: 15.0
-  max_provider_requests: 1600
-  max_input_tokens: 600000
-  max_output_tokens: 120000
+  live_spend_poll_seconds: 120
   allow_unbounded_paid_requests: false
 logging:
   level: INFO

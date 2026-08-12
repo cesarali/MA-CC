@@ -1,9 +1,10 @@
 """Corpus loading and information assignment for the HiddenBench games (§3, §4).
 
 **The corpus is not regenerated here.** It was downloaded and normalized by
-`scripts/local_llms/hiddenbench_population_pipeline/`, which is the user's own
-prior work; this module reads what that pipeline produced. See
-`docs/hidden_bench/data_provenance.md` for exactly what was found where.
+`scripts/local_llms/hiddenbench_population_pipeline/` into `data/hidden_bench/`,
+which is the user's own prior work; this module reads what that pipeline
+produced. See `docs/hidden_bench/data_provenance.md` for exactly what was found
+where.
 
 Two things the brief guessed at and this module corrects:
 
@@ -45,15 +46,14 @@ from .schemas import AgentInfoSet, HiddenBenchDataError, HiddenProfileTask
 # Resolved relative to this file so it works from any working directory.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-DEFAULT_CORPUS_ROOT = (
-    _REPO_ROOT / "scripts" / "local_llms" / "hiddenbench_population_pipeline" / "data" / "hiddenbench"
-)
-"""Where the pipeline actually put the corpus.
+DEFAULT_CORPUS_ROOT = _REPO_ROOT / "data" / "hidden_bench"
+"""The repository's one HiddenBench corpus location (the brief's §2 layout).
 
-The brief's §2 layout proposed `data/hidden_bench/`; that directory does not
-exist and inventing it would mean either copying 65 tasks to a second location
-or silently diverging from the pipeline that maintains them. Overridable per
-run with `game.options.corpus_root`.
+It used to live under `scripts/local_llms/hiddenbench_population_pipeline/data/`,
+which put run-time data inside a tool directory; the pipeline now writes here
+instead, so producer and consumers share a single path. This constant is that
+path - import it rather than re-deriving the location. Overridable per run with
+`game.options.corpus_root`.
 """
 
 PIPELINE_SCHEMES = ("exact_replication", "paraphrased_replication", "factorized_evidence")
@@ -118,8 +118,9 @@ def _read_json(path: Path) -> Any:
     if not path.exists():
         raise HiddenBenchDataError(
             f"HiddenBench corpus file not found: {path}\n"
-            "The corpus is produced by scripts/local_llms/hiddenbench_population_pipeline/ - "
-            "see docs/hidden_bench/data_provenance.md. It is not regenerated automatically."
+            "The corpus lives in data/hidden_bench/ and is produced by "
+            "scripts/local_llms/hiddenbench_population_pipeline/ - see "
+            "docs/hidden_bench/data_provenance.md. It is not regenerated automatically."
         )
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -191,9 +192,8 @@ def _load_scaled(corpus_root: str, method: str, n_agents: int) -> tuple[tuple[Hi
         raise HiddenBenchDataError(
             f"no prebuilt {method} population for N={n_agents} at {path}.\n"
             "Build it with:\n"
-            f"  cd scripts/local_llms/hiddenbench_population_pipeline && "
-            f"python scripts/prepare_hiddenbench.py --agents {n_agents} --method {method} "
-            "--data-root data/hiddenbench"
+            f"  python scripts/local_llms/hiddenbench_population_pipeline/scripts/"
+            f"prepare_hiddenbench.py --agents {n_agents} --method {method}"
             + ("" if method == "exact_replication" else "\n  (also needs --annotations; see that directory's README §6-7)")
         )
     payload = _read_json(path)

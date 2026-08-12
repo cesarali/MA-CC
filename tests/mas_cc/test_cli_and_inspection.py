@@ -6,6 +6,7 @@ from mas_cc.cli.main import main
 from mas_cc.cli.game import run_game_inspection
 from mas_cc.cli.provider import run_provider_smoke_test
 from mas_cc.cli.prompt import generate_paper_prompt_examples
+from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
 
 
 def test_version_command(capsys):
@@ -249,10 +250,7 @@ def test_phase_6_standard_inspection_cli(tmp_path: Path, capsys):
 
 def test_paper_prompt_example_bundle_is_readable_and_machine_inspectable(tmp_path: Path):
     output = tmp_path / "paper_prompts"
-    data = Path(
-        "scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/"
-        "scaled/exact_replication/N_32.json"
-    )
+    data = DEFAULT_CORPUS_ROOT / "scaled" / "exact_replication" / "N_32.json"
     generate_paper_prompt_examples(
         output, hiddenbench_data=data, task_id=1, agent_id=0
     )

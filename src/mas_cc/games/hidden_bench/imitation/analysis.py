@@ -1,12 +1,14 @@
 """Offline behavioral and discrete-information analysis for imitation events.
 
-The analysis consumes persisted ``trajectory.jsonl`` files.  It intentionally
-does not maintain streaming estimator state: episodes are the bootstrap unit,
-and temporal nulls have to see a complete episode before they can perturb it.
+The analysis consumes either persisted ``trajectory.jsonl`` files or versioned
+compact scientific Parquet. It intentionally does not maintain streaming
+estimator state: episodes are the bootstrap unit, and temporal nulls have to see
+a complete episode before they can perturb it.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from collections import Counter, defaultdict
@@ -29,6 +31,14 @@ from .metrics import behavioral_transition_metrics, population_observables
 
 MAIN_ESTIMATOR_VARIANT = "unsmoothed"
 ACTION_ENTROPY_EPSILON_BITS = 1e-6
+ENTROPY_BOUND_TOLERANCE_BITS = 1e-9
+"""Slack allowed on ``I(U;X'|S) <= H(U|S)`` before the bound counts as violated.
+
+Both sides come from the same direct counts, so a real violation cannot happen;
+only floating-point summation order can put the ratio a few ulps over one.  The
+bound is *reported*, never enforced -- clipping it would hide exactly the
+estimator pathology the check exists to surface.
+"""
 
 ORDER_PARAMETER_COUNT_FIELDS: Mapping[str, tuple[str, str]] = {
     "m_ctrl": ("Z_t", "Z_t1"),
@@ -118,6 +128,151 @@ INFORMATION_STATISTIC_DESCRIPTIONS: Mapping[str, str] = {
         "order parameter after the interaction, conditioned on its value before. Whether advocating "
         "changes how ordered the population becomes, regardless of which option wins."
     ),
+}
+
+
+ACTUATION_CHANNEL_COUNT_FIELDS: Mapping[str, tuple[str, str]] = {
+    "population": ("N_t", "N_t1"),
+    **ORDER_PARAMETER_COUNT_FIELDS,
+}
+"""Conditioning variable of each actuation channel, before and after the event.
+
+The order parameters reuse the headcount encoding above, so a controller
+diagnostic conditions on exactly the same partition of events as the CMI it is
+normalizing -- which is what makes the ratio auditable.
+"""
+
+CONDITIONING_LABELS: Mapping[str, str] = {
+    "population": "N_t",
+    "m_ctrl": "m_ctrl",
+    "m_truth": "m_truth",
+    "m_order": "m_order",
+}
+
+ACTUATION_CHANNEL_DELTA_FIELDS: Mapping[str, str] = {
+    "m_ctrl": "delta_m_ctrl",
+    "m_truth": "delta_m_truth",
+    "m_order": "delta_m_order",
+}
+"""Signed per-event movement of each order parameter.
+
+Signed responses use the float order parameter rather than the headcount it is
+encoded as: the two differ by a fixed positive affine map, so the sign is the
+same either way, and the float is the quantity the rest of the report plots.
+"""
+
+CONTROLLER_ENTROPY_STATISTICS = (
+    "controller_action_entropy",
+    "controller_action_entropy_given_population",
+    "controller_action_entropy_given_m_ctrl",
+    "controller_action_entropy_given_m_truth",
+    "controller_action_entropy_given_m_order",
+)
+ACTUATION_INFORMATION_FRACTION_STATISTICS = (
+    "population_actuation_information_fraction",
+    "m_ctrl_actuation_information_fraction",
+    "m_truth_actuation_information_fraction",
+    "m_order_actuation_information_fraction",
+)
+SIGNED_ACTUATION_STATISTICS = (
+    "m_ctrl_signed_actuation",
+    "m_truth_signed_actuation",
+    "m_order_signed_actuation",
+)
+ACTION_OVERLAP_STATISTICS = (
+    "population_action_overlap",
+    "m_ctrl_action_overlap",
+    "m_truth_action_overlap",
+    "m_order_action_overlap",
+)
+CONTROLLER_DIAGNOSTIC_STATISTICS = (
+    *CONTROLLER_ENTROPY_STATISTICS,
+    *ACTUATION_INFORMATION_FRACTION_STATISTICS,
+    *SIGNED_ACTUATION_STATISTICS,
+    *ACTION_OVERLAP_STATISTICS,
+)
+"""Diagnostics that make the actuation CMIs above readable.
+
+`I(U;X'|S) <= H(U|S)` means a near-zero CMI has two very different causes: the
+controller barely moves the population, or the controller has barely any action
+entropy left once `S` is known.  These quantities separate them, and add the
+sign the CMI cannot carry.  They are not new channels and not efficiencies.
+"""
+
+ACTION_OVERLAP_FIELDS = (
+    "occupied_conditioning_states",
+    "dual_action_conditioning_states",
+    "fraction_conditioning_states_with_both_actions",
+    "fraction_events_in_dual_action_conditioning_states",
+)
+
+CONTROLLER_DIAGNOSTIC_DESCRIPTIONS: Mapping[str, str] = {
+    "controller_action_entropy": (
+        "Shannon entropy of the controller's action (`H(U_t)`) over the whole cell. How variable "
+        "the controller was overall: 0 bits means it always took the same action, 1 bit means it "
+        "split evenly between `ADVOCATE_Z` and `NO_OP`. High values here do **not** imply the "
+        "actions are comparable at a fixed population state."
+    ),
+    "controller_action_entropy_given_population": (
+        "`H(U_t | N_t)` — how much uncertainty is left in the controller's action once the full "
+        "occupation state before the interaction is known. This is the ceiling on "
+        "`population_actuation_cmi`; near zero means a small CMI is structurally expected rather "
+        "than evidence of a weak controller."
+    ),
+    "controller_action_entropy_given_m_ctrl": (
+        "`H(U_t | m_ctrl,t)` — the same budget in the target-alignment conditioning space, the "
+        "ceiling on `m_ctrl_actuation_cmi`."
+    ),
+    "controller_action_entropy_given_m_truth": (
+        "`H(U_t | m_truth,t)` — the ceiling on `m_truth_actuation_cmi`. Equals the `m_ctrl` "
+        "version whenever the controller's target is the correct answer, since the two "
+        "conditioning encodings then coincide."
+    ),
+    "controller_action_entropy_given_m_order": (
+        "`H(U_t | m_order,t)` — the ceiling on `m_order_actuation_cmi`. `m_order` is a coarse "
+        "projection of `N_t`, so this typically stays well above `H(U_t | N_t)`."
+    ),
+    "population_actuation_information_fraction": (
+        "`population_actuation_cmi / H(U_t | N_t)` — what fraction of the controller's remaining "
+        "action information, after the current population state is fixed, is predictive of the "
+        "next population state. A normalization diagnostic, not an efficiency."
+    ),
+    "m_ctrl_actuation_information_fraction": (
+        "`m_ctrl_actuation_cmi / H(U_t | m_ctrl,t)` — the same ratio projected onto the "
+        "target-alignment order parameter."
+    ),
+    "m_truth_actuation_information_fraction": (
+        "`m_truth_actuation_cmi / H(U_t | m_truth,t)` — the same ratio projected onto the "
+        "truth-alignment order parameter."
+    ),
+    "m_order_actuation_information_fraction": (
+        "`m_order_actuation_cmi / H(U_t | m_order,t)` — the same ratio projected onto the "
+        "consensus order parameter."
+    ),
+    "m_ctrl_signed_actuation": (
+        "State-adjusted signed response of `m_ctrl`: within each conditioning state that saw "
+        "**both** actions, the mean `delta_m_ctrl` under `ADVOCATE_Z` minus the mean under "
+        "`NO_OP`, averaged over those states by event frequency. Positive means advocacy moves "
+        "the population toward the controller's target; CMI alone cannot say which way."
+    ),
+    "m_truth_signed_actuation": (
+        "The same state-adjusted contrast for `m_truth`. Under a wrong controller target this can "
+        "have the opposite sign to `m_ctrl_signed_actuation` — controller success and epistemic "
+        "success are then different things."
+    ),
+    "m_order_signed_actuation": (
+        "The same state-adjusted contrast for `m_order`: whether advocacy raises or lowers "
+        "consensus, irrespective of which option the population settles on. Not a measure of "
+        "target success."
+    ),
+    "population_action_overlap": (
+        "Action-overlap support in the `N_t` conditioning space. The headline number is the "
+        "fraction of events living in states where both `ADVOCATE_Z` and `NO_OP` were observed — "
+        "the only events that can contribute to a within-state comparison."
+    ),
+    "m_ctrl_action_overlap": "Action-overlap support in the `m_ctrl` conditioning space.",
+    "m_truth_action_overlap": "Action-overlap support in the `m_truth` conditioning space.",
+    "m_order_action_overlap": "Action-overlap support in the `m_order` conditioning space.",
 }
 
 
@@ -710,6 +865,345 @@ def information_analysis(
     return estimates, null_rows
 
 
+@dataclass(frozen=True, slots=True)
+class DiagnosticValue:
+    """One controller diagnostic, with the parts a ratio was built from.
+
+    ``numerator`` and ``denominator`` are carried so a reader can audit an
+    information fraction instead of trusting it, and so a bootstrap replicate
+    that lands on a zero denominator can say *why* it is ``NaN``.
+    """
+
+    value: float
+    numerator: float | None = None
+    denominator: float | None = None
+    undefined_reason: str | None = None
+
+
+def _entropy_bits(counts: Mapping[Hashable, int]) -> float:
+    total = sum(counts.values())
+    if total <= 0:
+        return math.nan
+    return -sum(
+        (count / total) * math.log2(count / total) for count in counts.values() if count
+    )
+
+
+def _states_by_action(
+    actions: Sequence[str], states: Sequence[Hashable]
+) -> dict[Hashable, Counter]:
+    grouped: dict[Hashable, Counter] = defaultdict(Counter)
+    for action, state in zip(actions, states, strict=True):
+        grouped[state][action] += 1
+    return dict(grouped)
+
+
+def conditional_action_entropy_bits(
+    actions: Sequence[str], states: Sequence[Hashable]
+) -> float:
+    """``H(U | state)`` in bits, by the direct counting the CMIs already use.
+
+    This is the entropy budget for ``I(U; next_state | state)``: a controller
+    with no remaining action uncertainty at a fixed state cannot carry
+    information about where that state goes next, however strong its real
+    effect on the population is.
+    """
+
+    if not actions:
+        return math.nan
+    total = len(actions)
+    return float(
+        sum(
+            (sum(counter.values()) / total) * _entropy_bits(counter)
+            for counter in _states_by_action(actions, states).values()
+        )
+    )
+
+
+def action_overlap_diagnostics(
+    actions: Sequence[str], states: Sequence[Hashable]
+) -> dict[str, Any]:
+    """How much data supports a within-state ``ADVOCATE_Z`` vs ``NO_OP`` contrast.
+
+    A nonzero overall ``H(U)`` is not evidence of overlap: a hard threshold
+    controller varies its action across the run while being deterministic in
+    every individual state, so every event sits in a single-action slice and
+    contributes nothing to a within-state comparison.
+    """
+
+    grouped = _states_by_action(actions, states)
+    dual = [
+        counter
+        for counter in grouped.values()
+        if counter[ADVOCATE_TARGET] > 0 and counter[NO_OP] > 0
+    ]
+    events_in_dual = sum(sum(counter.values()) for counter in dual)
+    return {
+        "occupied_conditioning_states": len(grouped),
+        "dual_action_conditioning_states": len(dual),
+        "fraction_conditioning_states_with_both_actions": (
+            math.nan if not grouped else len(dual) / len(grouped)
+        ),
+        "fraction_events_in_dual_action_conditioning_states": (
+            math.nan if not actions else events_in_dual / len(actions)
+        ),
+    }
+
+
+def signed_actuation_response(
+    actions: Sequence[str],
+    states: Sequence[Hashable],
+    deltas: Sequence[Any],
+) -> DiagnosticValue:
+    """State-adjusted ``ADVOCATE_Z`` minus ``NO_OP`` movement of an order parameter.
+
+    Adjusted rather than a bare difference of means because the policy is a
+    function of the current state: comparing all advocacy events against all
+    no-op events would mostly measure which states each action is taken in.
+    States seeing only one action are dropped, and the survivors are combined
+    with empirical event-frequency weights over that overlap-supported subset.
+    """
+
+    grouped: dict[Hashable, dict[str, list[float]]] = defaultdict(
+        lambda: {ADVOCATE_TARGET: [], NO_OP: []}
+    )
+    for action, state, delta in zip(actions, states, deltas, strict=True):
+        if delta is None or not math.isfinite(float(delta)):
+            continue
+        grouped[state][action].append(float(delta))
+    weighted, weight = 0.0, 0
+    for buckets in grouped.values():
+        advocate, no_op = buckets[ADVOCATE_TARGET], buckets[NO_OP]
+        if not advocate or not no_op:
+            continue
+        size = len(advocate) + len(no_op)
+        weighted += size * (sum(advocate) / len(advocate) - sum(no_op) / len(no_op))
+        weight += size
+    if weight == 0:
+        return DiagnosticValue(
+            math.nan, undefined_reason="no_conditioning_state_saw_both_actions"
+        )
+    return DiagnosticValue(weighted / weight)
+
+
+def _diagnostic_family(name: str) -> str:
+    if name in CONTROLLER_ENTROPY_STATISTICS:
+        return "controller_entropy"
+    if name in ACTUATION_INFORMATION_FRACTION_STATISTICS:
+        return "information_fraction"
+    if name in SIGNED_ACTUATION_STATISTICS:
+        return "signed_actuation"
+    if name in ACTION_OVERLAP_STATISTICS:
+        return "action_overlap"
+    raise ValueError(f"unknown HiddenBench imitation controller diagnostic {name!r}")
+
+
+def _diagnostic_channel(name: str) -> str | None:
+    """Which conditioning variable the diagnostic is measured against."""
+
+    for channel in ACTUATION_CHANNEL_COUNT_FIELDS:
+        if name.startswith(f"{channel}_") or name.endswith(f"_given_{channel}"):
+            return channel
+    return None
+
+
+def _controlled_events(events: Sequence[ImitationEvent]) -> list[ImitationEvent]:
+    return [event for event in events if event.U_t in {ADVOCATE_TARGET, NO_OP}]
+
+
+def _channel_series(
+    channel: str, events: Sequence[ImitationEvent]
+) -> tuple[list[Hashable], list[Hashable]]:
+    before_field, after_field = ACTUATION_CHANNEL_COUNT_FIELDS[channel]
+    return (
+        [getattr(event, before_field) for event in events],
+        [getattr(event, after_field) for event in events],
+    )
+
+
+def _diagnostic_value(name: str, events: Sequence[ImitationEvent]) -> DiagnosticValue:
+    """Compute one diagnostic; the single entry point bootstrap and null reuse."""
+
+    controlled = _controlled_events(events)
+    if not controlled:
+        return DiagnosticValue(math.nan, undefined_reason="no_controlled_events")
+    actions = [str(event.U_t) for event in controlled]
+    if name == "controller_action_entropy":
+        return DiagnosticValue(_entropy_bits(Counter(actions)))
+    family = _diagnostic_family(name)
+    channel = _diagnostic_channel(name)
+    assert channel is not None  # every remaining diagnostic names its channel
+    states, next_states = _channel_series(channel, controlled)
+    if family == "controller_entropy":
+        return DiagnosticValue(conditional_action_entropy_bits(actions, states))
+    if family == "information_fraction":
+        denominator = conditional_action_entropy_bits(actions, states)
+        numerator = getattr(
+            conditional_mutual_information(actions, next_states, states),
+            MAIN_ESTIMATOR_VARIANT,
+        )
+        if not math.isfinite(denominator) or denominator <= ACTION_ENTROPY_EPSILON_BITS:
+            # Undefined, not zero: the controller had no action freedom left to
+            # spend, so the question the ratio asks does not arise.
+            return DiagnosticValue(
+                math.nan,
+                numerator,
+                denominator,
+                "controller_deterministic_given_conditioning_state",
+            )
+        return DiagnosticValue(numerator / denominator, numerator, denominator)
+    if family == "signed_actuation":
+        deltas = [
+            event.event.get(ACTUATION_CHANNEL_DELTA_FIELDS[channel]) for event in controlled
+        ]
+        return signed_actuation_response(actions, states, deltas)
+    overlap = action_overlap_diagnostics(actions, states)
+    return DiagnosticValue(overlap["fraction_events_in_dual_action_conditioning_states"])
+
+
+def _quantiles(values: Sequence[float], alpha: float) -> tuple[float, float]:
+    finite = np.asarray([value for value in values if math.isfinite(value)], dtype=float)
+    if not len(finite):
+        return (math.nan, math.nan)
+    return (
+        float(np.quantile(finite, alpha)),
+        float(np.quantile(finite, 1 - alpha)),
+    )
+
+
+def controller_diagnostic_analysis(
+    events: Sequence[ImitationEvent],
+    *,
+    bootstrap_resamples: int = 1000,
+    null_permutations: int = 1000,
+    confidence: float = 0.95,
+    seed: int = 1,
+    diagnostics: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Entropy, information-fraction, signed-response and overlap diagnostics.
+
+    Whole episodes are the bootstrap unit, as for the CMIs themselves.  Ratios
+    are recomputed from a resample's own numerator and denominator rather than
+    assembled from separately resampled parts, so a replicate whose conditional
+    entropy vanishes reports ``NaN`` and is excluded from the interval; the
+    surviving count is kept on the row.
+
+    Entropy and overlap rows carry no permutation null on purpose: they describe
+    the controller's own policy, which a null that reshuffles that policy would
+    simply destroy rather than test.
+    """
+
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between zero and one")
+    names = tuple(
+        CONTROLLER_DIAGNOSTIC_STATISTICS if diagnostics is None else diagnostics
+    )
+    unknown = sorted(set(names) - set(CONTROLLER_DIAGNOSTIC_STATISTICS))
+    if unknown:
+        raise ValueError(
+            "unknown HiddenBench imitation controller diagnostic(s): " + ", ".join(unknown)
+        )
+    if not names:
+        raise ValueError("at least one HiddenBench imitation controller diagnostic is required")
+    alpha = (1 - confidence) / 2
+    controlled = _controlled_events(events)
+    by_episode = _group_events(controlled, key=lambda event: event.episode_id)
+    actions = [str(event.U_t) for event in controlled]
+    channel_entropy = {
+        channel: conditional_action_entropy_bits(
+            actions, _channel_series(channel, controlled)[0]
+        )
+        for channel in ACTUATION_CHANNEL_COUNT_FIELDS
+        if controlled
+    }
+    overlap_by_channel = {
+        channel: action_overlap_diagnostics(
+            actions, _channel_series(channel, controlled)[0]
+        )
+        for channel in ACTUATION_CHANNEL_COUNT_FIELDS
+        if controlled
+    }
+
+    rows: list[dict[str, Any]] = []
+    for index, name in enumerate(names):
+        family = _diagnostic_family(name)
+        channel = _diagnostic_channel(name)
+        main = _diagnostic_value(name, controlled)
+        bootstrap_values: list[float] = []
+        if controlled and family != "action_overlap":
+            draws = bootstrap_episode_ids(
+                list(by_episode), resamples=bootstrap_resamples, seed=seed + index
+            )
+            bootstrap_values = [
+                _diagnostic_value(name, _resampled_events(by_episode, draw)).value
+                for draw in draws
+            ]
+        null_values: list[float] = []
+        if controlled and family in {"information_fraction", "signed_actuation"}:
+            for permutation in range(null_permutations):
+                rng = np.random.default_rng(
+                    seed + 1_000_000 + 20_000 * (index + 1) + permutation
+                )
+                null_values.append(
+                    _diagnostic_value(
+                        name, _perturb_within_episode(controlled, field="U_t", rng=rng)
+                    ).value
+                )
+        finite_null = [value for value in null_values if math.isfinite(value)]
+        bootstrap_interval = _quantiles(bootstrap_values, alpha)
+        null_interval = _quantiles(null_values, alpha)
+        bound_satisfied: bool | None = None
+        if (
+            main.numerator is not None
+            and main.denominator is not None
+            and math.isfinite(main.numerator)
+            and math.isfinite(main.denominator)
+        ):
+            bound_satisfied = bool(
+                main.numerator <= main.denominator + ENTROPY_BOUND_TOLERANCE_BITS
+            )
+        entropy = None if channel is None else channel_entropy.get(channel)
+        rows.append({
+            "statistic": name,
+            "family": family,
+            "conditioning": None if channel is None else CONDITIONING_LABELS[channel],
+            "main_estimator_variant": MAIN_ESTIMATOR_VARIANT,
+            "value": main.value,
+            "numerator_bits": math.nan if main.numerator is None else main.numerator,
+            "denominator_bits": math.nan if main.denominator is None else main.denominator,
+            "undefined_reason": main.undefined_reason,
+            "bootstrap_ci_low": bootstrap_interval[0],
+            "bootstrap_ci_high": bootstrap_interval[1],
+            "bootstrap_resamples": len(bootstrap_values),
+            "bootstrap_valid_replicates": sum(
+                1 for value in bootstrap_values if math.isfinite(value)
+            ),
+            "null_mean": (
+                math.nan if not finite_null else float(sum(finite_null) / len(finite_null))
+            ),
+            "null_ci_low": null_interval[0],
+            "null_ci_high": null_interval[1],
+            "null_permutations": len(null_values),
+            "null_type": (
+                None if not null_values else "within_episode_controller_action_permutation"
+            ),
+            "entropy_bound_satisfied": bound_satisfied,
+            "controller_deterministic_given_conditioning_state": (
+                None
+                if entropy is None
+                else bool(not math.isfinite(entropy) or entropy <= ACTION_ENTROPY_EPSILON_BITS)
+            ),
+            "n_episodes": len(by_episode),
+            "n_events": len(controlled),
+            **(
+                {field: None for field in ACTION_OVERLAP_FIELDS}
+                if channel is None or channel not in overlap_by_channel
+                else overlap_by_channel[channel]
+            ),
+        })
+    return rows
+
+
 def _cell_dir_for(path: Path) -> Path | None:
     for candidate in path.parents:
         if candidate.parent.name == "cells":
@@ -719,6 +1213,32 @@ def _cell_dir_for(path: Path) -> Path | None:
 
 def read_imitation_events(run_dir: str | Path) -> list[ImitationEvent]:
     root = Path(run_dir)
+    compact_candidates = (
+        [root]
+        if root.is_file() and root.name.endswith(".parquet")
+        else list(root.glob("scientific_events.parquet"))
+        + list(root.glob("cells/*/scientific_events.parquet"))
+        + list(root.rglob(".resume/*/scientific_events.parquet"))
+    )
+    if compact_candidates:
+        from mas_cc.storage import iter_compact_imitation_events
+
+        compact_events = []
+        for event, episode_id, cell_id in iter_compact_imitation_events(root):
+            mechanism = event.get("_compact_control_mechanism")
+            compact_events.append(
+                adapt_event(
+                    event,
+                    episode_id=episode_id,
+                    cell_id=cell_id,
+                    overrides=(
+                        {} if mechanism is None else {"control.mechanism": mechanism}
+                    ),
+                )
+            )
+        if not compact_events:
+            raise ValueError(f"compact scientific files under {root} contain no imitation events")
+        return compact_events
     paths = [root] if root.is_file() else sorted(root.rglob("trajectory.jsonl"))
     if not paths:
         raise FileNotFoundError(f"no trajectory.jsonl files under {root}")
@@ -825,8 +1345,164 @@ def _format_number(value: Any) -> str:
     return str(value)
 
 
+def _format_percent(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    return f"{number * 100:.1f}%" if math.isfinite(number) else "—"
+
+
+def _format_reason(value: Any) -> str:
+    return "—" if not value else f"`{value}`"
+
+
+def _controller_diagnostic_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Render one cell's controller diagnostics as four small, purposeful tables.
+
+    Split by family rather than dumped as one wide table because the four
+    families answer different questions and share almost no columns: an entropy
+    is in bits, a fraction is dimensionless and may be undefined, a signed
+    response has a meaningful sign, and overlap is a support count.
+    """
+
+    if not rows:
+        return []
+    by_family: dict[Any, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        by_family.setdefault(row.get("family"), []).append(row)
+    lines: list[str] = []
+
+    entropies = by_family.get("controller_entropy", [])
+    if entropies:
+        lines.extend([
+            "### Controller entropy / available action information",
+            "",
+            "How much action freedom the controller had left once the conditioning variable is "
+            "known. Each conditional entropy is the ceiling on the actuation CMI measured in the "
+            "same space, so a CMI far below its ceiling means a weak effect, and a ceiling near "
+            "zero means the CMI could not have been large whatever the controller does.",
+            "",
+            "| Statistic | Bits | 95% bootstrap CI | Valid replicates | Deterministic given state |",
+            "|---|---|---|---|---|",
+        ])
+        for row in entropies:
+            lines.append(
+                "| `{statistic}` | {value} | {ci} | {replicates} | {deterministic} |".format(
+                    statistic=row.get("statistic"),
+                    value=_format_bits(row.get("value")),
+                    ci=_format_ci(row.get("bootstrap_ci_low"), row.get("bootstrap_ci_high")),
+                    replicates=_format_number(row.get("bootstrap_valid_replicates")),
+                    deterministic=_format_bool(
+                        row.get("controller_deterministic_given_conditioning_state")
+                    ),
+                )
+            )
+        lines.append("")
+
+    fractions = by_family.get("information_fraction", [])
+    if fractions:
+        lines.extend([
+            "### Actuation information fractions",
+            "",
+            "Each actuation CMI divided by the conditional controller entropy in the same "
+            "conditioning space. A **normalization diagnostic, not a thermodynamic efficiency**. "
+            "The ratio is `—` (undefined, never 0) when the denominator vanishes; the numerator "
+            "and denominator are printed so the ratio can be audited. Ratios are not clipped to "
+            "`[0, 1]` — a value above 1 is an estimator pathology worth seeing, which "
+            "**Bound holds** flags.",
+            "",
+            "| Statistic | CMI numerator (bits) | H(U \\| state) denominator (bits) | Ratio "
+            "| 95% bootstrap CI | Valid replicates | Null mean | Bound holds | Undefined because |",
+            "|---|---|---|---|---|---|---|---|---|",
+        ])
+        for row in fractions:
+            lines.append(
+                "| `{statistic}` | {numerator} | {denominator} | {value} | {ci} | {replicates} "
+                "| {null} | {bound} | {reason} |".format(
+                    statistic=row.get("statistic"),
+                    numerator=_format_bits(row.get("numerator_bits")),
+                    denominator=_format_bits(row.get("denominator_bits")),
+                    value=_format_bits(row.get("value")),
+                    ci=_format_ci(row.get("bootstrap_ci_low"), row.get("bootstrap_ci_high")),
+                    replicates=_format_number(row.get("bootstrap_valid_replicates")),
+                    null=_format_bits(row.get("null_mean")),
+                    bound=_format_bool(row.get("entropy_bound_satisfied")),
+                    reason=_format_reason(row.get("undefined_reason")),
+                )
+            )
+        lines.append("")
+
+    signed = by_family.get("signed_actuation", [])
+    if signed:
+        lines.extend([
+            "### Signed behavioral actuation",
+            "",
+            "CMI is unsigned: it says the action predicts the transition, not which way the "
+            "population moved. These are state-adjusted `ADVOCATE_Z` minus `NO_OP` contrasts, "
+            "computed only within conditioning states that saw both actions and weighted by how "
+            "many events those states hold. Positive means advocacy moves that order parameter "
+            "up relative to doing nothing.",
+            "",
+            "| Statistic | Response | 95% bootstrap CI | Null mean | Dual-action states "
+            "| Events in dual-action states | Undefined because |",
+            "|---|---|---|---|---|---|---|",
+        ])
+        for row in signed:
+            lines.append(
+                "| `{statistic}` | {value} | {ci} | {null} | {dual} | {events} | {reason} |".format(
+                    statistic=row.get("statistic"),
+                    value=_format_bits(row.get("value")),
+                    ci=_format_ci(row.get("bootstrap_ci_low"), row.get("bootstrap_ci_high")),
+                    null=_format_bits(row.get("null_mean")),
+                    dual=_format_number(row.get("dual_action_conditioning_states")),
+                    events=_format_percent(
+                        row.get("fraction_events_in_dual_action_conditioning_states")
+                    ),
+                    reason=_format_reason(row.get("undefined_reason")),
+                )
+            )
+        lines.append("")
+
+    overlap = by_family.get("action_overlap", [])
+    if overlap:
+        lines.extend([
+            "### Action-overlap diagnostics",
+            "",
+            "What fraction of the data can actually support a within-state `ADVOCATE_Z` vs "
+            "`NO_OP` comparison. **Events in dual-action states** is the quantity that matters: a "
+            "nonzero overall `controller_action_entropy` is not evidence of overlap, because a "
+            "hard threshold controller varies its action across the run while being deterministic "
+            "in every individual state.",
+            "",
+            "| Conditioning | Occupied states | Dual-action states | States with both actions "
+            "| Events in dual-action states |",
+            "|---|---|---|---|---|",
+        ])
+        for row in overlap:
+            lines.append(
+                "| `{conditioning}` | {occupied} | {dual} | {state_fraction} | {event_fraction} |".format(
+                    conditioning=row.get("conditioning"),
+                    occupied=_format_number(row.get("occupied_conditioning_states")),
+                    dual=_format_number(row.get("dual_action_conditioning_states")),
+                    state_fraction=_format_percent(
+                        row.get("fraction_conditioning_states_with_both_actions")
+                    ),
+                    event_fraction=_format_percent(
+                        row.get("fraction_events_in_dual_action_conditioning_states")
+                    ),
+                )
+            )
+        lines.append("")
+    return lines
+
+
 def _write_information_estimates_markdown(
-    rows: Sequence[Mapping[str, Any]], destination: Path
+    rows: Sequence[Mapping[str, Any]],
+    destination: Path,
+    diagnostic_rows: Sequence[Mapping[str, Any]] = (),
 ) -> None:
     """Human-readable replacement for the wide, hard-to-scan information_estimates.csv.
 
@@ -851,6 +1527,24 @@ def _write_information_estimates_markdown(
             continue
         description = INFORMATION_STATISTIC_DESCRIPTIONS.get(name, "")
         lines.append(f"- **`{name}`** — {description}")
+    diagnostics_reported = {row.get("statistic") for row in diagnostic_rows}
+    if diagnostics_reported:
+        lines.extend([
+            "",
+            "## Controller diagnostics",
+            "",
+            "The channels above are unsigned and unnormalized, which makes a small CMI ambiguous: "
+            "it can mean the controller barely moved the population, or that the controller had "
+            "almost no action entropy left once the current state was known. The quantities below "
+            "separate those two readings and add the direction the CMI cannot carry. They are "
+            "diagnostics for interpreting the CMIs, not new channels and not efficiencies.",
+            "",
+        ])
+        for name in CONTROLLER_DIAGNOSTIC_STATISTICS:
+            if name not in diagnostics_reported:
+                continue
+            description = CONTROLLER_DIAGNOSTIC_DESCRIPTIONS.get(name, "")
+            lines.append(f"- **`{name}`** — {description}")
     lines.extend(
         [
             "",
@@ -867,19 +1561,31 @@ def _write_information_estimates_markdown(
         ]
     )
     by_cell: dict[tuple[Any, Any], list[Mapping[str, Any]]] = {}
+    diagnostics_by_cell: dict[tuple[Any, Any], list[Mapping[str, Any]]] = {}
     for row in rows:
         by_cell.setdefault((row.get("cell_id"), row.get("scientific_cell")), []).append(row)
-    for (cell_id, scientific_cell), cell_rows in by_cell.items():
+    for row in diagnostic_rows:
+        diagnostics_by_cell.setdefault(
+            (row.get("cell_id"), row.get("scientific_cell")), []
+        ).append(row)
+    # Both keyings, so a run that requested only diagnostics still gets its cell
+    # sections rather than an empty report.
+    for cell_id, scientific_cell in dict.fromkeys((*by_cell, *diagnostics_by_cell)):
+        cell_rows = by_cell.get((cell_id, scientific_cell), [])
+        cell_diagnostics = diagnostics_by_cell.get((cell_id, scientific_cell), [])
         label = f"Cell `{cell_id}`"
         if scientific_cell:
             label += f" (scientific cell {scientific_cell})"
-        first = cell_rows[0]
+        first = (cell_rows or cell_diagnostics)[0]
         lines.append(f"## {label}")
         lines.append("")
         lines.append(
             f"Dynamics: `{first.get('dynamics_mode')}` · Control: `{first.get('control_mechanism')}`"
         )
         lines.append("")
+        if not cell_rows:
+            lines.extend(_controller_diagnostic_lines(cell_diagnostics))
+            continue
         lines.append(
             "| Statistic | Estimate (bits) | 95% bootstrap CI | Null mean (bits) | 95% null CI "
             "| unsmoothed / jeffreys / miller-madow | Interpretable | Episodes | Events |"
@@ -929,6 +1635,7 @@ def _write_information_estimates_markdown(
                 )
             )
         lines.append("")
+        lines.extend(_controller_diagnostic_lines(cell_diagnostics))
     destination.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
@@ -944,9 +1651,68 @@ INFORMATION_COMET_FIELDS = (
 """What each statistic contributes as *numbers* rather than as a report."""
 
 
-def _comet_metric_name(cell_id: Any, statistic: str, field: str) -> str:
+CONTROLLER_DIAGNOSTIC_COMET_FIELDS = (
+    "value",
+    "numerator_bits",
+    "denominator_bits",
+    "bootstrap_ci_low",
+    "bootstrap_ci_high",
+    "null_mean",
+    "bootstrap_valid_replicates",
+    "fraction_conditioning_states_with_both_actions",
+    "fraction_events_in_dual_action_conditioning_states",
+)
+"""Numerator and denominator ride along so a ratio stays auditable on Comet."""
+
+
+def _comet_metric_name(
+    cell_id: Any, statistic: str, field: str, *, prefix: str | None = "information"
+) -> str:
     label = str(cell_id or "run").replace("/", "_").replace(" ", "_")
-    return f"information/{label}/{statistic}/{field}"
+    parts = (label, statistic, field) if prefix is None else (prefix, label, statistic, field)
+    return "/".join(parts)
+
+
+def controller_diagnostic_comet_metrics(
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, float]:
+    """Flatten diagnostics into ``cell/statistic/field`` Comet scalars.
+
+    The cell-first namespace keeps even the longest standard diagnostic below
+    Comet's 100-character metric-name limit.  These remain off the
+    ``information/`` prefix on purpose: they are not bits of channel capacity,
+    and mixing a dimensionless ratio into the same namespace as the MI series
+    invites plotting them on one axis.
+    """
+
+    metrics: dict[str, float] = {}
+    for row in rows:
+        statistic = str(row.get("statistic") or "")
+        if not statistic:
+            continue
+        for field in (*CONTROLLER_DIAGNOSTIC_COMET_FIELDS, *ACTION_OVERLAP_FIELDS):
+            value = row.get(field)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if math.isnan(float(value)):
+                continue
+            metrics[
+                _comet_metric_name(
+                    row.get("cell_id"), statistic, field, prefix=None
+                )
+            ] = float(value)
+        for field in (
+            "entropy_bound_satisfied",
+            "controller_deterministic_given_conditioning_state",
+        ):
+            flag = row.get(field)
+            if isinstance(flag, bool):
+                metrics[
+                    _comet_metric_name(
+                        row.get("cell_id"), statistic, field, prefix=None
+                    )
+                ] = float(flag)
+    return metrics
 
 
 def information_comet_metrics(
@@ -1064,6 +1830,7 @@ def _export_information_estimates_to_comet(
     project_name: str,
     run_name: str,
     sink: Any | None = None,
+    diagnostic_rows: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Publish the estimates as metrics, figures and assets, if requested.
 
@@ -1089,7 +1856,10 @@ def _export_information_estimates_to_comet(
         from mas_cc.observability.recorder import CometMetricSink
 
         sink = CometMetricSink(True, project_name=project_name, run_name=run_name)
-    metrics = information_comet_metrics(rows)
+    metrics = {
+        **information_comet_metrics(rows),
+        **controller_diagnostic_comet_metrics(diagnostic_rows),
+    }
     uploaded_images = 0
     uploaded_assets = 0
     try:
@@ -1127,10 +1897,13 @@ def analyze_hidden_bench_imitation(
     confidence: float = 0.95,
     seed: int = 1,
     statistics: Sequence[str] | None = None,
+    diagnostics: Sequence[str] | None = None,
     comet_export: bool = False,
     comet_project: str = "mas-cc",
     comet_run_name: str | None = None,
     comet_sink: Any | None = None,
+    artifact_profile: str = "full",
+    resolved_config_hash: str | None = None,
 ) -> dict[str, Any]:
     """Write the first-pilot behavioral, response, support, MI, and null report."""
 
@@ -1193,15 +1966,8 @@ def analyze_hidden_bench_imitation(
 
     information_rows: list[dict[str, Any]] = []
     null_rows: list[dict[str, Any]] = []
+    diagnostic_rows: list[dict[str, Any]] = []
     for cell_id, group in _group_events(events, key=lambda event: event.cell_id).items():
-        cell_estimates, cell_nulls = information_analysis(
-            group,
-            bootstrap_resamples=bootstrap_resamples,
-            null_permutations=null_permutations,
-            confidence=confidence,
-            seed=seed,
-            statistics=statistics,
-        )
         cell_row = next(row for row in cell_rows if row["cell_id"] == cell_id)
         common = {
             "cell_id": cell_id,
@@ -1209,9 +1975,35 @@ def analyze_hidden_bench_imitation(
             "dynamics_mode": cell_row["dynamics_mode"],
             "control_mechanism": cell_row["control_mechanism"],
         }
-        information_rows.extend({**common, **row} for row in cell_estimates)
-        null_rows.extend({**common, **row} for row in cell_nulls)
-    _write_information_estimates_markdown(information_rows, destination / "information_estimates.md")
+        if statistics is None or statistics:
+            cell_estimates, cell_nulls = information_analysis(
+                group,
+                bootstrap_resamples=bootstrap_resamples,
+                null_permutations=null_permutations,
+                confidence=confidence,
+                seed=seed,
+                statistics=statistics,
+            )
+            information_rows.extend({**common, **row} for row in cell_estimates)
+            null_rows.extend({**common, **row} for row in cell_nulls)
+        if diagnostics is None or diagnostics:
+            diagnostic_rows.extend(
+                {**common, **row}
+                for row in controller_diagnostic_analysis(
+                    group,
+                    bootstrap_resamples=bootstrap_resamples,
+                    null_permutations=null_permutations,
+                    confidence=confidence,
+                    seed=seed,
+                    diagnostics=diagnostics,
+                )
+            )
+    _write_information_estimates_markdown(
+        information_rows, destination / "information_estimates.md", diagnostic_rows
+    )
+    pd.DataFrame(diagnostic_rows).to_csv(
+        destination / "controller_diagnostics.csv", index=False
+    )
     # The markdown is for reading; this is for everything else. Without it the
     # numbers this analysis exists to produce are only recoverable by parsing a
     # table out of prose, which is why the Comet export could never send them.
@@ -1256,6 +2048,16 @@ def analyze_hidden_bench_imitation(
     pd.DataFrame(contrast_rows).to_csv(destination / "cell_contrasts.csv", index=False)
 
     initial_states = {row["initial_state"] for row in cell_rows}
+    analysis_settings = {
+        "bootstrap_resamples": bootstrap_resamples,
+        "null_permutations": null_permutations,
+        "confidence": confidence,
+        "seed": seed,
+        "statistics": list(INFORMATION_STATISTICS if statistics is None else statistics),
+        "diagnostics": list(
+            CONTROLLER_DIAGNOSTIC_STATISTICS if diagnostics is None else diagnostics
+        ),
+    }
     summary = {
         "n_cells": len(cell_rows),
         "n_episodes": len(episode_rows),
@@ -1263,9 +2065,20 @@ def analyze_hidden_bench_imitation(
         "scientific_cells": sorted(row["scientific_cell"] for row in cell_rows if row["scientific_cell"]),
         "matched_initial_state_across_cells": len(initial_states) == 1,
         "main_estimator_variant": MAIN_ESTIMATOR_VARIANT,
-        "information_statistics": list(
-            INFORMATION_STATISTICS if statistics is None else statistics
-        ),
+        "information_statistics": analysis_settings["statistics"],
+        "controller_diagnostics": analysis_settings["diagnostics"],
+        "bootstrap_resamples": bootstrap_resamples,
+        "null_permutations": null_permutations,
+        "confidence": confidence,
+        "seed": seed,
+        "analysis_config_hash": hashlib.sha256(
+            json.dumps(
+                analysis_settings, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest(),
+        "analysis_code_hash": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "artifact_profile": artifact_profile,
+        "resolved_config_hash": resolved_config_hash,
         "auc_convention": "equal_event_spacing_mean_including_initial_state",
         "output_dir": str(destination),
     }
@@ -1279,32 +2092,60 @@ def analyze_hidden_bench_imitation(
             destination / "information_estimates.md",
             destination / "information_estimates.csv",
             destination / "support_diagnostics.csv",
+            destination / "controller_diagnostics.csv",
         ),
         information_plots,
         enabled=comet_export,
         project_name=comet_project,
         run_name=comet_run_name or destination.name,
         sink=comet_sink,
+        diagnostic_rows=diagnostic_rows,
     )
     (destination / "analysis_summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    if artifact_profile == "results_only":
+        for name in (
+            "event_metrics.csv",
+            "episode_summaries.csv",
+            "cell_summaries.csv",
+            "option_share_trajectories.csv",
+            "order_parameter_trajectories.csv",
+            "information_nulls.csv",
+            "controller_diagnostics.csv",
+        ):
+            path = destination / name
+            if path.is_file():
+                path.unlink()
     return summary
 
 
 __all__ = [
     "ACTION_ENTROPY_EPSILON_BITS",
+    "ACTION_OVERLAP_STATISTICS",
+    "ACTUATION_CHANNEL_COUNT_FIELDS",
+    "ACTUATION_INFORMATION_FRACTION_STATISTICS",
+    "CONTROLLER_DIAGNOSTIC_STATISTICS",
+    "CONTROLLER_ENTROPY_STATISTICS",
+    "DiagnosticValue",
+    "ENTROPY_BOUND_TOLERANCE_BITS",
     "ImitationEvent",
     "INFORMATION_STATISTICS",
     "MAIN_ESTIMATOR_VARIANT",
     "ORDER_PARAMETER_COUNT_FIELDS",
+    "SIGNED_ACTUATION_STATISTICS",
+    "action_overlap_diagnostics",
     "adapt_event",
     "analyze_hidden_bench_imitation",
     "binary_action_entropy_bits",
     "bootstrap_episode_ids",
     "cell_summary",
+    "conditional_action_entropy_bits",
+    "controller_diagnostic_analysis",
+    "controller_diagnostic_comet_metrics",
     "enrich_event",
     "episode_summary",
     "information_analysis",
     "read_imitation_events",
+    "signed_actuation_response",
 ]

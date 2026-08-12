@@ -1,5 +1,5 @@
-# Downloaded benchmark and all derived/population data
-data/
+# The downloaded benchmark and all derived/population data now live in the
+# repository's top-level data/hidden_bench/ (ignored by the root .gitignore).
 
 # API-generated annotations, audits, and benchmark outputs
 annotations/*.json

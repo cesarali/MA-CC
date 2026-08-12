@@ -568,7 +568,7 @@ def _parse_budget(raw: Any, issues: list[ValidationIssue]) -> BudgetConfig:
     values = _as_mapping(raw, path, issues)
     allowed = {"schema_version", "accounting_unit", "system_max_cost_per_run", "max_cost_per_run",
                "max_provider_requests", "max_input_tokens", "max_output_tokens",
-               "allow_unbounded_paid_requests"}
+               "allow_unbounded_paid_requests", "live_spend_poll_seconds"}
     _unknown_fields(values, allowed, path, issues)
     def optional_integer(name: str) -> int | None:
         if values.get(name) is None:
@@ -583,6 +583,18 @@ def _parse_budget(raw: Any, issues: list[ValidationIssue]) -> BudgetConfig:
         max_input_tokens=optional_integer("max_input_tokens"),
         max_output_tokens=optional_integer("max_output_tokens"),
         allow_unbounded_paid_requests=_boolean(values, "allow_unbounded_paid_requests", path, issues, default=False),
+        live_spend_poll_seconds=(
+            None
+            if values.get("live_spend_poll_seconds") is None
+            else _integer(
+                values,
+                "live_spend_poll_seconds",
+                path,
+                issues,
+                default=10,
+                minimum=10,
+            )
+        ),
     )
 
 
@@ -605,7 +617,9 @@ def _parse_execution(raw: Any, issues: list[ValidationIssue]) -> ExecutionConfig
     )
 
 
-def _parse_logging(raw: Any, issues: list[ValidationIssue]) -> LoggingConfig:
+def _parse_logging(
+    raw: Any, issues: list[ValidationIssue], *, artifact_profile: str = "full"
+) -> LoggingConfig:
     path = "logging"
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
@@ -615,13 +629,48 @@ def _parse_logging(raw: Any, issues: list[ValidationIssue]) -> LoggingConfig:
     if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
         _issue(issues, f"{path}.level", "must be DEBUG, INFO, WARNING, ERROR, or CRITICAL", level)
         level = "INFO"
+    options = dict(_as_mapping(values.get("options", {}), f"{path}.options", issues))
+    examples_path = f"{path}.options.prompt_examples"
+    if "prompt_examples" in options:
+        examples = dict(_as_mapping(options["prompt_examples"], examples_path, issues))
+        _unknown_fields(examples, {"count", "scope"}, examples_path, issues)
+        count = _integer(examples, "count", examples_path, issues, default=0, minimum=0)
+        explicit_scope = "scope" in examples
+        scope = _string(
+            examples,
+            "scope",
+            examples_path,
+            issues,
+            default="cell" if artifact_profile == "results_only" else "episode",
+        ) or ("cell" if artifact_profile == "results_only" else "episode")
+        if scope not in {"episode", "cell"}:
+            _issue(
+                issues,
+                f"{examples_path}.scope",
+                "must be one of episode, cell",
+                scope,
+            )
+            scope = "cell" if artifact_profile == "results_only" else "episode"
+        if artifact_profile == "results_only" and explicit_scope and scope != "cell":
+            _issue(
+                issues,
+                f"{examples_path}.scope",
+                "must be cell when storage.artifact_profile is results_only",
+                scope,
+            )
+            scope = "cell"
+        options["prompt_examples"] = {"count": count, "scope": scope}
+    elif artifact_profile == "results_only":
+        # Make the effective scope visible in resolved configs even when the
+        # sample is disabled.
+        options["prompt_examples"] = {"count": 0, "scope": "cell"}
     return LoggingConfig(
         schema_version=_schema_version(values, path, issues),
         level=level,
         console=_boolean(values, "console", path, issues, default=True),
         audit=_boolean(values, "audit", path, issues, default=True),
         comet=_boolean(values, "comet", path, issues, default=False),
-        options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
+        options=options,
     )
 
 
@@ -631,17 +680,56 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
     _unknown_fields(
         values,
         {
-            "schema_version", "output_dir", "format", "checkpoints", "overwrite",
-            "wipe_and_recompute", "options",
+            "schema_version", "output_dir", "format", "checkpoints",
+            "artifact_profile", "checkpoint_mode", "overwrite", "wipe_and_recompute",
+            "options",
         },
         path,
         issues,
     )
+    if "checkpoints" in values and "checkpoint_mode" in values:
+        _issue(
+            issues,
+            path,
+            "checkpoints and checkpoint_mode cannot both be specified",
+        )
+    profile = _string(
+        values, "artifact_profile", path, issues, default="full", required=True
+    ) or "full"
+    if profile not in {"full", "results_only"}:
+        _issue(
+            issues,
+            f"{path}.artifact_profile",
+            "must be one of full, results_only",
+            profile,
+        )
+        profile = "full"
+    if "checkpoint_mode" in values:
+        checkpoint_mode = _string(
+            values, "checkpoint_mode", path, issues, default="episode", required=True
+        ) or "episode"
+    elif "checkpoints" in values:
+        checkpoint_mode = (
+            "episode"
+            if _boolean(values, "checkpoints", path, issues, default=True)
+            else "off"
+        )
+    else:
+        checkpoint_mode = "episode"
+    if checkpoint_mode not in {"off", "episode"}:
+        _issue(
+            issues,
+            f"{path}.checkpoint_mode",
+            "must be one of off, episode",
+            checkpoint_mode,
+        )
+        checkpoint_mode = "episode"
     return StorageConfig(
         schema_version=_schema_version(values, path, issues),
         output_dir=_string(values, "output_dir", path, issues, default="results", required=True) or "results",
         format=_string(values, "format", path, issues, default="jsonl", required=True) or "jsonl",
-        checkpoints=_boolean(values, "checkpoints", path, issues, default=True),
+        artifact_profile=profile,
+        checkpoint_mode=checkpoint_mode,
         overwrite=_boolean(values, "overwrite", path, issues, default=False),
         wipe_and_recompute=_boolean(values, "wipe_and_recompute", path, issues, default=False),
         options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
@@ -922,14 +1010,17 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
             _issue(issues, required, "required field is missing")
 
     _validate_secret_fields(values, path="", issues=issues)
+    storage = _parse_storage(values.get("storage", {}), issues)
     config = RunConfig(
         schema_version=schema_version,
         llm_provider=_parse_provider(values.get("llm_provider", {}), issues),
         prompt=_parse_prompt(values.get("prompt", {}), issues),
         game=_parse_game(values.get("game", {}), issues),
         execution=_parse_execution(values.get("execution", {}), issues),
-        logging=_parse_logging(values.get("logging", {}), issues),
-        storage=_parse_storage(values.get("storage", {}), issues),
+        logging=_parse_logging(
+            values.get("logging", {}), issues, artifact_profile=storage.artifact_profile
+        ),
+        storage=storage,
         analysis=_parse_analysis(values.get("analysis", {}), issues),
         control=_parse_control(values.get("control", {}), issues),
         metrics=_parse_metrics(values.get("metrics", {}), issues),

@@ -239,12 +239,17 @@ finished, how many failed, and whether the batch as a whole came in on budget.
 
 ## 6. Interrupting and resuming
 
-**Technical:** an episode counts as done purely by the existence of its
-`data/episodes/<episode_id>/manifest.json` with `"status": "completed"`. If you interrupt a run
-(Ctrl-C, a crash, a machine restart) and re-run the identical command, `run` (default `--resume`)
-skips every episode whose manifest already says `completed` and only executes the rest — including
-retrying any episode that had failed. Pass `--no-resume` to ignore prior progress and re-run every
-episode from scratch.
+**Technical:** with `storage.checkpoint_mode: episode`, a results-only episode counts as done only
+after its compact shard has been atomically renamed and read back with matching config, prompt,
+pricing, seed, schema, episode identity, and row count. The full profile retains its historical
+completed-manifest path. If you interrupt a run (Ctrl-C, a crash, a machine restart) and re-run the
+identical command, `run` (default `--resume`) skips every validated completed episode and executes
+only the rest. Pass `--no-resume` to ignore prior progress and re-run every episode from scratch.
+
+The checkpoint boundary is the **episode**, not the round. An episode that was in flight has no
+valid completed shard and restarts at round zero with its original derived seed. Historical
+`checkpoints: true` wrote a round snapshot, but the orchestrator never loaded that snapshot back
+into a game runtime; no prompt object or partial conversation is restored.
 
 ```bash
 # interrupted partway through episode 3 of 5 - re-running the same command:

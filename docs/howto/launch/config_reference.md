@@ -278,11 +278,9 @@ pricing:
                                   # unknown, so budget.max_cost_per_run stops being a meaningful
                                   # guard for this run.
 budget:
-  # This block is sized for population_size: 10, horizon: 30 in the header comment of the
-  # accompanying tutorial config (2 decisions/interaction x 30 = 60 base requests; x3 with
-  # invalid_response_retries: 2 = 180, rounded up) — re-check `mas-cc game preflight` any time you
-  # change population_size, horizon, or invalid_response_retries; a run that would exceed any
-  # limit below refuses to launch (or halts mid-run) rather than overspending.
+  # A run whose *preflight* demand exceeds a limit below refuses to launch. Past that point
+  # only the cost ceiling halts a run mid-flight by default — see "Prefer a cost ceiling to
+  # a token ceiling" below, which is the single most important thing in this section.
   accounting_unit: proxy_accounting_unit
                                   # String label only — records what unit the cost numbers below
                                   # are in (a real currency code, or a proxy unit for a provider
@@ -293,18 +291,57 @@ budget:
   max_cost_per_run: 0.25           # Float >= 0 or null. The per-run cost ceiling actually enforced;
                                   # null means unbounded (dangerous — combine with
                                   # allow_unbounded_paid_requests below only deliberately).
-  max_provider_requests: 220       # Integer >= 0 or null. Hard cap on total provider calls,
-                                  # independent of cost — catches a runaway retry loop even on a
-                                  # free/mock provider where cost is always 0.
-  max_input_tokens: 200000         # Integer >= 0 or null. Cumulative input-token ceiling for the
-                                  # run.
-  max_output_tokens: 30000         # Integer >= 0 or null. Cumulative output-token ceiling — distinct
+  live_spend_poll_seconds: 120     # Integer >= 10 or null. When set (University provider only),
+                                  # the run polls the proxy's own `/user/info` accounting on this
+                                  # interval and stops when the provider says THIS RUN has spent
+                                  # more than max_cost_per_run. It is a delta measured from the
+                                  # account's spend at launch, so other traffic on a shared key
+                                  # neither borrows from nor donates to this run's ceiling. Null
+                                  # disables it and leaves only the guard's own arithmetic.
+  max_provider_requests: null      # Integer >= 0 or null. Hard cap on total provider calls,
+                                  # independent of cost. See the note below before setting it.
+  max_input_tokens: null           # Integer >= 0 or null. Cumulative input-token ceiling.
+  max_output_tokens: null          # Integer >= 0 or null. Cumulative output-token ceiling — distinct
                                   # from llm_provider.max_output_tokens, which caps *one call*.
   allow_unbounded_paid_requests: false
                                   # Boolean. Must be explicitly set true to launch a paid-provider
                                   # run with any of the above limits set to null — a deliberate
                                   # speed bump against accidentally launching an unbounded paid run.
 ```
+
+### Prefer a cost ceiling to a token ceiling
+
+`max_provider_requests`, `max_input_tokens`, and `max_output_tokens` behave differently
+depending on whether you set them:
+
+- **Left `null`** (recommended for real experiments) they are *advisory*. Usage is still
+  tracked and written into every run's `actual_budget_status`, and the first time usage
+  passes what preflight predicted you get one warning per resource on the
+  `mas_cc.budget` logger. Nothing stops.
+- **Set to a number** they are *hard*, exactly as before: the run halts the moment the
+  counter crosses. Keep them set only where the demand is genuinely known ahead of time —
+  smoke tests, fixed-length probes, a mock provider where you want a runaway retry loop
+  caught immediately.
+
+The reason for the default is that a token count is a prediction, and preflight's
+prediction comes from one representative prompt. Any game whose prompts grow — anything
+with `memory_size: 0`, any long discussion phase — will legitimately exceed it, and a
+wrong prediction does not save money, it destroys a run. `results/DIAGNOSIS.md` records
+what that costs in practice: a 50-cell grid hit its `max_input_tokens` partway through
+cell 0001 and burned its remaining 4,235 episodes on refused calls.
+
+Cost does not have that problem. The guard prices every call from the *actual* reported
+token usage, and `live_spend_poll_seconds` cross-checks that arithmetic against the
+provider's own books.
+
+### What happens when a budget does stop a run
+
+A budget stop ends the run rather than failing each queued episode. The episode that hit
+the ceiling is recorded `failed`; every episode after it is recorded `skipped_aborted`
+with `error_type: BudgetStop` and the reason in `error`. This holds regardless of
+`execution.fail_fast`, because once the guard denies, no later call can succeed. Results
+already written stay on disk and `resume: true` will pick up from them after you raise
+the ceiling.
 
 ---
 
@@ -336,6 +373,10 @@ logging:
                                   # this whole block) writes none. Independent of
                                   # detailed_prompt_audit below — use this one unless you
                                   # specifically want the raw JSON audit trail instead.
+      scope: episode               # episode | cell. `episode` preserves the full-profile behavior
+                                  # above. `cell` deterministically samples the lowest-ID successful
+                                  # episode and writes all selected examples into one
+                                  # prompt_examples.md. results_only defaults to/requires cell.
     detailed_prompt_audit:
       enabled: false                # Boolean. Turns on a second, JSON-based prompt/response audit
                                   # trail (as opposed to prompt_examples' Markdown). Off by default
@@ -375,22 +416,60 @@ storage:
                                   # (the Phase 5/6 inspection-bundle command), which still requires
                                   # `--output-dir` explicitly — it's pinned that way as a
                                   # phase-regression test fixture, not because it can't fall back.
-  format: jsonl                   # String. Recorded but not currently read by the recorder — see
-                                  # section 11; the actual on-disk format is jsonl regardless of
-                                  # this value today.
-  checkpoints: true                # Boolean. Whether an atomic checkpoint file is written as the
-                                  # run progresses, so `experiment run` can resume a partially
-                                  # completed run instead of restarting from episode 1 (see
-                                  # `running_an_experiment.md` section 6). false disables resume
-                                  # entirely — a crash means starting over.
+  format: jsonl                   # String. The full recorder still uses its established JSONL/CSV
+                                  # files. results_only always publishes its versioned scientific
+                                  # table as Parquet; this legacy field does not override that schema.
+  artifact_profile: full          # full | results_only. full preserves the verbose per-episode
+                                  # recorder tree. results_only retains atomic compact Parquet,
+                                  # aggregate/analysis results, bounded prompt samples, budget
+                                  # state, and the manifests needed to understand/resume the run.
+                                  # This changes local retention only; master Comet reporting is
+                                  # identical.
+  checkpoint_mode: episode        # off | episode. episode makes a completed episode shard durable
+                                  # and skips it after restart. An episode that was in flight starts
+                                  # again from round zero with its original seed. This is not a
+                                  # mid-round restore and no prompt object is restored.
+  # checkpoints: true             # Transitional alias only: true -> episode, false -> off. Do not
+                                  # specify it together with checkpoint_mode. Resolved configs emit
+                                  # only checkpoint_mode. Historical checkpoints: true wrote round
+                                  # snapshots but the orchestrator never restored a partial episode.
   overwrite: false                 # Boolean. Parsed but not currently wired to the recorder's own
                                   # write path — see section 11.
   wipe_and_recompute: false        # Boolean. If true, the entire run (or grid) output directory
                                   # under `output_dir` is deleted before the run starts, ignoring
-                                  # `resume`/`checkpoints` entirely — nothing is treated as
+                                  # `resume`/`checkpoint_mode` entirely — nothing is treated as
                                   # already-completed. Use this when you need a clean recompute
                                   # instead of the default resume-by-episode behavior.
 ```
+
+For long paid cells, use `results_only` without changing Comet:
+
+```yaml
+logging:
+  comet: true
+  options:
+    prompt_examples: {count: 2, scope: cell}
+storage:
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: true
+  wipe_and_recompute: false
+```
+
+To recover space from a completed legacy run without new model calls, preview first and
+then opt into deletion:
+
+```bash
+mas-cc experiment compact --run-dir <exact-run-dir> --profile results_only
+mas-cc experiment compact --run-dir <exact-run-dir> --profile results_only --delete-raw
+mas-cc experiment compact --run-dir <exact-run-dir> --profile results_only --delete-raw --archive
+```
+
+The first command validates and mutates nothing. The second reads back compact outputs
+before deleting only the documented raw-artifact allowlist inside the resolved run
+directory. Repeating it is safe.
+`--archive` requires `--delete-raw` and writes a sibling ZIP without
+`:Zone.Identifier` transfer sidecars.
 
 ---
 
@@ -593,9 +672,24 @@ analysis:
                                   # finishes. For every other game, aggregation.sweep_metrics above
                                   # plus the `mas-cc analysis empowerment` CLI command are the real
                                   # grid-level MI machinery instead.
-  estimators: []                   # List of names from sensing_mi, population_actuation_cmi,
-                                  # target_actuation_cmi, focal_actuation_cmi. Required (non-empty)
-                                  # when enabled is true.
+  estimators: []                   # List of names. Required (non-empty) when enabled is true.
+                                  # MI/CMI channels: sensing_mi, population_actuation_cmi,
+                                  # target_actuation_cmi, focal_actuation_cmi, and their
+                                  # order-parameter projections sensing_mi_m_{ctrl,truth,order} and
+                                  # m_{ctrl,truth,order}_actuation_cmi.
+                                  # Controller diagnostics, which make those CMIs readable:
+                                  # controller_action_entropy plus
+                                  # controller_action_entropy_given_{population,m_ctrl,m_truth,m_order}
+                                  # (the ceiling each CMI is bounded by),
+                                  # {population,m_ctrl,m_truth,m_order}_actuation_information_fraction
+                                  # (CMI over that ceiling — NaN, never 0, when the ceiling
+                                  # vanishes; a normalization diagnostic, not an efficiency),
+                                  # m_{ctrl,truth,order}_signed_actuation (state-adjusted
+                                  # ADVOCATE_Z-minus-NO_OP direction, which CMI cannot give), and
+                                  # {population,m_ctrl,m_truth,m_order}_action_overlap (how much
+                                  # data supports a within-state comparison at all).
+                                  # The two families are listed together here and land in
+                                  # information_estimates.md side by side.
   options: {}                      # bootstrap_resamples, null_permutations, confidence, seed — see
                                   # docs/documentation/hidden_bench/hidden_bench_imitation.md section 7.
   comet_export: false              # Boolean. Upload the rendered information_estimates.md report to

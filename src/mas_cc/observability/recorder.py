@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from mas_cc.config import RetentionPolicy
 from mas_cc.metrics import FinalMetric, Metric, StreamingMetric
 from mas_cc.metrics.interactions import (
     PRODUCTION_PROBABILITY_FIELDS,
@@ -21,7 +22,15 @@ from mas_cc.metrics.interactions import (
     binned_trajectory_tables,
 )
 from mas_cc.observability.audit import DetailedAuditPolicy, DetailedAuditSelector
-from mas_cc.storage import AtomicCheckpointStore, Checkpoint, canonical_hash
+from mas_cc.storage import (
+    AtomicCheckpointStore,
+    Checkpoint,
+    ScientificIdentity,
+    canonical_hash,
+    compact_imitation_event,
+    empty_compact_row,
+    write_completed_episode,
+)
 
 STREAMING_METRIC_FIELDS = ["round_index", "episode_id", "agent_id", "series", "metric_name", "value"]
 """Column order of ``metrics/streaming.csv``, and the marker for its schema.
@@ -215,6 +224,9 @@ class RunRecorder:
         metrics: Sequence[Metric] = (), to_round_view: Callable[[Any], Any] | None = None,
         comet_metric_export: Sequence[str] = (),
         binning: BinnedTrajectoryPolicy | None = None,
+        retention_policy: RetentionPolicy | None = None,
+        scientific_identity: ScientificIdentity | None = None,
+        scientific_path: str | Path | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -223,6 +235,18 @@ class RunRecorder:
         self.selector = DetailedAuditSelector(policy)
         self.price_snapshot_hash = price_snapshot_hash
         self.checkpoint_enabled = checkpoint_enabled
+        self.retention_policy = retention_policy or RetentionPolicy.for_profile("full")
+        self.scientific_identity = scientific_identity
+        self.scientific_path = None if scientific_path is None else Path(scientific_path)
+        if self.retention_policy.profile == "results_only" and (
+            self.scientific_identity is None or self.scientific_path is None
+        ):
+            raise ValueError(
+                "results_only recorder requires scientific_identity and scientific_path"
+            )
+        self._started_at = _now()
+        self._compact_rows: dict[int, dict[str, Any]] = {}
+        self._episode_usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0}
         self._event_path = self.output_dir / "events.jsonl"
         self._log_path = self.output_dir / "experiment.log"
         self._api_path = self.output_dir / "api_call_status.jsonl"
@@ -250,9 +274,10 @@ class RunRecorder:
 
     def event(self, event_type: str, **payload: Any) -> None:
         row = {"schema_version": self.schema_version, "timestamp": _now(), "run_id": self.run_id, "event_type": event_type, **payload}
-        _jsonl(self._event_path, row)
-        with self._log_path.open("a", encoding="utf-8") as stream:
-            stream.write(f"{row['timestamp']} {event_type} {json.dumps({k: v for k, v in payload.items() if k not in {'prompt', 'response'}}, sort_keys=True, default=str)}\n")
+        if self.retention_policy.verbose_episode_history:
+            _jsonl(self._event_path, row)
+            with self._log_path.open("a", encoding="utf-8") as stream:
+                stream.write(f"{row['timestamp']} {event_type} {json.dumps({k: v for k, v in payload.items() if k not in {'prompt', 'response'}}, sort_keys=True, default=str)}\n")
         self._logger.info("%s %s", event_type, {k: v for k, v in payload.items() if k not in {"prompt", "response"}})
 
     def record_attempt(
@@ -272,6 +297,12 @@ class RunRecorder:
             "valid": valid, "validation_error": validation_error,
             "provider_error": None if provider_error is None else str(provider_error),
         }
+        if response is not None:
+            self._episode_usage["requests"] += 1
+            self._episode_usage["input_tokens"] += int(response.usage.input_tokens or 0)
+            self._episode_usage["output_tokens"] += int(response.usage.output_tokens or 0)
+        if not self.retention_policy.verbose_episode_history:
+            return
         _jsonl(self._api_path, {"schema_version": self.schema_version, "run_id": self.run_id, **common})
         usage = {} if response is None else response.usage.to_dict()
         _jsonl(self._usage_path, {"schema_version": self.schema_version, "run_id": self.run_id, **common, "usage": usage, "price_snapshot_hash": self.price_snapshot_hash})
@@ -302,17 +333,40 @@ class RunRecorder:
     def record_interaction(self, *, round_index: int, interaction: Any, budget_status: Mapping[str, Any], state: Mapping[str, Any], prompt_definitions: Mapping[str, str]) -> None:
         metrics = {
             "round_index": round_index,
-            "successful_interaction": int(interaction.transition.success),
-            "payoff": interaction.transition.payoff,
-            "provider_attempts": sum(decision.validation_attempts for decision in interaction.decisions),
+            "successful_interaction": int(
+                bool(
+                    getattr(
+                        interaction.transition,
+                        "success",
+                        getattr(interaction.transition, "matched", False),
+                    )
+                )
+            ),
+            "payoff": getattr(interaction.transition, "payoff", 0.0),
+            "provider_attempts": sum(
+                getattr(decision, "validation_attempts", 0)
+                for decision in getattr(interaction, "decisions", ())
+            ),
         }
         self._metric_rows.append(metrics)
         self.comet.log_metrics({k: float(v) for k, v in metrics.items() if k != "round_index"}, round_index)
-        self._record_round_metrics(round_index, interaction.transition.next_state)
+        population_metrics, option_metrics = self._record_round_metrics(
+            round_index, interaction.transition.next_state
+        )
+        if self.retention_policy.profile == "results_only":
+            assert self.scientific_identity is not None
+            row = empty_compact_row(self.scientific_identity, round_index)
+            row["population_metrics_json"] = json.dumps(
+                population_metrics, sort_keys=True, ensure_ascii=False
+            )
+            row["option_metrics_json"] = json.dumps(
+                option_metrics, sort_keys=False, ensure_ascii=False
+            )
+            self._compact_rows[round_index] = row
         self.event("interaction_completed", interaction_id=str(interaction.interaction_id), **metrics)
         self.event("heartbeat", completed_rounds=round_index, status="running")
         self.record_budget("interaction_checkpoint", budget_status)
-        if self.checkpoint_enabled:
+        if self.checkpoint_enabled and self.retention_policy.verbose_episode_history:
             self._checkpoint_store.write(Checkpoint(self.run_id, round_index, self.config_hash, state, budget_status, prompt_definitions))
             self.event("checkpoint_written", completed_rounds=round_index)
 
@@ -324,6 +378,18 @@ class RunRecorder:
         """
 
         payload = record.to_dict() if hasattr(record, "to_dict") else dict(record)
+        if self.retention_policy.profile == "results_only":
+            assert self.scientific_identity is not None
+            event = payload.get("event")
+            if not isinstance(event, Mapping):
+                return
+            compact = compact_imitation_event(event, self.scientific_identity)
+            index = int(compact["interaction_index"])
+            existing = self._compact_rows.get(index, {})
+            compact["population_metrics_json"] = existing.get("population_metrics_json")
+            compact["option_metrics_json"] = existing.get("option_metrics_json")
+            self._compact_rows[index] = compact
+            return
         _jsonl(
             self._trajectory_path,
             {"schema_version": self.schema_version, "run_id": self.run_id, **payload},
@@ -337,7 +403,9 @@ class RunRecorder:
         with self._streaming_metrics_path.open(newline="", encoding="utf-8") as stream:
             return next(csv.reader(stream), None)
 
-    def _record_round_metrics(self, round_index: int, game_state: Any) -> None:
+    def _record_round_metrics(
+        self, round_index: int, game_state: Any
+    ) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
         """Compute the game's declared streaming metrics for one round.
 
         No-op unless the caller supplied both metric instances and a
@@ -345,11 +413,13 @@ class RunRecorder:
         game's metrics (e.g. the frozen Phase 7 gate) are unaffected.
         """
         if not self._streaming_metrics or self._to_round_view is None:
-            return
+            return {}, {}
         view = self._to_round_view(game_state)
         self._round_views.append(view)
         rows: list[dict[str, Any]] = []
         comet_values: dict[str, float] = {}
+        population_values: dict[str, float] = {}
+        option_values: dict[str, dict[str, float]] = {}
         for metric in self._streaming_metrics:
             for key, value in metric.compute_round(view).items():
                 # `key` means different things per scope, so it lands in a
@@ -366,8 +436,20 @@ class RunRecorder:
                     # under its own suffixed key while staying one metric locally.
                     comet_key = metric.name if metric.scope == "population" else f"{metric.name}_{key}"
                     comet_values[comet_key] = float(value)
+                if metric.scope == "population" and value is not None:
+                    try:
+                        population_values[metric.name] = float(value)
+                    except (TypeError, ValueError):
+                        pass
+                elif metric.scope == "option" and value is not None:
+                    try:
+                        option_values.setdefault(metric.name, {})[str(key)] = float(value)
+                    except (TypeError, ValueError):
+                        pass
         if not rows:
-            return
+            return population_values, option_values
+        if not self.retention_policy.verbose_episode_history:
+            return population_values, option_values
         self._streaming_metrics_path.parent.mkdir(parents=True, exist_ok=True)
         mode, write_header = "a", False
         if not self._streaming_metrics_header_written:
@@ -396,14 +478,24 @@ class RunRecorder:
         self._streaming_metrics_header_written = True
         if comet_values:
             self.comet.log_metrics(comet_values, round_index)
+        return population_values, option_values
+
+    def _final_metric_values(self) -> dict[str, float | None]:
+        if not self._final_metrics:
+            return {}
+        views = tuple(self._round_views)
+        values = {
+            metric.name: metric.compute_final(views) for metric in self._final_metrics
+        }
+        return values
 
     def _write_final_metrics(self) -> None:
-        if not self._final_metrics:
+        values = self._final_metric_values()
+        if not values:
             return
-        views = tuple(self._round_views)
         rows = [
-            {"episode_id": self.run_id, "metric_name": metric.name, "value": metric.compute_final(views)}
-            for metric in self._final_metrics
+            {"episode_id": self.run_id, "metric_name": name, "value": value}
+            for name, value in values.items()
         ]
         self._final_metrics_path.parent.mkdir(parents=True, exist_ok=True)
         with self._final_metrics_path.open("w", newline="", encoding="utf-8") as stream:
@@ -455,9 +547,52 @@ class RunRecorder:
                 writer.writerows(rows)
 
     def record_budget(self, event: str, status: Mapping[str, Any]) -> None:
+        if not self.retention_policy.verbose_episode_history:
+            return
         _jsonl(self._budget_path, {"schema_version": self.schema_version, "run_id": self.run_id, "event": event, "price_snapshot_hash": self.price_snapshot_hash, "budget": dict(status)})
 
-    def finalize(self, *, status: str, budget_status: Mapping[str, Any]) -> dict[str, Any]:
+    def finalize(
+        self,
+        *,
+        status: str,
+        budget_status: Mapping[str, Any],
+        termination_reason: str | None = None,
+        error: Exception | None = None,
+    ) -> dict[str, Any]:
+        if self.retention_policy.profile == "results_only":
+            comet = self.comet.close()
+            if status != "completed":
+                return {
+                    "audit": self.selector.summary(),
+                    "comet": comet,
+                    "checkpoint": None,
+                    "detailed_files_created": False,
+                    "scientific_path": None,
+                    "error_type": None if error is None else type(error).__name__,
+                }
+            final_metrics = json.dumps(
+                self._final_metric_values(), sort_keys=True, ensure_ascii=False
+            )
+            rows = [self._compact_rows[index] for index in sorted(self._compact_rows)]
+            for row in rows:
+                row["final_metrics_json"] = final_metrics
+            assert self.scientific_identity is not None
+            assert self.scientific_path is not None
+            path = write_completed_episode(
+                self.scientific_path,
+                rows,
+                self.scientific_identity,
+                termination_reason=termination_reason,
+                started_at=self._started_at,
+                usage=self._episode_usage,
+            )
+            return {
+                "audit": self.selector.summary(),
+                "comet": comet,
+                "checkpoint": {"mode": "episode", "path": str(path)},
+                "detailed_files_created": False,
+                "scientific_path": str(path),
+            }
         self.record_budget("run_completed", budget_status)
         self.event("run_completed", status=status, audit=self.selector.summary())
         metrics_path = self.output_dir / "local_metrics.csv"

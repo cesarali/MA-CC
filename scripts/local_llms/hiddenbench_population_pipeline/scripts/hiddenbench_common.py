@@ -12,6 +12,30 @@ from typing import Any, Iterable, Mapping, Sequence
 REPO_ID = "YuxuanLi1225/HiddenBench"
 SOURCE_FILENAME = "benchmark.json"
 
+PIPELINE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
+DEFAULT_DATA_ROOT = REPO_ROOT / "data" / "hidden_bench"
+"""Where this pipeline writes the corpus, and where mas_cc reads it from.
+
+Anchored to the repository rather than the working directory so the corpus lands
+in one place no matter where the script is invoked from. It is the same path as
+`mas_cc.games.hidden_bench.data.DEFAULT_CORPUS_ROOT`; the two are kept equal by
+`tests/mas_cc/test_hidden_bench_data.py`. It used to be `data/hiddenbench/`
+*inside this pipeline directory*, which hid run-time data in a tool folder.
+"""
+
+DEFAULT_CANONICAL_TASKS = DEFAULT_DATA_ROOT / "canonical" / "tasks.json"
+
+DEFAULT_ANNOTATIONS_DIR = PIPELINE_ROOT / "annotations"
+DEFAULT_RESULTS_DIR = PIPELINE_ROOT / "results"
+"""Annotations and audit output stay with the tool that produces them.
+
+Only the corpus is a shared artifact and therefore lives in `data/hidden_bench/`.
+These are anchored too so every path a script touches is independent of the
+directory it was launched from.
+"""
+
 
 class PipelineError(RuntimeError):
     pass

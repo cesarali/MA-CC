@@ -3,16 +3,31 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import math
+import os
 import threading
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from .errors import ProviderError
 from .pricing import ModelPricing, MonetaryAmount
 from .requests import CompletionRequest
 from .responses import CompletionResponse
+
+LOGGER = logging.getLogger("mas_cc.budget")
+
+# Every denial the guard can raise. A run that sees one of these can never make
+# progress again — the counters only ever move one way — so callers treat them
+# as "stop the whole run", not as one episode's bad luck.
+BUDGET_STOP_CODES = frozenset(
+    {"budget_exhausted", "budget_stopped", "budget_unbounded", "budget_unit_mismatch"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +99,30 @@ def resolve_budget_limits(system: BudgetLimits, run: BudgetLimits | None) -> Bud
 
 
 @dataclass(frozen=True, slots=True)
+class BudgetExpectation:
+    """What preflight predicted this run would consume.
+
+    Advisory only: the guard never denies against these numbers, it warns the
+    first time each is passed. Token and request counts are estimates built
+    from a representative prompt, so a run whose prompts grow with history
+    (`memory_size: 0`) legitimately blows past them — that is a signal worth
+    printing, never a reason to kill a run that is still inside its *cost*
+    ceiling.
+    """
+
+    requests: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "requests": self.requests,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class BudgetReservation:
     reservation_id: str
     cost: MonetaryAmount | None
@@ -95,8 +134,11 @@ class BudgetReservation:
 class RuntimeBudgetGuard:
     """Atomically reserves conservative request resources before dispatch."""
 
-    def __init__(self, limits: BudgetLimits) -> None:
+    def __init__(
+        self, limits: BudgetLimits, *, expectation: BudgetExpectation | None = None
+    ) -> None:
         self.limits = limits
+        self.expectation = expectation or BudgetExpectation()
         self._lock = threading.RLock()
         self._reservations: dict[str, BudgetReservation] = {}
         self._cost = 0.0
@@ -104,6 +146,49 @@ class RuntimeBudgetGuard:
         self._input_tokens = 0
         self._output_tokens = 0
         self._stops = 0
+        self._stop_reason: str | None = None
+        self._warned: set[str] = set()
+        self._account_spend: dict[str, Any] | None = None
+        self._durable_state_sink: Any | None = None
+
+    def set_durable_state_sink(self, sink: Any | None) -> None:
+        """Install an atomic state callback and immediately publish current totals."""
+
+        with self._lock:
+            self._durable_state_sink = sink
+            self._persist_locked()
+
+    def _persist_locked(self) -> None:
+        if self._durable_state_sink is not None:
+            self._durable_state_sink(self.durable_state())
+
+    def request_stop(self, reason: str) -> None:
+        """Refuse every subsequent reservation, for a reason set outside.
+
+        This is how an out-of-band signal — chiefly the provider's own reported
+        account spend — stops a run. It is deliberately one-way and idempotent:
+        the first reason is the one that gets reported.
+        """
+
+        if not reason:
+            raise ValueError("a budget stop must carry a reason")
+        with self._lock:
+            if self._stop_reason is None:
+                self._stop_reason = reason
+                LOGGER.warning("runtime budget stop requested: %s", reason)
+                self._persist_locked()
+
+    @property
+    def stop_reason(self) -> str | None:
+        with self._lock:
+            return self._stop_reason
+
+    def record_account_spend(self, value: Mapping[str, Any] | None) -> None:
+        """Record the provider's latest self-reported spend for the run record."""
+
+        with self._lock:
+            self._account_spend = None if value is None else dict(value)
+            self._persist_locked()
 
     def reserve(
         self,
@@ -115,6 +200,12 @@ class RuntimeBudgetGuard:
         if min(input_tokens, output_tokens) < 0:
             raise ValueError("reservation token counts cannot be negative")
         with self._lock:
+            if self._stop_reason is not None:
+                self._stops += 1
+                raise ProviderError(
+                    f"Runtime budget stop is in effect: {self._stop_reason}",
+                    provider="budget_guard", code="budget_stopped",
+                )
             if conservative_cost is None and not self.limits.allow_unbounded_paid_requests:
                 self._stops += 1
                 raise ProviderError(
@@ -141,11 +232,35 @@ class RuntimeBudgetGuard:
             self._requests += 1
             self._input_tokens += input_tokens
             self._output_tokens += output_tokens
+            self._check_expectations()
+            self._persist_locked()
             return reservation
 
     def _check_integer_limit(self, resource: str, proposed: int, limit: int | None) -> None:
         if limit is not None and proposed > limit:
             self._deny(resource)
+
+    def _check_expectations(self) -> None:
+        """Warn once per resource that has outgrown what preflight predicted.
+
+        Called with the lock held. This is the whole of the advisory path: it
+        never raises, so an underestimated prompt shows up as a line in the log
+        while the run keeps going, and the cost ceiling stays the only stop.
+        """
+
+        for resource, used, expected in (
+            ("request", self._requests, self.expectation.requests),
+            ("input-token", self._input_tokens, self.expectation.input_tokens),
+            ("output-token", self._output_tokens, self.expectation.output_tokens),
+        ):
+            if expected is None or resource in self._warned or used <= expected:
+                continue
+            self._warned.add(resource)
+            LOGGER.warning(
+                "%s usage passed the preflight estimate (%s used vs %s estimated); "
+                "this is advisory - the run continues until its cost ceiling.",
+                resource, f"{used:,}", f"{expected:,}",
+            )
 
     def _deny(self, resource: str) -> None:
         self._stops += 1
@@ -160,6 +275,7 @@ class RuntimeBudgetGuard:
             if current is None:
                 raise ValueError("unknown or already reconciled reservation")
             self._subtract(current)
+            self._persist_locked()
 
     def reconcile(
         self,
@@ -192,6 +308,7 @@ class RuntimeBudgetGuard:
             self._requests += 1
             self._input_tokens += input_tokens
             self._output_tokens += output_tokens
+            self._persist_locked()
 
     def _subtract(self, reservation: BudgetReservation) -> None:
         self._cost -= 0.0 if reservation.cost is None else reservation.cost.amount
@@ -213,6 +330,9 @@ class RuntimeBudgetGuard:
                 },
                 "active_reservations": len(self._reservations),
                 "stop_count": self._stops,
+                "stop_reason": self._stop_reason,
+                "preflight_expectation": self.expectation.to_dict(),
+                "provider_account_spend": self._account_spend,
             }
 
     def checkpoint_state(self) -> dict[str, Any]:
@@ -237,8 +357,79 @@ class RuntimeBudgetGuard:
                 ],
             }
 
+    def durable_state(self) -> dict[str, Any]:
+        """Compact monotone state: committed totals plus dead-process ceilings."""
+
+        with self._lock:
+            reserved_cost = sum(
+                0.0 if item.cost is None else item.cost.amount
+                for item in self._reservations.values()
+            )
+            reserved_requests = sum(item.requests for item in self._reservations.values())
+            reserved_input = sum(item.input_tokens for item in self._reservations.values())
+            reserved_output = sum(item.output_tokens for item in self._reservations.values())
+            unit = None if self.limits.max_cost is None else self.limits.max_cost.unit
+            return {
+                "schema_version": 1,
+                "approved_limits": self.limits.to_dict(),
+                "committed_requests": max(0, self._requests - reserved_requests),
+                "committed_input_tokens": max(0, self._input_tokens - reserved_input),
+                "committed_output_tokens": max(0, self._output_tokens - reserved_output),
+                "committed_cost": {
+                    "amount": max(0.0, self._cost - reserved_cost),
+                    "unit": unit,
+                },
+                "outstanding_reservation_ceilings": {
+                    "requests": reserved_requests,
+                    "input_tokens": reserved_input,
+                    "output_tokens": reserved_output,
+                    "cost": {"amount": reserved_cost, "unit": unit},
+                },
+                "stop_count": self._stops,
+                "stop_reason": self._stop_reason,
+                "provider_account_spend": self._account_spend,
+            }
+
+    def restore_durable_state(
+        self,
+        value: Mapping[str, Any],
+        *,
+        authoritative_cost: MonetaryAmount | None = None,
+    ) -> None:
+        """Restore without reviving reservations, conservatively charging uncertainty."""
+
+        if value.get("schema_version") != 1:
+            raise ValueError("unsupported durable budget schema version")
+        if value.get("approved_limits") != self.limits.to_dict():
+            raise ValueError("durable budget limits do not match the active run")
+        outstanding = value.get("outstanding_reservation_ceilings", {})
+        committed_cost = float((value.get("committed_cost") or {}).get("amount", 0.0))
+        uncertain_cost = float((outstanding.get("cost") or {}).get("amount", 0.0))
+        restored_cost = committed_cost + uncertain_cost
+        if authoritative_cost is not None:
+            if self.limits.max_cost is not None and authoritative_cost.unit != self.limits.max_cost.unit:
+                raise ValueError("authoritative spend and budget use different accounting units")
+            restored_cost = max(restored_cost, authoritative_cost.amount)
+        with self._lock:
+            self._cost = restored_cost
+            self._requests = int(value.get("committed_requests", 0)) + int(
+                outstanding.get("requests", 0)
+            )
+            self._input_tokens = int(value.get("committed_input_tokens", 0)) + int(
+                outstanding.get("input_tokens", 0)
+            )
+            self._output_tokens = int(value.get("committed_output_tokens", 0)) + int(
+                outstanding.get("output_tokens", 0)
+            )
+            self._reservations = {}
+            self._stops = int(value.get("stop_count", 0))
+            self._stop_reason = value.get("stop_reason")
+            account = value.get("provider_account_spend")
+            self._account_spend = dict(account) if isinstance(account, Mapping) else None
+
     def restore_checkpoint_state(self, value: dict[str, Any]) -> None:
-        """Restore counters only when the checkpoint has compatible limits."""
+        """Restore legacy round-checkpoint state with compatible limits."""
+
         if value.get("schema_version") != 1:
             raise ValueError("unsupported budget checkpoint schema version")
         status = value.get("status")
@@ -265,6 +456,68 @@ class RuntimeBudgetGuard:
                 restored[reservation.reservation_id] = reservation
             self._reservations = restored
 
+
+class AtomicBudgetStateStore:
+    """One fsync-and-replace budget checkpoint shared by concurrent episodes."""
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        resolved_budget_hash: str,
+        pricing_snapshot_hash: str,
+    ) -> None:
+        self.path = Path(path)
+        self.resolved_budget_hash = resolved_budget_hash
+        self.pricing_snapshot_hash = pricing_snapshot_hash
+        self._lock = threading.Lock()
+
+    def write(self, value: Mapping[str, Any]) -> None:
+        payload = {
+            **dict(value),
+            "resolved_budget_hash": self.resolved_budget_hash,
+            "pricing_snapshot_hash": self.pricing_snapshot_hash,
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_name(self.path.name + ".tmp")
+        with self._lock:
+            with temporary.open("w", encoding="utf-8") as stream:
+                json.dump(payload, stream, sort_keys=True, ensure_ascii=False)
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.path)
+            try:
+                directory_fd = os.open(self.path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            except OSError:
+                pass
+
+    def load(self) -> dict[str, Any] | None:
+        if not self.path.is_file():
+            return None
+        value = json.loads(self.path.read_text(encoding="utf-8"))
+        if value.get("resolved_budget_hash") != self.resolved_budget_hash:
+            raise ValueError("budget checkpoint resolved-budget hash does not match this run")
+        if value.get("pricing_snapshot_hash") != self.pricing_snapshot_hash:
+            raise ValueError("budget checkpoint pricing identity does not match this run")
+        return value
+
+    def restore(
+        self,
+        guard: RuntimeBudgetGuard,
+        *,
+        authoritative_cost: MonetaryAmount | None = None,
+    ) -> bool:
+        value = self.load()
+        if value is None:
+            return False
+        guard.restore_durable_state(value, authoritative_cost=authoritative_cost)
+        return True
 
 class BudgetGuardedProvider:
     """Provider decorator preserving the normalized completion interface."""

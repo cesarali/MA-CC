@@ -219,6 +219,22 @@ def run_aggregate_command(
     return aggregate_grid_directory(run_dir, aggregation)
 
 
+def run_compact_command(
+    run_dir: str | Path,
+    *,
+    profile: str = "results_only",
+    delete_raw: bool = False,
+    archive: bool = False,
+) -> dict[str, Any]:
+    """Preview or explicitly compact a legacy run without provider calls."""
+
+    from mas_cc.storage import compact_run_directory
+
+    return compact_run_directory(
+        run_dir, profile=profile, delete_raw=delete_raw, archive=archive
+    )
+
+
 def run_experiment_command(
     config_path: str | Path,
     output_dir: str | Path | None = None,

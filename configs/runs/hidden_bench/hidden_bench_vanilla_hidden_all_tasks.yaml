@@ -114,14 +114,24 @@ pricing:
   explicit_unknown_price_override: false
 budget:
   # Sized for the whole grid (65 cells x 1 repetition), not one cell - see the
-  # COST note above. Re-check with `experiment preflight` before raising
-  # `repetitions`.
+  # COST note above.
+  #
+  # COST is the only ceiling here. The token and request limits are
+  # deliberately UNSET: their values could only ever be guesses made before
+  # launch, and a wrong guess does not save money, it destroys a run. That is
+  # exactly how the 50-cell reasoning-control grid died - it hit a 250M
+  # `max_input_tokens` two cells in and burned its remaining 4,235 episodes on
+  # refused calls (results/DIAGNOSIS.md). Unset, those counters are still
+  # tracked and reported, and passing the preflight estimate logs a warning,
+  # but only money can stop the run.
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 70.0
   max_cost_per_run: 70.0
-  max_provider_requests: 9750
-  max_input_tokens: 5000000
-  max_output_tokens: 800000
+  # Cross-check the guard's own arithmetic against the proxy's accounting every
+  # 2 minutes. The run stops when the university reports that IT has spent
+  # more than `max_cost_per_run` since launch - measured as a delta, so a
+  # shared key's other traffic neither borrows from nor donates to this run.
+  live_spend_poll_seconds: 120
   allow_unbounded_paid_requests: false
 logging:
   level: INFO

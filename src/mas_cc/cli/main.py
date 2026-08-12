@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Sequence
 
 from mas_cc import __version__
+from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.llm_runtime.providers import ProviderError
 
@@ -35,10 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     examples.add_argument(
         "--hiddenbench-data",
         type=Path,
-        default=Path(
-            "scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/"
-            "scaled/exact_replication/N_32.json"
-        ),
+        default=DEFAULT_CORPUS_ROOT / "scaled" / "exact_replication" / "N_32.json",
         help="downloaded canonical or scaled HiddenBench JSON (default: %(default)s)",
     )
     examples.add_argument("--task-id", type=int, default=1)
@@ -154,6 +152,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", type=Path,
         help="take the aggregation: section from this config instead of the run's own; "
         "use to re-band, re-window, or change the fill rule without re-running episodes",
+    )
+    experiment_compact = experiment_commands.add_parser(
+        "compact",
+        help="preview or compact an existing full run into validated results-only artifacts",
+    )
+    experiment_compact.add_argument("--run-dir", type=Path, required=True)
+    experiment_compact.add_argument(
+        "--profile", choices=("results_only",), default="results_only"
+    )
+    experiment_compact.add_argument(
+        "--delete-raw",
+        action="store_true",
+        help="after validated compact outputs exist, delete only the documented raw allowlist",
+    )
+    experiment_compact.add_argument(
+        "--archive",
+        action="store_true",
+        help="also create a copy-friendly zip excluding :Zone.Identifier sidecars",
     )
 
     synthetic = commands.add_parser(
@@ -415,6 +431,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name, value in sorted(summary["sweep_metrics"].items()):
             print(f"  {name}: {value}")
         return 0 if summary["cells_aggregated"] else 1
+    if args.command == "experiment" and args.experiment_command == "compact":
+        from .experiment import run_compact_command
+
+        try:
+            summary = run_compact_command(
+                args.run_dir,
+                profile=args.profile,
+                delete_raw=args.delete_raw,
+                archive=args.archive,
+            )
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        mode = "preview" if summary["dry_run"] else "completed"
+        print(f"Compaction {mode}: {summary['run_dir']}")
+        print(
+            f"  before: {summary['before']['files']} files, {summary['before']['bytes']} bytes"
+        )
+        print(
+            f"  after:  {summary['after']['files']} files, {summary['after']['bytes']} bytes"
+        )
+        if summary.get("archive"):
+            print(f"  archive: {summary['archive']}")
+        return 0
     if args.command == "synthetic":
         from .synthetic import (
             DEFAULT_EPSILON_GRID,

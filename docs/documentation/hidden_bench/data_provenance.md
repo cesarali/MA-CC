@@ -12,12 +12,14 @@ produced and never rebuilds it.
 
 ## 1. Where everything actually is
 
-The brief's §2 proposed `data/hidden_bench/`. **That directory does not exist**,
-and creating it would mean either copying 65 tasks to a second location or
-diverging from the pipeline that maintains them. The real root is:
+The corpus is the brief's §2 location, `data/hidden_bench/`. It previously sat
+under `scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/`,
+which buried a shared run-time input inside a tool directory; the pipeline now
+writes straight to the shared location, so producer and consumers name one path
+and no copy exists. The root is:
 
 ```
-scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/
+data/hidden_bench/
 ├── source/
 │   ├── benchmark.json          65 tasks, byte-preserved from Hugging Face
 │   └── source_metadata.json    repo id, commit SHA, sha256
@@ -162,15 +164,15 @@ LLM verifier.
 
 ```bash
 python scripts/generate_semantic_annotations.py \
-  --input data/hiddenbench/canonical/tasks.json --output-dir annotations \
+  --input data/hidden_bench/canonical/tasks.json --output-dir annotations \
   --mode both --paraphrases-per-type 10 --factorization-alternatives 4 \
   --max-components 4 --resume
 python scripts/prepare_hiddenbench.py --agents 32 --method paraphrased_replication \
-  --annotations annotations/paraphrases.json --data-root data/hiddenbench
+  --annotations annotations/paraphrases.json --data-root data/hidden_bench
 python scripts/prepare_hiddenbench.py --agents 32 --method factorized_evidence \
-  --annotations annotations/factorizations.json --data-root data/hiddenbench
+  --annotations annotations/factorizations.json --data-root data/hidden_bench
 python scripts/run_information_sufficiency_audit.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output results/canonical_information_sufficiency.json
 ```
 

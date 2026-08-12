@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from mas_cc.config import LLMProviderConfig, PromptConfig, load_component_config
+from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
 from mas_cc.games.prompt_library.hidden_profile_v3 import (
     hidden_profile_discussion_prompt,
     hidden_profile_vote_prompt,
@@ -43,10 +44,7 @@ from mas_cc.planning import LogicalCallSpec, static_preflight
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_INPUT = (
-    REPOSITORY_ROOT
-    / "scripts/local_llms/hiddenbench_population_pipeline/data/hiddenbench/canonical/tasks.json"
-)
+DEFAULT_INPUT = DEFAULT_CORPUS_ROOT / "canonical" / "tasks.json"
 DEFAULT_PROVIDER_CONFIG = (
     REPOSITORY_ROOT / "configs/components/llm_providers/gemma_local.yaml"
 )

@@ -1,7 +1,10 @@
 """Normalized, lazy LLM provider interface."""
 
 from .budget import (
+    BUDGET_STOP_CODES,
+    AtomicBudgetStateStore,
     BudgetCeiling,
+    BudgetExpectation,
     BudgetGuardedProvider,
     BudgetLimits,
     RuntimeBudgetGuard,
@@ -35,7 +38,10 @@ from .requests import CompletionRequest
 from .responses import CompletionResponse, ProviderUsage, redact_raw_response
 
 __all__ = [
+    "BUDGET_STOP_CODES",
+    "AtomicBudgetStateStore",
     "BudgetCeiling",
+    "BudgetExpectation",
     "BudgetGuardedProvider",
     "BudgetLimits",
     "CompletionRequest",

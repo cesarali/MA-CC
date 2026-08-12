@@ -6,6 +6,7 @@ invariant is checked for every (scheme, n_agents) pair the games can produce.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import random
 from pathlib import Path
@@ -178,6 +179,29 @@ def test_union_invariant_catches_a_missing_fact(tasks):
 # --------------------------------------------------------------------------
 
 _SCALED = DEFAULT_CORPUS_ROOT / "scaled" / "exact_replication" / "N_32.json"
+
+
+def test_producer_and_consumer_agree_on_where_the_corpus_lives():
+    """The pipeline writes exactly where `data.py` reads.
+
+    The two constants are declared in different trees (the pipeline's `scripts/`
+    is not an importable package), so nothing but this test stops them drifting
+    back apart the way they had, with the corpus buried under `scripts/`.
+    """
+
+    pipeline_scripts = (
+        DEFAULT_CORPUS_ROOT.parents[1]
+        / "scripts"
+        / "local_llms"
+        / "hiddenbench_population_pipeline"
+        / "scripts"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "hiddenbench_common_for_test", pipeline_scripts / "hiddenbench_common.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.DEFAULT_DATA_ROOT == DEFAULT_CORPUS_ROOT
 
 
 @pytest.mark.skipif(not _SCALED.exists(), reason="prebuilt N_32 population not present")

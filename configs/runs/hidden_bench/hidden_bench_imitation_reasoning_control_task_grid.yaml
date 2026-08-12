@@ -2,12 +2,10 @@
 # the same v2 controlled reasoning run, swept over game.options.task_id **and**
 # over the two feedback controllers.
 #
-# Cells: 3 tasks x 2 control mechanisms = 6.
+# Cells: 14 tasks x 2 control mechanisms = 28.
 #
-#                     threshold_target        soft_target
-#   evacuation_north_hill      .                   .
-#   evacuate_park_dilemma      .                   .
-#   Laboratory Theft Deduction .                   .
+# Every task listed in the grid has one threshold_target cell and one
+# soft_target cell.
 #
 # The control axis is the one this grid was extended for. `threshold_target`
 # decides its action from the sampled target share; `soft_target` draws it from
@@ -183,8 +181,8 @@ control:
     # measuring. It also keeps these cells comparable with every earlier v2 run.
     template_version: 2
 execution:
-  seed: 20260840
-  repetitions: 2
+  seed: 20260850
+  repetitions: 4
   parallelism: 5
   fail_fast: false
 pricing:
@@ -201,12 +199,17 @@ budget:
   # control arms cost the same, because a controller message is assembled
   # locally and never costs a provider call in either arm. Re-check with
   # `experiment preflight` before raising `repetitions` or either axis.
+  #
+  # This grid is the one results/DIAGNOSIS.md is about. Its earlier revision
+  # carried `max_input_tokens: 250000000`, hit it during cell 0001 of 50, and
+  # then failed 4,235 episodes on refused calls. The token/request limits are
+  # gone: with `memory_size: 0` every prompt carries the whole interaction
+  # history, so no pre-launch token estimate can be right, and cost is the
+  # only ceiling worth stopping on.
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 300.0
   max_cost_per_run: 300.0
-  max_provider_requests: 15000
-  max_input_tokens: 200000000
-  max_output_tokens: 9000000
+  live_spend_poll_seconds: 120
   allow_unbounded_paid_requests: false
 logging:
   level: INFO
@@ -217,19 +220,27 @@ logging:
   options:
     show_metrics: true
     prompt_examples:
-      # One prompt/response Markdown file for every interaction step in each
-      # episode: data/episodes/<episode-id>/prompts/round_NNN.md.
-      count: 20
+      # One deterministic early/late sample for the completed cell, not one
+      # prompt file per round in every episode.
+      count: 2
+      scope: cell
 storage:
   output_dir: results
   format: jsonl
-  checkpoints: false
+  artifact_profile: results_only
+  checkpoint_mode: episode
   overwrite: true
   wipe_and_recompute: true
 analysis:
-  # Run all across-episode sensing/control information channels automatically.
-  # Results are written below the run directory as a human-readable table in
-  # hidden_bench_imitation_analysis/information_estimates.md.
+  # Run all across-episode sensing/control information channels automatically,
+  # together with the controller diagnostics that make them readable. Results
+  # are written below the run directory as a human-readable report in
+  # hidden_bench_imitation_analysis/information_estimates.md, with the machine
+  # -readable tables beside it as information_estimates.csv and
+  # support_diagnostics.csv.
+  #
+  # Nothing here is a hidden default: every quantity the run should compute is
+  # named in the list below.
   enabled: true
   estimators:
     # The count-vector channels: the sensor and the action measured against the
@@ -256,6 +267,56 @@ analysis:
     - m_ctrl_actuation_cmi
     - m_truth_actuation_cmi
     - m_order_actuation_cmi
+    # ---------------------------------------------------------------------
+    # Controller entropy / available action information.
+    #
+    # Every actuation CMI above is bounded by the controller's own remaining
+    # action entropy in the same conditioning space:
+    #
+    #   I(U_t; X_(t+1) | S_t)  <=  H(U_t | S_t)
+    #
+    # so a near-zero CMI has two readings - the controller barely moved the
+    # population, or it had almost no action freedom left once S_t was known.
+    # These entropies are the ceiling, and are what tell the two apart. They
+    # are the reason this grid sweeps threshold_target against soft_target at
+    # all: the deterministic policy is expected to put H(U_t | N_t) at ~0.
+    - controller_action_entropy
+    - controller_action_entropy_given_population
+    - controller_action_entropy_given_m_ctrl
+    - controller_action_entropy_given_m_truth
+    - controller_action_entropy_given_m_order
+    # ---------------------------------------------------------------------
+    # Actuation information fractions: each CMI over its own ceiling above.
+    # Reported as NaN, never 0, when the denominator vanishes - the ratio is
+    # undefined there rather than small - and never clipped to [0, 1], so an
+    # estimator pathology stays visible. A normalization diagnostic; not an
+    # efficiency, and not to be described as one.
+    - population_actuation_information_fraction
+    - m_ctrl_actuation_information_fraction
+    - m_truth_actuation_information_fraction
+    - m_order_actuation_information_fraction
+    # ---------------------------------------------------------------------
+    # Signed behavioral actuation. CMI is unsigned: it cannot say whether the
+    # population moved toward the controller's target or away from it. These
+    # are state-adjusted ADVOCATE_Z-minus-NO_OP contrasts, taken only inside
+    # conditioning states that saw both actions (the policy depends on the
+    # state, so an unconditional difference of means would mostly measure
+    # which states each action is taken in). m_truth is the one to watch under
+    # a wrong target: controller success and epistemic success can disagree.
+    - m_ctrl_signed_actuation
+    - m_truth_signed_actuation
+    - m_order_signed_actuation
+    # ---------------------------------------------------------------------
+    # Action-overlap diagnostics, one per conditioning representation. The
+    # headline number is the fraction of events sitting in states where both
+    # actions were observed - the only events that can support a within-state
+    # comparison at all. This is the direct measurement of the effect the
+    # control axis of this grid was added to produce, and a nonzero
+    # controller_action_entropy is NOT a substitute for it.
+    - population_action_overlap
+    - m_ctrl_action_overlap
+    - m_truth_action_overlap
+    - m_order_action_overlap
   options:
     bootstrap_resamples: 1000
     null_permutations: 1000
@@ -328,31 +389,8 @@ experiment:
   tags: [hidden-bench, imitation, reasoning, control, soft-target, diagnostics, prompt-v2, task-grid]
 grid:
   game.options.task_id:
-    - "evacuation_north_hill"
-    - "evacuate_park_dilemma"
-    - "Laboratory Theft Deduction"
-    - "critical_vaccine_route"
-    - "Critical Sample Transfer"
-    - "Safe Haven After the Spill"
-    - "the_safe_shelter"
-    - "datacenter_emergency_migration"
-    - "emergency_warehouse_selection"
-    - "storm_recovery_clinic_site_selection"
-    - "emergency_aircraft_landing_site"
-    - "emergency_hospital_transfer"
-    - "Space Evacuation Decision"
-    - "safe_haven_decision"
-    - "The Artifact Delivery"
-    - "Choosing the Safe Offsite Venue"
-    - "Safe Lab Choice After Earthquake"
-    - "emergency_evacuation_center_choice"
-    - "Find the Missing Prototype"
-    - "missing_lab_sample"
-    - "choosing_the_safe_field_station"
-    - "secure_meeting_room_decision"
-    - "emergency_supply_distribution"
-    - "mountain_storm_shelter"
-    - "sensor_placement_decision"
+    - "evacuation_west_city"
+    - "Antarctic Storm Safe Haven"
   control.mechanism:
     - threshold_target
     - soft_target

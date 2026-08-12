@@ -10,6 +10,8 @@ from typing import Any, Mapping, Sequence
 from tqdm.auto import tqdm
 
 from hiddenbench_common import (
+    DEFAULT_ANNOTATIONS_DIR,
+    DEFAULT_CANONICAL_TASKS,
     PipelineError,
     ValidationError,
     append_jsonl,
@@ -46,12 +48,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path("data/hiddenbench/canonical/tasks.json"),
+        default=DEFAULT_CANONICAL_TASKS,
+        help="canonical task file (default: %(default)s)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("annotations"),
+        default=DEFAULT_ANNOTATIONS_DIR,
     )
     parser.add_argument(
         "--mode",

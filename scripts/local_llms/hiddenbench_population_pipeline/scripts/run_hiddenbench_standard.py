@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from hiddenbench_common import (
+    DEFAULT_RESULTS_DIR,
     PipelineError,
     extract_tasks_payload,
     select_tasks,
@@ -30,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("results/hiddenbench_standard.json"),
+        default=DEFAULT_RESULTS_DIR / "hiddenbench_standard.json",
     )
     parser.add_argument(
         "--sessions",

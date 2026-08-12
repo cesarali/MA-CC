@@ -113,20 +113,38 @@ def config_schema() -> dict[str, Any]:
                     "console": {"type": "boolean"},
                     "audit": {"type": "boolean"},
                     "comet": {"type": "boolean"},
-                    "options": options,
+                    "options": {
+                        "type": "object",
+                        "additionalProperties": True,
+                        "properties": {
+                            "prompt_examples": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "count": {"type": "integer", "minimum": 0},
+                                    "scope": {"enum": ["episode", "cell"]},
+                                },
+                            }
+                        },
+                    },
                 }
             ),
-            "storage": _simple_object(
-                {
+            "storage": {
+                **_simple_object({
                     "schema_version": {"const": 1},
                     "output_dir": {"type": "string", "minLength": 1},
                     "format": {"type": "string", "minLength": 1},
                     "checkpoints": {"type": "boolean"},
+                    "artifact_profile": {"enum": ["full", "results_only"]},
+                    "checkpoint_mode": {"enum": ["off", "episode"]},
                     "overwrite": {"type": "boolean"},
                     "wipe_and_recompute": {"type": "boolean"},
                     "options": options,
-                }
-            ),
+                }),
+                "allOf": [
+                    {"not": {"required": ["checkpoints", "checkpoint_mode"]}}
+                ],
+            },
             "analysis": _simple_object(
                 {
                     "schema_version": {"const": 1},
@@ -226,6 +244,7 @@ def config_schema() -> dict[str, Any]:
                     "max_input_tokens": {"type": ["integer", "null"], "minimum": 0},
                     "max_output_tokens": {"type": ["integer", "null"], "minimum": 0},
                     "allow_unbounded_paid_requests": {"type": "boolean"},
+                    "live_spend_poll_seconds": {"type": ["integer", "null"], "minimum": 10},
                 }
             ),
         },

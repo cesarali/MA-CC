@@ -537,6 +537,32 @@ class UniversityPricingSource:
             raise ValueError("University metadata response must be a mapping")
         return body
 
+    def fetch_account_budget(self, *, unit: str | None = None) -> AccountBudget | None:
+        """Read only the account's own spend, with no pricing round-trips.
+
+        `fetch` costs three requests because it also has to prove the model
+        exists and price it. Polling during a run wants none of that — the
+        model cannot vanish mid-run and the prices were frozen at launch — so
+        this hits `/user/info` alone and is cheap enough to call on a timer.
+
+        ``unit`` pins the accounting unit to the one the launch quote resolved,
+        so a polled amount stays comparable with the amount already reserved
+        rather than silently re-deriving it from a thinner response body.
+
+        Returns ``None`` when the proxy reports no budget fields, which is not
+        an error: it means this account is not spend-tracked.
+        """
+
+        key, base, session = self._connection()
+        retrieved = utc_now()
+        body = self._get(session, f"{base}/user/info", key)
+        if unit is None:
+            return _account_budget(body, "university", self.config.model, retrieved)
+        return _account_budget(
+            body, "university", self.config.model, retrieved,
+            unit=unit, unit_source="accounting unit pinned to the launch pricing quote",
+        )
+
     def fetch(self, provider: str, model: str) -> PricingQuote:
         if provider != "university":
             raise ValueError("UniversityPricingSource only supports provider='university'")

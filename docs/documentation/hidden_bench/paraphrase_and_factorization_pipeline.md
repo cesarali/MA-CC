@@ -240,9 +240,9 @@ the original hidden facts across agents but does not modify their text.
 | `annotations/factorizations.json` | Tasks 1–42 complete; tasks 43–65 absent; not frozen |
 | `annotations/generation_audit.jsonl` | Detailed generation and verification audit trail |
 | `annotations/gpt5mini_full_run.log` | Console log from the interrupted run |
-| `data/hiddenbench/scaled/exact_replication/N_32.json` | Complete 65-task, 32-agent exact-replication dataset |
-| `data/hiddenbench/scaled/paraphrased_replication/N_32.json` | Not built |
-| `data/hiddenbench/scaled/factorized_evidence/N_32.json` | Not built |
+| `data/hidden_bench/scaled/exact_replication/N_32.json` | Complete 65-task, 32-agent exact-replication dataset |
+| `data/hidden_bench/scaled/paraphrased_replication/N_32.json` | Not built |
+| `data/hidden_bench/scaled/factorized_evidence/N_32.json` | Not built |
 
 The existing annotation files record `microsoft/gpt-5-mini` as both generator
 and verifier. Although the pipeline supports separately configured generator
@@ -264,7 +264,7 @@ Generate or resume both annotation types:
 
 ```bash
 python scripts/generate_semantic_annotations.py \
-  --input data/hiddenbench/canonical/tasks.json \
+  --input data/hidden_bench/canonical/tasks.json \
   --output-dir annotations \
   --mode both \
   --paraphrases-per-type 10 \
@@ -282,13 +282,13 @@ python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method paraphrased_replication \
   --annotations annotations/paraphrases.json \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 
 python scripts/prepare_hiddenbench.py \
   --agents 32 \
   --method factorized_evidence \
   --annotations annotations/factorizations.json \
-  --data-root data/hiddenbench
+  --data-root data/hidden_bench
 ```
 
 Finally, the transformed datasets should be checked with

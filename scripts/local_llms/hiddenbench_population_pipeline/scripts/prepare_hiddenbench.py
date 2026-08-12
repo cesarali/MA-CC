@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from hiddenbench_common import (
+    DEFAULT_DATA_ROOT,
     PipelineError,
     ValidationError,
     allocate_factor_components,
@@ -40,7 +41,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-root",
         type=Path,
-        default=Path("data/hiddenbench"),
+        default=DEFAULT_DATA_ROOT,
+        help="corpus root read by mas_cc (default: %(default)s)",
     )
     parser.add_argument(
         "--revision",

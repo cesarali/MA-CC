@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import asyncio
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -16,12 +17,16 @@ from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
 from mas_cc.games.hidden_bench.imitation import run_hidden_bench_imitation_game
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
 from mas_cc.games.hidden_bench.imitation.analysis import (
+    CONTROLLER_DIAGNOSTIC_STATISTICS,
     INFORMATION_STATISTICS,
     _export_information_estimates_to_comet,
     _write_information_estimates_markdown,
     adapt_event,
     binary_action_entropy_bits,
     bootstrap_episode_ids,
+    conditional_action_entropy_bits,
+    controller_diagnostic_analysis,
+    controller_diagnostic_comet_metrics,
     information_analysis,
     information_comet_metrics,
     plot_information_estimates,
@@ -219,6 +224,217 @@ def test_episode_bootstrap_draws_unique_episode_units_not_rows():
     assert len(draws) == 10
     assert all(len(draw) == 2 for draw in draws)
     assert all(set(draw) <= {"episode-a", "episode-b"} for draw in draws)
+
+
+def _controller_events(script, *, episodes=4, options=("A", "B", "C"), target="C"):
+    """Repeat one (before, action, after) script across several episodes."""
+
+    return [
+        adapt_event(
+            _event(
+                before,
+                after,
+                options=options,
+                target=target,
+                action=action,
+                episode=f"episode-{episode_index}",
+                index=index + 1,
+            )
+        )
+        for episode_index in range(episodes)
+        for index, (before, action, after) in enumerate(script)
+    ]
+
+
+def _diagnostic(rows, name):
+    return next(row for row in rows if row["statistic"] == name)
+
+
+# A hard threshold controller: which action it takes is a function of the target
+# headcount, so no m_ctrl state ever sees both actions.
+_DETERMINISTIC_SCRIPT = (
+    (("A", "A", "B"), "ADVOCATE_Z", ("C", "A", "B")),
+    (("C", "C", "B"), "NO_OP", ("C", "C", "B")),
+)
+# The same two states, but the action is free at each of them.
+_RANDOMIZED_SCRIPT = (
+    (("A", "A", "B"), "ADVOCATE_Z", ("C", "A", "B")),
+    (("A", "A", "B"), "NO_OP", ("A", "A", "B")),
+)
+
+
+def _diagnostics_for(script, **kwargs):
+    return controller_diagnostic_analysis(
+        _controller_events(script), bootstrap_resamples=0, null_permutations=0, **kwargs
+    )
+
+
+def test_conditional_entropy_is_zero_and_the_fraction_undefined_for_a_deterministic_policy():
+    """A near-zero CMI under a deterministic policy is structural, not a finding.
+
+    The controller here varies its action across the run, so `H(U_t)` is a full
+    bit — but at any fixed target headcount there is nothing left to vary, and
+    the CMI it bounds cannot be anything but zero.  The fraction has to say
+    "undefined", not "zero", or the report would read as a measured null result.
+    """
+
+    rows = _diagnostics_for(_DETERMINISTIC_SCRIPT)
+
+    assert _diagnostic(rows, "controller_action_entropy")["value"] == pytest.approx(1.0)
+    for name in ("controller_action_entropy_given_m_ctrl", "controller_action_entropy_given_population"):
+        assert _diagnostic(rows, name)["value"] == pytest.approx(0.0, abs=1e-12)
+    fraction = _diagnostic(rows, "m_ctrl_actuation_information_fraction")
+    assert math.isnan(fraction["value"])
+    assert fraction["value"] != 0.0 or math.isnan(fraction["value"])
+    assert fraction["undefined_reason"] == "controller_deterministic_given_conditioning_state"
+    assert fraction["controller_deterministic_given_conditioning_state"] is True
+    # m_order is a coarser projection: both states have a largest count of 2, so
+    # they collapse into one conditioning slice that does see both actions.
+    assert _diagnostic(rows, "controller_action_entropy_given_m_order")["value"] == pytest.approx(1.0)
+
+
+def test_a_randomized_policy_leaves_conditional_entropy_and_a_finite_fraction():
+    rows = _diagnostics_for(_RANDOMIZED_SCRIPT)
+
+    entropy = _diagnostic(rows, "controller_action_entropy_given_m_ctrl")
+    fraction = _diagnostic(rows, "m_ctrl_actuation_information_fraction")
+    assert entropy["value"] == pytest.approx(1.0)
+    assert entropy["controller_deterministic_given_conditioning_state"] is False
+    assert math.isfinite(fraction["value"])
+    # Every available bit of action freedom is spent predicting the next state.
+    assert fraction["numerator_bits"] == pytest.approx(1.0)
+    assert fraction["denominator_bits"] == pytest.approx(1.0)
+    assert fraction["value"] == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("script", [_DETERMINISTIC_SCRIPT, _RANDOMIZED_SCRIPT])
+def test_every_actuation_cmi_stays_under_its_conditional_entropy_ceiling(script):
+    rows = _diagnostics_for(script)
+
+    fractions = [row for row in rows if row["family"] == "information_fraction"]
+    assert len(fractions) == 4
+    for row in fractions:
+        assert row["entropy_bound_satisfied"] is True
+        assert row["numerator_bits"] <= row["denominator_bits"] + 1e-9
+
+
+def test_the_signed_response_follows_the_direction_advocacy_actually_moves_the_population():
+    """CMI is unsigned; this is the quantity that says which way.
+
+    Both scripts below carry exactly the same transitions and the same action
+    counts, so every CMI and every entropy is identical between them.  Only the
+    pairing of action to outcome is reversed.
+    """
+
+    forward = _diagnostics_for(_RANDOMIZED_SCRIPT)
+    reversed_script = (
+        (("A", "A", "B"), "NO_OP", ("C", "A", "B")),
+        (("A", "A", "B"), "ADVOCATE_Z", ("A", "A", "B")),
+    )
+    backward = _diagnostics_for(reversed_script)
+
+    assert _diagnostic(forward, "m_ctrl_signed_actuation")["value"] == pytest.approx(0.5)
+    assert _diagnostic(backward, "m_ctrl_signed_actuation")["value"] == pytest.approx(-0.5)
+    assert _diagnostic(forward, "m_ctrl_actuation_information_fraction")["value"] == pytest.approx(
+        _diagnostic(backward, "m_ctrl_actuation_information_fraction")["value"]
+    )
+
+
+def test_a_deterministic_policy_leaves_the_signed_response_undefined_rather_than_zero():
+    signed = _diagnostic(_diagnostics_for(_DETERMINISTIC_SCRIPT), "m_ctrl_signed_actuation")
+
+    assert math.isnan(signed["value"])
+    assert signed["undefined_reason"] == "no_conditioning_state_saw_both_actions"
+
+
+def test_action_overlap_separates_a_varying_controller_from_a_comparable_one():
+    """A nonzero `H(U)` is not evidence that the two actions are comparable."""
+
+    deterministic = _diagnostics_for(_DETERMINISTIC_SCRIPT)
+    randomized = _diagnostics_for(_RANDOMIZED_SCRIPT)
+
+    assert _diagnostic(deterministic, "controller_action_entropy")["value"] == pytest.approx(1.0)
+    overlap = _diagnostic(deterministic, "m_ctrl_action_overlap")
+    assert overlap["dual_action_conditioning_states"] == 0
+    assert overlap["occupied_conditioning_states"] == 2
+    assert overlap["fraction_events_in_dual_action_conditioning_states"] == pytest.approx(0.0)
+    assert overlap["value"] == pytest.approx(0.0)
+    # The m_order projection merges the two slices, so the same events do
+    # support a within-state comparison there.
+    assert _diagnostic(deterministic, "m_order_action_overlap")[
+        "fraction_events_in_dual_action_conditioning_states"
+    ] == pytest.approx(1.0)
+    assert _diagnostic(randomized, "m_ctrl_action_overlap")[
+        "fraction_events_in_dual_action_conditioning_states"
+    ] == pytest.approx(1.0)
+
+
+def test_ctrl_and_truth_diagnostics_coincide_when_the_target_is_the_correct_answer():
+    rows = _diagnostics_for(_RANDOMIZED_SCRIPT)
+
+    for suffix in (
+        "actuation_information_fraction",
+        "signed_actuation",
+        "action_overlap",
+    ):
+        ctrl = _diagnostic(rows, f"m_ctrl_{suffix}")
+        truth = _diagnostic(rows, f"m_truth_{suffix}")
+        assert ctrl["value"] == pytest.approx(truth["value"])
+    assert _diagnostic(rows, "controller_action_entropy_given_m_ctrl")["value"] == pytest.approx(
+        _diagnostic(rows, "controller_action_entropy_given_m_truth")["value"]
+    )
+
+
+def test_ratio_intervals_are_recomputed_per_resample_not_divided_at_the_endpoints():
+    rows = controller_diagnostic_analysis(
+        _controller_events(_RANDOMIZED_SCRIPT, episodes=6),
+        bootstrap_resamples=25,
+        null_permutations=10,
+        seed=5,
+    )
+
+    fraction = _diagnostic(rows, "m_ctrl_actuation_information_fraction")
+    assert fraction["bootstrap_resamples"] == 25
+    assert fraction["bootstrap_valid_replicates"] == 25
+    assert fraction["bootstrap_ci_low"] == pytest.approx(1.0)
+    assert fraction["bootstrap_ci_high"] == pytest.approx(1.0)
+    # Permuting U_t within an episode destroys the action-outcome pairing, so
+    # the ratio has to collapse even though the ceiling it divides by does not.
+    assert fraction["null_mean"] < fraction["value"]
+    assert fraction["null_type"] == "within_episode_controller_action_permutation"
+    entropy = _diagnostic(rows, "controller_action_entropy_given_m_ctrl")
+    assert entropy["null_permutations"] == 0, "a policy diagnostic gets no policy-destroying null"
+    assert entropy["bootstrap_valid_replicates"] == 25
+
+
+def test_no_controller_leaves_every_diagnostic_undefined_rather_than_zero():
+    events = [
+        adapt_event(_event(("A", "A", "B"), ("A", "A", "B"), action=None, index=index + 1))
+        for index in range(4)
+    ]
+
+    rows = controller_diagnostic_analysis(events, bootstrap_resamples=0, null_permutations=0)
+
+    assert {row["statistic"] for row in rows} == set(CONTROLLER_DIAGNOSTIC_STATISTICS)
+    assert all(math.isnan(row["value"]) for row in rows)
+    assert all(row["undefined_reason"] == "no_controlled_events" for row in rows)
+
+
+def test_an_unknown_diagnostic_is_refused_rather_than_silently_dropped():
+    with pytest.raises(ValueError, match="unknown HiddenBench imitation controller diagnostic"):
+        controller_diagnostic_analysis(
+            _controller_events(_RANDOMIZED_SCRIPT), diagnostics=("not_a_diagnostic",)
+        )
+
+
+def test_conditional_action_entropy_averages_over_states_by_frequency():
+    # Three events in a state with both actions (1 bit), one in a pure state.
+    entropy = conditional_action_entropy_bits(
+        ["ADVOCATE_Z", "NO_OP", "ADVOCATE_Z", "NO_OP"], [0, 0, 1, 1]
+    )
+    assert entropy == pytest.approx(1.0)
+    assert conditional_action_entropy_bits(["ADVOCATE_Z", "NO_OP"], [0, 1]) == pytest.approx(0.0)
+    assert math.isnan(conditional_action_entropy_bits([], []))
 
 
 def test_first_control_grid_resolves_exactly_four_matched_cells_and_provider():
@@ -568,6 +784,27 @@ def test_comet_metrics_derive_the_excess_over_the_permutation_null():
     assert metrics["information/run/sensing_mi/estimate"] == pytest.approx(1.25)
     assert metrics["information/run/sensing_mi/excess_over_null"] == pytest.approx(0.75)
     assert metrics["information/run/sensing_mi/scientifically_interpretable"] == 1.0
+
+
+def test_controller_comet_metrics_use_a_short_cell_first_namespace():
+    metrics = controller_diagnostic_comet_metrics(
+        [
+            {
+                "cell_id": "cell-0000",
+                "statistic": "controller_action_entropy_given_m_order",
+                "fraction_conditioning_states_with_both_actions": 0.5,
+                "controller_deterministic_given_conditioning_state": True,
+            }
+        ]
+    )
+
+    assert metrics == {
+        "cell-0000/controller_action_entropy_given_m_order/"
+        "fraction_conditioning_states_with_both_actions": pytest.approx(0.5),
+        "cell-0000/controller_action_entropy_given_m_order/"
+        "controller_deterministic_given_conditioning_state": 1.0,
+    }
+    assert all(len(name) <= 100 for name in metrics)
 
 
 def test_a_statistic_with_no_estimate_contributes_no_metric():

@@ -33,15 +33,27 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
             f"configured post-run analysis is not supported for game.type {config.game.type!r}"
         )
 
-    from mas_cc.games.hidden_bench.imitation.analysis import INFORMATION_STATISTICS
+    from mas_cc.games.hidden_bench.imitation.analysis import (
+        CONTROLLER_DIAGNOSTIC_STATISTICS,
+        INFORMATION_STATISTICS,
+    )
 
-    statistics = tuple(analysis.estimators)
-    unknown = sorted(set(statistics) - set(INFORMATION_STATISTICS))
+    # One list in the config, two arguments downstream: the MI/CMI channels and
+    # the controller diagnostics that normalize and sign them are computed by
+    # different machinery, but a run author thinks of them as one request.
+    requested = tuple(analysis.estimators)
+    unknown = sorted(
+        set(requested) - set(INFORMATION_STATISTICS) - set(CONTROLLER_DIAGNOSTIC_STATISTICS)
+    )
     if unknown:
         raise ValueError(
             "analysis.estimators contains unsupported HiddenBench imitation statistic(s): "
             + ", ".join(unknown)
         )
+    statistics = tuple(name for name in requested if name in INFORMATION_STATISTICS)
+    diagnostics = tuple(
+        name for name in requested if name in CONTROLLER_DIAGNOSTIC_STATISTICS
+    )
 
     options = dict(analysis.options)
     allowed_options = {"bootstrap_resamples", "null_permutations", "confidence", "seed"}
@@ -61,6 +73,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         "confidence": confidence,
         "seed": _integer_option(options, "seed", config.execution.seed),
         "statistics": statistics,
+        "diagnostics": diagnostics,
         # `analysis.comet_export` opts the report in; the logging master switch
         # can still veto it, same as every other Comet integration.
         "comet_export": analysis.comet_export and config.logging.comet,
@@ -78,7 +91,7 @@ def validate_configured_analysis(config: RunConfig) -> None:
 def run_configured_analysis(
     config: RunConfig, run_dir: str | Path, comet_sink: Any | None = None
 ) -> dict[str, Any] | None:
-    """Run configured across-episode analysis after trajectories are persisted.
+    """Run configured analysis after rich or compact scientific data is persisted.
 
     ``comet_sink`` is the run's already-open master experiment when the config
     asked for a single consolidated one; ``None`` keeps the historical
@@ -89,12 +102,15 @@ def run_configured_analysis(
     if arguments is None:
         return None
     from mas_cc.games.hidden_bench.imitation.analysis import analyze_hidden_bench_imitation
+    from mas_cc.storage import canonical_hash
 
     root = Path(run_dir)
     return analyze_hidden_bench_imitation(
         root,
         root / "hidden_bench_imitation_analysis",
         comet_sink=comet_sink,
+        artifact_profile=config.storage.artifact_profile,
+        resolved_config_hash=canonical_hash(config.to_dict()),
         **arguments,
     )
 

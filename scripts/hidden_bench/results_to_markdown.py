@@ -23,17 +23,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-CORPUS_TASKS = (
-    REPO_ROOT
-    / "scripts"
-    / "local_llms"
-    / "hiddenbench_population_pipeline"
-    / "data"
-    / "hiddenbench"
-    / "canonical"
-    / "tasks.json"
-)
+from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
+
+CORPUS_TASKS = DEFAULT_CORPUS_ROOT / "canonical" / "tasks.json"
 
 
 def load_corpus() -> dict[str, dict[str, Any]]:
