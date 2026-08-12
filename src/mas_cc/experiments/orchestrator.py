@@ -13,13 +13,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import csv
 import gzip
 import json
 import logging
 import os
+import resource
 import shutil
 import threading
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -79,6 +82,59 @@ from .configured_analysis import run_configured_analysis, validate_configured_an
 from .console import ExperimentProgress, format_banner, format_grid_banner, format_money, print_banner
 
 LOGGER = logging.getLogger("mas_cc.experiment")
+_TIMING_EPISODE: contextvars.ContextVar[tuple[str | None, str] | None] = (
+    contextvars.ContextVar("mas_cc_timing_episode", default=None)
+)
+
+
+class _TimingProvider:
+    """Metadata-only provider decorator used by the timing-study profile."""
+
+    def __init__(self, provider: Any) -> None:
+        self._provider = provider
+        self.name = provider.name
+        self.model = provider.model
+        self.capabilities = provider.capabilities
+        self.rows: list[dict[str, Any]] = []
+
+    async def complete(self, request: Any) -> Any:
+        context = _TIMING_EPISODE.get()
+        started_at = _now()
+        started = time.perf_counter()
+        try:
+            response = await self._provider.complete(request)
+        except Exception as exc:
+            self.rows.append(
+                {
+                    "cell_id": None if context is None else context[0],
+                    "episode_id": None if context is None else context[1],
+                    "started_at": started_at,
+                    "finished_at": _now(),
+                    "wall_seconds": round(time.perf_counter() - started, 6),
+                    "provider_latency_seconds": None,
+                    "retries": None,
+                    "status_code": getattr(exc, "status_code", None),
+                    "error_type": type(exc).__name__,
+                }
+            )
+            raise
+        self.rows.append(
+            {
+                "cell_id": None if context is None else context[0],
+                "episode_id": None if context is None else context[1],
+                "started_at": started_at,
+                "finished_at": _now(),
+                "wall_seconds": round(time.perf_counter() - started, 6),
+                "provider_latency_seconds": response.latency_seconds,
+                "retries": response.retries,
+                "status_code": response.status_code,
+                "error_type": None,
+            }
+        )
+        return response
+
+    def close(self) -> None:
+        self._provider.close()
 
 
 def _now() -> str:
@@ -92,6 +148,129 @@ def _json(value: Any) -> str:
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _parse_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _percentile(values: Sequence[float], fraction: float) -> float | None:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        return None
+    index = (len(ordered) - 1) * fraction
+    lower = int(index)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = index - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def _write_timing_study(
+    run_dir: Path,
+    outcomes: Sequence["EpisodeOutcome"],
+    *,
+    profile: str,
+    run_started_at: str,
+    run_finished_at: str,
+    cell_overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    request_rows: Sequence[Mapping[str, Any]] = (),
+) -> None:
+    """Write compact timing evidence for normal runs and detailed rows for studies."""
+
+    grouped: dict[str, list[EpisodeOutcome]] = {}
+    for outcome in outcomes:
+        grouped.setdefault(outcome.cell_id or "run", []).append(outcome)
+
+    lines = [
+        "# Timing study",
+        "",
+        f"- Artifact profile: `{profile}`",
+        f"- Run started: `{run_started_at}`",
+        f"- Run finished: `{run_finished_at}`",
+        f"- Total wall time: `{(_parse_timestamp(run_finished_at) - _parse_timestamp(run_started_at)).total_seconds():.3f}` seconds",
+        "",
+        "| Cell | Episodes | Completed | Failed | Cell wall (s) | Mean queue (s) | Mean episode (s) | Median (s) | P95 (s) | Episodes/min | Overrides |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for cell_id, cell_outcomes in sorted(grouped.items()):
+        durations = [
+            float(item.duration_seconds)
+            for item in cell_outcomes
+            if item.duration_seconds is not None and item.status != "skipped_resumed"
+        ]
+        queue_waits = [
+            float(item.queue_wait_seconds)
+            for item in cell_outcomes
+            if item.queue_wait_seconds is not None and item.status != "skipped_resumed"
+        ]
+        starts = [_parse_timestamp(item.started_at) for item in cell_outcomes if item.started_at]
+        finishes = [_parse_timestamp(item.finished_at) for item in cell_outcomes if item.finished_at]
+        wall = (max(finishes) - min(starts)).total_seconds() if starts and finishes else 0.0
+        completed = sum(item.status in {"completed", "skipped_resumed"} for item in cell_outcomes)
+        failed = sum(item.status == "failed" for item in cell_outcomes)
+        mean = sum(durations) / len(durations) if durations else 0.0
+        mean_queue = sum(queue_waits) / len(queue_waits) if queue_waits else 0.0
+        median = _percentile(durations, 0.5) or 0.0
+        p95 = _percentile(durations, 0.95) or 0.0
+        rate = completed / (wall / 60.0) if wall > 0 else 0.0
+        overrides = json.dumps(dict((cell_overrides or {}).get(cell_id, {})), sort_keys=True)
+        lines.append(
+            f"| `{cell_id}` | {len(cell_outcomes)} | {completed} | {failed} | {wall:.3f} | "
+            f"{mean_queue:.3f} | {mean:.3f} | {median:.3f} | {p95:.3f} | {rate:.3f} | `{overrides}` |"
+        )
+    lines.extend([
+        "",
+        "Episode duration is measured after an episode acquires an execution-parallelism slot and excludes queue wait time. Cell wall time spans the first episode start through the last episode finish.",
+        "",
+    ])
+    request_durations = [float(row["wall_seconds"]) for row in request_rows]
+    provider_latencies = [
+        float(row["provider_latency_seconds"])
+        for row in request_rows
+        if row.get("provider_latency_seconds") is not None
+    ]
+    retries = sum(int(row.get("retries") or 0) for row in request_rows)
+    errors = sum(bool(row.get("error_type")) for row in request_rows)
+    rate_limits = sum(row.get("status_code") == 429 for row in request_rows)
+    rate_wall = (_parse_timestamp(run_finished_at) - _parse_timestamp(run_started_at)).total_seconds()
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    lines.extend([
+        "## Operational summary",
+        "",
+        f"- Requests observed: `{len(request_rows)}`",
+        f"- Request throughput: `{(len(request_rows) / rate_wall if rate_wall > 0 else 0.0):.3f}` requests/second",
+        f"- Mean request wall time: `{(sum(request_durations) / len(request_durations) if request_durations else 0.0):.3f}` seconds",
+        f"- P50/P95 request wall time: `{(_percentile(request_durations, 0.5) or 0.0):.3f}` / `{(_percentile(request_durations, 0.95) or 0.0):.3f}` seconds",
+        f"- P50/P95 provider-reported latency: `{(_percentile(provider_latencies, 0.5) or 0.0):.3f}` / `{(_percentile(provider_latencies, 0.95) or 0.0):.3f}` seconds",
+        f"- Retries: `{retries}`; request errors: `{errors}`; HTTP 429 responses: `{rate_limits}`",
+        f"- Process user/system CPU: `{usage.ru_utime:.3f}` / `{usage.ru_stime:.3f}` seconds",
+        f"- Peak resident memory: `{int(usage.ru_maxrss)}` KiB",
+        "",
+    ])
+    _write(run_dir / "timing_study.md", "\n".join(lines))
+
+    if profile != "timing_study":
+        return
+    fields = [
+        "cell_id", "episode_id", "seed", "status", "interactions", "queued_at",
+        "started_at", "finished_at", "queue_wait_seconds", "duration_seconds",
+        "termination_reason", "error_type", "error",
+    ]
+    with (run_dir / "timing_study.csv").open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        for outcome in outcomes:
+            row = outcome.to_dict()
+            writer.writerow({field: row.get(field) for field in fields})
+    request_fields = [
+        "cell_id", "episode_id", "started_at", "finished_at", "wall_seconds",
+        "provider_latency_seconds", "retries", "status_code", "error_type",
+    ]
+    with (run_dir / "request_timing.csv").open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=request_fields)
+        writer.writeheader()
+        for row in request_rows:
+            writer.writerow({field: row.get(field) for field in request_fields})
 
 
 def _write_atomic(path: Path, text: str) -> None:
@@ -259,7 +438,7 @@ def _configure_durable_budget(
     price_hash: str,
     resume: bool,
 ) -> AtomicBudgetStateStore | None:
-    if config.storage.artifact_profile != "results_only":
+    if not config.storage.retention_policy.compact_scientific:
         return None
     store = AtomicBudgetStateStore(
         run_dir / "budget_state.json",
@@ -585,13 +764,27 @@ class EpisodeOutcome:
     error_type: str | None = None
     error: str | None = None
     cell_id: str | None = None  # None outside a grid
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_seconds: float | None = None
+    queued_at: str | None = None
+    queue_wait_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        value = {
             "episode_id": self.episode_id, "seed": self.seed, "status": self.status,
             "interactions": self.interactions, "termination_reason": self.termination_reason,
             "error_type": self.error_type, "error": self.error, "cell_id": self.cell_id,
         }
+        if self.started_at is not None:
+            value.update(
+                started_at=self.started_at,
+                finished_at=self.finished_at,
+                duration_seconds=self.duration_seconds,
+                queued_at=self.queued_at,
+                queue_wait_seconds=self.queue_wait_seconds,
+            )
+        return value
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "EpisodeOutcome":
@@ -599,6 +792,9 @@ class EpisodeOutcome:
             episode_id=str(value["episode_id"]), seed=int(value["seed"]), status=str(value["status"]),
             interactions=value.get("interactions"), termination_reason=value.get("termination_reason"),
             error_type=value.get("error_type"), error=value.get("error"), cell_id=value.get("cell_id"),
+            started_at=value.get("started_at"), finished_at=value.get("finished_at"),
+            duration_seconds=value.get("duration_seconds"),
+            queued_at=value.get("queued_at"), queue_wait_seconds=value.get("queue_wait_seconds"),
         )
 
 
@@ -773,7 +969,7 @@ def _scientific_identity(
 def _with_scientific_identity(
     task: _EpisodeTask, *, run_id: str, price_hash: str
 ) -> _EpisodeTask:
-    if task.config.storage.artifact_profile != "results_only":
+    if not task.config.storage.retention_policy.compact_scientific:
         return task
     return replace(task, scientific_identity=_scientific_identity(task, run_id=run_id, price_hash=price_hash))
 
@@ -986,7 +1182,7 @@ async def _execute_episode(
     if runtime is not None:
         recorder_dir = (
             scientific_path.parent
-            if retention_policy.profile == "results_only" and scientific_path is not None
+            if retention_policy.compact_scientific and scientific_path is not None
             else episode_dir
         )
         recorder = RunRecorder(
@@ -1010,7 +1206,7 @@ async def _execute_episode(
             dict(episode_config.logging.options.get("prompt_examples", {}) or {}).get(
                 "scope",
                 "cell"
-                if episode_config.storage.artifact_profile == "results_only"
+                if episode_config.storage.retention_policy.compact_scientific
                 else "episode",
             )
         )
@@ -1047,7 +1243,7 @@ async def _execute_episode(
 
     result = await run_game(game, episode_config, guarded_provider)
     progress.round_tick(episode_label, None, count=len(result.interactions))
-    if retention_policy.profile == "results_only":
+    if retention_policy.compact_scientific:
         recorder_dir = scientific_path.parent if scientific_path is not None else episode_dir
         recorder = RunRecorder(
             recorder_dir,
@@ -1160,7 +1356,25 @@ async def _run_episode_task(
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
+    episode_queued_at = _now()
+    episode_queued_clock = time.perf_counter()
     async with semaphore:
+        episode_started_at = _now()
+        episode_started_clock = time.perf_counter()
+        queue_wait_seconds = round(episode_started_clock - episode_queued_clock, 6)
+
+        def _timed(outcome: EpisodeOutcome) -> EpisodeOutcome:
+            if not task.config.storage.retention_policy.compact_scientific:
+                return outcome
+            return replace(
+                outcome,
+                started_at=episode_started_at,
+                finished_at=_now(),
+                duration_seconds=round(time.perf_counter() - episode_started_clock, 6),
+                queued_at=episode_queued_at,
+                queue_wait_seconds=queue_wait_seconds,
+            )
+
         # A budget stop aborts regardless of `fail_fast`. Once the guard is
         # exhausted or stopped its counters only move one way, so every queued
         # episode would dispatch, be refused on its first call, and be recorded
@@ -1173,16 +1387,19 @@ async def _run_episode_task(
                 task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id,
                 error_type="BudgetStop", error=guard.stop_reason or "runtime budget exhausted",
             )
+            outcome = _timed(outcome)
             _persist(outcome)
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
         if fail_fast and abort.is_set():
             outcome = EpisodeOutcome(task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id)
+            outcome = _timed(outcome)
             _persist(outcome)
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
+        timing_token = _TIMING_EPISODE.set((task.cell_id, task.episode_id))
         try:
             interactions, termination_reason = await _execute_episode(
                 game, task.config, guarded_provider, guard, task.episode_dir, label,
@@ -1214,6 +1431,9 @@ async def _run_episode_task(
                 error=str(exc), cell_id=task.cell_id,
             )
             LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
+        finally:
+            _TIMING_EPISODE.reset(timing_token)
+        outcome = _timed(outcome)
         _persist(outcome)
         _finished(outcome)
     # Outside the semaphore: aggregating a completed cell must not hold a slot
@@ -1304,11 +1524,19 @@ def _aggregate_quietly(aggregator: GridAggregator, cell_id: str | None) -> None:
 
 
 def _write_experiment_summary(run_dir: Path, config: RunConfig, result: ExperimentResult) -> None:
-    results_only = config.storage.artifact_profile == "results_only"
-    if not results_only:
+    compact = config.storage.retention_policy.compact_scientific
+    if not compact:
         _write(run_dir / "experiment_summary.json", _json(result.to_dict()))
-    fieldnames = ["episode_id", "seed", "status", "interactions", "termination_reason", "error_type", "error"]
-    output_path = run_dir / ("run_summary.csv" if results_only else "experiment_summary.csv")
+    fieldnames = [
+        "episode_id", "seed", "status", "interactions", "termination_reason",
+        "error_type", "error",
+    ]
+    if compact:
+        fieldnames.extend([
+            "queued_at", "started_at", "finished_at", "queue_wait_seconds",
+            "duration_seconds",
+        ])
+    output_path = run_dir / ("run_summary.csv" if compact else "experiment_summary.csv")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
@@ -1438,6 +1666,7 @@ async def run_experiment(
         tasks, resume=resume, price_hash=price_hash
     )
     guarded_provider = None
+    timing_provider = None
     watcher = None
     if scheduled_tasks:
         provider = create_llm_provider(config.llm_provider, registry=_provider_registry())
@@ -1445,6 +1674,9 @@ async def run_experiment(
             provider, guard, runtime_quote.pricing,
             input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
         )
+        if config.storage.retention_policy.detailed_timing:
+            timing_provider = _TimingProvider(guarded_provider)
+            guarded_provider = timing_provider
         watcher = _spend_watcher(config, guard, effective_budget)
     metrics, to_round_view = game_metrics(game)
     policy = DetailedAuditPolicy.from_mapping(config.logging.options.get("detailed_prompt_audit"))
@@ -1452,13 +1684,13 @@ async def run_experiment(
     prompt_sampler = (
         _CellPromptSampler(int(prompt_options.get("count", 0)))
         if prompt_options.get(
-            "scope", "cell" if config.storage.artifact_profile == "results_only" else "episode"
+            "scope", "cell" if config.storage.retention_policy.compact_scientific else "episode"
         ) == "cell"
         else None
     )
     finalizer = (
         _ResultsOnlyFinalizer(tasks, prompt_sampler)
-        if config.storage.artifact_profile == "results_only"
+        if config.storage.retention_policy.compact_scientific
         else None
     )
 
@@ -1549,11 +1781,16 @@ async def run_experiment(
         comet_summary = monitor.close()
         _write(
             run_dir
-            / ("comet_summary.json" if config.storage.artifact_profile == "results_only" else "comet_run_summary.json"),
+            / ("comet_summary.json" if config.storage.retention_policy.compact_scientific else "comet_run_summary.json"),
             _json(comet_summary),
         )
 
-    if config.storage.artifact_profile == "results_only":
+    if config.storage.retention_policy.compact_scientific:
+        _write_timing_study(
+            run_dir, outcomes, profile=config.storage.artifact_profile,
+            run_started_at=result.started_at, run_finished_at=result.finished_at,
+            request_rows=() if timing_provider is None else timing_provider.rows,
+        )
         _record_results_only_hashes(run_dir)
     _print_comet_destinations(comet_summary, analysis_summary)
     return result
@@ -1689,8 +1926,8 @@ class GridResult:
 
 
 def _write_grid_summary(grid_dir: Path, grid: GridSpec, result: GridResult) -> None:
-    results_only = grid.base.storage.artifact_profile == "results_only"
-    if not results_only:
+    compact = grid.base.storage.retention_policy.compact_scientific
+    if not compact:
         _write(grid_dir / "grid_summary.json", _json(result.to_dict()))
     fieldnames = ["cell_id", "completed", "failed", "skipped_resumed", "skipped_aborted", "overrides"]
     output_path = grid_dir / "grid_summary.csv"
@@ -1835,6 +2072,7 @@ async def run_experiment_grid(
         all_tasks, resume=resume, price_hash=price_hash
     )
     guarded_provider = None
+    timing_provider = None
     watcher = None
     if scheduled_tasks:
         provider = create_llm_provider(base.llm_provider, registry=_provider_registry())
@@ -1842,6 +2080,9 @@ async def run_experiment_grid(
             provider, guard, runtime_quote.pricing,
             input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
         )
+        if base.storage.retention_policy.detailed_timing:
+            timing_provider = _TimingProvider(guarded_provider)
+            guarded_provider = timing_provider
         watcher = _spend_watcher(base, guard, effective_budget)
 
     progress = ExperimentProgress(
@@ -1876,13 +2117,13 @@ async def run_experiment_grid(
     prompt_sampler = (
         _CellPromptSampler(int(prompt_options.get("count", 0)))
         if prompt_options.get(
-            "scope", "cell" if base.storage.artifact_profile == "results_only" else "episode"
+            "scope", "cell" if base.storage.retention_policy.compact_scientific else "episode"
         ) == "cell"
         else None
     )
     finalizer = (
         _ResultsOnlyFinalizer(all_tasks, prompt_sampler)
-        if base.storage.artifact_profile == "results_only"
+        if base.storage.retention_policy.compact_scientific
         else None
     )
     semaphore = asyncio.Semaphore(base.execution.parallelism)
@@ -1943,7 +2184,7 @@ async def run_experiment_grid(
             LOGGER.warning("could not render the grid image (%s)", type(exc).__name__)
         _write(
             grid_dir
-            / ("comet_summary.json" if base.storage.artifact_profile == "results_only" else "comet_run_summary.json"),
+            / ("comet_summary.json" if base.storage.retention_policy.compact_scientific else "comet_run_summary.json"),
             _json(monitor.close()),
         )
 
@@ -1977,16 +2218,22 @@ async def run_experiment_grid(
                     "skipped_aborted": cell_result.skipped_aborted,
                     **(
                         {"failures": failures}
-                        if base.storage.artifact_profile == "results_only"
+                        if base.storage.retention_policy.compact_scientific
                         else {"outcomes": [outcome.to_dict() for outcome in cell_result.outcomes]}
                     ),
                 }
             ),
         )
-    if base.storage.artifact_profile == "results_only":
+    if base.storage.retention_policy.compact_scientific:
         merge_cell_scientific_tables(grid_dir)
     run_configured_analysis(base, grid_dir)
-    if base.storage.artifact_profile == "results_only":
+    if base.storage.retention_policy.compact_scientific:
+        _write_timing_study(
+            grid_dir, outcomes, profile=base.storage.artifact_profile,
+            run_started_at=result.started_at, run_finished_at=result.finished_at,
+            cell_overrides={cell.cell_id: cell.overrides for cell in cells},
+            request_rows=() if timing_provider is None else timing_provider.rows,
+        )
         _record_results_only_hashes(grid_dir)
     return result
 

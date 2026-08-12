@@ -8,7 +8,7 @@
 #SBATCH --job-name=mascc-hb-reasoning-grid
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=5
+#SBATCH --cpus-per-task=10
 #SBATCH --mem=8G
 #SBATCH --time=1-00:00:00
 #SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC

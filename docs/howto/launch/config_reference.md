@@ -419,12 +419,16 @@ storage:
   format: jsonl                   # String. The full recorder still uses its established JSONL/CSV
                                   # files. results_only always publishes its versioned scientific
                                   # table as Parquet; this legacy field does not override that schema.
-  artifact_profile: full          # full | results_only. full preserves the verbose per-episode
+  artifact_profile: full          # full | results_only | timing_study. full preserves the verbose per-episode
                                   # recorder tree. results_only retains atomic compact Parquet,
                                   # aggregate/analysis results, bounded prompt samples, budget
                                   # state, and the manifests needed to understand/resume the run.
                                   # This changes local retention only; master Comet reporting is
                                   # identical.
+                                  # timing_study uses the same compact scientific retention as
+                                  # results_only and additionally writes per-episode and per-request
+                                  # timing CSVs plus timing_study.md. results_only writes only the
+                                  # compact Markdown timing summary.
   checkpoint_mode: episode        # off | episode. episode makes a completed episode shard durable
                                   # and skips it after restart. An episode that was in flight starts
                                   # again from round zero with its original seed. This is not a

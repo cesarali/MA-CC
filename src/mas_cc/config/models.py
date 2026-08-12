@@ -25,7 +25,7 @@ from mas_cc.metrics.interactions import PARTIAL_BIN_POLICIES, BinnedTrajectoryPo
 
 __all_reexported__ = ("LLMProviderConfig", "PromptConfig", "ProviderConfig")
 
-ARTIFACT_PROFILES = ("full", "results_only")
+ARTIFACT_PROFILES = ("full", "results_only", "timing_study")
 CHECKPOINT_MODES = ("off", "episode")
 PROMPT_EXAMPLE_SCOPES = ("episode", "cell")
 
@@ -185,6 +185,8 @@ class RetentionPolicy:
     verbose_episode_history: bool
     rich_analysis_intermediates: bool
     per_episode_prompt_files: bool
+    compact_scientific: bool
+    detailed_timing: bool
 
     @classmethod
     def for_profile(cls, profile: str) -> "RetentionPolicy":
@@ -196,6 +198,8 @@ class RetentionPolicy:
             verbose_episode_history=full,
             rich_analysis_intermediates=full,
             per_episode_prompt_files=full,
+            compact_scientific=not full,
+            detailed_timing=profile == "timing_study",
         )
 
 

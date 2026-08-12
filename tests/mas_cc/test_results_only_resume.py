@@ -81,6 +81,25 @@ def test_storage_contract_aliases_and_resolved_prompt_scope():
         parse_run_config(raw)
 
 
+def test_timing_study_profile_writes_episode_request_and_markdown_reports(tmp_path):
+    config = _results_only_config(repetitions=3)
+    config = replace(
+        config,
+        storage=replace(config.storage, artifact_profile="timing_study"),
+    )
+    result = run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
+
+    timing_csv = result.output_dir / "timing_study.csv"
+    request_csv = result.output_dir / "request_timing.csv"
+    report = (result.output_dir / "timing_study.md").read_text(encoding="utf-8")
+    assert len(timing_csv.read_text(encoding="utf-8").splitlines()) == 4
+    assert len(request_csv.read_text(encoding="utf-8").splitlines()) > 1
+    assert "Mean episode" in report
+    assert "P50/P95 request wall time" in report
+    assert "Peak resident memory" in report
+    assert not list(result.output_dir.rglob("events.jsonl"))
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("artifact_profile", "tiny"), ("checkpoint_mode", "round")],
@@ -397,7 +416,10 @@ def test_cell_prompt_sampling_writes_two_examples_in_one_file(tmp_path):
     assert rendered.count("## Example ") == 2
     assert result.outcomes[0].episode_id in rendered
     assert not list(result.output_dir.rglob("prompt_candidates.json.gz"))
-    assert list(result.output_dir.rglob("*.md")) == [prompt_path]
+    assert set(result.output_dir.rglob("*.md")) == {
+        prompt_path,
+        result.output_dir / "timing_study.md",
+    }
 
 
 def test_full_and_results_only_send_the_same_master_comet_calls(tmp_path, monkeypatch):

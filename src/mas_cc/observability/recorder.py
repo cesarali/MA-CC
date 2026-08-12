@@ -238,7 +238,7 @@ class RunRecorder:
         self.retention_policy = retention_policy or RetentionPolicy.for_profile("full")
         self.scientific_identity = scientific_identity
         self.scientific_path = None if scientific_path is None else Path(scientific_path)
-        if self.retention_policy.profile == "results_only" and (
+        if self.retention_policy.compact_scientific and (
             self.scientific_identity is None or self.scientific_path is None
         ):
             raise ValueError(
@@ -353,7 +353,7 @@ class RunRecorder:
         population_metrics, option_metrics = self._record_round_metrics(
             round_index, interaction.transition.next_state
         )
-        if self.retention_policy.profile == "results_only":
+        if self.retention_policy.compact_scientific:
             assert self.scientific_identity is not None
             row = empty_compact_row(self.scientific_identity, round_index)
             row["population_metrics_json"] = json.dumps(
@@ -378,7 +378,7 @@ class RunRecorder:
         """
 
         payload = record.to_dict() if hasattr(record, "to_dict") else dict(record)
-        if self.retention_policy.profile == "results_only":
+        if self.retention_policy.compact_scientific:
             assert self.scientific_identity is not None
             event = payload.get("event")
             if not isinstance(event, Mapping):
@@ -559,7 +559,7 @@ class RunRecorder:
         termination_reason: str | None = None,
         error: Exception | None = None,
     ) -> dict[str, Any]:
-        if self.retention_policy.profile == "results_only":
+        if self.retention_policy.compact_scientific:
             comet = self.comet.close()
             if status != "completed":
                 return {
