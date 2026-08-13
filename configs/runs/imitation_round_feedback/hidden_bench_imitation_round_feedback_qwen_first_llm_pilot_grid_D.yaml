@@ -5,6 +5,27 @@
 # 8 cells / 240 episodes. For the fixed evacuation_north_hill task, West City
 # is the explicitly recorded shared-information decoy; random_incorrect is not
 # used, so every repetition reverses toward the same interpretable target.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+# Preflight before model inference:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml \
+#     --output-dir inspection/first_llm_pilot_grid_D_preflight
+#
+# Launch Grid D with live console output:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml \
+#     --output-dir results
+#
+# Save the same console output instead:
+#   mkdir -p logs
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml \
+#     --output-dir results 2>&1 | tee logs/first_llm_pilot_grid_D.log
+# Startup output includes the local
+# Results path and `Comet: master -> project 'mas-cc', cells on this master`.
+# Each completed cell prints `cell cell-XXXX configured analysis ready: ...`.
 
 llm_provider:
   type: university
@@ -131,7 +152,9 @@ analysis:
     null_permutations: 1000
     confidence: 0.95
     seed: 20260813
+    # Analyze and write the report immediately after the cell's last repetition.
     per_cell_reports: true
+  # Publish that cell's information metrics and report assets to Comet.
   comet_export: true
 
 metrics:
@@ -157,6 +180,7 @@ observability:
     progress_metrics: [episodes_done]
     grid_image_every_n_episodes: 10
     sweep_experiment: true
+    # Finished-cell aggregates and configured analysis share the master run.
     cell_reporting: master
     metric_plots: true
 

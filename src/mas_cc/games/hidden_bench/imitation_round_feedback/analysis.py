@@ -1038,6 +1038,12 @@ def analyze_hidden_bench_imitation_round_feedback(
         "artifact_profile": artifact_profile,
         "resolved_config_hash": resolved_config_hash,
     }
+    summary_path = destination / "analysis_summary.json"
+    # Write the scientific summary before export so it is one of the durable
+    # per-cell Comet assets. It is rewritten below with the export status.
+    summary_path.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     summary["comet"] = _export_round_analysis_to_comet(
         estimates,
         (
@@ -1045,6 +1051,7 @@ def analyze_hidden_bench_imitation_round_feedback(
             destination / "round_information_estimates.md",
             destination / "round_support_diagnostics.csv",
             destination / "round_behavioral_summary.csv",
+            summary_path,
         ),
         enabled=comet_export,
         project_name=comet_project,
@@ -1052,7 +1059,7 @@ def analyze_hidden_bench_imitation_round_feedback(
         sink=comet_sink,
         name_suffix=comet_name_suffix,
     )
-    (destination / "analysis_summary.json").write_text(
+    summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     return summary

@@ -242,7 +242,10 @@ def run_configured_cell_analysis(
                 comet_name_suffix=slug,
                 **round_arguments,
             )
-            source_names = ("round_information_estimates.md",)
+            source_names = (
+                "round_information_estimates.md",
+                "analysis_summary.json",
+            )
         else:
             from mas_cc.games.hidden_bench.imitation.analysis import (
                 analyze_hidden_bench_imitation,

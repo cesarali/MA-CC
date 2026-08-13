@@ -170,6 +170,9 @@ def test_round_feedback_cell_analysis_reuses_master_sink_with_comet_enabled(
         (destination / "round_information_estimates.md").write_text(
             "# Round information\n", encoding="utf-8"
         )
+        (destination / "analysis_summary.json").write_text(
+            '{"n_cells": 1}\n', encoding="utf-8"
+        )
         return {"comet": {"status": "active", "published_to": "master"}}
 
     monkeypatch.setattr(
@@ -178,7 +181,7 @@ def test_round_feedback_cell_analysis_reuses_master_sink_with_comet_enabled(
         fake_analyze,
     )
     grid = load_run_config_or_grid(
-        "configs/runs/hidden_bench/"
+        "configs/runs/imitation_round_feedback/"
         "hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml",
         environment={},
     )
@@ -193,6 +196,7 @@ def test_round_feedback_cell_analysis_reuses_master_sink_with_comet_enabled(
     assert captured["comet_sink"] is sink
     assert captured["comet_name_suffix"].startswith("cell-0000__task-")
     assert captured["comet_run_name"].endswith("/analysis/cell-0000")
+    assert any(path.endswith(".json") for path in summary["cell_reports"])
 
 
 def test_per_cell_reports_option_is_boolean():

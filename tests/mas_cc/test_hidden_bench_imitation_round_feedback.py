@@ -6,6 +6,7 @@ import asyncio
 import random
 from collections import Counter
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -40,17 +41,19 @@ REASONING = (
     "hidden_bench_imitation_round_feedback_reasoning_smoke.yaml"
 )
 QWEN_GRID_A = (
-    "configs/runs/hidden_bench/"
+    "configs/runs/imitation_round_feedback/"
     "hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml"
 )
 QWEN_PILOT_GRIDS = (
     QWEN_GRID_A,
     *(
-        "configs/runs/hidden_bench/"
+        "configs/runs/imitation_round_feedback/"
         f"hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_{name}.yaml"
         for name in ("B", "C", "D")
     ),
 )
+ROUND_FEEDBACK_CONFIG_DIR = Path("configs/runs/imitation_round_feedback")
+ROUND_FEEDBACK_RUN_CONFIGS = tuple(sorted(ROUND_FEEDBACK_CONFIG_DIR.glob("*.yaml")))
 
 
 class _CountingControl(Control):
@@ -203,6 +206,13 @@ def test_qwen_first_pilot_suite_resolves_exactly_grids_a_through_d():
         assert grid.base.game.options["task_id"] == "evacuation_north_hill"
         assert grid.base.execution.seed == 20260813
         assert grid.base.execution.repetitions == 30
+        assert grid.base.logging.comet is True
+        assert grid.base.analysis.comet_export is True
+        assert grid.base.analysis.options["per_cell_reports"] is True
+        assert grid.base.observability.comet.writer == "master_only"
+        assert grid.base.observability.comet.sweep_experiment is True
+        assert grid.base.observability.comet.cell_reporting == "master"
+        assert grid.base.observability.comet.metric_plots is True
         assert "round_population_actuation_cmi" not in grid.base.analysis.estimators
         assert {
             "round_target_actuation_cmi",
@@ -217,6 +227,30 @@ def test_qwen_first_pilot_suite_resolves_exactly_grids_a_through_d():
             )
             for cell in grid.cells
         } == requested
+
+
+@pytest.mark.parametrize(
+    "path", ROUND_FEEDBACK_RUN_CONFIGS, ids=lambda path: path.stem
+)
+def test_every_round_feedback_run_has_live_console_and_completed_cell_reporting(path):
+    grid = load_run_config_or_grid(path, environment={})
+
+    assert isinstance(grid, GridSpec)
+    assert grid.base.logging.console is True
+    assert grid.base.logging.comet is True
+    assert grid.base.analysis.enabled is True
+    assert grid.base.analysis.comet_export is True
+    assert grid.base.analysis.options["per_cell_reports"] is True
+    assert grid.base.observability.comet.writer == "master_only"
+    assert grid.base.observability.comet.sweep_experiment is True
+    assert grid.base.observability.comet.cell_reporting == "master"
+    assert grid.base.observability.comet.metric_plots is True
+
+    instructions = path.read_text(encoding="utf-8")
+    assert f"--config {path.as_posix()}" in instructions
+    assert "conda run -n MA-CC --no-capture-output" in instructions
+    assert "2>&1 | tee logs/" in instructions
+    assert "configured analysis ready" in instructions
 
 
 def test_qwen_grid_uniform_initialization_is_planned_as_provider_free():

@@ -12,15 +12,26 @@
 # same task and seed, and reasoning dynamics. The four runs therefore contain
 # 22 cells and 660 episodes in total.
 #
-# Preflight before spending provider budget:
+# RUN FROM THE REPOSITORY ROOT
+#
+# Preflight before model inference:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
-#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml \
+#     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml \
 #     --output-dir inspection/first_llm_pilot_grid_A_preflight
 #
-# Launch Grid A:
+# Launch Grid A with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
-#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml \
+#     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml \
 #     --output-dir results
+#
+# Save the same console output instead:
+#   mkdir -p logs
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml \
+#     --output-dir results 2>&1 | tee logs/first_llm_pilot_grid_A.log
+# Startup output includes the local
+# Results path and `Comet: master -> project 'mas-cc', cells on this master`.
+# Each completed cell prints `cell cell-XXXX configured analysis ready: ...`.
 
 llm_provider:
   type: university
@@ -89,7 +100,7 @@ control:
 execution:
   seed: 20260813
   repetitions: 30
-  parallelism: 4
+  parallelism: 20
   fail_fast: true
 
 pricing:
@@ -152,7 +163,9 @@ analysis:
     null_permutations: 1000
     confidence: 0.95
     seed: 20260813
+    # Analyze and write the report immediately after the cell's last repetition.
     per_cell_reports: true
+  # Publish that cell's information metrics and report assets to Comet.
   comet_export: true
 
 metrics:
@@ -178,6 +191,7 @@ observability:
     progress_metrics: [episodes_done]
     grid_image_every_n_episodes: 1
     sweep_experiment: true
+    # Finished-cell aggregates and configured analysis share the master run.
     cell_reporting: master
     metric_plots: true
 

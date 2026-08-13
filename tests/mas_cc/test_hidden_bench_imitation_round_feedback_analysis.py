@@ -278,9 +278,13 @@ def test_completed_cell_analysis_publishes_metrics_and_assets_to_borrowed_master
     assert "run/round_population_actuation_cmi/excess_over_null" in logged
     assert summary["comet"]["published_to"] == "master"
     assert summary["comet"]["metrics"] == len(logged)
-    assert summary["comet"]["assets"] == 4
+    assert summary["comet"]["assets"] == 5
     assert any(
         call == ("log_asset", "round_information_estimates__cell-0000.csv")
+        for call in sink.calls
+    )
+    assert any(
+        call == ("log_asset", "analysis_summary__cell-0000.json")
         for call in sink.calls
     )
     assert sink.closed is False
