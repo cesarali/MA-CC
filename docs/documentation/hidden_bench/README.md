@@ -83,7 +83,7 @@ Names come from the pipeline, not from the brief — see
 | --- | --- | --- |
 | `bijective` | N == C only | The paper's baseline: one hidden item per agent. |
 | `exact_replication` | any N ≥ C | Evidence types dealt round-robin then shuffled. At N > C a type is held by several agents, so a fact can surface from more than one source. |
-| `paraphrased_replication` | prebuilt file only | Distinct wordings of one fact. **Not built yet.** |
+| `paraphrased_replication` | prebuilt or opt-in preparation from existing annotations | Distinct validated wordings of one fact; no runtime text generation. |
 | `factorized_evidence` | prebuilt file only | A fact split into components, recoverable only once all are pooled. **Not built yet.** |
 | `padded` | any N ≥ C, mas_cc-local | Extra agents get shared information only. Isolates "more agents" from "more distributed information". |
 | `decoy` | any N ≥ C, mas_cc-local | Extra agents get a shared fact restated as private — pooling noise with no new proposition. |

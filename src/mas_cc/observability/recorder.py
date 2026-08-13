@@ -255,6 +255,19 @@ class RunRecorder:
         self._audit_path = self.output_dir / "audit_traces.jsonl"
         self._blocks_path = self.output_dir / "prompt_block_traces.jsonl"
         self._trajectory_path = self.output_dir / "trajectory.jsonl"
+        if self.retention_policy.compact_scientific:
+            assert self.scientific_identity is not None
+            auxiliary_dir = (
+                self.output_dir.parent.parent
+                / "round_records"
+                / self.scientific_identity.episode_id
+            )
+            auxiliary_dir.mkdir(parents=True, exist_ok=True)
+            self._round_trajectory_path = auxiliary_dir / "round_trajectory.jsonl"
+            self._micro_slot_trajectory_path = auxiliary_dir / "micro_slot_trajectory.jsonl"
+        else:
+            self._round_trajectory_path = self.output_dir / "round_trajectory.jsonl"
+            self._micro_slot_trajectory_path = self.output_dir / "micro_slot_trajectory.jsonl"
         self._detailed_created = False
         self._metric_rows: list[dict[str, Any]] = []
         self._checkpoint_store = AtomicCheckpointStore(self.output_dir / ".checkpoints")
@@ -383,6 +396,37 @@ class RunRecorder:
             event = payload.get("event")
             if not isinstance(event, Mapping):
                 return
+            if "within_round_index" in event:
+                retained_fields = (
+                    "round_index",
+                    "within_round_index",
+                    "microscopic_event_index",
+                    "round_controller_action",
+                    "round_controller_target",
+                    "round_controller_advocate_probability",
+                    "controlled_slot",
+                    "intervention_budget",
+                    "controlled_positions_hash_or_id",
+                    "focal_opinion_before",
+                    "focal_opinion_after",
+                    "occupation_counts_before",
+                    "occupation_counts_after",
+                    "possible_answers",
+                    "delta_m_ctrl",
+                    "delta_m_truth",
+                    "delta_m_order",
+                    "truth_current_increment",
+                )
+                _jsonl(
+                    self._micro_slot_trajectory_path,
+                    {
+                        "schema_version": self.schema_version,
+                        "run_id": self.run_id,
+                        "cell_id": self.scientific_identity.cell_id,
+                        "episode_id": self.scientific_identity.episode_id,
+                        **{field: event.get(field) for field in retained_fields},
+                    },
+                )
             compact = compact_imitation_event(event, self.scientific_identity)
             index = int(compact["interaction_index"])
             existing = self._compact_rows.get(index, {})
@@ -392,6 +436,24 @@ class RunRecorder:
             return
         _jsonl(
             self._trajectory_path,
+            {"schema_version": self.schema_version, "run_id": self.run_id, **payload},
+        )
+
+    def record_round_trajectory(self, *, record: Any) -> None:
+        """Persist one coarse-grained game record independently of micro rows.
+
+        Round records are compact, provider-free scientific data and are kept
+        under every artifact profile so post-hoc round analysis never has to
+        reconstruct its main channel by summing microscopic events.
+        """
+
+        payload = record.to_dict() if hasattr(record, "to_dict") else dict(record)
+        if self.retention_policy.compact_scientific:
+            assert self.scientific_identity is not None
+            payload["cell_id"] = self.scientific_identity.cell_id
+            payload["episode_id"] = self.scientific_identity.episode_id
+        _jsonl(
+            self._round_trajectory_path,
             {"schema_version": self.schema_version, "run_id": self.run_id, **payload},
         )
 

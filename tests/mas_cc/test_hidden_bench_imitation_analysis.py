@@ -571,7 +571,7 @@ def test_standalone_behavior_configs_export_their_selected_monitoring_metrics():
     assert reasoning.analysis.options["null_permutations"] == 1000
     assert (
         create_game(reasoning.game).call_plan(reasoning.game).provider_requests.maximum
-        == 3 * reasoning.game.horizon
+        == 3 * reasoning.game.horizon * reasoning.game.population_size
     )
     assert create_game(classical.game).call_plan(classical.game).provider_requests.maximum == 0
     assert reasoning.analysis.comet_export is True
@@ -739,6 +739,37 @@ def test_the_export_sends_the_numbers_not_only_the_report(tmp_path, monkeypatch)
     assert summary["metrics"] == len(logged)
     assert summary["images"] == 1
     assert summary["url"] == "https://comet.invalid/analysis"
+
+
+def test_cell_export_suffixes_assets_and_images_to_prevent_master_collisions(
+    tmp_path, monkeypatch
+):
+    calls = []
+    _patch_sink(monkeypatch, calls)
+    report = tmp_path / "information_estimates.md"
+    report.write_text("# report\n", encoding="utf-8")
+    figure = tmp_path / "information_estimates_cell-0007.png"
+    figure.write_bytes(b"\x89PNG")
+
+    _export_information_estimates_to_comet(
+        _information_rows_fixture(),
+        (report,),
+        (figure,),
+        enabled=True,
+        project_name="mas-cc",
+        run_name="run/analysis/cell-0007",
+        name_suffix="cell-0007__N-32__q-4__qc-8",
+    )
+
+    assert (
+        "log_asset",
+        "information_estimates__cell-0007__N-32__q-4__qc-8.md",
+    ) in calls
+    assert any(
+        call[0] == "log_image"
+        and call[2].endswith("__cell-0007__N-32__q-4__qc-8")
+        for call in calls
+    )
 
 
 def test_a_missing_asset_or_image_is_skipped_rather_than_failing_the_export(

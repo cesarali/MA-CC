@@ -55,6 +55,9 @@ class HiddenBenchImitationGame(Game):
             corpus_root=rules.corpus_root,
             scheme=rules.assignment_scheme,
             n_agents=rules.n_agents,
+            requested_task=rules.task_id,
+            auto_prepare_paraphrases=rules.auto_prepare_paraphrases,
+            paraphrase_annotations=rules.paraphrase_annotations,
         )
         task = task_set.by_name(rules.task_id) if rules.task_id else task_set.tasks[0]
         assignment = assign(
@@ -913,7 +916,12 @@ class HiddenBenchImitationGame(Game):
             )
             interaction_count = InteractionCount(1, 1, 1, fixed=1)
         else:
-            initialization_calls = 0 if rules.initial_votes is not None else rules.n_agents
+            initialization_calls = (
+                rules.n_agents
+                if rules.initial_votes is None
+                and rules.initialization_mode == "local_vote"
+                else 0
+            )
             nested_controller = config.options.get("controller", {})
             controlled = isinstance(nested_controller, Mapping) and bool(
                 nested_controller.get("enabled", False)

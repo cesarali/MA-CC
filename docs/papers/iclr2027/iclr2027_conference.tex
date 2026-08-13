@@ -1,0 +1,52 @@
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2027_conference,times}
+
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+
+\usepackage{amsmath,amssymb,bm}
+\usepackage{mathtools}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\usepackage{url}
+
+\title{The Thermodynamics of Control in Multi-Agent Language Models}
+
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+\author{Anonymous Authors}
+
+%\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\begin{document}
+
+\maketitle
+
+\section{Methodology}
+\label{sec:methodology}
+
+\begingroup
+% Begin with the game definition and information-analysis methodology.
+\def\ICLRMethodologySection{}
+\input{hiddenbench_round_feedback_game_report.tex}
+\endgroup
+
+\bibliography{iclr2027_conference}
+\bibliographystyle{iclr2027_conference}
+
+\appendix
+\section{Theory}
+\label{app:theory}
+\setcounter{subsection}{0}
+
+\begingroup
+% Render the standalone theory note as subsections of this appendix.
+\def\ICLRTheorySection{}
+\input{fixed_qvoter_round_feedback_theory.tex}
+\endgroup
+
+\end{document}

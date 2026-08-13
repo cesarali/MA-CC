@@ -142,7 +142,10 @@ def prompt_definition_hash(config: Any) -> str:
 
     registry = register_game_prompt_factories(create_default_prompt_registry())
     families = [config.prompt.prompt_family]
-    if config.game.type == "hidden_bench_imitation":
+    if config.game.type in {
+        "hidden_bench_imitation",
+        "hidden_bench_imitation_round_feedback",
+    }:
         from mas_cc.games.hidden_bench.imitation.runtime import PROMPT_FAMILIES
 
         families = list(PROMPT_FAMILIES)

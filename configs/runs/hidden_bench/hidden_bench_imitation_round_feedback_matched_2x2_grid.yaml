@@ -1,0 +1,118 @@
+llm_provider:
+  type: mock
+  model: deterministic-grid
+  temperature: 0.0
+  max_output_tokens: 64
+  options:
+    response: '{"vote":"North Hill","rationale":"matched-grid"}'
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 4
+  horizon: 5
+  topology: complete
+  options:
+    task_set: vanilla
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: bijective
+    dynamics_mode: reasoning
+    rounds: 5
+    social_group_size: 2
+    messages_per_agent: 1
+    memory_size: 0
+    prompt_version: 1
+    stop_on_consensus: false
+    initialization:
+      mode: explicit
+      initial_votes: [West City, East Town, North Hill, East Town]
+    classical:
+      kernel: controlled_imitation_round_reference
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 2
+    template_version: 3
+execution:
+  seed: 20260813
+  repetitions: 20
+  parallelism: 4
+  fail_fast: true
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 100.0
+  max_cost_per_run: 100.0
+  max_provider_requests: 10000
+  max_input_tokens: 10000000
+  max_output_tokens: 1000000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+analysis:
+  enabled: true
+  estimators:
+    - round_sensing_mi
+    - round_population_actuation_cmi
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_population_information_fraction
+    - round_target_information_fraction
+    - round_dual_action_state_fraction
+    - round_dual_action_event_fraction
+    - round_single_action_slice_fraction
+    - round_conditioning_state_count
+    - round_singleton_fraction
+    - round_target_signed_actuation
+    - round_sensor_mae
+    - round_sensor_mse
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260813
+metrics:
+  enabled: true
+  comet_export: []
+aggregation:
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+experiment:
+  name: hidden-bench-round-feedback-matched-2x2
+  description: Matched reasoning on/off by round feedback on/off comparison.
+  tags: [hidden-bench, imitation, round-feedback, matched-2x2]
+grid:
+  game.options.dynamics_mode: [reasoning, classical]
+  control.mechanism: [none, round_soft_target_budgeted]

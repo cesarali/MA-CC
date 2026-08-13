@@ -67,6 +67,10 @@ def create_default_control_registry() -> ControlRegistry:
         "soft_target",
         "mas_cc.games.hidden_bench.imitation.controller:create_soft_target_control",
     )
+    registry.register(
+        "round_soft_target_budgeted",
+        "mas_cc.games.hidden_bench.imitation_round_feedback.controller:create_round_soft_target_budgeted_control",
+    )
     return registry
 
 

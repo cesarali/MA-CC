@@ -122,6 +122,7 @@ def test_repo_smoke_config_resolves_deterministically_and_without_secret_values(
     ("mutate", "field"),
     [
         (lambda raw: raw["game"].update(population_size=1), "game.population_size"),
+        (lambda raw: raw["game"].update(horizon_unit="interactions"), "game.horizon_unit"),
         (lambda raw: raw["execution"].update(parallelism=0), "execution.parallelism"),
         (lambda raw: raw["llm_provider"].update(max_retires=2), "llm_provider.max_retires"),
         (lambda raw: raw.update(schema_version=99), "schema_version"),

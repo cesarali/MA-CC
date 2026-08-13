@@ -52,6 +52,8 @@ class ImitationRules:
     invalid_response_retries: int
     expected_validation_failure_rate: float
     corpus_root: str | None
+    auto_prepare_paraphrases: bool
+    paraphrase_annotations: str | None
 
     @classmethod
     def from_config(cls, config: GameConfig) -> "ImitationRules":
@@ -128,6 +130,21 @@ class ImitationRules:
             if any(value < 0 for value in distribution.values()) or sum(distribution.values()) <= 0:
                 raise ValueError("initial_distribution weights must be non-negative and nonzero")
 
+        preparation = _mapping(
+            options.get("population_preparation"),
+            "game.options.population_preparation",
+        )
+        auto_prepare = preparation.get("auto_build_missing", False)
+        if not isinstance(auto_prepare, bool):
+            raise ValueError(
+                "game.options.population_preparation.auto_build_missing must be boolean"
+            )
+        annotation_path = preparation.get("paraphrase_annotations")
+        if annotation_path is not None and not isinstance(annotation_path, (str, bytes)):
+            raise ValueError(
+                "game.options.population_preparation.paraphrase_annotations must be a path"
+            )
+
         classical = _mapping(options.get("classical"), "game.options.classical")
         kernel = str(classical.get("kernel", "irisarri_multi_opinion"))
         if kernel != "irisarri_multi_opinion":
@@ -154,7 +171,9 @@ class ImitationRules:
 
         return cls(
             n_agents=n_agents,
-            horizon=config.horizon,
+            # HiddenBench imitation horizons are population sweeps: each sweep
+            # contains one elementary focal-update attempt per population member.
+            horizon=config.horizon * n_agents,
             social_group_size=int(social_group_size),
             dynamics_mode=mode,
             task_set=str(options.get("task_set", "vanilla")),
@@ -182,6 +201,10 @@ class ImitationRules:
             invalid_response_retries=int(retries),
             expected_validation_failure_rate=expected_failure,
             corpus_root=(None if options.get("corpus_root") is None else str(options["corpus_root"])),
+            auto_prepare_paraphrases=auto_prepare,
+            paraphrase_annotations=(
+                None if annotation_path is None else str(annotation_path)
+            ),
         )
 
     @property

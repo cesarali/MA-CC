@@ -213,10 +213,20 @@ class OpenAICompatibleProvider:
                         raw_response=body,
                     )
                 except (KeyError, IndexError, TypeError, ValueError) as exc:
+                    # Shared OpenAI-compatible proxies occasionally return an
+                    # HTTP-200 body that is not a complete Chat Completions
+                    # envelope. Never accept that body, but treat it like the
+                    # transient upstream fault it is and spend the configured
+                    # bounded retries before failing the logical request.
+                    if retry < self._max_retries:
+                        await asyncio.sleep(self._retry_delay(response, retry))
+                        continue
                     raise ProviderError(
                         f"The {self.name} response did not match the chat-completions schema.",
                         provider=self.name,
                         code="invalid_response",
+                        retryable=True,
+                        status_code=getattr(response, "status_code", None),
                     ) from exc
                 except Exception as exc:
                     status = getattr(response, "status_code", None)

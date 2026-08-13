@@ -51,6 +51,29 @@ class InteractionControlSignal:
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
 
+@dataclass(frozen=True, slots=True)
+class RoundControlSignal:
+    """One measured controller decision held fixed for a population round.
+
+    Unlike :class:`InteractionControlSignal`, this signal is sampled at a
+    round boundary and is not a request to actuate every microscopic update.
+    The consuming game owns the within-round schedule and decides which
+    update positions receive ``message`` as an influence slot.
+    """
+
+    action: str
+    target: str | None = None
+    message: str | None = None
+    observation: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.action, str) or not self.action.strip():
+            raise ValueError("RoundControlSignal.action must be non-empty")
+        object.__setattr__(self, "observation", MappingProxyType(dict(self.observation)))
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+
+
 class Control(ABC):
     """One provider-independent intervention/control policy."""
 
@@ -76,6 +99,23 @@ class Control(ABC):
         The default is deliberately inert, preserving every existing control
         and runtime.  ``rng`` is supplied by the game runtime so sensing is
         reproducible from the episode seed without controls owning global RNG.
+        """
+
+        return None
+
+    def round_signal(
+        self,
+        *,
+        round_index: int,
+        state: "GameState",
+        rng: Any,
+    ) -> RoundControlSignal | None:
+        """Optionally sense and choose once at a population-round boundary.
+
+        The inert default is intentionally separate from
+        :meth:`interaction_signal`: existing event-level controls keep their
+        exact behavior, while round-aware games can opt into this slower
+        control clock explicitly.
         """
 
         return None

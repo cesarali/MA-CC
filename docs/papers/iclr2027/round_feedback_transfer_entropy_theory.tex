@@ -1,0 +1,349 @@
+% This file can be compiled as a standalone note or included as the Theory
+% section of the ICLR paper. The parent defines \ICLRTheorySection.
+\ifdefined\ICLRTheorySection
+  \newcommand{\TheoryHeading}[1]{\subsection{#1}}
+  \newcommand{\FinishTheoryDocument}{}
+\else
+  \documentclass[10pt]{article}
+
+  \usepackage[a4paper,margin=0.78in]{geometry}
+  \usepackage{amsmath,amssymb,mathtools,bm}
+  \usepackage{microtype}
+  \usepackage{booktabs}
+  \usepackage{enumitem}
+  \usepackage{xcolor}
+  \usepackage[hidelinks]{hyperref}
+  \usepackage{tcolorbox}
+
+  \title{\vspace{-1.5em}\textbf{Round-Level Feedback Control of Imitation Dynamics}\\
+  \large Exact finite-budget transfer entropy without imposing microscopic reversibility}
+  \author{}
+  \date{13 August 2026}
+
+  \begin{document}
+  \maketitle
+  \vspace{-1.4em}
+  \newcommand{\TheoryHeading}[1]{\section{#1}}
+  \newcommand{\FinishTheoryDocument}{%
+    \begin{thebibliography}{9}\small
+    \bibitem{irisarri2026}
+    L. Irisarri, L. Trigal, R. Toral, and G. Manzano,
+    \emph{Stochastic Thermodynamics of Social Imitation beyond Energetics}, arXiv:2511.14006v2, 2026.
+
+    \bibitem{horowitz2014}
+    J. M. Horowitz and H. Sandberg,
+    \emph{Second-law-like inequalities with information and their interpretations}, New J. Phys. / arXiv:1409.5351, 2014.
+
+    \bibitem{hiddenbench2026}
+    Y. Li, A. Naito, and H. Shirado,
+    \emph{Systematic Failures in Collective Reasoning under Distributed Information in Multi-Agent LLMs}, ICML 2026.
+    \end{thebibliography}
+    \end{document}%
+  }
+\fi
+
+\providecommand{\Prob}{\mathbb{P}}
+\providecommand{\E}{\mathbb{E}}
+\providecommand{\Var}{\operatorname{Var}}
+\providecommand{\KL}{D_{\mathrm{KL}}}
+\providecommand{\Adv}{\textsc{Advocate}}
+\providecommand{\Noop}{\textsc{NoOp}}
+\providecommand{\Tctrl}{\mathcal{T}_{U\to N}}
+\providecommand{\1}{\mathbf{1}}
+\setlist{nosep,leftmargin=1.55em}
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0pt}
+
+\begin{tcolorbox}[colback=gray!5,colframe=gray!45,boxrule=0.5pt,arc=2pt]
+\textbf{Scope.} We keep the social-imitation model of Irisarri et al. as a classical anchor, but we do \emph{not} require the controlled dynamics to satisfy their microscopic-reversibility construction. The core objective is narrower: define a plausible round-level feedback protocol for which the controller-to-population information transfer can be calculated exactly at finite $N$, and then derive a large-$N$ approximation. The stochastic-thermodynamic reversible limit is optional rather than foundational.
+\end{tcolorbox}
+
+\TheoryHeading{Why the theory should be reorganized}
+
+Irisarri et al.~\cite{irisarri2026} formulate social stochastic thermodynamics for microscopically reversible elementary reactions. They explicitly note that strictly irreversible transitions lie outside that standard framework and require more specialized techniques. This matters for entropy production, affinities, and fluctuation relations, but it is \emph{not} a requirement for mutual information or transfer entropy. Horowitz and Sandberg~\cite{horowitz2014}, in turn, motivate transfer entropy by how one process changes the transition law of another and derive their continuous-time expression from repeated discrete feedback.
+
+For the present project, the minimal mathematical requirements are therefore only:
+\[
+\text{a state }N_k,\qquad \text{a stochastic policy }p(u\mid N_k),\qquad
+\text{and controlled kernels }R_u(N_{k+1}\mid N_k).
+\]
+Once these exist, the round-level actuation information
+\[
+\Tctrl = I(U_k;N_{k+1}\mid N_k)
+\]
+is well-defined whether the control is reversible, asymmetric, or irreversible.
+
+This reordering is also motivated by the current experiments. At $N=32,q=1$, increasing controller sensing from $q_c=2$ to $q_c=32$ reduced the across-episode truth-current variance from $29.53$ to $8.42$, while the one-step truth CMI changed only modestly. In contrast, moving from $q=1$ to $q=2$ at $q_c=2$ increased the current variance to $176.54$ and drove the local actuation CMIs to their permutation-null level. In the present protocol, however, increasing $q$ also dilutes a one-slot intervention from all of the focal context to one half of it. A separate actuation budget is therefore needed.
+
+\TheoryHeading{Round-level feedback protocol}
+
+Let $k=0,1,\ldots$ index \emph{population rounds}. Each round contains exactly $N$ microscopic focal-update attempts. In the binary theory let
+\[
+n_k\in\{0,1,\ldots,N\}
+\]
+be the number of agents holding the target opinion $A$ at the beginning of round $k$. The controller operates only once per round:
+\[
+n_k \longrightarrow Y_k \longrightarrow U_k,
+\qquad U_k\in\{\Noop,\Adv\}.
+\]
+If $U_k=\Noop$, all $N$ microscopic positions are ordinary. If $U_k=\Adv$, exactly $b$ of the $N$ update positions are chosen uniformly at random \emph{in advance}; those positions contain one external advocacy input for $A$. No additional sensing or controller decision occurs during the round. Define
+\[
+c=\frac{b}{N}
+\]
+as the actuation fraction. The three structural resources are then
+\[
+q=\text{social context size},\qquad q_c=\text{sensing size},\qquad c=b/N=\text{actuation fraction}.
+\]
+
+The schedule is an execution variable, not a new controller decision. Choosing update positions rather than fixed agent identities preserves exchangeability in the well-mixed classical model, so the occupation number $n$ remains a sufficient mesoscopic state.
+
+\TheoryHeading{A controlled imitation kernel without reversibility constraints}
+
+The cleanest classical analogue of an advocacy message is to let it occupy one of the same $q$ social-input slots that ordinary peers occupy. To remain general, define two focal-response functions
+\[
+\alpha_q(j)=\Prob(B\to A\mid j\text{ of the }q\text{ inputs support }A),
+\]
+\[
+\beta_q(j)=\Prob(A\to B\mid j\text{ of the }q\text{ inputs support }A),
+\qquad j=0,\ldots,q.
+\]
+The same functions are used in ordinary and controlled contexts; the controller changes only the composition of the social inputs. Two useful special cases are
+\begin{align*}
+\text{unanimity $q$-voter:}\quad
+&\alpha_q(j)=\1[j=q],\qquad \beta_q(j)=\1[j=0],\\
+\text{soft/``reasoning-like'' response:}\quad
+&\alpha_q(j)=s_q(j),\qquad \beta_q(j)=1-s_q(j),\\
+&s_q(j)=\sigma\!\left(\kappa\left(\frac{2j}{q}-1\right)+h\right),
+\end{align*}
+where $\sigma(z)=(1+e^{-z})^{-1}$. The soft choice is especially convenient for matching a stochastic LLM response while remaining analytically explicit. Nothing below requires local detailed balance.
+
+\subsection{Ordinary microscopic update $K_0$}
+
+Condition on $n$ target supporters before the update. If the focal is currently $B$, which occurs with probability $(N-n)/N$, the number $J_B$ of $A$ supporters among $q$ distinct ordinary peers satisfies
+\[
+\Prob(J_B=j\mid n,X_f=B)
+=
+\frac{\binom{n}{j}\binom{N-n-1}{q-j}}{\binom{N-1}{q}}.
+\]
+Hence
+\begin{align}
+K_0(n+1\mid n)
+&=\frac{N-n}{N}\sum_{j=0}^{q}
+\frac{\binom{n}{j}\binom{N-n-1}{q-j}}{\binom{N-1}{q}}\alpha_q(j). \label{eq:k0plus}
+\end{align}
+If the focal is currently $A$, the peer count is instead
+\[
+\Prob(J_A=j\mid n,X_f=A)
+=
+\frac{\binom{n-1}{j}\binom{N-n}{q-j}}{\binom{N-1}{q}},
+\]
+and
+\begin{align}
+K_0(n-1\mid n)
+&=\frac{n}{N}\sum_{j=0}^{q}
+\frac{\binom{n-1}{j}\binom{N-n}{q-j}}{\binom{N-1}{q}}\beta_q(j). \label{eq:k0minus}
+\end{align}
+Finally,
+\[
+K_0(n\mid n)=1-K_0(n+1\mid n)-K_0(n-1\mid n).
+\]
+These equations define a discrete-time, well-mixed $q$-interaction process. Irisarri et al.'s nonlinear voter model is a useful benchmark for choosing $\alpha_q,\beta_q$ or comparing phase behavior, but our control theory does not depend on their reaction decomposition.
+
+\subsection{Controlled microscopic update $K_1$}
+
+At a preallocated advocacy position, one social slot is fixed to target $A$, and only $q-1$ ordinary peers are sampled. Thus the focal sees
+\[
+J^{\Adv}=1+\widetilde J
+\]
+target-supporting inputs. For a $B$ focal,
+\[
+\Prob(\widetilde J=j\mid n,X_f=B)
+=
+\frac{\binom{n}{j}\binom{N-n-1}{q-1-j}}{\binom{N-1}{q-1}},
+\]
+which gives
+\begin{align}
+K_1(n+1\mid n)
+&=\frac{N-n}{N}\sum_{j=0}^{q-1}
+\frac{\binom{n}{j}\binom{N-n-1}{q-1-j}}{\binom{N-1}{q-1}}\alpha_q(j+1). \label{eq:k1plus}
+\end{align}
+For an $A$ focal,
+\begin{align}
+K_1(n-1\mid n)
+&=\frac{n}{N}\sum_{j=0}^{q-1}
+\frac{\binom{n-1}{j}\binom{N-n}{q-1-j}}{\binom{N-1}{q-1}}\beta_q(j+1), \label{eq:k1minus}
+\end{align}
+with $K_1(n\mid n)=1-K_1(n+1\mid n)-K_1(n-1\mid n)$. These formulas implement exactly the intended semantics: advocacy changes one item of social evidence, but the focal still applies the same response rule. If this creates irreversible transitions for a particular response function---for example, unanimity $q$-voting makes an $A\to B$ switch impossible at an $A$-advocacy position---that is acceptable for the TE theory.
+
+\TheoryHeading{Exact finite-budget round kernel}
+
+For $U_k=\Noop$, the round kernel is simply
+\[
+R_0(m\mid n)=\bigl(K_0^N\bigr)(m\mid n).
+\]
+For $U_k=\Adv$, exactly $b$ of the $N$ microscopic positions use $K_1$. The positions are uniformly random without replacement. We can integrate over all schedules exactly without enumerating $\binom{N}{b}$ possibilities.
+
+Let $f_{r,j}^{(n)}(\ell)$ be the probability that after $r$ microscopic positions the population has $\ell$ target supporters and exactly $j$ controlled positions have been used, given initial state $n$. Initialize
+\[
+f_{0,0}^{(n)}(\ell)=\1[\ell=n].
+\]
+Given $(r,j)$, exchangeability of the uniformly preallocated schedule implies
+\begin{align}
+\Prob(C_{r+1}=1\mid r,j)&=\frac{b-j}{N-r},\\
+\Prob(C_{r+1}=0\mid r,j)&=\frac{N-b-r+j}{N-r}.
+\end{align}
+Therefore
+\begin{align}
+f_{r+1,j+1}^{(n)}(m)
+&\mathrel{+}=\frac{b-j}{N-r}
+\sum_{\ell}f_{r,j}^{(n)}(\ell)K_1(m\mid\ell), \label{eq:rec1}\\
+f_{r+1,j}^{(n)}(m)
+&\mathrel{+}=\frac{N-b-r+j}{N-r}
+\sum_{\ell}f_{r,j}^{(n)}(\ell)K_0(m\mid\ell). \label{eq:rec0}
+\end{align}
+After the $N$th position,
+\begin{equation}
+\boxed{R_1(m\mid n)=f_{N,b}^{(n)}(m).} \label{eq:r1}
+\end{equation}
+Thus the exact finite-budget controlled process is a finite-state Markov chain at the round level even though the within-round execution uses a nontrivial schedule.
+
+\TheoryHeading{Sensor, policy, and closed-loop chain}
+
+At the beginning of the round the controller samples $q_c$ agents without replacement. If $Y_k=y$ of them support target $A$,
+\begin{equation}
+S_{q_c}(y\mid n)
+=\Prob(Y_k=y\mid n_k=n)
+=\frac{\binom{n}{y}\binom{N-n}{q_c-y}}{\binom{N}{q_c}}. \label{eq:sensor}
+\end{equation}
+For the existing soft threshold policy,
+\[
+\pi(\Adv\mid y)=
+\sigma\!\left[\beta\left(\vartheta-\frac{y}{q_c}\right)\right],
+\]
+so the action probability conditioned on the true population state is known exactly:
+\begin{equation}
+p_1(n)\equiv \Prob(U_k=\Adv\mid n_k=n)
+=\sum_y S_{q_c}(y\mid n)\pi(\Adv\mid y). \label{eq:policy}
+\end{equation}
+The closed-loop round kernel is
+\begin{equation}
+R(m\mid n)=[1-p_1(n)]R_0(m\mid n)+p_1(n)R_1(m\mid n). \label{eq:closed}
+\end{equation}
+If this finite chain is irreducible and time-homogeneous, its stationary distribution is obtained from
+\[
+\rho(m)=\sum_n \rho(n)R(m\mid n),\qquad \sum_n\rho(n)=1.
+\]
+No reversibility assumption is used here.
+
+\TheoryHeading{Exact controller-to-population transfer entropy}
+
+For a first-order controlled Markov description, the directed-information increment from the round action to the next population state reduces to
+\begin{equation}
+\Tctrl = I(U_k;n_{k+1}\mid n_k). \label{eq:te-def}
+\end{equation}
+At stationarity, inserting Eqs.~\eqref{eq:r1}--\eqref{eq:closed} gives
+\begin{equation}
+\boxed{
+\Tctrl
+=
+\sum_{n,u,m}
+\rho(n)p(u\mid n)R_u(m\mid n)
+\log\frac{R_u(m\mid n)}{R(m\mid n)}
+} \label{eq:te}
+\end{equation}
+in nats per population round; use $\log_2$ for bits. Equivalently,
+\begin{equation}
+\Tctrl
+=
+\sum_n\rho(n)\sum_u p(u\mid n)
+\KL\!\left(R_u(\cdot\mid n)\,\Vert\,R(\cdot\mid n)\right). \label{eq:te-kl}
+\end{equation}
+This is the key exact result. It says that control transfers information when the population transition law selected by the action is distinguishable from the action-averaged transition law.
+
+Two diagnostics follow immediately:
+\[
+0\le \Tctrl\le H(U_k\mid n_k).
+\]
+Hence a deterministic policy $U_k=f(n_k)$ has $H(U_k\mid n_k)=0$ and therefore zero conditional actuation information, even if it strongly changes the population. This is why the stochastic soft policy is not cosmetic: it creates within-state action support required by this particular information measure.
+
+Horowitz--Sandberg use transfer entropy primarily in the opposite direction, system $\to$ measurement device, to quantify information acquisition in feedback thermodynamics. Equation~\eqref{eq:te} is the \emph{actuation} direction controller $\to$ population. The two directions should be reported separately rather than conflated.
+
+\paragraph{Optional schedule-resolved quantity.}
+Because the randomized schedule $S_k$ is part of the realized intervention, one may additionally compute
+\[
+I(U_k,S_k;n_{k+1}\mid n_k),
+\]
+which measures the information in the complete executed control. The headline quantity in Eq.~\eqref{eq:te} marginalizes schedule randomness and measures the effect of the round-level controller decision itself.
+
+\TheoryHeading{Large-$N$ approximation and the controllability surface}
+
+The exact recursion is already computationally cheap for the system sizes of interest. A mean-field approximation is nevertheless useful for understanding scaling with $(q,q_c,c)$.
+
+Write $x=n/N$. For large $N$, ordinary peer sampling is approximately binomial. Define the averaged switch probabilities
+\begin{align}
+\bar\alpha_0(x)&=\sum_{j=0}^{q}\binom{q}{j}x^j(1-x)^{q-j}\alpha_q(j),\\
+\bar\beta_0(x)&=\sum_{j=0}^{q}\binom{q}{j}x^j(1-x)^{q-j}\beta_q(j),\\
+\bar\alpha_1(x)&=\sum_{j=0}^{q-1}\binom{q-1}{j}x^j(1-x)^{q-1-j}\alpha_q(j+1),\\
+\bar\beta_1(x)&=\sum_{j=0}^{q-1}\binom{q-1}{j}x^j(1-x)^{q-1-j}\beta_q(j+1).
+\end{align}
+The mean drift in target fraction per sweep-time unit is therefore
+\[
+a_0(x)=(1-x)\bar\alpha_0(x)-x\bar\beta_0(x)
+\]
+for an ordinary microscopic position and
+\[
+a_1(x)=(1-x)\bar\alpha_1(x)-x\bar\beta_1(x)
+\]
+for a controlled position. If a controlled round contains fraction $c=b/N$ advocacy positions, the leading drift is
+\begin{equation}
+a_c(x)=(1-c)a_0(x)+ca_1(x)
+=a_0(x)+c[a_1(x)-a_0(x)]. \label{eq:drift}
+\end{equation}
+The difference $a_1-a_0$ is the local control susceptibility: it quantifies how much replacing one peer slot by advocacy changes the expected focal response. Its dependence on $q$ captures the dilution question directly.
+
+Let $G_0(x)$ and $G_1(x)$ denote the deterministic one-round flow maps obtained by integrating $\dot x=a_0(x)$ and $\dot x=a_c(x)$ for one sweep, respectively. Finite-$N$ fluctuations produce approximately Gaussian round kernels
+\[
+R_u(x'\mid x)\approx
+\mathcal N\!\left(G_u(x),\frac{V_u(x)}{N}\right).
+\]
+For weak control, when the two conditional Gaussians have similar variance and their means are close, the conditional mutual information at a fixed $x$ has the leading expansion
+\begin{equation}
+I(U;x'\mid x)
+\approx
+\frac{p_1(x)[1-p_1(x)]}{2}
+\frac{N\,[G_1(x)-G_0(x)]^2}{V(x)}. \label{eq:small-signal}
+\end{equation}
+This approximation makes the scaling transparent: information transfer grows with action overlap $p_1(1-p_1)$ and squared dynamical separation, but is suppressed by intrinsic population fluctuations. It also shows why sensing and actuation can have qualitatively different effects: $q_c$ primarily changes $p_1(x)$ through the sensor-policy channel, whereas $q$ and $c$ change $G_1-G_0$ through the population dynamics.
+
+The natural theoretical object is therefore the \textbf{controllability surface}
+\begin{equation}
+\boxed{\Tctrl(q,q_c,c;N)}. \label{eq:surface}
+\end{equation}
+The exact finite-$N$ value comes from Eq.~\eqref{eq:te}; Eqs.~\eqref{eq:drift}--\eqref{eq:small-signal} explain its large-$N$ structure.
+
+\TheoryHeading{What to calculate first}
+
+A compact first theory study can now proceed without committing to thermodynamic irreversibility machinery:
+\begin{enumerate}
+\item \textbf{Freeze one pair of classical response functions $\alpha_q,\beta_q$.} Recommended first choice: a soft logistic response, because the same rule applies under ordinary and advocacy contexts and both transition directions remain possible without being forced to satisfy detailed balance.
+\item \textbf{Compute $K_0,K_1$ exactly} from Eqs.~\eqref{eq:k0plus}--\eqref{eq:k1minus} for small and moderate $N$.
+\item \textbf{Construct $R_0,R_1$ exactly} using matrix powers and the finite-budget recursion \eqref{eq:rec1}--\eqref{eq:r1}.
+\item \textbf{Solve the stationary closed-loop chain} and evaluate Eq.~\eqref{eq:te} without an empirical MI estimator.
+\item \textbf{Compare exact and mean-field predictions} as $N$ grows, especially the TE, mean target drift, and current/activity fluctuations.
+\item \textbf{Map $(q,q_c,c)$.} This separates social interaction order, sensing quality, and actuation capacity, removing the present $1/q$ intervention-dilution confound.
+\item \textbf{Only then compare reasoning OFF/ON.} The same round protocol is used in both arms; the LLM replaces the explicit $\alpha_q,\beta_q$ response by its implicit semantic transition kernel.
+\end{enumerate}
+
+For HiddenBench's three answer options~\cite{hiddenbench2026}, replace $n$ by the occupation vector $\bm n=(n_1,n_2,n_3)$. Irisarri et al. explicitly formulate the multi-opinion mesostate in this way. The exact TE construction is unchanged:
+\[
+I(U_k;\bm N_{k+1}\mid \bm N_k),
+\]
+but the finite state space becomes two-dimensional because $n_1+n_2+n_3=N$. This should be a second step, after the binary calculation is validated.
+
+\TheoryHeading{Role of stochastic thermodynamics after this revision}
+
+The reversible Irisarri limit remains valuable as a \emph{special case}: when the chosen microscopic kernel admits a generalized local-detailed-balance decomposition, one may recover affinities, reaction-resolved currents, entropy production, fluctuation relations, and TUR/KUR-type statements. But these are now optional extensions of the core control theory rather than constraints on how advocacy must be modeled.
+
+This ordering keeps the central scientific question intact: how much directional information can a finite-bandwidth controller transmit into a collectively interacting population, how does that depend on $q$, sensing $q_c$, and budget $c$, and where does semantic reasoning cause the LLM system to depart from the tractable classical prediction?
+
+\FinishTheoryDocument

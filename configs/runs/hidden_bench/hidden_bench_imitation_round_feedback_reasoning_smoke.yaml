@@ -1,0 +1,83 @@
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 64
+  options:
+    response: '{"vote":"North Hill","rationale":"smoke"}'
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+    allowed_values: [West City, East Town, North Hill]
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 4
+  horizon: 1
+  topology: complete
+  options:
+    task_set: vanilla
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: bijective
+    dynamics_mode: reasoning
+    rounds: 1
+    social_group_size: 2
+    messages_per_agent: 1
+    memory_size: 0
+    prompt_version: 1
+    stop_on_consensus: false
+    initialization:
+      mode: explicit
+      initial_votes: [West City, East Town, North Hill, East Town]
+    classical:
+      kernel: controlled_imitation_round_reference
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 2
+    template_version: 3
+execution:
+  seed: 20260813
+  repetitions: 1
+  parallelism: 1
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 100
+  max_input_tokens: 100000
+  max_output_tokens: 10000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+analysis:
+  enabled: false
+metrics:
+  enabled: true
+  comet_export: []
+experiment:
+  name: hidden-bench-round-feedback-reasoning-smoke
+  description: Mock-provider reasoning smoke run with the round feedback schedule.
+  tags: [hidden-bench, imitation, round-feedback, reasoning, smoke]

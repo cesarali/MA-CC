@@ -141,6 +141,35 @@ def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata(
     assert "metadata" not in sent
 
 
+def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():
+    valid = {
+        "id": "req-2",
+        "model": "gpt-oss",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+    }
+    session = _Session(
+        [
+            _Response(200, {"temporarily": "not-a-chat-envelope"}, headers={"Retry-After": "0"}),
+            _Response(200, valid),
+        ]
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-oss",
+            credentials_env="TEST_API_KEY",
+            max_retries=1,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+    )
+    response = asyncio.run(provider.complete(_request()))
+    assert response.content == "A"
+    assert response.retries == 1
+    assert len(session.post_calls) == 2
+
+
 def test_university_discovers_v1_endpoint_and_rejects_unlisted_model_safely():
     config = LLMProviderConfig(
         type="university",

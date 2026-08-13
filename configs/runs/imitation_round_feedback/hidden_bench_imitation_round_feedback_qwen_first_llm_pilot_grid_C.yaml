@@ -1,0 +1,175 @@
+# First LLM pilot — Grid C: sensing versus actuation.
+# Common setup and estimator choices match Grid A in
+# hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml.
+# This Cartesian grid has q_c={2,16,24} x b={6,12}: 6 cells / 180 episodes.
+
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 2
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    decoy: West City
+    initialization:
+      mode: uniform_random
+    classical:
+      kernel: controlled_imitation_round_reference
+
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 2
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 6
+    template_version: 3
+
+execution:
+  seed: 20260813
+  repetitions: 30
+  parallelism: 4
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 450000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: true
+  estimators:
+    - round_sensing_mi
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_target_information_fraction
+    - round_dual_action_state_fraction
+    - round_dual_action_event_fraction
+    - round_single_action_slice_fraction
+    - round_conditioning_state_count
+    - round_singleton_fraction
+    - round_target_signed_actuation
+    - round_truth_signed_actuation
+    - round_sensor_mae
+    - round_sensor_mse
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260813
+    per_cell_reports: true
+  comet_export: true
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 10
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: hidden-bench-round-feedback-qwen-first-llm-pilot-grid-C
+  description: First LLM pilot Grid C, separating sensing quality from actuation strength.
+  tags: [hidden-bench, imitation, round-feedback, qwen, first-llm-pilot, grid-C]
+  metadata:
+    pilot_grid: C
+    population_rounds: 10
+    social_group_sizes: [2]
+    sensor_sample_sizes: [2, 16, 24]
+    intervention_budgets: [6, 12]
+    controller_targets: [truth]
+    shared_information_decoy: West City
+
+grid:
+  control.options.sensor_sample_size: [2, 16, 24]
+  control.options.intervention_budget: [6, 12]

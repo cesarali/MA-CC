@@ -143,7 +143,7 @@ def test_grid_runs_requested_configured_analysis_at_each_cell_completion(
         lambda *_args, **_kwargs: None,
     )
 
-    def record_cell(config, cell_dir, cell_id):
+    def record_cell(config, cell_dir, cell_id, comet_sink=None):
         calls.append((cell_id, config.game.horizon, Path(cell_dir)))
         return {"cell_id": cell_id}
 

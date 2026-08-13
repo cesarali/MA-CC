@@ -1,0 +1,34 @@
+{
+  "run_budget": {
+    "allow_unbounded_paid_requests": false,
+    "max_cost": {
+      "amount": 10.0,
+      "model": "gwdg/openai-gpt-oss-120b",
+      "provider": "university",
+      "retrieved_at": "2026-08-13T10:14:57.948318Z",
+      "source": "resolved run-specific limit",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "resolved budget configuration",
+      "version": "resolved-config-v1"
+    },
+    "max_input_tokens": null,
+    "max_output_tokens": null,
+    "max_requests": 56
+  },
+  "system_budget": {
+    "allow_unbounded_paid_requests": false,
+    "max_cost": {
+      "amount": 10.0,
+      "model": "gwdg/openai-gpt-oss-120b",
+      "provider": "university",
+      "retrieved_at": "2026-08-13T10:14:57.948318Z",
+      "source": "resolved system-wide per-run limit",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "resolved budget configuration",
+      "version": "resolved-config-v1"
+    },
+    "max_input_tokens": null,
+    "max_output_tokens": null,
+    "max_requests": null
+  }
+}

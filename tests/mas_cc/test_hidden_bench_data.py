@@ -149,11 +149,11 @@ def test_full_profile_gives_every_agent_all_of_iu(tasks):
         assert info.transformation == "full_profile"
 
 
-def test_annotation_dependent_schemes_refuse_to_synthesize(tasks):
-    """Paraphrase/factorization need verified annotations; never invented here."""
+def test_annotation_dependent_schemes_refuse_to_invent_evidence(tasks):
+    """Paraphrase/factorization need prepared, verified annotation allocations."""
 
     for scheme in ("paraphrased_replication", "factorized_evidence"):
-        with pytest.raises(HiddenBenchDataError, match="prebuilt population file"):
+        with pytest.raises(HiddenBenchDataError, match="prepared population allocation"):
             assign(tasks[0], 8, scheme, random.Random(0))
 
 
@@ -247,6 +247,117 @@ def test_prebuilt_population_is_preferred_over_derivation():
 def test_missing_population_error_names_the_command_that_builds_it():
     with pytest.raises(HiddenBenchDataError, match="prepare_hiddenbench.py"):
         load_task_set("expanded", scheme="factorized_evidence", n_agents=32)
+
+
+def _write_paraphrase_preparation_fixture(root: Path, *, include_annotations: bool) -> None:
+    def task(task_id: int, name: str) -> dict:
+        return {
+            "task_id": task_id,
+            "name": name,
+            "source_description": f"Source scenario {task_id}",
+            "scenario_description": f"Scenario {task_id}",
+            "population_wording_changes": [],
+            "shared_information": [f"Shared {task_id}"],
+            "hidden_information": [
+                {"evidence_type": 0, "source_text": f"Hidden {task_id}-0"},
+                {"evidence_type": 1, "source_text": f"Hidden {task_id}-1"},
+            ],
+            "possible_answers": ["A", "B", "C"],
+            "correct_answer": "C",
+            "rationale": None,
+            "source_base_agent_count": 2,
+        }
+
+    tasks = [task(7, "portable_task_one"), task(8, "portable_task_two")]
+    canonical = root / "canonical" / "tasks.json"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text(json.dumps({"metadata": {}, "tasks": tasks}), encoding="utf-8")
+    if not include_annotations:
+        return
+
+    annotations = {"tasks": {}}
+    for item in tasks:
+        evidence = {}
+        for evidence_type, source in enumerate(item["hidden_information"]):
+            evidence[str(evidence_type)] = {
+                "source_text": source["source_text"],
+                "variants": [
+                    {
+                        "variant_id": f"{item['task_id']}-{evidence_type}-{index}",
+                        "text": f"Paraphrase {item['task_id']}-{evidence_type}-{index}",
+                        "accepted": True,
+                    }
+                    for index in range(3)
+                ],
+            }
+        annotations["tasks"][str(item["task_id"])] = {
+            "name": item["name"],
+            "evidence_types": evidence,
+        }
+    path = root / "annotations" / "paraphrases.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(annotations), encoding="utf-8")
+
+
+def test_auto_preparation_builds_and_appends_only_from_existing_paraphrases(tmp_path):
+    _write_paraphrase_preparation_fixture(tmp_path, include_annotations=True)
+
+    first = load_task_set(
+        "expanded",
+        corpus_root=tmp_path,
+        scheme="paraphrased_replication",
+        n_agents=6,
+        requested_task="portable_task_one",
+        auto_prepare_paraphrases=True,
+    )
+    second = load_task_set(
+        "expanded",
+        corpus_root=tmp_path,
+        scheme="paraphrased_replication",
+        n_agents=6,
+        requested_task="8",
+        auto_prepare_paraphrases=True,
+    )
+
+    population_path = tmp_path / "scaled" / "paraphrased_replication" / "N_6.json"
+    payload = json.loads(population_path.read_text(encoding="utf-8"))
+    assert first.by_name("portable_task_one").source == "scaled:paraphrased_replication"
+    assert second.by_name("8").name == "portable_task_two"
+    assert [record["task_id"] for record in payload["tasks"]] == [7, 8]
+    assert all(len(record["agents"]) == 6 for record in payload["tasks"])
+    assert all(
+        len({agent["variant_id"] for agent in record["agents"]}) == 6
+        for record in payload["tasks"]
+    )
+
+    # Once the requested task is ready, loading it does not require the source
+    # annotation file to remain present.
+    (tmp_path / "annotations" / "paraphrases.json").unlink()
+    reused = load_task_set(
+        "expanded",
+        corpus_root=tmp_path,
+        scheme="paraphrased_replication",
+        n_agents=6,
+        requested_task="portable_task_two",
+        auto_prepare_paraphrases=True,
+    )
+    assert reused.by_name("portable_task_two").task_id == 8
+
+
+def test_auto_preparation_fails_clearly_when_source_paraphrases_are_absent(
+    tmp_path,
+):
+    _write_paraphrase_preparation_fixture(tmp_path, include_annotations=False)
+
+    with pytest.raises(HiddenBenchDataError, match="No paraphrase annotations exist"):
+        load_task_set(
+            "expanded",
+            corpus_root=tmp_path,
+            scheme="paraphrased_replication",
+            n_agents=6,
+            requested_task="portable_task_one",
+            auto_prepare_paraphrases=True,
+        )
 
 
 # --------------------------------------------------------------------------

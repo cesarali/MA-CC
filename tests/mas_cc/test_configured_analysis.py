@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from mas_cc.config import load_run_config
+from mas_cc.config import GridSpec, load_run_config, load_run_config_or_grid
 from mas_cc.experiments.configured_analysis import (
     per_cell_reports_enabled,
     run_configured_analysis,
@@ -132,7 +132,67 @@ def test_cell_analysis_keeps_only_parameter_named_markdown_reports(tmp_path, mon
         f"truth_current_estimates__{suffix}.md",
     }
     assert not list(tmp_path.glob(".cell-analysis-*"))
-    assert captured["comet_export"] is False
+    assert captured["comet_export"] is True
+    assert captured["comet_run_name"].endswith("/analysis/cell-0007")
+    assert captured["comet_name_suffix"] == suffix
+
+
+def test_cell_analysis_reuses_the_master_comet_sink(tmp_path, monkeypatch):
+    captured = {}
+    sink = object()
+
+    def fake_analyze(run_dir, output_dir, **kwargs):
+        captured.update(kwargs)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        return {"comet": {"status": "active", "published_to": "master"}}
+
+    monkeypatch.setattr(
+        "mas_cc.games.hidden_bench.imitation.analysis.analyze_hidden_bench_imitation",
+        fake_analyze,
+    )
+
+    summary = run_configured_cell_analysis(_config(), tmp_path, "cell-0007", sink)
+
+    assert summary is not None
+    assert captured["comet_sink"] is sink
+
+
+def test_round_feedback_cell_analysis_reuses_master_sink_with_comet_enabled(
+    tmp_path, monkeypatch
+):
+    captured = {}
+    sink = object()
+
+    def fake_analyze(run_dir, output_dir, **kwargs):
+        captured.update(kwargs)
+        destination = Path(output_dir)
+        destination.mkdir(parents=True, exist_ok=True)
+        (destination / "round_information_estimates.md").write_text(
+            "# Round information\n", encoding="utf-8"
+        )
+        return {"comet": {"status": "active", "published_to": "master"}}
+
+    monkeypatch.setattr(
+        "mas_cc.games.hidden_bench.imitation_round_feedback.analysis."
+        "analyze_hidden_bench_imitation_round_feedback",
+        fake_analyze,
+    )
+    grid = load_run_config_or_grid(
+        "configs/runs/hidden_bench/"
+        "hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml",
+        environment={},
+    )
+    assert isinstance(grid, GridSpec)
+
+    summary = run_configured_cell_analysis(
+        grid.cells[0].config, tmp_path, "cell-0000", sink
+    )
+
+    assert summary is not None
+    assert captured["comet_export"] is True
+    assert captured["comet_sink"] is sink
+    assert captured["comet_name_suffix"].startswith("cell-0000__task-")
+    assert captured["comet_run_name"].endswith("/analysis/cell-0000")
 
 
 def test_per_cell_reports_option_is_boolean():
