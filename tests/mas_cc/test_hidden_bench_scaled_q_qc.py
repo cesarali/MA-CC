@@ -83,7 +83,11 @@ def test_imitation_n_grid_is_exactly_the_requested_three_by_three_phase_diagram(
         for cell in spec.cells
     } == {(q, q_c) for q in (1, 2, 4) for q_c in (2, 8, 32)}
     assert all(cell.config.game.population_size == 32 for cell in spec.cells)
-    assert all(cell.config.game.horizon == 10 * 32 for cell in spec.cells)
+    assert all(cell.config.game.horizon == 10 for cell in spec.cells)
+    assert all(
+        HiddenBenchImitationGame().rules(cell.config.game).horizon == 320
+        for cell in spec.cells
+    )
     assert all(
         cell.config.game.options["assignment_scheme"] == "paraphrased_replication"
         for cell in spec.cells
@@ -93,6 +97,30 @@ def test_imitation_n_grid_is_exactly_the_requested_three_by_three_phase_diagram(
     assert spec.base.analysis.estimators[-2:] == (
         "truth_current",
         "truth_current_fano",
+    )
+
+
+def test_random_incorrect_grid_matches_the_phase_diagram_without_a_hard_coded_target():
+    spec = load_run_config_or_grid(
+        "configs/runs/hidden_bench/"
+        "hidden_bench_imitation_N_q_qc_phase_grid_random_incorrect.yaml",
+        environment={},
+    )
+    assert spec.base.experiment.name == "imitation_N_random_incorrect"
+    assert spec.base.control.options["target"] == "random_incorrect"
+    assert len(spec.cells) == 9
+    assert {
+        (
+            cell.config.game.options["social_group_size"],
+            cell.config.control.options["sensor_sample_size"],
+        )
+        for cell in spec.cells
+    } == {(q, q_c) for q in (1, 2, 4) for q_c in (2, 8, 24)}
+    assert all(cell.config.game.population_size == 24 for cell in spec.cells)
+    assert all(cell.config.game.horizon == 10 for cell in spec.cells)
+    assert all(
+        HiddenBenchImitationGame().rules(cell.config.game).horizon == 240
+        for cell in spec.cells
     )
 
 
@@ -114,23 +142,27 @@ def test_advocacy_replaces_exactly_one_of_q_distinct_social_slots():
     config = _classical(q=3, q_c=4, horizon=5, threshold=1.0)
     result = _run(config, control=create_control(config.control))
     assert len(result.initial_state.agents) == 4
+    assert len(result.interactions) == 5 * 4
+    advocacy_events = 0
     for interaction in result.interactions:
         event = interaction.transition.event
-        assert event["controller_action"] == "ADVOCATE_Z"
         assert len(event["social_peer_ids"]) == 3
         assert len(set(event["social_peer_ids"])) == 3
         assert event["focal_agent_id"] not in event["social_peer_ids"]
         assert len(event["influence_slots"]) == 3
-        assert [slot["kind"] for slot in event["influence_slots"]].count("controller") == 1
-        assert [slot["kind"] for slot in event["influence_slots"]].count("peer") == 2
-        assert event["replaced_peer_id"] in event["social_peer_ids"]
-        assert event["social_peer_ids"][event["replaced_peer_slot"]] == event["replaced_peer_id"]
+        if event["controller_action"] == "ADVOCATE_Z":
+            advocacy_events += 1
+            assert [slot["kind"] for slot in event["influence_slots"]].count("controller") == 1
+            assert [slot["kind"] for slot in event["influence_slots"]].count("peer") == 2
+            assert event["replaced_peer_id"] in event["social_peer_ids"]
+            assert event["social_peer_ids"][event["replaced_peer_slot"]] == event["replaced_peer_id"]
         assert len(event["controller_sensor_ids"]) == 4
         assert len(set(event["controller_sensor_ids"])) == 4
         assert event["controller_sensor_includes_focal"] is True
         assert set(event["controller_sensor_social_overlap_ids"]) == set(event["social_peer_ids"])
         before, after = event["population_state_before"], event["population_state_after"]
         assert sum(left != right for left, right in zip(before, after)) == 1
+    assert advocacy_events > 0
 
 
 def test_noop_keeps_all_q_ordinary_peer_slots():
@@ -377,10 +409,10 @@ def test_controller_exposure_diagnostics_distinguish_decisions_and_advocacy():
     result = _run(config, control=create_control(config.control))
     events = [adapt_event(item.transition.event) for item in result.interactions]
     row = episode_summary(events)
-    assert row["controller_decision_count"] == 6
+    assert row["controller_decision_count"] == 6 * 4
     assert row["controller_advocacy_count"] > 0
-    assert row["controller_advocacy_count"] + row["controller_noop_count"] == 6
-    assert row["controller_decisions_per_agent"] == pytest.approx(1.5)
+    assert row["controller_advocacy_count"] + row["controller_noop_count"] == 6 * 4
+    assert row["controller_decisions_per_agent"] == pytest.approx(6.0)
     assert row["controller_advocacies_per_agent"] == pytest.approx(
         row["controller_advocacy_count"] / 4
     )

@@ -229,6 +229,9 @@ class _EpisodeObserver:
     def record_trajectory(self, **payload: Any) -> None:
         self.recorder.record_trajectory(**payload)
 
+    def record_round_trajectory(self, **payload: Any) -> None:
+        self.recorder.record_round_trajectory(**payload)
+
 
 def _print_final_metrics(result: Any, metrics: tuple[Any, ...], to_round_view: Any) -> None:
     views = tuple(to_round_view(interaction.transition.next_state) for interaction in result.interactions)

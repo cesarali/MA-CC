@@ -149,8 +149,10 @@ At each event:
 The controller does not overwrite or force the reasoning agent's vote. Its
 message contains target advocacy but no hidden task evidence.
 
-With explicit initial votes, a horizon of 20 steps, and one message per agent, the
-conservative reasoning call plan is 60 provider requests per episode: two
+For HiddenBench imitation, `horizon` always counts population sweeps. With
+`N=4`, explicit initial votes, a horizon of 20 sweeps, and one message per
+agent, the runtime executes `20 x 4 = 80` focal-update events and the
+conservative reasoning call plan is 240 provider requests per episode: two
 message decisions plus one focal update per event. Advocacy events may use
 fewer calls because they replace the peer exchange, but preflight retains the
 conservative bound.
@@ -1409,9 +1411,9 @@ The current classical kernel samples/logs the same `q`-peer context but does not
 yet use those peer opinions in its rate. It remains the existing linear
 `irisarri_multi_opinion` model until a q-voter kernel is specified.
 
-The event index is discrete. Comparisons across population size should hold the
-number of sweeps `S` fixed, set `T=SN`, and use `tau=t/N`. `tau` is normalized
-sweep time, not physical time.
+The event index is discrete. `game.horizon` is the number of population sweeps
+`S`; the runtime always resolves the elementary event limit as `T=SN` and uses
+`tau=t/N`. There is no interaction-count horizon mode.
 
 ### 12.1 Paraphrased population preparation
 

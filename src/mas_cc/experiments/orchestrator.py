@@ -758,6 +758,9 @@ class _RoundTickingObserver:
     def record_trajectory(self, **payload: Any) -> None:
         self.recorder.record_trajectory(**payload)
 
+    def record_round_trajectory(self, **payload: Any) -> None:
+        self.recorder.record_round_trajectory(**payload)
+
 
 @dataclass(frozen=True, slots=True)
 class EpisodeOutcome:
@@ -1115,9 +1118,12 @@ class _PerCellAnalysisReporter:
     still free to continue.
     """
 
-    def __init__(self, cells: Sequence[Any], cells_dir: Path) -> None:
+    def __init__(
+        self, cells: Sequence[Any], cells_dir: Path, comet_sink: Any | None = None
+    ) -> None:
         self._configs = {cell.cell_id: cell.config for cell in cells}
         self._cells_dir = cells_dir
+        self._comet_sink = comet_sink
         self._lock = threading.Lock()
 
     def write(self, cell_id: str) -> dict[str, Any] | None:
@@ -1126,6 +1132,7 @@ class _PerCellAnalysisReporter:
                 self._configs[cell_id],
                 self._cells_dir / cell_id,
                 cell_id,
+                comet_sink=self._comet_sink,
             )
             if summary is not None:
                 LOGGER.info(
@@ -1174,6 +1181,20 @@ def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: A
 
         control = create_control(episode_config.control)
         return lambda observer: run_hidden_bench_imitation_game(
+            game,
+            episode_config,
+            guarded_provider,
+            observer=observer,
+            control=control,
+        )
+
+    if episode_config.game.type == "hidden_bench_imitation_round_feedback":
+        from mas_cc.games.hidden_bench.imitation_round_feedback import (
+            run_hidden_bench_imitation_round_feedback_game,
+        )
+
+        control = create_control(episode_config.control)
+        return lambda observer: run_hidden_bench_imitation_round_feedback_game(
             game,
             episode_config,
             guarded_provider,
@@ -2168,7 +2189,7 @@ async def run_experiment_grid(
         else None
     )
     cell_analysis = (
-        _PerCellAnalysisReporter(cells, cells_dir)
+        _PerCellAnalysisReporter(cells, cells_dir, monitor.analysis_sink)
         if per_cell_reports_enabled(base)
         else None
     )

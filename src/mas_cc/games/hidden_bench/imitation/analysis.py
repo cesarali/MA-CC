@@ -2027,6 +2027,7 @@ def _export_information_estimates_to_comet(
     run_name: str,
     sink: Any | None = None,
     diagnostic_rows: Sequence[Mapping[str, Any]] = (),
+    name_suffix: str | None = None,
 ) -> dict[str, Any]:
     """Publish the estimates as metrics, figures and assets, if requested.
 
@@ -2064,11 +2065,18 @@ def _export_information_estimates_to_comet(
             sink.log_metrics(metrics, 0)
         for image in images:
             if Path(image).is_file():
-                sink.log_image(image, name=Path(image).stem, step=0)
+                image_name = Path(image).stem
+                if name_suffix:
+                    image_name = f"{image_name}__{name_suffix}"
+                sink.log_image(image, name=image_name, step=0)
                 uploaded_images += 1
         for asset in assets:
             if Path(asset).is_file():
-                sink.log_asset(asset, name=Path(asset).name)
+                asset_name = Path(asset).name
+                if name_suffix:
+                    path = Path(asset)
+                    asset_name = f"{path.stem}__{name_suffix}{path.suffix}"
+                sink.log_asset(asset, name=asset_name)
                 uploaded_assets += 1
         summary = {
             "status": sink.status,
@@ -2099,6 +2107,7 @@ def analyze_hidden_bench_imitation(
     comet_project: str = "mas-cc",
     comet_run_name: str | None = None,
     comet_sink: Any | None = None,
+    comet_name_suffix: str | None = None,
     artifact_profile: str = "full",
     resolved_config_hash: str | None = None,
 ) -> dict[str, Any]:
@@ -2339,6 +2348,7 @@ def analyze_hidden_bench_imitation(
         run_name=comet_run_name or destination.name,
         sink=comet_sink,
         diagnostic_rows=diagnostic_rows,
+        name_suffix=comet_name_suffix,
     )
     (destination / "analysis_summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"

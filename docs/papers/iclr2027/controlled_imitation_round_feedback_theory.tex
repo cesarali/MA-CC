@@ -1,0 +1,365 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{mathtools}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\Adv}{\textsc{Advocate}}
+\newcommand{\Noop}{\textsc{NoOp}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\KL}{D_{\mathrm{KL}}}
+
+\title{Round-Level Feedback Control of a Classical Social-Imitation Process\\
+\large Minimal Binary Theory and Exact Transfer-Entropy Construction}
+\author{}
+\date{13 August 2026}
+
+\begin{document}
+\maketitle
+
+\paragraph{Purpose.}
+This note fixes a minimal classical controlled-imitation model that stays close to
+Irisarri et al.~\cite{irisarri2026} while matching the intended slower feedback
+timescale of the multi-agent experiment. One population round contains $N$
+microscopic focal-update attempts. The controller measures and decides only once
+at the beginning of the round. If it chooses \Adv, exactly $b$ of the $N$
+microscopic update positions are selected uniformly at random in advance and use
+a controlled social-interaction kernel. No further sensing or controller decision
+occurs within the round.
+
+\section{Uncontrolled microscopic imitation}
+
+Consider $N$ agents with binary opinions $A$ and $B$, and let
+\[
+n\in\{0,\ldots,N\}
+\]
+denote the number of $A$ agents. Irisarri et al.~use the reversible reaction
+structure
+\begin{align}
+qA+B &\xrightleftharpoons[a_1]{h_1} (q+1)A, \label{eq:r1}\\
+A+qB &\xrightleftharpoons[a_2]{h_2} (q+1)B. \label{eq:r2}
+\end{align}
+Reaction~\eqref{eq:r1} contains conformity $B\to A$ with strength $h_1$ and
+anticonformity $A\to B$ with strength $a_1$; reaction~\eqref{eq:r2} contains the
+opposite pair.
+
+We use sampling of distinct peers without replacement. Define
+\[
+G_q(m)=\frac{\binom{m}{q}}{\binom{N-1}{q}},
+\qquad
+G_q(m)=0\ \text{for }m<q,
+\]
+the probability that all $q$ sampled peers belong to a specified set of $m$
+eligible agents.
+
+The continuous-time rates in Irisarri et al. can be converted to a discrete
+update-attempt kernel by a common factor $\eta>0$ chosen small enough that all
+transition probabilities are valid. Equivalently, the off-diagonal probabilities
+are $(\eta/N)$ times their mesoscopic rates. This common factor fixes only the
+microscopic clock and does not change forward/backward rate ratios.
+
+For one ordinary microscopic update attempt,
+\begin{align}
+K_0(n+1\mid n)
+&=
+\eta\,\frac{N-n}{N}
+\left[
+h_1G_q(n)+a_2G_q(N-n-1)
+\right], \label{eq:k0plus}\\
+K_0(n-1\mid n)
+&=
+\eta\,\frac{n}{N}
+\left[
+a_1G_q(n-1)+h_2G_q(N-n)
+\right], \label{eq:k0minus}\\
+K_0(n\mid n)
+&=
+1-K_0(n+1\mid n)-K_0(n-1\mid n). \label{eq:k0stay}
+\end{align}
+All other entries vanish. These are the discrete-attempt counterparts of the
+birth--death rates in Eqs.~(3a)--(3d) of Irisarri et al.~\cite{irisarri2026}.
+
+\paragraph{Reaction-resolved detailed balance.}
+The reaction labels must be retained. For reaction~1,
+\[
+\frac{K_0^{(1)}(n+1\mid n)}
+     {K_0^{(1)}(n\mid n+1)}
+=
+\frac{h_1}{a_1}\frac{N-n}{n+1}.
+\]
+Since
+\[
+S_n^{\mathrm{int}}=\ln\binom{N}{n},
+\qquad
+S_{n+1}^{\mathrm{int}}-S_n^{\mathrm{int}}
+=
+\ln\frac{N-n}{n+1},
+\]
+we recover
+\[
+\ln
+\frac{K_0^{(1)}(n+1\mid n)}
+     {K_0^{(1)}(n\mid n+1)}
+=
+S_{n+1}^{\mathrm{int}}-S_n^{\mathrm{int}}
++\ln\frac{h_1}{a_1}.
+\]
+Reaction~2 has the analogous relation with bias $\ln(a_2/h_2)$. This is the
+generalized local-detailed-balance structure used by Irisarri et al. to define
+reaction-resolved currents and trajectory entropy production.
+
+\section{Controlled microscopic update}
+
+Take the controller target to be $Z=A$. At a controlled microscopic position,
+one of the $q$ social-influence slots is replaced by an external advocacy message
+for $A$. The remaining $q-1$ peers are sampled ordinarily.
+
+Because one influence slot is guaranteed to be $A$, an all-$B$ influence group is
+impossible. Therefore reaction~2 cannot fire at an $A$-controlled position.
+Reaction~1 remains possible, but only $q-1$ ordinary peers must now be $A$. Hence
+\begin{align}
+K_1^A(n+1\mid n)
+&=
+\eta\,\frac{N-n}{N}\,
+h_1G_{q-1}(n), \label{eq:k1plus}\\
+K_1^A(n-1\mid n)
+&=
+\eta\,\frac{n}{N}\,
+a_1G_{q-1}(n-1), \label{eq:k1minus}\\
+K_1^A(n\mid n)
+&=
+1-K_1^A(n+1\mid n)-K_1^A(n-1\mid n). \label{eq:k1stay}
+\end{align}
+
+The controller changes \emph{exposure}, not the focal agent's action. Thus an
+$A$-advocacy event may induce either conformity $B\to A$ or anticonformity
+$A\to B$. This mirrors the LLM setting, where an advocacy message can be
+accepted or rejected by the focal agent.
+
+Importantly, the controlled kernel preserves the same reaction-level
+local-detailed-balance form:
+\[
+\frac{K_1^A(n+1\mid n)}
+     {K_1^A(n\mid n+1)}
+=
+\frac{h_1}{a_1}\frac{N-n}{n+1},
+\]
+because the same factor $G_{q-1}(n)$ appears in the forward and reverse
+transition. Hence
+\[
+\ln
+\frac{K_1^A(n+1\mid n)}
+     {K_1^A(n\mid n+1)}
+=
+S_{n+1}^{\mathrm{int}}-S_n^{\mathrm{int}}
++\ln\frac{h_1}{a_1}.
+\]
+
+\section{Round-level feedback with an exact intervention budget}
+
+Let $k$ index population rounds. At the start of round $k$, the state is $n_k$.
+The controller acts once:
+\[
+n_k \longrightarrow Y_k \longrightarrow U_k,
+\qquad
+U_k\in\{\Noop,\Adv\}.
+\]
+If $U_k=\Noop$, all $N$ microscopic positions use $K_0$, so
+\[
+R_0(m\mid n)=\left[K_0^N\right]_{mn}.
+\]
+
+If $U_k=\Adv$, exactly $b$ of the $N$ positions are selected uniformly at random
+in advance. The selected positions use $K_1^A$ and the rest use $K_0$. This
+defines an exact finite-budget round kernel $R_1$.
+
+To compute it without enumerating the $\binom{N}{b}$ schedules, augment the
+within-round state by $(r,j)$, where $r$ microscopic positions have elapsed and
+$j$ controlled positions have already been used. Conditional on $(r,j)$,
+\begin{align}
+\Prob(C_{r+1}=1\mid r,j)
+&=\frac{b-j}{N-r},\\
+\Prob(C_{r+1}=0\mid r,j)
+&=\frac{N-b-r+j}{N-r}.
+\end{align}
+Let $f_{r,j}^{(n)}(\ell)$ be the probability of population state $\ell$ after
+$r$ microscopic updates, starting the round at $n$, with $j$ interventions used.
+Initialize
+\[
+f_{0,0}^{(n)}(\ell)=\mathbf{1}[\ell=n].
+\]
+Then
+\begin{align}
+f_{r+1,j+1}^{(n)}(m)
+&\mathrel{+}=
+\frac{b-j}{N-r}
+\sum_{\ell}
+f_{r,j}^{(n)}(\ell)K_1^A(m\mid\ell),\\
+f_{r+1,j}^{(n)}(m)
+&\mathrel{+}=
+\frac{N-b-r+j}{N-r}
+\sum_{\ell}
+f_{r,j}^{(n)}(\ell)K_0(m\mid\ell).
+\end{align}
+After $N$ positions,
+\[
+\boxed{R_1(m\mid n)=f_{N,b}^{(n)}(m).}
+\]
+
+\section{Measurement and soft feedback policy}
+
+The controller samples $q_c$ agents without replacement at the beginning of the
+round. If $Y_k=y$ is the number of sampled agents supporting $A$,
+\[
+S_{q_c}(y\mid n)
+=
+\Prob(Y_k=y\mid n_k=n)
+=
+\frac{\binom{n}{y}\binom{N-n}{q_c-y}}
+     {\binom{N}{q_c}}.
+\]
+Using the soft threshold policy,
+\[
+\pi(\Adv\mid y)
+=
+\sigma\!\left[
+\beta\left(\vartheta-\frac{y}{q_c}\right)
+\right],
+\qquad
+\sigma(z)=\frac{1}{1+e^{-z}},
+\]
+where $\vartheta$ is the controller threshold. Therefore
+\[
+p_1(n)
+\equiv
+\Prob(U_k=\Adv\mid n_k=n)
+=
+\sum_y S_{q_c}(y\mid n)\pi(\Adv\mid y).
+\]
+
+The action-averaged round kernel is
+\[
+R(m\mid n)
+=
+[1-p_1(n)]R_0(m\mid n)+p_1(n)R_1(m\mid n).
+\]
+For an irreducible time-homogeneous closed-loop chain, the stationary law
+$\rho$ satisfies
+\[
+\rho(m)=\sum_n \rho(n)R(m\mid n),
+\qquad
+\sum_n\rho(n)=1.
+\]
+
+\section{Exact round-level controller-to-population information transfer}
+
+Under this round-level Markov description, the one-step directional information
+from controller action to next population state is
+\[
+\mathcal{T}_{U\to N}
+=
+I(U_k;n_{k+1}\mid n_k).
+\]
+At stationarity,
+\[
+\boxed{
+\mathcal{T}_{U\to N}
+=
+\sum_{n,u,m}
+\rho(n)\,p(u\mid n)\,R_u(m\mid n)
+\log
+\frac{R_u(m\mid n)}
+     {R(m\mid n)}
+}
+\]
+in nats per population round, or in bits if $\log_2$ is used. Equivalently,
+\[
+\mathcal{T}_{U\to N}
+=
+\sum_n \rho(n)
+\sum_u p(u\mid n)
+\KL\!\left(
+R_u(\cdot\mid n)\,\Vert\,R(\cdot\mid n)
+\right).
+\]
+Thus the controller transfers information when its action selects a population
+transition law that is distinguishable from the action-averaged law.
+
+Horowitz and Sandberg~\cite{horowitz2014} use transfer entropy in the opposite
+feedback direction---system to measurement device---for information-acquisition
+bounds. The quantity above is instead the controller-to-population
+\emph{actuation} direction. This distinction should remain explicit in the later
+thermodynamic derivation.
+
+\section{Annealed approximation to the exact budget}
+
+The exact model fixes the controlled-position count to $b$. A convenient
+approximation independently controls each microscopic position with probability
+\[
+c=\frac{b}{N}.
+\]
+Then
+\[
+K_c=(1-c)K_0+cK_1^A,
+\qquad
+R_1^{\mathrm{ann}}\approx K_c^N.
+\]
+This approximation matches the mean intervention fraction but not its
+fluctuations: the exact model has exactly $b$ controlled positions, whereas the
+annealed model has a binomial intervention count with variance $Nc(1-c)$.
+Therefore it should be checked against the exact model for both transfer entropy
+and current/activity fluctuations.
+
+\section{Minimal next calculation}
+
+For the first theory calculation, use the symmetric Irisarri model
+\[
+h_1=h_2=h,\qquad a_1=a_2=a,
+\]
+so that
+\[
+\chi=\theta_{\mathrm{Irisarri}}=1,
+\qquad
+\lambda=\frac{h}{a}.
+\]
+For the sampling-with-replacement large-$N$ model analyzed by Irisarri et al.,
+the symmetry-breaking critical value is
+\[
+\lambda_c=\frac{q+1}{q-1},
+\qquad q>1.
+\]
+The immediate calculation is:
+\begin{enumerate}[leftmargin=1.6em]
+    \item construct $K_0$ and $K_1^A$ for chosen $(N,q,\lambda)$;
+    \item compute exact $R_0$ and finite-budget $R_1$;
+    \item solve for the closed-loop stationary law $\rho$;
+    \item evaluate $\mathcal{T}_{U\to N}$ exactly;
+    \item compare with the annealed approximation;
+    \item only then derive the large-$N$/Fokker--Planck limit.
+\end{enumerate}
+
+\paragraph{Implementation note.}
+Reaction identity should be logged in the classical simulator. Irisarri et al.'s
+trajectory thermodynamics is reaction resolved: distinct mechanisms can produce
+the same visible jump $n\to n\pm1$ while carrying different affinities. The
+occupation trajectory alone is therefore insufficient for the later entropy
+production and current decomposition.
+
+\begin{thebibliography}{9}
+
+\bibitem{irisarri2026}
+L.~Irisarri, L.~Trigal, R.~Toral, and G.~Manzano,
+\emph{Stochastic Thermodynamics of Social Imitation beyond Energetics},
+arXiv:2511.14006v2, 2026.
+
+\bibitem{horowitz2014}
+J.~M.~Horowitz and H.~Sandberg,
+\emph{Second-law-like inequalities with information and their interpretations},
+arXiv:1409.5351, 2014.
+
+\end{thebibliography}
+
+\end{document}

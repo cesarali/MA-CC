@@ -153,11 +153,12 @@ Both annotation pools were generated with `microsoft/gpt-5-mini` as generator
 self-verified pool has no independent check, and the pipeline README's design
 (§5) describes generator and verifier as separate stages.
 
-**Consequence for the games.** `assignment_scheme: paraphrased_replication` and
-`factorized_evidence` raise a `HiddenBenchDataError` naming the exact command
-that would build them. They are never synthesized at run time, because doing so
-would invent evidence content that the pipeline deliberately routes through an
-LLM verifier.
+**Consequence for the games.** `factorized_evidence` raises a
+`HiddenBenchDataError` naming the command that builds it. Paraphrased runs also
+fail by default when their scaled task is missing, but may explicitly enable
+`population_preparation.auto_build_missing`. That path allocates only existing
+accepted paraphrases and never invents evidence content or invokes an LLM. It
+fails when the selected task's annotation coverage or capacity is missing.
 
 **To finish them** (needs a reachable university proxy), from
 `scripts/local_llms/hiddenbench_population_pipeline/`:

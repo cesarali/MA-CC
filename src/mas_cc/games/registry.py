@@ -94,6 +94,10 @@ def create_default_game_registry() -> GameRegistry:
         "hidden_bench_imitation",
         "mas_cc.games.hidden_bench.imitation.game:HiddenBenchImitationGame",
     )
+    registry.register(
+        "hidden_bench_imitation_round_feedback",
+        "mas_cc.games.hidden_bench.imitation_round_feedback.game:HiddenBenchImitationRoundFeedbackGame",
+    )
     return registry
 
 

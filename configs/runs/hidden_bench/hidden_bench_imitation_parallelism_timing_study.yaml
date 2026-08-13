@@ -24,7 +24,8 @@ prompt:
 game:
   type: hidden_bench_imitation
   population_size: 4
-  horizon: 5
+  # Whole population sweeps; two sweeps replace the former five-attempt partial run.
+  horizon: 2
   topology: complete
   options:
     task_set: vanilla

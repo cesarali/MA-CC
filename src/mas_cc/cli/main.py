@@ -273,6 +273,26 @@ def build_parser() -> argparse.ArgumentParser:
     imitation_analysis.add_argument("--confidence", type=float, default=0.95)
     imitation_analysis.add_argument("--seed", type=int, default=1)
 
+    round_feedback_analysis = analysis_commands.add_parser(
+        "hidden-bench-round-feedback",
+        help="derive round-level sensing, actuation, slot, and current estimates",
+    )
+    round_feedback_analysis.add_argument(
+        "--run-dir", type=Path, required=True,
+        help="a completed hidden_bench_imitation_round_feedback run or grid directory",
+    )
+    round_feedback_analysis.add_argument(
+        "--output-dir", type=Path,
+        help=(
+            "analysis destination (default: "
+            "<run-dir>/hidden_bench_imitation_round_feedback_analysis)"
+        ),
+    )
+    round_feedback_analysis.add_argument("--bootstrap-resamples", type=int, default=1000)
+    round_feedback_analysis.add_argument("--null-permutations", type=int, default=1000)
+    round_feedback_analysis.add_argument("--confidence", type=float, default=0.95)
+    round_feedback_analysis.add_argument("--seed", type=int, default=1)
+
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
@@ -523,6 +543,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         try:
             summary = run_hidden_bench_imitation_analysis_command(
+                args.run_dir,
+                args.output_dir,
+                bootstrap_resamples=args.bootstrap_resamples,
+                null_permutations=args.null_permutations,
+                confidence=args.confidence,
+                seed=args.seed,
+            )
+        except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+    if args.command == "analysis" and args.analysis_command == "hidden-bench-round-feedback":
+        from .analysis import run_hidden_bench_round_feedback_analysis_command
+
+        try:
+            summary = run_hidden_bench_round_feedback_analysis_command(
                 args.run_dir,
                 args.output_dir,
                 bootstrap_resamples=args.bootstrap_resamples,

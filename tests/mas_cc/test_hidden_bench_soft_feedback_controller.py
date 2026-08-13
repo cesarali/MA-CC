@@ -47,6 +47,9 @@ pytestmark = pytest.mark.skipif(
 
 CLASSICAL_CONFIG = "configs/runs/hidden_bench/hidden_bench_imitation_classical.yaml"
 REASONING_CONFIG = "configs/runs/hidden_bench/hidden_bench_imitation_reasoning_mock.yaml"
+RANDOM_TARGET_CONFIG = (
+    "configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml"
+)
 
 
 def _config(path: str, *, horizon: int | None = None, **options):
@@ -177,6 +180,36 @@ def test_target_resolution_failure_is_never_silently_defaulted():
             state=state,
             rng=random.Random(0),
         )
+
+
+def test_random_incorrect_target_is_task_agnostic_reproducible_and_episode_fixed():
+    control = SoftTargetControl.from_options(
+        {"target": "random_incorrect", "sensor_sample_size": 1}
+    )
+    game = HiddenBenchImitationGame()
+    config = _config(RANDOM_TARGET_CONFIG)
+    targets_by_seed = {}
+    for seed in range(20):
+        state = game.initialize(config.game, seed)
+        first = control._resolved_target(state)
+        second = control._resolved_target(state)
+        assert first == second
+        assert first in state.possible_answers
+        assert first != state.correct_answer
+        targets_by_seed[seed] = first
+
+    # The task used by this fixture has multiple wrong answers, so a reasonable
+    # seed range must exercise more than one randomly selected direction.
+    assert len(set(targets_by_seed.values())) > 1
+
+
+def test_random_incorrect_is_accepted_through_run_configuration():
+    config = _with_control(
+        _config(RANDOM_TARGET_CONFIG), "soft_target", target="random_incorrect"
+    )
+    control = create_control(config.control)
+    assert isinstance(control, SoftTargetControl)
+    assert control.target == "random_incorrect"
 
 
 def test_sensor_sample_size_cannot_exceed_the_population():

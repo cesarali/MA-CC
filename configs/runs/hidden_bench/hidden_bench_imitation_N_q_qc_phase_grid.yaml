@@ -46,7 +46,8 @@ prompt:
 game:
   type: hidden_bench_imitation
   population_size: 32
-  horizon: 320
+  # HiddenBench imitation horizons are always population sweeps: 10 x 32 = 320 updates.
+  horizon: 10
   topology: complete
   options:
     task_set: expanded

@@ -1,0 +1,534 @@
+% This file can be compiled as a standalone note or included as the Theory
+% appendix of the ICLR paper. The parent defines \ICLRTheorySection.
+\ifdefined\ICLRTheorySection
+  \newcommand{\TheoryHeading}[1]{\subsection{#1}}
+  \newcommand{\TheorySubheading}[1]{\subsubsection{#1}}
+  \newcommand{\FinishTheoryDocument}{}
+\else
+  \documentclass[10pt]{article}
+
+  \usepackage[a4paper,margin=0.72in]{geometry}
+  \usepackage{amsmath,amssymb,mathtools,bm}
+  \usepackage{microtype}
+  \usepackage{booktabs}
+  \usepackage{enumitem}
+  \usepackage{xcolor}
+  \usepackage[hidelinks]{hyperref}
+  \usepackage[most]{tcolorbox}
+  \usepackage{array}
+
+  \title{\vspace{-1.7em}\textbf{Round-Level Feedback Control of a Classical $q$-Voter Population}\\
+  \large Exact microscopic kernels, finite-budget round dynamics, and transfer entropy}
+  \author{}
+  \date{13 August 2026}
+
+  \begin{document}
+  \maketitle
+  \vspace{-1.5em}
+  \newcommand{\TheoryHeading}[1]{\section{#1}}
+  \newcommand{\TheorySubheading}[1]{\subsection{#1}}
+  \newcommand{\FinishTheoryDocument}{%
+    \begin{thebibliography}{9}\small
+    \bibitem{irisarri2026}
+    L. Irisarri, L. Trigal, R. Toral, and G. Manzano,
+    \emph{Stochastic Thermodynamics of Social Imitation beyond Energetics}, arXiv:2511.14006v2, 2026.
+
+    \bibitem{horowitz2014}
+    J. M. Horowitz and H. Sandberg,
+    \emph{Second-law-like inequalities with information and their interpretations}, arXiv:1409.5351, 2014.
+
+    \bibitem{hiddenbench2026}
+    Y. Li, A. Naito, and H. Shirado,
+    \emph{Systematic Failures in Collective Reasoning under Distributed Information in Multi-Agent LLMs}, Proceedings of ICML 2026.
+    \end{thebibliography}
+    \end{document}%
+  }
+\fi
+
+\providecommand{\Prob}{\mathbb{P}}
+\providecommand{\E}{\mathbb{E}}
+\providecommand{\KL}{D_{\mathrm{KL}}}
+\providecommand{\KLtwo}{D_{\mathrm{KL}}^{(2)}}
+\providecommand{\Adv}{\textsc{Advocate}}
+\providecommand{\Noop}{\textsc{NoOp}}
+\providecommand{\TE}{\mathcal{T}_{U\to N}}
+\providecommand{\1}{\mathbf{1}}
+\providecommand{\binomz}[2]{\binom{#1}{#2}}
+
+\setlist{nosep,leftmargin=1.45em}
+\setlength{\parskip}{0.32em}
+\setlength{\parindent}{0pt}
+\setcounter{secnumdepth}{2}
+
+\newtcolorbox{plainbox}{colback=gray!4,colframe=gray!45,boxrule=0.45pt,arc=2pt,left=5pt,right=5pt,top=4pt,bottom=4pt}
+\newtcolorbox{validationbox}{colback=blue!2,colframe=blue!38!black,boxrule=0.45pt,arc=2pt,left=5pt,right=5pt,top=4pt,bottom=4pt}
+\newtcolorbox{resultbox}{colback=green!2,colframe=green!35!black,boxrule=0.5pt,arc=2pt,left=5pt,right=5pt,top=4pt,bottom=4pt}
+
+\begin{plainbox}
+\textbf{Purpose of this note.}
+We now fix the classical response rule instead of leaving it abstract. Ordinary agents follow a unanimity $q$-voter rule: a focal agent switches opinion only when all $q$ social inputs unanimously support the opposite opinion. At a controlled update, the controller does not change this rule; it replaces one of the $q$ social inputs by advocacy for the target opinion. The controller senses and decides only once per population round, and, if it chooses \Adv, exactly $b$ of the $N$ microscopic update positions are selected uniformly in advance. The goal is to derive the one-step kernels $K_0,K_1$, the full-round kernels $R_0,R_1$, and the controller-to-population transfer entropy. Microscopic reversibility is \emph{not} imposed.
+\end{plainbox}
+
+\TheoryHeading{Model and notation: what evolves, and on which time scale?}
+
+\textbf{In simple terms.}
+There are two time scales. Inside a round, agents update one at a time. The controller, however, acts on a slower time scale: it measures once at the beginning of the round, decides whether to advocate the target opinion, and then lets the whole round unfold without reconsidering its decision.
+
+We first derive the binary model. Let opinion $A$ be the controller's target and $B$ the alternative. There are $N$ agents. At the beginning of round $k$,
+\[
+n_k=n\in\{0,1,\ldots,N\}
+\]
+means that exactly $n$ agents currently support $A$ and $N-n$ support $B$. Each round contains exactly $N$ microscopic update attempts, indexed by $r=0,\ldots,N-1$. Thus capital $N$ is the fixed population size, while lower-case $n_k$ is the stochastic population state observed on the round clock.
+
+The main variables are:
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.16\linewidth} p{0.72\linewidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$N$ & Population size; also the number of microscopic update positions in one round.\\
+$q$ & Number of social inputs seen by the focal agent at one microscopic update.\\
+$q_c$ & Number of agents sampled by the controller at the beginning of a round.\\
+$b$ & Exact number of controlled microscopic positions if the controller chooses \Adv.\\
+$c=b/N$ & Actuation fraction: controlled positions per round.\\
+$n_k$ & Number of target supporters at the beginning of round $k$.\\
+$Y_k$ & Number of target supporters found in the controller's sample of size $q_c$.\\
+$U_k$ & Round-level action, $U_k\in\{\Noop,\Adv\}$.\\
+$K_0$ & Transition kernel for \emph{one ordinary microscopic update}.\\
+$K_1$ & Transition kernel for \emph{one controlled microscopic update}.\\
+$R_0,R_1$ & Transition kernels for a \emph{whole round} under \Noop or \Adv.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The round protocol is
+\[
+n_k\;\longrightarrow\;Y_k\;\longrightarrow\;U_k
+\;\longrightarrow\;\text{$N$ microscopic updates}\;\longrightarrow\;n_{k+1}.
+\]
+If $U_k=\Adv$, a set $S_k\subset\{1,\ldots,N\}$ with $|S_k|=b$ is drawn uniformly at random \emph{before} any microscopic update occurs. Positions in $S_k$ use the controlled kernel $K_1$; all other positions use $K_0$. No new sensing or controller decision occurs within the round.
+
+\begin{validationbox}
+\textbf{How to validate this section.}
+In simulation logs, each round should contain exactly $N$ focal-update attempts. There must be exactly one controller sensing/policy evaluation per round. Under \Adv, exactly $b$ positions should be marked controlled and their indices should be fixed before the first update. Under \Noop, there should be zero controlled positions. These are protocol-level invariants and should hold for every random seed.
+\end{validationbox}
+
+\TheoryHeading{The fixed classical rule and the microscopic kernels $K_0,K_1$}
+
+\TheorySubheading{The unanimity $q$-voter rule}
+
+\textbf{In simple terms.}
+At every microscopic update, one focal agent looks at $q$ social inputs. It changes opinion only if all $q$ inputs agree with each other and all oppose the focal's current opinion. The controller does not create a new decision rule; at a controlled position it simply occupies one of those $q$ input slots and says ``$A$''.
+
+This is the classical herding part of a $q$-voter construction: the probability of switching depends nonlinearly on finding $q$ opposite opinions, as in the social-imitation model of Irisarri et al.~\cite{irisarri2026}. We deliberately do \emph{not} add their anticonformity reaction here, because our immediate objective is a minimal classical analogue of the advocacy intervention.
+
+For an ordinary position:
+\begin{enumerate}
+\item choose one focal agent uniformly from the $N$ agents;
+\item sample $q$ distinct ordinary peers uniformly from the remaining $N-1$ agents;
+\item switch the focal only if all $q$ peers unanimously hold the opposite opinion.
+\end{enumerate}
+
+For a controlled position with target $A$:
+\begin{enumerate}
+\item choose the focal in exactly the same way;
+\item one of the $q$ input slots is occupied by the controller and therefore supports $A$;
+\item sample only $q-1$ ordinary peers from the remaining $N-1$ agents;
+\item apply the \emph{same} unanimity rule to the resulting $q$ inputs.
+\end{enumerate}
+
+\TheorySubheading{Ordinary microscopic kernel $K_0$}
+
+\textbf{What we calculate now.}
+Starting from $n$ supporters of $A$, one microscopic update can only produce $n+1$, $n$, or $n-1$. We calculate these three probabilities exactly.
+
+A transition $n\to n+1$ requires (i) choosing a $B$ focal and (ii) sampling $q$ peers that are all $A$. The probability of choosing a $B$ focal is $(N-n)/N$. Conditional on that choice, all $n$ supporters of $A$ remain available among the other $N-1$ agents. Therefore
+\begin{equation}
+\boxed{
+K_0(n+1\mid n)
+=\frac{N-n}{N}\,
+\frac{\binom{n}{q}}{\binom{N-1}{q}}
+}
+\equiv p_0^+(n).
+\label{eq:k0plus}
+\end{equation}
+
+Similarly, $n\to n-1$ requires an $A$ focal followed by $q$ unanimously $B$ peers. Hence
+\begin{equation}
+\boxed{
+K_0(n-1\mid n)
+=\frac{n}{N}\,
+\frac{\binom{N-n}{q}}{\binom{N-1}{q}}
+}
+\equiv p_0^-(n).
+\label{eq:k0minus}
+\end{equation}
+The remaining probability is a self-transition,
+\begin{equation}
+\boxed{K_0(n\mid n)=1-p_0^+(n)-p_0^-(n).}
+\label{eq:k0stay}
+\end{equation}
+We use the convention $\binom{a}{q}=0$ when $a<q$.
+
+\TheorySubheading{Controlled microscopic kernel $K_1$}
+
+\textbf{What changes under control.}
+The controller contributes one guaranteed $A$ input. A $B$ focal therefore needs only the remaining $q-1$ ordinary peers to support $A$ in order to see $q$ unanimous $A$ inputs. An $A$ focal can no longer see $q$ unanimous $B$ inputs, because one input is fixed to $A$ by the controller.
+
+Thus
+\begin{equation}
+\boxed{
+K_1(n+1\mid n)
+=\frac{N-n}{N}\,
+\frac{\binom{n}{q-1}}{\binom{N-1}{q-1}}
+}
+\equiv p_1^+(n),
+\label{eq:k1plus}
+\end{equation}
+while
+\begin{equation}
+\boxed{K_1(n-1\mid n)=0,}
+\label{eq:k1minus}
+\end{equation}
+and
+\begin{equation}
+\boxed{K_1(n\mid n)=1-p_1^+(n).}
+\label{eq:k1stay}
+\end{equation}
+This controlled kernel is asymmetric and may be microscopically irreversible. That is acceptable: transfer entropy only requires well-defined stochastic transition probabilities. Irisarri et al.'s reversibility structure is needed for their specific affinity/fluctuation-theorem construction, not for Eqs.~\eqref{eq:k1plus}--\eqref{eq:k1stay} themselves~\cite{irisarri2026}.
+
+\paragraph{A concrete example.}
+Take $N=6$, $q=2$, and $n=2$. In an ordinary update,
+\[
+p_0^+(2)=\frac{4}{6}\frac{\binom{2}{2}}{\binom{5}{2}}=\frac{1}{15},
+\qquad
+p_0^-(2)=\frac{2}{6}\frac{\binom{4}{2}}{\binom{5}{2}}=\frac{1}{5}.
+\]
+So when $A$ is a minority, the ordinary $q$-voter tends to reduce it further. At a controlled position,
+\[
+p_1^+(2)=\frac{4}{6}\frac{\binom{2}{1}}{\binom{5}{1}}=\frac{4}{15},
+\qquad p_1^-(2)=0.
+\]
+The controller therefore changes the local drift without changing the focal response rule.
+
+\begin{validationbox}
+\textbf{How to validate $K_0$ and $K_1$.}
+First check analytically that every row is nonnegative and sums to one. Then, for fixed $(N,q,n)$, simulate $10^5$ isolated microscopic updates and compare empirical frequencies of $n+1,n,n-1$ against Eqs.~\eqref{eq:k0plus}--\eqref{eq:k1stay}. Useful hand checks are: (i) $q=1$ gives $p_0^+=p_0^-=n(N-n)/[N(N-1)]$ and $p_1^+=(N-n)/N$; (ii) at $n=N$, both kernels remain at $N$; (iii) for $q>1$ and $n=0$, even control cannot create the first $A$ supporter because $q-1$ ordinary $A$ peers are still required.
+\end{validationbox}
+
+\TheoryHeading{From microscopic kernels to whole-round kernels $R_0,R_1$}
+
+\textbf{In simple terms.}
+$K_0$ and $K_1$ describe only one focal update. Transfer entropy is defined on our slower round clock, so we need the probability of ending the entire round at $m$ supporters, given that it started at $n$ supporters. This is what $R_0(m\mid n)$ and $R_1(m\mid n)$ mean.
+
+Represent $K_0$ and $K_1$ as $(N+1)\times(N+1)$ transition matrices with rows indexed by the current $n$ and columns by the next $m$.
+
+\TheorySubheading{No-control round}
+If $U_k=\Noop$, all $N$ microscopic positions are ordinary. Therefore the exact round kernel is
+\begin{equation}
+\boxed{R_0=K_0^N,\qquad R_0(m\mid n)=[K_0^N]_{nm}.}
+\label{eq:r0}
+\end{equation}
+
+\TheorySubheading{Advocacy round with exactly $b$ controlled positions}
+If $U_k=\Adv$, exactly $b$ positions use $K_1$ and $N-b$ use $K_0$. Because the population changes after every update, the order of $K_0$ and $K_1$ generally matters. We therefore average over the uniformly preallocated schedule exactly.
+
+Let $F_{r,j}$ be an $(N+1)\times(N+1)$ matrix whose $(n,m)$ element is the probability of being at $m$ after $r$ microscopic positions, having used exactly $j$ controlled positions, conditional on starting the round at $n$. Initialize
+\[
+F_{0,0}=I,
+\]
+where $I$ is the identity matrix. After $r$ positions and $j$ controlled uses, there are $b-j$ controlled positions and $(N-b)-(r-j)$ ordinary positions remaining. Hence
+\begin{align}
+F_{r+1,j+1}
+&\mathrel{+}=
+\frac{b-j}{N-r}\,F_{r,j}K_1,
+\label{eq:rec1}\\
+F_{r+1,j}
+&\mathrel{+}=
+\frac{N-b-r+j}{N-r}\,F_{r,j}K_0.
+\label{eq:rec0}
+\end{align}
+After all $N$ positions,
+\begin{equation}
+\boxed{R_1=F_{N,b}.}
+\label{eq:r1}
+\end{equation}
+This recursion is exactly equivalent to averaging over all $\binom{N}{b}$ possible schedules, but it avoids enumerating them.
+
+Two limiting identities are useful:
+\[
+b=0\quad\Rightarrow\quad R_1=R_0,
+\qquad
+b=N\quad\Rightarrow\quad R_1=K_1^N.
+\]
+
+\begin{validationbox}
+\textbf{How to validate $R_0$ and $R_1$.}
+For tiny systems such as $N\leq6$, enumerate all $\binom{N}{b}$ schedules explicitly and verify that their averaged ordered matrix products equal the recursion in Eq.~\eqref{eq:r1}. For realistic $N$, fix an initial $n$, simulate many complete rounds, and compare the histogram of $n_{k+1}$ with the corresponding row of $R_0$ or $R_1$. Also verify the identities $b=0\Rightarrow R_1=R_0$ and $b=N\Rightarrow R_1=K_1^N$ numerically to machine precision.
+\end{validationbox}
+
+\TheoryHeading{Controller sensing and the closed-loop round process}
+
+\textbf{In simple terms.}
+Before choosing \Noop or \Adv, the controller sees only a sample of the population. We first calculate how likely each sample result is, then average the controller's policy over that measurement noise. This gives the action probability $p(u\mid n)$ needed by the transfer-entropy calculation.
+
+At the beginning of the round, the controller samples $q_c$ distinct agents without replacement. If $Y_k=y$ of them support $A$, then
+\begin{equation}
+\boxed{
+S_{q_c}(y\mid n)
+=\Prob(Y_k=y\mid n_k=n)
+=\frac{\binom{n}{y}\binom{N-n}{q_c-y}}{\binom{N}{q_c}}.
+}
+\label{eq:sensor}
+\end{equation}
+This is the hypergeometric sensor model.
+
+Let $\pi_1(y)=\Prob(U_k=\Adv\mid Y_k=y)$ denote the controller policy. We do not need to fix a particular form for the theory. A useful soft-threshold example is
+\[
+\pi_1(y)=\sigma\!\left[\eta\left(\vartheta-\frac{y}{q_c}\right)\right],
+\qquad \sigma(z)=\frac{1}{1+e^{-z}},
+\]
+where $\vartheta$ is a target-support threshold and $\eta$ controls policy sharpness.
+
+The probability of advocacy conditioned on the \emph{true} population state is
+\begin{equation}
+\boxed{
+p_1(n)\equiv\Prob(U_k=\Adv\mid n_k=n)
+=\sum_y S_{q_c}(y\mid n)\,\pi_1(y).
+}
+\label{eq:p1}
+\end{equation}
+The action-averaged closed-loop transition kernel is therefore row-wise
+\begin{equation}
+\boxed{
+R(m\mid n)=\bigl[1-p_1(n)\bigr]R_0(m\mid n)+p_1(n)R_1(m\mid n).
+}
+\label{eq:closed}
+\end{equation}
+If $P_k(n)=\Prob(n_k=n)$ is the state distribution before round $k$, then
+\begin{equation}
+P_{k+1}(m)=\sum_n P_k(n)R(m\mid n).
+\label{eq:pk}
+\end{equation}
+
+\begin{validationbox}
+\textbf{How to validate sensing and policy.}
+Hold the true state $n$ fixed and repeatedly sample $q_c$ agents. The empirical distribution of $Y$ should match Eq.~\eqref{eq:sensor}. Next run the policy on those samples and compare the empirical advocacy frequency with Eq.~\eqref{eq:p1}. When $q_c=N$, the sensor becomes exact: $Y=n$ with probability one. When $q_c$ is small, repeated samples should visibly broaden the action distribution. This directly checks the intended sensing-resource interpretation of $q_c$.
+\end{validationbox}
+
+\TheoryHeading{Exact round-level transfer entropy}
+
+\textbf{What transfer entropy means here.}
+We ask: after the current population state $n_k$ is already known, how much additional information does knowing the controller's round action $U_k$ provide about the next population state $n_{k+1}$? If \Noop and \Adv lead to nearly identical next-state distributions, the answer is small. If they lead to clearly different next-state distributions, the answer is large.
+
+For our round-level Markov description, the controller-to-population transfer-entropy increment is
+\begin{equation}
+\boxed{
+\mathcal{T}_k
+=I(U_k;n_{k+1}\mid n_k).
+}
+\label{eq:tedef}
+\end{equation}
+Using $P_k(n)$, the action probabilities, and the exact round kernels gives the finite sum. The steps are
+\begin{align*}
+I(U_k;n_{k+1}\mid n_k)
+&=\sum_{n,u,m}\Prob(n,u,m)
+\log_2\frac{\Prob(m\mid n,u)}{\Prob(m\mid n)},\\
+\Prob(n,u,m)&=P_k(n)\,p(u\mid n)\,R_u(m\mid n),\\
+\Prob(m\mid n)&=R(m\mid n).
+\end{align*}
+Substituting these three pieces yields
+\begin{equation}
+\boxed{
+\mathcal{T}_k
+=
+\sum_{n,u,m}
+P_k(n)\,p(u\mid n)\,R_u(m\mid n)
+\log_2\frac{R_u(m\mid n)}{R(m\mid n)}.
+}
+\label{eq:teexact}
+\end{equation}
+This is an \emph{exact finite-$N$ expression} in bits per round once $K_0,K_1$, the sensor, and the policy are fixed. Equivalently,
+\begin{equation}
+\mathcal{T}_k
+=
+\sum_n P_k(n)
+\sum_u p(u\mid n)
+\KLtwo\!\left(R_u(\cdot\mid n)\,\Vert\,R(\cdot\mid n)\right),
+\label{eq:tekl}
+\end{equation}
+where $\KLtwo$ uses logarithm base two.
+
+Equation~\eqref{eq:tekl} gives the most useful interpretation: \textbf{transfer entropy is the average distinguishability between the transition law selected by the controller and the transition law obtained when the controller action is not revealed.}
+
+For an experiment of $K$ rounds, define the finite-horizon rate
+\begin{equation}
+\boxed{
+\overline{\mathcal{T}}^{(K)}_{U\to N}
+=\frac{1}{K}\sum_{k=0}^{K-1}\mathcal{T}_k.
+}
+\label{eq:finiteTE}
+\end{equation}
+This finite-horizon quantity is the natural headline measure for the pure unanimity $q$-voter baseline.
+
+\paragraph{Why finite-horizon TE is important here.}
+A pure $q$-voter has absorbing consensus states. With persistent advocacy for $A$, $n=N$ is absorbing, and the long-time stationary distribution may collapse onto consensus. Once the population is already at $n=N$, $R_0(\cdot\mid N)=R_1(\cdot\mid N)$ and the stationary actuation TE is zero. This does \emph{not} mean the controller had no influence on the path to consensus. It means that no new control information is transmitted after the system has become frozen. Therefore we should primarily report $\mathcal{T}_k$ as a function of round and its finite-horizon average in Eq.~\eqref{eq:finiteTE}. A non-degenerate stationary TE would require adding spontaneous noise/anticonformity or another mechanism that prevents absorption.
+
+The TE obeys
+\begin{equation}
+0\leq \mathcal{T}_k\leq H(U_k\mid n_k).
+\label{eq:bound}
+\end{equation}
+If $R_0=R_1$ (for example $b=0$), then $\mathcal{T}_k=0$. If the action is completely deterministic once $n_k$ is known, then $H(U_k\mid n_k)=0$ and therefore $\mathcal{T}_k=0$ even if the chosen action has a large causal effect. In our feedback design, randomness can remain because the controller observes only the random sample $Y_k$ and/or because the policy itself is stochastic. This distinction is important when interpreting TE as an information-flow measure rather than as a generic causal-effect size.
+
+Horowitz and Sandberg use transfer entropy in feedback thermodynamics mainly for the opposite direction, system $\to$ measurement/controller, and derive the continuous construction by discretizing repeated feedback~\cite{horowitz2014}. Our Eq.~\eqref{eq:teexact} is the \emph{actuation} direction, controller $\to$ population. The sensing direction should be reported separately, e.g. through $I(n_k;Y_k)$.
+
+\begin{validationbox}
+\textbf{How to validate the transfer entropy.}
+There are three strong checks. (1) Generate long synthetic trajectories directly from the exact closed-loop kernel and estimate $I(U_k;n_{k+1}\mid n_k)$ by contingency tables; it should converge to Eq.~\eqref{eq:teexact}. (2) Shuffle $U_k$ within appropriate state strata: the estimated TE should collapse toward its finite-sample null. (3) Check exact identities: $b=0\Rightarrow\mathcal{T}_k=0$; $R_0=R_1\Rightarrow\mathcal{T}_k=0$; and every numerical value must satisfy Eq.~\eqref{eq:bound}. These tests validate both the derivation and the estimator already used in the repository's direct-counting information-analysis path.
+\end{validationbox}
+
+\TheoryHeading{Large-$N$ approximation: what phase structure should we expect?}
+
+\textbf{In simple terms.}
+The exact kernels tell us what happens for finite $N$. To understand phase behavior, we now replace the discrete fraction $n/N$ by a continuous variable $x\in[0,1]$ and calculate the average drift produced by ordinary and controlled microscopic updates. This is the mean-field layer; it is an approximation to the exact finite-budget model, not a replacement for it.
+
+Let
+\[
+x=\frac{n}{N}.
+\]
+For large $N$ with fixed $q$, hypergeometric sampling is approximately sampling from proportions. The ordinary microscopic upward and downward probabilities become
+\begin{align}
+p_0^+(x)&\simeq (1-x)x^q,\\
+p_0^-(x)&\simeq x(1-x)^q.
+\end{align}
+Hence the ordinary drift in the intensive variable is proportional to
+\begin{equation}
+\boxed{
+f_0(x)=(1-x)x^q-x(1-x)^q.
+}
+\label{eq:f0}
+\end{equation}
+For a controlled position,
+\begin{equation}
+\boxed{
+f_1(x)=(1-x)x^{q-1},
+}
+\label{eq:f1}
+\end{equation}
+because only $B\to A$ switches remain possible.
+
+During an \Adv round, a fraction $c=b/N$ of positions are controlled. At leading mean-field order the within-round drift is therefore
+\begin{equation}
+\boxed{
+f_{\Adv}(x;c)=(1-c)f_0(x)+c f_1(x),
+}
+\label{eq:fadv}
+\end{equation}
+whereas $f_{\Noop}(x)=f_0(x)$. If one unit of rescaled time corresponds to one population round, the mean-field round maps $\Phi_0$ and $\Phi_1$ are obtained by integrating
+\[
+\frac{dx}{d\tau}=f_{\Noop}(x)
+\quad\text{or}\quad
+\frac{dx}{d\tau}=f_{\Adv}(x;c),
+\qquad \tau\in[0,1].
+\]
+The controller still chooses the action only once at the beginning of the round. Therefore the next-state law is a mixture of the two round maps, not a policy decision at each infinitesimal time.
+
+\TheorySubheading{A simple analytic controllability threshold}
+
+For $x<1/2$, the ordinary $q$-voter drift $f_0(x)$ is negative when $q>1$: a minority tends to shrink. We can ask how large $c$ must be for an \Adv round to reverse that local drift. Solve $f_{\Adv}(x;c)>0$. For $q\geq2$ and $0<x<1/2$ this gives
+\begin{equation}
+\boxed{
+c>c_\star(x;q)
+=\frac{(1-x)^{q-1}-x^{q-1}}
+{(1-x)\left[x^{q-2}+(1-x)^{q-2}\right]}.
+}
+\label{eq:cstar}
+\end{equation}
+For $q=2$,
+\[
+c_\star(x;2)=\frac{1-2x}{2(1-x)},
+\]
+whereas for $q=3$,
+\[
+c_\star(x;3)=\frac{1-2x}{1-x}.
+\]
+This already predicts that stronger social unanimity makes a small target minority substantially harder to control. It also exposes an important structural fact: for $q>1$ and $x=0$, one-slot advocacy cannot create the first target supporter because the remaining $q-1$ ordinary peers must already include target support. The controller can amplify an existing seed but, except at $q=1$, cannot create one from nothing.
+
+This suggests the theoretical phase/controllability surfaces to study first:
+\[
+\overline{\mathcal{T}}^{(K)}_{U\to N}(q,q_c,c),
+\qquad
+\E[x_K](q,q_c,c),
+\qquad
+\mathrm{Var}(x_K)(q,q_c,c),
+\]
+and, in the mean-field approximation, the location of drift reversals or basin changes as functions of $(q,c)$ with sensing $q_c$ entering through the policy.
+
+\begin{validationbox}
+\textbf{How to validate the mean-field layer.}
+For several $N$ values (for example $N=20,50,100,200$), compare: (i) the exact one-step drifts computed from $K_0,K_1$ with Eqs.~\eqref{eq:f0}--\eqref{eq:f1}; (ii) Monte Carlo average trajectories with the ODE round maps $\Phi_0,\Phi_1$; and (iii) the empirical control threshold for positive drift against $c_\star(x;q)$. The discrepancy should shrink with increasing $N$ away from absorbing boundaries. This is the cleanest way to justify, rather than merely assume, the mean-field approximation.
+\end{validationbox}
+
+\TheoryHeading{Direct extension to the three-option HiddenBench setting}
+
+\textbf{In simple terms.}
+HiddenBench has three decision options rather than two~\cite{hiddenbench2026}. The binary calculation above is the easiest place to understand the theory, but the fixed unanimity rule extends directly. The population state becomes a count vector instead of a single count.
+
+Let
+\[
+\bm n=(n_A,n_B,n_C),\qquad n_A+n_B+n_C=N,
+\]
+with $A$ the controller target. In an ordinary microscopic update, a focal agent in option $i$ changes to option $j\neq i$ only if all $q$ ordinary peers unanimously support $j$. Therefore
+\begin{equation}
+K_0(\bm n-\bm e_i+\bm e_j\mid\bm n)
+=
+\frac{n_i}{N}\,
+\frac{\binom{n_j}{q}}{\binom{N-1}{q}},
+\qquad i\neq j.
+\label{eq:multiK0}
+\end{equation}
+At a controlled position, one input is fixed to $A$. The only possible opinion change is therefore from a non-$A$ option $i$ to $A$:
+\begin{equation}
+\boxed{
+K_1(\bm n-\bm e_i+\bm e_A\mid\bm n)
+=
+\frac{n_i}{N}\,
+\frac{\binom{n_A}{q-1}}{\binom{N-1}{q-1}},
+\qquad i\neq A.
+}
+\label{eq:multiK1}
+\end{equation}
+All other off-diagonal controlled transitions are zero, and the diagonal element completes each row to one. The same finite-$b$ recursion then constructs $R_1(\bm m\mid\bm n)$, and Eq.~\eqref{eq:teexact} remains unchanged after replacing scalar counts by composition vectors.
+
+The number of three-option occupation states is
+\[
+\binom{N+2}{2},
+\]
+so for the population sizes currently under consideration the exact state space is still manageable, especially because $K_0$ and $K_1$ are sparse.
+
+\begin{validationbox}
+\textbf{How to validate the three-option extension.}
+Use tiny populations and enumerate all focal/peer choices directly. Verify Eq.~\eqref{eq:multiK0} and Eq.~\eqref{eq:multiK1} against empirical microscopic transitions. Then compare exact round kernels with Monte Carlo as in the binary case. Finally, check permutation symmetry between the two non-target options $B$ and $C$ when their initial counts and evidence treatment are symmetric.
+\end{validationbox}
+
+\TheoryHeading{What the theory now gives us, and what remains empirical}
+
+The fixed-rule theory now separates four objects cleanly:
+\begin{enumerate}
+\item \textbf{Social dynamics:} $q$ determines how much unanimous peer support is needed for imitation.
+\item \textbf{Sensing resource:} $q_c$ determines how noisy the controller's round-level observation is.
+\item \textbf{Actuation resource:} $c=b/N$ determines how many microscopic opportunities receive advocacy.
+\item \textbf{Information flow:} $\mathcal{T}_k$ measures how distinguishable the next-round population dynamics are when the controller action is known.
+\end{enumerate}
+
+The exact finite-$N$ theory is algorithmic but not necessarily a single elementary closed-form scalar: $K_0$ and $K_1$ are explicit, $R_0$ is a matrix power, $R_1$ is obtained by an exact finite recursion, and transfer entropy is then the explicit finite sum in Eq.~\eqref{eq:teexact}. This is sufficient to generate theoretical TE surfaces without Monte Carlo estimation error.
+
+For the LLM experiment, the same round-level protocol should be used with reasoning OFF and ON. The classical $q$-voter then provides a tractable reference. Reasoning is not represented by inserting an arbitrary sigmoid into the classical model; instead, its effect is diagnosed empirically by where the LLM transition statistics, memory dependence, outcome drift, variance, and information flow depart from the classical predictions.
+
+\begin{resultbox}
+\textbf{Recommended immediate validation sequence.}
+(1) Implement the binary $K_0,K_1$ formulas and unit-test them. (2) Build the exact $R_0,R_1$ recursion and compare it with brute force for small $N$. (3) Generate exact finite-horizon TE from Eq.~\eqref{eq:teexact}. (4) Simulate the same classical process and verify that empirical CMI converges to the exact TE. (5) Produce $(q,q_c,c)$ controllability surfaces from both exact finite-$N$ theory and mean field. (6) Only then compare reasoning OFF/ON under the identical slow feedback protocol.
+\end{resultbox}
+
+\FinishTheoryDocument

@@ -23,9 +23,10 @@ Two things the brief guessed at and this module corrects:
    arbitrary N available without regenerating data files - and
    `tests/games/hidden_bench/test_data.py` asserts it reproduces the
    checked-in `N_32.json` agent-for-agent, so the two can never drift.
-   `paraphrased_replication` and `factorized_evidence` depend on verified
-   LLM-generated annotations and are therefore *only* read from prebuilt files;
-   they are never synthesized here.
+   `factorized_evidence` remains prebuilt-only. `paraphrased_replication` is
+   normally read from a prebuilt file, but an explicit run option may invoke
+   the pipeline's deterministic builder for one requested task when verified
+   source paraphrases already exist. No paraphrases are generated at runtime.
 """
 
 from __future__ import annotations
@@ -34,6 +35,8 @@ import hashlib
 import json
 import random
 import re
+import subprocess
+import sys
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
@@ -281,7 +284,7 @@ class TaskSet:
 
     def by_name(self, name: str) -> HiddenProfileTask:
         for task in self.tasks:
-            if task.name == name:
+            if task.name == name or str(task.task_id) == name:
                 return task
         raise HiddenBenchDataError(
             f"unknown task {name!r}; the {self.task_set} set has "
@@ -303,26 +306,90 @@ def load_task_set(
     corpus_root: str | Path | None = None,
     scheme: str = "bijective",
     n_agents: int | None = None,
+    requested_task: str | None = None,
+    auto_prepare_paraphrases: bool = False,
+    paraphrase_annotations: str | Path | None = None,
 ) -> TaskSet:
     """Load the corpus for one run.
 
     `task_set: vanilla` reads `canonical/tasks.json` - the 65 upstream tasks.
     `task_set: expanded` reads `scaled/<scheme>/N_<n_agents>.json` when such a
     file exists, so a prebuilt (and audited) population is always preferred over
-    one derived at run time.
+    one derived at run time. With ``auto_prepare_paraphrases=True``, a missing
+    requested task is added using only the existing annotation pool.
     """
 
-    root = str(Path(corpus_root) if corpus_root is not None else DEFAULT_CORPUS_ROOT)
+    root_path = Path(corpus_root) if corpus_root is not None else DEFAULT_CORPUS_ROOT
+    root = str(root_path)
     if task_set == "vanilla":
         return TaskSet(_load_canonical(root), root, task_set, {})
     if task_set != "expanded":
-        raise HiddenBenchDataError(f"game.options.task_set must be 'vanilla' or 'expanded', got {task_set!r}")
+        raise HiddenBenchDataError(
+            "game.options.task_set must be 'vanilla' or 'expanded', "
+            f"got {task_set!r}"
+        )
     if n_agents is None:
         raise HiddenBenchDataError("task_set 'expanded' requires n_agents")
     if scheme in LOCAL_SCHEMES:
         # These schemes have no pipeline output by construction; they are
         # derived from the canonical tasks at assignment time.
         return TaskSet(_load_canonical(root), root, task_set, {})
+    if auto_prepare_paraphrases:
+        if scheme != "paraphrased_replication":
+            raise HiddenBenchDataError(
+                "automatic population preparation currently supports only "
+                "assignment_scheme 'paraphrased_replication'"
+            )
+        population_path = root_path / "scaled" / scheme / f"N_{n_agents}.json"
+        needs_task = False
+        if population_path.exists():
+            loaded = _load_scaled(root, scheme, n_agents)
+            needs_task = requested_task is not None and not any(
+                task.name == requested_task or str(task.task_id) == requested_task
+                for task, _ in loaded
+            )
+        if not population_path.exists() or needs_task:
+            annotations_path = (
+                Path(paraphrase_annotations)
+                if paraphrase_annotations is not None
+                else root_path / "annotations" / "paraphrases.json"
+            )
+            if not annotations_path.is_absolute():
+                annotations_path = _REPO_ROOT / annotations_path
+            script = (
+                _REPO_ROOT
+                / "scripts"
+                / "local_llms"
+                / "hiddenbench_population_pipeline"
+                / "scripts"
+                / "ensure_paraphrased_population.py"
+            )
+            command = [
+                sys.executable,
+                str(script),
+                "--agents",
+                str(n_agents),
+                "--annotations",
+                str(annotations_path),
+                "--data-root",
+                str(root_path),
+            ]
+            if requested_task is not None:
+                command.extend(("--task", requested_task))
+            completed = subprocess.run(
+                command,
+                cwd=_REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if completed.returncode != 0:
+                detail = completed.stderr.strip() or completed.stdout.strip()
+                raise HiddenBenchDataError(
+                    "could not prepare the requested paraphrased population"
+                    + (f": {detail}" if detail else "")
+                )
+            _load_scaled.cache_clear()
     try:
         loaded = _load_scaled(root, scheme, n_agents)
     except HiddenBenchDataError:
@@ -438,10 +505,16 @@ def assign(
 
     if scheme in {"paraphrased_replication", "factorized_evidence"}:
         raise HiddenBenchDataError(
-            f"scheme {scheme!r} is only available from a prebuilt population file - it depends on "
-            "verified LLM-generated annotations and is never synthesized at run time. Build it with "
+            f"scheme {scheme!r} needs a prepared population allocation based on verified "
+            "LLM-generated annotations. Build it with "
             "scripts/local_llms/hiddenbench_population_pipeline/scripts/prepare_hiddenbench.py "
             f"--agents {n_agents} --method {scheme} --annotations ..."
+            + (
+                ", or enable game.options.population_preparation.auto_build_missing "
+                "for paraphrased_replication"
+                if scheme == "paraphrased_replication"
+                else ""
+            )
         )
 
     # ---- mas_cc-local group-size controls -------------------------------

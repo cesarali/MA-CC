@@ -30,37 +30,56 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         return None
     if not analysis.estimators:
         raise ValueError("analysis.enabled is true but analysis.estimators is empty")
-    if config.game.type != "hidden_bench_imitation":
+    if config.game.type not in {
+        "hidden_bench_imitation",
+        "hidden_bench_imitation_round_feedback",
+    }:
         raise ValueError(
             f"configured post-run analysis is not supported for game.type {config.game.type!r}"
         )
 
-    from mas_cc.games.hidden_bench.imitation.analysis import (
-        CONTROLLER_DIAGNOSTIC_STATISTICS,
-        CURRENT_STATISTICS,
-        INFORMATION_STATISTICS,
-    )
-
-    # One list in the config, two arguments downstream: the MI/CMI channels and
-    # the controller diagnostics that normalize and sign them are computed by
-    # different machinery, but a run author thinks of them as one request.
-    requested = tuple(analysis.estimators)
-    unknown = sorted(
-        set(requested)
-        - set(INFORMATION_STATISTICS)
-        - set(CONTROLLER_DIAGNOSTIC_STATISTICS)
-        - set(CURRENT_STATISTICS)
-    )
-    if unknown:
-        raise ValueError(
-            "analysis.estimators contains unsupported HiddenBench imitation statistic(s): "
-            + ", ".join(unknown)
+    if config.game.type == "hidden_bench_imitation_round_feedback":
+        from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
+            ROUND_ANALYSIS_STATISTICS,
         )
-    statistics = tuple(name for name in requested if name in INFORMATION_STATISTICS)
-    diagnostics = tuple(
-        name for name in requested if name in CONTROLLER_DIAGNOSTIC_STATISTICS
-    )
-    current_statistics = tuple(name for name in requested if name in CURRENT_STATISTICS)
+
+        requested = tuple(analysis.estimators)
+        unknown = sorted(set(requested) - set(ROUND_ANALYSIS_STATISTICS))
+        if unknown:
+            raise ValueError(
+                "analysis.estimators contains unsupported round-feedback statistic(s): "
+                + ", ".join(unknown)
+            )
+        statistics = requested
+        diagnostics: tuple[str, ...] = ()
+        current_statistics: tuple[str, ...] = ()
+    else:
+        from mas_cc.games.hidden_bench.imitation.analysis import (
+            CONTROLLER_DIAGNOSTIC_STATISTICS,
+            CURRENT_STATISTICS,
+            INFORMATION_STATISTICS,
+        )
+
+        # One list in the config, two arguments downstream: the MI/CMI channels and
+        # the controller diagnostics that normalize and sign them are computed by
+        # different machinery, but a run author thinks of them as one request.
+        requested = tuple(analysis.estimators)
+        unknown = sorted(
+            set(requested)
+            - set(INFORMATION_STATISTICS)
+            - set(CONTROLLER_DIAGNOSTIC_STATISTICS)
+            - set(CURRENT_STATISTICS)
+        )
+        if unknown:
+            raise ValueError(
+                "analysis.estimators contains unsupported HiddenBench imitation statistic(s): "
+                + ", ".join(unknown)
+            )
+        statistics = tuple(name for name in requested if name in INFORMATION_STATISTICS)
+        diagnostics = tuple(
+            name for name in requested if name in CONTROLLER_DIAGNOSTIC_STATISTICS
+        )
+        current_statistics = tuple(name for name in requested if name in CURRENT_STATISTICS)
 
     options = dict(analysis.options)
     allowed_options = {
@@ -141,10 +160,28 @@ def run_configured_analysis(
     arguments = _configured_arguments(config)
     if arguments is None:
         return None
-    from mas_cc.games.hidden_bench.imitation.analysis import analyze_hidden_bench_imitation
     from mas_cc.storage import canonical_hash
 
     root = Path(run_dir)
+    if config.game.type == "hidden_bench_imitation_round_feedback":
+        from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
+            analyze_hidden_bench_imitation_round_feedback,
+        )
+
+        round_arguments = dict(arguments)
+        round_arguments.pop("diagnostics", None)
+        round_arguments.pop("current_statistics", None)
+        return analyze_hidden_bench_imitation_round_feedback(
+            root,
+            root / "hidden_bench_imitation_round_feedback_analysis",
+            comet_sink=comet_sink,
+            artifact_profile=config.storage.artifact_profile,
+            resolved_config_hash=canonical_hash(config.to_dict()),
+            **round_arguments,
+        )
+
+    from mas_cc.games.hidden_bench.imitation.analysis import analyze_hidden_bench_imitation
+
     return analyze_hidden_bench_imitation(
         root,
         root / "hidden_bench_imitation_analysis",
@@ -159,6 +196,7 @@ def run_configured_cell_analysis(
     config: RunConfig,
     cell_dir: str | Path,
     cell_id: str,
+    comet_sink: Any | None = None,
 ) -> dict[str, Any] | None:
     """Render the two compact human-readable reports for one completed grid cell.
 
@@ -168,35 +206,65 @@ def run_configured_cell_analysis(
     runs the exact configured estimators in a temporary directory and keeps
     only the MI/controller-diagnostic and truth-current Markdown reports.
 
-    Per-cell reports are local-only.  The final grid analysis remains the one
-    Comet export, avoiding nine additional experiments or concurrent writers.
+    When analysis export is enabled, a consolidated grid passes its already
+    open master sink here.  Otherwise the analyzer opens a uniquely named
+    per-cell analysis experiment.  In either case there is still no worker or
+    episode-level Comet writer.
     """
 
     arguments = _configured_arguments(config)
     if arguments is None:
         return None
-    from mas_cc.games.hidden_bench.imitation.analysis import analyze_hidden_bench_imitation
     from mas_cc.storage import canonical_hash
 
     root = Path(cell_dir)
     reports = root / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     slug = _report_slug(config, cell_id)
-    arguments["comet_export"] = False
+    arguments["comet_run_name"] = f"{arguments['comet_run_name']}/{cell_id}"
     retained: list[str] = []
     with tempfile.TemporaryDirectory(prefix=".cell-analysis-", dir=root) as temporary:
         destination = Path(temporary)
-        summary = analyze_hidden_bench_imitation(
-            root,
-            destination,
-            artifact_profile=config.storage.artifact_profile,
-            resolved_config_hash=canonical_hash(config.to_dict()),
-            **arguments,
-        )
-        for source_name in (
-            "information_estimates.md",
-            "truth_current_estimates.md",
-        ):
+        if config.game.type == "hidden_bench_imitation_round_feedback":
+            from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
+                analyze_hidden_bench_imitation_round_feedback,
+            )
+
+            round_arguments = dict(arguments)
+            round_arguments.pop("diagnostics", None)
+            round_arguments.pop("current_statistics", None)
+            summary = analyze_hidden_bench_imitation_round_feedback(
+                root,
+                destination,
+                artifact_profile=config.storage.artifact_profile,
+                resolved_config_hash=canonical_hash(config.to_dict()),
+                comet_sink=comet_sink,
+                comet_name_suffix=slug,
+                **round_arguments,
+            )
+            source_names = (
+                "round_information_estimates.md",
+                "analysis_summary.json",
+            )
+        else:
+            from mas_cc.games.hidden_bench.imitation.analysis import (
+                analyze_hidden_bench_imitation,
+            )
+
+            summary = analyze_hidden_bench_imitation(
+                root,
+                destination,
+                artifact_profile=config.storage.artifact_profile,
+                resolved_config_hash=canonical_hash(config.to_dict()),
+                comet_sink=comet_sink,
+                comet_name_suffix=slug,
+                **arguments,
+            )
+            source_names = (
+                "information_estimates.md",
+                "truth_current_estimates.md",
+            )
+        for source_name in source_names:
             source = destination / source_name
             if not source.is_file():
                 continue

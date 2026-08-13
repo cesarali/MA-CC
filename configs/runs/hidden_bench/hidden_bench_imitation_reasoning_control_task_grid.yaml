@@ -114,7 +114,8 @@ prompt:
 game:
   type: hidden_bench_imitation
   population_size: 4
-  horizon: 50
+  # Whole population sweeps; 13 sweeps replace the former 50-attempt partial run.
+  horizon: 13
   topology: complete
   options:
     task_set: vanilla

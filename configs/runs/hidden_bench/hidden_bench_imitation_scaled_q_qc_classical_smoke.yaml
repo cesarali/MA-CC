@@ -17,7 +17,8 @@ prompt:
 game:
   type: hidden_bench_imitation
   population_size: 16
-  horizon: 32
+  # Population sweeps: 2 x 16 = 32 focal-update attempts.
+  horizon: 2
   topology: complete
   options:
     task_set: expanded

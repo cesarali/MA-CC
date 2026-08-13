@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 
 from mas_cc.config import ControlConfig
 from mas_cc.control import Control, InteractionControlSignal
-from mas_cc.core import AgentId
+from mas_cc.core import AgentId, Seed
 from mas_cc.games.protocols import GameState
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.llm_runtime.validation import ValidationIssue
@@ -278,17 +278,39 @@ class ThresholdTargetControl(Control):
         return None
 
     def _resolved_target(self, state: GameState) -> str:
+        task = state.data.get("task", {})
         if isinstance(self.target, int):
-            task = state.data.get("task", {})
             options = task.get("possible_answers", ()) if isinstance(task, Mapping) else ()
             if self.target < 0 or self.target >= len(options):
                 raise ValueError(
                     f"controller target index {self.target} is outside [0, {len(options)})"
                 )
             return str(options[self.target])
+        if self.target == "random_incorrect":
+            if not isinstance(task, Mapping):
+                raise ValueError("target 'random_incorrect' requires state.data.task")
+            correct = task.get("correct_answer")
+            options = tuple(str(option) for option in task.get("possible_answers", ()))
+            candidates = tuple(option for option in options if option != str(correct))
+            if not correct or not candidates:
+                raise ValueError(
+                    "target 'random_incorrect' requires a correct answer and at least "
+                    "one distinct incorrect option"
+                )
+            seed = state.data.get("seed")
+            if isinstance(seed, bool) or not isinstance(seed, int):
+                raise ValueError("target 'random_incorrect' requires an integer episode seed")
+            task_id = task.get("task_id", task.get("name", "unknown-task"))
+            # A derived stream makes the draw uniform and reproducible without
+            # consuming the per-interaction sensing stream. Resolving from the
+            # episode seed also keeps one coherent wrong direction throughout
+            # the episode instead of changing the target on every update.
+            target_rng = Seed(seed).derive(
+                f"hidden-bench-imitation-random-incorrect-target:{task_id}"
+            ).create_random()
+            return target_rng.choice(candidates)
         if self.target != "correct":
             return self.target
-        task = state.data.get("task", {})
         if not isinstance(task, Mapping) or not task.get("correct_answer"):
             raise ValueError("target 'correct' requires state.data.task.correct_answer")
         return str(task["correct_answer"])
@@ -392,7 +414,8 @@ class ThresholdTargetControl(Control):
             issues.append(
                 ValidationIssue(
                     "control.options.target",
-                    "must be 'correct', an option label, or a non-negative zero-based index",
+                    "must be 'correct', 'random_incorrect', an option label, or a "
+                    "non-negative zero-based index",
                 )
             )
         if isinstance(sample_size, bool) or not isinstance(sample_size, int) or sample_size < 1:
