@@ -1,0 +1,144 @@
+# Minimal live-provider run for capturing full LLM prompt/response examples
+# where control.mechanism round_soft_target_budgeted actuates on (essentially)
+# every round.
+#
+# Derived from hidden_bench_imitation_round_feedback_qwen_N6_qc6_prompt_examples_demo.yaml.
+# The round_soft_target_budgeted mechanism's round-level fire/no-fire decision
+# is a stochastic sigmoid gate (advocacy_probability = sigmoid(beta*(threshold
+# - target_support))), so it can never be made perfectly deterministic through
+# config alone - but threshold=1.0 with a steep beta pushes that probability to
+# ~1.0 for any round that hasn't already reached full consensus on the target,
+# and intervention_budget = population_size actuates every focal slot in a
+# round that does fire. In practice this fires on effectively every round of a
+# short run. Comet is disabled since this is an ad hoc demo, not part of the
+# real experiment grid.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_qwen_N6_qc6_control_always_demo.yaml
+#
+# To find which prompts correspond to an actuated agent:
+#  - data/episodes/*/round_trajectory.jsonl: one row per game round, with
+#    controller_action, controlled_positions, controlled_position_count.
+#  - data/episodes/*/trajectory.jsonl: one row per focal interaction, with
+#    controlled_slot: true/false marking exactly which agent turn was actuated.
+#  - data/episodes/*/prompts/round_00N.md: the captured full prompt/response
+#    text for that focal interaction (prompt_examples.count is set high enough
+#    below to capture every focal interaction in this small episode, so any
+#    controlled_slot=true row in trajectory.jsonl has a matching prompts file).
+#  - The injected control text is fixed and greppable: "still looks like the
+#    strongest option to me, and I think it deserves more weight than it is
+#    getting."
+
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 6
+  horizon: 2
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 2
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: uniform_random
+    classical:
+      kernel: controlled_imitation_round_reference
+
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 1.0
+    beta: 20.0
+    intervention_budget: 6
+    template_version: 3
+
+execution:
+  seed: 20260813
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 500
+  max_input_tokens: 10000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 12
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+experiment:
+  name: hidden-bench-round-feedback-qwen-N6-qc6-control-always-votes-demo
+  description: Control-always run capturing update/vote prompts via cell-scoped sampling.
+  tags: [hidden-bench, imitation, round-feedback, qwen, N6, qc6, control-demo, demo]

@@ -125,7 +125,7 @@ logging:
 storage:
   output_dir: results
   format: jsonl
-  artifact_profile: full
+  artifact_profile: results_only
   checkpoint_mode: episode
   overwrite: false
 

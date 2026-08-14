@@ -1,0 +1,128 @@
+# Minimal live-provider run for capturing full LLM prompt/response examples.
+#
+# Derived from hidden_bench_imitation_round_feedback_qwen_N6_qc6_b_2x2_smoke.yaml,
+# reduced to a single cell (dynamics_mode=reasoning, intervention_budget=0) and
+# repetitions=1, so it makes only a handful of real calls to the GWDG/Qwen
+# endpoint instead of the full 2x2 x 2-repetition grid. Comet is disabled since
+# this is just an ad hoc demo run, not part of the real experiment grid.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_qwen_N6_qc6_prompt_examples_demo.yaml
+#
+# Look for `prompt_examples.md` under the printed results/ directory once the
+# run finishes: it contains the full rendered prompt(s) sent to the model and
+# the model's actual response(s).
+
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    estimated_latency_seconds: 3.0
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_imitation_update
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_json_vote
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 6
+  horizon: 2
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 2
+    messages_per_agent: 1
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: uniform_random
+    classical:
+      kernel: controlled_imitation_round_reference
+
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 0
+    template_version: 3
+
+execution:
+  seed: 20260813
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 500
+  max_input_tokens: 10000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 4
+      scope: episode
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+experiment:
+  name: hidden-bench-round-feedback-qwen-N6-qc6-prompt-examples-demo
+  description: Single-cell live-provider run to capture full LLM prompt/response examples.
+  tags: [hidden-bench, imitation, round-feedback, qwen, N6, qc6, prompt-examples, demo]
