@@ -186,26 +186,28 @@ def test_qwen_first_pilot_suite_resolves_exactly_grids_a_through_d():
         {(q, 2, b, "correct") for q in (1, 2) for b in (0, 6)},
         {(q, 2, b, "correct") for q in (1, 2) for b in (12, 18)},
         {(2, qc, b, "correct") for qc in (2, 16, 24) for b in (6, 12)},
+        # D reverses the target across three tasks, so its arm is named by role
+        # ("a wrong option") rather than by a label only one task contains.
         {
             (q, 12, b, target)
             for q in (1, 2)
-            for target in ("correct", "West City")
+            for target in ("correct", "random_incorrect")
             for b in (6, 12)
         },
     )
     grids = [load_run_config_or_grid(path, environment={}) for path in QWEN_PILOT_GRIDS]
 
     assert all(isinstance(grid, GridSpec) for grid in grids)
-    assert [len(grid.cells) for grid in grids] == [4, 4, 6, 8]
-    assert sum(len(grid.cells) for grid in grids) == 22
-    assert sum(len(grid.cells) * grid.base.execution.repetitions for grid in grids) == 660
+    assert [len(grid.cells) for grid in grids] == [4, 4, 6, 24]
+    assert sum(len(grid.cells) for grid in grids) == 38
+    assert sum(len(grid.cells) * grid.base.execution.repetitions for grid in grids) == 1380
     for name, grid, requested in zip("ABCD", grids, expected, strict=True):
         assert grid.base.experiment.metadata["pilot_grid"] == name
         assert grid.base.game.population_size == 24
         assert grid.base.game.options["rounds"] == 10
         assert grid.base.game.options["task_id"] == "evacuation_north_hill"
         assert grid.base.execution.seed == 20260813
-        assert grid.base.execution.repetitions == 30
+        assert grid.base.execution.repetitions == (40 if name == "D" else 30)
         assert grid.base.logging.comet is True
         assert grid.base.analysis.comet_export is True
         assert grid.base.analysis.options["per_cell_reports"] is True
@@ -227,6 +229,34 @@ def test_qwen_first_pilot_suite_resolves_exactly_grids_a_through_d():
             )
             for cell in grid.cells
         } == requested
+
+
+def test_grid_d_crosses_three_tasks_with_a_target_no_task_has_to_define():
+    """D is the only multi-task grid, so its target must not name an option.
+
+    "West City" exists in the evacuation task and nowhere else; `correct` and
+    `random_incorrect` are roles the controller resolves per episode, which is
+    what lets the same two arms mean the same thing in all three tasks.
+    """
+
+    grid = load_run_config_or_grid(QWEN_PILOT_GRIDS[3], environment={})
+
+    assert isinstance(grid, GridSpec)
+    tasks = {cell.config.game.options["task_id"] for cell in grid.cells}
+    assert tasks == {
+        "evacuation_north_hill",
+        "Laboratory Theft Deduction",
+        "datacenter_emergency_migration",
+    }
+    targets = {cell.config.control.options["target"] for cell in grid.cells}
+    assert targets == {"correct", "random_incorrect"}
+    # Every (task, q, target, b) combination appears exactly once.
+    assert len(grid.cells) == len(tasks) * 2 * 2 * 2 == 24
+    # One population round is N microscopic updates, so an episode is rounds x N
+    # focal updates and therefore that many provider calls.
+    rules = create_game(grid.base.game).rules(grid.base.game)
+    assert rules.rounds == 10
+    assert rules.horizon == 10 * grid.base.game.population_size == 240
 
 
 @pytest.mark.parametrize(
@@ -262,8 +292,10 @@ def test_qwen_grid_uniform_initialization_is_planned_as_provider_free():
     stages = {stage.name: stage for stage in plan.decision_stages}
 
     assert stages["local_initialization"].requests_per_interaction == 0
-    # Ten rounds x 24 focal updates: 480 private messages + 240 focal votes.
-    assert plan.provider_requests.lower == 720
+    assert "private_exchange" not in stages
+    # Ten rounds x 24 focal updates, one public-ballot call each and no others.
+    assert stages["public_ballot_update"].requests_per_interaction == 240
+    assert plan.provider_requests.lower == 240
 
 
 def test_controller_is_called_once_per_round_and_micro_rows_hold_one_action():

@@ -1,0 +1,257 @@
+# Live-provider smoke for the atomic public-ballot reasoning kernel.
+#
+# WHAT THIS IS FOR
+#
+# One small real run against GWDG/gpt-oss-120b whose only job is to prove three
+# things before any larger grid is launched:
+#
+#   1. the endpoint answers the new one-call `{vote, reason}` contract;
+#   2. the rendered prompt is what we think it is - focal identity, the fixed
+#      Strategic-Uncertainty block, private evidence, the focal's own standing
+#      ballot, and exactly q public `(vote, reason)` sources;
+#   3. the Comet plumbing (params, streaming metrics, cell report) still works
+#      for this game.
+#
+# ONE EPISODE.  N = 6 agents, 5 population rounds, q = 2, so the run makes
+# 6 x 5 = 30 provider calls (plus at most one retry each), and zero peer-dialogue
+# calls - there is no such stage any more. Initialization is `uniform_random`,
+# which is provider-free.
+#
+# The numbers this produces are NOT a measurement: 5 round samples is far too
+# few for the CMI estimators, and `analysis` is enabled here only so the report
+# and its Comet publication are exercised end to end.
+#
+# CONTROL IS ON (`intervention_budget: 2`) on purpose. With b = 0 every prompt
+# would look the same and the interesting half of the inspection - what a
+# controlled social slot looks like from inside the prompt - would be missing.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+# 1. Price the run before spending anything:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_gpt_oss_120b_N6_public_ballot_smoke.yaml \
+#     --output-dir inspection/gpt_oss_120b_N6_public_ballot_preflight
+#
+# 2. Launch with live console output:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_gpt_oss_120b_N6_public_ballot_smoke.yaml
+#
+# `--no-capture-output` is what makes the progress lines and the Comet URL
+# appear live. To keep a copy of the same console output:
+#
+#   mkdir -p logs
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/hidden_bench/hidden_bench_imitation_round_feedback_gpt_oss_120b_N6_public_ballot_smoke.yaml \
+#     2>&1 | tee logs/gpt_oss_120b_N6_public_ballot_smoke.log
+#
+# EXPECTED STARTUP LINES
+#
+#   Game:          hidden_bench_imitation_round_feedback v2
+#   Provider:      university / gwdg/openai-gpt-oss-120b
+#   Prompt:        hidden_bench_public_ballot v1  [def:...]
+#   Results:       results/hidden_bench_imitation_round_feedback/...
+#   Comet:         master -> project 'mas-cc', cells on this master
+#                  https://www.comet.com/...
+#
+# and, once the cell finishes:
+#
+#   cell cell-0000 configured analysis ready: ...
+#
+# WHAT TO INSPECT AFTERWARDS
+#
+# `prompt_examples.md` under the printed results/ directory holds the full
+# rendered prompts and the model's actual replies. Read at least one prompt with
+# a controlled slot and one without: they must be indistinguishable apart from
+# which participant's `(vote, reason)` pair is shown under CURRENT SOCIAL
+# INFORMATION, and nothing outside the TASK block may say controller, external,
+# intervention, experiment, or simulation.
+#
+# The TASK block itself is verbatim corpus text and, at N != the task's native
+# size, does contain the corpus line "There are exactly 6 agents in this
+# experiment." That is a HiddenBench property, identical in every prompt, and
+# not controller leakage - do not "fix" it here.
+#
+# `data/episodes/*/trajectory.jsonl` carries the same thing structurally: each
+# row's `social_sources` lists what the focal saw, with `source_type` marking the
+# control slot, next to `focal_reason_before` / `focal_reason_after`.
+#
+# ENVIRONMENT
+#
+# POTSDAM_API_KEY and BASE_POTSDAM_LLM_URL must be set. This run spends real
+# credit and publishes a real Comet experiment.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  # gpt-oss is a reasoning model: it emits a long `reasoning_content` first and
+  # the answer only afterwards, and both are charged against `max_tokens`. A
+  # measured public-ballot prompt for this game (884 prompt tokens) spent 684
+  # completion tokens - roughly 650 of them reasoning, ~35 on the ballot itself.
+  #
+  # If the budget runs out inside the reasoning, `content` arrives empty and the
+  # adapter rejects the body with "did not match the chat-completions schema".
+  # That - not the prompt, not the contract - is why every earlier gpt-oss-120b
+  # smoke in results/gpt_oss_120b_smoke_test* failed at 256, 512, and 1024.
+  #
+  # You cannot predict that number in advance, and you are not meant to. The
+  # budget guard reserves `max_output_tokens` per call and then settles the
+  # reservation against the response's actual usage, and the preflight already
+  # quotes its conservative scenario at the full ceiling - so a generous value
+  # changes what is *quoted*, never what is *paid*. This setting is a cliff to
+  # stay away from; `budget.max_cost_per_run` is what actually stops the run.
+  #
+  # Hence 6x the measured requirement rather than a tuned guess. To re-measure
+  # after any run, read the `usage` field of data/episodes/*/usage_cost.jsonl.
+  #
+  # `reasoning_effort: low` would cut the reasoning itself, but this LiteLLM
+  # proxy rejects the parameter outright (HTTP 400, UnsupportedParamsError).
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 3.0
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_public_ballot
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 6
+  horizon: 5
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    dynamics_mode: reasoning
+    rounds: 5
+    social_group_size: 2
+    vote_visibility: public
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: uniform_random
+    classical:
+      kernel: controlled_imitation_round_reference
+
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 2
+    template_version: 3
+
+execution:
+  seed: 20260814
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 5.0
+  max_cost_per_run: 5.0
+  # 30 focal updates, at most one retry each.  Measured: ~884 input and ~684
+  # output tokens per call, so the ceilings below are worst-case headroom
+  # (60 calls x the full 2048-token output budget), not an expectation.
+  max_provider_requests: 120
+  max_input_tokens: 400000
+  max_output_tokens: 150000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      # Enough of the 30 updates to be sure of catching both a controlled and an
+      # uncontrolled slot, and a first-round prompt with no prior public reasons.
+      count: 8
+      scope: episode
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: true
+  estimators:
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_target_signed_actuation
+    - round_sensor_mae
+  options:
+    bootstrap_resamples: 50
+    null_permutations: 50
+    confidence: 0.95
+    seed: 20260814
+    per_cell_reports: true
+  comet_export: true
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    # This is the master experiment, and under `writer: master_only` it is the
+    # only Comet object this run has.  "One cell, so no sweep" is the wrong
+    # intuition: `false` here switches Comet off entirely, whatever
+    # `logging.comet` says.
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: hidden-bench-round-feedback-gpt-oss-120b-N6-public-ballot-smoke
+  description: >-
+    One live gpt-oss-120b episode of the atomic public-ballot kernel, for
+    inspecting the rendered prompts and the Comet reporting path.
+  tags: [hidden-bench, imitation, round-feedback, public-ballot, gpt-oss-120b, N6, smoke]
+  metadata:
+    population_rounds: 5
+    social_group_size: 2
+    sensor_sample_size: 6
+    intervention_budget: 2
+    vote_visibility: public

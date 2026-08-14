@@ -24,16 +24,24 @@ llm_provider:
   max_retries: 2
   request_concurrency: 4
   temperature: 0.0
-  max_output_tokens: 128
+  # Not a cost dial: the budget guard reserves this many output tokens per call
+  # and then settles the reservation against actual usage, so a generous ceiling
+  # changes the preflight quote and nothing you actually pay. Setting it tight
+  # saves nothing and turns an expensive call into a dead episode.
+  #
+  # The public-ballot contract allows a reason of up to 600 characters (~150
+  # tokens) plus the JSON scaffolding, so 128 could not hold a maximal legal
+  # reply. Bound spend with budget.max_cost_per_run instead.
+  max_output_tokens: 512
   options:
     estimated_latency_seconds: 3.0
 
 prompt:
   schema_version: 2
-  prompt_family: hidden_bench_imitation_update
+  prompt_family: hidden_bench_public_ballot
   prompt_version: 1
   response_contract:
-    type: hidden_bench_json_vote
+    type: hidden_bench_public_ballot
 
 game:
   type: hidden_bench_imitation_round_feedback
@@ -51,7 +59,7 @@ game:
     dynamics_mode: reasoning
     rounds: 2
     social_group_size: 2
-    messages_per_agent: 1
+    vote_visibility: public
     memory_size: 0
     allow_relay: true
     prompt_version: 1
