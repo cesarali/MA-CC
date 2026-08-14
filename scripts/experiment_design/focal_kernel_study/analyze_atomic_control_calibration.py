@@ -31,9 +31,46 @@ METRICS: dict[str, Metric] = {
     ),
 }
 
+MODEL_DISPLAY_NAMES: dict[str, str] = {
+    "gwdg/openai-gpt-oss-120b": "GPT-OSS 120B",
+    "microsoft/Kimi-K2.6": "Kimi K2.6",
+    "microsoft/gpt-5-mini": "GPT-5 Mini",
+    "microsoft/gpt-4o": "GPT-4o",
+    "gwdg/qwen3-30b-a3b-instruct-2507": "Qwen3 30B A3B",
+    "up/gemma4-31b": "Gemma4 31B",
+}
+
+TASK_NAMES: dict[str, str] = {
+    "1": "Evacuation",
+    "4": "Traffic accident",
+    "9": "Hospital transfer",
+    "13": "Laboratory theft",
+    "16": "Backup datacenter",
+    "23": "Banquet venue",
+    "27": "Research station",
+    "30": "Lead investor",
+    "36": "Datacenter migration",
+    "41": "Space evacuation",
+}
+
 
 def model_label(row: dict[str, Any]) -> str:
-    return f"{row['provider']}:{row['model']}"
+    model_id = str(row["model"])
+    return clean_model_label(MODEL_DISPLAY_NAMES.get(model_id, model_id))
+
+
+def clean_model_label(value: str) -> str:
+    """Return only the human-facing model name, never a routing/provider prefix."""
+
+    # Provider gateways have used both ``provider/model`` and
+    # ``provider:model`` spellings.  Keep this defensive cleanup at the final
+    # plotting boundary so a stale/intermediate table cannot leak either form.
+    return str(value).rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+
+
+def task_label(task_id: str) -> str:
+    name = TASK_NAMES.get(str(task_id), "Unknown task")
+    return f"{task_id}: {name}"
 
 
 def load_records(paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -230,6 +267,301 @@ def write_alignment_table(output_dir: Path, metrics: list[dict[str, Any]]) -> No
     write_csv(output_dir / "control_alignment_table.csv", list(rows[0]), rows)
 
 
+def descriptive_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute transparent rates for one already-selected response group."""
+
+    result: dict[str, Any] = {"n_valid": len(rows)}
+    for name, metric in METRICS.items():
+        result[name] = rate(rows, metric)
+    aligned = [row for row in rows if row["control_alignment"] == "truth"]
+    adversarial = [row for row in rows if row["control_alignment"] == "incorrect"]
+    adoption = METRICS["control_target_adoption_rate"]
+    result.update(
+        {
+            "n_aligned": len(aligned),
+            "n_adversarial": len(adversarial),
+            "aligned_target_adoption_rate": rate(aligned, adoption),
+            "adversarial_target_adoption_rate": rate(adversarial, adoption),
+            "adversarial_resistance_rate": (
+                1.0 - rate(adversarial, adoption) if adversarial else math.nan
+            ),
+        }
+    )
+    return result
+
+
+def write_model_task_tables(
+    output_dir: Path,
+    valid: list[dict[str, Any]],
+    failures: list[dict[str, Any]],
+) -> None:
+    """Write overall, per-task, and per-task/bucket descriptive statistics."""
+
+    models = sorted({model_label(row) for row in valid + failures})
+    task_ids = sorted({str(row["task_id"]) for row in valid + failures}, key=int)
+
+    valid_by_model: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    valid_by_model_task: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    valid_by_model_task_bucket: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    failures_by_model: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    failures_by_model_task: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    failures_by_model_task_bucket: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+
+    for row in valid:
+        model = model_label(row)
+        task_id = str(row["task_id"])
+        bucket = str(row["bucket"])
+        valid_by_model[model].append(row)
+        valid_by_model_task[(model, task_id)].append(row)
+        valid_by_model_task_bucket[(model, task_id, bucket)].append(row)
+    for row in failures:
+        model = model_label(row)
+        task_id = str(row["task_id"])
+        bucket = str(row["bucket"])
+        failures_by_model[model].append(row)
+        failures_by_model_task[(model, task_id)].append(row)
+        failures_by_model_task_bucket[(model, task_id, bucket)].append(row)
+
+    model_rows = []
+    for model in models:
+        rows = valid_by_model[model]
+        failed = failures_by_model[model]
+        expected = len(rows) + len(failed)
+        model_rows.append(
+            {
+                "model": model,
+                "n_expected": expected,
+                "n_failed": len(failed),
+                "coverage": len(rows) / expected if expected else math.nan,
+                **descriptive_metrics(rows),
+            }
+        )
+
+    task_rows = []
+    task_bucket_rows = []
+    for model in models:
+        for task_id in task_ids:
+            rows = valid_by_model_task[(model, task_id)]
+            failed = failures_by_model_task[(model, task_id)]
+            expected = len(rows) + len(failed)
+            task_rows.append(
+                {
+                    "model": model,
+                    "task_id": task_id,
+                    "task_name": TASK_NAMES.get(task_id, "Unknown task"),
+                    "n_expected": expected,
+                    "n_failed": len(failed),
+                    "coverage": len(rows) / expected if expected else math.nan,
+                    **descriptive_metrics(rows),
+                }
+            )
+            for bucket in BUCKETS:
+                bucket_rows = valid_by_model_task_bucket[(model, task_id, bucket)]
+                bucket_failed = failures_by_model_task_bucket[(model, task_id, bucket)]
+                bucket_expected = len(bucket_rows) + len(bucket_failed)
+                task_bucket_rows.append(
+                    {
+                        "model": model,
+                        "task_id": task_id,
+                        "task_name": TASK_NAMES.get(task_id, "Unknown task"),
+                        "bucket": bucket,
+                        "n_expected": bucket_expected,
+                        "n_failed": len(bucket_failed),
+                        "coverage": (
+                            len(bucket_rows) / bucket_expected
+                            if bucket_expected
+                            else math.nan
+                        ),
+                        **descriptive_metrics(bucket_rows),
+                    }
+                )
+
+    write_csv(output_dir / "model_metrics.csv", list(model_rows[0]), model_rows)
+    write_csv(output_dir / "model_task_metrics.csv", list(task_rows[0]), task_rows)
+    write_csv(
+        output_dir / "model_task_bucket_metrics.csv",
+        list(task_bucket_rows[0]),
+        task_bucket_rows,
+    )
+
+    markdown = [
+        "# Per-model and per-task statistics",
+        "",
+        "Rates pool the six matched social-context buckets within each task. "
+        "Coverage is `n_valid / n_expected`; incomplete coverage should be considered "
+        "when comparing models.",
+        "",
+        "| Model | Task | Valid/expected | Coverage | Control adoption | Truth | Stay | Switch |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in task_rows:
+        markdown.append(
+            f"| {row['model']} | {row['task_id']}: {row['task_name']} | {row['n_valid']}/{row['n_expected']} | "
+            f"{fmt(row['coverage'])} | {fmt(row['control_target_adoption_rate'])} | "
+            f"{fmt(row['truth_rate'])} | {fmt(row['stay_rate'])} | {fmt(row['switch_rate'])} |"
+        )
+    atomic_write_text(output_dir / "model_task_metrics.md", "\n".join(markdown) + "\n")
+
+
+def write_reproducibility_data(
+    output_dir: Path,
+    valid: list[dict[str, Any]],
+    failures: list[dict[str, Any]],
+) -> None:
+    """Persist the analysis-ready observations and model identity mapping."""
+
+    registry = []
+    identities = sorted({(str(row["provider"]), str(row["model"])) for row in valid + failures})
+    for provider, model_id in identities:
+        registry.append(
+            {
+                "model_name": MODEL_DISPLAY_NAMES.get(model_id, model_id.rsplit("/", 1)[-1]),
+                "provider": provider,
+                "model_id": model_id,
+            }
+        )
+    write_csv(output_dir / "model_registry.csv", list(registry[0]), registry)
+
+    fields = [
+        "model_name",
+        "provider",
+        "model_id",
+        "task_id",
+        "task_name",
+        "bucket",
+        "state_id",
+        "current_vote",
+        "control_target",
+        "control_alignment",
+        "correct_answer",
+        "vote_after",
+        "attempts",
+    ]
+    observations = []
+    for row in sorted(valid, key=lambda value: (model_label(value), str(value["task_id"]), value["bucket"], value["state_id"])):
+        observations.append(
+            {
+                "model_name": model_label(row),
+                "provider": row["provider"],
+                "model_id": row["model"],
+                "task_id": row["task_id"],
+                "task_name": TASK_NAMES.get(str(row["task_id"]), "Unknown task"),
+                "bucket": row["bucket"],
+                "state_id": row["state_id"],
+                "current_vote": row["current_vote"],
+                "control_target": row["control_target"],
+                "control_alignment": row["control_alignment"],
+                "correct_answer": row["correct_answer"],
+                "vote_after": row["vote_after"],
+                "attempts": row["attempts"],
+            }
+        )
+    write_csv(output_dir / "effective_valid_responses.csv", fields, observations)
+
+    failure_rows = []
+    for row in sorted(failures, key=lambda value: (model_label(value), str(value["task_id"]), value["bucket"], value["state_id"])):
+        failure_rows.append(
+            {
+                "model_name": model_label(row),
+                "provider": row["provider"],
+                "model_id": row["model"],
+                "task_id": row["task_id"],
+                "task_name": TASK_NAMES.get(str(row["task_id"]), "Unknown task"),
+                "bucket": row["bucket"],
+                "state_id": row["state_id"],
+                "failure_type": row.get("failure_type"),
+                "attempts": row.get("attempts"),
+                "last_validation_error": (row.get("validation_errors") or [None])[-1],
+            }
+        )
+    failure_fields = list(failure_rows[0]) if failure_rows else [
+        "model_name", "provider", "model_id", "task_id", "task_name", "bucket",
+        "state_id", "failure_type", "attempts", "last_validation_error",
+    ]
+    write_csv(output_dir / "effective_failures.csv", failure_fields, failure_rows)
+
+
+def write_task_comparison_plots(output_dir: Path, valid: list[dict[str, Any]]) -> None:
+    """Plot model comparisons across the ten substantive HiddenBench tasks."""
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    models = sorted({model_label(row) for row in valid})
+    task_ids = sorted({str(row["task_id"]) for row in valid}, key=int)
+    grouped_rows: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in valid:
+        grouped_rows[(model_label(row), str(row["task_id"]))].append(row)
+
+    for metric_name, title, filename in (
+        ("control_target_adoption_rate", "Control-target adoption by task", "model_task_control_adoption_heatmap.png"),
+        ("truth_rate", "Truth rate by task", "model_task_truth_rate_heatmap.png"),
+    ):
+        metric = METRICS[metric_name]
+        # Rows are tasks and columns are models: task names remain readable on
+        # the y-axis and the six model columns are easy to compare.
+        heat = np.asarray(
+            [[rate(grouped_rows[(model, task_id)], metric) for model in models] for task_id in task_ids]
+        )
+        fig, axis = plt.subplots(figsize=(11, max(6, len(task_ids) * 0.62 + 1.5)))
+        image = axis.imshow(heat, vmin=0, vmax=1, cmap="viridis", aspect="auto")
+        axis.set_xticks(range(len(models)), models, rotation=25, ha="right")
+        axis.set_yticks(range(len(task_ids)), [task_label(value) for value in task_ids])
+        for row_index in range(len(task_ids)):
+            for column_index in range(len(models)):
+                value = heat[row_index, column_index]
+                axis.text(column_index, row_index, f"{value:.2f}", ha="center", va="center", fontsize=8, color="white" if value < 0.68 else "black")
+        axis.set_title(title)
+        fig.colorbar(image, ax=axis, label="Rate")
+        fig.tight_layout()
+        fig.savefig(output_dir / filename, dpi=180)
+        plt.close(fig)
+
+    coverage = np.asarray(
+        [[len(grouped_rows[(model, task_id)]) / 60.0 for model in models] for task_id in task_ids]
+    )
+    fig, axis = plt.subplots(figsize=(11, max(6, len(task_ids) * 0.62 + 1.5)))
+    image = axis.imshow(coverage, vmin=0, vmax=1, cmap="magma", aspect="auto")
+    axis.set_xticks(range(len(models)), models, rotation=25, ha="right")
+    axis.set_yticks(range(len(task_ids)), [task_label(value) for value in task_ids])
+    for row_index in range(len(task_ids)):
+        for column_index in range(len(models)):
+            value = coverage[row_index, column_index]
+            axis.text(column_index, row_index, f"{value:.2f}", ha="center", va="center", fontsize=8, color="white" if value < 0.7 else "black")
+    axis.set_title("Valid-response coverage by task")
+    fig.colorbar(image, ax=axis, label="Coverage")
+    fig.tight_layout()
+    fig.savefig(output_dir / "model_task_coverage_heatmap.png", dpi=180)
+    plt.close(fig)
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10), sharex=True, sharey=True)
+    bucket_labels = [BUCKET_LABELS[bucket] for bucket in BUCKETS]
+    colors = plt.get_cmap("tab10")
+    for model_index, (axis, model) in enumerate(zip(axes.flat, models)):
+        for task_index, task_id in enumerate(task_ids):
+            values = [
+                rate(
+                    [row for row in grouped_rows[(model, task_id)] if row["bucket"] == bucket],
+                    METRICS["control_target_adoption_rate"],
+                )
+                for bucket in BUCKETS
+            ]
+            axis.plot(bucket_labels, values, marker="o", linewidth=1.2, alpha=0.75, color=colors(task_index % 10), label=task_label(task_id))
+        axis.set_title(model)
+        axis.grid(alpha=0.25)
+        axis.tick_params(axis="x", rotation=40)
+        axis.set_ylim(-0.03, 1.03)
+    axes[0, 0].legend(fontsize=7, ncol=2, loc="upper center", bbox_to_anchor=(1.55, 1.35))
+    fig.supylabel("Control-target adoption rate")
+    fig.suptitle("All tasks across the six prompt families", y=1.02)
+    fig.tight_layout()
+    fig.savefig(output_dir / "all_tasks_across_prompt_families.png", dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
 def write_paired_tables(
     output_dir: Path, valid: list[dict[str, Any]], *, repetitions: int, seed: int
 ) -> None:
@@ -300,8 +632,10 @@ def write_plots(output_dir: Path, metrics: list[dict[str, Any]]) -> None:
     import matplotlib.pyplot as plt
     import numpy as np
 
-    models = sorted({row["model"] for row in metrics})
-    by_key = {(row["model"], row["bucket"]): row for row in metrics}
+    # Sanitize again at the plotting boundary, including analyses loaded from
+    # older tables whose model field may still contain a provider prefix.
+    models = sorted({clean_model_label(row["model"]) for row in metrics})
+    by_key = {(clean_model_label(row["model"]), row["bucket"]): row for row in metrics}
     heat = np.array(
         [
             [by_key.get((model, bucket), {}).get("control_target_adoption_rate", np.nan) for bucket in BUCKETS]
@@ -395,8 +729,11 @@ def analyze(paths: list[Path], output_dir: Path, *, repetitions: int, seed: int)
     metrics = compute_metrics(valid, repetitions=repetitions, seed=seed)
     write_main_tables(output_dir, metrics)
     write_alignment_table(output_dir, metrics)
+    write_model_task_tables(output_dir, valid, failures)
+    write_reproducibility_data(output_dir, valid, failures)
     write_paired_tables(output_dir, valid, repetitions=repetitions, seed=seed)
     write_plots(output_dir, metrics)
+    write_task_comparison_plots(output_dir, valid)
     write_summary(output_dir, valid, failures, metrics)
     return {
         "models": len({model_label(row) for row in valid}),

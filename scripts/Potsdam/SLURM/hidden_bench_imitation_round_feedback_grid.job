@@ -1,0 +1,57 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=32G
+#SBATCH --time=3-00:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: sbatch <options> $0 CONFIG GRID_LABEL" >&2
+  exit 2
+fi
+
+readonly CONFIG=$1
+readonly GRID_LABEL=$2
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly RESULTS_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/imitation_round_feedback_grid_${GRID_LABEL}
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly PREFLIGHT_DIR=${RESULTS_ROOT}/preflight
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${RESULTS_ROOT}/.matplotlib
+
+[[ -x "${CONDA_BIN}" ]] || { echo "[error] missing conda: ${CONDA_BIN}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${REPO_ROOT}/${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing environment file: ${REPO_ROOT}/.env" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/data/hidden_bench/scaled/paraphrased_replication/N_24.json" ]] || {
+  echo "[error] missing prebuilt N=24 population" >&2
+  exit 1
+}
+
+mkdir -p "${RESULTS_ROOT}" "${PREFLIGHT_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] grid=${GRID_LABEL} config=${CONFIG} cpus=${SLURM_CPUS_PER_TASK:-unknown}"
+echo "[run] output_dir=${RESULTS_ROOT} slurm_job_id=${SLURM_JOB_ID:-manual}"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment preflight \
+  --config "${CONFIG}" \
+  --output-dir "${PREFLIGHT_DIR}"
+
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${RESULTS_ROOT}" \
+  --no-progress
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -1,0 +1,92 @@
+#!/bin/bash
+# Retry only the failed first-pass prompts for GPT-4o, GPT-5 Mini, and Gemma.
+# Results are kept separate from first-pass outputs.
+
+#SBATCH --job-name=mascc-focal-recovery
+#SBATCH --array=0-2%3
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=6G
+#SBATCH --time=12:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/slurm-%x-%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/slurm-%x-%A_%a.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly INPUT_DIR=${REPO_ROOT}/results/atomic_control_calibration/frozen_prompts
+readonly RESPONSES_DIR=${REPO_ROOT}/results/atomic_control_calibration/responses
+readonly RECOVERY_DIR=${REPO_ROOT}/results/atomic_control_calibration/recovery_responses
+readonly RUNNER=scripts/experiment_design/focal_kernel_study/run_atomic_control_calibration_recovery.py
+readonly CONCURRENCY=4
+
+MODELS=(
+  "microsoft/gpt-4o"
+  "microsoft/gpt-5-mini"
+  "up/gemma4-31b"
+)
+
+SOURCE_NAMES=(
+  "microsoft_gpt_4o"
+  "microsoft_gpt_5_mini"
+  "up_gemma4_31b"
+)
+
+readonly ARRAY_INDEX=${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is required}
+readonly MODEL=${MODELS[$ARRAY_INDEX]}
+readonly SOURCE_NAME=${SOURCE_NAMES[$ARRAY_INDEX]}
+readonly FAILED_FROM=${RESPONSES_DIR}/${SOURCE_NAME}/failures.jsonl
+readonly OUTPUT_DIR=${RECOVERY_DIR}/${SOURCE_NAME}
+
+if [[ "${MODEL}" == "microsoft/gpt-5-mini" ]]; then
+  readonly TEMPERATURE=1
+  readonly MAX_OUTPUT_TOKENS=1024
+else
+  readonly TEMPERATURE=0
+  readonly MAX_OUTPUT_TOKENS=256
+fi
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+[[ -x "${CONDA_BIN}" ]] || { echo "[error] missing conda: ${CONDA_BIN}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing environment file" >&2; exit 1; }
+[[ -f "${FAILED_FROM}" ]] || { echo "[error] missing first-pass failures: ${FAILED_FROM}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${RUNNER}" ]] || { echo "[error] recovery runner missing" >&2; exit 1; }
+
+set -a
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/.env"
+set +a
+
+mkdir -p "${OUTPUT_DIR}"
+cd "${REPO_ROOT}"
+
+echo "[recovery] job=${SLURM_ARRAY_JOB_ID:-manual}_${ARRAY_INDEX} model=${MODEL}"
+echo "[recovery] failed_from=${FAILED_FROM}"
+echo "[recovery] output=${OUTPUT_DIR}"
+echo "[recovery] concurrency=${CONCURRENCY} max_output_tokens=${MAX_OUTPUT_TOKENS} temperature=${TEMPERATURE}"
+echo "[recovery] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${CONDA_BIN}" run --live-stream -n MA-CC python "${RUNNER}" \
+  --input-dir "${INPUT_DIR}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --failed-from "${FAILED_FROM}" \
+  --provider university \
+  --model "${MODEL}" \
+  --concurrency "${CONCURRENCY}" \
+  --temperature "${TEMPERATURE}" \
+  --max-output-tokens "${MAX_OUTPUT_TOKENS}" \
+  --invalid-response-retries 2 \
+  --progress never
+
+echo "[recovery-done] model=${MODEL} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
