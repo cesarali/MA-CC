@@ -1,0 +1,7 @@
+model_name,provider,model_id
+GPT-OSS 120B,university,gwdg/openai-gpt-oss-120b
+Qwen3 30B A3B,university,gwdg/qwen3-30b-a3b-instruct-2507
+Kimi K2.6,university,microsoft/Kimi-K2.6
+GPT-4o,university,microsoft/gpt-4o
+GPT-5 Mini,university,microsoft/gpt-5-mini
+Gemma4 31B,university,up/gemma4-31b

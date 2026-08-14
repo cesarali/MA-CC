@@ -1,0 +1,91 @@
+bucket,model_a,model_b,delta_a_minus_b,ci_low,ci_high,matched_n
+bucket_01_anonymous,GPT-4o,GPT-5 Mini,0.02,-0.04,0.08,100
+bucket_01_anonymous,GPT-4o,GPT-OSS 120B,-0.05,-0.09,0.0,100
+bucket_01_anonymous,GPT-4o,Gemma4 31B,-0.06315789473684211,-0.12631578947368421,-0.011764705882352941,95
+bucket_01_anonymous,GPT-4o,Kimi K2.6,-0.05128205128205128,-0.08620689655172414,0.0,39
+bucket_01_anonymous,GPT-4o,Qwen3 30B A3B,0.17,0.07,0.26,100
+bucket_01_anonymous,GPT-5 Mini,GPT-OSS 120B,-0.07,-0.13,-0.01,100
+bucket_01_anonymous,GPT-5 Mini,Gemma4 31B,-0.09473684210526316,-0.16016666666666665,-0.021052631578947368,95
+bucket_01_anonymous,GPT-5 Mini,Kimi K2.6,-0.05128205128205128,-0.16,0.0,39
+bucket_01_anonymous,GPT-5 Mini,Qwen3 30B A3B,0.15,0.04,0.25,100
+bucket_01_anonymous,GPT-OSS 120B,Gemma4 31B,-0.021052631578947368,-0.07777777777777778,0.04,95
+bucket_01_anonymous,GPT-OSS 120B,Kimi K2.6,0.0,-0.08108108108108109,0.07894736842105263,39
+bucket_01_anonymous,GPT-OSS 120B,Qwen3 30B A3B,0.22,0.11,0.32,100
+bucket_01_anonymous,Gemma4 31B,Kimi K2.6,0.0,0.0,0.0,39
+bucket_01_anonymous,Gemma4 31B,Qwen3 30B A3B,0.25263157894736843,0.1368421052631579,0.35789473684210527,95
+bucket_01_anonymous,Kimi K2.6,Qwen3 30B A3B,0.15384615384615385,-0.08333333333333333,0.320771563342318,39
+bucket_02_persistent_identity,GPT-4o,GPT-5 Mini,0.02,-0.07,0.1,100
+bucket_02_persistent_identity,GPT-4o,GPT-OSS 120B,-0.06,-0.12,0.01,100
+bucket_02_persistent_identity,GPT-4o,Gemma4 31B,-0.05,-0.1,0.0,100
+bucket_02_persistent_identity,GPT-4o,Kimi K2.6,-0.023255813953488372,-0.06666666666666667,0.0,43
+bucket_02_persistent_identity,GPT-4o,Qwen3 30B A3B,0.13,0.01,0.24,100
+bucket_02_persistent_identity,GPT-5 Mini,GPT-OSS 120B,-0.08,-0.15,-0.01,100
+bucket_02_persistent_identity,GPT-5 Mini,Gemma4 31B,-0.07,-0.12,-0.02,100
+bucket_02_persistent_identity,GPT-5 Mini,Kimi K2.6,-0.023255813953488372,-0.09375,0.0,43
+bucket_02_persistent_identity,GPT-5 Mini,Qwen3 30B A3B,0.11,0.04,0.18,100
+bucket_02_persistent_identity,GPT-OSS 120B,Gemma4 31B,0.01,-0.04,0.06,100
+bucket_02_persistent_identity,GPT-OSS 120B,Kimi K2.6,0.0,0.0,0.0,43
+bucket_02_persistent_identity,GPT-OSS 120B,Qwen3 30B A3B,0.19,0.09,0.29,100
+bucket_02_persistent_identity,Gemma4 31B,Kimi K2.6,-0.023255813953488372,-0.08333333333333333,0.0,43
+bucket_02_persistent_identity,Gemma4 31B,Qwen3 30B A3B,0.18,0.09,0.27,100
+bucket_02_persistent_identity,Kimi K2.6,Qwen3 30B A3B,0.11627906976744186,-0.046511627906976744,0.2758804108584005,43
+bucket_03_positive_reputation,GPT-4o,GPT-5 Mini,0.04,-0.04,0.13,100
+bucket_03_positive_reputation,GPT-4o,GPT-OSS 120B,0.06,0.0,0.13,100
+bucket_03_positive_reputation,GPT-4o,Gemma4 31B,0.0,-0.07,0.08247422680412371,97
+bucket_03_positive_reputation,GPT-4o,Kimi K2.6,0.0,0.0,0.0,49
+bucket_03_positive_reputation,GPT-4o,Qwen3 30B A3B,0.04040404040404041,-0.05154639175257732,0.13131313131313133,99
+bucket_03_positive_reputation,GPT-5 Mini,GPT-OSS 120B,0.02,-0.02,0.07,100
+bucket_03_positive_reputation,GPT-5 Mini,Gemma4 31B,-0.041237113402061855,-0.09278350515463918,0.010309278350515464,97
+bucket_03_positive_reputation,GPT-5 Mini,Kimi K2.6,0.0,-0.05555555555555555,0.06976744186046512,49
+bucket_03_positive_reputation,GPT-5 Mini,Qwen3 30B A3B,0.0,-0.09002272727272727,0.09,99
+bucket_03_positive_reputation,GPT-OSS 120B,Gemma4 31B,-0.061855670103092786,-0.10638297872340426,-0.02127659574468085,97
+bucket_03_positive_reputation,GPT-OSS 120B,Kimi K2.6,-0.04081632653061224,-0.10529115341545352,0.0,49
+bucket_03_positive_reputation,GPT-OSS 120B,Qwen3 30B A3B,-0.020202020202020204,-0.11227382705659583,0.09002272727272714,99
+bucket_03_positive_reputation,Gemma4 31B,Kimi K2.6,0.0,0.0,0.0,48
+bucket_03_positive_reputation,Gemma4 31B,Qwen3 30B A3B,0.052083333333333336,-0.033707865168539325,0.15633311170212721,96
+bucket_03_positive_reputation,Kimi K2.6,Qwen3 30B A3B,0.020833333333333332,-0.13729575163398694,0.19617647058823476,48
+bucket_04_negative_reputation,GPT-4o,GPT-5 Mini,-0.13,-0.23,-0.02,100
+bucket_04_negative_reputation,GPT-4o,GPT-OSS 120B,-0.15,-0.24,-0.06,100
+bucket_04_negative_reputation,GPT-4o,Gemma4 31B,-0.16494845360824742,-0.24468085106382978,-0.09090909090909091,97
+bucket_04_negative_reputation,GPT-4o,Kimi K2.6,-0.07142857142857142,-0.13513513513513514,0.0,42
+bucket_04_negative_reputation,GPT-4o,Qwen3 30B A3B,0.05,-0.05024999999999999,0.15,100
+bucket_04_negative_reputation,GPT-5 Mini,GPT-OSS 120B,-0.02,-0.08,0.03,100
+bucket_04_negative_reputation,GPT-5 Mini,Gemma4 31B,-0.041237113402061855,-0.15789473684210525,0.08,97
+bucket_04_negative_reputation,GPT-5 Mini,Kimi K2.6,0.023809523809523808,0.0,0.08333333333333333,42
+bucket_04_negative_reputation,GPT-5 Mini,Qwen3 30B A3B,0.18,0.08,0.27,100
+bucket_04_negative_reputation,GPT-OSS 120B,Gemma4 31B,-0.010309278350515464,-0.13131313131313133,0.11471874999999926,97
+bucket_04_negative_reputation,GPT-OSS 120B,Kimi K2.6,0.023809523809523808,0.0,0.09375,42
+bucket_04_negative_reputation,GPT-OSS 120B,Qwen3 30B A3B,0.2,0.11,0.29,100
+bucket_04_negative_reputation,Gemma4 31B,Kimi K2.6,0.0,0.0,0.0,41
+bucket_04_negative_reputation,Gemma4 31B,Qwen3 30B A3B,0.21649484536082475,0.10635498320268758,0.31184475806451606,97
+bucket_04_negative_reputation,Kimi K2.6,Qwen3 30B A3B,0.14285714285714285,-0.030303030303030304,0.2653061224489796,42
+bucket_05_social_reputation,GPT-4o,GPT-5 Mini,-0.1111111111111111,-0.1958762886597938,-0.02,99
+bucket_05_social_reputation,GPT-4o,GPT-OSS 120B,-0.10101010101010101,-0.16161616161616163,-0.04,99
+bucket_05_social_reputation,GPT-4o,Gemma4 31B,-0.11458333333333333,-0.19355661619486503,-0.0340719696969698,96
+bucket_05_social_reputation,GPT-4o,Kimi K2.6,-0.02631578947368421,-0.09090909090909091,0.0,38
+bucket_05_social_reputation,GPT-4o,Qwen3 30B A3B,0.061224489795918366,-0.01020408163265306,0.125,98
+bucket_05_social_reputation,GPT-5 Mini,GPT-OSS 120B,0.01,-0.06,0.08,100
+bucket_05_social_reputation,GPT-5 Mini,Gemma4 31B,0.0,-0.06,0.0425531914893617,97
+bucket_05_social_reputation,GPT-5 Mini,Kimi K2.6,0.02631578947368421,0.0,0.10714285714285714,38
+bucket_05_social_reputation,GPT-5 Mini,Qwen3 30B A3B,0.16161616161616163,0.07,0.25006313131313096,99
+bucket_05_social_reputation,GPT-OSS 120B,Gemma4 31B,-0.010309278350515464,-0.07216494845360824,0.05319148936170213,97
+bucket_05_social_reputation,GPT-OSS 120B,Kimi K2.6,0.0,0.0,0.0,38
+bucket_05_social_reputation,GPT-OSS 120B,Qwen3 30B A3B,0.15151515151515152,0.0707070707070707,0.24242424242424243,99
+bucket_05_social_reputation,Gemma4 31B,Kimi K2.6,0.0,0.0,0.0,38
+bucket_05_social_reputation,Gemma4 31B,Qwen3 30B A3B,0.16666666666666666,0.08418859649122806,0.25,96
+bucket_05_social_reputation,Kimi K2.6,Qwen3 30B A3B,0.05405405405405406,-0.047619047619047616,0.1724137931034483,37
+bucket_06_strategic_uncertainty,GPT-4o,GPT-5 Mini,-0.05,-0.12,0.03,100
+bucket_06_strategic_uncertainty,GPT-4o,GPT-OSS 120B,-0.09,-0.15,-0.03,100
+bucket_06_strategic_uncertainty,GPT-4o,Gemma4 31B,-0.07142857142857142,-0.14285714285714285,-0.01,98
+bucket_06_strategic_uncertainty,GPT-4o,Kimi K2.6,0.029411764705882353,0.0,0.10818318318318278,34
+bucket_06_strategic_uncertainty,GPT-4o,Qwen3 30B A3B,0.07,-0.02,0.14,100
+bucket_06_strategic_uncertainty,GPT-5 Mini,GPT-OSS 120B,-0.04,-0.08,0.0,100
+bucket_06_strategic_uncertainty,GPT-5 Mini,Gemma4 31B,-0.02040816326530612,-0.09375,0.05102040816326531,98
+bucket_06_strategic_uncertainty,GPT-5 Mini,Kimi K2.6,0.0,0.0,0.0,34
+bucket_06_strategic_uncertainty,GPT-5 Mini,Qwen3 30B A3B,0.12,0.02,0.21,100
+bucket_06_strategic_uncertainty,GPT-OSS 120B,Gemma4 31B,0.02040816326530612,-0.04081632653061224,0.09,98
+bucket_06_strategic_uncertainty,GPT-OSS 120B,Kimi K2.6,0.0,0.0,0.0,34
+bucket_06_strategic_uncertainty,GPT-OSS 120B,Qwen3 30B A3B,0.16,0.08,0.23,100
+bucket_06_strategic_uncertainty,Gemma4 31B,Kimi K2.6,0.029411764705882353,0.0,0.10354064039408815,34
+bucket_06_strategic_uncertainty,Gemma4 31B,Qwen3 30B A3B,0.14285714285714285,0.05,0.22448979591836735,98
+bucket_06_strategic_uncertainty,Kimi K2.6,Qwen3 30B A3B,0.029411764705882353,-0.15789473684210525,0.16217787554996851,34

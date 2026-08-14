@@ -12,6 +12,7 @@
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{tcolorbox}
+\usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{url}
 
@@ -47,6 +48,16 @@
 % Render the standalone theory note as subsections of this appendix.
 \def\ICLRTheorySection{}
 \input{fixed_qvoter_round_feedback_theory.tex}
+\endgroup
+
+\section{Focal-Control Calibration Study}
+\label{app:focal-control-study}
+\setcounter{subsection}{0}
+
+\begingroup
+% Render the standalone calibration study as subsections of this appendix.
+\def\ICLRFocalKernelSection{}
+\input{focal_kernel_control_study.tex}
 \endgroup
 
 \end{document}
