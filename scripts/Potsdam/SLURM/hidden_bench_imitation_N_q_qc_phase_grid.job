@@ -1,0 +1,70 @@
+#!/bin/bash
+###############################################################################
+# Run the N=32 HiddenBench imitation q x q_c phase grid on Potsdam Slurm.
+# Submit from the repository root with:
+#   sbatch scripts/Potsdam/SLURM/hidden_bench_imitation_N_q_qc_phase_grid.job
+# All generated artifacts and logs are written below RESULTS_ROOT on /work.
+###############################################################################
+#SBATCH --job-name=mascc-hb-N-q-qc-grid
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=16G
+#SBATCH --time=3-00:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/slurm-%x-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/slurm-%x-%j.err
+###############################################################################
+set -euo pipefail
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly RESULTS_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/hidden_bench_imitation_N_q_qc_phase_grid_50rep
+readonly CONDA_BIN=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly CONFIG=configs/runs/hidden_bench/hidden_bench_imitation_N_q_qc_phase_grid.yaml
+readonly PREFLIGHT_DIR=${RESULTS_ROOT}/preflight/hidden_bench_imitation_N_q_qc_phase_grid
+
+export MPLCONFIGDIR=${RESULTS_ROOT}/.matplotlib
+
+if [[ ! -x "${CONDA_BIN}" ]]; then
+  echo "[error] Conda is unavailable at ${CONDA_BIN}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/${CONFIG}" ]]; then
+  echo "[error] Config is missing: ${REPO_ROOT}/${CONFIG}" >&2
+  exit 1
+fi
+if [[ ! -f "${REPO_ROOT}/.env" ]]; then
+  echo "[error] ${REPO_ROOT}/.env is missing" >&2
+  exit 1
+fi
+
+mkdir -p "${RESULTS_ROOT}" "${PREFLIGHT_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] config=${REPO_ROOT}/${CONFIG}"
+echo "[run] repetitions_per_cell=50 parallelism=10 cpus=10"
+echo "[run] output_dir=${RESULTS_ROOT}"
+echo "[run] slurm_job_id=${SLURM_JOB_ID:-manual}"
+echo "[run] start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+echo "[step] preflight"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment preflight \
+  --config "${CONFIG}" \
+  --output-dir "${PREFLIGHT_DIR}"
+
+echo "[step] run"
+"${CONDA_BIN}" run --live-stream -n MA-CC mas-cc experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${RESULTS_ROOT}" \
+  --no-progress
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

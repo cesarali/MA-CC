@@ -85,7 +85,7 @@ control:
 
 execution:
   seed: 20260812
-  repetitions: 40
+  repetitions: 50
   parallelism: 10
   fail_fast: false
 
@@ -100,9 +100,9 @@ budget:
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 300.0
   max_cost_per_run: 300.0
-  # q=4 is the expensive edge. The exact call plan is checked at preflight;
-  # this bound covers 4 repetitions across all nine cells with headroom.
-  max_provider_requests: 75000
+  # q=4 is the expensive edge. Preflight estimates 830,400 requests for
+  # 50 repetitions across all nine cells; retain modest launch headroom.
+  max_provider_requests: 850000
   allow_unbounded_paid_requests: false
 
 logging:
