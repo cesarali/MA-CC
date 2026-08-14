@@ -1,0 +1,22 @@
+# Atomic-control calibration summary
+
+- Number of models: 6
+- Number of valid responses: 3226
+- Invalid-response rate: 0.104
+- Provider/other failed prompts: 0
+- Most controllable model/bucket: Kimi K2.6 / +Reputation (0.673)
+- Least controllable model/bucket: Qwen3 30B A3B / -Reputation (0.160)
+- Highest aligned target-adoption rate: Kimi K2.6 / +Reputation (0.970)
+- Highest adversarial target-adoption rate: GPT-4o / +Reputation (0.360)
+- Highest truth rate: Kimi K2.6 / Identity (0.953)
+
+## Main controllability table
+
+| Model | Anonymous | Identity | +Reputation | -Reputation | Social reputation | Strategic uncertainty |
+|---|---:|---:|---:|---:|---:|---:|
+| GPT-4o | 0.490 [0.450, 0.530] | 0.480 [0.430, 0.540] | 0.640 [0.580, 0.700] | 0.210 [0.140, 0.280] | 0.475 [0.434, 0.520] | 0.440 [0.410, 0.470] |
+| GPT-5 Mini | 0.470 [0.410, 0.530] | 0.460 [0.390, 0.510] | 0.600 [0.530, 0.690] | 0.340 [0.290, 0.380] | 0.580 [0.500, 0.670] | 0.490 [0.440, 0.540] |
+| GPT-OSS 120B | 0.540 [0.490, 0.590] | 0.540 [0.490, 0.590] | 0.580 [0.530, 0.650] | 0.360 [0.300, 0.420] | 0.570 [0.520, 0.620] | 0.530 [0.480, 0.580] |
+| Gemma4 31B | 0.579 [0.510, 0.663] | 0.530 [0.470, 0.590] | 0.649 [0.588, 0.711] | 0.381 [0.290, 0.469] | 0.588 [0.515, 0.660] | 0.510 [0.449, 0.582] |
+| Kimi K2.6 | 0.538 [0.462, 0.636] | 0.535 [0.471, 0.630] | 0.673 [0.588, 0.780] | 0.333 [0.250, 0.400] | 0.579 [0.500, 0.677] | 0.471 [0.407, 0.556] |
+| Qwen3 30B A3B | 0.320 [0.250, 0.410] | 0.350 [0.270, 0.440] | 0.596 [0.515, 0.670] | 0.160 [0.090, 0.250] | 0.414 [0.347, 0.480] | 0.370 [0.310, 0.440] |

@@ -4,13 +4,13 @@ llm_provider:
   temperature: 0.0
   max_output_tokens: 64
   options:
-    response: '{"vote":"North Hill","rationale":"smoke"}'
+    response: '{"vote":"North Hill","reason":"smoke"}'
 prompt:
   schema_version: 2
-  prompt_family: hidden_bench_imitation_update
+  prompt_family: hidden_bench_public_ballot
   prompt_version: 1
   response_contract:
-    type: hidden_bench_json_vote
+    type: hidden_bench_public_ballot
     allowed_values: [West City, East Town, North Hill]
 game:
   type: hidden_bench_imitation_round_feedback
@@ -25,7 +25,7 @@ game:
     dynamics_mode: reasoning
     rounds: 1
     social_group_size: 2
-    messages_per_agent: 1
+    vote_visibility: public
     memory_size: 0
     prompt_version: 1
     stop_on_consensus: false
@@ -60,7 +60,10 @@ budget:
   max_provider_requests: 100
   max_input_tokens: 100000
   max_output_tokens: 10000
-  allow_unbounded_paid_requests: false
+  # The mock provider has no price, so a conservative per-request cost
+  # cannot be formed; this is the free smoke run the plan's step 18 asks
+  # to inspect by hand, never a paid one.
+  allow_unbounded_paid_requests: true
 logging:
   level: INFO
   console: true

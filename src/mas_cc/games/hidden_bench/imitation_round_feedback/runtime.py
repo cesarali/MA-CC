@@ -1,4 +1,19 @@
-"""Two-clock runtime for budgeted round-level HiddenBench feedback."""
+"""Two-clock runtime for budgeted round-level HiddenBench feedback.
+
+The slow clock - one controller decision per population round, `q_c` sensing, a
+soft policy, an exact budget `b` of randomly placed controlled positions - is
+unchanged.  The fast clock's reasoning kernel is not: one microscopic update is
+
+    sample focal + q social slots
+        -> render each slot from its current (vote, public reason)
+        -> ONE focal provider call
+        -> {vote, reason}
+        -> apply both immediately
+
+with no peer-dialogue generation anywhere.  Control still consumes one of the
+`q` social slots rather than adding one, so a controlled and an uncontrolled
+update cost exactly one call each and show exactly `q` sources.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +21,7 @@ import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from mas_cc.config import RunConfig
 from mas_cc.control import (
@@ -24,14 +39,30 @@ from ..imitation.controller import ADVOCATE_TARGET, NO_OP
 from ..imitation.game import FOCAL_UPDATE
 from ..imitation.metrics import population_observables
 from ..imitation.runtime import (
-    PROMPT_FAMILIES,
+    PROMPT_FAMILIES as LEGACY_PROMPT_FAMILIES,
     ImitationInteractionRecord,
 )
 from ..imitation.state import ImitationGameState
 from ..runtime import HiddenBenchDecision, _execute_decision, _notify
 from .classical import classical_transition
 from .game import HiddenBenchImitationRoundFeedbackGame
-from .state import CLASSICAL_KERNEL_RULE, RoundFeedbackRecord
+from .prompts import (
+    PROMPT_FAMILY,
+    agent_label,
+    control_label,
+    render_control_reason,
+)
+from .state import CLASSICAL_KERNEL_RULE, RoundFeedbackRecord, get_public_reason
+
+REASONING_PROMPT_FAMILIES = (PROMPT_FAMILY,)
+CLASSICAL_PROMPT_FAMILIES = (*LEGACY_PROMPT_FAMILIES, PROMPT_FAMILY)
+"""Classical mode never reaches a provider, so the historical family names stay
+acceptable there and the shipped classical configs keep loading unchanged."""
+
+CONTROL_SOURCE_ID = "control-source"
+"""The controller's stable identifier in the trajectory.  It is *not* what the
+focal agent sees: in the prompt the controller is one more numbered
+participant, see `control_label`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,16 +121,93 @@ def _controller_view(state: ImitationGameState) -> GameState:
 
 
 def _round_interaction_signal(
-    signal: RoundControlSignal | None, *, controlled_slot: bool
+    signal: RoundControlSignal | None,
+    *,
+    controlled_slot: bool,
+    message: str | None = None,
 ) -> InteractionControlSignal | None:
+    """Project the round decision onto one microscopic position.
+
+    `message` overrides the controller's own text with what the focal agent was
+    actually shown, so `controller_message` in the trajectory is the rendered
+    public reason rather than a template the reasoning path no longer uses.
+    """
+
     if signal is None:
         return None
     return InteractionControlSignal(
         action=signal.action,
         target=signal.target,
-        message=signal.message if controlled_slot else None,
+        message=(message if message is not None else signal.message)
+        if controlled_slot
+        else None,
         observation=signal.observation,
         metadata=signal.metadata,
+    )
+
+
+def build_social_sources(
+    state: ImitationGameState,
+    sampled_peers: tuple[Any, ...],
+    *,
+    replaced_peer_slot: int | None,
+    controller_target: str | None,
+    population_size: int,
+) -> tuple[dict[str, Any], ...]:
+    """The `q` visible social inputs, in scheduler slot order.
+
+    A controlled position substitutes `(X_j, R_j) -> (Z, R_C(Z))` in exactly one
+    slot.  Both kinds of source carry the same four visible fields, which is
+    what makes the controller indistinguishable from an ordinary participant in
+    the rendered prompt.
+    """
+
+    sources: list[dict[str, Any]] = []
+    for slot, peer in enumerate(sampled_peers):
+        if slot == replaced_peer_slot:
+            if controller_target is None:
+                raise ValueError("a controlled social slot requires a controller target")
+            sources.append(
+                {
+                    "slot": slot,
+                    "source_id": CONTROL_SOURCE_ID,
+                    "source_type": "control",
+                    "label": control_label(population_size),
+                    "vote": controller_target,
+                    "reason": render_control_reason(controller_target),
+                }
+            )
+            continue
+        agent = state.hidden_bench_agent(peer)
+        sources.append(
+            {
+                "slot": slot,
+                "source_id": str(peer),
+                "source_type": "ordinary",
+                "label": agent_label(peer),
+                "vote": agent.committed_action,
+                "reason": get_public_reason(agent),
+            }
+        )
+    return tuple(sources)
+
+
+def _influence_slots(sources: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...]:
+    """The historical per-slot row, derived from the same source records."""
+
+    return tuple(
+        {
+            "slot": int(source["slot"]),
+            "kind": "controller" if source["source_type"] == "control" else "peer",
+            "peer_agent_id": (
+                None if source["source_type"] == "control" else str(source["source_id"])
+            ),
+            "peer_vote_before": (
+                None if source["source_type"] == "control" else source["vote"]
+            ),
+            "message": source["reason"],
+        }
+        for source in sources
     )
 
 
@@ -131,10 +239,15 @@ async def run_hidden_bench_imitation_round_feedback_game(
     """Run one episode with exactly one controller decision per population round."""
 
     rules = game.rules(config.game)
-    if config.prompt.prompt_family not in PROMPT_FAMILIES:
+    families = (
+        REASONING_PROMPT_FAMILIES
+        if rules.dynamics_mode == "reasoning"
+        else CLASSICAL_PROMPT_FAMILIES
+    )
+    if config.prompt.prompt_family not in families:
         raise ValueError(
-            f"prompt.prompt_family must be one of {PROMPT_FAMILIES}; "
-            f"got {config.prompt.prompt_family!r}"
+            f"prompt.prompt_family must be one of {families} in "
+            f"{rules.dynamics_mode} mode; got {config.prompt.prompt_family!r}"
         )
     if config.prompt.prompt_version != rules.prompt_version:
         raise ValueError(
@@ -263,84 +376,22 @@ async def run_hidden_bench_imitation_round_feedback_game(
                 for slot, peer in enumerate(sampled_peers)
                 if slot != replaced_peer_slot
             )
-            micro_signal = _round_interaction_signal(
-                round_signal, controlled_slot=controlled_slot
-            )
             decisions: list[HiddenBenchDecision] = []
             dialogue: list[Mapping[str, Any]] = []
+            focal_agent = state.hidden_bench_agent(focal)
+            focal_reason_before = get_public_reason(focal_agent)
 
             if rules.dynamics_mode == "reasoning":
-                for peer_slot, peer in enumerate(sampled_peers):
-                    if peer_slot == replaced_peer_slot:
-                        continue
-                    participants = (focal, peer)
-                    pair_dialogue: list[Mapping[str, Any]] = []
-                    for _ in range(rules.messages_per_agent):
-                        requests = game.message_requests(
-                            state, participants, tuple(pair_dialogue), config.game
-                        )
-                        message_decisions = tuple(
-                            await asyncio.gather(
-                                *(
-                                    _execute_decision(
-                                        game,
-                                        request,
-                                        state,
-                                        config,
-                                        provider,
-                                        counter,
-                                        root,
-                                        observer,
-                                    )
-                                    for request in requests
-                                )
-                            )
-                        )
-                        decisions.extend(message_decisions)
-                        messages = tuple(
-                            {
-                                "agent_id": str(decision.action.agent_id),
-                                "message": decision.action.value,
-                                "interaction_index": state.turn + 1,
-                                "private": True,
-                                "social_peer_slot": peer_slot,
-                            }
-                            for decision in message_decisions
-                        )
-                        pair_dialogue.extend(messages)
-                        dialogue.extend(messages)
-                influence_slots = tuple(
-                    {
-                        "slot": slot,
-                        "kind": "controller" if slot == replaced_peer_slot else "peer",
-                        "peer_agent_id": (
-                            None if slot == replaced_peer_slot else str(peer)
-                        ),
-                        "peer_vote_before": (
-                            None
-                            if slot == replaced_peer_slot
-                            else state.hidden_bench_agent(peer).committed_action
-                        ),
-                        "message": (
-                            round_signal.message
-                            if slot == replaced_peer_slot and round_signal is not None
-                            else game._spoken_message(peer, dialogue)
-                        ),
-                    }
-                    for slot, peer in enumerate(sampled_peers)
-                )
-                request = game.focal_update_request(
+                social_sources = build_social_sources(
                     state,
-                    focal,
-                    effective_peers,
-                    tuple(dialogue),
-                    (
-                        round_signal.message
-                        if controlled_slot and round_signal is not None
-                        else None
-                    ),
-                    config.game,
-                    influence_slots=influence_slots,
+                    sampled_peers,
+                    replaced_peer_slot=replaced_peer_slot,
+                    controller_target=target,
+                    population_size=rules.n_agents,
+                )
+                influence_slots = _influence_slots(social_sources)
+                request = game.public_ballot_request(
+                    state, focal, social_sources, config.game
                 )
                 update = await _execute_decision(
                     game, request, state, config, provider, counter, root, observer
@@ -348,7 +399,20 @@ async def run_hidden_bench_imitation_round_feedback_game(
                 decisions.append(update)
                 focal_action = update.action
                 classical_metadata = None
+                # The agent's own new public reason is the only thing said at
+                # this event, so it - and nothing else - enters the transcript
+                # and the disclosure counters.
+                dialogue.append(
+                    {
+                        "agent_id": str(focal),
+                        "message": str(focal_action.metadata.get("reason") or ""),
+                        "interaction_index": state.turn + 1,
+                        "private": False,
+                        "kind": "public_reason",
+                    }
+                )
             else:
+                social_sources = ()
                 peer_opinions = tuple(
                     str(state.hidden_bench_agent(peer).committed_action)
                     for peer in sampled_peers
@@ -421,10 +485,24 @@ async def run_hidden_bench_imitation_round_feedback_game(
                     "classical_focal_changed": jump.changed,
                 }
 
+            control_source = next(
+                (
+                    source
+                    for source in social_sources
+                    if source["source_type"] == "control"
+                ),
+                None,
+            )
+            micro_signal = _round_interaction_signal(
+                round_signal,
+                controlled_slot=controlled_slot,
+                message=None if control_source is None else str(control_source["reason"]),
+            )
             micro_index = state.turn + 1
             round_fields = {
                 "round_index": round_index,
                 "within_round_index": within_round_index,
+                "global_update_index": round_index * rules.n_agents + within_round_index,
                 "microscopic_event_index": micro_index,
                 "round_controller_action": action,
                 "round_controller_target": target,
@@ -438,6 +516,14 @@ async def run_hidden_bench_imitation_round_feedback_game(
                     None if replaced_peer is None else str(replaced_peer)
                 ),
                 "controller_advocate_probability": probability,
+                # Everything needed to reconstruct exactly what this focal saw
+                # and produced, without re-rendering the prompt.  The matching
+                # `focal_vote_before`/`focal_vote_after` are already written by
+                # the inherited transition.
+                "vote_visibility": rules.vote_visibility,
+                "social_sources": [dict(source) for source in social_sources],
+                "focal_reason_before": focal_reason_before,
+                "focal_reason_after": focal_action.metadata.get("reason"),
             }
             transition = game.apply_round_event_transition(
                 state,
@@ -620,7 +706,9 @@ def run_hidden_bench_imitation_round_feedback_game_sync(
 
 
 __all__ = [
+    "CONTROL_SOURCE_ID",
     "RoundFeedbackGameResult",
+    "build_social_sources",
     "run_hidden_bench_imitation_round_feedback_game",
     "run_hidden_bench_imitation_round_feedback_game_sync",
     "sample_controlled_positions",

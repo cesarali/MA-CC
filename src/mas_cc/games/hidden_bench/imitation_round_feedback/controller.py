@@ -1,4 +1,13 @@
-"""One-sense/one-action budgeted feedback controller."""
+"""One-sense/one-action budgeted feedback controller.
+
+`template_version` is **not** an experimental axis here and the `message` this
+controller carries is **not** what a reasoning-mode agent sees. Under atomic
+public ballots the controller's whole visible contribution is one social slot's
+`(vote, reason)` pair, rendered by
+`prompts.render_control_reason` - one fixed, fact-free renderer per target.
+The option is still validated (and pinned to `3`) so the shipped configs and
+the classical reference path keep loading unchanged.
+"""
 
 from __future__ import annotations
 

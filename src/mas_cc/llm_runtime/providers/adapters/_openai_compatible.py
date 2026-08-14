@@ -159,6 +159,39 @@ class OpenAICompatibleProvider:
                     exc, operation="model discovery"
                 ) from exc
 
+    def _raise_if_reasoning_exhausted(
+        self, choice: Mapping[str, Any], request: CompletionRequest, status_code: int
+    ) -> None:
+        """Name the one non-transient cause of an empty `content`.
+
+        Reasoning models (gpt-oss, and anything else that returns a separate
+        `reasoning_content`) charge their chain of thought against the same
+        `max_tokens` as the answer. When the budget runs out inside the
+        reasoning, the body is a well-formed envelope whose `content` is empty -
+        indistinguishable, to the schema check, from a truncated proxy reply.
+
+        The difference is that this one is deterministic: every retry burns
+        another paid request and fails identically. So it is reported
+        immediately, as itself, with the setting that fixes it.
+        """
+
+        message = choice.get("message")
+        if not isinstance(message, Mapping):
+            return
+        if choice.get("finish_reason") != "length":
+            return
+        if not message.get("reasoning_content") and not message.get("reasoning"):
+            return
+        raise ProviderError(
+            f"{self.model!r} spent its whole {request.max_output_tokens}-token "
+            "output budget on reasoning and returned no answer. Raise "
+            "llm_provider.max_output_tokens; retrying cannot help.",
+            provider=self.name,
+            code="reasoning_budget_exhausted",
+            retryable=False,
+            status_code=status_code,
+        )
+
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         if self._closed:
             raise ProviderError(
@@ -197,6 +230,9 @@ class OpenAICompatibleProvider:
                     choice = body["choices"][0]
                     content = choice["message"]["content"]
                     if not isinstance(content, str):
+                        self._raise_if_reasoning_exhausted(
+                            choice, request, response.status_code
+                        )
                         raise TypeError("message content is not a string")
                     latency = time.perf_counter() - started
                     return CompletionResponse(
@@ -212,6 +248,11 @@ class OpenAICompatibleProvider:
                         status_code=response.status_code,
                         raw_response=body,
                     )
+                except ProviderError:
+                    # Already diagnosed and already normalized - in particular
+                    # the exhausted reasoning budget above, which must not be
+                    # retried into three identical paid failures.
+                    raise
                 except (KeyError, IndexError, TypeError, ValueError) as exc:
                     # Shared OpenAI-compatible proxies occasionally return an
                     # HTTP-200 body that is not a complete Chat Completions

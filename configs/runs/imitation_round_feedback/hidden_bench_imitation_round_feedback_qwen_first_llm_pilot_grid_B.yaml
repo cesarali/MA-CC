@@ -1,4 +1,10 @@
 # First LLM pilot — Grid B: control strength.
+#
+# MODEL: this pilot now runs gwdg/openai-gpt-oss-120b, not Qwen. The file name
+# still says `qwen` only so that existing references keep resolving; the model,
+# the experiment name, and the Comet tags are all gpt-oss. Because gpt-oss is a
+# reasoning model, `llm_provider.max_output_tokens` is 4096 - see the note there
+# before touching it.
 # Common setup and estimator choices match Grid A in
 # hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_A.yaml.
 # This Cartesian grid has q={1,2} x b={12,18}: 4 cells / 120 episodes.
@@ -26,23 +32,37 @@
 
 llm_provider:
   type: university
-  model: gwdg/qwen3-30b-a3b-instruct-2507
+  model: gwdg/openai-gpt-oss-120b
   credentials_env: POTSDAM_API_KEY
   base_url_env: BASE_POTSDAM_LLM_URL
   timeout_seconds: 180
   max_retries: 2
   request_concurrency: 4
   temperature: 0.0
-  max_output_tokens: 128
+  # gpt-oss is a reasoning model: it emits a long `reasoning_content` before the
+  # answer and BOTH are charged against max_tokens. A measured public-ballot
+  # prompt for this game spent 684 completion tokens, ~650 of them reasoning.
+  # Below that the answer is truncated away, `content` arrives empty, and the
+  # adapter rejects the body - which is exactly how every earlier gpt-oss smoke
+  # in results/gpt_oss_120b_smoke_test* died, at 256, 512 and 1024.
+  #
+  # This is not a cost dial. The budget guard reserves this many tokens per call
+  # and then settles the reservation against actual usage, so a generous ceiling
+  # changes the preflight quote and never what you pay. Spend is bounded by
+  # budget.max_cost_per_run below. Do not trim this back.
+  #
+  # `reasoning_effort: low` would cut the reasoning itself, but the proxy
+  # rejects the parameter (HTTP 400, UnsupportedParamsError).
+  max_output_tokens: 4096
   options:
-    estimated_latency_seconds: 3.0
+    estimated_latency_seconds: 10.0
 
 prompt:
   schema_version: 2
-  prompt_family: hidden_bench_imitation_update
+  prompt_family: hidden_bench_public_ballot
   prompt_version: 1
   response_contract:
-    type: hidden_bench_json_vote
+    type: hidden_bench_public_ballot
 
 game:
   type: hidden_bench_imitation_round_feedback
@@ -60,7 +80,7 @@ game:
     dynamics_mode: reasoning
     rounds: 10
     social_group_size: 1
-    messages_per_agent: 1
+    vote_visibility: public
     memory_size: 0
     allow_relay: true
     prompt_version: 1
@@ -182,9 +202,9 @@ observability:
     metric_plots: true
 
 experiment:
-  name: hidden-bench-round-feedback-qwen-first-llm-pilot-grid-B
+  name: hidden-bench-round-feedback-gpt-oss-120b-first-llm-pilot-grid-B
   description: First LLM pilot Grid B, probing stronger truth-target actuation.
-  tags: [hidden-bench, imitation, round-feedback, qwen, first-llm-pilot, grid-B]
+  tags: [hidden-bench, imitation, round-feedback, gpt-oss-120b, first-llm-pilot, grid-B]
   metadata:
     pilot_grid: B
     population_rounds: 10

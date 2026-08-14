@@ -139,6 +139,9 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
         hidden_bench_imitation_message_prompt,
         hidden_bench_imitation_update_prompt,
     )
+    from .hidden_bench.imitation_round_feedback.prompts import (
+        hidden_bench_public_ballot_prompt,
+    )
     from .naming_convention.prompts import naming_convention_prompt
     from .synthetic.prompts import synthetic_agent_decision_prompt
     from .toy_coordination.prompts import toy_coordination_prompt
@@ -168,6 +171,11 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     registry.register(lambda: hidden_bench_imitation_initial_prompt(style=imitation_v2))
     registry.register(lambda: hidden_bench_imitation_message_prompt(imitation_v2))
     registry.register(lambda: hidden_bench_imitation_update_prompt(style=imitation_v2))
+    # The round-feedback game reasons in one call: its whole reasoning kernel is
+    # a single family, used for both the local initial ballot and every focal
+    # update, and it has exactly one version because the social environment it
+    # carries is fixed rather than swept.
+    registry.register(hidden_bench_public_ballot_prompt)
     return registry
 
 

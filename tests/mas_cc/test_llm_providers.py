@@ -170,6 +170,94 @@ def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():
     assert len(session.post_calls) == 2
 
 
+def _reasoning_body(finish_reason, content, reasoning="Let me think about this."):
+    message = {"role": "assistant", "content": content}
+    if reasoning is not None:
+        message["reasoning_content"] = reasoning
+    return {
+        "id": "req-3",
+        "model": "gpt-oss",
+        "choices": [{"message": message, "finish_reason": finish_reason}],
+        "usage": {"prompt_tokens": 884, "completion_tokens": 300, "total_tokens": 1184},
+    }
+
+
+def _reasoning_provider(session, *, max_retries=1):
+    return create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-oss",
+            credentials_env="TEST_API_KEY",
+            max_retries=max_retries,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+    )
+
+
+def test_a_reasoning_model_that_ran_out_of_budget_says_so_instead_of_retrying():
+    """gpt-oss charges its chain of thought against `max_tokens`.
+
+    When the budget runs out inside the reasoning the envelope is well formed
+    but `content` is empty, which is indistinguishable from a flaky proxy to
+    the schema check alone - yet it is perfectly deterministic, so retrying it
+    only buys identical paid failures.
+    """
+
+    session = _Session([_Response(200, _reasoning_body("length", None))])
+    provider = _reasoning_provider(session)
+
+    with pytest.raises(ProviderError) as captured:
+        asyncio.run(provider.complete(_request()))
+
+    assert captured.value.code == "reasoning_budget_exhausted"
+    assert captured.value.retryable is False
+    assert "max_output_tokens" in str(captured.value)
+    # The whole point: one request, not one per configured retry.
+    assert len(session.post_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("finish_reason", "reasoning"),
+    [("stop", "Let me think."), ("length", None)],
+    ids=["complete_but_empty", "truncated_without_reasoning"],
+)
+def test_an_empty_content_that_is_not_a_reasoning_overrun_still_retries(
+    finish_reason, reasoning
+):
+    valid = {
+        "id": "req-4",
+        "model": "gpt-oss",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+    }
+    session = _Session(
+        [
+            _Response(
+                200,
+                _reasoning_body(finish_reason, None, reasoning),
+                headers={"Retry-After": "0"},
+            ),
+            _Response(200, valid),
+        ]
+    )
+
+    response = asyncio.run(_reasoning_provider(session).complete(_request()))
+
+    assert response.content == "A"
+    assert len(session.post_calls) == 2
+
+
+def test_a_reasoning_model_that_answers_is_read_from_content_not_reasoning():
+    body = _reasoning_body("stop", '{"vote": "A", "reason": "Because."}')
+    response = asyncio.run(
+        _reasoning_provider(_Session([_Response(200, body)])).complete(_request())
+    )
+
+    assert response.content == '{"vote": "A", "reason": "Because."}'
+    assert response.raw_response["choices"][0]["message"]["reasoning_content"]
+
+
 def test_university_discovers_v1_endpoint_and_rejects_unlisted_model_safely():
     config = LLMProviderConfig(
         type="university",
