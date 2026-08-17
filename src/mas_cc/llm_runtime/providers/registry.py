@@ -12,6 +12,8 @@ from mas_cc.llm_runtime.config import LLMProviderConfig
 from ..exceptions import ConfigurationError
 from ..validation import ValidationIssue
 from .protocols import LLMProvider
+from .model_profiles import ModelProfileRegistry, default_model_profile_registry
+from .profiles import ProfiledLLMProvider
 
 ProviderFactory = Callable[..., LLMProvider]
 
@@ -73,6 +75,7 @@ def create_llm_provider(
     *,
     registry: ProviderRegistry | None = None,
     environment: Mapping[str, str] | None = None,
+    profile_registry: ModelProfileRegistry | None = None,
     **adapter_options: Any,
 ) -> LLMProvider:
     """Construct one adapter; this is the only public provider creation path."""
@@ -80,4 +83,8 @@ def create_llm_provider(
     selected = registry or create_default_provider_registry()
     if environment is not None and config.type in {"openai", "university"}:
         adapter_options["environment"] = environment
-    return selected.create(config, **adapter_options)
+    provider = selected.create(config, **adapter_options)
+    if config.type.strip().lower() in {"openai", "university"}:
+        profiles = profile_registry or default_model_profile_registry()
+        return ProfiledLLMProvider(provider, config.type, profiles)
+    return provider

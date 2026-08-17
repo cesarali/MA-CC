@@ -1,0 +1,4 @@
+# Curated live-probe allowlist. Blank lines and comments are ignored.
+# Do not add a model here unless probing it has been explicitly approved.
+microsoft/gpt-4o
+microsoft/gpt-5-mini

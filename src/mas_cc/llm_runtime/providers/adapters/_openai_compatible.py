@@ -19,6 +19,9 @@ from ..requests import CompletionRequest
 from ..responses import CompletionResponse, ProviderUsage
 
 
+_OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
+
+
 def _load_dotenv_if_available() -> None:
     """Load a repository .env lazily; process environment keeps precedence."""
 
@@ -88,6 +91,7 @@ class OpenAICompatibleProvider:
         self._concurrency = config.request_concurrency
         self._discover_endpoint = discover_endpoint
         self._chat_url: str | None = None if discover_endpoint else f"{self._base_url}/chat/completions"
+        self._available_models: tuple[str, ...] | None = None
         self._endpoint_lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(self._concurrency)
         self._session = session
@@ -107,12 +111,14 @@ class OpenAICompatibleProvider:
             self._session = requests.Session()
         return self._session
 
-    async def _ensure_endpoint(self) -> None:
-        if self._chat_url is not None:
-            return
+    async def discover_models(self) -> tuple[str, ...]:
+        """Return advertised model ids while sharing normal endpoint discovery."""
+
+        if self._available_models is not None:
+            return self._available_models
         async with self._endpoint_lock:
-            if self._chat_url is not None:
-                return
+            if self._available_models is not None:
+                return self._available_models
             session = self._get_session()
             url = f"{self._base_url}/models"
             try:
@@ -145,19 +151,28 @@ class OpenAICompatibleProvider:
                 models = {
                     item.get("id") for item in entries if isinstance(item, Mapping)
                 }
-                if self.model not in models:
-                    raise ProviderError(
-                        f"Model {self.model!r} is not listed by {self.name}.",
-                        provider=self.name,
-                        code="model_unavailable",
-                    )
                 self._chat_url = f"{prefix}/chat/completions"
+                self._available_models = tuple(
+                    sorted(item for item in models if isinstance(item, str) and item)
+                )
+                return self._available_models
             except ProviderError:
                 raise
             except Exception as exc:
                 raise self._normalize_transport_error(
                     exc, operation="model discovery"
                 ) from exc
+
+    async def _ensure_endpoint(self) -> None:
+        if not self._discover_endpoint:
+            return
+        models = await self.discover_models()
+        if self.model not in models:
+            raise ProviderError(
+                f"Model {self.model!r} is not listed by {self.name}.",
+                provider=self.name,
+                code="model_unavailable",
+            )
 
     def _raise_if_reasoning_exhausted(
         self, choice: Mapping[str, Any], request: CompletionRequest, status_code: int
@@ -201,9 +216,10 @@ class OpenAICompatibleProvider:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": copy.deepcopy(request.wire_messages()),
-            "temperature": request.temperature,
             "max_tokens": request.max_output_tokens,
         }
+        if not request.metadata.get(_OMIT_TEMPERATURE_METADATA_KEY, False):
+            payload["temperature"] = request.temperature
         if request.seed is not None:
             payload["seed"] = request.seed
         headers = {

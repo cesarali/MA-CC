@@ -40,6 +40,9 @@ mas-cc = "mas_cc.cli.main:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"mas_cc.llm_runtime.providers" = ["model_profiles.json"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 pythonpath = ["src"]

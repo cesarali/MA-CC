@@ -28,6 +28,9 @@ src/mas_cc/llm_runtime/
 │   ├── capabilities.py        # ProviderCapabilities
 │   ├── registry.py            # ProviderRegistry, create_default_provider_registry, create_llm_provider
 │   ├── budget.py              # BudgetCeiling, BudgetLimits, RuntimeBudgetGuard, BudgetGuardedProvider
+│   ├── model_profiles.py      # ModelProfile, TemperatureRule, catalogue registry/fallbacks
+│   ├── model_profiles.json    # checked-in per-model probe catalogue (package data)
+│   ├── profiles.py            # request-normalizing provider decorator
 │   ├── pricing.py             # ModelPricing, PricingCatalog, PricingSource impls, MonetaryAmount, ...
 │   └── adapters/
 │       ├── __init__.py
@@ -89,6 +92,14 @@ All four are registered lazily by string module path in
 `torch`, or `transformers` — those are imported lazily inside adapter
 methods, only when a call is actually made.
 
+`create_llm_provider()` wraps the OpenAI-compatible providers in
+`ProfiledLLMProvider`. The decorator looks up the concrete provider/model pair
+in the packaged `model_profiles.json`, applies known temperature/seed rules,
+and warns once for each automatic rule applied. Unknown entries remain usable
+through a profile explicitly marked `probe_source="inferred"`. The adapter's
+`discover_models()` method is shared with the opt-in exploratory probe so model
+listing and normal university endpoint discovery cannot drift apart.
+
 ## Prompt subsystem classes/functions
 
 Kernel (generic mechanism, ships with no game/paper content):
@@ -127,6 +138,10 @@ subpackages directly.
 - **university** additionally: on Windows only, `_potsdam_network.py` may
   shell out to a local VPN-bridge helper process; this is a narrow,
   network-environment-specific concern, not a pip dependency.
+
+The setuptools package-data declaration for this component must include
+`mas_cc.llm_runtime.providers/model_profiles.json`; otherwise exact profiles
+are unavailable from an installed wheel.
 
 Importing `mas_cc.llm_runtime.providers` or `mas_cc.llm_runtime.prompts`
 never requires `openai`, `requests`, `torch`, or `transformers` to be

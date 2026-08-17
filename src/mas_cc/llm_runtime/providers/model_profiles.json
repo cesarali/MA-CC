@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "provider_type": "university",
+      "model": "microsoft/gpt-4o",
+      "family": "gpt-4",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-17T14:34:32.354631Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "temperature_0: HTTP 200",
+        "temperature_1: HTTP 200",
+        "temperature_omitted: HTTP 200",
+        "seed: HTTP 200",
+        "system_messages: HTTP 200",
+        "max_tokens: HTTP 200",
+        "max_completion_tokens: HTTP 200"
+      ]
+    },
+    {
+      "provider_type": "university",
+      "model": "microsoft/gpt-5-mini",
+      "family": "gpt-5",
+      "temperature": {
+        "mode": "fixed",
+        "value": 1.0
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-17T14:34:41.065118Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "temperature_0: failed (HTTP 400): {\"error\": {\"code\": \"400\", \"message\": \"litellm.UnsupportedParamsError: gpt-5 models (including gpt-5-codex) don't support temperature=0.0. Only temperature=1 is supported. For gpt-5.1, temperature is supported when reasoning_effort='none' (or not specified, as it defaults to 'none'). To drop unsupported params set `litellm.drop_params = True`. Received Model Group=microsoft/gpt-5-mini\\nAvailable Model Group Fallbacks=None\", \"param\": null, \"type\": \"None\"}}",
+        "temperature_1: HTTP 200",
+        "temperature_omitted: HTTP 200",
+        "seed: HTTP 200",
+        "system_messages: HTTP 200",
+        "max_tokens: HTTP 200",
+        "max_completion_tokens: HTTP 200"
+      ]
+    }
+  ]
+}
