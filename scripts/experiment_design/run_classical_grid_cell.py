@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Run one original cell of a provider-free grid in its own process.
+"""Run one original grid cell in its own process.
 
 This is intentionally an orchestration wrapper, not an experiment-engine
-change.  It retains the original GridCell object (including its index and
+change. It retains the original GridCell object (including its index and
 cell_id), so the grid-cell and episode seed derivation is byte-for-byte the
-same as in the unsplit grid.
+same as in the unsplit grid. Provider-backed use must be rate-limited by the
+caller because each process owns an independent provider concurrency limit.
 """
 
 from __future__ import annotations
