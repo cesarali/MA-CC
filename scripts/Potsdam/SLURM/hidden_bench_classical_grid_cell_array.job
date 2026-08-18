@@ -1,0 +1,50 @@
+#!/bin/bash
+# Submit with an explicit array range matching the source grid, for example:
+#   sbatch --array=0-23 .../hidden_bench_classical_grid_cell_array.job CONFIG LABEL
+#
+# One CPU is deliberate: the classical Python kernel is CPU-bound and one
+# process uses one core.  Scaling comes from independent array processes.
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --time=04:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --mail-type=END,FAIL
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: sbatch --array=FIRST-LAST $0 CONFIG LABEL" >&2
+  exit 2
+fi
+
+readonly CONFIG=$1
+readonly LABEL=$2
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly SHARD_INDEX=${SLURM_ARRAY_TASK_ID:?submit this script as a SLURM array}
+readonly OUTPUT_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/imitation_round_feedback_sharded_${LABEL}
+readonly SHARD_DIR=${OUTPUT_ROOT}/shard_$(printf '%04d' "${SHARD_INDEX}")
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${SHARD_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+
+mkdir -p "${SHARD_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] label=${LABEL} cell_index=${SHARD_INDEX} job=${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+echo "[run] config=${CONFIG} output=${SHARD_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" scripts/experiment_design/run_classical_grid_cell.py \
+  --config "${CONFIG}" \
+  --cell-index "${SHARD_INDEX}" \
+  --output-dir "${SHARD_DIR}"
+
+echo "[done] end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
