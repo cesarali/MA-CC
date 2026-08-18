@@ -20,7 +20,11 @@ from mas_cc.control import Control, RoundControlSignal
 from mas_cc.games import create_game
 from mas_cc.games.hidden_bench.data import DEFAULT_CORPUS_ROOT
 from mas_cc.games.hidden_bench.imitation.controller import ADVOCATE_TARGET
+from mas_cc.games.hidden_bench.imitation_round_feedback.controller import (
+    RoundSoftTargetBudgetedControl,
+)
 from mas_cc.games.hidden_bench.imitation_round_feedback.prompts import (
+    CONTROL_EVIDENCE_PREFIX,
     DECISION_BASIS_SOCIAL,
     MAX_REASON_CHARACTERS,
     NO_PREVIOUS_REASON,
@@ -37,6 +41,7 @@ from mas_cc.games.hidden_bench.imitation_round_feedback.runtime import (
     run_hidden_bench_imitation_round_feedback_game,
 )
 from mas_cc.games.hidden_bench.imitation_round_feedback.state import get_public_reason
+from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
 
 pytestmark = pytest.mark.skipif(
@@ -57,9 +62,16 @@ class _BudgetedControl(Control):
 
     sensor_sample_size = 2
 
-    def __init__(self, *, target: str = "West City", budget: int = 2) -> None:
+    def __init__(
+        self,
+        *,
+        target: str = "West City",
+        budget: int = 2,
+        evidence_mode: str = "none",
+    ) -> None:
         self.intervention_budget = budget
         self.target = target
+        self.evidence_mode = evidence_mode
 
     def override(self, **_):
         return None
@@ -380,6 +392,136 @@ def test_no_prompt_ever_identifies_a_source_as_control_or_as_an_experiment():
     }
     assert len(scenarios) == 1
     assert any(item.transition.event["controlled_slot"] for item in result.interactions)
+
+
+# ---- controller evidence (`control.options.evidence_mode`) -------------
+
+
+def _control_sources(result):
+    return [
+        source
+        for item in result.interactions
+        for source in item.transition.event["social_sources"]
+        if source["source_type"] == "control"
+    ]
+
+
+def _shared_facts(config):
+    state = create_game(config.game).initialize(config.game, config.execution.seed)
+    return tuple(state.agents[0].attributes["shared_information"])
+
+
+def _round_control_reasons(result, round_index):
+    return {
+        source["reason"]
+        for item in result.interactions
+        if item.transition.event["round_index"] == round_index
+        for source in item.transition.event["social_sources"]
+        if source["source_type"] == "control"
+    }
+
+
+def test_evidence_mode_defaults_to_none_and_is_validated():
+    base = {
+        "target": "correct",
+        "sensor_sample_size": 2,
+        "intervention_budget": 2,
+        "template_version": 3,
+    }
+    assert RoundSoftTargetBudgetedControl.from_options(base).evidence_mode == "none"
+    assert (
+        RoundSoftTargetBudgetedControl.from_options(
+            {**base, "evidence_mode": "shared_fact"}
+        ).evidence_mode
+        == "shared_fact"
+    )
+    with pytest.raises(ConfigurationError):
+        RoundSoftTargetBudgetedControl.from_options({**base, "evidence_mode": "hidden_fact"})
+
+
+def test_evidence_mode_none_renders_the_historical_fact_free_advocacy():
+    config = _config(rounds=2)
+    bare, _ = _run(config, control=_BudgetedControl(evidence_mode="none"))
+    absent, _ = _run(config, control=_BudgetedControl())
+
+    reasons = {source["reason"] for source in _control_sources(bare)}
+    assert reasons == {render_control_reason("West City")}
+    assert reasons == {source["reason"] for source in _control_sources(absent)}
+    assert all(
+        record.event["controller_evidence_mode"] == "none" for record in bare.rounds
+    )
+    assert all(record.event["controller_evidence_fact"] is None for record in bare.rounds)
+
+
+def test_shared_fact_mode_appends_one_true_shared_fact_that_names_the_target():
+    config = _config(rounds=2)
+    shared = _shared_facts(config)
+    result, ballots = _run(
+        config, control=_BudgetedControl(evidence_mode="shared_fact")
+    )
+
+    sources = _control_sources(result)
+    assert sources
+    for source in sources:
+        assert source["reason"].startswith(render_control_reason("West City"))
+        assert CONTROL_EVIDENCE_PREFIX in source["reason"]
+        # Verbatim, from `Is`, and pointing at the target - never invented.
+        cited = source["reason"].split(CONTROL_EVIDENCE_PREFIX, 1)[1].strip()
+        assert cited in shared
+        assert "West City" in cited
+
+    advocating = [
+        record for record in result.rounds if record.event["controlled_position_count"]
+    ]
+    assert advocating
+    for record in advocating:
+        assert record.event["controller_evidence_mode"] == "shared_fact"
+        assert record.event["controller_evidence_fact"] in shared
+        assert (
+            shared[record.event["controller_evidence_fact_index"]]
+            == record.event["controller_evidence_fact"]
+        )
+    # The fact reaches the population, not just the log.
+    assert any(
+        record.event["controller_evidence_fact"] in prompt
+        for record in advocating
+        for prompt in ballots.prompts
+    )
+
+
+def test_shared_fact_mode_never_cites_unshared_information():
+    config = _config(rounds=2)
+    task = create_game(config.game).initialize(config.game, config.execution.seed).task
+    result, ballots = _run(
+        config, control=_BudgetedControl(evidence_mode="shared_fact")
+    )
+
+    for source in _control_sources(result):
+        for fact in task["hidden_information"]:
+            assert fact not in source["reason"]
+    for prompt in ballots.prompts:
+        lowered = prompt.lower()
+        for word in FORBIDDEN:
+            assert word not in lowered, f"{word!r} leaked into a focal prompt"
+
+
+def test_the_cited_fact_is_one_per_round_and_replays_from_the_seed():
+    config = _config(rounds=4)
+    # `North Hill` has two on-target shared facts, so the draw is a real draw.
+    control = _BudgetedControl(target="North Hill", evidence_mode="shared_fact")
+    first, _ = _run(config, control=control)
+    second, _ = _run(config, control=control)
+
+    cited = [record.event["controller_evidence_fact"] for record in first.rounds]
+    assert cited == [record.event["controller_evidence_fact"] for record in second.rounds]
+    assert any(fact is not None for fact in cited)
+    for record, fact in zip(first.rounds, cited, strict=True):
+        # One citation per controller decision: every actuated slot of a round
+        # shows the population the same message.
+        reasons = _round_control_reasons(first, record.round_index)
+        assert len(reasons) <= 1
+        if reasons and fact is not None:
+            assert fact in reasons.pop()
 
 
 def test_scenario_sanitizer_removes_only_the_legacy_protocol_layer():
