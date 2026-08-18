@@ -45,6 +45,7 @@ from ..imitation.runtime import (
 from ..imitation.state import ImitationGameState
 from ..runtime import HiddenBenchDecision, _execute_decision, _notify
 from .classical import classical_transition
+from .controller import EVIDENCE_SHARED_FACT, select_shared_evidence_fact
 from .game import HiddenBenchImitationRoundFeedbackGame
 from .prompts import (
     PROMPT_FAMILY,
@@ -153,6 +154,7 @@ def build_social_sources(
     replaced_peer_slot: int | None,
     controller_target: str | None,
     population_size: int,
+    controller_evidence_fact: str | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """The `q` visible social inputs, in scheduler slot order.
 
@@ -160,6 +162,10 @@ def build_social_sources(
     slot.  Both kinds of source carry the same four visible fields, which is
     what makes the controller indistinguishable from an ordinary participant in
     the rendered prompt.
+
+    `controller_evidence_fact` is the round's already-selected shared fact under
+    `evidence_mode: shared_fact`, or `None`.  It only ever changes `R_C(Z)`; the
+    slot count, the field set, and the vote are untouched.
     """
 
     sources: list[dict[str, Any]] = []
@@ -174,7 +180,9 @@ def build_social_sources(
                     "source_type": "control",
                     "label": control_label(population_size),
                     "vote": controller_target,
-                    "reason": render_control_reason(controller_target),
+                    "reason": render_control_reason(
+                        controller_target, evidence_fact=controller_evidence_fact
+                    ),
                 }
             )
             continue
@@ -264,6 +272,9 @@ async def run_hidden_bench_imitation_round_feedback_game(
     resolved_control = None if control is None or isinstance(control, NoneControl) else control
     sensor_sample_size = getattr(resolved_control, "sensor_sample_size", None)
     intervention_budget = int(getattr(resolved_control, "intervention_budget", 0))
+    # `getattr` rather than an attribute: a Control that predates this option -
+    # or a test double - simply renders the historical fact-free advocacy.
+    evidence_mode = str(getattr(resolved_control, "evidence_mode", "none"))
     if sensor_sample_size is not None and int(sensor_sample_size) > rules.n_agents:
         raise ValueError("controller sensor_sample_size cannot exceed the population size")
     if not 0 <= intervention_budget <= rules.n_agents:
@@ -351,6 +362,28 @@ async def run_hidden_bench_imitation_round_feedback_game(
             )
         else:
             controlled_positions = ()
+        # One fact per controller decision, not per actuated slot: the round is
+        # the clock the controller acts on, so a single citation makes the whole
+        # round's advocacy one message rather than `b` different ones.
+        #
+        # Reasoning mode only.  Classical dynamics renders no controller text at
+        # all - a controlled slot is a kernel term, not a message - so drawing a
+        # fact there would log evidence no agent was ever shown.
+        evidence_fact_index: int | None = None
+        evidence_fact: str | None = None
+        if (
+            rules.dynamics_mode == "reasoning"
+            and action == ADVOCATE_TARGET
+            and evidence_mode == EVIDENCE_SHARED_FACT
+            and target is not None
+        ):
+            evidence_fact_index, evidence_fact = select_shared_evidence_fact(
+                state,
+                target,
+                root.derive(
+                    f"round-feedback-controller-evidence:{round_index}"
+                ).create_random(),
+            )
         controlled_set = frozenset(controlled_positions)
         schedule_hash = hashlib.sha256(
             json.dumps(list(controlled_positions), separators=(",", ":")).encode("utf-8")
@@ -388,6 +421,7 @@ async def run_hidden_bench_imitation_round_feedback_game(
                     replaced_peer_slot=replaced_peer_slot,
                     controller_target=target,
                     population_size=rules.n_agents,
+                    controller_evidence_fact=evidence_fact,
                 )
                 influence_slots = _influence_slots(social_sources)
                 request = game.public_ballot_request(
@@ -621,6 +655,9 @@ async def run_hidden_bench_imitation_round_feedback_game(
                 None if round_signal is None else round_signal.metadata.get("beta")
             ),
             "controller_action": action,
+            "controller_evidence_mode": evidence_mode,
+            "controller_evidence_fact": evidence_fact,
+            "controller_evidence_fact_index": evidence_fact_index,
             "controller_advocate_probability": probability,
             "controller_advocacy_probability": probability,
             "sensor_agent_ids": list(sensor.get("sampled_agent_ids", ())),

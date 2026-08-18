@@ -297,8 +297,9 @@ control:
     threshold: 0.5             # §5.3  (theta)
     beta: 4.0                  # §5.4
     intervention_budget: 6     # §5.5  (b)
-    policy: soft_target        # §5.7  (fixed)
+    policy: soft_target        # §5.8  (fixed)
     template_version: 3        # §5.6  (fixed)
+    evidence_mode: none        # §5.7  (optional)
 ```
 
 ### 5.1 `target` — which option the controller pushes
@@ -402,12 +403,52 @@ first-person vote. A violation raises rather than silently leaking the
 controller's identity into the population. The controller is never given the
 hidden facts, so it cannot manufacture evidence.
 
-### 5.7 `policy`
+### 5.7 `evidence_mode` — whether the advocacy cites a fact
+
+Optional. Default `none`, which is exactly the behaviour above: an existing
+config that omits the key renders a byte-identical controller message.
+
+| Value | The controller's public reason |
+| --- | --- |
+| `none` (default) | *"Based on the discussion so far, Z still looks like the strongest option to me and deserves more weight."* |
+| `shared_fact` | The same line, then `Relevant information: <one fact>` |
+
+The cited fact is drawn from the task's **shared** set `Is` and from nowhere
+else. `Is` is the block every agent is already shown in its own prompt, so this
+option changes how the control signal is *justified*, not how much information
+the population has. The unshared pool `Iu` is unreachable from the selector
+(`controller.select_shared_evidence_fact`), the fact is copied verbatim, and
+nothing is paraphrased or invented — the §5.6 guarantee that the controller
+cannot manufacture evidence is unchanged.
+
+Selection reuses the parent module's `_preferred_facts`: shared facts that name
+`Z` first, short ones next, the whole shared pool as the last resort. The corpus
+carries no explicit fact→option mapping beyond the option label appearing in the
+fact, so on a task whose facts never name an option this degrades to a uniform
+draw rather than to a semantic guess. A fact containing an apparatus word
+(`controller`, `external`, `experiment`, `simulation`) is dropped, and if that
+leaves nothing the round simply cites no fact.
+
+**Reasoning mode only.** Classical dynamics renders no controller text at all —
+a controlled slot is a term in the strict-unanimity kernel, not a message — so
+`controller_evidence_fact` stays `null` there whatever the mode says.
+
+**One fact per controller decision, not per actuated slot.** The draw happens
+once per round, from a stream derived from the episode seed and `round_index`,
+so all `b` controlled positions of a round show the population the same message
+and the run replays exactly.
+
+Recorded on every round record: `controller_evidence_mode`,
+`controller_evidence_fact` (the exact text, or `null`), and
+`controller_evidence_fact_index` (its position in `Is`). That is what makes
+bare advocacy and evidence-supported advocacy comparable after the fact.
+
+### 5.8 `policy`
 
 Optional; if present it must be `soft_target`. It exists so a run record states
 its policy explicitly rather than by implication from the mechanism name.
 
-### 5.8 Related game-side options
+### 5.9 Related game-side options
 
 These are `game.options`, not `control.options`, but they change what control
 means:
@@ -478,7 +519,9 @@ Each round record carries, among others:
   `intervention_budget`, `sensing_fraction`, `actuation_fraction`.
 - **Controller**: `controller_enabled`, `controller_target`, `analysis_target`,
   `controller_policy`, `controller_threshold`, `controller_beta`,
-  `controller_action`, `controller_advocate_probability`.
+  `controller_action`, `controller_advocate_probability`,
+  `controller_evidence_mode`, `controller_evidence_fact`,
+  `controller_evidence_fact_index`.
 - **Sensor**: `sensor_agent_ids`, `sensor_observed_opinions`,
   `sensor_count_vector`, `sensor_target_share`.
 - **Schedule**: `controlled_positions`, `controlled_position_count`,
@@ -590,6 +633,7 @@ larger sensors, and a decoy target.
 | `prompt.prompt_version is X but game.options.prompt_version is Y` | The prompt block and the game block disagree; they must match exactly. |
 | `round feedback requires fixed peer-style template version 3` | `template_version` set to 1 or 2. |
 | `control.options.intervention_budget must be a non-negative integer` | `b` was negative, a float, or a bool. |
+| `control.options.evidence_mode: must be one of ['none', 'shared_fact']` | An unrecognised §5.7 evidence mode. |
 | `controller intervention_budget must be between 0 and N` | `b > population_size`. |
 | `controller sensor_sample_size cannot exceed the population size` | `q_c > N`. |
 | `the selected control does not implement round-level signaling` | An event-clock mechanism (`soft_target`, `threshold_target`) was configured for this game. |

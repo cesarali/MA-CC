@@ -1,0 +1,304 @@
+# Macroscopic steerability test — gpt-oss-120b.
+#
+# Derived from hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml.
+# The game, prompt, controller mechanism, public-ballot setup, provider/model,
+# budget, logging and observability blocks are copied from that file unchanged.
+# Only the design axes and the run identity differ; see GRID below.
+#
+# THE QUESTION
+#
+# Does increasing controller strength visibly move the population toward the
+# controller's target? Nothing more. The readout is the ordinary trajectory
+# output already produced by this game — `m_ctrl` (alignment with this
+# episode's controller target), `m_truth` (alignment with the correct answer),
+# the per-round vote shares, and the final winner — read as a ladder in b/N.
+# No new estimators, no new statistics: the `analysis` block below is Grid D's,
+# carried over verbatim rather than extended. If the CMI/MI machinery is not
+# wanted for this run at all, set `analysis.enabled: false`; it changes nothing
+# about which trajectories are recorded.
+#
+# THE LADDER
+#
+# `control.options.intervention_budget` is a count of controlled focal slots per
+# population round, out of N = 24 (the runtime records it as
+# `actuation_fraction = intervention_budget / N`). With `social_group_size: 1`
+# each focal sees exactly one social slot, so a controlled slot means that
+# focal's only peer is replaced by the controller for that round:
+#
+#   b =  6  ->  b/N = 0.25   a quarter of the population hears the controller
+#   b = 18  ->  b/N = 0.75
+#   b = 24  ->  b/N = 1.00   every focal's single peer is the controller
+#
+# There is no b = 0 / no-control arm here by design: this run is the controlled
+# ladder only. The uncontrolled baseline is its own companion config, over the
+# same five tasks and with the same q, N, rounds and repetitions:
+# gpt-oss-steer-test-no-control.yaml. It uses the repository's own
+# `control.mechanism: none`, so the baseline is measured once rather than
+# duplicated under each controller target.
+#
+# FIVE TASKS, TASK-AGNOSTIC TARGETS
+#
+# The five tasks are all K = 3 options with 4 latent evidence types and a full
+# (10-variant) paraphrase pool per evidence type, so every one of them expands
+# to N = 24 under `paraphrased_replication` with no variant reuse. The first
+# three are Grid D's tasks, kept so the b = 6 / q = 1 cells stay comparable
+# with that pilot; the other two were chosen for framings the anchors do not
+# already cover: inbound humanitarian logistics, and the one task in the pool
+# that is deliberate planning rather than escape from an imminent hazard.
+#
+# Both target arms are task-agnostic, exactly as in Grid D: `correct` aims at
+# the task's own correct answer, `random_incorrect` draws one wrong option
+# uniformly from the episode seed and holds it for the whole episode. The
+# reverse arm is what makes steerability legible — under it `m_ctrl` and
+# `m_truth` come apart, so a population moving toward the controller cannot be
+# confused with a population reasoning its way to the right answer.
+#
+# MODEL: gwdg/openai-gpt-oss-120b, a reasoning model. See the note on
+# `llm_provider.max_output_tokens` before touching it.
+#
+# SIZE: 5 tasks x 2 targets x 3 budgets = 30 cells, 10 repetitions each,
+# 300 episodes, 240 provider calls per episode (24 agents x 10 rounds).
+#
+# BEFORE LAUNCHING: two of the five tasks are not yet in
+# data/hidden_bench/scaled/paraphrased_replication/N_24.json. `auto_build_missing`
+# will add them, but it does so from inside the run, once per missing task, under
+# `execution.parallelism: 40`. Build them once up front instead: it is
+# deterministic and makes no LLM calls, and the companion no-control config
+# needs exactly the same two, so this covers both runs.
+#   for t in emergency_supply_drop choosing_base_camp; do
+#     conda run -n MA-CC --no-capture-output python \
+#       scripts/local_llms/hiddenbench_population_pipeline/scripts/ensure_paraphrased_population.py \
+#       --agents 24 --task "$t"
+#   done
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+# Preflight before model inference:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/imitation_round_feedback/gpt-oss-steer-test.yaml \
+#     --output-dir inspection/gpt_oss_steer_test_preflight
+#
+# Launch with live console output:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback/gpt-oss-steer-test.yaml \
+#     --output-dir results
+#
+# Save the same console output instead:
+#   mkdir -p logs
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback/gpt-oss-steer-test.yaml \
+#     --output-dir results 2>&1 | tee logs/gpt_oss_steer_test.log
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  # gpt-oss is a reasoning model: it emits a long `reasoning_content` before the
+  # answer and BOTH are charged against max_tokens. A measured public-ballot
+  # prompt for this game spent 684 completion tokens, ~650 of them reasoning.
+  # Below that the answer is truncated away, `content` arrives empty, and the
+  # adapter rejects the body - which is exactly how every earlier gpt-oss smoke
+  # in results/gpt_oss_120b_smoke_test* died, at 256, 512 and 1024.
+  #
+  # This is not a cost dial. The budget guard reserves this many tokens per call
+  # and then settles the reservation against actual usage, so a generous ceiling
+  # changes the preflight quote and never what you pay. Spend is bounded by
+  # budget.max_cost_per_run below. Do not trim this back.
+  #
+  # `reasoning_effort: low` would cut the reasoning itself, but the proxy
+  # rejects the parameter (HTTP 400, UnsupportedParamsError).
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_public_ballot
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    dynamics_mode: reasoning
+    rounds: 10
+    # q = 1: one social slot per focal per round. Fixed, not swept - a
+    # controlled slot therefore replaces the focal's only peer.
+    social_group_size: 1
+    vote_visibility: public
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: uniform_random
+    classical:
+      kernel: controlled_imitation_round_reference
+
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 6
+    template_version: 3
+
+execution:
+  seed: 20260813
+  repetitions: 5
+  # Episode concurrency is shared across the whole grid, not per cell, so this
+  # stays at Grid D's value even though there are fewer repetitions per cell.
+  parallelism: 40
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 600000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+# Carried over from Grid D unchanged. Nothing here is new; the steerability
+# readout does not depend on any of it.
+analysis:
+  enabled: true
+  estimators:
+    - round_sensing_mi
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_target_information_fraction
+    - round_dual_action_state_fraction
+    - round_dual_action_event_fraction
+    - round_single_action_slice_fraction
+    - round_conditioning_state_count
+    - round_singleton_fraction
+    - round_target_signed_actuation
+    - round_truth_signed_actuation
+    - round_sensor_mae
+    - round_sensor_mse
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260813
+    # Analyze and write the report immediately after the cell's last repetition.
+    per_cell_reports: true
+  # Publish that cell's information metrics and report assets to Comet.
+  comet_export: true
+
+metrics:
+  enabled: true
+  comet_export: []
+
+# `cell_metrics` is the steerability readout: m_ctrl against m_truth, per cell.
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 10
+    sweep_experiment: true
+    # Finished-cell aggregates and configured analysis share the master run.
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: hidden-bench-round-feedback-gpt-oss-120b-steer-test
+  description: Macroscopic steerability test - does raising the controller budget fraction b/N move the population toward the controller target, across five HiddenBench tasks and both target arms?
+  tags: [hidden-bench, imitation, round-feedback, gpt-oss-120b, steerability, budget-ladder]
+  metadata:
+    study: macroscopic_steerability
+    population_rounds: 10
+    social_group_sizes: [1]
+    sensor_sample_sizes: [12]
+    intervention_budgets: [6, 18, 24]
+    budget_fractions: [0.25, 0.75, 1.0]
+    controller_targets: [correct, random_incorrect]
+    control_arms: controlled_only
+    task_count: 5
+
+grid:
+  # Five K=3 tasks with 4 evidence types and full paraphrase pools. The first
+  # three are Grid D's; the name with spaces is a corpus task id given by name
+  # so the cell stays readable in reports. Five distinct decision framings:
+  # hazard evacuation, forensic deduction, IT failover, inbound logistics, and
+  # expedition planning. Excluded as near-duplicates of those:
+  # critical_hospital_transfer (the same "re-route to one of three facilities"
+  # shape as datacenter_emergency_migration), and meteor_shower_shelter,
+  # Antarctic Storm Safe Haven and Space Evacuation Decision (all the same
+  # "flee to one of three shelters" shape as evacuation_north_hill).
+  game.options.task_id:
+    - evacuation_north_hill
+    - "Laboratory Theft Deduction"
+    - datacenter_emergency_migration
+    - emergency_supply_drop
+    - choosing_base_camp
+  # Both arms are task-agnostic: one aims at the task's correct answer, the
+  # other at a uniformly drawn wrong option held fixed for the episode.
+  control.options.target: [correct, random_incorrect]
+  # b/N = 0.25, 0.75, 1.0 at N = 24.
+  control.options.intervention_budget: [6, 18, 24]

@@ -230,18 +230,36 @@ def control_label(population_size: int) -> str:
     return f"Agent {int(population_size) + 1}"
 
 
-def render_control_reason(target: str) -> str:
+CONTROL_EVIDENCE_PREFIX = "Relevant information:"
+"""How a cited shared fact is introduced, when `evidence_mode: shared_fact` is
+on.  Deliberately flat and unargued: the controller presents the fact, it does
+not editorialize about what the fact proves."""
+
+
+def render_control_reason(target: str, *, evidence_fact: str | None = None) -> str:
     """The controller's public reason: deterministic in `Z`, and fact-free.
 
     It cites no task evidence, fabricates nothing, and never names itself as a
     controller, an experiment, or anything external.  The `(vote, reason)` pair
     *is* the whole intervention - nothing else is appended to the prompt.
+
+    `evidence_fact` is the single, narrow exception, reached only under
+    `control.options.evidence_mode: shared_fact`.  It appends one fact
+    **verbatim** from the task's shared set `Is` - text every agent is already
+    shown in its own prompt - so the mode changes how the control signal is
+    justified and not how much information the population holds.  The unshared
+    pool `Iu` is not reachable from here and nothing is ever paraphrased or
+    invented; see `controller.select_shared_evidence_fact` for the draw.
     """
 
-    return (
+    reason = (
         f"Based on the discussion so far, {target} still looks like the "
         f"strongest option to me and deserves more weight."
     )
+    fact = None if evidence_fact is None else str(evidence_fact).strip()
+    if not fact:
+        return reason
+    return f"{reason} {CONTROL_EVIDENCE_PREFIX} {fact}"
 
 
 def render_social_source(
@@ -627,6 +645,7 @@ def build_public_ballot_update_prompt(
 
 
 __all__ = [
+    "CONTROL_EVIDENCE_PREFIX",
     "DECISION_BASIS_INITIAL",
     "DECISION_BASIS_SOCIAL",
     "DECISION_INSTRUCTION",
