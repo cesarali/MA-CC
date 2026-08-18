@@ -56,7 +56,7 @@ from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation.metrics import population_observables
 from .controller import RECOMMENDATION_ONLY
 from .game import RelationalImitationRoundFeedbackGame
-from .metrics import knowledge_observables
+from .metrics import knowledge_observables, knowledge_strata
 from .prompts import PROMPT_FAMILY, agent_label, control_label, render_control_reason
 from .state import (
     FOCAL_UPDATE,
@@ -473,6 +473,9 @@ async def run_relational_imitation_round_feedback_game(
         options = tuple(state.possible_answers)
         population_before = [str(agent.committed_action) for agent in state.agents]
         knowledge_before = knowledge_observables(state.agents, state.supporting_fact_ids)
+        strata_before = knowledge_strata(
+            state.agents, state.supporting_fact_ids, state.correct_answer
+        )
 
         round_signal: RoundControlSignal | None = None
         if resolved_control is not None:
@@ -523,6 +526,12 @@ async def run_relational_imitation_round_feedback_game(
         controller_exposures = 0
         new_peer_facts = 0
         new_controller_facts = 0
+        # Controlled updates where the focal was not already standing on the
+        # controller's target, and how many of those moved onto it. Counted
+        # online because the microscopic trajectory is not retained under the
+        # compact artifact profile.
+        controlled_off_target = 0
+        controlled_adoptions = 0
 
         for within_round_index in range(rules.n_agents):
             selected = game.select_participants(state, config.game, participant_rng)
@@ -598,6 +607,11 @@ async def run_relational_imitation_round_feedback_game(
             controller_exposures += int(event.get("controller_fact_exposures", 0))
             new_peer_facts += int(event.get("new_peer_facts", 0))
             new_controller_facts += int(event.get("new_controller_facts", 0))
+            if controlled_slot and target is not None:
+                if event.get("vote_before") != target:
+                    controlled_off_target += 1
+                    if event.get("vote_after") == target:
+                        controlled_adoptions += 1
 
             record = RelationalInteractionRecord(
                 interaction_id=transition.interaction_id,
@@ -630,6 +644,9 @@ async def run_relational_imitation_round_feedback_game(
             population_after, options, state.correct_answer, analysis_target
         )
         knowledge_after = knowledge_observables(state.agents, state.supporting_fact_ids)
+        strata_after = knowledge_strata(
+            state.agents, state.supporting_fact_ids, state.correct_answer
+        )
         sensor = {} if round_signal is None else dict(round_signal.observation)
         raw_sensor_counts = sensor.get("sampled_opinion_counts", {})
         sensor_counts = (
@@ -728,6 +745,37 @@ async def run_relational_imitation_round_feedback_game(
             "controller_fact_exposures": controller_exposures,
             "new_peer_facts": new_peer_facts,
             "new_controller_facts": new_controller_facts,
+            # --- self-contained round summary (§ compact artifact profile) ---
+            # These make round_trajectory.jsonl sufficient on its own: under
+            # `results_only` the microscopic trajectory is not retained, so
+            # anything the r-scan or the control comparison needs has to be
+            # here rather than derivable from it.
+            "vote_entropy": after_obs["H_vote"],
+            "vote_entropy_before": before_obs["H_vote"],
+            **{
+                key: value
+                for key, value in strata_after.items()
+                if key.startswith(("knowledge_share_k", "truth_share_k"))
+            },
+            **{
+                f"{key}_before": value
+                for key, value in strata_before.items()
+                if key.startswith(("knowledge_share_k", "truth_share_k"))
+            },
+            "knowledge_stratum_counts": strata_after["knowledge_stratum_counts"],
+            "truth_counts_by_stratum": strata_after["truth_counts_by_stratum"],
+            "reasoning_depth_L": len(state.supporting_fact_ids),
+            # Controlled-update response. The rate is conditional on the focal
+            # not already standing on the target; both counts are kept so the
+            # unconditional form can be recomputed.
+            "controlled_update_count": len(controlled_positions),
+            "controlled_off_target_count": controlled_off_target,
+            "controlled_adoption_count": controlled_adoptions,
+            "controlled_target_adoption_rate": (
+                controlled_adoptions / controlled_off_target
+                if controlled_off_target
+                else None
+            ),
             "possible_answers": list(options),
             "correct_answer": state.correct_answer,
             "correct_relation": state.task["correct_relation"],

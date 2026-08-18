@@ -80,6 +80,58 @@ def knowledge_observables(
     }
 
 
+def knowledge_strata(
+    agents: Sequence[Any],
+    supporting_fact_ids: Sequence[str],
+    correct_answer: str,
+    votes: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Population split by *how much of the proof* each agent holds.
+
+    For a task with ``|S|`` supporting facts this returns, for every
+    ``k = 0..|S|``:
+
+    ``knowledge_share_k{k}``
+        the fraction of the population currently knowing exactly ``k`` of them;
+
+    ``truth_share_k{k}``
+        the fraction **of that stratum** currently voting the correct answer,
+        or ``None`` when the stratum is empty.
+
+    The conditional form is the point.  A population-wide ``p_truth`` cannot
+    distinguish "more agents hold the proof" from "agents who hold the proof
+    use it", and the r-scan is precisely a sweep over the first while asking
+    about the second.  ``None`` rather than ``0.0`` for an empty stratum keeps
+    "nobody is here" separable from "everybody here is wrong".
+    """
+
+    supporting = set(supporting_fact_ids)
+    depth = len(supporting)
+    counts = [0] * (depth + 1)
+    correct = [0] * (depth + 1)
+    for agent in agents:
+        known = set(str(item) for item in agent.attributes.get("known_fact_ids", ()))
+        k = len(known & supporting)
+        counts[k] += 1
+        vote = (
+            agent.attributes.get("committed_action")
+            if votes is None
+            else votes.get(str(agent.agent_id))
+        )
+        if vote is not None and str(vote) == correct_answer:
+            correct[k] += 1
+    total = len(agents)
+    result: dict[str, Any] = {}
+    for k in range(depth + 1):
+        result[f"knowledge_share_k{k}"] = counts[k] / total if total else 0.0
+        result[f"truth_share_k{k}"] = (
+            correct[k] / counts[k] if counts[k] else None
+        )
+    result["knowledge_stratum_counts"] = counts
+    result["truth_counts_by_stratum"] = correct
+    return result
+
+
 def _summary(view: RoundView) -> Mapping[str, Any]:
     return view.recent_history[-1] if view.recent_history else {}
 
@@ -130,6 +182,7 @@ METRICS = [
 __all__ = [
     "METRICS",
     "knowledge_observables",
+    "knowledge_strata",
     "supporting_fact_coverage",
     "to_round_view",
 ]

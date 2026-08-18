@@ -27,6 +27,7 @@ controller sensing/policy - is reused as-is; see ``runtime.py``.
 from __future__ import annotations
 
 import random
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
@@ -659,6 +660,13 @@ class RelationalImitationRoundFeedbackGame(Game):
             "sensor_sample_size": sensor.get("sample_size"),
             "sensor_agent_ids": list(sensor.get("sampled_agent_ids", ())),
             "sensor_observed_opinions": list(sensor.get("sampled_opinions", ())),
+            # Per-option sensed counts in the task's own alphabet. Required by
+            # the compact scientific writer whenever the controller acted -
+            # `results_only` normalizes every micro event through it, and that
+            # path is not exercised by the `full` profile.
+            "sensor_count_vector": {
+                option: _sensed_counts(sensor).get(option, 0) for option in options
+            },
             # --- population observables ------------------------------------
             "population_state_before": before,
             "population_state_after": after,
@@ -903,6 +911,14 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "initial_votes_provider_supplied": rules.initial_votes is not None,
             },
         )
+
+
+def _sensed_counts(sensor: Mapping[str, Any]) -> Counter:
+    """Votes the controller's sensor actually observed, counted per option."""
+
+    return Counter(
+        str(value) for value in sensor.get("sampled_opinions", ()) if value is not None
+    )
 
 
 def _coverage(known: Sequence[str], supporting: Sequence[str]) -> float:

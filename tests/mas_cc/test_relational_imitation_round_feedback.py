@@ -12,6 +12,7 @@ import asyncio
 import json
 from collections import Counter
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -42,6 +43,10 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     render_control_reason,
     render_social_source,
     social_environment,
+)
+from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
+    knowledge_strata,
+    supporting_fact_coverage,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     CONTROL_SOURCE_ID,
@@ -1825,6 +1830,220 @@ def test_the_prompt_tells_the_agent_its_reason_is_not_shown_to_others():
             "Sharing a fact is the only way to pass information to other participants."
             in prompt
         )
+
+
+# ---- the self-contained round summary (compact artifact profile) --------
+
+# Under `artifact_profile: results_only` the microscopic trajectory is deleted
+# at cell completion, so the round record has to carry everything the r-scan
+# and the control comparison need. These tests check it does, and that each
+# quantity actually agrees with the population state it claims to summarize.
+
+ROUND_SUMMARY_FIELDS = (
+    "truth_vote_share",
+    "mean_supporting_fact_coverage",
+    "full_proof_agent_share",
+    "vote_entropy",
+    "knowledge_share_k0",
+    "knowledge_share_k1",
+    "knowledge_share_k2",
+    "truth_share_k0",
+    "truth_share_k1",
+    "truth_share_k2",
+    "supporting_fact_reach",
+    "peer_fact_exposures",
+    "controller_fact_exposures",
+    "new_peer_facts",
+    "new_controller_facts",
+    "controller_target_share",
+    "controlled_target_adoption_rate",
+)
+
+
+def test_every_round_record_carries_the_whole_compact_summary():
+    result, _ = _run(
+        _config(CONTROLLED, rounds=3, q=1),
+        control=_forced(_config(CONTROLLED)),
+        ballots=_Ballots(share="first_known"),
+    )
+
+    assert result.rounds
+    for record in result.rounds:
+        missing = [key for key in ROUND_SUMMARY_FIELDS if key not in record.event]
+        assert not missing, missing
+
+
+def test_the_knowledge_strata_partition_the_population():
+    result, _ = _run(
+        _config(rounds=3, q=2), ballots=_Ballots(share="first_known")
+    )
+
+    for record in result.rounds:
+        event = record.event
+        shares = [event[f"knowledge_share_k{k}"] for k in range(len(SUPPORTING) + 1)]
+        counts = event["knowledge_stratum_counts"]
+        assert sum(counts) == event["N"]
+        assert sum(shares) == pytest.approx(1.0)
+        for share, count in zip(shares, counts, strict=True):
+            assert share == pytest.approx(count / event["N"])
+        # k = |S| is exactly the full-proof share, by construction.
+        assert event[f"knowledge_share_k{len(SUPPORTING)}"] == pytest.approx(
+            event["full_proof_agent_share"]
+        )
+
+
+def test_the_summary_agrees_with_the_final_population_state():
+    """Recompute every summary quantity from the agents themselves."""
+
+    config = _config(rounds=3, q=2)
+    result, _ = _run(config, ballots=_Ballots(share="first_known"))
+    event = result.rounds[-1].event
+    agents = result.final_state.agents
+    supporting = set(result.final_state.supporting_fact_ids)
+    correct = result.final_state.correct_answer
+
+    # p_truth
+    assert event["truth_vote_share"] == pytest.approx(
+        sum(1 for a in agents if a.committed_action == correct) / len(agents)
+    )
+    # kappa_t
+    assert event["mean_supporting_fact_coverage"] == pytest.approx(
+        sum(supporting_fact_coverage(a.known_fact_ids, supporting) for a in agents)
+        / len(agents)
+    )
+    # phi_t
+    assert event["full_proof_agent_share"] == pytest.approx(
+        sum(1 for a in agents if supporting <= set(a.known_fact_ids)) / len(agents)
+    )
+    # reach, per supporting fact in sorted order
+    assert event["supporting_fact_reach"] == [
+        sum(1 for a in agents if fact in a.known_fact_ids) for fact in sorted(supporting)
+    ]
+    # the k-strata, both families
+    for k in range(len(SUPPORTING) + 1):
+        stratum = [a for a in agents if len(set(a.known_fact_ids) & supporting) == k]
+        assert event[f"knowledge_share_k{k}"] == pytest.approx(len(stratum) / len(agents))
+        expected = (
+            sum(1 for a in stratum if a.committed_action == correct) / len(stratum)
+            if stratum
+            else None
+        )
+        actual = event[f"truth_share_k{k}"]
+        if expected is None:
+            assert actual is None
+        else:
+            assert actual == pytest.approx(expected)
+
+
+def test_an_empty_stratum_reports_none_rather_than_zero():
+    """"Nobody is here" must stay separable from "everybody here is wrong"."""
+
+    config = _config(rounds=1, q=1)
+    state = create_game(config.game).initialize(config.game, config.execution.seed)
+    strata = knowledge_strata(
+        state.agents, state.supporting_fact_ids, state.correct_answer
+    )
+
+    # No agent starts with both supporting facts on a hidden-profile task.
+    assert strata["knowledge_share_k2"] == 0.0
+    assert strata["truth_share_k2"] is None
+    assert strata["knowledge_share_k0"] > 0.0
+
+
+def test_vote_entropy_is_the_round_entropy_and_matches_the_micro_row():
+    result, _ = _run(_config(rounds=3, q=1), ballots=_Ballots(share="first_known"))
+    events = _events(result)
+
+    for record in result.rounds:
+        window = [e for e in events if e["round_index"] == record.round_index]
+        assert record.event["vote_entropy"] == pytest.approx(window[-1]["H_vote"])
+        assert record.event["vote_entropy_before"] == pytest.approx(window[0]["H_vote_before"])
+        assert 0.0 <= record.event["vote_entropy"] <= 1.0
+
+
+def test_the_controlled_adoption_rate_counts_only_off_target_controlled_updates():
+    config = _config(CONTROLLED, rounds=3, q=1)
+    result, _ = _run(config, control=_forced(config), ballots=_Ballots(share="first_known"))
+    events = _events(result)
+
+    seen_rate = False
+    for record in result.rounds:
+        event = record.event
+        target = event["controller_target"]
+        window = [
+            e for e in events
+            if e["round_index"] == record.round_index and e["controlled_slot"]
+        ]
+        assert event["controlled_update_count"] == len(window)
+        off = [e for e in window if e["vote_before"] != target]
+        adopted = [e for e in off if e["vote_after"] == target]
+        assert event["controlled_off_target_count"] == len(off)
+        assert event["controlled_adoption_count"] == len(adopted)
+        if off:
+            assert event["controlled_target_adoption_rate"] == pytest.approx(
+                len(adopted) / len(off)
+            )
+            seen_rate = True
+        else:
+            assert event["controlled_target_adoption_rate"] is None
+    assert seen_rate
+
+
+def test_the_uncontrolled_arm_reports_no_adoption_rate():
+    config = _config(NO_CONTROL, rounds=2, q=1)
+    result, _ = _run(config, control=create_control(config.control))
+
+    for record in result.rounds:
+        assert record.event["controlled_update_count"] == 0
+        assert record.event["controlled_target_adoption_rate"] is None
+        assert record.event["controller_fact_exposures"] == 0
+
+
+def test_the_micro_event_carries_the_sensor_count_vector_the_compact_writer_needs():
+    """`results_only` normalizes every micro event through the compact writer,
+    which requires a per-option sensed count whenever the controller acted."""
+
+    config = _config(CONTROLLED, rounds=2, q=1)
+    result, _ = _run(config, control=_forced(config))
+
+    for event in _events(result):
+        vector = event["sensor_count_vector"]
+        assert set(vector) == set(event["possible_answers"])
+        assert sum(vector.values()) == event["sensor_sample_size"]
+        assert vector == {
+            option: event["sensor_observed_opinions"].count(option)
+            for option in event["possible_answers"]
+        }
+
+
+def test_the_overnight_configs_use_the_compact_profile_and_the_full_ones_do_not():
+    from mas_cc.config import GridSpec, load_run_config_or_grid
+
+    env = {"POTSDAM_API_KEY": "x", "BASE_POTSDAM_LLM_URL": "http://x"}
+    root = Path("configs/runs/relational_reasoning/population_study_01")
+    arms = (
+        "a_no_control",
+        "b_social_control",
+        "c_epistemic_control",
+        "d_adversarial_diagnostic",
+    )
+    for arm in arms:
+        overnight = load_run_config_or_grid(
+            str(root / "overnight" / f"relational_population_study01_{arm}_overnight.yaml"),
+            environment=env,
+        )
+        full = load_run_config_or_grid(
+            str(root / f"relational_population_study01_{arm}.yaml"), environment=env
+        )
+        assert isinstance(overnight, GridSpec) and isinstance(full, GridSpec)
+        assert overnight.base.storage.artifact_profile == "results_only"
+        policy = overnight.base.storage.retention_policy
+        assert policy.compact_scientific is True
+        assert policy.verbose_episode_history is False
+        assert policy.per_episode_prompt_files is False
+        # The full study keeps everything, and is untouched by the reduction.
+        assert full.base.storage.artifact_profile == "full"
+        assert full.base.execution.repetitions == 3
 
 
 # ---- backward compatibility (§23) --------------------------------------

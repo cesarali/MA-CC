@@ -162,7 +162,18 @@ logging:
 storage:
   output_dir: results
   format: jsonl
-  artifact_profile: full
+  # Compact: the microscopic trajectory.jsonl, per-episode events/logs/audit
+  # and the streaming metric CSVs are dropped at cell completion. What survives
+  # is the per-round scientific channel - round_records/<episode>/
+  # round_trajectory.jsonl - plus the compact scientific table, the cell
+  # aggregate, one prompt example per cell and the resolved config.
+  #
+  # This is only safe because the round record is self-contained: p_truth,
+  # kappa_t, phi_t, vote entropy, the k-stratified knowledge and truth shares,
+  # supporting-fact reach, the four exposure/acquisition counters, the
+  # controller target share and the controlled-update adoption rate are all
+  # written per round rather than derived afterwards from micro rows.
+  artifact_profile: results_only
   checkpoint_mode: episode
   overwrite: false
 
