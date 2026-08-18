@@ -1,0 +1,265 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0015",
+  "seed": 3064821383670614580,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 15,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Javi",
+        "coordinates": {
+          "x": -2,
+          "y": 1
+        }
+      },
+      {
+        "name": "Viko",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Cali",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Nori",
+        "coordinates": {
+          "x": 999,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Savi",
+        "coordinates": {
+          "x": 998,
+          "y": 1003
+        }
+      },
+      {
+        "name": "Weno",
+        "coordinates": {
+          "x": 998,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Javi",
+        "relation": "NORTHWEST",
+        "object": "Viko",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Viko",
+        "relation": "WEST",
+        "object": "Cali",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Nori",
+        "relation": "SOUTHEAST",
+        "object": "Savi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Savi",
+        "relation": "NORTH",
+        "object": "Weno",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Weno",
+        "relation": "NORTHWEST",
+        "object": "Faro",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Faro",
+        "relation": "NORTHWEST",
+        "object": "Meno",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Javi",
+    "reference": "Cali",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1",
+        "f5"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2",
+        "f3"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1",
+        "f6"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Javi relative to Cali?",
+    "facts": {
+      "f1": "Javi is northwest of Viko.",
+      "f2": "Viko is west of Cali.",
+      "f3": "Nori is southeast of Savi.",
+      "f4": "Savi is north of Weno.",
+      "f5": "Weno is northwest of Faro.",
+      "f6": "Faro is northwest of Meno."
+    },
+    "reasoning_chain": [
+      "Javi is northwest of Viko.",
+      "Viko is west of Cali."
+    ]
+  }
+}

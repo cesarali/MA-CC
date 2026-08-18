@@ -1,0 +1,267 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0008",
+  "seed": 2336080111679405181,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 8,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Tero",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "name": "Wali",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Viko",
+        "coordinates": {
+          "x": 1001,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Rivo",
+        "coordinates": {
+          "x": 1002,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Haro",
+        "coordinates": {
+          "x": 1002,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Naro",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Pavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Tero",
+        "relation": "WEST",
+        "object": "Yani",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Yani",
+        "relation": "NORTH",
+        "object": "Wali",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Viko",
+        "relation": "NORTHWEST",
+        "object": "Rivo",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Rivo",
+        "relation": "NORTH",
+        "object": "Haro",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Haro",
+        "relation": "EAST",
+        "object": "Naro",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Naro",
+        "relation": "EAST",
+        "object": "Pavi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Tero",
+    "reference": "Wali",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1",
+        "f6"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Tero relative to Wali?",
+    "facts": {
+      "f1": "Tero is west of Yani.",
+      "f2": "Yani is north of Wali.",
+      "f3": "Viko is northwest of Rivo.",
+      "f4": "Rivo is north of Haro.",
+      "f5": "Haro is east of Naro.",
+      "f6": "Naro is east of Pavi."
+    },
+    "reasoning_chain": [
+      "Tero is west of Yani.",
+      "Yani is north of Wali."
+    ]
+  }
+}

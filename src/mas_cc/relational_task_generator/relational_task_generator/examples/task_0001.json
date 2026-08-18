@@ -1,0 +1,267 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 2215413865579214693,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 1,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 0,
+          "y": 2
+        }
+      },
+      {
+        "name": "Zora",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Ralo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Javi",
+        "coordinates": {
+          "x": 1001,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Vela",
+        "coordinates": {
+          "x": 1001,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Cali",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Savi",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Bavi",
+        "relation": "NORTHEAST",
+        "object": "Zora",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Zora",
+        "relation": "NORTHWEST",
+        "object": "Ralo",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Javi",
+        "relation": "SOUTH",
+        "object": "Vela",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Vela",
+        "relation": "NORTHEAST",
+        "object": "Cali",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Cali",
+        "relation": "EAST",
+        "object": "Savi",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Savi",
+        "relation": "NORTHWEST",
+        "object": "Maro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Bavi",
+    "reference": "Ralo",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTH"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f1",
+        "f5"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Bavi relative to Ralo?",
+    "facts": {
+      "f1": "Bavi is northeast of Zora.",
+      "f2": "Zora is northwest of Ralo.",
+      "f3": "Javi is south of Vela.",
+      "f4": "Vela is northeast of Cali.",
+      "f5": "Cali is east of Savi.",
+      "f6": "Savi is northwest of Maro."
+    },
+    "reasoning_chain": [
+      "Bavi is northeast of Zora.",
+      "Zora is northwest of Ralo."
+    ]
+  }
+}

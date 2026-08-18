@@ -1,0 +1,120 @@
+# No-control smoke run for the relational reasoning round-feedback game.
+#
+# One frozen task, q = 1, no controller, few rounds, one repetition, and the
+# mock provider - so this executes end to end without contacting any model.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/relational_imitation_round_feedback_no_control_smoke.yaml
+#
+# The provider-free structural check (no inference at all):
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/relational_reasoning/relational_imitation_round_feedback_no_control_smoke.yaml \
+#     --output-dir inspection/relational_no_control_smoke_preflight
+
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    # task_0001: correct_option C (NORTH). The mock answers the same ballot
+    # every time; the point of this run is the machinery, not the reasoning.
+    response: '{"vote":"C","reason":"smoke","shared_fact_id":"none"}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  # task_0001 distributes its facts over exactly 24 agents; the game refuses to
+  # start if this does not match.
+  population_size: 24
+  horizon: 2
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/examples
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    # true (the default) keeps the strategic-uncertainty wording: "some
+    # participants may have objectives that differ from yours". Set false for
+    # the neutral cooperative baseline in which everyone is stated to be after
+    # the correct answer.
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    initialization:
+      # Provider-free, so this smoke run costs 48 calls rather than 72 and the
+      # initial population is a clean uniform draw over the option labels.
+      mode: uniform_random
+
+control:
+  mechanism: none
+
+execution:
+  seed: 20260818
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 500
+  max_input_tokens: 1000000
+  max_output_tokens: 100000
+  # The mock provider has no price, so no conservative per-request cost can be
+  # formed. This is a free smoke run, never a paid one.
+  allow_unbounded_paid_requests: true
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+
+analysis:
+  # The configured MI analysers are HiddenBench-specific; version 1 of this
+  # game logs the state they would need and stops there.
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    # Belt and braces next to `logging.comet: false`: a smoke run must never be
+    # able to open a remote experiment.
+    sweep_experiment: false
+
+experiment:
+  name: relational-round-feedback-no-control-smoke
+  description: Mock-provider relational reasoning smoke run with no controller.
+  tags: [relational, round-feedback, reasoning, no-control, smoke]

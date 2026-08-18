@@ -98,6 +98,10 @@ def create_default_game_registry() -> GameRegistry:
         "hidden_bench_imitation_round_feedback",
         "mas_cc.games.hidden_bench.imitation_round_feedback.game:HiddenBenchImitationRoundFeedbackGame",
     )
+    registry.register(
+        "relational_imitation_round_feedback",
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.game:RelationalImitationRoundFeedbackGame",
+    )
     return registry
 
 
@@ -142,6 +146,9 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     from .hidden_bench.imitation_round_feedback.prompts import (
         hidden_bench_public_ballot_prompt,
     )
+    from .relational_reasoning.imitation_round_feedback.prompts import (
+        relational_public_ballot_prompt,
+    )
     from .naming_convention.prompts import naming_convention_prompt
     from .synthetic.prompts import synthetic_agent_decision_prompt
     from .toy_coordination.prompts import toy_coordination_prompt
@@ -176,6 +183,10 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     # update, and it has exactly one version because the social environment it
     # carries is fixed rather than swept.
     registry.register(hidden_bench_public_ballot_prompt)
+    # The relational game reasons in one call too, but on its own three-field
+    # ballot: the extra `shared_fact_id` is state, not decoration, so it needs a
+    # family of its own rather than a rebinding of the HiddenBench one.
+    registry.register(relational_public_ballot_prompt)
     return registry
 
 

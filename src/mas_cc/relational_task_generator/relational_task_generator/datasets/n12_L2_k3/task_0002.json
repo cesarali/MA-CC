@@ -1,0 +1,190 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0002",
+  "seed": 13295414370049309223,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 2,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": 1,
+          "y": 2
+        }
+      },
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 999,
+          "y": 998
+        }
+      },
+      {
+        "name": "Ceno",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Viko",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Jeni",
+        "relation": "NORTHEAST",
+        "object": "Zani",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Zani",
+        "relation": "NORTH",
+        "object": "Pelo",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Meno",
+        "relation": "SOUTH",
+        "object": "Ceno",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Ceno",
+        "relation": "SOUTHWEST",
+        "object": "Viko",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Jeni",
+    "reference": "Pelo",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Jeni relative to Pelo?",
+    "facts": {
+      "f1": "Jeni is northeast of Zani.",
+      "f2": "Zani is north of Pelo.",
+      "f3": "Meno is south of Ceno.",
+      "f4": "Ceno is southwest of Viko."
+    },
+    "reasoning_chain": [
+      "Jeni is northeast of Zani.",
+      "Zani is north of Pelo."
+    ]
+  }
+}

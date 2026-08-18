@@ -1,0 +1,59 @@
+# Tiny mock preflight — the check you run before spending anything.
+#
+# Two grid cells, three tasks each, the `mock` provider. Nothing here reaches a
+# paid endpoint: `preflight` opens no provider at all, and `run` on this config
+# talks to the deterministic in-process mock, which always answers "A". The
+# point is not the accuracy number (it is meaningless) but that the whole path
+# executes: generator subprocess -> seeded reproducibility check -> evidence
+# conditions -> rendered prompts -> the twelve pre-flight validity checks ->
+# provider boundary -> rows.jsonl -> summary tables.
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main \
+#     benchmark relational-support preflight \
+#     --config configs/benchmarks/relational_support/L2_mock_preflight.yaml
+
+benchmark:
+  name: relational-support-L2-mock-preflight
+  description: >-
+    Two-cell, three-task smoke check of the single-agent support-validation
+    benchmark on the deterministic mock provider.
+  seed: 20260818
+  tasks_per_condition: 3
+
+grid:
+  reasoning_depth: [2]
+  distractors: [0, 4]
+  num_options: [3]
+
+fixed:
+  population_size: 12
+  support_redundancy: 4
+  distractor_redundancy: 1
+  no_single_agent_solution: true
+
+evidence:
+  include_zero_condition: true
+  max_subsets_per_k: 4
+
+presentation:
+  # Correct relation displayed at A, then B, then C — position is balanced by
+  # construction rather than by luck, and scoring is on the relation.
+  mode: all_positions
+
+llm_provider:
+  type: mock
+  model: mock-benchmark
+  temperature: 0.0
+  max_output_tokens: 64
+  request_concurrency: 4
+  options:
+    response: "ANSWER: A"
+
+output:
+  dir: results/benchmarks/relational_support
+
+limits:
+  # 2 cells x 3 tasks x 4 conditions (k=0, k=1 twice, k=2) x 3 option
+  # permutations (correct relation at A, B, C) = 72.
+  max_requests: 100
+  prompt_example_tasks: 1

@@ -1,0 +1,266 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0012",
+  "seed": 11281717822933978446,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 12,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Lumo",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Sora",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Hira",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Pavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Garo",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Cali",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Jeni",
+        "relation": "NORTH",
+        "object": "Lumo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lumo",
+        "relation": "SOUTHWEST",
+        "object": "Sora",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Hira",
+        "relation": "EAST",
+        "object": "Pavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Pavi",
+        "relation": "SOUTHEAST",
+        "object": "Garo",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Garo",
+        "relation": "SOUTH",
+        "object": "Cali",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Cali",
+        "relation": "NORTHWEST",
+        "object": "Caro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Jeni",
+    "reference": "Sora",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2",
+        "f6"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2",
+        "f3"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Jeni relative to Sora?",
+    "facts": {
+      "f1": "Jeni is north of Lumo.",
+      "f2": "Lumo is southwest of Sora.",
+      "f3": "Hira is east of Pavi.",
+      "f4": "Pavi is southeast of Garo.",
+      "f5": "Garo is south of Cali.",
+      "f6": "Cali is northwest of Caro."
+    },
+    "reasoning_chain": [
+      "Jeni is north of Lumo.",
+      "Lumo is southwest of Sora."
+    ]
+  }
+}

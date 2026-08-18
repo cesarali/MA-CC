@@ -1,0 +1,266 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0002",
+  "seed": 3331710926435733375,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 2,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Fira",
+        "coordinates": {
+          "x": -2,
+          "y": -1
+        }
+      },
+      {
+        "name": "Kelo",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Selo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Tavi",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Teni",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Yaro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Fira",
+        "relation": "WEST",
+        "object": "Kelo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Kelo",
+        "relation": "SOUTHWEST",
+        "object": "Selo",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Tavi",
+        "relation": "NORTHEAST",
+        "object": "Teni",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Teni",
+        "relation": "SOUTHEAST",
+        "object": "Gavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Gavi",
+        "relation": "NORTH",
+        "object": "Faro",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Faro",
+        "relation": "SOUTHWEST",
+        "object": "Yaro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Fira",
+    "reference": "Selo",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1",
+        "f5"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2",
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f2"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Fira relative to Selo?",
+    "facts": {
+      "f1": "Fira is west of Kelo.",
+      "f2": "Kelo is southwest of Selo.",
+      "f3": "Tavi is northeast of Teni.",
+      "f4": "Teni is southeast of Gavi.",
+      "f5": "Gavi is north of Faro.",
+      "f6": "Faro is southwest of Yaro."
+    },
+    "reasoning_chain": [
+      "Fira is west of Kelo.",
+      "Kelo is southwest of Selo."
+    ]
+  }
+}

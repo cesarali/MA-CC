@@ -1,0 +1,190 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0003",
+  "seed": 9801262203822032224,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 3,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Kelo",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Daro",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Demi",
+        "coordinates": {
+          "x": 998,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Yaro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Kelo",
+        "relation": "SOUTH",
+        "object": "Daro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Daro",
+        "relation": "EAST",
+        "object": "Maro",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Demi",
+        "relation": "NORTHWEST",
+        "object": "Meno",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Meno",
+        "relation": "NORTHWEST",
+        "object": "Yaro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Kelo",
+    "reference": "Maro",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f3"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Kelo relative to Maro?",
+    "facts": {
+      "f1": "Kelo is south of Daro.",
+      "f2": "Daro is east of Maro.",
+      "f3": "Demi is northwest of Meno.",
+      "f4": "Meno is northwest of Yaro."
+    },
+    "reasoning_chain": [
+      "Kelo is south of Daro.",
+      "Daro is east of Maro."
+    ]
+  }
+}

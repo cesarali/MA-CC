@@ -1,0 +1,255 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0005",
+  "seed": 3518158946834630128,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 5,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 3,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Weno",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Wira",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Pira",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": 998,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 999,
+          "y": 1003
+        }
+      },
+      {
+        "name": "Kiro",
+        "coordinates": {
+          "x": 999,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Nira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Weno",
+        "relation": "NORTH",
+        "object": "Wira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Wira",
+        "relation": "SOUTHWEST",
+        "object": "Pira",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Jeni",
+        "relation": "SOUTHWEST",
+        "object": "Faro",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Faro",
+        "relation": "NORTH",
+        "object": "Kiro",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Kiro",
+        "relation": "NORTHWEST",
+        "object": "Nira",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Nira",
+        "relation": "NORTH",
+        "object": "Mira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Weno",
+    "reference": "Pira",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "WEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTH"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1",
+        "f6"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f5"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Weno relative to Pira?",
+    "facts": {
+      "f1": "Weno is north of Wira.",
+      "f2": "Wira is southwest of Pira.",
+      "f3": "Jeni is southwest of Faro.",
+      "f4": "Faro is north of Kiro.",
+      "f5": "Kiro is northwest of Nira.",
+      "f6": "Nira is north of Mira."
+    },
+    "reasoning_chain": [
+      "Weno is north of Wira.",
+      "Wira is southwest of Pira."
+    ]
+  }
+}

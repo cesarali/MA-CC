@@ -1,0 +1,191 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 18025959922836359799,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 1,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Davi",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Hira",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Sora",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Davi",
+        "relation": "SOUTH",
+        "object": "Lira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lira",
+        "relation": "NORTHWEST",
+        "object": "Hira",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Sora",
+        "relation": "SOUTHWEST",
+        "object": "Vero",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Vero",
+        "relation": "EAST",
+        "object": "Faro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Davi",
+    "reference": "Hira",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "EAST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Davi relative to Hira?",
+    "facts": {
+      "f1": "Davi is south of Lira.",
+      "f2": "Lira is northwest of Hira.",
+      "f3": "Sora is southwest of Vero.",
+      "f4": "Vero is east of Faro."
+    },
+    "reasoning_chain": [
+      "Davi is south of Lira.",
+      "Lira is northwest of Hira."
+    ]
+  }
+}

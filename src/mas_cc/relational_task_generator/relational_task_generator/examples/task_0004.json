@@ -1,0 +1,267 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0004",
+  "seed": 9403774729830342564,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 4,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Sora",
+        "coordinates": {
+          "x": -2,
+          "y": -1
+        }
+      },
+      {
+        "name": "Yaro",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Rivo",
+        "coordinates": {
+          "x": 1004,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Hira",
+        "coordinates": {
+          "x": 1003,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Daro",
+        "coordinates": {
+          "x": 1002,
+          "y": 999
+        }
+      },
+      {
+        "name": "Jora",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Selo",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Sora",
+        "relation": "SOUTHWEST",
+        "object": "Yaro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Yaro",
+        "relation": "WEST",
+        "object": "Bavi",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Rivo",
+        "relation": "NORTHEAST",
+        "object": "Hira",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Hira",
+        "relation": "NORTHEAST",
+        "object": "Daro",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Daro",
+        "relation": "EAST",
+        "object": "Jora",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Jora",
+        "relation": "SOUTHEAST",
+        "object": "Selo",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Sora",
+    "reference": "Bavi",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHEAST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2",
+        "f4",
+        "f5"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Sora relative to Bavi?",
+    "facts": {
+      "f1": "Sora is southwest of Yaro.",
+      "f2": "Yaro is west of Bavi.",
+      "f3": "Rivo is northeast of Hira.",
+      "f4": "Hira is northeast of Daro.",
+      "f5": "Daro is east of Jora.",
+      "f6": "Jora is southeast of Selo."
+    },
+    "reasoning_chain": [
+      "Sora is southwest of Yaro.",
+      "Yaro is west of Bavi."
+    ]
+  }
+}

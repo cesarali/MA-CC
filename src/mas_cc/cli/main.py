@@ -293,6 +293,42 @@ def build_parser() -> argparse.ArgumentParser:
     round_feedback_analysis.add_argument("--confidence", type=float, default=0.95)
     round_feedback_analysis.add_argument("--seed", type=int, default=1)
 
+    benchmark = commands.add_parser(
+        "benchmark",
+        help="single-model task-validation benchmarks (no game, no agents)",
+    )
+    benchmark_commands = benchmark.add_subparsers(dest="benchmark_command", required=True)
+    relational_support = benchmark_commands.add_parser(
+        "relational-support",
+        help="does holding the supporting facts decide whether a model solves the task?",
+    )
+    relational_support_commands = relational_support.add_subparsers(
+        dest="relational_support_command", required=True
+    )
+    for name, description in (
+        ("preflight", "generate tasks, render every prompt, validate; send nothing"),
+        ("run", "preflight, then send one request per item to one model"),
+    ):
+        sub = relational_support_commands.add_parser(name, help=description)
+        sub.add_argument("--config", type=Path, required=True, help="benchmark YAML")
+        sub.add_argument(
+            "--output-dir",
+            type=Path,
+            help="artifact directory (default: output.dir/<benchmark name> from the config)",
+        )
+        sub.add_argument(
+            "--skip-reproducibility-check",
+            action="store_true",
+            help="skip regenerating each task from its stored seed (faster, weaker)",
+        )
+    relational_support_summarize = relational_support_commands.add_parser(
+        "summarize", help="turn rows.jsonl into the A_k, per-subset and L=2 headline tables"
+    )
+    relational_support_summarize.add_argument(
+        "--input-dir", type=Path, required=True, help="a completed benchmark output directory"
+    )
+    relational_support_summarize.add_argument("--output-dir", type=Path)
+
     inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
@@ -572,6 +608,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0
+    if args.command == "benchmark" and args.benchmark_command == "relational-support":
+        from .benchmark import (
+            run_relational_support_benchmark,
+            run_relational_support_preflight,
+            summarize_relational_support_benchmark,
+        )
+
+        try:
+            if args.relational_support_command == "summarize":
+                destination = summarize_relational_support_benchmark(
+                    args.input_dir, args.output_dir
+                )
+                print(f"Benchmark summary written: {destination}")
+                return 0
+            handler = (
+                run_relational_support_preflight
+                if args.relational_support_command == "preflight"
+                else run_relational_support_benchmark
+            )
+            ok, destination, message = handler(
+                args.config,
+                args.output_dir,
+                verify_reproducibility=not args.skip_reproducibility_check,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"{message}: {destination}")
+        return 0 if ok else 1
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
 
