@@ -1,0 +1,266 @@
+# Grid D — CLASSICAL (provider-free) twin.
+#
+# This is the no-LLM counterpart of
+# configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml.
+# The population is driven by the `controlled_imitation_round_reference`
+# transition kernel instead of a language model, so the run makes ZERO provider
+# requests and costs nothing. Everything that defines the experiment - tasks,
+# grid axes, seed, repetitions, control mechanism, estimators - is held fixed
+# against the LLM twin, so the pair isolates "does the controller result need
+# language models at all?".
+#
+# NO LLM IS CALLED. Three independent things enforce that, and all three should
+# stay as they are:
+#   1. `game.options.dynamics_mode: classical` routes every agent update through
+#      the kernel. The call planner reports the run as
+#      `classical_provider_free_jump` with requests_per_interaction=0.
+#   2. `llm_provider.type: mock` - there is no real endpoint to call, and no
+#      credentials are read.
+#   3. `budget.max_provider_requests: 0` - a hard stop. If a code path ever did
+#      try to reach a provider, the run aborts instead of quietly spending.
+#
+# Initialization is provider-free too: with `initialization.mode` set to
+# anything other than `local_vote`, the game draws the opening votes itself from
+# the episode seed (uniform over the task's options) rather than asking a model.
+#
+# The three tasks all have K=3 options and 4 latent evidence types, and all
+# expand to N=24 under `paraphrased_replication`, which is read from the
+# pre-generated annotations file on disk - not generated at run time.
+#
+# THREE TASKS, TASK-AGNOSTIC TARGET.
+#
+# The Cartesian grid is task={evacuation,lab-theft,datacenter} x q={1,2} x
+# target={correct,random_incorrect} x b={6,12}: 24 cells.
+#
+# The reverse-direction arm uses `random_incorrect`: the controller draws one
+# wrong option uniformly, from the episode seed, and keeps it for the whole
+# episode. That gives one coherent wrong direction per episode and makes the arm
+# mean the same thing in every task, at the price of no longer isolating one
+# named decoy.
+#
+# The readout is correct-vs-incorrect: every trajectory row carries `m_truth`
+# (alignment with the correct answer) and `m_ctrl` (alignment with whatever this
+# episode's target was), so both arms are comparable across tasks without any
+# per-task constant.
+#
+# COST AND SCALE. Episodes are pure computation, so `repetitions` is limited by
+# CPU time rather than by budget. 40 is kept here only to pair 1:1 with the LLM
+# twin; raise it freely for tighter confidence intervals when you are not
+# comparing cell-for-cell.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+# Preflight (should quote zero requests and zero cost):
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml \
+#     --output-dir inspection/first_llm_pilot_grid_D_classical_preflight
+#
+# Launch with live console output:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml \
+#     --output-dir results
+#
+# Save the same console output instead:
+#   mkdir -p logs
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml \
+#     --output-dir results 2>&1 | tee logs/first_llm_pilot_grid_D_classical.log
+
+# Never contacted. Present because the schema requires a provider block, and
+# `type: mock` guarantees no network call and no credential lookup. The canned
+# response below is never consumed in classical mode.
+llm_provider:
+  type: mock
+  model: deterministic-v1
+  temperature: 0.0
+  max_output_tokens: 64
+  options:
+    response: '{"vote":"North Hill","reason":"classical kernel; provider never called"}'
+
+# The public-ballot family is valid in classical mode, where it is used only to
+# describe the action space. No prompt is ever rendered to a model.
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_public_ballot
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      # Reads the pre-generated annotation file below; does not call a model.
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    # THE SWITCH: every agent update goes through the classical kernel named
+    # under `classical.kernel`, and no provider request is ever issued.
+    dynamics_mode: classical
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    # Inert in classical mode: these bound LLM response-validation retries and
+    # there are no responses to validate. Kept so the config pairs key-for-key
+    # with the LLM twin.
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      # Any mode other than `local_vote` is drawn provider-free from the seed;
+      # `local_vote` would ask a model for the opening ballot and is therefore
+      # the one value that must not appear here.
+      mode: uniform_random
+    classical:
+      # In classical mode this is the actual population dynamics, not a
+      # comparison baseline.
+      kernel: controlled_imitation_round_reference
+
+control:
+  mechanism: round_soft_target_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 6
+    template_version: 3
+
+execution:
+  # Same seed as the LLM twin: paired cells see the same task assignments, the
+  # same opening votes, and the same controller draws.
+  seed: 20260813
+  repetitions: 40
+  parallelism: 40
+  fail_fast: true
+
+# No paid provider is involved, so prices are neither fetched nor required.
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+# All zeros. This is the hard guarantee that the run cannot spend anything: a
+# single provider request would exceed max_provider_requests and abort the run.
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  max_provider_requests: 0
+  max_input_tokens: 0
+  max_output_tokens: 0
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  # Logged to the same Comet project as the LLM twin so the two can be compared
+  # side by side. Set to false for a purely local run.
+  comet: true
+  options:
+    comet_project: mas-cc
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: true
+  estimators:
+    - round_sensing_mi
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_target_information_fraction
+    - round_dual_action_state_fraction
+    - round_dual_action_event_fraction
+    - round_single_action_slice_fraction
+    - round_conditioning_state_count
+    - round_singleton_fraction
+    - round_target_signed_actuation
+    - round_truth_signed_actuation
+    - round_sensor_mae
+    - round_sensor_mse
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260813
+    # Analyze and write the report immediately after the cell's last repetition.
+    per_cell_reports: true
+  # Publish that cell's information metrics and report assets to Comet.
+  comet_export: true
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 10
+    sweep_experiment: true
+    # Finished-cell aggregates and configured analysis share the master run.
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: hidden-bench-round-feedback-classical-first-llm-pilot-grid-D
+  description: Grid D on the classical transition kernel with no language model, reversing control between the correct answer and a random incorrect one, across three tasks.
+  tags: [hidden-bench, imitation, round-feedback, classical, provider-free, first-llm-pilot, grid-D]
+  metadata:
+    pilot_grid: D-classical
+    dynamics: classical
+    provider_requests: 0
+    llm_twin: hidden-bench-round-feedback-gpt-oss-120b-first-llm-pilot-grid-D
+    population_rounds: 10
+    social_group_sizes: [1, 2]
+    sensor_sample_sizes: [12]
+    intervention_budgets: [6, 12]
+    controller_targets: [correct, random_incorrect]
+    tasks: [evacuation_north_hill, Laboratory Theft Deduction, datacenter_emergency_migration]
+
+grid:
+  # Task labels: `evacuation_north_hill` is a corpus name, the other two are
+  # corpus task ids 13 and 36 given by name so the cell is readable in reports.
+  game.options.task_id:
+    - evacuation_north_hill
+    - "Laboratory Theft Deduction"
+    - datacenter_emergency_migration
+  game.options.social_group_size: [1,2]
+  # Both arms are task-agnostic: one aims at the task's correct answer, the
+  # other at a uniformly drawn wrong option held fixed for the episode.
+  control.options.target: [correct, random_incorrect]
+  control.options.intervention_budget: [6,12]

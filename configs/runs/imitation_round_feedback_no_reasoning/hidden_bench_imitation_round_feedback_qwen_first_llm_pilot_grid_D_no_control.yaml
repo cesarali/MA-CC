@@ -1,0 +1,219 @@
+# Grid D no-control baseline — CLASSICAL (provider-free) twin.
+#
+# This is the uncontrolled companion to
+# configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D.yaml,
+# and the no-LLM counterpart of
+# configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D_no_control.yaml.
+#
+# It is the free-running kernel: no language model and no controller. That makes
+# it the reference both other Grid D arms are measured against - it shows what
+# the population does when nothing is steering it.
+#
+# With no controller, neither controller target nor intervention budget defines
+# an experimental condition, so those two axes are absent from the grid.
+# The Cartesian grid is task={evacuation,lab-theft,datacenter} x q={1,2}:
+# 6 cells (40 repetitions per cell, 240 episodes total).
+#
+# NO LLM IS CALLED. Three independent things enforce that, and all three should
+# stay as they are:
+#   1. `game.options.dynamics_mode: classical` routes every agent update through
+#      the kernel; the call planner reports requests_per_interaction=0.
+#   2. `llm_provider.type: mock` - no endpoint, no credentials.
+#   3. `budget.max_provider_requests: 0` - a hard stop if any path tried.
+#
+# Initialization is provider-free too: with `initialization.mode` set to
+# anything other than `local_vote`, the opening votes are drawn from the episode
+# seed rather than requested from a model.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+# Preflight (should quote zero requests and zero cost):
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D_no_control.yaml \
+#     --output-dir inspection/first_llm_pilot_grid_D_no_control_classical_preflight
+#
+# Launch with live console output:
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D_no_control.yaml \
+#     --output-dir results
+#
+# Save the same console output instead:
+#   mkdir -p logs
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/imitation_round_feedback_no_reasoning/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_D_no_control.yaml \
+#     --output-dir results 2>&1 | tee logs/first_llm_pilot_grid_D_no_control_classical.log
+
+# Never contacted; present only because the schema requires a provider block.
+llm_provider:
+  type: mock
+  model: deterministic-v1
+  temperature: 0.0
+  max_output_tokens: 64
+  options:
+    response: '{"vote":"North Hill","reason":"classical kernel; provider never called"}'
+
+prompt:
+  schema_version: 2
+  prompt_family: hidden_bench_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: hidden_bench_public_ballot
+
+game:
+  type: hidden_bench_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_set: expanded
+    task_id: evacuation_north_hill
+    profile: hidden
+    assignment_scheme: paraphrased_replication
+    population_preparation:
+      # Reads the pre-generated annotation file below; does not call a model.
+      auto_build_missing: true
+      paraphrase_annotations: data/hidden_bench/annotations/paraphrases.json
+    # THE SWITCH: population updates come from the classical kernel, not an LLM.
+    dynamics_mode: classical
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    memory_size: 0
+    allow_relay: true
+    prompt_version: 1
+    inform_asymmetry: false
+    scenario_variant: 1
+    stop_on_consensus: false
+    # Inert in classical mode; kept so this pairs key-for-key with the LLM twin.
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      # Provider-free draw from the seed. `local_vote` is the one value that
+      # would require a model and must not appear here.
+      mode: uniform_random
+    classical:
+      # In classical mode this is the actual population dynamics.
+      kernel: controlled_imitation_round_reference
+
+# Explicit no-op controller. It emits no controller action, takes no sensor
+# sample, and controls no population positions. Combined with the classical
+# kernel above, this cell is the free-running population.
+control:
+  mechanism: none
+
+execution:
+  # Same seed as every other Grid D arm, classical and LLM alike.
+  seed: 20260813
+  repetitions: 40
+  parallelism: 40
+  fail_fast: true
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+# All zeros: a single provider request would exceed the request cap and abort.
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 0.0
+  max_cost_per_run: 0.0
+  max_provider_requests: 0
+  max_input_tokens: 0
+  max_output_tokens: 0
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  # Same Comet project as the other arms for side-by-side comparison.
+  comet: true
+  options:
+    comet_project: mas-cc
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+# The round-feedback analyzer intentionally emits no controller estimates for
+# no-control rows; behavioral trajectories and m_truth remain available through
+# the ordinary metrics and aggregation outputs below.
+analysis:
+  enabled: true
+  estimators:
+    - round_sensing_mi
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_target_information_fraction
+    - round_dual_action_state_fraction
+    - round_dual_action_event_fraction
+    - round_single_action_slice_fraction
+    - round_conditioning_state_count
+    - round_singleton_fraction
+    - round_target_signed_actuation
+    - round_truth_signed_actuation
+    - round_sensor_mae
+    - round_sensor_mse
+  options:
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260813
+    per_cell_reports: true
+  comet_export: true
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 10
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: hidden-bench-round-feedback-classical-first-llm-pilot-grid-D-no-control
+  description: Free-running Grid D baseline on the classical transition kernel with no language model and no controller, across three tasks and two social-group sizes.
+  tags: [hidden-bench, imitation, round-feedback, classical, provider-free, first-llm-pilot, grid-D, no-control]
+  metadata:
+    pilot_grid: D-no-control-classical
+    dynamics: classical
+    provider_requests: 0
+    control_mechanism: none
+    llm_twin: hidden-bench-round-feedback-gpt-oss-120b-first-llm-pilot-grid-D-no-control
+    population_rounds: 10
+    social_group_sizes: [1, 2]
+    tasks: [evacuation_north_hill, Laboratory Theft Deduction, datacenter_emergency_migration]
+
+grid:
+  # Task labels: `evacuation_north_hill` is a corpus name; the other two are
+  # corpus task ids 13 and 36 given by name for readable reports.
+  game.options.task_id:
+    - evacuation_north_hill
+    - "Laboratory Theft Deduction"
+    - datacenter_emergency_migration
+  game.options.social_group_size: [1, 2]
