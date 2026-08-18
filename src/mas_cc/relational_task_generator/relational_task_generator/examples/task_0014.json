@@ -1,0 +1,267 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0014",
+  "seed": 8084173263432140979,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 14,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Fira",
+        "coordinates": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Lumo",
+        "coordinates": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "name": "Nelo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Kiro",
+        "coordinates": {
+          "x": 998,
+          "y": 999
+        }
+      },
+      {
+        "name": "Pavi",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Pira",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Tala",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Fira",
+        "relation": "EAST",
+        "object": "Lumo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lumo",
+        "relation": "NORTH",
+        "object": "Nelo",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Kiro",
+        "relation": "SOUTHWEST",
+        "object": "Pavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Pavi",
+        "relation": "NORTHWEST",
+        "object": "Yani",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Yani",
+        "relation": "EAST",
+        "object": "Pira",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Pira",
+        "relation": "SOUTHWEST",
+        "object": "Tala",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Fira",
+    "reference": "Nelo",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHWEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Fira relative to Nelo?",
+    "facts": {
+      "f1": "Fira is east of Lumo.",
+      "f2": "Lumo is north of Nelo.",
+      "f3": "Kiro is southwest of Pavi.",
+      "f4": "Pavi is northwest of Yani.",
+      "f5": "Yani is east of Pira.",
+      "f6": "Pira is southwest of Tala."
+    },
+    "reasoning_chain": [
+      "Fira is east of Lumo.",
+      "Lumo is north of Nelo."
+    ]
+  }
+}

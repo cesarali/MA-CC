@@ -1,0 +1,255 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0006",
+  "seed": 15405349208273959903,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 6,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 3,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zavi",
+        "coordinates": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "name": "Hira",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Yaro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Demi",
+        "coordinates": {
+          "x": 998,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 998,
+          "y": 999
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 998,
+          "y": 998
+        }
+      },
+      {
+        "name": "Teni",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zavi",
+        "relation": "NORTHEAST",
+        "object": "Hira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Hira",
+        "relation": "WEST",
+        "object": "Yaro",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Demi",
+        "relation": "NORTH",
+        "object": "Gavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Gavi",
+        "relation": "NORTH",
+        "object": "Meno",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Meno",
+        "relation": "SOUTHWEST",
+        "object": "Teni",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Teni",
+        "relation": "SOUTHWEST",
+        "object": "Lira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zavi",
+    "reference": "Yaro",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTH"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f3",
+        "f6"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Zavi relative to Yaro?",
+    "facts": {
+      "f1": "Zavi is northeast of Hira.",
+      "f2": "Hira is west of Yaro.",
+      "f3": "Demi is north of Gavi.",
+      "f4": "Gavi is north of Meno.",
+      "f5": "Meno is southwest of Teni.",
+      "f6": "Teni is southwest of Lira."
+    },
+    "reasoning_chain": [
+      "Zavi is northeast of Hira.",
+      "Hira is west of Yaro."
+    ]
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0011",
+  "seed": 14609237639604747114,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 11,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Kelo",
+        "coordinates": {
+          "x": -2,
+          "y": 0
+        }
+      },
+      {
+        "name": "Hira",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Nelo",
+        "coordinates": {
+          "x": 1003,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Ceno",
+        "coordinates": {
+          "x": 1002,
+          "y": 999
+        }
+      },
+      {
+        "name": "Renu",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Feni",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Kelo",
+        "relation": "SOUTHWEST",
+        "object": "Hira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Hira",
+        "relation": "NORTHWEST",
+        "object": "Caro",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Nelo",
+        "relation": "NORTHEAST",
+        "object": "Ceno",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Ceno",
+        "relation": "SOUTHEAST",
+        "object": "Renu",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Renu",
+        "relation": "NORTHEAST",
+        "object": "Feni",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Feni",
+        "relation": "SOUTH",
+        "object": "Maro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Kelo",
+    "reference": "Caro",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2",
+        "f6"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1",
+        "f3"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Kelo relative to Caro?",
+    "facts": {
+      "f1": "Kelo is southwest of Hira.",
+      "f2": "Hira is northwest of Caro.",
+      "f3": "Nelo is northeast of Ceno.",
+      "f4": "Ceno is southeast of Renu.",
+      "f5": "Renu is northeast of Feni.",
+      "f6": "Feni is south of Maro."
+    },
+    "reasoning_chain": [
+      "Kelo is southwest of Hira.",
+      "Hira is northwest of Caro."
+    ]
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0013",
+  "seed": 9545735001484116750,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 13,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": 2,
+          "y": 1
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 997,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 998,
+          "y": 999
+        }
+      },
+      {
+        "name": "Vela",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Peni",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Fira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Lira",
+        "relation": "NORTHEAST",
+        "object": "Faro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Faro",
+        "relation": "EAST",
+        "object": "Caro",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Pelo",
+        "relation": "NORTHWEST",
+        "object": "Yani",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Yani",
+        "relation": "WEST",
+        "object": "Vela",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Vela",
+        "relation": "SOUTH",
+        "object": "Peni",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Peni",
+        "relation": "WEST",
+        "object": "Fira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Lira",
+    "reference": "Caro",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f3"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f2",
+        "f6"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Lira relative to Caro?",
+    "facts": {
+      "f1": "Lira is northeast of Faro.",
+      "f2": "Faro is east of Caro.",
+      "f3": "Pelo is northwest of Yani.",
+      "f4": "Yani is west of Vela.",
+      "f5": "Vela is south of Peni.",
+      "f6": "Peni is west of Fira."
+    },
+    "reasoning_chain": [
+      "Lira is northeast of Faro.",
+      "Faro is east of Caro."
+    ]
+  }
+}

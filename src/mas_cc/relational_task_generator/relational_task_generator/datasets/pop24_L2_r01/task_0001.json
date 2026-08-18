@@ -1,0 +1,249 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 18025959922836359799,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 1,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 1,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Davi",
+        "coordinates": {
+          "x": -2,
+          "y": 0
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Hira",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Sora",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 1000,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Zavi",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Havi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Davi",
+        "relation": "NORTHWEST",
+        "object": "Lira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lira",
+        "relation": "SOUTHWEST",
+        "object": "Hira",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Sora",
+        "relation": "SOUTHWEST",
+        "object": "Vero",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Vero",
+        "relation": "NORTH",
+        "object": "Faro",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Faro",
+        "relation": "NORTHWEST",
+        "object": "Zavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Zavi",
+        "relation": "EAST",
+        "object": "Havi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Davi",
+    "reference": "Hira",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Davi relative to Hira?",
+    "facts": {
+      "f1": "Davi is northwest of Lira.",
+      "f2": "Lira is southwest of Hira.",
+      "f3": "Sora is southwest of Vero.",
+      "f4": "Vero is north of Faro.",
+      "f5": "Faro is northwest of Zavi.",
+      "f6": "Zavi is east of Havi."
+    },
+    "reasoning_chain": [
+      "Davi is northwest of Lira.",
+      "Lira is southwest of Hira."
+    ]
+  }
+}

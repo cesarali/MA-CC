@@ -1,0 +1,289 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0010",
+  "seed": 10002790195813810359,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 10,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 12,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Renu",
+        "coordinates": {
+          "x": 1,
+          "y": -2
+        }
+      },
+      {
+        "name": "Fira",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Teni",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Vela",
+        "coordinates": {
+          "x": 997,
+          "y": 998
+        }
+      },
+      {
+        "name": "Pira",
+        "coordinates": {
+          "x": 997,
+          "y": 999
+        }
+      },
+      {
+        "name": "Jora",
+        "coordinates": {
+          "x": 998,
+          "y": 999
+        }
+      },
+      {
+        "name": "Feni",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Tero",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Renu",
+        "relation": "SOUTH",
+        "object": "Fira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Fira",
+        "relation": "SOUTHEAST",
+        "object": "Teni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Vela",
+        "relation": "SOUTH",
+        "object": "Pira",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Pira",
+        "relation": "WEST",
+        "object": "Jora",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Jora",
+        "relation": "WEST",
+        "object": "Feni",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Feni",
+        "relation": "SOUTHWEST",
+        "object": "Tero",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Renu",
+    "reference": "Teni",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2",
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f2",
+        "f6"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f2"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Renu relative to Teni?",
+    "facts": {
+      "f1": "Renu is south of Fira.",
+      "f2": "Fira is southeast of Teni.",
+      "f3": "Vela is south of Pira.",
+      "f4": "Pira is west of Jora.",
+      "f5": "Jora is west of Feni.",
+      "f6": "Feni is southwest of Tero."
+    },
+    "reasoning_chain": [
+      "Renu is south of Fira.",
+      "Fira is southeast of Teni."
+    ]
+  }
+}

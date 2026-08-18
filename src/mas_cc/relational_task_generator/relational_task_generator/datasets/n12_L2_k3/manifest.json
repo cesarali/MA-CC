@@ -1,0 +1,29 @@
+{
+  "schema_version": "spatial_relational_dataset_v1",
+  "dataset_seed": 20260818,
+  "num_tasks": 5,
+  "config": {
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "task_files": [
+    "task_0001.json",
+    "task_0002.json",
+    "task_0003.json",
+    "task_0004.json",
+    "task_0005.json"
+  ],
+  "task_fingerprints_sha256": {
+    "task_0001.json": "7d3d83dffc6c49e442812b990cb4e7bcc082e0956ce92dbc217774d019e30722",
+    "task_0002.json": "12ff9648a93c4487f4c4711b56b39c8ab0284cbe2130e68c60318d3b0189b4ec",
+    "task_0003.json": "a05d978365f7fe87a0dc88abf64c4bcfb5282679514a6831861df73d4b40ca09",
+    "task_0004.json": "7cd927951b21ac5c55da4451e38dd8049be752e5df860abc83458370d50a808c",
+    "task_0005.json": "09b7a1d4deaedc1a4f4c1a9fdd66fd33f04d13b6f34b83bd319debd63b3240fc"
+  },
+  "dataset_fingerprint_sha256": "8c35e4e34d98f49499340e49fdb64597c6c5256e36fd8c9a1496b80d2f613fec"
+}

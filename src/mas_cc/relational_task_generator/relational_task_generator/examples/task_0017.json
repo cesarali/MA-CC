@@ -1,0 +1,269 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0017",
+  "seed": 263991553858561077,
+  "generation": {
+    "dataset_seed": 42,
+    "task_index": 17,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Pavi",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Peni",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Wali",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Kiro",
+        "coordinates": {
+          "x": 1003,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 1003,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 1002,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Zavi",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Pavi",
+        "relation": "EAST",
+        "object": "Peni",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Peni",
+        "relation": "SOUTHWEST",
+        "object": "Wali",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Kiro",
+        "relation": "SOUTH",
+        "object": "Faro",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Faro",
+        "relation": "NORTHEAST",
+        "object": "Bavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Bavi",
+        "relation": "NORTHEAST",
+        "object": "Zavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Zavi",
+        "relation": "EAST",
+        "object": "Yani",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Pavi",
+    "reference": "Wali",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "WEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f6"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Pavi relative to Wali?",
+    "facts": {
+      "f1": "Pavi is east of Peni.",
+      "f2": "Peni is southwest of Wali.",
+      "f3": "Kiro is south of Faro.",
+      "f4": "Faro is northeast of Bavi.",
+      "f5": "Bavi is northeast of Zavi.",
+      "f6": "Zavi is east of Yani."
+    },
+    "reasoning_chain": [
+      "Pavi is east of Peni.",
+      "Peni is southwest of Wali."
+    ]
+  }
+}

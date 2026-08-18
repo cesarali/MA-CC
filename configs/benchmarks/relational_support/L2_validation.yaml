@@ -1,0 +1,140 @@
+# The actual validation experiment: does holding the support decide the answer?
+#
+# SCIENTIFIC CLAIM UNDER TEST
+#
+#   P(correct | both facts) >> P(correct | one fact) ~ P(correct | no facts)
+#
+# If that does not hold, the relational tasks are not measuring distributed
+# reasoning and no multi-agent result built on them means anything — so this
+# runs first, on one model, with no agents in sight.
+#
+# ANSWER-POSITION CONTROL (added after the first run)
+#
+# The first run reproduced the separation (full 0.99, partial 0.33) but also
+# showed the model answering "A" in 89% of zero-evidence items. With the
+# generator's frozen letter assignment that makes `accuracy_zero` a measurement
+# of how often A happened to be correct, not of chance.
+#
+# So the semantic answer is now decoupled from the letter. The generated worlds,
+# facts, chains, distractors and correct relations are untouched; only the
+# relation-to-letter assignment is rebuilt at prompt time, and correctness is
+# scored on the RELATION the model named. Rather than hoping a random assignment
+# comes out balanced, every task and evidence condition is presented three
+# times — correct relation at A, at B, at C — so position is balanced inside
+# every analysis cell by construction. FACTS and QUESTION are byte-identical
+# across those three; only the option block moves.
+#
+# THE GRID
+#
+# Only parameters that change the reasoning item a single model sees are swept:
+#
+#   reasoning_depth  [2]           the chain length L
+#   distractors      [0, 2, 4, 8]  irrelevant facts sharing the page
+#   num_options      [3]           the chance floor, 1/3
+#
+# `population_size`, `support_redundancy`, `distractor_redundancy` and
+# `no_single_agent_solution` decide who is *told* what. This benchmark tells one
+# model everything its condition allows, so they cannot move the measurement;
+# they are pinned under `fixed:` and echoed into every output row.
+#
+# SIZE AND COST
+#
+#   4 cells x 20 tasks x 4 evidence conditions (k=0; k=1 as f1 and as f2
+#   separately; k=2) x 3 option permutations  =  960 requests, one per item,
+#   no conversation. That is 3x the pre-control run, and the factor of 3 IS the
+#   control: it is what makes "accuracy at position B" a measured quantity
+#   rather than an accidental subgroup.
+#
+# The `zero` condition costs a quarter of that and is worth it: it is the only
+# thing that distinguishes "one fact is insufficient" from "the options were
+# guessable from the question alone".
+#
+# EXTENDING TO L = 1, 2, 3, 4
+#
+# Add depths to `grid.reasoning_depth`. Nothing else changes: the evidence
+# conditions are enumerated from each task's own supporting set, and
+# `max_subsets_per_k` caps the C(L, k) blow-up at L = 4 with a seeded sample
+# rather than always taking the same prefix. Note that the generator refuses
+# `no_single_agent_solution` at L = 1 (one fact handed to one agent is the whole
+# proof), and the config layer drops it for that depth automatically.
+#
+# RUN IT
+#
+# 1. Preflight — generates the tasks, renders all 320 prompts, runs every
+#    validity check, sends nothing:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main \
+#     benchmark relational-support preflight \
+#     --config configs/benchmarks/relational_support/L2_validation.yaml
+#
+# 2. The run:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main \
+#     benchmark relational-support run \
+#     --config configs/benchmarks/relational_support/L2_validation.yaml
+#
+# 3. The tables:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main \
+#     benchmark relational-support summarize \
+#     --input-dir results/benchmarks/relational_support/relational-support-L2-validation-position-controlled
+
+benchmark:
+  name: relational-support-L2-validation-position-controlled
+  description: >-
+    Single-agent validation that the designated supporting facts — and not the
+    question, the distractors, or the letter the answer is printed under — are
+    what determine whether a model answers a relational task correctly.
+  seed: 20260818
+  tasks_per_condition: 20
+
+grid:
+  reasoning_depth: [2]
+  distractors: [0, 2, 4, 8]
+  num_options: [3]
+
+fixed:
+  population_size: 12
+  support_redundancy: 4
+  distractor_redundancy: 1
+  no_single_agent_solution: true
+
+evidence:
+  include_zero_condition: true
+  # At L = 2 both singletons are enumerated anyway; this only starts binding at
+  # L >= 3, where C(L, k) grows.
+  max_subsets_per_k: 4
+
+presentation:
+  # all_positions: the correct relation is displayed at every label in turn.
+  # `frozen` reproduces the generator's own assignment — the pre-control
+  # behaviour — and exists so the two can be compared rather than argued about.
+  mode: all_positions
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  # gpt-oss is a reasoning model: `reasoning_content` and the answer are both
+  # charged against max_tokens, and below roughly 1k the answer is truncated
+  # away and `content` arrives empty. That is a token overrun, not a flaky
+  # proxy. This prompt asks for free reasoning followed by one ANSWER line, so
+  # keep the ceiling generous.
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+output:
+  dir: results/benchmarks/relational_support
+
+limits:
+  # 4 cells x 20 tasks x 4 conditions x 3 permutations = 960. The run refuses
+  # to start if the expanded plan exceeds this, so a typo in the grid cannot
+  # quietly multiply it.
+  max_requests: 1000
+  prompt_example_tasks: 2

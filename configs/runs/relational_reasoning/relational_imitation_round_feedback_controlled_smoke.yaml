@@ -1,0 +1,125 @@
+# Controlled smoke run for the relational reasoning round-feedback game.
+#
+# Identical task and settings to the no-control smoke config, plus the
+# round-level soft controller with a small actuation budget, demonstrating
+# `recommendation_plus_fact` with one explicit supporting fact.
+#
+# task_0001's supporting chain is:
+#   f1  Bavi is northeast of Zora.
+#   f2  Zora is northwest of Ralo.
+# The controller injects f2 - a real fact of the task, rendered by the
+# generator - at each of its `b` controlled positions, and nowhere else.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/relational_imitation_round_feedback_controlled_smoke.yaml
+
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    response: '{"vote":"C","reason":"smoke","shared_fact_id":"none"}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 2
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/examples
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    # true (the default) keeps the strategic-uncertainty wording: "some
+    # participants may have objectives that differ from yours". Set false for
+    # the neutral cooperative baseline in which everyone is stated to be after
+    # the correct answer.
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    initialization:
+      mode: uniform_random
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # `correct` resolves to the task's own correct option label.
+    target: correct
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 4
+    # One recommendation plus one exact, existing supporting fact, fixed for
+    # the whole episode so the message is not a second stochastic channel.
+    message_mode: recommendation_plus_fact
+    controller_fact_id: f2
+
+execution:
+  seed: 20260818
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 500
+  max_input_tokens: 1000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: true
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    # Belt and braces next to `logging.comet: false`: a smoke run must never be
+    # able to open a remote experiment.
+    sweep_experiment: false
+
+experiment:
+  name: relational-round-feedback-controlled-smoke
+  description: >-
+    Mock-provider relational reasoning smoke run with the round-level soft
+    controller injecting one explicit supporting fact.
+  tags: [relational, round-feedback, reasoning, control, smoke]

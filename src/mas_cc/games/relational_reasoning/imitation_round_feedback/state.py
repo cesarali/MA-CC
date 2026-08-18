@@ -1,0 +1,434 @@
+"""Configuration and typed records for ``relational_imitation_round_feedback``.
+
+Two state variables per agent, and they are genuinely independent:
+
+    X_i(t)  the currently voted option label      -> ``committed_action``
+    K_i(t)  the exact set of fact ids it knows    -> ``known_fact_ids``
+
+``X_i`` moves when the agent votes.  ``K_i`` moves only when some other
+participant exposes a fact to *this* agent at an interaction it took part in.
+An agent can hold the complete proof and still vote wrongly, and it can vote
+correctly while knowing nothing - keeping the two apart is the entire point of
+this game, so nothing in this module ever derives one from the other.
+
+``(X_i, S_i)`` - vote and publicly exposed fact id - is the whole socially
+visible state.  ``R_i``, the free-form reason, is recorded for analysis and
+rendered to nobody: not to peers, and not back to its own author on a later
+turn.  ``K_i`` is private and reaches only the owning agent's own prompt.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from mas_cc.config import GameConfig
+from mas_cc.core import AgentId
+from mas_cc.games.protocols import AgentState, GameState, Transition, _thaw
+
+from ..data import DEFAULT_TASK_DATASET_DIR
+from .prompts import (
+    IMPLEMENTED_VOTE_VISIBILITIES,
+    PROMPT_VERSION,
+    VOTE_VISIBILITIES,
+)
+
+GAME_TYPE = "relational_imitation_round_feedback"
+ROUND_RECORD_TYPE = "relational_imitation_round_feedback"
+
+INITIAL_VOTE = "initial_vote"
+FOCAL_UPDATE = "focal_update"
+
+KNOWN_FACT_IDS = "known_fact_ids"
+COMMITTED_ACTION = "committed_action"
+PUBLIC_REASON = "public_reason"
+PUBLIC_SHARED_FACT_ID = "public_shared_fact_id"
+
+DYNAMICS_MODES = ("reasoning", "classical")
+IMPLEMENTED_DYNAMICS_MODES = ("reasoning",)
+"""``classical`` is refused rather than approximated.  A provider-free kernel
+for this game would have to decide what a *fact* does to a q-voter jump, and
+inventing that silently would produce numbers nobody could interpret."""
+
+INITIALIZATION_MODES = ("local_vote", "uniform_random", "explicit")
+
+PEER_SOURCE = "peer"
+CONTROLLER_SOURCE = "controller"
+INITIAL_SOURCE = "initial"
+FACT_SOURCES = (INITIAL_SOURCE, PEER_SOURCE, CONTROLLER_SOURCE)
+"""Every way a fact is allowed to enter ``K_i``.  §18's "no information
+teleportation" invariant is exactly the claim that nothing else ever does."""
+
+
+# --------------------------------------------------------------------------
+# Agent / game state
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class RelationalAgentState(AgentState):
+    """One agent's knowledge set and its standing public ballot."""
+
+    @property
+    def known_fact_ids(self) -> tuple[str, ...]:
+        """``K_i(t)`` - the fact ids this agent currently knows."""
+
+        return tuple(str(item) for item in self.attributes.get(KNOWN_FACT_IDS, ()))
+
+    @property
+    def committed_action(self) -> str | None:
+        value = self.attributes.get(COMMITTED_ACTION)
+        return None if value is None else str(value)
+
+    @property
+    def public_reason(self) -> str | None:
+        value = self.attributes.get(PUBLIC_REASON)
+        return None if value is None else str(value)
+
+    @property
+    def public_shared_fact_id(self) -> str | None:
+        value = self.attributes.get(PUBLIC_SHARED_FACT_ID)
+        return None if value is None else str(value)
+
+    @property
+    def initial_fact_ids(self) -> tuple[str, ...]:
+        """``K_i(0)``, kept next to ``K_i(t)`` so acquisition is auditable."""
+
+        return tuple(str(item) for item in self.attributes.get("initial_fact_ids", ()))
+
+    @property
+    def fact_provenance(self) -> Mapping[str, Any]:
+        """``fact_id -> {source, round_index, within_round_index, from}``."""
+
+        return dict(self.attributes.get("fact_provenance", {}))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "agent_id": str(self.agent_id),
+            "score": self.score,
+            "committed_action": self.committed_action,
+            "public_reason": self.public_reason,
+            "public_shared_fact_id": self.public_shared_fact_id,
+            "known_fact_ids": list(self.known_fact_ids),
+            "initial_fact_ids": list(self.initial_fact_ids),
+            "fact_provenance": _thaw(self.attributes.get("fact_provenance", {})),
+            "memory": _thaw(self.memory),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RelationalGameState(GameState):
+    """Whole-population state for one relational reasoning episode."""
+
+    @property
+    def phase(self) -> str:
+        return str(self.data["phase"])
+
+    @property
+    def task(self) -> Mapping[str, Any]:
+        return self.data["task"]
+
+    @property
+    def possible_answers(self) -> tuple[str, ...]:
+        """The **semantic** vote alphabet: compass relations, not letters."""
+
+        return tuple(str(item) for item in self.task["possible_answers"])
+
+    @property
+    def option_relations(self) -> Mapping[str, str]:
+        """The task's frozen ``label -> relation`` map.  Provenance only.
+
+        Nothing in the dynamics reads this: presentation letters are drawn per
+        call, see ``game.RelationalImitationRoundFeedbackGame.option_letters``.
+        """
+
+        return {str(key): str(value) for key, value in self.task["option_relations"].items()}
+
+    @property
+    def correct_answer(self) -> str:
+        return str(self.task["correct_answer"])
+
+    @property
+    def supporting_fact_ids(self) -> tuple[str, ...]:
+        return tuple(str(item) for item in self.task["supporting_fact_ids"])
+
+    @property
+    def fact_ids(self) -> tuple[str, ...]:
+        return tuple(str(item) for item in self.task["fact_order"])
+
+    @property
+    def initial_votes(self) -> tuple[str, ...]:
+        return tuple(str(item) for item in self.data.get("initial_votes", ()))
+
+    @property
+    def evaluator_history(self) -> tuple[Mapping[str, Any], ...]:
+        return tuple(self.data.get("evaluator_history", ()))
+
+    @property
+    def event_history(self) -> tuple[Mapping[str, Any], ...]:
+        return tuple(self.data.get("event_history", ()))
+
+    @property
+    def termination_reason(self) -> str | None:
+        value = self.data.get("termination_reason")
+        return None if value is None else str(value)
+
+    def fact_text(self, fact_id: str) -> str:
+        """The frozen deterministic rendering of one fact."""
+
+        return str(self.task["facts"][fact_id]["text"])
+
+    def relational_agent(self, agent_id: AgentId) -> RelationalAgentState:
+        agent = self.agent(agent_id)
+        if not isinstance(agent, RelationalAgentState):
+            raise TypeError("relational state contains a non-relational agent")
+        return agent
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "game_type": self.game_type,
+            "turn": self.turn,
+            "phase": self.phase,
+            "terminated": self.terminated,
+            "termination_reason": self.termination_reason,
+            "seed": int(self.data["seed"]),
+            "dynamics_mode": str(self.data["dynamics_mode"]),
+            "task": _thaw(self.task),
+            "initial_votes": list(self.initial_votes),
+            "agents": [agent.to_dict() for agent in self.agents],
+            "evaluator_history": _thaw(self.evaluator_history),
+            "event_history": _thaw(self.event_history),
+            "rules": _thaw(self.data.get("rules", {})),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RelationalTransition(Transition):
+    """A transition the shared recorder can read without a special case.
+
+    ``success``/``payoff`` exist because ``observability/recorder.py`` reads
+    exactly those two names off every transition it is handed; without them an
+    episode runs but writes no ``metrics/streaming.csv``.
+    """
+
+    event: Mapping[str, Any] | None = None
+
+    @property
+    def success(self) -> bool:
+        return bool(self.matched)
+
+    @property
+    def payoff(self) -> float:
+        values = list(self.payoffs.values())
+        return sum(values) / len(values) if values else 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        value = Transition.to_dict(self)
+        value["event"] = None if self.event is None else _thaw(self.event)
+        return value
+
+
+@dataclass(frozen=True, slots=True)
+class RelationalRoundRecord:
+    """One complete slow-clock transition, persisted separately from micro rows."""
+
+    round_index: int
+    event: Mapping[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "record_type": ROUND_RECORD_TYPE,
+            "round_index": self.round_index,
+            **_thaw(self.event),
+        }
+
+
+# --------------------------------------------------------------------------
+# Rules
+# --------------------------------------------------------------------------
+
+
+def _mapping(value: Any, field: str) -> Mapping[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field} must be a mapping")
+    return value
+
+
+def _positive_int(value: Any, field: str, *, minimum: int = 1) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{field} must be an integer >= {minimum}")
+    return int(value)
+
+
+@dataclass(frozen=True, slots=True)
+class RelationalRules:
+    """Everything the game reads out of ``game.options``, validated once.
+
+    ``horizon`` is derived, not configured: ``game.horizon`` counts *population
+    rounds* and each round contains exactly ``N`` microscopic focal updates, so
+    the elementary-step horizon is ``rounds * N``.  This mirrors the HiddenBench
+    round-feedback game so the two remain comparable at equal ``rounds``.
+    """
+
+    n_agents: int
+    rounds: int
+    horizon: int
+    social_group_size: int
+    dynamics_mode: str
+    task_dataset_dir: str
+    task_id: str | None
+    vote_visibility: str
+    prompt_version: int
+    social_distrust: bool
+    stop_on_consensus: bool
+    initialization_mode: str
+    initial_votes: tuple[str, ...] | None
+    initial_distribution: Mapping[str, float] | None
+    invalid_response_retries: int
+    expected_validation_failure_rate: float
+
+    @classmethod
+    def from_config(cls, config: GameConfig) -> "RelationalRules":
+        if config.type != GAME_TYPE:
+            raise ValueError(f"RelationalRules requires game.type {GAME_TYPE}")
+        options = config.options
+
+        n_agents = int(options.get("n_agents", config.population_size))
+        if n_agents != config.population_size:
+            raise ValueError("game.options.n_agents must equal game.population_size")
+        rounds = _positive_int(options.get("rounds", config.horizon), "game.options.rounds")
+        social_group_size = _positive_int(
+            options.get("social_group_size", 1), "game.options.social_group_size"
+        )
+        if social_group_size > n_agents - 1:
+            raise ValueError(
+                "game.options.social_group_size must be between 1 and "
+                "game.population_size - 1"
+            )
+
+        mode = str(options.get("dynamics_mode", "reasoning"))
+        if mode not in DYNAMICS_MODES:
+            raise ValueError(f"game.options.dynamics_mode must be one of {list(DYNAMICS_MODES)}")
+        if mode not in IMPLEMENTED_DYNAMICS_MODES:
+            raise ValueError(
+                f"game.options.dynamics_mode {mode!r} is not implemented for "
+                f"{GAME_TYPE!r}; only {list(IMPLEMENTED_DYNAMICS_MODES)} is available. "
+                "A provider-free kernel would have to define what an exposed fact "
+                "does to a q-voter jump, which this version deliberately leaves open."
+            )
+
+        dataset_dir = options.get("task_dataset_dir", str(DEFAULT_TASK_DATASET_DIR))
+        if not isinstance(dataset_dir, (str, Path)):
+            raise ValueError("game.options.task_dataset_dir must be a path")
+        task_id = options.get("task_id")
+        if task_id is not None and not isinstance(task_id, str):
+            raise ValueError("game.options.task_id must be a string")
+
+        visibility = str(options.get("vote_visibility", "public"))
+        if visibility not in VOTE_VISIBILITIES:
+            raise ValueError(
+                f"game.options.vote_visibility must be one of {list(VOTE_VISIBILITIES)}"
+            )
+        if visibility not in IMPLEMENTED_VOTE_VISIBILITIES:
+            raise ValueError(
+                f"game.options.vote_visibility {visibility!r} is reserved; only "
+                f"{list(IMPLEMENTED_VOTE_VISIBILITIES)} is implemented"
+            )
+
+        distrust = options.get("social_distrust", True)
+        if not isinstance(distrust, bool):
+            raise ValueError("game.options.social_distrust must be a boolean")
+
+        prompt_version = options.get("prompt_version", PROMPT_VERSION)
+        if isinstance(prompt_version, bool) or prompt_version != PROMPT_VERSION:
+            raise ValueError(
+                f"the {GAME_TYPE!r} prompt family has one version; "
+                f"game.options.prompt_version must be {PROMPT_VERSION}"
+            )
+
+        initialization = _mapping(options.get("initialization"), "game.options.initialization")
+        initialization_mode = str(initialization.get("mode", "local_vote"))
+        if initialization_mode not in INITIALIZATION_MODES:
+            raise ValueError(
+                f"game.options.initialization.mode must be one of {list(INITIALIZATION_MODES)}"
+            )
+        initial_votes_raw = initialization.get("initial_votes")
+        initial_votes: tuple[str, ...] | None = None
+        if initial_votes_raw is not None:
+            if isinstance(initial_votes_raw, (str, bytes)) or not isinstance(
+                initial_votes_raw, Sequence
+            ):
+                raise ValueError("initialization.initial_votes must be a list")
+            initial_votes = tuple(str(item) for item in initial_votes_raw)
+            if len(initial_votes) != n_agents:
+                raise ValueError("initialization.initial_votes must contain one vote per agent")
+        if initialization_mode == "explicit" and initial_votes is None:
+            raise ValueError(
+                "initialization.mode 'explicit' requires initialization.initial_votes"
+            )
+        distribution_raw = initialization.get("initial_distribution")
+        distribution: Mapping[str, float] | None = None
+        if distribution_raw is not None:
+            values = _mapping(
+                distribution_raw, "game.options.initialization.initial_distribution"
+            )
+            distribution = {str(key): float(value) for key, value in values.items()}
+            if any(value < 0 for value in distribution.values()) or sum(distribution.values()) <= 0:
+                raise ValueError("initial_distribution weights must be non-negative and nonzero")
+
+        retries = options.get("invalid_response_retries", 0)
+        if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+            raise ValueError("game.options.invalid_response_retries must be an integer >= 0")
+        expected_failure = float(options.get("expected_validation_failure_rate", 0.0))
+        if not 0 <= expected_failure <= 1:
+            raise ValueError("expected_validation_failure_rate must be between 0 and 1")
+
+        return cls(
+            n_agents=n_agents,
+            rounds=rounds,
+            horizon=rounds * n_agents,
+            social_group_size=social_group_size,
+            dynamics_mode=mode,
+            task_dataset_dir=str(dataset_dir),
+            task_id=task_id,
+            vote_visibility=visibility,
+            prompt_version=int(prompt_version),
+            social_distrust=distrust,
+            stop_on_consensus=bool(options.get("stop_on_consensus", False)),
+            initialization_mode=initialization_mode,
+            initial_votes=initial_votes,
+            initial_distribution=distribution,
+            invalid_response_retries=int(retries),
+            expected_validation_failure_rate=expected_failure,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {field: _thaw(getattr(self, field)) for field in self.__dataclass_fields__}
+
+
+__all__ = [
+    "COMMITTED_ACTION",
+    "CONTROLLER_SOURCE",
+    "DYNAMICS_MODES",
+    "FACT_SOURCES",
+    "FOCAL_UPDATE",
+    "GAME_TYPE",
+    "IMPLEMENTED_DYNAMICS_MODES",
+    "INITIALIZATION_MODES",
+    "INITIAL_SOURCE",
+    "INITIAL_VOTE",
+    "KNOWN_FACT_IDS",
+    "PEER_SOURCE",
+    "PUBLIC_REASON",
+    "PUBLIC_SHARED_FACT_ID",
+    "ROUND_RECORD_TYPE",
+    "RelationalAgentState",
+    "RelationalGameState",
+    "RelationalRoundRecord",
+    "RelationalRules",
+    "RelationalTransition",
+]

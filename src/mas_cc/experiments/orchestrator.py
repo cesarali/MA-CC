@@ -1202,6 +1202,20 @@ def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: A
             control=control,
         )
 
+    if episode_config.game.type == "relational_imitation_round_feedback":
+        from mas_cc.games.relational_reasoning.imitation_round_feedback import (
+            run_relational_imitation_round_feedback_game,
+        )
+
+        control = create_control(episode_config.control)
+        return lambda observer: run_relational_imitation_round_feedback_game(
+            game,
+            episode_config,
+            guarded_provider,
+            observer=observer,
+            control=control,
+        )
+
     from mas_cc.games.synthetic import SyntheticGame, run_synthetic_game
 
     if isinstance(game, SyntheticGame):

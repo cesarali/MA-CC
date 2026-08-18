@@ -1,0 +1,296 @@
+# Relational reasoning — one tiny live episode, built for reading the prompts.
+#
+# PURPOSE
+#
+# This config exists to be *watched*, not to measure anything. One episode,
+# 12 agents, 4 population rounds, q = 1, on gwdg/openai-gpt-oss-120b. Every
+# focal prompt and the response it got are written to Markdown as the run
+# proceeds, so you can open them while it is still going.
+#
+# SIZE AND COST
+#
+#   12 agents x 4 rounds  =  48 focal updates
+#   + 12 local initial votes (initialization.mode: local_vote)
+#   ------------------------------------------------------------
+#   = 60 provider calls, one episode, sequential.
+#
+# THE TASK
+#
+# task_0001 of a 12-agent dataset generated once, offline, with the standalone
+# generator. It is a hidden profile: the answer needs both supporting facts and
+# no single agent starts with both.
+#
+#   f1  (supporting)  Davi is south of Lira.        held by agents 1, 3, 8, 9
+#   f2  (supporting)  Lira is northwest of Hira.    held by agents 4, 5, 6, 11
+#   f3  (distractor)  Sora is southwest of Vero.    held by agent 7
+#   f4  (distractor)  Vero is east of Faro.         held by agent 2
+#   agents 10 and 12 start knowing nothing at all
+#
+#   question   Where is Davi relative to Hira?
+#   answers    EAST | SOUTHEAST | WEST      correct: WEST
+#
+# Votes are semantic: the population state is the relation, and each call gets
+# its own seeded A/B/C shuffle of those three answers. So the option list you
+# read in one prompt file will not match the next one, and that is the point -
+# no globally shared letter can become an attractor.
+#
+# The dataset is checked in next to the generator and is reproducible from its
+# seed. To regenerate it byte-identically:
+#
+#   cd src/mas_cc/relational_task_generator/relational_task_generator
+#   python generate_dataset.py --num-tasks 5 --population-size 12 \
+#     --reasoning-depth 2 --support-redundancy 4 --distractors 2 \
+#     --distractor-redundancy 1 --num-options 3 --seed 20260818 \
+#     --no-single-agent-solution --output datasets/n12_L2_k3
+#
+# `game.population_size` must equal the task's own agent count. Pointing this
+# config at the 24-agent `examples/` dataset without changing population_size
+# is refused at startup rather than silently discarding two thirds of the
+# evidence.
+#
+# WHAT YOU WILL SEE IN THE PROMPTS
+#
+# Four shapes, and reading them side by side is the point:
+#
+#   1. the local initial vote      — no social block at all, K_i(0) only
+#   2. an uncontrolled update      — one peer: identity, vote, and its shared
+#                                    fact if it shared one
+#   3. an uncontrolled update with a peer that shared nothing — the social
+#      block is just `Agent k` + `Vote: X`
+#   4. a controlled update         — the peer slot is replaced by `Agent 13`,
+#                                    voting WEST (in that call's letter) and
+#                                    sharing f2
+#
+# Note that a participant's free-form `reason` is never rendered into anyone
+# else's prompt: `shared_fact_id` is the only task-information channel between
+# agents. The reasons are all in the trajectory and in the response section of
+# each Markdown file — just not in each other's prompts.
+#
+# THE ONE KNOB THAT DECIDES WHICH SHAPES YOU SEE: b
+#
+# `intervention_budget` (b) is how many of the N focal positions are controlled
+# on a round where the controller advocates. With q = 1, a controlled position
+# replaces that focal's ONLY peer.
+#
+#   b = 12  (b/N = 1)    every position controlled on an advocating round, so
+#                        on that round nobody sees a peer at all. You get
+#                        shapes 1 and 4 only, and shapes 2 and 3 appear solely
+#                        if some round happens to come out NO_OP.
+#
+#   b = 6   (b/N = 0.5)  half the positions controlled, half seeing a real peer
+#                        - IN THE SAME ROUND. All four shapes, every run,
+#                        regardless of how the model votes.  <- shipped default
+#
+# b = 6 is the default here purely because this config exists to be read. If you
+# specifically want b/N = 1, change the one line below to
+# `intervention_budget: 12` and expect controlled prompts almost exclusively.
+#
+# The other dial, `threshold: 0.9` / `beta: 6.0`, is also an INSPECTION setting
+# rather than a measurement one. It makes advocacy near-certain while the
+# population is split and a coin flip once it has converged:
+#
+#   sensed correct-share 0.33  ->  P(advocate) ~ 0.97
+#   sensed correct-share 0.90  ->  P(advocate) ~ 0.50
+#
+# so controlled rounds reliably happen inside a 4-round episode. The honest
+# measurement setting is `threshold: 0.5`, used by the two smoke configs next
+# to this one; at 0.5 a population that converges early simply stops being
+# intervened on, which is correct science and poor prompt coverage for a single
+# short episode.
+#
+# If you want no controller at all: `control.mechanism: none`.
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+# 1. Structural check first — no model inference, no spend:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/relational_reasoning/relational_imitation_round_feedback_gpt_oss_120b_N12_prompt_inspection.yaml \
+#     --output-dir inspection/relational_gpt_oss_N12_prompt_inspection_preflight
+#
+# 2. The run:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/relational_imitation_round_feedback_gpt_oss_120b_N12_prompt_inspection.yaml
+#
+# 3. The prompts land here, one Markdown file per update, written as it goes:
+#
+#   results/relational_imitation_round_feedback/relational-gpt-oss-N12-prompt-inspection/
+#     <run-id>/data/episodes/<episode-id>/prompts/*.md
+#
+# Watch them arrive while the run is going:
+#
+#   watch -n 5 'ls -1 results/relational_imitation_round_feedback/*/*/data/episodes/*/prompts | tail -20'
+#
+# Read the newest one:
+#
+#   ls -t results/relational_imitation_round_feedback/*/*/data/episodes/*/prompts/*.md | head -1 | xargs cat
+#
+# Any response the contract rejected is always written to `../failures/`
+# alongside, whether or not prompt examples are on.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  # Only the 12 initialization calls run concurrently; focal updates are
+  # sequential by construction, which is also what makes the prompt files
+  # appear in trajectory order.
+  request_concurrency: 4
+  temperature: 0.0
+  # gpt-oss is a reasoning model: it emits a long `reasoning_content` before the
+  # answer and BOTH are charged against max_tokens. Below roughly 1k the answer
+  # is truncated away, `content` arrives empty, and the adapter rejects the body
+  # - that is a token overrun, not a flaky proxy. This game's ballot carries a
+  # third field (`shared_fact_id`) on top of vote and reason, so keep the
+  # ceiling generous.
+  #
+  # This is not a cost dial. The budget guard reserves this many tokens per call
+  # and settles the reservation against actual usage, so a generous ceiling
+  # changes the preflight quote and never what you pay. Spend is bounded by
+  # budget.max_cost_per_run below.
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 12
+  horizon: 4
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n12_L2_k3
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 4
+    # q = 1: each focal sees exactly one social slot, so a controlled position
+    # replaces that agent's only peer.
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    # true (the default) keeps the strategic-uncertainty wording: "some
+    # participants may have objectives that differ from yours". Set false for
+    # the neutral cooperative baseline in which everyone is stated to be after
+    # the correct answer.
+    social_distrust: true
+    stop_on_consensus: false
+    # One retry, so a malformed ballot is asked again rather than killing the
+    # episode. Both attempts are visible in the failure Markdown.
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      # Each agent decides once from K_i(0) alone. Worth the 12 extra calls
+      # here: it gives you the initial-vote prompt shape, and it makes the
+      # starting population reflect the distributed-information problem rather
+      # than a coin flip.
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Resolves to this task's own correct option, C.
+    target: correct
+    # q_c = 12: the controller senses the whole population's votes each round.
+    # It never sees any agent's knowledge set.
+    sensor_sample_size: 12
+    policy: soft_target
+    # An inspection dial, not a measurement setting — see the header. Use
+    # threshold 0.5 / beta 4.0 for the honest soft policy.
+    threshold: 0.9
+    beta: 6.0
+    # b = 6 of N = 12, so b/N = 0.5: half the positions controlled and half
+    # seeing a real peer in the same round, which is what gets all four prompt
+    # shapes into one run. Set 12 for b/N = 1 — see the header.
+    intervention_budget: 6
+    # The controller shares one real supporting fact of this task, fixed for
+    # the whole episode, rendered by the generator and never paraphrased. f2 is
+    # the second link of the chain ("Lira is northwest of Hira.").
+    message_mode: recommendation_plus_fact
+    controller_fact_id: f2
+
+execution:
+  seed: 20260818
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  # Sized for this run and nothing larger: 60 calls plus retry headroom. If the
+  # guard stops the run, that is the config protecting you from a typo, not a
+  # limit to raise reflexively.
+  system_max_cost_per_run: 5.0
+  max_cost_per_run: 5.0
+  max_provider_requests: 200
+  max_input_tokens: 2000000
+  max_output_tokens: 400000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      # One Markdown file per microscopic update, capped well above the 48 this
+      # episode produces so nothing is dropped. `scope: episode` puts them under
+      # the episode directory rather than sampling a few into the cell summary.
+      count: 60
+      scope: episode
+
+storage:
+  output_dir: results
+  format: jsonl
+  # `full` keeps the per-episode trajectory, the round trajectory and the
+  # prompt Markdown. Do not switch this to a compact profile for an inspection
+  # run - compaction is what removes the files you came for.
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+
+analysis:
+  # The configured MI estimators are HiddenBench-specific and would refuse this
+  # game type. Nothing about the trajectories depends on this.
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    # Belt and braces next to `logging.comet: false`: an inspection run should
+    # not be able to open a remote experiment.
+    sweep_experiment: false
+
+experiment:
+  name: relational-gpt-oss-N12-prompt-inspection
+  description: >-
+    One 12-agent, 4-round relational reasoning episode on gpt-oss-120b, with
+    every focal prompt written to Markdown for inspection.
+  tags: [relational, round-feedback, gpt-oss, N12, prompt-inspection]
+  metadata:
+    population_rounds: 4
+    social_group_size: 1
+    sensor_sample_size: 12
+    intervention_budget: 6

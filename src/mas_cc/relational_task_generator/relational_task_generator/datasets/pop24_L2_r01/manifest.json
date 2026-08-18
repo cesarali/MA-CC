@@ -1,0 +1,39 @@
+{
+  "schema_version": "spatial_relational_dataset_v1",
+  "dataset_seed": 20260818,
+  "num_tasks": 10,
+  "config": {
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 1,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "task_files": [
+    "task_0001.json",
+    "task_0002.json",
+    "task_0003.json",
+    "task_0004.json",
+    "task_0005.json",
+    "task_0006.json",
+    "task_0007.json",
+    "task_0008.json",
+    "task_0009.json",
+    "task_0010.json"
+  ],
+  "task_fingerprints_sha256": {
+    "task_0001.json": "1402bdfedd4a6605c0fc3a40a70465148d2ba32e25c3e5ae43bf61c960bd3d95",
+    "task_0002.json": "288ab2041705cb7736c92ef69ad5b9cae364259856abdf8db4ba5e1dd701c734",
+    "task_0003.json": "7fa969ce9f82582a770a003417dd057d30dcb121f6f6d4aa0ad10ad772d3d687",
+    "task_0004.json": "7e642665a295cacb5f26d344b92329a83ef257185ac56ffee29365212073cfe2",
+    "task_0005.json": "22de71adb941e67c07424e4fb5726ac3390789687bfa3c70962c65cdd20373fd",
+    "task_0006.json": "087679c21e5c27db7e1405dcabf997b90b5e11f778a4315226888d28bc049293",
+    "task_0007.json": "ff8a784b2233903ba27058771a267162ee9e299920bc1fa07f25e5ee1ce21a43",
+    "task_0008.json": "92cf02060bc2228c939ace22f8bf747707213fbc62ba48d7068e0ec4e4c28bb4",
+    "task_0009.json": "77a6626979166a1eda6eb8447a07e197d578384934d3b1aaa49f9394b851a0ba",
+    "task_0010.json": "1b8fdfec810352b6f43df5cba172479dacb6f4542c414987fb0462f9c8e30666"
+  },
+  "dataset_fingerprint_sha256": "6b295aee636a26a6e983dfa8502af0881b5cd8dceee2b862b57db6c5c6d752a3"
+}

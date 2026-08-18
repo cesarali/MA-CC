@@ -1,0 +1,289 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0007",
+  "seed": 4712717481348590173,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 7,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 12,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Wali",
+        "coordinates": {
+          "x": 0,
+          "y": -2
+        }
+      },
+      {
+        "name": "Kavi",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Wira",
+        "coordinates": {
+          "x": 1002,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Pavi",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Wali",
+        "relation": "SOUTHWEST",
+        "object": "Kavi",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Kavi",
+        "relation": "SOUTHEAST",
+        "object": "Faro",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Wira",
+        "relation": "NORTHEAST",
+        "object": "Pavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Pavi",
+        "relation": "NORTHEAST",
+        "object": "Mira",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Mira",
+        "relation": "WEST",
+        "object": "Bavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Bavi",
+        "relation": "SOUTHEAST",
+        "object": "Yani",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Wali",
+    "reference": "Faro",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f2",
+        "f3"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f1",
+        "f6"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Wali relative to Faro?",
+    "facts": {
+      "f1": "Wali is southwest of Kavi.",
+      "f2": "Kavi is southeast of Faro.",
+      "f3": "Wira is northeast of Pavi.",
+      "f4": "Pavi is northeast of Mira.",
+      "f5": "Mira is west of Bavi.",
+      "f6": "Bavi is southeast of Yani."
+    },
+    "reasoning_chain": [
+      "Wali is southwest of Kavi.",
+      "Kavi is southeast of Faro."
+    ]
+  }
+}
