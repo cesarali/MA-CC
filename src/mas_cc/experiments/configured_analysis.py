@@ -10,6 +10,17 @@ from typing import Any, Mapping
 from mas_cc.config import RunConfig
 
 
+RELATIONAL_ROUND_FEEDBACK = "relational_imitation_round_feedback"
+ROUND_FEEDBACK_GAME_TYPES = frozenset(
+    {"hidden_bench_imitation_round_feedback", RELATIONAL_ROUND_FEEDBACK}
+)
+"""Games whose configured analysis is the round-feedback pipeline.
+
+They share one statistic vocabulary (`ROUND_ANALYSIS_STATISTICS`) because they
+share the estimators; only the record adapter and the report destination
+differ."""
+
+
 def _integer_option(options: Mapping[str, Any], name: str, default: int) -> int:
     value = options.get(name, default)
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -33,12 +44,13 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     if config.game.type not in {
         "hidden_bench_imitation",
         "hidden_bench_imitation_round_feedback",
+        "relational_imitation_round_feedback",
     }:
         raise ValueError(
             f"configured post-run analysis is not supported for game.type {config.game.type!r}"
         )
 
-    if config.game.type == "hidden_bench_imitation_round_feedback":
+    if config.game.type in ROUND_FEEDBACK_GAME_TYPES:
         from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
             ROUND_ANALYSIS_STATISTICS,
         )
@@ -50,6 +62,8 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
                 "analysis.estimators contains unsupported round-feedback statistic(s): "
                 + ", ".join(unknown)
             )
+        # Validated here rather than at analysis time so a typo in the estimator
+        # list fails at preflight, before the run spends anything.
         statistics = requested
         diagnostics: tuple[str, ...] = ()
         current_statistics: tuple[str, ...] = ()
@@ -89,6 +103,11 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         "seed",
         "per_cell_reports",
     }
+    if config.game.type == RELATIONAL_ROUND_FEEDBACK:
+        # Bin count for the joint (kappa, phi) diagnostic conditioning. The
+        # three scalar epistemic conditionings are fixed at three bins by
+        # design and deliberately have no dial.
+        allowed_options.add("epistemic_bins")
     unknown_options = sorted(set(options) - allowed_options)
     if unknown_options:
         raise ValueError(
@@ -101,6 +120,18 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     if not 0 < confidence < 1:
         raise ValueError("analysis.options.confidence must be between zero and one")
     run_id = f"{config.experiment.name}-{config.execution.seed}"
+    if config.game.type == RELATIONAL_ROUND_FEEDBACK:
+        # The relational analyzer writes local files only - it has no Comet
+        # path at all - so the Comet arguments are simply absent rather than
+        # passed as False. One less way for a "local" analysis to reach out.
+        return {
+            "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
+            "null_permutations": _integer_option(options, "null_permutations", 1000),
+            "confidence": confidence,
+            "seed": _integer_option(options, "seed", config.execution.seed),
+            "statistics": statistics,
+            "epistemic_bins": _integer_option(options, "epistemic_bins", 4),
+        }
     return {
         "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
         "null_permutations": _integer_option(options, "null_permutations", 1000),
@@ -163,6 +194,17 @@ def run_configured_analysis(
     from mas_cc.storage import canonical_hash
 
     root = Path(run_dir)
+    if config.game.type == RELATIONAL_ROUND_FEEDBACK:
+        from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+            analyze_relational_imitation_round_feedback,
+        )
+
+        return analyze_relational_imitation_round_feedback(
+            root,
+            root / "relational_imitation_round_feedback_analysis",
+            **arguments,
+        )
+
     if config.game.type == "hidden_bench_imitation_round_feedback":
         from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
             analyze_hidden_bench_imitation_round_feedback,
@@ -221,11 +263,24 @@ def run_configured_cell_analysis(
     reports = root / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     slug = _report_slug(config, cell_id)
-    arguments["comet_run_name"] = f"{arguments['comet_run_name']}/{cell_id}"
+    if config.game.type != RELATIONAL_ROUND_FEEDBACK:
+        arguments["comet_run_name"] = f"{arguments['comet_run_name']}/{cell_id}"
     retained: list[str] = []
     with tempfile.TemporaryDirectory(prefix=".cell-analysis-", dir=root) as temporary:
         destination = Path(temporary)
-        if config.game.type == "hidden_bench_imitation_round_feedback":
+        if config.game.type == RELATIONAL_ROUND_FEEDBACK:
+            from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+                analyze_relational_imitation_round_feedback,
+            )
+
+            summary = analyze_relational_imitation_round_feedback(
+                root, destination, **arguments
+            )
+            source_names = (
+                "round_information_estimates.md",
+                "analysis_summary.json",
+            )
+        elif config.game.type == "hidden_bench_imitation_round_feedback":
             from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
                 analyze_hidden_bench_imitation_round_feedback,
             )
