@@ -20,3 +20,6 @@ results/
 
 # Local data folder
 data/
+
+# Preflight / inspection artifacts (regenerable, provider-free)
+inspection/
