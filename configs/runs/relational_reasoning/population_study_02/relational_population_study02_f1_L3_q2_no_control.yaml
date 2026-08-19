@@ -1,0 +1,211 @@
+# Relational reasoning — population study 02, arm F1: L=3, q=2, NO CONTROL
+#
+# ---------------------------------------------------------------------------
+# EXPLORATORY companion to arm E. Same game, same controller code, same
+# prompts, same metrics, same `results_only` artifact profile. Two things move
+# relative to study 01:
+#
+#   reasoning depth   L = 2 -> L = 3   (dataset pop24_L3_r06)
+#   social slots      q = 1 -> q = 2   (game.options.social_group_size)
+#
+# r stays at 6, N at 24, rounds at 10, options at 3, distractors at 4 and
+# no_single_agent_solution at true.
+#
+# This file is the c = 0 half of the L=3/q=2 comparison. Its controlled twin is
+#   relational_population_study02_f2_L3_q2_wrong_b06.yaml
+# and it runs the SAME two worlds, so the pair is matched by construction.
+#
+# WHY q = 2 IS A SEPARATE QUESTION FROM r
+#
+# `social_group_size` is q, the number of peer ballots a focal agent sees per
+# update. It is not r, the number of agents initially holding each supporting
+# fact. At q = 1 a controlled update replaces the focal's only peer, so the
+# controlled focal sees nothing but the controller. At q = 2 the controller
+# replaces exactly one of the two slots (runtime.py:540-552 draws a single
+# `replaced_peer_slot`), so an ordinary peer - with its own vote AND its own
+# `shared_fact_id` - is still visible alongside it. The peer information
+# channel therefore stays open under control, which is exactly what this arm
+# is for. The uncontrolled cells here are the baseline for that.
+#
+# THE DATASET
+#
+#   src/mas_cc/relational_task_generator/relational_task_generator/datasets/
+#     pop24_L3_r06
+#   generated with the same dataset seed (20260818) as the pop24_L2_r* family:
+#     --num-tasks 10 --population-size 24 --reasoning-depth 3
+#     --support-redundancy 6 --distractors 4 --distractor-redundancy 1
+#     --num-options 3 --seed 20260818 --no-single-agent-solution
+#   dataset fingerprint sha256 559279be5049...
+#   validated by validate_dataset.py (full reproducibility check): VALID.
+#
+#   task_0001  options [NORTHWEST, WEST, SOUTHWEST]      correct WEST      (1)
+#   task_0002  options [NORTHWEST, SOUTHEAST, EAST]      correct SOUTHEAST (1)
+#   both: supporting f1,f2,f3 each held by exactly 6 of 24 agents; distractors
+#   f4..f7 each held by 1; no agent holds more than 1 of the 3 supporting facts,
+#   so no_single_agent_solution holds strictly.
+#
+# WHAT CHANGES IN THE OBSERVABLES AT L = 3
+#
+# The knowledge strata are computed as |S| + 1 buckets, so this arm writes
+# knowledge_share_k0..k3 and truth_share_k0..k3 where study 01 wrote k0..k2.
+# Everything else is identical: truth_vote_share, controller_target_share,
+# kappa_t (mean_supporting_fact_coverage), phi_t (full_proof_agent_share),
+# peer/controller fact exposures and acquisitions, controlled_target_adoption
+# _rate. phi_t still starts at exactly 0.
+#
+# COST (from `experiment preflight`, status: permitted):
+#   2 cells x 2 repetitions = 4 episodes.
+#   Per episode: 264 nominal calls (24 initial votes + 24 x 10 focal updates),
+#   279 expected (the 5% validation-failure allowance), 528 conservative (the
+#   retry bound). Arm total: 1,056 nominal / 1,116 expected / 2,112 conservative.
+#   q does NOT change the call count: control replaces a social slot rather than
+#   adding a call, and a focal update is one provider call whatever q is
+#   (game.py:801-804).
+#
+# RUN FROM THE REPOSITORY ROOT — preflight first, it makes no model calls:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/relational_reasoning/population_study_02/relational_population_study02_f1_L3_q2_no_control.yaml \
+#     --output-dir inspection/relational_study02_f1_L3_q2_no_control_preflight
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/population_study_02/relational_population_study02_f1_L3_q2_no_control.yaml
+# ---------------------------------------------------------------------------
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L3_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    # q = 2. The one line that differs from study 01's game block, together
+    # with the L=3 dataset above.
+    social_group_size: 2
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: none
+
+execution:
+  seed: 20260819
+  repetitions: 2
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study02-f1-L3-q2-no-control
+  description: >-
+    Relational reasoning population study 02, arm F1: L=3, q=2, no control.
+    N=24, r=6, 10 rounds, 2 matched worlds. Baseline for arm F2.
+  tags: [relational, population-study-02, arm-f, N24, q2, r6, L3, no-control]
+  metadata:
+    study: population_study_02
+    arm: "F1"
+    population_rounds: 10
+    social_group_size: 2
+    support_redundancy: 6
+    reasoning_depth: 3
+    worlds: 2
+    repetitions: 2
+    dataset_fingerprint_sha256_prefix: 559279be5049
+    paired_with: relational_population_study02_f2_L3_q2_wrong_b06.yaml
+
+grid:
+  game.options.task_id:
+    - task_0001
+    - task_0002

@@ -1,0 +1,223 @@
+# Relational reasoning — population study 02, arm F2: L=3, q=2, WRONG CONTROL b=6
+#
+# ---------------------------------------------------------------------------
+# The controlled half of the L=3/q=2 comparison. Its uncontrolled twin is
+#   relational_population_study02_f1_L3_q2_no_control.yaml
+# and every field below is byte-identical to it apart from the `control:` block
+# and the experiment identity, so the pair differs only in whether the
+# controller is present and at what budget.
+#
+#   N = 24    L = 3    r = 6    q = 2    K = 3 options    4 distractors
+#   10 population rounds        message_mode: recommendation_only
+#   advocacy_schedule: always   b = 6 -> c = b/N = 0.25
+#   2 matched worlds (task_0001, task_0002) x 2 repetitions
+#
+# THE TARGET IS PINNED, NOT DRAWN
+#
+# `control.options.target: 2` is the zero-based index into the task's frozen
+# label-order `possible_answers`, resolved by
+# ThresholdTargetControl._resolved_target. Unlike `random_incorrect` it does not
+# depend on the episode seed and therefore not on the grid cell index, so both
+# repetitions of both worlds advocate one fixed wrong relation. Same reasoning
+# as arm E; see that file's "WHY NOT random_incorrect" section.
+#
+# Index 2 is verified wrong for both worlds used here:
+#
+#   task_0001  possible_answers = [NORTHWEST, WEST, SOUTHWEST]
+#              correct = WEST (1)       -> target index 2 = SOUTHWEST
+#   task_0002  possible_answers = [NORTHWEST, SOUTHEAST, EAST]
+#              correct = SOUTHEAST (1)  -> target index 2 = EAST
+#
+# A per-task fact, not a dataset invariant: in pop24_L3_r06 the correct option
+# sits at index 2 for task_0006. Re-check before widening `game.options.task_id`.
+#
+# THE POINT OF q = 2 UNDER CONTROL
+#
+# At q = 1 a controlled focal sees the controller and nothing else, so
+# "adversarial control" and "social isolation" are confounded. At q = 2 the
+# runtime draws exactly ONE `replaced_peer_slot`
+# (runtime.py:540, `replacement_rng.randrange(len(sampled_peers))`) and
+# `build_social_sources` substitutes the controller into that slot only
+# (runtime.py:331). The other slot stays an ordinary peer carrying its own vote
+# and its own `shared_fact_id`, so:
+#
+#   * `effective_peer_ids` has length q - 1 = 1 on every controlled update;
+#   * `peer_fact_exposures` and `new_peer_facts` can still be positive on
+#     controlled updates - the peer evidence channel is NOT closed by control;
+#   * `controller_fact_exposures` stays 0 for the whole arm, because
+#     message_mode is recommendation_only and the controller never cites a fact.
+#
+# That combination - social pressure toward a wrong relation while true
+# evidence is still flowing - is what this arm measures and what q = 1 cannot.
+#
+# COST (from `experiment preflight`, status: permitted):
+#   2 cells x 2 repetitions = 4 episodes.
+#   Per episode: 264 nominal calls (24 initial votes + 24 x 10 focal updates),
+#   279 expected (the 5% validation-failure allowance), 528 conservative (the
+#   retry bound). Arm total: 1,056 nominal / 1,116 expected / 2,112 conservative.
+#   q does NOT change the call count: control replaces a social slot rather than
+#   adding a call, and a focal update is one provider call whatever q is
+#   (game.py:801-804).
+#
+# RUN FROM THE REPOSITORY ROOT — preflight first, it makes no model calls:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/relational_reasoning/population_study_02/relational_population_study02_f2_L3_q2_wrong_b06.yaml \
+#     --output-dir inspection/relational_study02_f2_L3_q2_wrong_b06_preflight
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/population_study_02/relational_population_study02_f2_L3_q2_wrong_b06.yaml
+# ---------------------------------------------------------------------------
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L3_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 2
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Fixed wrong relation per world; seed- and cell-independent.
+    # task_0001 -> SOUTHWEST, task_0002 -> EAST.
+    target: 2
+    sensor_sample_size: 24
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    # b/N = 0.25. At q = 2 this means a quarter of the focal updates in a round
+    # have ONE of their two social slots occupied by the controller.
+    intervention_budget: 6
+    advocacy_schedule: always
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260819
+  repetitions: 2
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study02-f2-L3-q2-wrong-b06
+  description: >-
+    Relational reasoning population study 02, arm F2: L=3, q=2, wrong
+    recommendation_only control at b=6 (c=0.25). N=24, r=6, 10 rounds, the same
+    2 matched worlds as arm F1.
+  tags: [relational, population-study-02, arm-f, N24, q2, r6, L3, wrong-target, b6]
+  metadata:
+    study: population_study_02
+    arm: "F2"
+    population_rounds: 10
+    social_group_size: 2
+    support_redundancy: 6
+    reasoning_depth: 3
+    worlds: 2
+    repetitions: 2
+    control_budget: 6
+    control_fraction: 0.25
+    target_selection: fixed_option_index_2
+    dataset_fingerprint_sha256_prefix: 559279be5049
+    paired_with: relational_population_study02_f1_L3_q2_no_control.yaml
+
+grid:
+  game.options.task_id:
+    - task_0001
+    - task_0002

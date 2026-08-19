@@ -1,0 +1,291 @@
+# Relational reasoning — population study 02, arm E: wrong-control budget scan
+#
+# ---------------------------------------------------------------------------
+# ADVERSARIAL FOLLOW-UP to study 01 arm D.
+#
+# Derived from
+#   configs/runs/relational_reasoning/population_study_01/overnight/
+#     relational_population_study01_d_adversarial_diagnostic_overnight.yaml
+#
+# The game, controller implementation, prompts, metrics, observables, provider
+# and the `results_only` artifact profile are unchanged. Exactly three things
+# differ, and all three are stated here rather than left to be discovered:
+#
+#   1. the r axis is collapsed to the single matched dataset pop24_L2_r06;
+#   2. the swept axis is now `control.options.intervention_budget`
+#      b in {6, 12, 18}, i.e. c = b/N in {0.25, 0.50, 0.75};
+#   3. `control.options.target` is PINNED to the zero-based index 2 instead of
+#      `random_incorrect`. See "WHY NOT random_incorrect" below - this is the
+#      whole reason the follow-up is comparable at all.
+#
+# FIXED IN EVERY CELL
+#
+#   N = 24    L = 2    r = 6    q = 1    K = 3 options    4 distractors
+#   10 population rounds        message_mode: recommendation_only
+#   advocacy_schedule: always   wrong (incorrect) controller target
+#   2 worlds (task_0001, task_0002) x 2 repetitions
+#   no_single_agent_solution = true
+#
+# THE c AXIS, AND WHERE ITS ENDPOINTS COME FROM
+#
+#   c = 0.00   NOT RUN HERE. Read from study 01 arm A, r = 6, task_0001/0002
+#              (cells cell-0010 / cell-0011, 2 repetitions each).
+#   c = 0.25   b =  6   this config
+#   c = 0.50   b = 12   this config
+#   c = 0.75   b = 18   this config
+#   c = 1.00   NOT RUN HERE. Read from study 01 arm D, r = 6, task_0001/0002
+#              (cells cell-0010 / cell-0011, 2 repetitions each).
+#
+# WHY NOT random_incorrect
+#
+# `random_incorrect` resolves per EPISODE, from the episode seed:
+#
+#     target_rng = Seed(episode_seed).derive(
+#         f"hidden-bench-imitation-random-incorrect-target:{task_id}")
+#
+# and the episode seed is itself derived from the GRID CELL INDEX
+#   Seed(execution.seed).derive(f"grid-cell:{i}").derive(f"episode:{j}")
+# (see src/mas_cc/experiments/orchestrator.py:2124-2132). A cell at b = 6 and a
+# cell at b = 12 therefore have different cell indices, different episode
+# seeds, and no reason at all to draw the same wrong relation. Study 01 arm D
+# already shows this happening WITHIN one cell: at r = 6, task_0002 drew
+# SOUTHEAST in repetition 0 and SOUTH in repetition 1, and those two
+# repetitions ended at wrong-target shares of 0.333 and 1.000. Pooling them as
+# one "b = 24" point averages two different experiments.
+#
+# THE FIX, AND WHY IT IS THE SMALLEST ONE
+#
+# `control.options.target` already accepts a non-negative zero-based index into
+# the task's frozen label-order option list (`possible_answers`), resolved by
+# ThresholdTargetControl._resolved_target. An index is seed-independent and
+# cell-independent, so every episode of every cell here advocates the SAME
+# semantic relation for a given world. Nothing else in the controller changes.
+#
+# Index 2 is verified wrong for both worlds used here:
+#
+#   task_0001  possible_answers = [SOUTHWEST, WEST, EAST]   correct = WEST (1)
+#              -> target index 2 = EAST
+#   task_0002  possible_answers = [SOUTHEAST, SOUTHWEST, SOUTH]
+#              correct = SOUTHWEST (1)  -> target index 2 = SOUTH
+#
+# This is a per-task fact, NOT a dataset-wide invariant: in pop24_L2_r06 the
+# correct option sits at index 2 for task_0006 and task_0010. Do not widen
+# `game.options.task_id` below without re-checking that index 2 is still an
+# incorrect option for every world added.
+#
+# HISTORICAL MATCHING (read this before pooling anything)
+#
+#   c = 1 (arm D, b = 24) realized targets:
+#     task_0001 rep 0  EAST  = index 2   MATCHED
+#     task_0001 rep 1  EAST  = index 2   MATCHED
+#     task_0002 rep 0  SOUTHEAST = index 0   *** NOT MATCHED - EXCLUDE ***
+#     task_0002 rep 1  SOUTH = index 2   MATCHED
+#   No single fixed target matches all four; index 2 matches the maximum
+#   attainable 3 of 4. The task_0002/rep0 episode must be dropped from the
+#   c = 1 point, or that point must be re-run under this config's pinned target.
+#
+#   c = 0 (arm A) ran with no controller, so `controller_target` is null and
+#   `m_ctrl`/`analysis_target` fall back to the CORRECT answer there. The wrong
+#   -target share is still exactly recoverable per round without re-running:
+#   the round record carries `occupation_counts_after` aligned to
+#   `possible_answers`, so share(index 2) = occupation_counts_after[2] / N.
+#   Verified against all four arm-A episodes.
+#
+# OBSERVABLES: unchanged. truth_vote_share, controller_target_share, kappa_t
+# (mean_supporting_fact_coverage), phi_t (full_proof_agent_share),
+# truth_share_k0/k1/k2, knowledge_share_k*, peer/controller fact exposures and
+# acquisitions, controlled_target_adoption_rate - all still written per round
+# to round_records/<episode>/round_trajectory.jsonl.
+#
+# COST (from `experiment preflight`, status: permitted):
+#   6 cells x 2 repetitions = 12 episodes.
+#   Per episode: 264 nominal calls (24 initial votes + 24 x 10 focal updates),
+#   279 expected (the 5% validation-failure allowance), 528 conservative (the
+#   retry bound). Arm total: 3,168 nominal / 3,348 expected / 6,336 conservative.
+#
+# RUN FROM THE REPOSITORY ROOT — preflight first, it makes no model calls:
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/relational_reasoning/population_study_02/relational_population_study02_e_wrong_budget_scan_L2_q1.yaml \
+#     --output-dir inspection/relational_study02_e_wrong_budget_scan_preflight
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/population_study_02/relational_population_study02_e_wrong_budget_scan_L2_q1.yaml
+# ---------------------------------------------------------------------------
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  # gpt-oss is a reasoning model: `reasoning_content` and the answer are both
+  # charged against max_tokens, and below roughly 1k the answer is truncated
+  # away and `content` arrives empty. Not a cost dial - the budget guard settles
+  # reservations against actual usage. Bound spend with budget.max_cost_per_run.
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    # The letters a call presents. Which relation each names is shuffled per
+    # call; the population state is the relation, never the letter.
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    # Fixed, not swept: this study holds r = 6 and varies the control budget.
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      # Each agent decides once from K_i(0) alone, so the starting population
+      # reflects the distributed-information problem rather than a coin flip.
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Zero-based index into the task's frozen label-order `possible_answers`.
+    # Seed- and cell-independent, unlike `random_incorrect`: this is what makes
+    # the b levels comparable to each other and to the historical anchors.
+    # Verified incorrect for task_0001 (EAST) and task_0002 (SOUTH).
+    target: 2
+    sensor_sample_size: 24
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    # Swept below: b in {6, 12, 18} -> c = b/N in {0.25, 0.50, 0.75}.
+    intervention_budget: 6
+    advocacy_schedule: always
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260819
+  repetitions: 2
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  # Compact, exactly as in study 01: the microscopic trajectory.jsonl, the
+  # per-episode events/logs/audit and the streaming metric CSVs are dropped at
+  # cell completion. What survives is the per-round scientific channel -
+  # round_records/<episode>/round_trajectory.jsonl - plus the compact
+  # scientific table, the cell aggregate, one prompt example per cell and the
+  # resolved config.
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  # Deliberately off, as in study 01: the configured estimators are
+  # HiddenBench-specific, and this study's analysis (kappa_t, phi_t, p_truth,
+  # controller_target_share) is read straight off round_trajectory.jsonl.
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study02-e-wrong-budget-scan
+  description: >-
+    Relational reasoning population study 02, arm E: wrong-control budget scan.
+    N=24, L=2, r=6, q=1, 10 rounds, recommendation_only against a pinned
+    incorrect target, b in [6,12,18] over 2 matched worlds.
+  tags: [relational, population-study-02, arm-e, N24, q1, r6, b-scan, wrong-target]
+  metadata:
+    study: population_study_02
+    arm: "E"
+    population_rounds: 10
+    social_group_size: 1
+    support_redundancy: 6
+    reasoning_depth: 2
+    worlds: 2
+    repetitions: 2
+    control_budgets: [6, 12, 18]
+    control_fractions: [0.25, 0.5, 0.75]
+    target_selection: fixed_option_index_2
+    historical_anchor_c0: study01/a_no_control r=6 task_0001,task_0002
+    historical_anchor_c1: study01/d_adversarial_diagnostic r=6 task_0001,task_0002
+    historical_anchor_c1_excluded_episode: task_0002 repetition 0 (target SOUTHEAST, index 0)
+
+grid:
+  control.options.intervention_budget:
+    - 6
+    - 12
+    - 18
+  game.options.task_id:
+    - task_0001
+    - task_0002

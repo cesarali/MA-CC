@@ -1,0 +1,295 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0004",
+  "seed": 9010985708457717220,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 4,
+    "population_size": 24,
+    "reasoning_depth": 3,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Kavi",
+        "coordinates": {
+          "x": 3,
+          "y": -2
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 2,
+          "y": -2
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Tero",
+        "coordinates": {
+          "x": 998,
+          "y": 1004
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 998,
+          "y": 1003
+        }
+      },
+      {
+        "name": "Kiro",
+        "coordinates": {
+          "x": 999,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Ralo",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Bira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Kavi",
+        "relation": "EAST",
+        "object": "Gavi",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Gavi",
+        "relation": "SOUTHEAST",
+        "object": "Meno",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Meno",
+        "relation": "SOUTHEAST",
+        "object": "Lira",
+        "role": "supporting"
+      },
+      {
+        "id": "f4",
+        "subject": "Tero",
+        "relation": "NORTH",
+        "object": "Mira",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Mira",
+        "relation": "NORTHWEST",
+        "object": "Kiro",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Kiro",
+        "relation": "NORTH",
+        "object": "Ralo",
+        "role": "distractor"
+      },
+      {
+        "id": "f7",
+        "subject": "Ralo",
+        "relation": "NORTHWEST",
+        "object": "Bira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Kavi",
+    "reference": "Lira",
+    "reasoning_depth": 3,
+    "supporting_fact_ids": [
+      "f1",
+      "f2",
+      "f3"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f7"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f3",
+        "f6"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Kavi relative to Lira?",
+    "facts": {
+      "f1": "Kavi is east of Gavi.",
+      "f2": "Gavi is southeast of Meno.",
+      "f3": "Meno is southeast of Lira.",
+      "f4": "Tero is north of Mira.",
+      "f5": "Mira is northwest of Kiro.",
+      "f6": "Kiro is north of Ralo.",
+      "f7": "Ralo is northwest of Bira."
+    },
+    "reasoning_chain": [
+      "Kavi is east of Gavi.",
+      "Gavi is southeast of Meno.",
+      "Meno is southeast of Lira."
+    ]
+  }
+}
