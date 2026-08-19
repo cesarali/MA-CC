@@ -320,7 +320,14 @@ class ShardAggregator:
                 f"control mechanism {mechanism!r} has no intervention_budget at {where}"
             )
 
-        target_mode = control_options.get("target") if mechanism != "none" else "none"
+        # target: may be a mode name ("random_incorrect") or a zero-based option
+        # index (study 02 pins it to 2). Normalise to str so the column keeps a
+        # single arrow type when a study mixes both forms across its arms.
+        if mechanism == "none":
+            target_mode: str | None = "none"
+        else:
+            raw_target = control_options.get("target")
+            target_mode = None if raw_target is None else str(raw_target)
         message_mode = (
             control_options.get("message_mode") if mechanism != "none" else "none"
         )
