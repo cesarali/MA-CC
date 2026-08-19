@@ -26,9 +26,12 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     SCHEDULE_SOFT,
     RECOMMENDATION_ONLY,
     RECOMMENDATION_PLUS_FACT,
+    SILENT,
     RelationalRoundBudgetedControl,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
+    DECISION_BASIS_INITIAL,
+    DECISION_BASIS_SOCIAL_NONE_VISIBLE,
     EVIDENCE_HEADER,
     MAX_REASON_CHARACTERS,
     NO_KNOWN_FACTS,
@@ -37,6 +40,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     SOCIAL_ENVIRONMENT_NEUTRAL,
     RelationalBallotContract,
     agent_label,
+    control_label,
     localize_sources,
     parse_relational_ballot,
     relational_public_ballot_prompt,
@@ -661,6 +665,147 @@ def test_at_q1_a_controlled_focal_sees_the_controller_instead_of_its_peer():
         assert event["effective_peer_ids"] == []
         assert event["replaced_peer_id"] == event["sampled_peer_ids"][0]
         assert [source["source_type"] for source in event["social_sources"]] == ["control"]
+
+
+# ---- the occlusion placebo, `message_mode: silent` (Study 02) ----------
+#
+# The placebo answers one question about the adversarial arm: how much of what
+# the controller does is *directional influence*, and how much is simply the
+# peer the focal did not get to hear.  It removes the peer on exactly the same
+# schedule and puts nothing in its place, so the difference against
+# `recommendation_only` at the same budget is the directional part alone.
+
+
+def _silent(config, **overrides):
+    """The config's controller, occluding instead of recommending."""
+
+    return _forced(config, message_mode=SILENT, controller_fact_id=None, **overrides)
+
+
+def _adversarial(config, **overrides):
+    """The same controller in the arm the placebo is matched to."""
+
+    return _forced(
+        config, message_mode=RECOMMENDATION_ONLY, controller_fact_id=None, **overrides
+    )
+
+
+@pytest.mark.parametrize("q", [1, 2])
+def test_a_silent_controlled_slot_removes_the_peer_and_substitutes_nothing(q):
+    config = _config(CONTROLLED, rounds=2, q=q)
+    result, ballots = _run(config, control=_silent(config))
+
+    occluded_updates = 0
+    for prompt, item in zip(ballots.prompts, result.interactions, strict=True):
+        event = item.transition.event
+        sources = event["social_sources"]
+        occluded = int(event["controlled_slot"])
+        # Nothing speaks in the vacated slot: not the controller, not a stand-in.
+        assert [s for s in sources if s["source_type"] != "ordinary"] == []
+        assert len(sources) == len(_social_block(prompt)) == q - occluded
+        assert len(event["effective_peer_ids"]) == q - occluded
+        if occluded:
+            assert event["replaced_peer_id"] in event["sampled_peer_ids"]
+            assert event["replaced_peer_id"] not in event["effective_peer_ids"]
+            assert event["replaced_peer_id"] not in [
+                str(source["source_id"]) for source in sources
+            ]
+        occluded_updates += occluded
+    assert occluded_updates > 0
+
+
+def test_an_occluded_prompt_carries_no_vote_no_recommendation_and_no_evidence():
+    config = _config(CONTROLLED, rounds=2, q=1)
+    result, ballots = _run(config, control=_silent(config))
+
+    occluded = [
+        prompt
+        for prompt, item in zip(ballots.prompts, result.interactions, strict=True)
+        if item.transition.event["controlled_slot"]
+    ]
+    assert occluded
+    for prompt in occluded:
+        assert "CURRENT SOCIAL INFORMATION" not in prompt
+        assert control_label(config.game.population_size) not in prompt
+        assert EVIDENCE_HEADER not in prompt
+        assert render_control_reason(CORRECT) not in prompt
+        # Occluded mid-episode is not the same claim as "nobody has voted yet".
+        assert DECISION_BASIS_SOCIAL_NONE_VISIBLE in prompt
+        assert DECISION_BASIS_INITIAL not in prompt
+
+    for event in _events(result):
+        assert event["controller_fact_exposures"] == 0
+        assert event["new_controller_facts"] == 0
+        # Nothing was said, so nothing is recorded as said. Checked against the
+        # arm that does speak, so a silently-None message field cannot pass this.
+        assert event["controller_message"] is None
+
+    spoken, _ = _run(config, control=_adversarial(config))
+    said = [
+        event["controller_message"]
+        for event in _events(spoken)
+        if event["controlled_slot"]
+    ]
+    assert said and all(message for message in said)
+
+
+def test_the_placebo_occludes_on_exactly_the_adversarial_arm_schedule():
+    """Same seed, same budget: same slots, same peers, same replaced position.
+
+    This is what makes the later comparison paired rather than merely matched -
+    every stream the two arms share is drawn identically, and only the content
+    of the vacated slot differs.
+    """
+
+    config = _config(CONTROLLED, rounds=2, q=1)
+    adversarial, _ = _run(config, control=_adversarial(config))
+    placebo, _ = _run(config, control=_silent(config))
+
+    def schedule(result):
+        return [
+            (
+                event["focal_agent_id"],
+                tuple(event["sampled_peer_ids"]),
+                event["controlled_slot"],
+                event["replaced_peer_slot"],
+                event["replaced_peer_id"],
+                event["controlled_positions_hash_or_id"],
+            )
+            for event in _events(result)
+        ]
+
+    assert schedule(placebo) == schedule(adversarial)
+    assert any(row[2] for row in schedule(placebo))
+    # ... and the arms differ only in what occupied the slot.
+    assert all(
+        source["source_type"] == "ordinary"
+        for event in _events(placebo)
+        for source in event["social_sources"]
+    )
+    assert any(
+        source["source_type"] == "control"
+        for event in _events(adversarial)
+        for source in event["social_sources"]
+    )
+
+
+def test_silent_transmits_neither_a_fact_nor_a_recommendation():
+    config = _config(CONTROLLED)
+    task = create_game(config.game).load_task(config.game)
+    control = RelationalRoundBudgetedControl.from_options(
+        _control_options(message_mode=SILENT)
+    )
+
+    assert not control.transmits_fact
+    assert not control.transmits_recommendation
+    assert control.resolve_fact_id(task) is None
+
+
+def test_silent_refuses_a_configured_citation():
+    with pytest.raises(ConfigurationError):
+        RelationalRoundBudgetedControl.from_options(
+            _control_options(message_mode=SILENT, controller_fact_id="f2")
+        )
 
 
 def test_the_controller_senses_votes_only_and_never_a_knowledge_set():

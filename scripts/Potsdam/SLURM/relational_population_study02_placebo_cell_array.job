@@ -1,0 +1,108 @@
+#!/bin/bash
+# Relational reasoning population study 02, arm G -- OCCLUSION PLACEBO.
+#
+# The occlusion-matched control for the arm E budget scan. A controlled slot is
+# vacated rather than filled (`message_mode: silent`): the focal loses one peer
+# and is shown nothing in its place, so this arm carries the lost-peer-
+# information half of the adversarial intervention without the directional
+# recommendation. Arm E minus arm G at the same b is the directional part.
+#
+# ONE ARRAY TASK PER GRID CELL, AND THE INDEX SHIFT
+#
+#   array index   grid cell   b    c      world       arm E counterpart
+#   ---------------------------------------------------------------------------
+#       0         cell-0002   12   0.50   task_0001   study02 arm E cell-0002
+#       1         cell-0003   12   0.50   task_0002   study02 arm E cell-0003
+#       2         cell-0004   18   0.75   task_0001   study02 arm E cell-0004
+#       3         cell-0005   18   0.75   task_0002   study02 arm E cell-0005
+#
+#   4 cells x 2 repetitions = 8 episodes.
+#
+# The array index is NOT the cell index here: it is offset by +2. The grid in
+# the config keeps arm E's full b axis {6, 12, 18} on purpose, because the
+# episode seed is derived from the grid CELL INDEX
+# (orchestrator.py:2124-2132). Cells 2..5 therefore reproduce arm E's episode
+# seeds exactly - same initial local votes, same focal/peer sampling, same
+# controlled schedule, same replaced slots - and the two arms differ only in
+# what occupied the vacated slot. Cells 0..1 (b = 6) exist to hold that
+# alignment and are never submitted.
+#
+# Shard directories are named by the GRID cell index, not the array index, so
+# `shard_0002` here pairs with `shard_0002` of the arm E results.
+#
+# RUNTIME. Same shape as an arm E cell (2 episodes x 264 nominal calls, L=2,
+# q=1): those ran 17-18 min each. --time=04:00:00 is ~10x the median. With
+# %4 the four cells run in one wave, so expect ~20 minutes wall clock.
+#
+# RATE LIMIT. request_concurrency is 8 per process and each shard owns an
+# independent provider client, so
+#
+#     simultaneous provider requests = array throttle x 8
+#
+# %4 -> 32 simultaneous, the same figure study 01 and study 02 ran at. Do not
+# raise the throttle without redoing that arithmetic -- see
+# docs/howto/launch/parallel_hiddenbench_grid_runs.md.
+#
+# SUBMIT (always with a throttle):
+#
+#   sbatch --array=0-3%4 \
+#     scripts/Potsdam/SLURM/relational_population_study02_placebo_cell_array.job
+#
+# Resume after an interruption: storage.overwrite is false and checkpoint_mode
+# is episode, so re-submitting the same index range picks up where it stopped.
+#
+#SBATCH --job-name=relstudy02g
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --time=04:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy02g_%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy02g_%A_%a.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly CONFIG=configs/runs/relational_reasoning/population_study_02/relational_population_study02_g_occlusion_placebo_L2_q1.yaml
+readonly RESULT_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study02_occlusion_placebo
+readonly ARM=g_occlusion_placebo
+readonly FIRST_CELL=2
+readonly TASK_INDEX=${SLURM_ARRAY_TASK_ID:?submit this script as a SLURM array}
+
+if (( TASK_INDEX < 0 || TASK_INDEX > 3 )); then
+  echo "[error] array index ${TASK_INDEX} outside 0..3" >&2
+  exit 2
+fi
+readonly CELL_INDEX=$(( TASK_INDEX + FIRST_CELL ))
+
+readonly SHARD_DIR=${RESULT_ROOT}/${ARM}/shard_$(printf '%04d' "${CELL_INDEX}")
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${SHARD_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing ${REPO_ROOT}/.env" >&2; exit 1; }
+
+mkdir -p "${SHARD_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] study=population_study_02 arm=${ARM} (occlusion placebo for arm E)"
+echo "[run] array_index=${TASK_INDEX} cell_index=${CELL_INDEX} job=${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+echo "[run] config=${CONFIG}"
+echo "[run] output=${SHARD_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" scripts/experiment_design/run_classical_grid_cell.py \
+  --config "${CONFIG}" \
+  --cell-index "${CELL_INDEX}" \
+  --output-dir "${SHARD_DIR}"
+
+echo "[done] arm=${ARM} cell_index=${CELL_INDEX} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

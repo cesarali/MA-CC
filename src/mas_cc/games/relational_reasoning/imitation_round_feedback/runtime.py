@@ -54,7 +54,7 @@ from mas_cc.runtime import DecisionLoopExhausted, ValidationAttempt, run_validat
 
 from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation.metrics import population_observables
-from .controller import RECOMMENDATION_ONLY
+from .controller import RECOMMENDATION_ONLY, SILENT
 from .game import RelationalImitationRoundFeedbackGame
 from .metrics import knowledge_observables, knowledge_strata
 from .prompts import PROMPT_FAMILY, agent_label, control_label, render_control_reason
@@ -312,14 +312,23 @@ def build_social_sources(
     controller_target: str | None,
     population_size: int,
     controller_fact_id: str | None = None,
+    controller_transmits: bool = True,
 ) -> tuple[dict[str, Any], ...]:
-    """The ``q`` visible social inputs, in scheduler slot order.
+    """The visible social inputs, in scheduler slot order.
 
     A controlled position substitutes ``(X_j, S_j) -> (Z, f_C)`` in exactly one
     slot.  Both kinds of source carry the same fields, which is what makes the
     controller indistinguishable from an ordinary participant in the rendered
     prompt - and what makes an injected fact travel down exactly the same
     channel a peer's would.
+
+    ``controller_transmits=False`` is the occlusion placebo (``message_mode:
+    silent``): the controlled slot is **vacated rather than filled**, so the
+    focal sees ``q - 1`` sources and no substitute speaker.  Nothing is invented
+    to stand in the empty slot - a placeholder vote, or a named participant who
+    said nothing, would each be a new social object rather than the absence of
+    an old one.  The surviving sources keep their original slot numbers, so the
+    record still says which slot was taken away.
 
     ``reason`` is recorded on each source but **not rendered**: it is the
     speaker's own record, and showing it would open a second task-information
@@ -329,6 +338,8 @@ def build_social_sources(
     sources: list[dict[str, Any]] = []
     for slot, peer in enumerate(sampled_peers):
         if slot == replaced_peer_slot:
+            if not controller_transmits:
+                continue
             if controller_target is None:
                 raise ValueError("a controlled social slot requires a controller target")
             sources.append(
@@ -555,6 +566,7 @@ async def run_relational_imitation_round_feedback_game(
                 controller_target=target,
                 population_size=rules.n_agents,
                 controller_fact_id=round_controller_fact,
+                controller_transmits=message_mode != SILENT,
             )
             request = game.ballot_request(state, focal, social_sources, config.game)
             update = await _execute_decision(
@@ -572,7 +584,12 @@ async def run_relational_imitation_round_feedback_game(
             )
             micro_signal = _round_interaction_signal(
                 round_signal,
-                controlled_slot=controlled_slot,
+                # An occluded position (`message_mode: silent`) is controlled but
+                # transmits nothing, so it records no controller message. Without
+                # this, `_round_interaction_signal` would fall back to the round
+                # signal's own legacy text and the trajectory would claim words
+                # that were never put in front of anybody.
+                controlled_slot=controlled_slot and control_source is not None,
                 message=None if control_source is None else str(control_source["reason"]),
             )
             micro_index = state.turn + 1
