@@ -1,0 +1,91 @@
+#!/bin/bash
+# Relational reasoning population study 03, arm G -- stochastic-feedback pilot.
+#
+# NOT a cell array, unlike the study 01/02 jobs. This one runs the whole grid
+# in a SINGLE process, on purpose:
+#
+#   * the pilot is 2 cells, so sharding buys one extra process and no more;
+#   * the offline analysis this study exists for
+#       mas-cc analysis relational-round-feedback --run-dir <run>
+#     reads one run directory, and its pooled estimates are the slice with any
+#     chance of populating the memory-aware conditioning I(U;n_Z'|n_Z,E).
+#     Two shards would be two run trees and no pooled slice without a roll-up.
+#
+# THE SHAPE
+#
+#   2 cells (task_0001, task_0002) x 10 repetitions = 20 episodes
+#   264 nominal provider calls per episode
+#     = 24 initial local votes + 24 agents x 10 rounds
+#   5,280 nominal / 5,580 expected (5% validation allowance) / 10,560 retry bound
+#
+# RUNTIME. Measured on study 02: 528 calls took ~17.5 min at this provider
+# concurrency, so 5,280 calls is roughly 2.5-3 h. `experiment preflight` puts
+# its own rough estimate at 2,094 s; that is optimistic against what this
+# provider actually did. --time=12:00:00 covers either.
+#
+# RATE LIMIT. One process, request_concurrency 8 -> 8 simultaneous provider
+# requests. That is a quarter of what the %4 cell arrays ran at, so there is
+# nothing to compute here: it is comfortably inside the GPT-OSS allowance.
+#
+# THE CONTROLLER IS CLOSED LOOP HERE. `advocacy_schedule: soft`, so U_k is a
+# real random variable drawn from sigmoid[beta*(threshold - p_Z)] and rounds
+# split into ADVOCATE (b = 12 controlled positions) and NO_OP (0). Studies
+# 01/02 ran `always`, which pins H(U_k) = 0 and makes every actuation CMI zero
+# by construction. Do not "fix" the schedule back to `always`.
+#
+# SUBMIT:
+#
+#   sbatch scripts/Potsdam/SLURM/relational_population_study03_pilot.job
+#
+# Resume after an interruption: storage.overwrite is false, checkpoint_mode is
+# episode and `experiment run` defaults to --resume, so re-submitting picks up
+# the episodes that are not finished. Point it at the SAME output dir.
+#
+# ANALYSIS when it finishes (offline, provider-free, one run directory):
+#
+#   python -m mas_cc.cli.main analysis relational-round-feedback \
+#     --run-dir /work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study03/relational_imitation_round_feedback/relational-study03-g-stochastic-feedback-pilot/<run-id>
+#
+#SBATCH --job-name=relstudy03g
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=8G
+#SBATCH --time=12:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy03g_%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy03g_%j.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly CONFIG=configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml
+readonly OUTPUT_DIR=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study03
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${OUTPUT_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing ${REPO_ROOT}/.env" >&2; exit 1; }
+
+mkdir -p "${OUTPUT_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] study=population_study_03 arm=G stochastic-feedback pilot"
+echo "[run] job=${SLURM_JOB_ID} config=${CONFIG}"
+echo "[run] output=${OUTPUT_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" -m mas_cc.cli.main experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --no-progress
+
+echo "[done] study=population_study_03 end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
