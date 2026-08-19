@@ -1,0 +1,202 @@
+# Relational reasoning — population study 03, arm G: MOCK SMOKE.
+#
+# Byte-for-byte the same game, controller, grid, seed, repetitions and horizon
+# as `relational_population_study03_g_stochastic_feedback_pilot.yaml`. Five
+# things differ, and nothing else may:
+#
+#   1. `llm_provider.type: mock` - no endpoint, no credentials, no network.
+#   2. `pricing.mode: offline` - there is no price to fetch for a mock model.
+#   3. `logging.comet: false` AND `observability.comet.sweep_experiment: false`
+#      - BOTH, because `sweep_experiment` gates Comet independently of
+#        `logging.comet`, and a "mock" run has uploaded to Comet here before.
+#   4. `artifact_profile: full` + `overwrite: true` - the smoke run exists to
+#      be read apart, including the microscopic slot rows.
+#   5. `storage.output_dir: results/smoke` - kept out of the results tree the
+#      real arm writes into.
+#
+# The mock returns one canned ballot for every call. That is not a degenerate
+# population: `shuffled_option_letters` re-shuffles which relation each letter
+# names on every single call, so a fixed letter is an (approximately) uniform
+# draw over the three relations. The target share therefore wanders near 1/3,
+# the soft policy sits near sigmoid(4 * (0.5 - 1/3)) ~ 0.66, and BOTH actions
+# occur - which is exactly what has to be true before the real arm is worth
+# running.
+#
+# WHAT THIS RUN IS FOR - each of these is checkable from the round records:
+#   * both ADVOCATE and NO_OP occur                (controller_action)
+#   * q_c = 12 agents sensed every round           (len(sensor_agent_ids))
+#   * b = 12 controlled positions on ADVOCATE      (controlled_position_count)
+#   * 0 controlled positions on NO_OP              (controlled_position_count)
+#   * usable state-action overlap for the CMIs     (analysis support columns)
+#
+# RUN FROM THE REPOSITORY ROOT
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot_mock.yaml
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main analysis relational-round-feedback \
+#     --run-dir results/smoke/<run-id> --bootstrap-resamples 200 --null-permutations 200
+# ---------------------------------------------------------------------------
+
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    response: '{"vote":"C","reason":"smoke","shared_fact_id":"none"}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    # The letters a call presents. Which relation each names is shuffled per
+    # call; the population state is the relation, never the letter.
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    # Must stay false: a consensus stop would truncate episodes to different
+    # lengths and put the round-indexed information estimates on ragged data.
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      # Each agent decides once from K_i(0) alone, so the starting population
+      # reflects the distributed-information problem rather than a coin flip.
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Pinned zero-based index into the task's frozen `possible_answers`.
+    # Verified incorrect for task_0001 (EAST) and task_0002 (SOUTH).
+    target: 2
+    # q_c: agents sensed per round. Half the population, sampled without
+    # replacement, votes only.
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    # b: controlled update positions per ADVOCATE round. Numerically equal to
+    # q_c here; conceptually a different resource. See the header.
+    intervention_budget: 12
+    # THE POINT OF THIS ARM. `soft` closes the loop and makes U_k stochastic,
+    # so H(U_k) > 0 and the actuation CMIs are estimable at all. `always`
+    # would pin H(U_k) = 0 and every information quantity to zero.
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260820
+  repetitions: 10
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 20000
+  max_input_tokens: 100000000
+  max_output_tokens: 10000000
+  allow_unbounded_paid_requests: true
+
+logging:
+  level: INFO
+  console: false
+  audit: true
+  comet: false
+
+storage:
+  output_dir: results/smoke
+  format: jsonl
+  # `full`, unlike the real arm: the smoke run is read apart, including the
+  # microscopic slot rows the real arm deliberately drops.
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+
+analysis:
+  # Off in-run, deliberately. The round-feedback estimators are wired into
+  # `configured_analysis` for the HiddenBench game only; the relational
+  # adapter is invoked offline afterwards via
+  #   mas_cc.cli.main analysis relational-round-feedback --run-dir ...
+  # which reads the same round_trajectory.jsonl and runs the same estimators.
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    # Belt and braces next to `logging.comet: false`: `sweep_experiment: false`
+    # disables Comet whatever `logging.comet` says, and a mock run must never
+    # be able to open a remote experiment.
+    sweep_experiment: false
+
+experiment:
+  name: relational-study03-g-stochastic-feedback-pilot-mock
+  description: >-
+    Relational reasoning population study 03, arm G: stochastic-feedback /
+    transfer-information pilot. N=24, L=2, r=6, q=1, 10 rounds,
+    recommendation_only against a pinned incorrect target, soft advocacy
+    schedule (beta=4, threshold=0.5), q_c=12 sensed agents and b=12 controlled
+    positions, over 2 matched worlds x 10 repetitions.
+  tags: [relational, population-study-03, arm-g, N24, q1, r6, soft-schedule, information-pilot, smoke, mock]
+  metadata:
+    study: population_study_03
+    arm: "G"
+    population_rounds: 10
+    social_group_size: 1
+    support_redundancy: 6
+    reasoning_depth: 2
+    worlds: 2
+    repetitions: 10
+    sensor_sample_size: 12
+    sensing_fraction: 0.5
+    intervention_budget: 12
+    control_fraction: 0.5
+    advocacy_schedule: soft
+    policy_beta: 4.0
+    policy_threshold: 0.5
+    target_selection: fixed_option_index_2
+    smoke_of: relational_population_study03_g_stochastic_feedback_pilot.yaml
+
+grid:
+  game.options.task_id:
+    - task_0001
+    - task_0002

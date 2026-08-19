@@ -30,6 +30,23 @@ ROUND_INFORMATION_STATISTICS = (
     "round_truth_actuation_cmi",
     "round_order_actuation_cmi",
 )
+ROUND_MEMORY_STATISTICS = (
+    "round_memory_target_actuation_cmi",
+    "round_epistemic_target_actuation_cmi",
+)
+"""Actuation CMI on the opinion channel with the conditioning state *augmented*
+by whatever internal state a game chooses to publish.
+
+Both go through the same `conditional_mutual_information` as every other
+statistic here; only the `z` argument is wider.  A game opts in by writing
+`conditioning_memory_state` / `conditioning_epistemic_state` on its round
+record - a run whose records lack the key simply produces no eligible rows and
+the statistic is skipped, so this stays inert for HiddenBench.
+
+`memory` is the exact internal state (for the relational game, the epistemic
+memory histogram E_k); `epistemic` is a deliberately coarser diagnostic
+conditioning, kept under its own name so a sparse exact estimate is never
+silently replaced by a denser approximate one."""
 ROUND_DIAGNOSTIC_STATISTICS = (
     "round_controller_action_entropy",
     "round_controller_action_entropy_given_population",
@@ -45,10 +62,24 @@ ROUND_DIAGNOSTIC_STATISTICS = (
     "round_order_signed_actuation",
     "round_sensor_mae",
     "round_sensor_mse",
+    "round_target_signed_response_share",
 )
+# Appended, not interleaved: `round_information_analysis` seeds each statistic's
+# bootstrap from `seed + name_index`, so inserting a name anywhere but the end
+# would silently move every later statistic's resampling stream.
 ROUND_ANALYSIS_STATISTICS = (
     *ROUND_INFORMATION_STATISTICS,
     *ROUND_DIAGNOSTIC_STATISTICS,
+    *ROUND_MEMORY_STATISTICS,
+)
+ROUND_ACTUATION_STATISTICS = (
+    *ROUND_INFORMATION_STATISTICS[1:],
+    *ROUND_MEMORY_STATISTICS,
+)
+"""Everything that conditions on a current state and admits the policy null."""
+
+_BITS_STATISTICS = frozenset(ROUND_INFORMATION_STATISTICS) | frozenset(
+    ROUND_MEMORY_STATISTICS
 )
 MICRO_SLOT_STATISTICS = (
     "micro_slot_focal_actuation_cmi",
@@ -104,6 +135,25 @@ class RoundEvent:
     @property
     def truth_after(self) -> int:
         return int(self.event["truth_count_after"])
+
+    @property
+    def memory_state(self) -> tuple[int, ...] | None:
+        """A game's exact internal state at the start of the round, or `None`.
+
+        Opaque here on purpose - this module only ever hashes it as a
+        conditioning label.  The relational round-feedback game writes the
+        epistemic memory histogram `E_k = (n_k^(0), ..., n_k^(L))`.
+        """
+
+        value = self.event.get("conditioning_memory_state")
+        return None if value is None else tuple(int(item) for item in value)
+
+    @property
+    def epistemic_state(self) -> tuple[int, ...] | None:
+        """A coarser, lower-dimensional companion to `memory_state`."""
+
+        value = self.event.get("conditioning_epistemic_state")
+        return None if value is None else tuple(int(item) for item in value)
 
     @property
     def order_before(self) -> int:
@@ -172,33 +222,43 @@ def read_round_records(root: str | Path) -> list[RoundEvent]:
     return rows
 
 
+ROUND_CONDITIONING_STATE: Mapping[str, Callable[[RoundEvent], Hashable]] = {
+    "round_population_actuation_cmi": lambda row: row.N_k,
+    "round_target_actuation_cmi": lambda row: row.target_before,
+    "round_truth_actuation_cmi": lambda row: row.truth_before,
+    "round_order_actuation_cmi": lambda row: row.order_before,
+    "round_memory_target_actuation_cmi": lambda row: (row.target_before, row.memory_state),
+    "round_epistemic_target_actuation_cmi": lambda row: (
+        row.target_before,
+        row.epistemic_state,
+    ),
+}
+"""`Z` in `I(U_k ; . | Z)`, per statistic - the single place the conditioning
+state of an actuation estimate is defined.  Also what the entropy ceiling
+`H(U_k | Z)` and the support/overlap diagnostics are computed against."""
+
+_ROUND_OUTCOME: Mapping[str, Callable[[RoundEvent], Hashable]] = {
+    "round_population_actuation_cmi": lambda row: row.N_k1,
+    "round_target_actuation_cmi": lambda row: row.target_after,
+    "round_truth_actuation_cmi": lambda row: row.truth_after,
+    "round_order_actuation_cmi": lambda row: row.order_after,
+    "round_memory_target_actuation_cmi": lambda row: row.target_after,
+    "round_epistemic_target_actuation_cmi": lambda row: row.target_after,
+}
+
+
 def _estimate_for(name: str, rows: Sequence[RoundEvent]) -> Estimate:
     if name == "round_sensing_mi":
         return mutual_information([row.N_k for row in rows], [row.Y_k for row in rows])
-    actions = [str(row.U_k) for row in rows]
-    if name == "round_population_actuation_cmi":
-        return conditional_mutual_information(
-            actions, [row.N_k1 for row in rows], [row.N_k for row in rows]
-        )
-    if name == "round_target_actuation_cmi":
-        return conditional_mutual_information(
-            actions,
-            [row.target_after for row in rows],
-            [row.target_before for row in rows],
-        )
-    if name == "round_truth_actuation_cmi":
-        return conditional_mutual_information(
-            actions,
-            [row.truth_after for row in rows],
-            [row.truth_before for row in rows],
-        )
-    if name == "round_order_actuation_cmi":
-        return conditional_mutual_information(
-            actions,
-            [row.order_after for row in rows],
-            [row.order_before for row in rows],
-        )
-    raise ValueError(f"unknown round information statistic {name!r}")
+    outcome = _ROUND_OUTCOME.get(name)
+    if outcome is None:
+        raise ValueError(f"unknown round information statistic {name!r}")
+    state = ROUND_CONDITIONING_STATE[name]
+    return conditional_mutual_information(
+        [str(row.U_k) for row in rows],
+        [outcome(row) for row in rows],
+        [state(row) for row in rows],
+    )
 
 
 def _entropy_bits(values: Sequence[Hashable]) -> float:
@@ -224,11 +284,23 @@ def conditional_action_entropy_bits(
     )
 
 
-def round_overlap_diagnostics(rows: Sequence[RoundEvent]) -> dict[str, Any]:
+def round_overlap_diagnostics(
+    rows: Sequence[RoundEvent],
+    *,
+    state: Callable[[RoundEvent], Hashable] = lambda row: row.N_k,
+) -> dict[str, Any]:
+    """How much action overlap the conditioning slices actually carry.
+
+    `state` defaults to the population occupation vector, which is what the
+    historical columns mean.  A caller estimating a CMI under a *wider*
+    conditioning state passes that state instead, so the sparsity reported next
+    to an estimate is the sparsity that estimate actually faced.
+    """
+
     controlled = [row for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
-    grouped: dict[tuple[int, ...], Counter[str]] = defaultdict(Counter)
+    grouped: dict[Hashable, Counter[str]] = defaultdict(Counter)
     for row in controlled:
-        grouped[row.N_k][str(row.U_k)] += 1
+        grouped[state(row)][str(row.U_k)] += 1
     dual = [
         counter
         for counter in grouped.values()
@@ -333,6 +405,18 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             state=lambda row: row.order_before,
             delta=lambda row: float(row.event["delta_m_order"]),
         )
+    if name == "round_target_signed_response_share":
+        # `E[dp_Z | ADVOCATE] - E[dp_Z | NO_OP]` in raw share units, unmatched:
+        # a constant conditioning state collapses `_signed_response` to exactly
+        # that marginal difference. The state-matched form of the same quantity
+        # is `round_target_signed_actuation`, in aligned-magnetization units
+        # (`dm = dp * K/(K-1)`), so the two are read together rather than
+        # instead of each other.
+        return _signed_response(
+            controlled,
+            state=lambda row: 0,
+            delta=lambda row: float(row.event["delta_p_ctrl"]),
+        )
     errors = [
         float(row.event["sensor_target_share"])
         - row.target_before / sum(row.N_k)
@@ -397,7 +481,7 @@ def policy_resampling_null(
     permutations: int,
     seed: int,
 ) -> tuple[float, ...]:
-    if name not in ROUND_INFORMATION_STATISTICS[1:]:
+    if name not in ROUND_ACTUATION_STATISTICS:
         raise ValueError("policy resampling is defined for round actuation statistics")
     values = []
     for index in range(permutations):
@@ -406,9 +490,13 @@ def policy_resampling_null(
     return tuple(values)
 
 
-def _support(rows: Sequence[RoundEvent]) -> dict[str, Any]:
-    overlap = round_overlap_diagnostics(rows)
-    counts = Counter(row.N_k for row in rows)
+def _support(
+    rows: Sequence[RoundEvent],
+    *,
+    state: Callable[[RoundEvent], Hashable] = lambda row: row.N_k,
+) -> dict[str, Any]:
+    overlap = round_overlap_diagnostics(rows, state=state)
+    counts = Counter(state(row) for row in rows)
     return {
         "n_episodes": len({row.episode_id for row in rows}),
         "n_rounds": len(rows),
@@ -449,11 +537,22 @@ def round_information_analysis(
             if name == "round_sensing_mi"
             else [row for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
         )
+        # A statistic that needs a state or a delta the game does not record
+        # drops out here rather than raising, which is what keeps the augmented
+        # conditioning and the share-unit response inert on runs without them.
+        if name == "round_memory_target_actuation_cmi":
+            eligible = [row for row in eligible if row.memory_state is not None]
+        elif name == "round_epistemic_target_actuation_cmi":
+            eligible = [row for row in eligible if row.epistemic_state is not None]
+        elif name == "round_target_signed_response_share":
+            eligible = [
+                row for row in eligible if row.event.get("delta_p_ctrl") is not None
+            ]
         # No-control cells have no fabricated U=NO_OP rows and therefore emit
         # no controller information/diagnostic estimate at all.
         if not eligible:
             continue
-        if name in ROUND_INFORMATION_STATISTICS:
+        if name in _BITS_STATISTICS:
             estimate = _estimate_for(name, eligible)
             value = float(getattr(estimate, MAIN_ESTIMATOR_VARIANT))
             variants = {
@@ -472,7 +571,7 @@ def round_information_analysis(
         for draw in bootstrap_episode_rows(
             eligible, resamples=bootstrap_resamples, seed=seed + name_index
         ):
-            if name in ROUND_INFORMATION_STATISTICS:
+            if name in _BITS_STATISTICS:
                 boot = float(getattr(_estimate_for(name, draw), MAIN_ESTIMATOR_VARIANT))
             else:
                 boot = _diagnostic_for(name, draw)
@@ -488,7 +587,7 @@ def round_information_analysis(
         )
         null_values: tuple[float, ...] = ()
         null_type = None
-        if name in ROUND_INFORMATION_STATISTICS[1:]:
+        if name in ROUND_ACTUATION_STATISTICS:
             null_values = policy_resampling_null(
                 name,
                 eligible,
@@ -521,27 +620,22 @@ def round_information_analysis(
                     "estimate": null_value,
                 }
             )
-        support = _support(eligible)
+        conditioning = ROUND_CONDITIONING_STATE.get(name)
+        # Sparsity is reported against the statistic's OWN conditioning state,
+        # so the memory-aware estimate carries its own slice counts rather than
+        # the population-vector ones. Statistics that do not condition keep the
+        # historical population-vector support.
+        support = (
+            _support(eligible)
+            if name not in ROUND_MEMORY_STATISTICS
+            else _support(eligible, state=conditioning)
+        )
         entropy_ceiling = math.nan
         entropy_bound_satisfied: bool | None = None
-        if name == "round_population_actuation_cmi":
-            entropy_ceiling = conditional_action_entropy_bits(
-                [str(row.U_k) for row in eligible], [row.N_k for row in eligible]
-            )
-        elif name == "round_target_actuation_cmi":
+        if conditioning is not None:
             entropy_ceiling = conditional_action_entropy_bits(
                 [str(row.U_k) for row in eligible],
-                [row.target_before for row in eligible],
-            )
-        elif name == "round_truth_actuation_cmi":
-            entropy_ceiling = conditional_action_entropy_bits(
-                [str(row.U_k) for row in eligible],
-                [row.truth_before for row in eligible],
-            )
-        elif name == "round_order_actuation_cmi":
-            entropy_ceiling = conditional_action_entropy_bits(
-                [str(row.U_k) for row in eligible],
-                [row.order_before for row in eligible],
+                [conditioning(row) for row in eligible],
             )
         if math.isfinite(entropy_ceiling):
             entropy_bound_satisfied = bool(value <= entropy_ceiling + 1e-9)
@@ -559,7 +653,7 @@ def round_information_analysis(
                     math.nan if not finite_null else float(np.mean(finite_null))
                 ),
                 "units": "bits" if (
-                    name in ROUND_INFORMATION_STATISTICS
+                    name in _BITS_STATISTICS
                     or "entropy" in name
                 ) else "dimensionless",
                 "bootstrap_unit": "episode",
@@ -1067,7 +1161,10 @@ def analyze_hidden_bench_imitation_round_feedback(
 
 __all__ = [
     "MICRO_SLOT_STATISTICS",
+    "ROUND_ACTUATION_STATISTICS",
     "ROUND_ANALYSIS_STATISTICS",
+    "ROUND_CONDITIONING_STATE",
+    "ROUND_MEMORY_STATISTICS",
     "ROUND_DIAGNOSTIC_STATISTICS",
     "ROUND_INFORMATION_STATISTICS",
     "RoundEvent",

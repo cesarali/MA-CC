@@ -764,6 +764,14 @@ async def run_relational_imitation_round_feedback_game(
             },
             "knowledge_stratum_counts": strata_after["knowledge_stratum_counts"],
             "truth_counts_by_stratum": strata_after["truth_counts_by_stratum"],
+            # E_k = (n_k^(0), ..., n_k^(L)): how many agents hold exactly j of
+            # the L supporting facts at the START of the round, i.e. aligned
+            # with `occupation_counts_before` rather than with the post-round
+            # strata above. Counts, not shares, because this is a conditioning
+            # state for discrete estimators - `share * N` would round-trip
+            # through a float for no reason.
+            "knowledge_stratum_counts_before": strata_before["knowledge_stratum_counts"],
+            "truth_counts_by_stratum_before": strata_before["truth_counts_by_stratum"],
             "reasoning_depth_L": len(state.supporting_fact_ids),
             # Controlled-update response. The rate is conditional on the focal
             # not already standing on the target; both counts are kept so the
