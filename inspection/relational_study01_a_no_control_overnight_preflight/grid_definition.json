@@ -1,0 +1,25 @@
+{
+  "axes": [
+    {
+      "path": "game.options.task_dataset_dir",
+      "values": [
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r01",
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r03",
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06",
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r12"
+      ]
+    },
+    {
+      "path": "game.options.task_id",
+      "values": [
+        "task_0001",
+        "task_0002",
+        "task_0003",
+        "task_0004",
+        "task_0005"
+      ]
+    }
+  ],
+  "cell_count": 20,
+  "grid_id": "1e4277c58e2a853817590db2d89099dcf7ad1e89eb45c5c5c0319fd39f0696ed"
+}

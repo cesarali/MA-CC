@@ -1,0 +1,223 @@
+schema_version: 1
+llm_provider:
+  schema_version: 1
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180.0
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values:
+    - A
+    - B
+    - C
+  message_mode: null
+  block_separator: null
+  options: {}
+  resolved_block_manifest:
+  - order: 1
+    name: identity
+    version: 1
+    role: system
+    required: true
+    binding: dynamic
+    sensitive: false
+  - order: 2
+    name: social_environment
+    version: 1
+    role: system
+    required: true
+    binding: fixed
+    sensitive: false
+  - order: 3
+    name: decision_basis
+    version: 1
+    role: system
+    required: true
+    binding: dynamic
+    sensitive: false
+  - order: 4
+    name: task
+    version: 1
+    role: system
+    required: true
+    binding: dynamic
+    sensitive: false
+  - order: 5
+    name: known_facts
+    version: 1
+    role: system
+    required: true
+    binding: dynamic
+    sensitive: true
+  - order: 6
+    name: current_position
+    version: 1
+    role: user
+    required: false
+    binding: dynamic
+    sensitive: false
+  - order: 7
+    name: social_information
+    version: 1
+    role: user
+    required: false
+    binding: dynamic
+    sensitive: false
+  definition_hash: 96d7a3ef4438dc26ec254f8612ad1049b80e0428e07bfd80d7079caefa79e0ed
+game:
+  schema_version: 1
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+execution:
+  schema_version: 1
+  seed: 20260818
+  repetitions: 2
+  parallelism: 8
+  fail_fast: false
+  timeout_seconds: null
+logging:
+  schema_version: 1
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+storage:
+  schema_version: 1
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+  wipe_and_recompute: false
+  options: {}
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+  options: {}
+  comet_export: false
+control:
+  schema_version: 1
+  mechanism: relational_round_budgeted
+  options:
+    target: random_incorrect
+    sensor_sample_size: 24
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 24
+    advocacy_schedule: always
+    message_mode: recommendation_only
+metrics:
+  schema_version: 1
+  enabled: true
+  comet_export: []
+  available: {}
+  bin_size_interactions: null
+  partial_final_bin: drop
+  exclude_committed_outputs: false
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles:
+  - 10
+  - 50
+  - 90
+  rolling_window: 1
+  cell_metrics:
+  - m_ctrl
+  - m_truth
+  - m_order
+  - dominant_action_share
+  sweep_metrics: []
+  horizons:
+  - 1
+  null_permutations: 0
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20.0
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+    progress_metrics:
+    - episodes_done
+experiment:
+  schema_version: 1
+  name: relational-study01-d-adversarial-diagnostic-overnight
+  description: 'Relational reasoning population study 01, arm D: adversarial social
+    diagnostic. N=24, L=2, q=1, 10 rounds, r in [1,3,6,12] over 10 matched worlds.'
+  tags:
+  - relational
+  - population-study-01
+  - overnight
+  - arm-d
+  - N24
+  - q1
+  - r-sweep
+  metadata:
+    study: population_study_01_overnight
+    arm: D
+    population_rounds: 10
+    social_group_size: 1
+    support_redundancies:
+    - 1
+    - 3
+    - 6
+    - 12
+    worlds: 5
+    repetitions: 2
+pricing:
+  schema_version: 1
+  mode: live
+  cache_path: null
+  max_age_seconds: 600.0
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  schema_version: 1
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+  live_spend_poll_seconds: null

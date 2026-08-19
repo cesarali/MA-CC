@@ -1,0 +1,32 @@
+{
+  "axes": [
+    {
+      "path": "game.options.task_dataset_dir",
+      "values": [
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r01",
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r03",
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06",
+        "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r12"
+      ]
+    },
+    {
+      "path": "game.options.task_id",
+      "values": [
+        "task_0001",
+        "task_0002",
+        "task_0003",
+        "task_0004",
+        "task_0005"
+      ]
+    },
+    {
+      "path": "control.options.intervention_budget",
+      "values": [
+        6,
+        24
+      ]
+    }
+  ],
+  "cell_count": 40,
+  "grid_id": "179f9a240b2500b89f96cfbbe4d58938dc80e9b8f2ef73abf07d10e92c621ef5"
+}
