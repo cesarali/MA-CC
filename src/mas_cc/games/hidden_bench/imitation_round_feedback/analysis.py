@@ -30,23 +30,57 @@ ROUND_INFORMATION_STATISTICS = (
     "round_truth_actuation_cmi",
     "round_order_actuation_cmi",
 )
-ROUND_MEMORY_STATISTICS = (
-    "round_memory_target_actuation_cmi",
-    "round_epistemic_target_actuation_cmi",
+ROUND_MEMORY_CONDITIONING_KEYS: Mapping[str, str] = {
+    "round_memory_target_actuation_cmi": "conditioning_memory_state",
+    "round_epistemic_target_actuation_cmi": "conditioning_epistemic_state",
+    "round_phi_target_actuation_cmi": "conditioning_phi_bin",
+    "round_susceptible_target_actuation_cmi": "conditioning_susceptible_bin",
+    "round_kappa_target_actuation_cmi": "conditioning_kappa_bin",
+}
+"""Statistic name -> the round-record key holding its extra conditioning state.
+
+Every one of these is `I(U_k ; n_Z,k+1 | n_Z,k, X_k)` for a different `X_k`,
+and every one goes through the same `conditional_mutual_information` as the
+plain `round_target_actuation_cmi`; only the `z` argument is wider.  A game
+opts in by writing the key on its round record - a run whose records lack it
+produces no eligible rows and the statistic is skipped, so all of this stays
+inert for HiddenBench.
+
+Adding a conditioning variable is one line here plus one extractor in the
+game's adapter.  Two families live in this table on purpose:
+
+`memory` / `epistemic`
+    the high-dimensional reference.  `memory` is the game's exact internal
+    state (for the relational game, the epistemic memory histogram `E_k`);
+    `epistemic` is a joint bin pair.  Both are kept even when sparse.
+
+`phi` / `susceptible` / `kappa`
+    deliberately coarse, *scalar* conditionings that stay estimable at pilot
+    sample sizes.  They are separate statistics rather than one joint state
+    precisely so the conditioning stays small - conditioning on all three at
+    once would reproduce the sparsity they exist to avoid.
+
+`susceptible` is `1 - phi` and is carried under its own name because the
+population it describes is a different scientific object (who is still movable
+by talk) even though the arithmetic is a reflection.  Since CMI is invariant
+under relabelling of `z`, the two estimates coincide wherever the two binnings
+induce the same partition; that is expected, and the relational adapter reports
+whether it happened rather than hiding it."""
+ROUND_MEMORY_STATISTICS = tuple(ROUND_MEMORY_CONDITIONING_KEYS)
+ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS = tuple(
+    name.replace("_actuation_cmi", "_signed_response")
+    for name in ROUND_MEMORY_STATISTICS
 )
-"""Actuation CMI on the opinion channel with the conditioning state *augmented*
-by whatever internal state a game chooses to publish.
-
-Both go through the same `conditional_mutual_information` as every other
-statistic here; only the `z` argument is wider.  A game opts in by writing
-`conditioning_memory_state` / `conditioning_epistemic_state` on its round
-record - a run whose records lack the key simply produces no eligible rows and
-the statistic is skipped, so this stays inert for HiddenBench.
-
-`memory` is the exact internal state (for the relational game, the epistemic
-memory histogram E_k); `epistemic` is a deliberately coarser diagnostic
-conditioning, kept under its own name so a sparse exact estimate is never
-silently replaced by a denser approximate one."""
+"""`E[dp_Z | ADVOCATE] - E[dp_Z | NO_OP]`, matched on the *same* conditioning
+state as the CMI of the same stem.  Same `_signed_response` as every other
+signed diagnostic here; only the stratification changes."""
+_SIGNED_RESPONSE_SOURCE: Mapping[str, str] = dict(
+    zip(ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS, ROUND_MEMORY_STATISTICS, strict=True)
+)
+_SHARE_RESPONSE_STATISTICS = frozenset(
+    ("round_target_signed_response_share", *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS)
+)
+"""Everything read off `delta_p_ctrl`, which not every game records."""
 ROUND_DIAGNOSTIC_STATISTICS = (
     "round_controller_action_entropy",
     "round_controller_action_entropy_given_population",
@@ -64,6 +98,9 @@ ROUND_DIAGNOSTIC_STATISTICS = (
     "round_sensor_mse",
     "round_target_signed_response_share",
 )
+"""Diagnostics on a FIXED conditioning. The augmented-conditioning family
+carries its own diagnostics next to its own CMIs, in
+`ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS`."""
 # Appended, not interleaved: `round_information_analysis` seeds each statistic's
 # bootstrap from `seed + name_index`, so inserting a name anywhere but the end
 # would silently move every later statistic's resampling stream.
@@ -71,6 +108,7 @@ ROUND_ANALYSIS_STATISTICS = (
     *ROUND_INFORMATION_STATISTICS,
     *ROUND_DIAGNOSTIC_STATISTICS,
     *ROUND_MEMORY_STATISTICS,
+    *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS,
 )
 ROUND_ACTUATION_STATISTICS = (
     *ROUND_INFORMATION_STATISTICS[1:],
@@ -136,24 +174,37 @@ class RoundEvent:
     def truth_after(self) -> int:
         return int(self.event["truth_count_after"])
 
-    @property
-    def memory_state(self) -> tuple[int, ...] | None:
-        """A game's exact internal state at the start of the round, or `None`.
+    def augmented_state(self, key: str) -> tuple[int, ...] | None:
+        """One published conditioning state, or `None` when the game omits it.
 
         Opaque here on purpose - this module only ever hashes it as a
-        conditioning label.  The relational round-feedback game writes the
-        epistemic memory histogram `E_k = (n_k^(0), ..., n_k^(L))`.
+        conditioning label.  Scalars are normalised to a one-tuple so every
+        entry of `ROUND_MEMORY_CONDITIONING_KEYS` hashes the same way whether
+        the game published a histogram or a single bin index.
         """
 
-        value = self.event.get("conditioning_memory_state")
-        return None if value is None else tuple(int(item) for item in value)
+        value = self.event.get(key)
+        if value is None:
+            return None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return (int(value),)
+        return tuple(int(item) for item in value)
+
+    @property
+    def memory_state(self) -> tuple[int, ...] | None:
+        """The game's exact internal state at the start of the round.
+
+        For the relational round-feedback game, the epistemic memory histogram
+        `E_k = (n_k^(0), ..., n_k^(L))`.
+        """
+
+        return self.augmented_state("conditioning_memory_state")
 
     @property
     def epistemic_state(self) -> tuple[int, ...] | None:
         """A coarser, lower-dimensional companion to `memory_state`."""
 
-        value = self.event.get("conditioning_epistemic_state")
-        return None if value is None else tuple(int(item) for item in value)
+        return self.augmented_state("conditioning_epistemic_state")
 
     @property
     def order_before(self) -> int:
@@ -222,28 +273,35 @@ def read_round_records(root: str | Path) -> list[RoundEvent]:
     return rows
 
 
+def _augmented_conditioning(key: str) -> Callable[[RoundEvent], Hashable]:
+    """`(n_Z,k, X_k)` for the published state under `key`."""
+
+    return lambda row: (row.target_before, row.augmented_state(key))
+
+
 ROUND_CONDITIONING_STATE: Mapping[str, Callable[[RoundEvent], Hashable]] = {
     "round_population_actuation_cmi": lambda row: row.N_k,
     "round_target_actuation_cmi": lambda row: row.target_before,
     "round_truth_actuation_cmi": lambda row: row.truth_before,
     "round_order_actuation_cmi": lambda row: row.order_before,
-    "round_memory_target_actuation_cmi": lambda row: (row.target_before, row.memory_state),
-    "round_epistemic_target_actuation_cmi": lambda row: (
-        row.target_before,
-        row.epistemic_state,
-    ),
+    **{
+        name: _augmented_conditioning(key)
+        for name, key in ROUND_MEMORY_CONDITIONING_KEYS.items()
+    },
 }
 """`Z` in `I(U_k ; . | Z)`, per statistic - the single place the conditioning
 state of an actuation estimate is defined.  Also what the entropy ceiling
-`H(U_k | Z)` and the support/overlap diagnostics are computed against."""
+`H(U_k | Z)`, the support/overlap diagnostics and the matched signed responses
+are computed against."""
 
 _ROUND_OUTCOME: Mapping[str, Callable[[RoundEvent], Hashable]] = {
     "round_population_actuation_cmi": lambda row: row.N_k1,
     "round_target_actuation_cmi": lambda row: row.target_after,
     "round_truth_actuation_cmi": lambda row: row.truth_after,
     "round_order_actuation_cmi": lambda row: row.order_after,
-    "round_memory_target_actuation_cmi": lambda row: row.target_after,
-    "round_epistemic_target_actuation_cmi": lambda row: row.target_after,
+    # Every augmented conditioning measures the same opinion channel; only the
+    # conditioning differs, which is what makes the family comparable.
+    **{name: (lambda row: row.target_after) for name in ROUND_MEMORY_STATISTICS},
 }
 
 
@@ -417,6 +475,16 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             state=lambda row: 0,
             delta=lambda row: float(row.event["delta_p_ctrl"]),
         )
+    if name in _SIGNED_RESPONSE_SOURCE:
+        # The same difference, stratified on the SAME conditioning state as the
+        # CMI of the same stem - so "the controller moved the target" and "the
+        # controller moved the target within this epistemic regime" are read
+        # off one shared definition instead of two that can drift apart.
+        return _signed_response(
+            controlled,
+            state=ROUND_CONDITIONING_STATE[_SIGNED_RESPONSE_SOURCE[name]],
+            delta=lambda row: float(row.event["delta_p_ctrl"]),
+        )
     errors = [
         float(row.event["sensor_target_share"])
         - row.target_before / sum(row.N_k)
@@ -539,12 +607,12 @@ def round_information_analysis(
         )
         # A statistic that needs a state or a delta the game does not record
         # drops out here rather than raising, which is what keeps the augmented
-        # conditioning and the share-unit response inert on runs without them.
-        if name == "round_memory_target_actuation_cmi":
-            eligible = [row for row in eligible if row.memory_state is not None]
-        elif name == "round_epistemic_target_actuation_cmi":
-            eligible = [row for row in eligible if row.epistemic_state is not None]
-        elif name == "round_target_signed_response_share":
+        # conditioning and the share-unit responses inert on runs without them.
+        source = _SIGNED_RESPONSE_SOURCE.get(name, name)
+        key = ROUND_MEMORY_CONDITIONING_KEYS.get(source)
+        if key is not None:
+            eligible = [row for row in eligible if row.augmented_state(key) is not None]
+        if name in _SHARE_RESPONSE_STATISTICS:
             eligible = [
                 row for row in eligible if row.event.get("delta_p_ctrl") is not None
             ]
@@ -623,12 +691,13 @@ def round_information_analysis(
         conditioning = ROUND_CONDITIONING_STATE.get(name)
         # Sparsity is reported against the statistic's OWN conditioning state,
         # so the memory-aware estimate carries its own slice counts rather than
-        # the population-vector ones. Statistics that do not condition keep the
-        # historical population-vector support.
+        # the population-vector ones - and a matched signed response inherits
+        # the sparsity of the CMI it mirrors, via `source`. Statistics that do
+        # not condition keep the historical population-vector support.
         support = (
-            _support(eligible)
-            if name not in ROUND_MEMORY_STATISTICS
-            else _support(eligible, state=conditioning)
+            _support(eligible, state=ROUND_CONDITIONING_STATE[source])
+            if source in ROUND_MEMORY_STATISTICS
+            else _support(eligible)
         )
         entropy_ceiling = math.nan
         entropy_bound_satisfied: bool | None = None
@@ -1164,6 +1233,8 @@ __all__ = [
     "ROUND_ACTUATION_STATISTICS",
     "ROUND_ANALYSIS_STATISTICS",
     "ROUND_CONDITIONING_STATE",
+    "ROUND_MEMORY_CONDITIONING_KEYS",
+    "ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS",
     "ROUND_MEMORY_STATISTICS",
     "ROUND_DIAGNOSTIC_STATISTICS",
     "ROUND_INFORMATION_STATISTICS",

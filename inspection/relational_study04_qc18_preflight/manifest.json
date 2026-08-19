@@ -1,0 +1,52 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1040,
+      "path": "budget_status.json",
+      "sha256": "4f71e2691e899afc3727d26029231e9da5f44177ddb5d4ba8a8517f477ccd2bb"
+    },
+    {
+      "bytes": 363,
+      "path": "grid_definition.json",
+      "sha256": "4be158f154e41613b3824cc4b14034777a02f17f5e6ab9a5c194a9fdb6772f04"
+    },
+    {
+      "bytes": 49774,
+      "path": "grid_estimate.json",
+      "sha256": "e8b447a6e9b856deccad403cdda5bedc84c3ee80ab468784334d203be48fc475"
+    },
+    {
+      "bytes": 65,
+      "path": "preflight_id.txt",
+      "sha256": "8871c7ce8e34f9bbcec96c419f865cc146553d8d31039cb3a7558fc528ac5664"
+    },
+    {
+      "bytes": 2323,
+      "path": "pricing_snapshot.json",
+      "sha256": "36eae7b218126aaaee38bb99000d018d897d3fcfae288251d0997b7c64ffd956"
+    },
+    {
+      "bytes": 972,
+      "path": "report.md",
+      "sha256": "0098f252c672c5068ff81a5489a9a9a56d731fd1a79fd08ee0991dbfd699e411"
+    },
+    {
+      "bytes": 6778,
+      "path": "resolved_base_config.yaml",
+      "sha256": "4499a0e4a8026683dcc44d41fe03e6dd3bb6be8fe2648c1237cec3c1a8f2fb7e"
+    }
+  ],
+  "checks": {
+    "launch_permitted": true
+  },
+  "generated_at": "2026-08-19T17:27:14.015715Z",
+  "manifest_version": 1,
+  "mas_cc_version": "0.1.0",
+  "phase": 9,
+  "status": "pass",
+  "warnings": [
+    "Lower/expected scenarios use representative contexts; conservative demand uses each stage's maximum context and retry bound.",
+    "Token counts use a deterministic regex estimate, not the provider tokenizer.",
+    "Runtime is a rough planning estimate, not a service guarantee."
+  ]
+}

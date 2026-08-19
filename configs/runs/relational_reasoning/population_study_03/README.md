@@ -125,7 +125,14 @@ turn calls `mas_cc/analysis/estimators.py`.
 | 6 | bootstrap CIs + nulls | `bootstrap_ci_low/high`, `null_mean`, `round_information_nulls.csv` | existing |
 | 7 | `E[Δp_Z \| ADVOCATE] − E[Δp_Z \| NO_OP]` | `round_target_signed_response_share` | **new name, existing `_signed_response`** |
 | 8 | `I(U_k ; n_Z,k+1 \| n_Z,k, E_k)` | `round_memory_target_actuation_cmi` | **new name, same CMI estimator** |
-| 9 | coarse `(κ, φ)` diagnostic | `round_epistemic_target_actuation_cmi` | **new name, labelled separately** |
+| 9 | coarse joint `(κ, φ)` diagnostic | `round_epistemic_target_actuation_cmi` | **new name, labelled separately** |
+| 10 | `I(U_k ; n_Z,k+1 \| n_Z,k, φ̄_k)` | `round_phi_target_actuation_cmi` | **new name, same CMI estimator** |
+| 11 | `I(U_k ; n_Z,k+1 \| n_Z,k, s̄_k)` | `round_susceptible_target_actuation_cmi` | **new name, same CMI estimator** |
+| 12 | `I(U_k ; n_Z,k+1 \| n_Z,k, κ̄_k)` | `round_kappa_target_actuation_cmi` | **new name, same CMI estimator** |
+| 13 | matched signed response, one per conditioning above | `round_{memory,epistemic,phi,susceptible,kappa}_target_signed_response` | **new names, existing `_signed_response`** |
+
+All 30 are named explicitly in the config's `analysis.estimators`, so the run
+computes them itself — see [The analysis is declared in the config](#the-analysis-is-declared-in-the-config-not-left-implicit).
 
 Note on #7: the pipeline already had `round_target_signed_actuation`, which is
 the same comparison **state-matched** on `n_Z,k` and expressed in aligned
@@ -156,8 +163,54 @@ count, rounds, singleton fraction, dual-action state/event fraction, and a
 **its own** conditioning state, so #8's numbers describe the slices #8 actually
 faced.
 
-#9 is a deliberately coarse fallback: `(κ_k, φ_k)` each binned into 4. It is
-reported **under its own name** and never substituted for #8.
+#9 is a deliberately coarse fallback: `(κ_k, φ_k)` binned jointly into 4×4. It
+is reported **under its own name** and never substituted for #8.
+
+### The scalar coarse-grained epistemic conditionings (#10–#12)
+
+`E_k` is three-dimensional at `L = 2` and is expected to be support-limited at
+this sample size. #10–#12 are the low-dimensional answer: three **scalar**
+variables, each conditioned on **separately** — never jointly, which would
+rebuild exactly the sparsity they exist to avoid.
+
+| variable | definition | read from |
+|---|---|---|
+| `φ_k` | `n_k^(L) / N`, the full-proof fraction | the last stratum of the recorded `E_k` (falls back to `full_proof_agent_share_before`) |
+| `s_k` | `1 − φ_k`, the **socially susceptible** fraction — who can still be moved by what they are told | derived from `φ_k` |
+| `κ_k` | mean supporting-fact coverage | the already-recorded `mean_supporting_fact_coverage_before`, not recomputed |
+
+Each is discretised into three interpretable bins, half-open below and closed
+at the top so `1.0` lands in `high`:
+
+```
+low     [0, 1/3)
+medium  [1/3, 2/3)
+high    [2/3, 1]
+```
+
+No repository-wide share-binning utility existed to reuse
+(`metrics.interactions.non_overlapping_bins` bins interaction indices,
+`synthetic.empowerment.binning_matrix` bins occupation counts), so
+`coarse_bin` compares against the edges directly rather than by
+multiply-and-truncate — `2/3` is the case that decides it.
+
+**`s` is `1 − φ`, so #10 and #11 will usually be identical.** CMI is invariant
+under relabelling of the conditioning variable, and three equal bins make the
+two labellings a relabelling of one another on almost any data. This is
+expected, not an error; `analysis_summary.json` reports
+`phi_susceptible_partition_identical` so the coincidence is stated rather than
+rediscovered. `s` is carried anyway because the population it names is a
+different scientific object from `φ`.
+
+Every one of #10–#12 gets the **full existing reporting**: estimate, bootstrap
+CI, the policy-conditional null, the `H(U_k | Z)` entropy ceiling and its
+bound check, conditioning-state count, singleton fraction, dual-action state
+fraction and dual-action event fraction — each computed against *its own*
+conditioning state. #13 mirrors each one with `E[Δp_Z | ADVOCATE] −
+E[Δp_Z | NO_OP]` matched on the same state.
+
+The full `E_k` result (#8) stays in the report as the high-dimensional
+reference **even when sparse**, flagged by `support_limited`.
 
 κ and φ themselves are kept alongside the information quantities, per episode
 (`episode_epistemic_regime.csv`) and per round
@@ -245,6 +298,46 @@ It writes `relational_imitation_round_feedback_analysis/` next to the run:
 100 rounds per cell the per-cell tables are thin, and the pooled slice is the
 one with a real chance of populating the memory-aware conditioning.
 
-`analysis.enabled` is `false` in the config on purpose: the in-run
-`configured_analysis` path is wired for the HiddenBench game only. The offline
-command reads the same `round_trajectory.jsonl` and runs the same estimators.
+### The analysis is declared in the config, not left implicit
+
+`analysis.enabled` is **`true`**, and `analysis.estimators` lists all 30
+statistics by name. That block is the study's measurement plan: `experiment
+preflight` validates every name against `ROUND_ANALYSIS_STATISTICS`, so a typo
+fails **before** the run spends anything, and the finished run carries its own
+report at
+
+```
+<run-dir>/relational_imitation_round_feedback_analysis/
+```
+
+The analyzer writes local files only — the relational path has no Comet
+integration at all, so `analysis` cannot open a remote experiment regardless of
+`logging.comet`.
+
+`analysis.options` sets `bootstrap_resamples: 1000`, `null_permutations: 1000`
+and `epistemic_bins: 4` (the joint `(κ,φ)` diagnostic only). The whole analysis
+takes ~35 s for the 200-round pilot, so there is nothing to economise.
+
+The offline command below reads the same `round_trajectory.jsonl` and runs the
+same estimators, and is what to use for re-analysis or for a run made before
+the estimator list was declared.
+
+> **If you edit this config and then re-launch, pass `--no-resume` or use a
+> clean output directory.** `--resume` defaults to on, and checkpoints written
+> under a different `resolved_config_hash` are rejected — the run aborts rather
+> than mixing two configurations in one result set.
+
+### Re-running the analysis on results that already exist
+
+The command is idempotent and provider-free, so an already-finished run is
+re-analysed by pointing at it again — no re-run of the experiment:
+
+```bash
+conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main analysis relational-round-feedback \
+  --run-dir results/relational_imitation_round_feedback/relational-study03-g-stochastic-feedback-pilot/<run-id> \
+  --output-dir results/relational_imitation_round_feedback/relational-study03-g-stochastic-feedback-pilot/<run-id>/relational_imitation_round_feedback_analysis \
+  --bootstrap-resamples 1000 --null-permutations 1000
+```
+
+`--epistemic-bins` still controls only the **joint** `(κ, φ)` diagnostic (#9).
+The three scalar conditionings are fixed at the three bins above by design.

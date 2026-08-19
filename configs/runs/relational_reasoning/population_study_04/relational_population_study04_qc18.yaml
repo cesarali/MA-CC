@@ -1,73 +1,96 @@
-# Relational reasoning — population study 03, arm G:
-# stochastic-feedback / transfer-information pilot.
+# Relational reasoning - population study 04:
+# sensing/actuation RESOURCE GRID, arm q_c = 18.
 #
 # ---------------------------------------------------------------------------
 # WHAT THIS IS
 #
-# The first relational cell run under a CLOSED LOOP. Studies 01 and 02 ran
-# `advocacy_schedule: always` on purpose: an open loop fixes the intervention
-# and lets the population vary, which is what a controllability sweep wants.
-# It is exactly the wrong thing for an information measurement, because a
-# controller that acts every round has H(U_k) = 0 and can carry no bits.
+# Study 03 arm G measured the controller-to-population information channel at
+# ONE point of the resource plane: q_c = 12, b = 12, both at half the
+# population. It answered "are these quantities estimable at all" and the
+# answer was yes. It could not answer how the channel SCALES, because a single
+# point has no slope.
 #
-# Here the schedule is `soft`, so the action is a genuine random variable:
+# Study 04 is that same measurement over a 3 x 3 grid:
+#
+#     q_c in {6, 12, 18}   x   b in {6, 12, 18}
+#
+# THIS FILE IS THE q_c = 18 ROW. It sweeps b in {6, 12, 18} over the two
+# matched worlds and holds everything else at the Study 03 values. The other
+# two rows are `relational_population_study04_qc06.yaml`,
+# `relational_population_study04_qc12.yaml` and
+# `relational_population_study04_qc18.yaml` - three files, one experiment.
+#
+# The split into three configs is OPERATIONAL ONLY. Scientifically the three
+# together are one 3 x 3 resource grid over two matched tasks. They are split
+# because each is independently launchable and independently resumable, so an
+# overnight run that dies in row two does not cost rows one and three.
+#
+# ---------------------------------------------------------------------------
+# THE ROUND-LEVEL ORDERING (UNCHANGED FROM STUDY 03)
+#
+#     N_k  ->  Y_k (sensor, q_c = 18 agents)
+#          ->  U_k in {NO_OP, ADVOCATE}   (stochastic, soft policy)
+#          ->  b controlled positions IF U_k = ADVOCATE, else exactly 0
+#          ->  N_{k+1}
+#
+# with the same soft policy Study 03 ran, unchanged:
 #
 #     P(U_k = ADVOCATE | Y_k) = sigmoid[ beta * (threshold - p_Z(Y_k)) ]
 #
-# with beta = 4 and threshold = 0.5. Nothing about that policy is new - it is
-# `SoftTargetControl.select_action` / `advocacy_probability`, unchanged, and
-# it is what `soft` has always meant in this codebase.
+# beta = 4, threshold = 0.5. This is `SoftTargetControl.select_action` /
+# `advocacy_probability`; no controller code was written for this study.
 #
 # ---------------------------------------------------------------------------
-# THE ROUND-LEVEL ORDERING THIS CONFIG BUYS
+# q_c AND b ARE INDEPENDENT RESOURCES - THAT IS THE WHOLE POINT OF STUDY 04
 #
-#     N_k  ->  Y_k (sensor, q_c = 12 agents)
-#          ->  U_k in {NO_OP, ADVOCATE}   (stochastic, soft policy)
-#          ->  b = 12 controlled positions IF U_k = ADVOCATE, else 0
-#          ->  N_{k+1}
+# Study 03 held them numerically equal (12 = 12) and its header warned that
+# this was a coincidence of that pilot. Study 04 breaks the coincidence on
+# purpose: this row alone contains cells with q_c = 18 against b = 6, 12 and
+# 18, so sensing and actuation can be told apart.
 #
-# q_c AND b ARE NOT THE SAME RESOURCE. They take the same numerical value in
-# this pilot and only in this pilot:
-#
-#     q_c = 12   how many agents the controller LOOKS AT, once, at the start
+#     q_c = 18   how many agents the controller LOOKS AT, once, at the start
 #                of the round (`ThresholdTargetControl.interaction_signal`,
 #                `rng.sample(state.agents, sensor_sample_size)` - without
-#                replacement, exchangeable, votes only, never any K_i).
-#     b   = 12   how many UPDATE POSITIONS are actuated afterwards, and only
-#                on an ADVOCATE round (`sample_controlled_positions`, called
-#                in `runtime.py` under `if action == ADVOCATE_TARGET else ()`).
+#                replacement, exchangeable, VOTES ONLY, never any K_i).
+#                sensing fraction q_c/N = 0.75
+#     b          how many UPDATE POSITIONS are actuated afterwards, and only
+#                on an ADVOCATE round (`sample_controlled_positions`, called in
+#                `runtime.py` under `if action == ADVOCATE_TARGET else ()`).
+#                control fraction c = b/N in {0.25, 0.5, 0.75}
 #
-# The 12 sensed agents and the 12 controlled positions are drawn from separate
-# seeded streams (`relational-sensor:*` vs `relational-schedule:<round>`) and
-# are NOT required to coincide. Do not "simplify" this into one draw: the
-# theory is exchangeable in both, and c = b/N and the sensing fraction q_c/N
-# are separate axes that this pilot happens to hold at the same value.
+# The sensed agents and the controlled positions come from SEPARATE seeded
+# streams (`relational-sensor:*` vs `relational-schedule:<round>`) and are not
+# required to coincide - they are not even in the same index space (agent
+# identities vs within-round update slots). Do not tie them together.
 #
 # ---------------------------------------------------------------------------
-# FIXED IN BOTH CELLS
+# FIXED ACROSS EVERY CELL OF EVERY STUDY 04 CONFIG
 #
 #   N = 24     L = 2      r = 6       q = 1      K = 3 options, 4 distractors
 #   rounds = 10           threshold = 0.5        beta = 4
-#   q_c = 12  -> sensing fraction  q_c/N = 0.5
-#   b   = 12  -> control fraction  c = b/N = 0.5
 #   advocacy_schedule: soft         message_mode: recommendation_only
 #   target: 2 (a PINNED, verified-incorrect option index - see below)
 #   social_distrust: true           initialization: local_vote
-#   semantic option shuffling (per call, `shuffled_option_letters`)
+#   stop_on_consensus: false        semantic option shuffling (per call)
 #   artifact_profile: results_only
+#   provider/model/temperature/max_output_tokens: identical to Study 03
 #
-# SWEPT: nothing. `game.options.task_id` in {task_0001, task_0002} is the world
-# axis, 10 repetitions each -> 2 cells, 20 episodes.
+# SWEPT IN THIS FILE: b in {6, 12, 18} x task_id in {task_0001, task_0002}
+#   -> 6 cells, 30 repetitions each -> 180 episodes.
+# SWEPT ACROSS THE STUDY: the above, x q_c in {6, 12, 18} (the three files)
+#   -> 18 cells, 540 episodes.
+# NOTHING ELSE IS SWEPT.
 #
 # ---------------------------------------------------------------------------
 # WHY target IS AN INDEX AND NOT `random_incorrect`
 #
-# `random_incorrect` resolves per EPISODE from the episode seed, and the
+# Unchanged from Study 03, and it matters more here because there are more
+# cells. `random_incorrect` resolves per EPISODE from the episode seed, and the
 # episode seed is derived from the GRID CELL INDEX
 # (`orchestrator.py`: Seed(execution.seed).derive("grid-cell:i").derive("episode:j")),
-# so two repetitions of one cell can advocate two different relations. Study 01
-# arm D shows exactly that. An option index is seed- and cell-independent, so
-# every one of the 20 episodes here advocates one fixed relation per world.
+# so two repetitions of one cell can advocate two different relations. An
+# option index is seed- and cell-independent, so all 540 episodes advocate one
+# fixed relation per world.
 #
 # Index 2 is verified INCORRECT for both worlds of pop24_L2_r06:
 #
@@ -80,30 +103,42 @@
 # and task_0010). Re-check before widening `game.options.task_id`.
 #
 # ---------------------------------------------------------------------------
-# COST
+# THE SEED IS SHARED WITH THE OTHER TWO ROWS ON PURPOSE
 #
-#   2 cells x 10 repetitions = 20 episodes.
-#   Per episode: 264 nominal provider calls = 24 initial votes + 24 x 10
-#   focal updates. `q` does not change this - control REPLACES a social slot
-#   rather than adding one, so a focal update is one call whatever q is.
-#   Arm total: 5,280 nominal. Run `experiment preflight` for the expected and
+# All three Study 04 configs use execution.seed 20260821, and all three declare
+# the grid axes in the same order, so cell index i is the same (b, task) pair
+# in every row. Episode seeds derive from the cell index, so episode j of
+# (b = 6, task_0001) starts from the SAME initial population in the q_c = 6,
+# 12 and 18 rows. That is common random numbers across the sensing axis: the
+# q_c comparison is paired, and differences between rows are not initial-
+# condition noise. Do not renumber the axes in one file only.
+#
+# ---------------------------------------------------------------------------
+# COST (THIS FILE)
+#
+#   6 cells x 30 repetitions = 180 episodes.
+#   Per episode: 264 nominal provider calls = 24 initial votes + 24 x 10 focal
+#   updates. `q` does not change this - control REPLACES a social slot rather
+#   than adding one, so a focal update is one call whatever q is. Neither q_c
+#   nor b changes it either: sensing reads recorded votes and makes no call,
+#   and a controlled position is still one focal update.
+#   Row total: 47,520 nominal. Run `experiment preflight` for the expected and
 #   conservative bounds; it makes no model calls.
 #
 # ---------------------------------------------------------------------------
 # RUN FROM THE REPOSITORY ROOT
 #
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
-#     --config configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml \
-#     --output-dir inspection/relational_study03_g_preflight
+#     --config configs/runs/relational_reasoning/population_study_04/relational_population_study04_qc18.yaml \
+#     --output-dir inspection/relational_study04_qc18_preflight
 #
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
-#     --config configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml
+#     --config configs/runs/relational_reasoning/population_study_04/relational_population_study04_qc18.yaml
 #
 # THEN (offline, no model calls):
 #
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main analysis relational-round-feedback \
-#     --run-dir results/<run-id> \
-#     --output-dir results/<run-id>/relational_imitation_round_feedback_analysis
+#     --run-dir results/<run-id>
 # ---------------------------------------------------------------------------
 
 llm_provider:
@@ -140,6 +175,7 @@ game:
   topology: complete
   options:
     task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    # Swept below over the two matched worlds; this is the base value.
     task_id: task_0001
     dynamics_mode: reasoning
     rounds: 10
@@ -163,24 +199,29 @@ control:
     # Pinned zero-based index into the task's frozen `possible_answers`.
     # Verified incorrect for task_0001 (EAST) and task_0002 (SOUTH).
     target: 2
-    # q_c: agents sensed per round. Half the population, sampled without
-    # replacement, votes only.
-    sensor_sample_size: 12
+    # q_c: agents sensed per round, sampled without replacement, votes only.
+    # THIS IS THE AXIS THIS FILE PINS. The other two rows set 6 and 18.
+    # q_c/N = 0.75
+    sensor_sample_size: 18
     policy: soft_target
     threshold: 0.5
     beta: 4.0
-    # b: controlled update positions per ADVOCATE round. Numerically equal to
-    # q_c here; conceptually a different resource. See the header.
+    # b: controlled update positions per ADVOCATE round. SWEPT below over
+    # {6, 12, 18}; this is the base value the grid overrides. Independent of
+    # q_c above - see the header.
     intervention_budget: 12
-    # THE POINT OF THIS ARM. `soft` closes the loop and makes U_k stochastic,
-    # so H(U_k) > 0 and the actuation CMIs are estimable at all. `always`
-    # would pin H(U_k) = 0 and every information quantity to zero.
+    # `soft` closes the loop and makes U_k stochastic, so H(U_k) > 0 and the
+    # actuation CMIs are estimable at all. `always` would pin H(U_k) = 0 and
+    # every information quantity to zero. Study 04 is an information study;
+    # this must not be changed to `always`.
     advocacy_schedule: soft
     message_mode: recommendation_only
 
 execution:
-  seed: 20260820
-  repetitions: 10
+  # Shared with the other two rows on purpose - see the header. Bumped from
+  # Study 03's 20260820 so Study 04 is not a seed-for-seed replay of the pilot.
+  seed: 20260821
+  repetitions: 30
   parallelism: 8
   fail_fast: false
 
@@ -195,6 +236,8 @@ budget:
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 300.0
   max_cost_per_run: 300.0
+  # Conservative (retry-bound) call count for this row is 95,040, so the guard
+  # still sits above the worst case with room to spare.
   max_provider_requests: 200000
   max_input_tokens: 1000000000
   max_output_tokens: 100000000
@@ -213,11 +256,11 @@ logging:
 
 storage:
   output_dir: results
-  format: jsonl
   # The per-round scientific channel - round_records/<episode>/
   # round_trajectory.jsonl - is what the information analysis reads, and
   # results_only keeps exactly that plus the compact table, the cell
   # aggregate, one prompt example per cell and the resolved config.
+  format: jsonl
   artifact_profile: results_only
   checkpoint_mode: episode
   overwrite: false
@@ -228,25 +271,21 @@ analysis:
   # validates every name below against ROUND_ANALYSIS_STATISTICS, so a typo
   # fails before the run spends anything.
   #
-  # The analyzer is `analyze_relational_imitation_round_feedback`, which only
-  # adapts round records - the estimators, the whole-episode bootstrap, the
-  # policy-conditional null and the support diagnostics are the shared
-  # round-feedback pipeline. It writes local files only and has no Comet path.
-  #
-  # The same statistics are reproducible offline at any time with
-  #   mas_cc.cli.main analysis relational-round-feedback --run-dir <run>
+  # Identical to Study 03 arm G. No estimator was added for Study 04 - the
+  # resource grid is a sweep over the SAME measurement, which is the only way
+  # the 3 x 3 surface is comparable point to point.
   enabled: true
   estimators:
     # --- sensing ---------------------------------------------------------
-    # I(N_k ; Y_k): how much the q_c = 12 sample tells the controller about
-    # the population it is about to act on.
+    # I(N_k ; Y_k): how much the q_c = 18 sample tells the controller about
+    # the population it is about to act on. This is the quantity the q_c axis
+    # exists to move, so it is the first thing to read off this study.
     - round_sensing_mi
     - round_sensor_mae
     - round_sensor_mse
 
     # --- controller action as a random variable ---------------------------
-    # The reason this arm runs `advocacy_schedule: soft` at all. Under
-    # `always`, H(U_k) = 0 and every quantity below is identically zero.
+    # Under `always`, H(U_k) = 0 and every quantity below is identically zero.
     - round_controller_action_entropy
     - round_controller_action_entropy_given_population
 
@@ -260,8 +299,10 @@ analysis:
 
     # --- state-action support: can the CMIs be estimated at all -----------
     # Read these BEFORE the numbers above. A conditioning slice that only ever
-    # saw one action contributes nothing, and on a 20-episode pilot that is
-    # the failure mode to expect.
+    # saw one action contributes nothing. Support is expected to VARY across
+    # the grid: a large b moves the population faster and can thin the states
+    # that carry both actions, so a cell's support must be read next to its
+    # own estimate rather than assumed from the pilot.
     - round_conditioning_state_count
     - round_dual_action_state_fraction
     - round_dual_action_event_fraction
@@ -270,9 +311,6 @@ analysis:
 
     # --- signed response: direction, not just magnitude -------------------
     # A CMI is unsigned; these say which way the controller pushed.
-    # `_share` is E[dp_Z|ADVOCATE] - E[dp_Z|NO_OP] in raw share units,
-    # unmatched; `_actuation` is the same comparison matched on the opinion
-    # state, in aligned-magnetization units (dm = dp * K/(K-1)).
     - round_target_signed_response_share
     - round_target_signed_actuation
     - round_truth_signed_actuation
@@ -286,11 +324,9 @@ analysis:
     #   phi        -> full-proof fraction n2/N,       3 bins: low/medium/high
     #   susceptible-> 1 - phi, the socially movable fraction, same 3 bins
     #   kappa      -> mean supporting-fact coverage,  same 3 bins
-    # phi/susceptible/kappa are conditioned on SEPARATELY, never jointly -
-    # a joint state would rebuild the sparsity they exist to avoid. Because
-    # s = 1 - phi, the phi- and susceptible-conditioned estimates will usually
-    # be identical (CMI is invariant under relabelling of the conditioning
-    # variable); `analysis_summary.json` reports
+    # phi/susceptible/kappa are conditioned on SEPARATELY, never jointly.
+    # Because s = 1 - phi, the phi- and susceptible-conditioned estimates will
+    # usually be identical; `analysis_summary.json` reports
     # `phi_susceptible_partition_identical` rather than leaving that to be
     # rediscovered.
     - round_memory_target_actuation_cmi
@@ -305,16 +341,17 @@ analysis:
     - round_susceptible_target_signed_response
     - round_kappa_target_signed_response
   options:
-    # ~35 s for the whole 200-round pilot at these settings - negligible next
-    # to the run itself, so there is no reason to economize here.
     bootstrap_resamples: 1000
     null_permutations: 1000
     confidence: 0.95
     # Bins per axis for the JOINT (kappa, phi) conditioning only. The three
     # scalar conditionings above are fixed at low/medium/high by design.
     epistemic_bins: 4
-    # The whole grid is two cells; a per-cell report would just be the same
-    # thing twice with half the data.
+    # Left false, as in Study 03. Per-cell estimates are emitted as ROWS of
+    # `round_information_estimates.csv` either way; this flag only controls
+    # whether each cell additionally gets its own report bundle written during
+    # the run, and 6 more bundles per row is 18 more across the study for no
+    # extra information.
     per_cell_reports: false
 
 metrics:
@@ -344,34 +381,52 @@ observability:
     metric_plots: true
 
 experiment:
-  name: relational-study03-g-stochastic-feedback-pilot
+  name: relational-study04-qc18-resource-grid
   description: >-
-    Relational reasoning population study 03, arm G: stochastic-feedback /
-    transfer-information pilot. N=24, L=2, r=6, q=1, 10 rounds,
-    recommendation_only against a pinned incorrect target, soft advocacy
-    schedule (beta=4, threshold=0.5), q_c=12 sensed agents and b=12 controlled
-    positions, over 2 matched worlds x 10 repetitions.
-  tags: [relational, population-study-03, arm-g, N24, q1, r6, soft-schedule, information-pilot]
+    Relational reasoning population study 04, sensing/actuation resource grid,
+    row q_c = 18 (sensing fraction 0.75). N=24, L=2, r=6, q=1,
+    10 rounds, recommendation_only against a pinned incorrect target, soft
+    advocacy schedule (beta=4, threshold=0.5), b swept over 6/12/18 controlled
+    positions (c = 0.25/0.5/0.75) across 2 matched worlds x 30 repetitions =
+    6 cells, 180 episodes. One of three rows forming a 3 x 3 (q_c, b) grid.
+  tags: [relational, population-study-04, resource-grid, qc18, N24, q1, r6, soft-schedule, information]
   metadata:
-    study: population_study_03
-    arm: "G"
+    study: population_study_04
+    design: sensing_actuation_resource_grid
+    row: "q_c=18"
     population_rounds: 10
     social_group_size: 1
     support_redundancy: 6
     reasoning_depth: 2
     worlds: 2
-    repetitions: 10
-    sensor_sample_size: 12
-    sensing_fraction: 0.5
-    intervention_budget: 12
-    control_fraction: 0.5
+    repetitions: 30
+    # The scientific coordinates of this row. `intervention_budget` and
+    # `control_fraction` are swept, so they are listed as the swept sets rather
+    # than as scalars; the per-cell values land in each cell's `overrides.json`
+    # and on every round record.
+    sensor_sample_size: 18
+    sensing_fraction: 0.75
+    intervention_budget_sweep: [6, 12, 18]
+    control_fraction_sweep: [0.25, 0.5, 0.75]
     advocacy_schedule: soft
     policy_beta: 4.0
     policy_threshold: 0.5
     target_selection: fixed_option_index_2
-    smoke_reference: relational_population_study03_g_stochastic_feedback_pilot_mock.yaml
+    cells: 6
+    episodes: 180
+    study_total_cells: 18
+    study_total_episodes: 540
+    base_config: ../population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml
 
 grid:
+  # AXIS ORDER IS LOAD-BEARING. Cells are the cartesian product in declaration
+  # order, so this ordering fixes cell-0000 = (b=6, task_0001) in all three
+  # rows, which is what makes the shared seed a paired design. Do not reorder
+  # in one file only.
+  control.options.intervention_budget:
+    - 6
+    - 12
+    - 18
   game.options.task_id:
     - task_0001
     - task_0002

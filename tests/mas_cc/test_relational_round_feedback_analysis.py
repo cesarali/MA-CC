@@ -20,10 +20,19 @@ from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
     round_information_analysis,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+    COARSE_BIN_EDGES,
+    COARSE_BIN_LABELS,
+    EPISTEMIC_CONDITIONING_VARIABLES,
     adapt_relational_round_record,
     analyze_relational_imitation_round_feedback,
+    coarse_bin,
     controller_action_summary,
+    epistemic_conditioning_values,
     read_relational_round_records,
+)
+
+EPISTEMIC_CONDITIONING_STATISTICS = tuple(
+    f"round_{name}_target_actuation_cmi" for name in EPISTEMIC_CONDITIONING_VARIABLES
 )
 
 OPTIONS = ["SOUTHWEST", "WEST", "EAST"]
@@ -226,8 +235,271 @@ def test_analysis_writes_the_report_and_flags_memory_support(tmp_path):
     assert reported == {
         "round_memory_target_actuation_cmi",
         "round_epistemic_target_actuation_cmi",
+        "round_phi_target_actuation_cmi",
+        "round_susceptible_target_actuation_cmi",
+        "round_kappa_target_actuation_cmi",
     }
+    assert summary["coarse_bins"]["labels"] == ["low", "medium", "high"]
+    assert summary["coarse_bins"]["conditioned_separately"] is True
     assert all(
         math.isfinite(float(row["estimate"]))
         for row in summary["memory_conditioning_support"]
     )
+
+
+# ---------------------------------------------------------------------------
+# Coarse-grained scalar epistemic conditioning
+# ---------------------------------------------------------------------------
+
+
+def test_the_three_bins_are_exactly_the_documented_half_open_intervals():
+    assert COARSE_BIN_EDGES == (0.0, 1 / 3, 2 / 3, 1.0)
+    assert COARSE_BIN_LABELS == ("low", "medium", "high")
+    # The two interior edges belong to the bin ABOVE them, and 1.0 must land in
+    # `high` rather than off the end - the case a multiply-and-truncate binner
+    # gets wrong depending on how `value * 3` rounds.
+    assert coarse_bin(0.0) == 0
+    assert coarse_bin(0.3333) == 0
+    assert coarse_bin(1 / 3) == 1
+    assert coarse_bin(0.5) == 1
+    assert coarse_bin(0.6666) == 1
+    assert coarse_bin(2 / 3) == 2
+    assert coarse_bin(1.0) == 2
+    assert coarse_bin(None) is None
+
+
+def test_phi_is_the_last_stratum_over_the_population():
+    """`phi = n_L / N`, read off `E_k` rather than recomputed."""
+
+    values = epistemic_conditioning_values(
+        _record(episode="e0", index=0, action=NO_OP, strata_before=(4, 14, 6))
+    )
+    assert values["phi"] == pytest.approx(6 / 24)
+
+
+def test_phi_falls_back_to_the_recorded_share_without_a_histogram():
+    record = _record(episode="e0", index=0, action=NO_OP, phi=0.375)
+    del record["knowledge_stratum_counts_before"]
+    assert epistemic_conditioning_values(record)["phi"] == pytest.approx(0.375)
+
+
+def test_susceptible_is_one_minus_phi():
+    values = epistemic_conditioning_values(
+        _record(episode="e0", index=0, action=NO_OP, strata_before=(4, 14, 6))
+    )
+    assert values["susceptible"] == pytest.approx(1.0 - values["phi"])
+
+
+def test_kappa_is_the_already_recorded_coverage_and_is_not_recomputed():
+    # Deliberately inconsistent with the strata: if kappa were being derived
+    # from the histogram this would come out 0.5, not 0.8125.
+    values = epistemic_conditioning_values(
+        _record(episode="e0", index=0, action=NO_OP, strata_before=(12, 12, 0), kappa=0.8125)
+    )
+    assert values["kappa"] == pytest.approx(0.8125)
+
+
+def test_each_scalar_variable_reaches_the_record_under_its_own_key():
+    row = adapt_relational_round_record(
+        _record(
+            episode="e0", index=0, action=NO_OP, strata_before=(4, 14, 6), kappa=0.7
+        )
+    )
+    assert row.event["phi_before"] == pytest.approx(6 / 24)
+    assert row.event["susceptible_before"] == pytest.approx(18 / 24)
+    assert row.event["kappa_before"] == pytest.approx(0.7)
+    assert row.event["conditioning_phi_bin"] == 0  # 0.25  -> low
+    assert row.event["conditioning_susceptible_bin"] == 2  # 0.75 -> high
+    assert row.event["conditioning_kappa_bin"] == 2  # 0.70 -> high
+
+
+def _epistemic_rows():
+    """Rows whose target response flips with the coarse epistemic regime.
+
+    Marginally, given `n_Z,k`, the action says nothing; the effect exists only
+    once the regime is conditioned on. Both regimes are chosen so that phi, s
+    and kappa each separate them.
+    """
+
+    rows = []
+    for repetition in range(6):
+        for strata, kappa, up in (((12, 12, 0), 0.25, True), ((2, 2, 20), 0.9, False)):
+            for action, moved in ((ADVOCATE_TARGET, up), (NO_OP, not up)):
+                rows.append(
+                    adapt_relational_round_record(
+                        _record(
+                            episode=f"e{repetition}-{strata[0]}",
+                            index=len(rows),
+                            action=action,
+                            before=(14, 5, 5),
+                            after=(13, 5, 6) if moved else (15, 5, 4),
+                            strata_before=strata,
+                            kappa=kappa,
+                        )
+                    )
+                )
+    return rows
+
+
+@pytest.mark.parametrize(
+    "statistic",
+    [
+        "round_phi_target_actuation_cmi",
+        "round_susceptible_target_actuation_cmi",
+        "round_kappa_target_actuation_cmi",
+    ],
+)
+def test_each_coarse_conditioning_recovers_the_effect_the_plain_cmi_averages_away(
+    statistic,
+):
+    estimates, nulls = round_information_analysis(
+        _epistemic_rows(),
+        statistics=["round_target_actuation_cmi", statistic],
+        bootstrap_resamples=4,
+        null_permutations=4,
+    )
+    values = {row["statistic"]: row for row in estimates}
+    assert values["round_target_actuation_cmi"]["estimate"] == pytest.approx(0.0, abs=1e-9)
+    assert values[statistic]["estimate"] == pytest.approx(1.0, abs=1e-9)
+
+    row = values[statistic]
+    # Every reporting field the pipeline already produces has to come along.
+    assert row["units"] == "bits"
+    assert row["estimator_variant"] == "direct_counting"
+    assert row["null_type"] == "policy_conditional_randomization"
+    assert row["bootstrap_unit"] == "episode"
+    assert math.isfinite(row["bootstrap_ci_low"]) and math.isfinite(row["bootstrap_ci_high"])
+    assert row["conditional_action_entropy_bits"] >= row["estimate"]
+    assert row["entropy_bound_satisfied"] is True
+    assert row["round_conditioning_state_count"] == 2
+    assert 0.0 <= row["round_singleton_fraction"] <= 1.0
+    assert row["round_dual_action_state_fraction"] == pytest.approx(1.0)
+    assert row["round_dual_action_event_fraction"] == pytest.approx(1.0)
+    assert any(item["statistic"] == statistic for item in nulls)
+
+
+def test_the_new_statistics_go_through_the_shared_cmi_implementation(monkeypatch):
+    """No second estimator: patching the shared one must blank all three."""
+
+    import mas_cc.games.hidden_bench.imitation_round_feedback.analysis as pipeline
+
+    calls: list[int] = []
+
+    def _spy(x, y, z, **kwargs):
+        calls.append(len(x))
+        return pipeline.Estimate(-1.0, -1.0, -1.0, len(x))
+
+    monkeypatch.setattr(pipeline, "conditional_mutual_information", _spy)
+    estimates, _ = round_information_analysis(
+        _epistemic_rows(),
+        statistics=list(EPISTEMIC_CONDITIONING_STATISTICS),
+        bootstrap_resamples=0,
+        null_permutations=0,
+    )
+    assert len(calls) == len(EPISTEMIC_CONDITIONING_STATISTICS)
+    assert {row["estimate"] for row in estimates} == {-1.0}
+
+
+def test_the_matched_signed_response_removes_an_epistemic_confound():
+    """What conditioning the signed response on `phi` is actually for.
+
+    The target drifts up in the low-phi regime and down in the high-phi one,
+    whatever the controller does, and ADVOCATE happens to be concentrated in
+    the first. The unmatched difference reads that drift as a controller
+    effect; matched inside a phi bin - the same state the CMI conditions on -
+    it correctly reads zero. `n_Z,k` is identical in both regimes, so matching
+    on the opinion state alone cannot remove this.
+    """
+
+    rows = []
+    for regime, (strata, after, advocates) in enumerate(
+        (((12, 12, 0), (13, 5, 6), 5), ((2, 2, 20), (15, 5, 4), 1))
+    ):
+        for index in range(6):
+            rows.append(
+                adapt_relational_round_record(
+                    _record(
+                        episode=f"e{regime}",
+                        index=index,
+                        action=ADVOCATE_TARGET if index < advocates else NO_OP,
+                        before=(14, 5, 5),
+                        after=after,
+                        strata_before=strata,
+                    )
+                )
+            )
+
+    estimates, _ = round_information_analysis(
+        rows,
+        statistics=[
+            "round_target_signed_response_share",
+            "round_target_signed_actuation",
+            "round_phi_target_signed_response",
+        ],
+        bootstrap_resamples=0,
+        null_permutations=0,
+    )
+    values = {row["statistic"]: row for row in estimates}
+    # E[dp | ADVOCATE] = +4/144 and E[dp | NO_OP] = -4/144, so the unmatched
+    # difference reports a spurious +8/144 of pure drift.
+    assert values["round_target_signed_response_share"]["estimate"] == pytest.approx(
+        8 / 144
+    )
+    # Matched on `n_Z,k` alone, the confound survives: it is constant at 5.
+    assert values["round_target_signed_actuation"]["estimate"] != pytest.approx(
+        0.0, abs=1e-9
+    )
+    assert values["round_phi_target_signed_response"]["estimate"] == pytest.approx(
+        0.0, abs=1e-12
+    )
+    assert values["round_phi_target_signed_response"]["units"] == "dimensionless"
+    # And it reports the sparsity of the conditioning it was matched on.
+    assert values["round_phi_target_signed_response"]["round_conditioning_state_count"] == 2
+
+
+def test_phi_and_susceptible_agree_when_the_binning_is_a_relabelling():
+    """Expected, not an error: CMI is invariant under relabelling of `z`."""
+
+    rows = _epistemic_rows()
+    estimates, _ = round_information_analysis(
+        rows,
+        statistics=[
+            "round_phi_target_actuation_cmi",
+            "round_susceptible_target_actuation_cmi",
+        ],
+        bootstrap_resamples=0,
+        null_permutations=0,
+    )
+    values = {row["statistic"]: row["estimate"] for row in estimates}
+    assert values["round_phi_target_actuation_cmi"] == pytest.approx(
+        values["round_susceptible_target_actuation_cmi"]
+    )
+
+
+def test_the_pre_existing_statistics_are_untouched_by_the_new_conditionings():
+    """Adding conditioning variables must not move anything already reported."""
+
+    rows = _epistemic_rows()
+    historical = [
+        "round_target_actuation_cmi",
+        "round_truth_actuation_cmi",
+        "round_order_actuation_cmi",
+        "round_population_actuation_cmi",
+        "round_controller_action_entropy",
+        "round_target_signed_actuation",
+        "round_memory_target_actuation_cmi",
+        "round_epistemic_target_actuation_cmi",
+    ]
+    alone, _ = round_information_analysis(
+        rows, statistics=historical, bootstrap_resamples=8, null_permutations=8, seed=7
+    )
+    together, _ = round_information_analysis(
+        rows,
+        statistics=[*historical, *EPISTEMIC_CONDITIONING_STATISTICS],
+        bootstrap_resamples=8,
+        null_permutations=8,
+        seed=7,
+    )
+    kept = {row["statistic"]: row for row in together if row["statistic"] in historical}
+    for row in alone:
+        assert kept[row["statistic"]] == row
