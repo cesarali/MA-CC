@@ -293,6 +293,30 @@ def build_parser() -> argparse.ArgumentParser:
     round_feedback_analysis.add_argument("--confidence", type=float, default=0.95)
     round_feedback_analysis.add_argument("--seed", type=int, default=1)
 
+    relational_analysis = analysis_commands.add_parser(
+        "relational-round-feedback",
+        help="the same round-level estimators over a relational reasoning grid",
+    )
+    relational_analysis.add_argument(
+        "--run-dir", type=Path, required=True,
+        help="a completed relational_imitation_round_feedback run or grid directory",
+    )
+    relational_analysis.add_argument(
+        "--output-dir", type=Path,
+        help=(
+            "analysis destination (default: "
+            "<run-dir>/relational_imitation_round_feedback_analysis)"
+        ),
+    )
+    relational_analysis.add_argument("--bootstrap-resamples", type=int, default=1000)
+    relational_analysis.add_argument("--null-permutations", type=int, default=1000)
+    relational_analysis.add_argument("--confidence", type=float, default=0.95)
+    relational_analysis.add_argument("--seed", type=int, default=1)
+    relational_analysis.add_argument(
+        "--epistemic-bins", type=int, default=4,
+        help="bins per axis for the coarse (kappa, phi) diagnostic conditioning",
+    )
+
     benchmark = commands.add_parser(
         "benchmark",
         help="single-model task-validation benchmarks (no game, no agents)",
@@ -602,6 +626,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                 null_permutations=args.null_permutations,
                 confidence=args.confidence,
                 seed=args.seed,
+            )
+        except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+    if args.command == "analysis" and args.analysis_command == "relational-round-feedback":
+        from .analysis import run_relational_round_feedback_analysis_command
+
+        try:
+            summary = run_relational_round_feedback_analysis_command(
+                args.run_dir,
+                args.output_dir,
+                bootstrap_resamples=args.bootstrap_resamples,
+                null_permutations=args.null_permutations,
+                confidence=args.confidence,
+                seed=args.seed,
+                epistemic_bins=args.epistemic_bins,
             )
         except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
             print(str(exc), file=sys.stderr)

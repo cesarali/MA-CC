@@ -1,0 +1,438 @@
+{
+  "cell_count": 2,
+  "cells": [
+    {
+      "estimate": {
+        "concurrency": 8,
+        "episode_count": 10,
+        "game_type": "relational_imitation_round_feedback",
+        "launch_status": "permitted",
+        "model": "gwdg/openai-gpt-oss-120b",
+        "per_episode": {
+          "cost_estimates": {
+            "conservative": {
+              "amount": 0.0,
+              "model": "gwdg/openai-gpt-oss-120b",
+              "provider": "university",
+              "retrieved_at": "2026-08-19T13:15:48.254459Z",
+              "source": "University GET /v1/model/info",
+              "unit": "proxy_accounting_unit",
+              "unit_source": "University proxy budget semantics; no currency field reported",
+              "version": "live-2026-08-19"
+            },
+            "expected": {
+              "amount": 0.0,
+              "model": "gwdg/openai-gpt-oss-120b",
+              "provider": "university",
+              "retrieved_at": "2026-08-19T13:15:48.254459Z",
+              "source": "University GET /v1/model/info",
+              "unit": "proxy_accounting_unit",
+              "unit_source": "University proxy budget semantics; no currency field reported",
+              "version": "live-2026-08-19"
+            },
+            "lower": {
+              "amount": 0.0,
+              "model": "gwdg/openai-gpt-oss-120b",
+              "provider": "university",
+              "retrieved_at": "2026-08-19T13:15:48.254459Z",
+              "source": "University GET /v1/model/info",
+              "unit": "proxy_accounting_unit",
+              "unit_source": "University proxy budget semantics; no currency field reported",
+              "version": "live-2026-08-19"
+            }
+          },
+          "game_type": "relational_imitation_round_feedback",
+          "launch_status": "permitted",
+          "model": "gwdg/openai-gpt-oss-120b",
+          "pricing": {
+            "fresh_until": "2026-08-19T13:25:48.254459Z",
+            "mode": "live",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /models + GET /v1/model/info",
+            "status": "known",
+            "version": "live-2026-08-19"
+          },
+          "prompt_scenarios": [
+            {
+              "decision_stage": "local_initialization",
+              "lower": {
+                "base_requests": 24,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 399,
+                "instance_hash": "21d552c143dde47b2f7edbad32e659095263ed73f76d6db78bf401eddd3c5285",
+                "name": "local_initial_ballot"
+              },
+              "maximum": {
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 399,
+                "instance_hash": "21d552c143dde47b2f7edbad32e659095263ed73f76d6db78bf401eddd3c5285",
+                "name": "local_initial_ballot",
+                "requests_including_retries": 48
+              },
+              "representative": {
+                "base_requests": 26,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 399,
+                "instance_hash": "21d552c143dde47b2f7edbad32e659095263ed73f76d6db78bf401eddd3c5285",
+                "name": "local_initial_ballot"
+              }
+            },
+            {
+              "decision_stage": "relational_ballot_update",
+              "lower": {
+                "base_requests": 240,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 462,
+                "instance_hash": "e26def9269265943ed96e3ec538c9584f9168bdf42545b03da707a26b9af81df",
+                "name": "relational_ballot_update"
+              },
+              "maximum": {
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 462,
+                "instance_hash": "e26def9269265943ed96e3ec538c9584f9168bdf42545b03da707a26b9af81df",
+                "name": "relational_ballot_update",
+                "requests_including_retries": 480
+              },
+              "representative": {
+                "base_requests": 253,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 462,
+                "instance_hash": "e26def9269265943ed96e3ec538c9584f9168bdf42545b03da707a26b9af81df",
+                "name": "relational_ballot_update"
+              }
+            }
+          ],
+          "provider": "university",
+          "provider_requests": {
+            "conservative": 528,
+            "expected": 279,
+            "lower": 264
+          },
+          "schema_version": 1,
+          "token_estimates": {
+            "input": {
+              "conservative": 240912,
+              "expected": 127260,
+              "lower": 120456
+            },
+            "output": {
+              "conservative": 2162688,
+              "expected": 1142784,
+              "lower": 264
+            }
+          },
+          "warnings": [
+            "Lower/expected scenarios use representative contexts; conservative demand uses each stage's maximum context and retry bound.",
+            "Token counts use a deterministic regex estimate, not the provider tokenizer.",
+            "Runtime is a rough planning estimate, not a service guarantee."
+          ]
+        },
+        "provider": "university",
+        "rough_runtime_seconds": 210.0,
+        "schema_version": 1,
+        "total_costs": {
+          "conservative": {
+            "amount": 0.0,
+            "model": "gwdg/openai-gpt-oss-120b",
+            "provider": "university",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /v1/model/info",
+            "unit": "proxy_accounting_unit",
+            "unit_source": "University proxy budget semantics; no currency field reported",
+            "version": "live-2026-08-19"
+          },
+          "expected": {
+            "amount": 0.0,
+            "model": "gwdg/openai-gpt-oss-120b",
+            "provider": "university",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /v1/model/info",
+            "unit": "proxy_accounting_unit",
+            "unit_source": "University proxy budget semantics; no currency field reported",
+            "version": "live-2026-08-19"
+          },
+          "lower": {
+            "amount": 0.0,
+            "model": "gwdg/openai-gpt-oss-120b",
+            "provider": "university",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /v1/model/info",
+            "unit": "proxy_accounting_unit",
+            "unit_source": "University proxy budget semantics; no currency field reported",
+            "version": "live-2026-08-19"
+          }
+        },
+        "total_input_tokens": {
+          "conservative": 2409120,
+          "expected": 1272600,
+          "lower": 1204560
+        },
+        "total_output_tokens": {
+          "conservative": 21626880,
+          "expected": 11427840,
+          "lower": 2640
+        },
+        "total_provider_requests": {
+          "conservative": 5280,
+          "expected": 2790,
+          "lower": 2640
+        },
+        "warnings": [
+          "Lower/expected scenarios use representative contexts; conservative demand uses each stage's maximum context and retry bound.",
+          "Token counts use a deterministic regex estimate, not the provider tokenizer.",
+          "Runtime is a rough planning estimate, not a service guarantee."
+        ]
+      },
+      "overrides": {
+        "game.options.task_id": "task_0001"
+      }
+    },
+    {
+      "estimate": {
+        "concurrency": 8,
+        "episode_count": 10,
+        "game_type": "relational_imitation_round_feedback",
+        "launch_status": "permitted",
+        "model": "gwdg/openai-gpt-oss-120b",
+        "per_episode": {
+          "cost_estimates": {
+            "conservative": {
+              "amount": 0.0,
+              "model": "gwdg/openai-gpt-oss-120b",
+              "provider": "university",
+              "retrieved_at": "2026-08-19T13:15:48.254459Z",
+              "source": "University GET /v1/model/info",
+              "unit": "proxy_accounting_unit",
+              "unit_source": "University proxy budget semantics; no currency field reported",
+              "version": "live-2026-08-19"
+            },
+            "expected": {
+              "amount": 0.0,
+              "model": "gwdg/openai-gpt-oss-120b",
+              "provider": "university",
+              "retrieved_at": "2026-08-19T13:15:48.254459Z",
+              "source": "University GET /v1/model/info",
+              "unit": "proxy_accounting_unit",
+              "unit_source": "University proxy budget semantics; no currency field reported",
+              "version": "live-2026-08-19"
+            },
+            "lower": {
+              "amount": 0.0,
+              "model": "gwdg/openai-gpt-oss-120b",
+              "provider": "university",
+              "retrieved_at": "2026-08-19T13:15:48.254459Z",
+              "source": "University GET /v1/model/info",
+              "unit": "proxy_accounting_unit",
+              "unit_source": "University proxy budget semantics; no currency field reported",
+              "version": "live-2026-08-19"
+            }
+          },
+          "game_type": "relational_imitation_round_feedback",
+          "launch_status": "permitted",
+          "model": "gwdg/openai-gpt-oss-120b",
+          "pricing": {
+            "fresh_until": "2026-08-19T13:25:48.254459Z",
+            "mode": "live",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /models + GET /v1/model/info",
+            "status": "known",
+            "version": "live-2026-08-19"
+          },
+          "prompt_scenarios": [
+            {
+              "decision_stage": "local_initialization",
+              "lower": {
+                "base_requests": 24,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 399,
+                "instance_hash": "21d552c143dde47b2f7edbad32e659095263ed73f76d6db78bf401eddd3c5285",
+                "name": "local_initial_ballot"
+              },
+              "maximum": {
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 399,
+                "instance_hash": "21d552c143dde47b2f7edbad32e659095263ed73f76d6db78bf401eddd3c5285",
+                "name": "local_initial_ballot",
+                "requests_including_retries": 48
+              },
+              "representative": {
+                "base_requests": 26,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 399,
+                "instance_hash": "21d552c143dde47b2f7edbad32e659095263ed73f76d6db78bf401eddd3c5285",
+                "name": "local_initial_ballot"
+              }
+            },
+            {
+              "decision_stage": "relational_ballot_update",
+              "lower": {
+                "base_requests": 240,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 462,
+                "instance_hash": "e26def9269265943ed96e3ec538c9584f9168bdf42545b03da707a26b9af81df",
+                "name": "relational_ballot_update"
+              },
+              "maximum": {
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 462,
+                "instance_hash": "e26def9269265943ed96e3ec538c9584f9168bdf42545b03da707a26b9af81df",
+                "name": "relational_ballot_update",
+                "requests_including_retries": 480
+              },
+              "representative": {
+                "base_requests": 253,
+                "definition_hash": "c407738e5eaa6d30165f4de16ea509e65c4bb5b04f006da3201aab173c544554",
+                "input_tokens_per_request": 462,
+                "instance_hash": "e26def9269265943ed96e3ec538c9584f9168bdf42545b03da707a26b9af81df",
+                "name": "relational_ballot_update"
+              }
+            }
+          ],
+          "provider": "university",
+          "provider_requests": {
+            "conservative": 528,
+            "expected": 279,
+            "lower": 264
+          },
+          "schema_version": 1,
+          "token_estimates": {
+            "input": {
+              "conservative": 240912,
+              "expected": 127260,
+              "lower": 120456
+            },
+            "output": {
+              "conservative": 2162688,
+              "expected": 1142784,
+              "lower": 264
+            }
+          },
+          "warnings": [
+            "Lower/expected scenarios use representative contexts; conservative demand uses each stage's maximum context and retry bound.",
+            "Token counts use a deterministic regex estimate, not the provider tokenizer.",
+            "Runtime is a rough planning estimate, not a service guarantee."
+          ]
+        },
+        "provider": "university",
+        "rough_runtime_seconds": 210.0,
+        "schema_version": 1,
+        "total_costs": {
+          "conservative": {
+            "amount": 0.0,
+            "model": "gwdg/openai-gpt-oss-120b",
+            "provider": "university",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /v1/model/info",
+            "unit": "proxy_accounting_unit",
+            "unit_source": "University proxy budget semantics; no currency field reported",
+            "version": "live-2026-08-19"
+          },
+          "expected": {
+            "amount": 0.0,
+            "model": "gwdg/openai-gpt-oss-120b",
+            "provider": "university",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /v1/model/info",
+            "unit": "proxy_accounting_unit",
+            "unit_source": "University proxy budget semantics; no currency field reported",
+            "version": "live-2026-08-19"
+          },
+          "lower": {
+            "amount": 0.0,
+            "model": "gwdg/openai-gpt-oss-120b",
+            "provider": "university",
+            "retrieved_at": "2026-08-19T13:15:48.254459Z",
+            "source": "University GET /v1/model/info",
+            "unit": "proxy_accounting_unit",
+            "unit_source": "University proxy budget semantics; no currency field reported",
+            "version": "live-2026-08-19"
+          }
+        },
+        "total_input_tokens": {
+          "conservative": 2409120,
+          "expected": 1272600,
+          "lower": 1204560
+        },
+        "total_output_tokens": {
+          "conservative": 21626880,
+          "expected": 11427840,
+          "lower": 2640
+        },
+        "total_provider_requests": {
+          "conservative": 5280,
+          "expected": 2790,
+          "lower": 2640
+        },
+        "warnings": [
+          "Lower/expected scenarios use representative contexts; conservative demand uses each stage's maximum context and retry bound.",
+          "Token counts use a deterministic regex estimate, not the provider tokenizer.",
+          "Runtime is a rough planning estimate, not a service guarantee."
+        ]
+      },
+      "overrides": {
+        "game.options.task_id": "task_0002"
+      }
+    }
+  ],
+  "concurrency": 8,
+  "game_type": "relational_imitation_round_feedback",
+  "grid_id": "32423c048e684bb7264f6736afd816f4871d51b4e71324ec67482419d1848c33",
+  "launch_status": "permitted",
+  "model": "gwdg/openai-gpt-oss-120b",
+  "provider": "university",
+  "rough_runtime_seconds": 2094.0,
+  "schema_version": 1,
+  "total_costs": {
+    "conservative": {
+      "amount": 0.0,
+      "model": "gwdg/openai-gpt-oss-120b",
+      "provider": "university",
+      "retrieved_at": "2026-08-19T13:15:48.254459Z",
+      "source": "University GET /v1/model/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "live-2026-08-19"
+    },
+    "expected": {
+      "amount": 0.0,
+      "model": "gwdg/openai-gpt-oss-120b",
+      "provider": "university",
+      "retrieved_at": "2026-08-19T13:15:48.254459Z",
+      "source": "University GET /v1/model/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "live-2026-08-19"
+    },
+    "lower": {
+      "amount": 0.0,
+      "model": "gwdg/openai-gpt-oss-120b",
+      "provider": "university",
+      "retrieved_at": "2026-08-19T13:15:48.254459Z",
+      "source": "University GET /v1/model/info",
+      "unit": "proxy_accounting_unit",
+      "unit_source": "University proxy budget semantics; no currency field reported",
+      "version": "live-2026-08-19"
+    }
+  },
+  "total_episode_count": 20,
+  "total_input_tokens": {
+    "conservative": 4818240,
+    "expected": 2545200,
+    "lower": 2409120
+  },
+  "total_output_tokens": {
+    "conservative": 43253760,
+    "expected": 22855680,
+    "lower": 5280
+  },
+  "total_provider_requests": {
+    "conservative": 10560,
+    "expected": 5580,
+    "lower": 5280
+  },
+  "warnings": [
+    "Lower/expected scenarios use representative contexts; conservative demand uses each stage's maximum context and retry bound.",
+    "Token counts use a deterministic regex estimate, not the provider tokenizer.",
+    "Runtime is a rough planning estimate, not a service guarantee."
+  ]
+}

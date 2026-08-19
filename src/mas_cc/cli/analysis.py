@@ -78,3 +78,37 @@ def run_hidden_bench_round_feedback_analysis_command(
         confidence=confidence,
         seed=seed,
     )
+
+
+def run_relational_round_feedback_analysis_command(
+    run_dir: Path,
+    output_dir: Path | None,
+    *,
+    bootstrap_resamples: int = 1000,
+    null_permutations: int = 1000,
+    confidence: float = 0.95,
+    seed: int = 1,
+    epistemic_bins: int = 4,
+) -> dict[str, Any]:
+    """Run the same round-feedback estimators over a relational grid.
+
+    Same pipeline as `hidden-bench-round-feedback`; only the record adapter
+    differs, plus the epistemic conditioning the relational game can supply.
+    """
+
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+        analyze_relational_imitation_round_feedback,
+    )
+
+    destination = output_dir or (
+        Path(run_dir) / "relational_imitation_round_feedback_analysis"
+    )
+    return analyze_relational_imitation_round_feedback(
+        run_dir,
+        destination,
+        bootstrap_resamples=bootstrap_resamples,
+        null_permutations=null_permutations,
+        confidence=confidence,
+        seed=seed,
+        epistemic_bins=epistemic_bins,
+    )

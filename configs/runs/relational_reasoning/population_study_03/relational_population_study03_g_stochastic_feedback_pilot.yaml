@@ -1,0 +1,290 @@
+# Relational reasoning — population study 03, arm G:
+# stochastic-feedback / transfer-information pilot.
+#
+# ---------------------------------------------------------------------------
+# WHAT THIS IS
+#
+# The first relational cell run under a CLOSED LOOP. Studies 01 and 02 ran
+# `advocacy_schedule: always` on purpose: an open loop fixes the intervention
+# and lets the population vary, which is what a controllability sweep wants.
+# It is exactly the wrong thing for an information measurement, because a
+# controller that acts every round has H(U_k) = 0 and can carry no bits.
+#
+# Here the schedule is `soft`, so the action is a genuine random variable:
+#
+#     P(U_k = ADVOCATE | Y_k) = sigmoid[ beta * (threshold - p_Z(Y_k)) ]
+#
+# with beta = 4 and threshold = 0.5. Nothing about that policy is new - it is
+# `SoftTargetControl.select_action` / `advocacy_probability`, unchanged, and
+# it is what `soft` has always meant in this codebase.
+#
+# ---------------------------------------------------------------------------
+# THE ROUND-LEVEL ORDERING THIS CONFIG BUYS
+#
+#     N_k  ->  Y_k (sensor, q_c = 12 agents)
+#          ->  U_k in {NO_OP, ADVOCATE}   (stochastic, soft policy)
+#          ->  b = 12 controlled positions IF U_k = ADVOCATE, else 0
+#          ->  N_{k+1}
+#
+# q_c AND b ARE NOT THE SAME RESOURCE. They take the same numerical value in
+# this pilot and only in this pilot:
+#
+#     q_c = 12   how many agents the controller LOOKS AT, once, at the start
+#                of the round (`ThresholdTargetControl.interaction_signal`,
+#                `rng.sample(state.agents, sensor_sample_size)` - without
+#                replacement, exchangeable, votes only, never any K_i).
+#     b   = 12   how many UPDATE POSITIONS are actuated afterwards, and only
+#                on an ADVOCATE round (`sample_controlled_positions`, called
+#                in `runtime.py` under `if action == ADVOCATE_TARGET else ()`).
+#
+# The 12 sensed agents and the 12 controlled positions are drawn from separate
+# seeded streams (`relational-sensor:*` vs `relational-schedule:<round>`) and
+# are NOT required to coincide. Do not "simplify" this into one draw: the
+# theory is exchangeable in both, and c = b/N and the sensing fraction q_c/N
+# are separate axes that this pilot happens to hold at the same value.
+#
+# ---------------------------------------------------------------------------
+# FIXED IN BOTH CELLS
+#
+#   N = 24     L = 2      r = 6       q = 1      K = 3 options, 4 distractors
+#   rounds = 10           threshold = 0.5        beta = 4
+#   q_c = 12  -> sensing fraction  q_c/N = 0.5
+#   b   = 12  -> control fraction  c = b/N = 0.5
+#   advocacy_schedule: soft         message_mode: recommendation_only
+#   target: 2 (a PINNED, verified-incorrect option index - see below)
+#   social_distrust: true           initialization: local_vote
+#   semantic option shuffling (per call, `shuffled_option_letters`)
+#   artifact_profile: results_only
+#
+# SWEPT: nothing. `game.options.task_id` in {task_0001, task_0002} is the world
+# axis, 10 repetitions each -> 2 cells, 20 episodes.
+#
+# ---------------------------------------------------------------------------
+# WHY target IS AN INDEX AND NOT `random_incorrect`
+#
+# `random_incorrect` resolves per EPISODE from the episode seed, and the
+# episode seed is derived from the GRID CELL INDEX
+# (`orchestrator.py`: Seed(execution.seed).derive("grid-cell:i").derive("episode:j")),
+# so two repetitions of one cell can advocate two different relations. Study 01
+# arm D shows exactly that. An option index is seed- and cell-independent, so
+# every one of the 20 episodes here advocates one fixed relation per world.
+#
+# Index 2 is verified INCORRECT for both worlds of pop24_L2_r06:
+#
+#   task_0001  possible_answers = [SOUTHWEST, WEST, EAST]
+#              correct = WEST (index 1)      -> target index 2 = EAST
+#   task_0002  possible_answers = [SOUTHEAST, SOUTHWEST, SOUTH]
+#              correct = SOUTHWEST (index 1) -> target index 2 = SOUTH
+#
+# This is per-task, not a dataset invariant (index 2 is CORRECT for task_0006
+# and task_0010). Re-check before widening `game.options.task_id`.
+#
+# ---------------------------------------------------------------------------
+# COST
+#
+#   2 cells x 10 repetitions = 20 episodes.
+#   Per episode: 264 nominal provider calls = 24 initial votes + 24 x 10
+#   focal updates. `q` does not change this - control REPLACES a social slot
+#   rather than adding one, so a focal update is one call whatever q is.
+#   Arm total: 5,280 nominal. Run `experiment preflight` for the expected and
+#   conservative bounds; it makes no model calls.
+#
+# ---------------------------------------------------------------------------
+# RUN FROM THE REPOSITORY ROOT
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
+#     --config configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml \
+#     --output-dir inspection/relational_study03_g_preflight
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
+#     --config configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml
+#
+# THEN (offline, no model calls):
+#
+#   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main analysis relational-round-feedback \
+#     --run-dir results/<run-id> \
+#     --output-dir results/<run-id>/relational_imitation_round_feedback_analysis
+# ---------------------------------------------------------------------------
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  # gpt-oss is a reasoning model: `reasoning_content` and the answer are both
+  # charged against max_tokens, and below roughly 1k the answer is truncated
+  # away and `content` arrives empty. Not a cost dial - bound spend with
+  # budget.max_cost_per_run.
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    # The letters a call presents. Which relation each names is shuffled per
+    # call; the population state is the relation, never the letter.
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    # Must stay false: a consensus stop would truncate episodes to different
+    # lengths and put the round-indexed information estimates on ragged data.
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      # Each agent decides once from K_i(0) alone, so the starting population
+      # reflects the distributed-information problem rather than a coin flip.
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Pinned zero-based index into the task's frozen `possible_answers`.
+    # Verified incorrect for task_0001 (EAST) and task_0002 (SOUTH).
+    target: 2
+    # q_c: agents sensed per round. Half the population, sampled without
+    # replacement, votes only.
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    # b: controlled update positions per ADVOCATE round. Numerically equal to
+    # q_c here; conceptually a different resource. See the header.
+    intervention_budget: 12
+    # THE POINT OF THIS ARM. `soft` closes the loop and makes U_k stochastic,
+    # so H(U_k) > 0 and the actuation CMIs are estimable at all. `always`
+    # would pin H(U_k) = 0 and every information quantity to zero.
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260820
+  repetitions: 10
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200000
+  max_input_tokens: 1000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  # The per-round scientific channel - round_records/<episode>/
+  # round_trajectory.jsonl - is what the information analysis reads, and
+  # results_only keeps exactly that plus the compact table, the cell
+  # aggregate, one prompt example per cell and the resolved config.
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  # Off in-run, deliberately. The round-feedback estimators are wired into
+  # `configured_analysis` for the HiddenBench game only; the relational
+  # adapter is invoked offline afterwards via
+  #   mas_cc.cli.main analysis relational-round-feedback --run-dir ...
+  # which reads the same round_trajectory.jsonl and runs the same estimators.
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study03-g-stochastic-feedback-pilot
+  description: >-
+    Relational reasoning population study 03, arm G: stochastic-feedback /
+    transfer-information pilot. N=24, L=2, r=6, q=1, 10 rounds,
+    recommendation_only against a pinned incorrect target, soft advocacy
+    schedule (beta=4, threshold=0.5), q_c=12 sensed agents and b=12 controlled
+    positions, over 2 matched worlds x 10 repetitions.
+  tags: [relational, population-study-03, arm-g, N24, q1, r6, soft-schedule, information-pilot]
+  metadata:
+    study: population_study_03
+    arm: "G"
+    population_rounds: 10
+    social_group_size: 1
+    support_redundancy: 6
+    reasoning_depth: 2
+    worlds: 2
+    repetitions: 10
+    sensor_sample_size: 12
+    sensing_fraction: 0.5
+    intervention_budget: 12
+    control_fraction: 0.5
+    advocacy_schedule: soft
+    policy_beta: 4.0
+    policy_threshold: 0.5
+    target_selection: fixed_option_index_2
+    smoke_reference: relational_population_study03_g_stochastic_feedback_pilot_mock.yaml
+
+grid:
+  game.options.task_id:
+    - task_0001
+    - task_0002
