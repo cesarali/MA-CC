@@ -19,7 +19,7 @@
 # 1. Check availability, pricing, request counts, and budget (no model calls):
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
-#     --output-dir inspection/hidden_bench_imitation_reasoning_control_10_v2_preflight
+#     --output-dir results/inspection/hidden_bench_imitation_reasoning_control_10_v2_preflight
 #
 # 2. Run all 10 episodes with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \

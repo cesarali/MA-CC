@@ -121,9 +121,6 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         raise ValueError("analysis.options.confidence must be between zero and one")
     run_id = f"{config.experiment.name}-{config.execution.seed}"
     if config.game.type == RELATIONAL_ROUND_FEEDBACK:
-        # The relational analyzer writes local files only - it has no Comet
-        # path at all - so the Comet arguments are simply absent rather than
-        # passed as False. One less way for a "local" analysis to reach out.
         return {
             "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
             "null_permutations": _integer_option(options, "null_permutations", 1000),
@@ -131,6 +128,13 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
             "seed": _integer_option(options, "seed", config.execution.seed),
             "statistics": statistics,
             "epistemic_bins": _integer_option(options, "epistemic_bins", 4),
+            # Current analysis is aggregate post-processing, so it follows the
+            # same master-only Comet gate as the other configured analyzers.
+            "comet_export": analysis.comet_export and config.logging.comet,
+            "comet_project": str(
+                config.logging.options.get("comet_project", "mas-cc")
+            ),
+            "comet_run_name": f"{run_id}/analysis",
         }
     return {
         "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
@@ -202,6 +206,7 @@ def run_configured_analysis(
         return analyze_relational_imitation_round_feedback(
             root,
             root / "relational_imitation_round_feedback_analysis",
+            comet_sink=comet_sink,
             **arguments,
         )
 
@@ -263,8 +268,7 @@ def run_configured_cell_analysis(
     reports = root / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     slug = _report_slug(config, cell_id)
-    if config.game.type != RELATIONAL_ROUND_FEEDBACK:
-        arguments["comet_run_name"] = f"{arguments['comet_run_name']}/{cell_id}"
+    arguments["comet_run_name"] = f"{arguments['comet_run_name']}/{cell_id}"
     retained: list[str] = []
     with tempfile.TemporaryDirectory(prefix=".cell-analysis-", dir=root) as temporary:
         destination = Path(temporary)
@@ -274,11 +278,16 @@ def run_configured_cell_analysis(
             )
 
             summary = analyze_relational_imitation_round_feedback(
-                root, destination, **arguments
+                root,
+                destination,
+                comet_sink=comet_sink,
+                comet_name_suffix=slug,
+                **arguments,
             )
             source_names = (
                 "round_information_estimates.md",
                 "analysis_summary.json",
+                Path("currents") / "current_analysis.md",
             )
         elif config.game.type == "hidden_bench_imitation_round_feedback":
             from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (

@@ -46,7 +46,7 @@
 #
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/relational_reasoning/population_study_01/relational_population_study01_b_social_control.yaml \
-#     --output-dir inspection/relational_study01_b_social_control_preflight
+#     --output-dir results/inspection/relational_study01_b_social_control_preflight
 #
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
 #     --config configs/runs/relational_reasoning/population_study_01/relational_population_study01_b_social_control.yaml

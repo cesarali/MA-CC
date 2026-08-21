@@ -83,6 +83,7 @@ def _baseline_selected_wire_parity(selected_rows: list[dict[str, Any]]) -> bool:
 
     baseline = (
         Path(__file__).resolve().parents[3]
+        / "results"
         / "inspection"
         / "realignment_v3"
         / "baseline"

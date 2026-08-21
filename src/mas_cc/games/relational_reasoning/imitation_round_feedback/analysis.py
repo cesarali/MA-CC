@@ -99,6 +99,11 @@ from ...hidden_bench.imitation_round_feedback.analysis import (
     round_information_analysis,
 )
 from .state import ROUND_RECORD_TYPE
+from .current import (
+    current_analysis_comet_metrics,
+    read_relational_micro_events,
+    write_current_analysis,
+)
 from .theory import (
     ClassicalReference,
     TheoryParameters,
@@ -1253,6 +1258,57 @@ def append_theory_report(
         handle.write("\n".join(lines) + "\n")
 
 
+def _export_current_analysis_to_comet(
+    rows: Sequence[Mapping[str, Any]],
+    assets: Sequence[Path],
+    *,
+    enabled: bool,
+    project_name: str,
+    run_name: str,
+    sink: Any | None = None,
+    name_suffix: str | None = None,
+) -> dict[str, Any]:
+    """Publish aggregate current values from the master/post-hoc layer only."""
+
+    if not enabled:
+        return {
+            "status": "disabled",
+            "metrics": 0,
+            "assets": 0,
+            "url": None,
+            "published_to": None,
+        }
+    borrowed = sink is not None
+    if sink is None:
+        from mas_cc.observability.recorder import CometMetricSink
+
+        sink = CometMetricSink(True, project_name=project_name, run_name=run_name)
+    metrics = current_analysis_comet_metrics(rows)
+    uploaded = 0
+    try:
+        sink.add_tags(("analysis", "relational", "current"))
+        if metrics:
+            sink.log_metrics(metrics, 0)
+        for asset in assets:
+            if not asset.is_file():
+                continue
+            asset_name = asset.name
+            if name_suffix:
+                asset_name = f"{asset.stem}__{name_suffix}{asset.suffix}"
+            sink.log_asset(asset, name=asset_name)
+            uploaded += 1
+        return {
+            "status": sink.status,
+            "metrics": len(metrics),
+            "assets": uploaded,
+            "url": sink.url,
+            "published_to": "master" if borrowed else "analysis_experiment",
+        }
+    finally:
+        if not borrowed:
+            sink.close()
+
+
 def analyze_relational_imitation_round_feedback(
     run_dir: str | Path,
     output_dir: str | Path,
@@ -1264,6 +1320,11 @@ def analyze_relational_imitation_round_feedback(
     statistics: Sequence[str] | None = None,
     epistemic_bins: int = DEFAULT_EPISTEMIC_BINS,
     theory_comparison_enabled: bool = True,
+    comet_export: bool = False,
+    comet_project: str = "mas-cc",
+    comet_run_name: str | None = None,
+    comet_sink: Any | None = None,
+    comet_name_suffix: str | None = None,
 ) -> dict[str, Any]:
     """Run the shared round-feedback pipeline over a relational grid.
 
@@ -1386,6 +1447,17 @@ def analyze_relational_imitation_round_feedback(
     pd.DataFrame(regimes).to_csv(
         destination / "episode_epistemic_regime.csv", index=False
     )
+
+    micro = read_relational_micro_events(run_dir)
+    current_rows, current_episodes, current_reports = write_current_analysis(
+        rounds,
+        destination,
+        bootstrap_resamples=bootstrap_resamples,
+        confidence=confidence,
+        seed=seed,
+        theory_enabled=theory_comparison_enabled,
+        micro=micro,
+    )
     pd.DataFrame(
         [
             {
@@ -1492,6 +1564,10 @@ def analyze_relational_imitation_round_feedback(
             for row in theory_rows
         ],
         "theory_state_coarse_graining": "target_vs_not_target",
+        "current_analysis": current_rows,
+        "current_episode_rows": len(current_episodes),
+        "current_reports": [str(path) for path in current_reports],
+        "n_micro_events_checked_for_current": len(micro),
         "memory_conditioning_support": [
             {
                 "cell_id": row["cell_id"],
@@ -1510,7 +1586,26 @@ def analyze_relational_imitation_round_feedback(
             for row in memory_rows
         ],
     }
-    (destination / "analysis_summary.json").write_text(
+    summary_path = destination / "analysis_summary.json"
+    summary_path.write_text(
+        json.dumps(summary, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+    summary["comet"] = _export_current_analysis_to_comet(
+        current_rows,
+        (
+            destination / "currents" / "cell_current_summary.csv",
+            destination / "currents" / "episode_currents.csv",
+            *current_reports,
+            summary_path,
+        ),
+        enabled=comet_export,
+        project_name=comet_project,
+        run_name=comet_run_name or f"{Path(run_dir).name}/analysis",
+        sink=comet_sink,
+        name_suffix=comet_name_suffix,
+    )
+    summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True, default=str) + "\n",
         encoding="utf-8",
     )
@@ -1537,6 +1632,7 @@ __all__ = [
     "adapt_relational_round_record",
     "analyze_relational_imitation_round_feedback",
     "controller_action_summary",
+    "current_analysis_comet_metrics",
     "epistemic_regime_summary",
     "read_relational_round_records",
 ]

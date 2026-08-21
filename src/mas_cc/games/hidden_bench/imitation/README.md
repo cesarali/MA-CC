@@ -111,12 +111,12 @@ Reasoning preflight and run:
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
-  --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+  --output-dir results/inspection/hidden_bench_imitation_reasoning_control_10_preflight
 
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
   --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
   --output-dir results \
-  --approve-preflight inspection/hidden_bench_imitation_reasoning_control_10_preflight/preflight_id.txt
+  --approve-preflight results/inspection/hidden_bench_imitation_reasoning_control_10_preflight/preflight_id.txt
 ```
 
 Classical/no-reasoning preflight and run:
@@ -124,12 +124,12 @@ Classical/no-reasoning preflight and run:
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
-  --output-dir inspection/hidden_bench_imitation_classical_control_10_preflight
+  --output-dir results/inspection/hidden_bench_imitation_classical_control_10_preflight
 
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \
   --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
   --output-dir results \
-  --approve-preflight inspection/hidden_bench_imitation_classical_control_10_preflight/preflight_id.txt
+  --approve-preflight results/inspection/hidden_bench_imitation_classical_control_10_preflight/preflight_id.txt
 ```
 
 Every episode writes the 12 behavioral diagnostics directly to

@@ -106,7 +106,7 @@
 #
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/relational_reasoning/relational_imitation_round_feedback_gpt_oss_120b_N12_prompt_inspection.yaml \
-#     --output-dir inspection/relational_gpt_oss_N12_prompt_inspection_preflight
+#     --output-dir results/inspection/relational_gpt_oss_N12_prompt_inspection_preflight
 #
 # 2. The run:
 #

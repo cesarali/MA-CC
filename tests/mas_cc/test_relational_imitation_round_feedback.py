@@ -23,6 +23,7 @@ from mas_cc.games.hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_O
 from mas_cc.games.relational_reasoning.data import DEFAULT_TASK_DATASET_DIR
 from mas_cc.games.relational_reasoning.imitation_round_feedback.controller import (
     SCHEDULE_ALWAYS,
+    SCHEDULE_NEVER,
     SCHEDULE_SOFT,
     RECOMMENDATION_ONLY,
     RECOMMENDATION_PLUS_FACT,
@@ -1074,6 +1075,29 @@ def test_always_advocates_every_round_whatever_the_sensor_saw():
         assert control.select_action(share, None) == (ADVOCATE_TARGET, 1.0)
 
 
+def test_never_advocates_in_any_round_whatever_the_sensor_saw():
+    control = RelationalRoundBudgetedControl.from_options(
+        _control_options(advocacy_schedule=SCHEDULE_NEVER)
+    )
+
+    # Like `always`, this schedule neither consults nor advances the RNG.
+    for share in (0.0, 0.5, 1.0):
+        assert control.select_action(share, None) == (NO_OP, 0.0)
+
+
+def test_a_never_schedule_is_no_op_in_every_round_but_still_senses():
+    config = _config(CONTROLLED, rounds=3, q=1)
+    options = {**dict(config.control.options), "advocacy_schedule": SCHEDULE_NEVER}
+    config = replace(config, control=replace(config.control, options=options))
+    result, _ = _run(config, control=create_control(config.control))
+
+    for record in result.rounds:
+        assert record.event["controller_action"] == NO_OP
+        assert record.event["controller_advocacy_probability"] == 0.0
+        assert record.event["controlled_position_count"] == 0
+        assert len(record.event["sensor_agent_ids"]) == options["sensor_sample_size"]
+
+
 def test_an_always_schedule_actuates_in_every_round_of_an_episode():
     config = _config(CONTROLLED, rounds=4, q=1)
     options = {**dict(config.control.options), "advocacy_schedule": SCHEDULE_ALWAYS}
@@ -1090,6 +1114,8 @@ def test_an_always_schedule_actuates_in_every_round_of_an_episode():
         # Sensing still happened and is still logged; only the decision ignores it.
         assert record.event["sensor_sample_size"] == options["sensor_sample_size"]
         assert len(record.event["sensor_agent_ids"]) == options["sensor_sample_size"]
+        assert len(record.event["agent_ids"]) == config.game.population_size
+        assert len(record.event["initial_knowledge_class_by_agent"]) == config.game.population_size
 
 
 def test_an_unknown_advocacy_schedule_is_refused():

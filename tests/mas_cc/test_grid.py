@@ -6,6 +6,8 @@ import pytest
 
 from mas_cc.config import GridSpec, RunConfig, load_run_config
 from mas_cc.config.grid import GridAxis
+from mas_cc.core import Seed
+from mas_cc.experiments.orchestrator import _grid_cell_seed
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.experiments import run_experiment_grid_sync
 from mas_cc.games import create_game
@@ -44,6 +46,18 @@ def test_grid_spec_expands_the_cartesian_product_in_stable_order():
     # The base config is untouched; only each cell's own config carries the override.
     assert base.game.horizon == load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={}).game.horizon
     assert grid.grid_id == GridSpec(base=base, axes=grid.axes).grid_id  # deterministic
+
+
+def test_common_random_numbers_share_episode_streams_only_when_opted_in():
+    root = Seed(20260821)
+
+    matched = [_grid_cell_seed(root, index, common_random_numbers=True) for index in range(3)]
+    ordinary = [_grid_cell_seed(root, index, common_random_numbers=False) for index in range(3)]
+
+    assert [int(seed.derive("episode:7")) for seed in matched] == [
+        int(root.derive("episode:7"))
+    ] * 3
+    assert len({int(seed.derive("episode:7")) for seed in ordinary}) == 3
 
 
 @pytest.mark.parametrize(

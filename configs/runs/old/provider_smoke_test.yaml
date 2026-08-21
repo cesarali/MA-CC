@@ -16,7 +16,7 @@ execution:
 pricing:
   schema_version: 1
   mode: live
-  cache_path: inspection/phase_04_amendment/pricing_snapshot.json
+  cache_path: results/inspection/phase_04_amendment/pricing_snapshot.json
   max_age_seconds: 900
   require_fresh_at_launch: true
   fallback_policy: deny

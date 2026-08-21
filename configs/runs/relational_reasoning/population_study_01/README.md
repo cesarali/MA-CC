@@ -145,7 +145,7 @@ price list, so it needs the provider credentials.)
 for arm in a_no_control b_social_control c_epistemic_control d_adversarial_diagnostic; do
   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
     --config configs/runs/relational_reasoning/population_study_01/relational_population_study01_${arm}.yaml \
-    --output-dir inspection/relational_study01_${arm}_preflight
+    --output-dir results/inspection/relational_study01_${arm}_preflight
 done
 ```
 

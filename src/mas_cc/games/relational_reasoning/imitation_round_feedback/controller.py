@@ -47,7 +47,7 @@ from mas_cc.config import ControlConfig
 from mas_cc.control import Control
 from mas_cc.llm_runtime.validation import ValidationIssue
 
-from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, SoftTargetControl
+from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP, SoftTargetControl
 from ...hidden_bench.imitation_round_feedback.controller import (
     EVIDENCE_NONE,
     RoundSoftTargetBudgetedControl,
@@ -66,12 +66,14 @@ FACT_SELECTORS = (SELECTOR_SUPPORTING,)
 
 SCHEDULE_SOFT = "soft"
 SCHEDULE_ALWAYS = "always"
-ADVOCACY_SCHEDULES = (SCHEDULE_SOFT, SCHEDULE_ALWAYS)
+SCHEDULE_NEVER = "never"
+ADVOCACY_SCHEDULES = (SCHEDULE_SOFT, SCHEDULE_ALWAYS, SCHEDULE_NEVER)
 """``control.options.advocacy_schedule``.
 
 ``soft`` is the default and the closed loop: the sensed target share feeds the
 logistic policy, so whether the controller acts depends on the population.
 ``always`` is open loop - it advocates every round regardless of what it sensed.
+``never`` is the corresponding open-loop no-op schedule.
 
 Open loop is what a *controllability* study wants. Under the soft policy the
 actuation a population receives is a function of that population's own state,
@@ -105,6 +107,8 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
 
         if self.advocacy_schedule == SCHEDULE_ALWAYS:
             return ADVOCATE_TARGET, 1.0
+        if self.advocacy_schedule == SCHEDULE_NEVER:
+            return NO_OP, 0.0
         # Explicit rather than `super()`: `@dataclass(slots=True)` rebuilds the
         # class, which leaves the zero-argument form's `__class__` cell pointing
         # at the discarded original.  The parent does the same for the same
@@ -273,6 +277,7 @@ __all__ = [
     "RECOMMENDATION_ONLY",
     "RECOMMENDATION_PLUS_FACT",
     "SCHEDULE_ALWAYS",
+    "SCHEDULE_NEVER",
     "SCHEDULE_SOFT",
     "SELECTOR_SUPPORTING",
     "RelationalRoundBudgetedControl",

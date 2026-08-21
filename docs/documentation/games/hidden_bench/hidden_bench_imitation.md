@@ -1117,7 +1117,7 @@ Preflight cost and demand:
 conda run -n MA-CC --no-capture-output \
   python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
-  --output-dir inspection/hidden_bench_imitation_reasoning_control_10_preflight
+  --output-dir results/inspection/hidden_bench_imitation_reasoning_control_10_preflight
 ```
 
 The reasoning preflight uses live university price metadata and therefore
@@ -1131,7 +1131,7 @@ conda run -n MA-CC --no-capture-output \
   python -m mas_cc.cli.main experiment run \
   --config configs/runs/hidden_bench/hidden_bench_imitation_reasoning_control_10.yaml \
   --output-dir results \
-  --approve-preflight inspection/hidden_bench_imitation_reasoning_control_10_preflight/preflight_id.txt
+  --approve-preflight results/inspection/hidden_bench_imitation_reasoning_control_10_preflight/preflight_id.txt
 ```
 
 The run config enables all four MI/CMI statistics, so the experiment command
@@ -1154,7 +1154,7 @@ Preflight:
 conda run -n MA-CC --no-capture-output \
   python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
-  --output-dir inspection/hidden_bench_imitation_classical_control_10_preflight
+  --output-dir results/inspection/hidden_bench_imitation_classical_control_10_preflight
 ```
 
 The classical configuration retains the same university-provider declaration
@@ -1168,7 +1168,7 @@ conda run -n MA-CC --no-capture-output \
   python -m mas_cc.cli.main experiment run \
   --config configs/runs/hidden_bench/hidden_bench_imitation_classical_control_10.yaml \
   --output-dir results \
-  --approve-preflight inspection/hidden_bench_imitation_classical_control_10_preflight/preflight_id.txt
+  --approve-preflight results/inspection/hidden_bench_imitation_classical_control_10_preflight/preflight_id.txt
 ```
 
 This config also computes all four MI/CMI statistics automatically. To
@@ -1199,13 +1199,13 @@ It uses 12 episodes per cell and the same initial vote vector in every cell.
 conda run -n MA-CC --no-capture-output \
   python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/hidden_bench/hidden_bench_imitation_first_control_grid.yaml \
-  --output-dir inspection/hidden_bench_imitation_first_control_grid_preflight
+  --output-dir results/inspection/hidden_bench_imitation_first_control_grid_preflight
 
 conda run -n MA-CC --no-capture-output \
   python -m mas_cc.cli.main experiment run \
   --config configs/runs/hidden_bench/hidden_bench_imitation_first_control_grid.yaml \
   --output-dir results \
-  --approve-preflight inspection/hidden_bench_imitation_first_control_grid_preflight/preflight_id.txt
+  --approve-preflight results/inspection/hidden_bench_imitation_first_control_grid_preflight/preflight_id.txt
 ```
 
 Analyze the resulting grid:

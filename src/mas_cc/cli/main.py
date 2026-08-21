@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     examples.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("inspection/paper_prompts"),
+        default=Path("results/inspection/paper_prompts"),
         help="artifact directory (default: %(default)s)",
     )
     examples.add_argument(
@@ -365,7 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
     phase.add_argument(
         "--output-dir",
         type=Path,
-        help="artifact directory (default: inspection/phase_NN)",
+        help="artifact directory (default: results/inspection/phase_NN)",
     )
     phase.add_argument(
         "--prompt",
@@ -682,7 +682,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
 
-        output_dir = args.output_dir or Path(f"inspection/phase_{args.number:02d}")
+        output_dir = args.output_dir or Path(f"results/inspection/phase_{args.number:02d}")
         try:
             if args.number == 1:
                 passed = inspect_phase_1(output_dir)

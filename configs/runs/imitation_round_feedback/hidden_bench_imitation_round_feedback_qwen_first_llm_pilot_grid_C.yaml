@@ -14,7 +14,7 @@
 # Preflight before model inference:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/imitation_round_feedback/hidden_bench_imitation_round_feedback_qwen_first_llm_pilot_grid_C.yaml \
-#     --output-dir inspection/first_llm_pilot_grid_C_preflight
+#     --output-dir results/inspection/first_llm_pilot_grid_C_preflight
 #
 # Launch Grid C with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \

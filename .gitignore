@@ -16,8 +16,11 @@ venv/
 .DS_Store
 .tags*
 
-# Generated benchmark artifacts
+# Generated benchmark artifacts (inspection bundles live in results/inspection/)
 results/
+
+# Legacy inspection location - artifacts now go to results/inspection/
+inspection/
 
 # Local data folder
 data/
