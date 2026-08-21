@@ -1,0 +1,126 @@
+#!/bin/bash
+# Relational reasoning population study 04 -- the sensing/actuation resource grid.
+#
+# ONE ARRAY TASK PER q_c ROW. The three rows are one 3x3 grid scientifically
+# (q_c in {6,12,18} x b in {6,12,18} x 2 worlds x 30 repetitions = 18 cells,
+# 540 episodes); they are three configs so each is independently launchable and
+# independently resumable, and they are three array tasks so they run side by
+# side instead of back to back.
+#
+#   array index   row     config                                  q_c
+#   ---------------------------------------------------------------------------
+#       0         qc06    relational_population_study04_qc06.yaml   6
+#       1         qc12    relational_population_study04_qc12.yaml  12
+#       2         qc18    relational_population_study04_qc18.yaml  18
+#
+#   each row: 6 cells (b in {6,12,18} x task_0001/task_0002) x 30 reps
+#             = 180 episodes, 47,520 nominal / 50,220 expected provider calls
+#
+# NOT a cell array, and not one process for the whole study. Per row this is a
+# single `experiment run`, because the offline analysis
+#   mas-cc analysis relational-round-feedback --run-dir <run>
+# reads ONE run directory per row and its pooled estimates are the slice that
+# can populate the memory-conditioned CMIs. Sharding a row by cell would give
+# six run trees and no pooled slice without a roll-up first.
+#
+# WHY %3 AND NOT MORE
+#
+#     simultaneous provider requests = running tasks x request_concurrency
+#
+# request_concurrency is 8 per process, so %3 -> 24 simultaneous. The study 01
+# and 02 cell arrays ran at %4 x 8 = 32 simultaneous against this same proxy
+# and model, over 134 cells, with no provider errors - so 24 is below a level
+# already demonstrated here. The study README calls 24 "not tuned for"; this is
+# the missing evidence, not a decision to ignore it. Do not raise the throttle
+# past %4 without redoing the arithmetic against the 2,000 req/min allowance.
+#
+# request_concurrency and execution.parallelism are deliberately NOT raised:
+# they are study 03 settings this study holds fixed, and changing them would
+# make the rows incomparable to the pilot. The parallelism here comes from
+# running the three rows at once.
+#
+# RUNTIME. Measured on study 03 (same provider, same shape): 5,280 calls in
+# 53m46s = ~98 calls/min per process. A row's 50,220 expected calls is
+# therefore ~8.5 h, and all three land together in ~8.5 h. --time=20:00:00 is
+# ~2.3x that, so a slow night does not truncate an unattended run. The study
+# README's own "~5.2 h per row" is the preflight's optimistic estimate; the
+# measured rate is the one this job is sized against.
+#
+# MEMORY. Study 03 peaked at 2.9 GB for 20 episodes; a row is 180. 32 G is
+# generous headroom on nodes that carry 512-768 G.
+#
+# SUBMIT (always with the throttle):
+#
+#   sbatch --array=0-2%3 \
+#     scripts/Potsdam/SLURM/relational_population_study04_row_array.job
+#
+# Resume after an interruption: storage.overwrite is false, checkpoint_mode is
+# episode and `experiment run` defaults to --resume, so re-submitting the same
+# index picks up the unfinished episodes. Point it at the SAME output dir. If
+# the CONFIG changed, pass --no-resume or use a clean directory - checkpoints
+# under a different resolved_config_hash are rejected rather than mixed.
+#
+# ANALYSIS per row when it finishes (offline, provider-free):
+#
+#   python -m mas_cc.cli.main analysis relational-round-feedback \
+#     --run-dir /work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study04/<row>/relational_imitation_round_feedback/relational-study04-<row>-resource-grid/<run-id>
+#
+#SBATCH --job-name=relstudy04
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --time=20:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy04_%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy04_%A_%a.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly CONFIG_DIR=configs/runs/relational_reasoning/population_study_04
+readonly RESULT_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study04
+readonly TASK_INDEX=${SLURM_ARRAY_TASK_ID:?submit this script as a SLURM array}
+
+case "${TASK_INDEX}" in
+  0) ROW=qc06 ;;
+  1) ROW=qc12 ;;
+  2) ROW=qc18 ;;
+  *) echo "[error] array index ${TASK_INDEX} outside 0..2" >&2; exit 2 ;;
+esac
+readonly ROW
+
+readonly CONFIG=${CONFIG_DIR}/relational_population_study04_${ROW}.yaml
+# One output directory per row: three `experiment run` processes write
+# concurrently, and separate roots keep their run trees and durable budget
+# state from sharing a parent.
+readonly OUTPUT_DIR=${RESULT_ROOT}/${ROW}
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${OUTPUT_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing ${REPO_ROOT}/.env" >&2; exit 1; }
+
+mkdir -p "${OUTPUT_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] study=population_study_04 row=${ROW} (sensing/actuation resource grid)"
+echo "[run] array_index=${TASK_INDEX} job=${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+echo "[run] config=${CONFIG}"
+echo "[run] output=${OUTPUT_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" -m mas_cc.cli.main experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --no-progress
+
+echo "[done] row=${ROW} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

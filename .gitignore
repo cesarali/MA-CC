@@ -14,6 +14,7 @@ __pycache__/
 venv/
 
 .DS_Store
+.tags*
 
 # Generated benchmark artifacts
 results/
