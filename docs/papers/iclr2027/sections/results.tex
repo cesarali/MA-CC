@@ -1,4 +1,218 @@
 \section{Results}
 \label{sec:results}
 
-\lipsum[14-16]
+We organize the results around three complementary questions. First, how much
+can the controller move the population? Second, how efficiently is the
+controller-dependent information expressed as coherent population motion?
+Third, how efficiently are sensing and actuation resources converted into
+useful directed current? These questions correspond respectively to the
+susceptibility $\chi$, the information--response efficiency $\eta_{\rm IR}$,
+and the finite-time thermodynamic efficiency $\eta_{\rm th}$.
+
+\subsection{Control susceptibility is causal, finite, and state dependent}
+
+We first measure the response to advocacy under matched initial conditions.
+For a fixed initial target fraction $x_0=n_Z/N$, the susceptibility is
+\[
+\chi(x_0)=\mathbb E[\Delta x\mid {\rm ADV},x_0]
+          -\mathbb E[\Delta x\mid {\rm NOOP},x_0].
+\]
+Holding the epistemic composition fixed, advocacy produces a positive shift
+toward the controller target at every tested state:
+\[
+\chi(0.25)=0.163,\qquad
+\chi(0.375)=0.100,\qquad
+\chi(0.50)=0.104.
+\]
+The corresponding $95\%$ matched-pair bootstrap intervals are
+$[0.119,0.202]$, $[0.060,0.144]$, and $[0.060,0.148]$
+(Fig.~\ref{fig:susceptibility}a). Thus the controller has a measurable causal
+influence even when the initial knowledge distribution is held fixed. The
+response is largest at the lowest tested target fraction and does not increase
+with additional pre-existing support over the tested range.
+
+Microscopic controlled transitions provide a direct calibration of the
+finite-compliance description. Pooling the state-matched controlled updates
+gives an effective directional affinity $F_{\rm eff}=3.83$ and kinetic
+compliance $\gamma_{\rm eff}=0.372$. Substituting these into
+\[
+\chi_{F,\gamma}(x)=
+[\sigma(F)-x]\left[1-\left(1-\frac{\gamma}{N}\right)^b\right]
+\]
+gives the dashed finite-compliance reference in
+Fig.~\ref{fig:susceptibility}a. Because $F_{\rm eff}$ and $\gamma_{\rm eff}$ are estimated from the same microscopic trajectories, this is a calibrated reference rather than a parameter-free prediction. It nevertheless shows that separating directional bias from kinetic compliance removes much of the discrepancy with the idealized copying limit.
+
+The exact theory also clarifies the role of compliance itself
+(Fig.~\ref{fig:susceptibility}b). Changing $\gamma$ rescales the magnitude of
+the response while leaving the zero-response set point
+$x^\star=\sigma(h_c)$ unchanged. This separation is useful empirically:
+$h_c$ (or the effective net affinity) controls which direction is favored,
+whereas $\gamma$ controls how often a controlled opportunity actually produces
+a revision.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/fig_susceptibility_empirical_theory.png}
+\caption{\textbf{Empirical and theoretical susceptibility.}
+(a) State-matched ADVOCATE-minus-NoOp response with $95\%$ bootstrap
+intervals and the finite-compliance calibration from microscopic transition
+rates. (b) Exact theory showing how kinetic compliance $\gamma$ changes the
+response amplitude without moving the intrinsic set point.}
+\label{fig:susceptibility}
+\end{figure*}
+
+\subsection{State-local dynamics reveal where control is expressed}
+
+The longer stochastic-feedback experiment gives access to the trajectory-level
+state dependence of control. Figure~\ref{fig:landscapes}a shows the mean signed
+round-to-round drift $\mathbb E[\Delta x\mid x,b]$ for $q_c=12$. Because the
+controller advocates an incorrect target, the uncontrolled epistemic dynamics
+usually drive $x$ downward. Increasing $b$ makes this correction progressively
+weaker, particularly at low and intermediate target support. This quantity is
+descriptive rather than causal: the matched experiment above remains the clean
+measurement of $\chi$.
+
+The controller action also leaves a strongly state-dependent information
+signature. We measure the reduced-state conditional mutual information
+\[
+T(n)=I(U;n_{k+1}\mid n_k=n).
+\]
+The empirical excess above a within-state permutation null is shown in
+Fig.~\ref{fig:landscapes}b. At small $b$ the signal is weak, whereas at
+$b=18$ a clear interior band appears. The exact finite-state theory produces
+the same basic geometric mechanism (Fig.~\ref{fig:landscapes}c): local
+information is high only where the action is not already deterministic and
+where the advocacy and NoOp transition kernels are sufficiently separated.
+The support map in Fig.~\ref{fig:landscapes}d is included because the higher
+state bins are visited less often and should not be interpreted with the same
+confidence as densely sampled cells.
+
+The robust conclusion is that control information is not uniform over population state space and stronger actuation creates an informative interior region. We do not interpret the precise ridge location as a phase boundary because $n_Z$ is only a coarse-grained state.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.80\textwidth]{figures/fig_state_local_landscapes.png}
+\caption{\textbf{State-local response and information.}
+(a) Empirical signed population drift as a function of target support and
+actuation budget at $q_c=12$. (b) Empirical state-local action-to-population
+information above a within-state permutation null. (c) Exact theoretical
+state-local information landscape for the baseline finite-bias feedback
+controller. (d) Number of observed rounds supporting each empirical state
+bin.}
+\label{fig:landscapes}
+\end{figure*}
+
+\subsection{Feedback gain concentrates rather than simply increases information}
+
+The theory makes a more specific prediction about the feedback policy. The
+gain $\beta$ controls how sharply the controller switches between advocacy and
+NoOp after sensing. At small $\beta$, the action remains uncertain over a wide
+range of states; at large $\beta$, the policy becomes nearly deterministic
+except close to its switching threshold. Consequently increasing $\beta$ does
+not monotonically increase $T(n)$. Instead, the informative band narrows and
+moves toward the decision boundary (Fig.~\ref{fig:beta}a).
+
+The state-averaged theory curves make the same point in one dimension
+(Fig.~\ref{fig:beta}b): for fixed actuation budget, larger $\beta$ can reduce
+the average action-to-population information even though the controller is
+more decisive. This separates controller \emph{decisiveness} from controller \emph{information transmission} and suggests a focused validation rather than a broad search: $\beta\in\{1,4,8\}$ is sufficient to test whether the empirical information band sharpens as predicted.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/fig_beta_theory.png}
+\caption{\textbf{Exact theory for feedback gain.}
+(a) State-local action-to-population information for increasing policy gain
+$\beta$. A sharper policy concentrates information around the switching
+region and suppresses it where the action saturates. (b) State-averaged local
+information versus actuation budget for the theory parameter sweeps; the
+$\beta$ family shows that a more deterministic policy need not transmit more
+action information overall.}
+\label{fig:beta}
+\end{figure*}
+
+\subsection{Information--response efficiency increases with actuation}
+
+The information--response efficiency asks how much of the controller-dependent
+change in the full next-state distribution is expressed as a coherent shift of
+the mean target fraction. Using the bounded quantity defined in
+Section~\ref{sec:feedback_efficiency}, the occupancy-averaged empirical values
+are small in absolute terms but systematic across the resource grid
+(Fig.~\ref{fig:efficiencies}a). They range from approximately $0.4\%$ to $2.5\%$ of
+the rigorous Pinsker bound and increase with $b$ for every sensing budget. At
+$q_c=12$, for example,
+\[
+\eta_{\rm IR}=0.0043,\;0.0135,\;0.0228
+\qquad\text{for } b=6,12,18.
+\]
+Thus stronger actuation does more than increase the size of the population
+response: within this operating regime it also makes a larger fraction of the
+action-dependent distributional change visible as coherent mean motion. The
+small absolute values should not be interpreted as energetic losses; the
+Pinsker inequality supplies a conservative information-theoretic ceiling and
+need not be tight for these transition distributions.
+
+
+
+\subsection{A finite-time thermodynamic bridge exposes sensing costs}
+
+The same microscopic trajectories allow us to reconstruct most ingredients of
+the thermodynamic control channel. Across the nine resource cells, the fitted
+net affinity remains positive,
+$F_{\rm eff}\in[1.86,3.01]$, whereas kinetic compliance remains low,
+$\gamma_{\rm eff}\in[0.084,0.127]$. The resulting finite-compliance current
+matches the directly observed controlled current closely
+($r=0.999$, RMSE $=0.016$ target-count changes per round), providing an
+internal consistency check on the reduced microscopic description.
+
+A genuine empirical $\eta_{\rm th}$ additionally requires an independently
+identified opposing load. As an exploratory bridge, we summarize the
+population's NoOp tendency to leave the incorrect target by
+$h_e^\star=2.19$ with bootstrap interval $[2.12,2.26]$, and evaluate
+\[
+\eta_{\rm th}^\star=
+\frac{h_e^\star J_c}
+{(F_{\rm eff}+h_e^\star)J_c+I(n;Y)+\Delta S_{\rm sys}}.
+\]
+The resource ordering is strikingly simple
+(Fig.~\ref{fig:efficiencies}b): $\eta_{\rm th}^\star$ increases with $b$ at every
+$q_c$, while increasing sensing at fixed $b$ generally lowers the efficiency
+proxy. At $b=18$, for example, it changes from $0.369$ at $q_c=6$ to $0.343$
+at $q_c=12$ and $0.296$ at $q_c=18$.
+
+The exact theory explains why this is possible. Increasing controller affinity
+need not increase thermodynamic efficiency because the generalized input work
+$h_cJ_c$ rises together with the current
+(Fig.~\ref{fig:efficiencies}c). Likewise, the empirical sensing information grows
+strongly with $q_c$ (Fig.~\ref{fig:efficiencies}d), but the corresponding controlled
+current does not increase proportionally. Additional sensing is therefore a
+resource only when the feedback policy can convert the extra information into
+useful directed motion.
+
+We retain the superscript $\star$ because the NoOp drift is not yet an
+independently imposed, mechanism-resolved load. The result should therefore be
+read as a thermodynamic bridge rather than the final empirical measurement of
+$\eta_{\rm th}$. Nevertheless, the observed resource ordering is robust to a
+broad range of assumed loads, and it identifies the main missing experiment:
+a direct calibration of epistemic resistance that separates $h_c$ from $h_e$.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.82\textwidth]{figures/fig_efficiencies_all.png}
+\caption{\textbf{Efficiency and resource conversion.}
+(a) Empirical information--response efficiency across the sensing--actuation grid.
+(b) Exploratory finite-time thermodynamic-efficiency proxy.
+(c) Exact theory: increasing controller affinity can reduce thermodynamic efficiency because input work grows with control strength.
+(d) Empirical sensing information, which rises strongly with $q_c$ without a proportional increase in controlled current.}
+\label{fig:efficiencies}
+\end{figure*}
+
+Taken together, the results support a single resource-conversion picture of
+feedback control. Susceptibility identifies where the population can be moved;
+state-local information identifies where the action is dynamically visible;
+$\eta_{\rm IR}$ quantifies how coherently that information appears as mean
+motion; and the thermodynamic analysis asks whether sensing and actuation are
+worth the directed current they produce. In the present regime, actuation is
+the dominant useful resource, while sensing displays clear diminishing
+returns. The theory additionally predicts that feedback gain $\beta$ should
+reshape, rather than simply amplify, the information channel, providing a
+focused next validation of the framework.

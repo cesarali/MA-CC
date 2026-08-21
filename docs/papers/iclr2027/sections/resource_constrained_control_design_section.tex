@@ -1,0 +1,122 @@
+\section{Resource-Constrained Control Design}
+\label{sec:resource_constrained_control}
+
+The state-local susceptibility introduced above quantifies how strongly the population responds when the controller acts,
+\begin{equation}
+\chi_{h_c}(x)
+=
+\mathbb{E}[x' \mid U=1,x]
+-
+\mathbb{E}[x' \mid U=0,x],
+\end{equation}
+with \(x=n/N\). This quantity characterizes the local effectiveness of an intervention, but it does not by itself specify how a controller should be designed. If sensing and intervention were completely free, the design problem would be largely trivial: one would simply sense as much as possible and actuate as strongly and as often as possible. The practically relevant question is instead how much control can be obtained for a finite controller budget, or conversely, how little sensing and actuation are required to achieve a prescribed population response.
+
+\subsection{Operational efficacy and interaction cost}
+\label{subsec:efficacy_cost}
+
+Let \(a_n=\Pr(U=1\mid n)\) denote the probability that the controller advocates the target at population count \(n\), and let \(\rho(n)\) denote the occupancy distribution used to average over the states encountered during the evaluation window. The expected controller-induced response per round is then
+\begin{equation}
+\boxed{
+R
+=
+\sum_n
+\rho(n)\,
+a_n\,
+\chi_{h_c}\!\left(\frac{n}{N}\right)
+}
+\label{eq:control_efficacy}
+\end{equation}
+and provides an operational measure of control efficacy. The factor \(a_n\) is required because the susceptibility is defined conditionally on advocacy, whereas the controller acts only on a subset of rounds.
+
+A simple interaction-level controller cost is
+\begin{equation}
+\boxed{
+C
+=
+q_c
++
+b
+\sum_n
+\rho(n)\,a_n .
+}
+\label{eq:control_cost}
+\end{equation}
+The first term counts the \(q_c\) sensing interactions performed every round, while the second counts the expected number of controlled update positions. This decomposition makes clear why maximizing \(q_c\) and \(b\) is not generally equivalent to designing an efficient controller. Increasing \(q_c\) is useful only insofar as the additional sensing resolution changes the policy in a way that improves the population response, while increasing \(b\) can produce diminishing returns once the locally susceptible part of the population has already been exploited.
+
+A corresponding interaction-normalized response is
+\begin{equation}
+\boxed{
+\eta_{\mathrm{int}}
+=
+\frac{R}{C}.
+}
+\label{eq:interaction_efficiency}
+\end{equation}
+Unlike the information--response efficiency in Eq.~\eqref{eq:eta_ir}, \(\eta_{\mathrm{int}}\) is not a universal bounded efficiency. It is an explicitly operational quantity: useful population displacement per controller interaction. In the occupancy-matched \(q=1\) reference used for the present parameter scan, the raw response increases with actuation budget \(b\), but the response per interaction exhibits diminishing returns and an intermediate optimum over the tested grid. Likewise, increasing \(q_c\) can reduce \(\eta_{\mathrm{int}}\) when the additional sensing information does not translate into a commensurate increase in behavioral response. Thus the relevant distinction is not between ``more'' and ``less'' control, but between additional controller resources that alter the population response and resources that are largely redundant.
+
+\subsection{Controller design as a constrained optimization problem}
+\label{subsec:controller_optimization}
+
+Equations~\eqref{eq:control_efficacy}--\eqref{eq:control_cost} naturally turn controller design into a constrained optimization problem. Let
+\[
+\pi=(q_c,b,\theta,\beta,h_c,\ldots)
+\]
+collect the tunable controller parameters. Different operational requirements lead to different, but closely related, design objectives. For example, one may seek the least expensive controller that achieves a desired response,
+\begin{equation}
+\boxed{
+\pi^\star
+=
+\arg\min_{\pi} C(\pi)
+\qquad
+\text{subject to}
+\qquad
+R(\pi)\ge R_{\mathrm{target}},
+}
+\label{eq:min_cost_control}
+\end{equation}
+or the strongest controller compatible with a fixed resource budget,
+\begin{equation}
+\boxed{
+\pi^\star
+=
+\arg\max_{\pi} R(\pi)
+\qquad
+\text{subject to}
+\qquad
+C(\pi)\le C_{\max}.
+}
+\label{eq:max_response_control}
+\end{equation}
+An equivalent scalarized formulation is
+\begin{equation}
+\boxed{
+\pi^\star
+=
+\arg\max_{\pi}
+\left[
+R(\pi)-\lambda C(\pi)
+\right],
+}
+\label{eq:scalarized_control}
+\end{equation}
+where \(\lambda>0\) specifies the relative penalty assigned to controller interactions.
+
+These formulations emphasize that there is no unique notion of an ``optimal'' controller without specifying the resource constraint. A controller with larger \(b\) may produce a larger absolute response while being dominated by a weaker controller when the desired response can already be reached at substantially lower cost. The natural design object is therefore the Pareto frontier in the \((C,R)\) plane: controllers on this frontier achieve the largest available population response for a given interaction budget. State-dependent susceptibility further sharpens this picture, because controller resources should preferentially be spent in states for which \(\chi_{h_c}(x)\) is large rather than applied uniformly across the population trajectory.
+
+\paragraph{Finite-time and nonstationary interpretation.}
+No stationarity assumption is required in the definitions above. In a nonstationary process, let
+\begin{equation}
+\rho_k(n)=\Pr(N_k=n)
+\end{equation}
+denote the population distribution at round \(k\). For a finite horizon of \(H\) rounds, the occupancy entering Eqs.~\eqref{eq:control_efficacy}--\eqref{eq:control_cost} may be understood as the finite-time visitation distribution
+\begin{equation}
+\boxed{
+\bar{\rho}_H(n)
+=
+\frac{1}{H}
+\sum_{k=0}^{H-1}
+\rho_k(n).
+}
+\label{eq:finite_time_occupancy}
+\end{equation}
+Consequently, the occupancy-weighted efficacy and cost are finite-time averages over the transient states actually visited by the system, rather than equilibrium averages. A stationary distribution is recovered only as a special long-time limit, if such a limit exists. In the empirical LLM system, \(\bar{\rho}_H(n)\) should therefore be interpreted as a coarse-grained finite-time occupancy of the observed target-count coordinate, not as an assumption that the underlying multi-agent dynamics are stationary.

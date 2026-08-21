@@ -109,19 +109,39 @@ When analyzing a designated controller target $Z\in\mathcal{A}$, we additionally
 The scalar $x_k$ is a useful coarse-grained population coordinate, but it is not assumed to contain the complete state of the LLM population.
 
 \paragraph{One population round.}
-Each population round contains exactly $N$ microscopic update positions. At every position, one focal agent is sampled and ordinarily observes $q$ social peers. In the main experiments $q=1$, so an uncontrolled focal update contains one peer message.
 
-A peer message contains the peer's current public vote and at most one explicitly shared fact already present in the peer's knowledge set. The peer's free-form reason is recorded for auditing but is not shown to other agents and is not fed back to the author. Consequently, the explicit shared fact is the only channel through which task evidence can move between agents. If focal agent $i$ is exposed to fact $f$, then
-\begin{equation}
-    K_i \leftarrow K_i\cup\{f\}.
-\end{equation}
-This makes epistemic transmission exactly observable rather than inferred from free-form text.
+At the beginning of round $k$, the population is described by the agents'
+current votes and knowledge states,
+\[
+\{X_i(k),K_i(k)\}_{i=1}^{N}.
+\]
+The population then performs $N$ sequential microscopic updates. At each
+update, one focal agent $i$ and $q$ peers are sampled. Importantly, only the
+\emph{focal agent} generates a new LLM response; peers are not queried again.
+Instead, the focal agent sees the peers' already stored public ballots,
+consisting of their current vote and at most one fact that they previously
+chose to share.
 
-After observing its private facts, current vote, and the currently visible social source, the focal LLM returns a new ballot. The response is parsed into a semantic relation and the focal vote is updated immediately,
-\begin{equation}
-    X_i \leftarrow X_i'.
-\end{equation}
-The process then continues to the next microscopic update position.
+For a focal agent $i$ interacting with peer $j$, the information shown to the
+LLM is therefore schematically
+\[
+\bigl(K_i(k),\,X_i(k),\,X_j(k),\,f_j(k)\bigr),
+\]
+where $f_j(k)$ is either one fact already known by peer $j$ or no shared fact.
+The focal agent then produces, in a single LLM call, a new ballot containing
+\[
+\bigl(X_i',\,r_i',\,f_i'\bigr),
+\]
+where $X_i'$ is its updated vote, $r_i'$ is a private reason, and $f_i'$ is at
+most one fact from its own current knowledge that it chooses to make public.
+
+If the peer exposes a fact $f_j$, that fact is permanently added to the focal
+agent's knowledge,
+\[
+K_i' = K_i \cup \{f_j\}.
+\]
+The updated vote and public fact become the focal agent's stored ballot and may
+be observed by other agents in later interactions.
 
 \paragraph{External feedback controller.}
 The game includes an external round-level controller that acts through the same social interface rather than directly overwriting an agent's decision. Before round $k$, the controller samples $q_c$ distinct agents without replacement and observes their votes only. It does not observe their knowledge sets. Based on this sensor observation it chooses an action

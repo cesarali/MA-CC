@@ -1,0 +1,328 @@
+
+% ======================================================================
+% Paper section: Efficiency of feedback control
+% Standalone LaTeX fragment; intended to be included with \input{...}
+% Requires: amsmath, amssymb, booktabs
+% ======================================================================
+
+\section{Efficiency of Feedback Control}
+\label{sec:feedback_efficiency}
+
+A central distinction in our formulation is that feedback-control thermodynamics does not require the population to have reached equilibrium, or even a stationary nonequilibrium state. Stochastic thermodynamics can be formulated directly for finite-time trajectories, where irreversibility is quantified by comparing forward and time-reversed path probabilities and the corresponding entropy balance includes the change of the system distribution itself \cite{irisarri2026stochastic}. Stationary limits are often emphasized because they simplify the theory: once the distribution no longer changes in time, boundary terms vanish and quantities such as currents, work, and information flow can be expressed as steady rates. This is the regime used, for example, in the feedback-cooling analysis of Horowitz and Sandberg \cite{horowitz2014second}. Our setting is different: the LLM population is deliberately observed during a finite sequence of feedback rounds, while its collective state is still evolving.
+
+For this reason, we treat control efficiency as a finite-time quantity. During one feedback cycle, the controller acquires information about the current population, decides whether to intervene, and applies a biased actuation that changes the population state. Part of the controller input produces useful target-directed current, while part is associated with irreversibility and with the fact that the population distribution itself changes between the beginning and end of the cycle. The corresponding system-entropy change, \(\Delta S_{\mathrm{sys}}\), therefore cannot be discarded as it would be in a stationary calculation; it is precisely the term that accounts for operating away from steady state. This allows us to define a bounded efficiency of feedback control without assuming that the multi-agent population has equilibrated or reached a nonequilibrium steady state.
+
+We therefore isolate the feedback-control channel rather than assigning a
+thermodynamics to the full language-model population. Let
+\(n\in\{0,\ldots,N\}\) denote the number of agents currently supporting the
+controller target \(Z\), and let
+\[
+x=\frac{n}{N}
+\]
+be the corresponding target fraction. Our aim is to determine how efficiently
+finite sensing and actuation resources are converted into a directed response
+over one population round.
+
+\subsection{Finite-information feedback controller}
+
+The controller observes a sample of \(q_c\) agents without replacement.  If
+\(Y\) is the number of target supporters in the sample, then
+\[
+Y\mid n \sim \mathrm{Hypergeom}(N,n,q_c).
+\]
+Given \(Y=y\), the controller advocates for \(Z\) with probability
+\[
+P(U=1\mid Y=y)
+=
+\sigma\!\left[
+\beta\left(\theta-\frac{y}{q_c}\right)
+\right],
+\qquad
+\sigma(z)=\frac{1}{1+e^{-z}},
+\]
+where \(U=1\) denotes advocacy and \(U=0\) denotes no intervention.  The
+state-dependent intervention probability is therefore
+\[
+a_n
+=
+P(U=1\mid n)
+=
+\sum_y
+P(Y=y\mid n)\,P(U=1\mid Y=y).
+\]
+
+When the controller acts, a controlled microscopic interaction has finite
+directional bias \(h_c\). Writing
+\[
+p_h=\sigma(h_c),
+\]
+a controlled update favors the target state with probability \(p_h\), while
+the reverse transition remains possible with probability \(1-p_h\). Thus
+\(h_c\) is a dimensionless control affinity, or equivalently the log-odds
+\[
+h_c
+=
+\log\frac{p_h}{1-p_h}.
+\]
+The deterministic one-sided controller is recovered only in the singular
+limit \(h_c\to\infty\).
+
+\subsection{Control susceptibility and exact response}
+\label{sec:control-susceptibility}
+
+The intervention probability $a_n$ specifies whether the controller acts,
+whereas $h_c$ specifies the directional bias when it does. Conditional on the
+same initial state $x$, we quantify the resulting population response through
+the state-dependent susceptibility
+\begin{equation}
+\boxed{
+\begin{aligned}
+\chi(x)
+&\equiv
+\mathbb{E}\!\left[x' \mid U=1,x\right]
+-\mathbb{E}\!\left[x' \mid U=0,x\right] \\
+&=
+\mathbb{E}\!\left[\Delta x\mid U=1,x\right]
+-\mathbb{E}\!\left[\Delta x\mid U=0,x\right].
+\end{aligned}
+}
+\label{eq:control-susceptibility}
+\end{equation}
+Here $x'$ is the target fraction after the round and $\Delta x=x'-x$. Thus,
+$\chi(x)>0$ means that advocacy increases target support relative to the
+uncontrolled dynamics, whereas $\chi(x)<0$ indicates a net response away from
+the target.
+
+For the finite-bias $q=1$ controller, this susceptibility can be obtained
+exactly. After $b$ controlled opportunities,
+\begin{equation}
+\boxed{
+\chi_{h_c}(x)
+=
+\left[\sigma(h_c)-x\right]\Lambda_b,
+\qquad
+\Lambda_b
+=
+1-\left(1-\frac{1}{N}\right)^b
+}.
+\label{eq:chi_finite_bias}
+\end{equation}
+The response separates into the directional term $\sigma(h_c)-x$ and the
+actuation factor $\Lambda_b$, which determines how strongly the finite budget
+is expressed at population level. It vanishes at
+$x^\star=\sigma(h_c)$, the intrinsic set point of the finite-bias controller.
+
+\begin{table}[t]
+\centering
+\caption{Roles of the feedback-control parameters.  The distinction between
+sensing, intervention frequency, intervention budget, and directional bias
+is important for the efficiency accounting.}
+\label{tab:feedback_parameters}
+\begin{tabular}{cl}
+\toprule
+Symbol & Role \\
+\midrule
+\(q_c\) & number of agents sensed before the round \\
+\(\theta\) & feedback threshold controlling when advocacy is favored \\
+\(\beta\) & feedback-policy gain \\
+\(b\) & number of controlled microscopic opportunities when active \\
+\(h_c\) & controller affinity; directional strength of one controlled interaction \\
+\(h_e\) & opposing load/epistemic affinity \\
+\(a_n\) & probability of advocacy at population state \(n\) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Information--response efficiency}
+
+The first efficiency is purely information-theoretic and does not require a
+thermodynamic interpretation.  Let
+\[
+R_0(\cdot\mid n)
+\quad\text{and}\quad
+R_{h_c}(\cdot\mid n)
+\]
+denote the next-round target-count distributions under no intervention and
+advocacy, respectively.  The state-local action-to-population information is
+\begin{equation}
+T_{h_c}(n)
+=
+I(U;n'\mid n)
+=
+\operatorname{JS}_{a_n}
+\!\left[
+R_0(\cdot\mid n),
+R_{h_c}(\cdot\mid n)
+\right].
+\label{eq:action-population-information}
+\end{equation}
+This quantity is reported in bits. Because the target fraction lies in \([0,1]\), total
+variation together with Pinsker's inequality gives the exact bound
+\begin{equation}
+T_{h_c}(n)
+\ge
+\frac{2a_n(1-a_n)}{\ln 2}\,
+\chi_{h_c}(n/N)^2.
+\label{eq:information-response-bound}
+\end{equation}
+A complete derivation is given in
+Appendix~\ref{app:information_response_bound}.
+This motivates the bounded information--response efficiency
+\begin{equation}
+\boxed{
+\eta_{\mathrm{IR}}(n)
+=
+\frac{
+2a_n(1-a_n)\chi_{h_c}(n/N)^2
+}{
+(\ln 2)\,T_{h_c}(n)
+}
+\le 1.
+}
+\label{eq:eta_ir}
+\end{equation}
+It measures how much of the action-dependent change in the full next-state
+distribution is expressed as a coherent shift of its mean target fraction.
+It is not an energetic efficiency.
+
+\subsection{Thermodynamic efficiency of the feedback-control layer}
+
+To obtain a genuine thermodynamic efficiency, the controlled interaction must
+have finite forward and reverse transition probabilities.  We therefore
+introduce an opposing dimensionless load \(h_e\), so that the net affinity of
+the reversible actuation channel is
+\[
+F=h_c-h_e,
+\qquad
+p_F=\sigma(F).
+\]
+The controlled current \(J_c\) counts the expected net number of
+controller-directed transitions. For a state distribution \(p(n)\),
+\[
+J_c
+=
+N\Lambda_b
+\sum_{n=0}^{N}
+p(n)a_n
+\left[
+\sigma(h_c-h_e)-\frac{n}{N}
+\right].
+\]
+We associate generalized input and output work with the two affinities,
+\[
+W_{\mathrm{ctrl}}=h_cJ_c,
+\qquad
+W_{\mathrm{out}}=h_eJ_c.
+\]
+
+The feedback controller also acquires information through its sensor.  The
+relevant information resource is therefore
+\[
+I_{\mathrm{sens}}
+=
+I(n;Y),
+\]
+which is distinct from the downstream action-to-population information
+\(I(U;n'\mid n)\) used in Eq.~\eqref{eq:eta_ir}.  For the reversible
+actuation/load layer, comparison of the forward and reverse path measures
+gives
+\[
+\Delta S_{\mathrm{sys}}
++
+(h_c-h_e)J_c
++
+I(n;Y)
+=
+D_{\mathrm{KL}}(P_F\Vert P_R)
+\ge 0.
+\]
+Equivalently,
+\[
+h_eJ_c
+\le
+h_cJ_c
++
+I(n;Y)
++
+\Delta S_{\mathrm{sys}}.
+\]
+For positive useful current, the finite-time thermodynamic efficiency is
+therefore
+\[
+\boxed{
+\eta_{\mathrm{th}}
+=
+\frac{h_eJ_c}
+{
+h_cJ_c+I(n;Y)+\Delta S_{\mathrm{sys}}
+}
+=
+\frac{h_eJ_c}
+{
+h_eJ_c+D_{\mathrm{KL}}(P_F\Vert P_R)
+}
+\le 1.
+}
+\label{eq:eta_th}
+\]
+
+\begin{table}[t]
+\centering
+\caption{The two bounded efficiencies used in the feedback-control theory.}
+\label{tab:two_efficiencies}
+\begin{tabular}{p{0.14\linewidth}p{0.22\linewidth}p{0.23\linewidth}p{0.23\linewidth}}
+\toprule
+ & Output & Resource / denominator & Interpretation \\
+\midrule
+\(\eta_{\mathrm{IR}}\)
+&
+mean response \(\chi^2\)
+&
+action-to-population information
+\(I(U;n'\mid n)\)
+&
+fraction of action-dependent information expressed as coherent mean motion
+\\[1ex]
+\(\eta_{\mathrm{th}}\)
+&
+useful load work \(h_eJ_c\)
+&
+control work \(h_cJ_c\), sensing information \(I(n;Y)\), and
+\(\Delta S_{\mathrm{sys}}\)
+&
+finite-time efficiency of the reversible feedback-control layer
+\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Main theoretical consequences}
+
+The efficiency formulation leads to four conclusions that we use throughout
+the empirical analysis.
+
+First, \(\eta_{\mathrm{IR}}\) and \(\eta_{\mathrm{th}}\) answer different
+questions and involve different information measures.  The former quantifies
+how efficiently a controller-dependent population transition is converted
+into mean behavioral response, whereas the latter quantifies how efficiently
+control work and acquired sensing information are converted into useful work
+against an opposing load.
+
+Second, stronger control is not necessarily more efficient. Increasing
+\(h_c\) can increase the directed current while increasing the generalized
+input work \(h_cJ_c\) even faster. In the deterministic limit
+\(h_c\to\infty\), the original one-sided controller is recovered
+behaviorally, but its affinity-based work diverges; finite bias is therefore
+essential for a non-singular thermodynamic efficiency.
+
+Third, more sensing is not automatically better utilized. Increasing
+\(q_c\) can increase \(I(n;Y)\) without producing a proportional increase in
+useful current, so additional information may reduce
+\(\eta_{\mathrm{th}}\).
+
+Finally, the thermodynamic statement is deliberately restricted to the
+reversible feedback-control layer.  The uncontrolled social dynamics may
+contain absorbing transitions and hidden epistemic memory; these do not
+invalidate the control-layer bound, but they prevent us from identifying
+Eq.~\eqref{eq:eta_th} with the complete microscopic thermodynamic efficiency
+of the full multi-agent population.

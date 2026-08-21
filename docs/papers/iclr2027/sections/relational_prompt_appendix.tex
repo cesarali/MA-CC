@@ -1,0 +1,177 @@
+% Audited prompt documentation for the relational-reasoning population game.
+% Kept as a separate appendix fragment so that the prompt can be revised and
+% reviewed independently of the main methods text.
+
+\definecolor{relpromptaccent}{HTML}{E9A126}
+\definecolor{relpromptprivate}{HTML}{157F4A}
+\definecolor{relpromptsocial}{HTML}{1F5FA9}
+\definecolor{relpromptrule}{HTML}{C8C8C8}
+
+\newcommand{\relvariable}[1]{\textcolor{relpromptaccent}{#1}}
+\newcommand{\relprivate}[1]{\textcolor{relpromptprivate}{#1}}
+\newcommand{\relsocial}[1]{\textcolor{relpromptsocial}{#1}}
+
+\newtcolorbox{relpromptbox}[1]{%
+  enhanced,
+  breakable,
+  colback=white,
+  colframe=relpromptrule,
+  boxrule=0.6pt,
+  arc=2mm,
+  left=7pt,
+  right=7pt,
+  top=6pt,
+  bottom=6pt,
+  fonttitle=\bfseries\small\color{relpromptaccent},
+  colbacktitle=black!5,
+  coltitle=relpromptaccent,
+  boxed title style={boxrule=0pt,arc=0pt},
+  title={#1}}
+
+\section{Relational-reasoning prompt}
+\label{app:relational-prompt}
+
+The population is driven by one versioned prompt family,
+\texttt{relational\_public\_ballot} version~1. Each call is compiled into two
+chat messages. The system message establishes the agent's role, privacy
+boundary, task, call-specific option mapping, and currently known facts. The
+user message supplies the current vote and visible social source, then states
+the response contract. The model therefore receives only the state available
+to the focal agent at that microscopic update; it is never shown the global
+vote vector, other agents' private facts, the ground-truth answer, or the
+controller's sensor sample.
+
+The display below reproduces one complete prompt from the audit of the minimal
+Study~04 inspection episode ($N=24$, $q_c=12$, $b=12$). It is the first focal
+update of population round~1 for Agent~17. Typography is annotation only:
+\relvariable{orange} marks values instantiated anew for the call,
+\relprivate{green} marks the focal agent's private state, and
+\relsocial{blue} marks the visible social input. None of these colours or the
+``SYSTEM MESSAGE''/``USER MESSAGE'' labels are sent to the model.
+
+\begin{relpromptbox}{Audited focal-update prompt}
+\small\raggedright
+\setlength{\parindent}{0pt}
+\textbf{SYSTEM MESSAGE}
+
+You are \relvariable{Agent 17}, one participant in a group reasoning problem.
+
+Your goal is to identify the correct answer.
+
+Participant identities persist across interactions.
+
+Different participants know different facts about this problem. No single
+participant is guaranteed to know everything needed to answer, and some
+participants may have objectives that differ from yours. You do not know
+which participants, if any, have different objectives.
+
+Make your own decision, using:
+\begin{itemize}[leftmargin=1.3em,itemsep=0pt,topsep=2pt]
+  \item the facts you currently know;
+  \item your current position;
+  \item the public positions of the participants shown below.
+\end{itemize}
+
+You see only the participants shown in this interaction, and of each one you
+see their vote and the fact they chose to share, if any.
+
+Other participants will see the same of you: your vote and any fact you choose
+to share, and nothing else. Your reason is your own record: it is not shown to
+anyone.
+
+\textbf{QUESTION}
+
+\relvariable{Where is Davi relative to Hira?}
+
+The available answers are:
+\begin{itemize}[leftmargin=1.3em,itemsep=0pt,topsep=2pt]
+  \item \relvariable{A) WEST}
+  \item \relvariable{B) EAST}
+  \item \relvariable{C) SOUTHWEST}
+\end{itemize}
+
+Exactly one of these answers is correct. Vote by its letter.
+
+\textbf{YOUR CURRENT KNOWLEDGE}
+
+\relprivate{You do not currently know any facts about this problem. You will
+have to rely on what other participants tell you.}
+
+\medskip
+\textbf{USER MESSAGE}
+
+\textbf{YOUR CURRENT POSITION}
+
+\relprivate{Vote: SOUTHWEST}
+
+\textbf{CURRENT SOCIAL INFORMATION}
+
+\relsocial{Agent 25\\
+Vote: B}
+
+\textbf{DECISION}
+
+Work out which option the facts available to you support, and vote for it.
+
+Your reason should briefly explain your choice, for your own record.
+
+Sharing a fact is the only way to pass information to other participants. You
+may share exactly one of the facts you currently know by giving its identifier
+in \texttt{shared\_fact\_id}, so that the participants who see your position
+can use it too. Use ``none'' if you prefer to share nothing.
+
+You may share only a fact listed under YOUR CURRENT KNOWLEDGE, by its exact
+identifier. Do not invent facts, identifiers, or relationships that were not
+given to you.
+
+Keep your reason to at most three sentences.
+
+Return only valid JSON:
+
+\texttt{\{}\\
+\quad\texttt{"vote": "<A | B | C>",}\\
+\quad\texttt{"reason": "<brief private reason>",}\\
+\quad\texttt{"shared\_fact\_id": "<none>"}\\
+\texttt{\}}
+\end{relpromptbox}
+
+\paragraph{What changes between calls.}
+The identity, query, available semantic answers, private facts, current vote,
+visible sources, and admissible fact identifiers are bound from the live game
+state. The semantic answers are independently permuted onto A/B/C for every
+call. Thus the \relsocial{social vote B} above means \emph{EAST} only in this
+instance; the persistent population state stores EAST, not the letter B. This
+prevents a stable display position from becoming an unintended convention.
+
+\paragraph{Ordinary and controlled social inputs.}
+An uncontrolled update shows the vote and, when supplied, one valid fact from
+an ordinary peer. In the audited example the visible source is the controller:
+the controller's semantic target EAST is rendered as \relsocial{Vote: B} under
+this call's permutation. The prompt deliberately does not identify that source
+as a controller or authority. Under the \texttt{recommendation\_only} mode it
+also supplies no fact, so the intervention can change the public vote state but
+cannot directly enlarge the focal agent's knowledge set.
+
+\paragraph{Initialization variant.}
+Before social interaction, each of the 24 agents receives the same role, task,
+privacy, fact-sharing, and JSON-contract blocks, but no current-position or
+social-information block. Instead, the prompt states that no other participant
+has yet declared a position and instructs the agent to decide from its local
+facts alone. The resulting 24 ballots define the initial population state.
+
+\paragraph{Response and information boundary.}
+The accepted response contains a display-letter vote, a private reason of at
+most three sentences, and either one fact identifier already in the agent's
+knowledge set or \texttt{none}. The display letter is immediately mapped back
+to its semantic relation. The reason is retained for audit but never shown to
+another agent. Only the semantic vote and the explicitly selected fact may
+enter a later prompt, which makes the public decision channel and the epistemic
+transmission channel separately observable.
+
+\paragraph{Audit check.}
+The inspection episode recorded 72 distinct compiled prompt instances: 24
+local-initialization prompts and 48 focal-update prompts (24 in each of two
+population rounds). All 72 responses passed validation without a retry or
+provider error. The prompt definition hash was constant across the episode,
+whereas every instance hash was unique, confirming that one fixed template was
+bound to 72 call-specific views.

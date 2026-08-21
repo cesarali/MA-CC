@@ -1,0 +1,124 @@
+# Minimal prompt-inspection run derived from population study 04, q_c=12.
+# One task, one episode, two population rounds, and a complete local prompt audit.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 2
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: 2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 12
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260821
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200
+  max_input_tokens: 10000000
+  max_output_tokens: 1000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    progress: true
+    show_metrics: false
+    prompt_examples:
+      count: 0
+      scope: episode
+    detailed_prompt_audit:
+      enabled: true
+      log_every_n_rounds: 1
+      always_log_first_n_rounds: 2
+      always_log_provider_errors: true
+      always_log_invalid_responses: true
+      max_logged_prompts_per_game: 100
+      max_logged_prompts_per_run: 100
+
+storage:
+  output_dir: results/inspection/relational_study04_qc12_b12_prompts
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: false
+  comet_export: []
+
+experiment:
+  name: relational-study04-qc12-b12-prompt-inspection
+  description: One task and one episode with two rounds for complete prompt inspection.
+  tags: [relational, population-study-04, prompt-inspection, qc12, b12]
+  metadata:
+    study: population_study_04
+    purpose: prompt_inspection
+    sensor_sample_size: 12
+    intervention_budget: 12
+    population_rounds: 2
+    repetitions: 1

@@ -1,8 +1,33 @@
-\begin{thebibliography}{0}
+\begin{thebibliography}{4}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Ashery et~al.(2025)Ashery, Aiello, and
+  Baronchelli]{ashery2025emergent}
+Ariel~Flint Ashery, Luca~Maria Aiello, and Andrea Baronchelli.
+\newblock Emergent social conventions and collective bias in {LLM} populations.
+\newblock \emph{Science Advances}, 11\penalty0 (20):\penalty0 eadu9368, 2025.
+\newblock \doi{10.1126/sciadv.adu9368}.
+
+\bibitem[Horowitz \& Sandberg(2014)Horowitz and Sandberg]{horowitz2014second}
+Jordan~M Horowitz and Henrik Sandberg.
+\newblock Second-law-like inequalities with information and their
+  interpretations.
+\newblock \emph{New Journal of Physics}, 16\penalty0 (12):\penalty0 125007,
+  2014.
+
+\bibitem[Irisarri et~al.(2026)Irisarri, Trigal, Toral, and
+  Manzano]{irisarri2026stochastic}
+Luis Irisarri, Lucas Trigal, Ra{\'u}l Toral, and Gonzalo Manzano.
+\newblock Stochastic thermodynamics of social imitation beyond energetics.
+\newblock \emph{Nature Communications}, 2026.
+
+\bibitem[Riedl(2026)]{riedl2026emergent}
+Christoph Riedl.
+\newblock Emergent coordination in multi-agent language models.
+\newblock In \emph{International Conference on Learning Representations}, 2026.
 
 \end{thebibliography}
