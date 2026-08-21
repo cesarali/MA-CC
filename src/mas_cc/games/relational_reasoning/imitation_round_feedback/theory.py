@@ -473,6 +473,21 @@ class ClassicalReference:
             [binary_entropy_bits(value) for value in self.advocacy], dtype=float
         )
 
+    @property
+    def closed_loop_kernel(self) -> np.ndarray:
+        """The exact state-dependent soft-feedback whole-round kernel.
+
+        Row ``n`` mixes ``R0[n]`` and ``R1[n]`` at the sensor-smeared
+        advocacy probability ``a_n``. Keeping this as a property of the
+        assembled reference gives information and current analyses one shared
+        definition of the controlled q-voter's closed loop.
+        """
+
+        return (
+            (1.0 - self.advocacy)[:, None] * self.R0
+            + self.advocacy[:, None] * self.R1
+        )
+
     def occupancy_weighted_te(self, occupancy: Sequence[float]) -> float:
         """`sum_n P(n) T_qv(n)` - the local theory read over a given occupancy."""
 
@@ -490,13 +505,120 @@ class ClassicalReference:
         where the LLM actually went".
         """
 
-        closed = (1.0 - self.advocacy)[:, None] * self.R0 + self.advocacy[:, None] * self.R1
+        closed = self.closed_loop_kernel
         distribution = np.asarray(initial, dtype=float)
         history = [distribution]
         for _ in range(max(0, rounds - 1)):
             distribution = distribution @ closed
             history.append(distribution)
         return np.asarray(history, dtype=float)
+
+
+def finite_horizon_current_moments(
+    round_kernel: np.ndarray,
+    initial_distribution: Sequence[float],
+    rounds: int,
+) -> dict[str, float]:
+    """Exact moments of ``J = N_K - N_0`` under one whole-round kernel.
+
+    This deliberately keeps ``N_0`` inside the double sum. Subtracting the
+    mean initial count from the mean final count is sufficient for the first
+    moment but loses the correlation needed by the variance when repeated
+    episodes start from more than one count.
+    """
+
+    kernel = np.asarray(round_kernel, dtype=float)
+    initial = np.asarray(initial_distribution, dtype=float)
+    if kernel.ndim != 2 or kernel.shape[0] != kernel.shape[1]:
+        raise ValueError("round_kernel must be a square matrix")
+    if initial.shape != (kernel.shape[0],):
+        raise ValueError("initial_distribution must be indexed by n = 0..N")
+    if isinstance(rounds, bool) or int(rounds) != rounds or rounds < 0:
+        raise ValueError("rounds must be a non-negative integer")
+    if np.any(initial < 0.0) or not np.isclose(initial.sum(), 1.0, atol=1e-12):
+        raise ValueError("initial_distribution must be a probability distribution")
+
+    transition = np.linalg.matrix_power(kernel, int(rounds))
+    states = np.arange(kernel.shape[0], dtype=float)
+    currents = states[None, :] - states[:, None]
+    joint = initial[:, None] * transition
+    mean = float(np.sum(joint * currents))
+    second = float(np.sum(joint * currents * currents))
+    variance = second - mean * mean
+    # Matrix arithmetic can leave a tiny negative residue after subtracting
+    # two equal floating-point numbers. This is exact theory, so expose zero,
+    # not a physically impossible negative variance.
+    if -1e-12 < variance < 0.0:
+        variance = 0.0
+    if variance < 0.0:
+        raise ArithmeticError("finite-horizon current variance became negative")
+    return {"mean": mean, "second_moment": second, "variance": variance}
+
+
+def finite_horizon_current_moments_for_episodes(
+    round_kernel: np.ndarray,
+    initial_counts: Sequence[int],
+    horizons: Sequence[int],
+) -> dict[str, float]:
+    """Exact current moments matched to an empirical ``(N_0, K)`` mixture.
+
+    Ordinary fixed-horizon cells reduce to ``finite_horizon_current_moments``
+    with their empirical ``P0``. The joint form also stays exact for a run
+    where an early stopping rule gives completed episodes different horizons.
+    """
+
+    if len(initial_counts) != len(horizons) or not initial_counts:
+        raise ValueError("initial_counts and horizons must be non-empty and aligned")
+    size = np.asarray(round_kernel).shape[0]
+    cache: dict[tuple[int, int], tuple[float, float]] = {}
+    mean = 0.0
+    second = 0.0
+    for raw_initial, raw_horizon in zip(initial_counts, horizons, strict=True):
+        initial, horizon = int(raw_initial), int(raw_horizon)
+        if not 0 <= initial < size:
+            raise ValueError("initial target count is outside n = 0..N")
+        key = (initial, horizon)
+        if key not in cache:
+            distribution = np.zeros(size, dtype=float)
+            distribution[initial] = 1.0
+            moments = finite_horizon_current_moments(
+                round_kernel, distribution, horizon
+            )
+            cache[key] = (moments["mean"], moments["second_moment"])
+        item_mean, item_second = cache[key]
+        mean += item_mean
+        second += item_second
+    mean /= len(initial_counts)
+    second /= len(initial_counts)
+    variance = second - mean * mean
+    if -1e-12 < variance < 0.0:
+        variance = 0.0
+    if variance < 0.0:
+        raise ArithmeticError("mixed finite-horizon current variance became negative")
+    return {"mean": mean, "second_moment": second, "variance": variance}
+
+
+def q1_current_closed_forms(
+    initial_distribution: Sequence[float], *, N: int, b: int
+) -> dict[str, float]:
+    """Initial-distribution average of the genuine one-round ``q = 1`` forms."""
+
+    initial = np.asarray(initial_distribution, dtype=float)
+    if initial.shape != (N + 1,):
+        raise ValueError("initial_distribution must be indexed by n = 0..N")
+    if np.any(initial < 0.0) or not np.isclose(initial.sum(), 1.0, atol=1e-12):
+        raise ValueError("initial_distribution must be a probability distribution")
+    states = np.arange(N + 1, dtype=float)
+    response = float(
+        initial
+        @ ((N - states) * (1.0 - (1.0 - 1.0 / N) ** int(b)))
+    )
+    return {
+        "q1_current_mean_noop_closed_form_theory": 0.0,
+        "q1_current_mean_advocate_closed_form_theory": response,
+        "q1_current_response_closed_form_theory": response,
+        "q1_current_response_fraction_closed_form_theory": response / N,
+    }
 
 
 @lru_cache(maxsize=32)
@@ -572,6 +694,8 @@ __all__ = [
     "advocate_round_kernel",
     "binary_entropy_bits",
     "classical_reference",
+    "finite_horizon_current_moments",
+    "finite_horizon_current_moments_for_episodes",
     "kernel_mean_response",
     "local_transfer_entropy",
     "mean_field_drifts",
@@ -579,6 +703,7 @@ __all__ = [
     "microscopic_kernels",
     "no_op_round_kernel",
     "q1_mean_response",
+    "q1_current_closed_forms",
     "sensor_law",
     "theory_parameters_from_record",
 ]

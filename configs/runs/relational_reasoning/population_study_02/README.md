@@ -170,7 +170,7 @@ for f in relational_population_study02_e_wrong_budget_scan_L2_q1 \
          relational_population_study02_f2_L3_q2_wrong_b06; do
   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
     --config configs/runs/relational_reasoning/population_study_02/$f.yaml \
-    --output-dir inspection/study02_${f}_preflight
+    --output-dir results/inspection/study02_${f}_preflight
 done
 ```
 

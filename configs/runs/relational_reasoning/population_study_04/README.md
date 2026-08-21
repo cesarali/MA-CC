@@ -282,7 +282,7 @@ Preflight makes no model calls.
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/relational_reasoning/population_study_04/relational_population_study04_qc06.yaml \
-  --output-dir inspection/relational_study04_qc06_preflight
+  --output-dir results/inspection/relational_study04_qc06_preflight
 ```
 
 Launch one row (repeat with `qc12`, `qc18`):

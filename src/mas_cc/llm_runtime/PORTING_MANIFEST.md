@@ -246,7 +246,7 @@ Result at the time this manifest was written: all of the above pass. The
 full repository suite (`python -m pytest -q`) has two pre-existing,
 unrelated failures (`test_phase_6_inspection_contract_audit_and_determinism`,
 `test_phase_6_standard_inspection_cli`) caused by a missing baseline fixture
-file (`inspection/realignment_v3/baseline/phase_06/selected_audit_traces.jsonl`,
+file (`results/inspection/realignment_v3/baseline/phase_06/selected_audit_traces.jsonl`,
 not checked into the repository) — unrelated to this bundling work and
 present before it.
 

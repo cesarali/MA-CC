@@ -41,7 +41,7 @@
 # 1. Check availability, pricing, request counts, and budget (no model calls):
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/hidden_bench/hidden_bench_vanilla_full_all_tasks.yaml \
-#     --output-dir inspection/hidden_bench_vanilla_full_all_tasks_preflight
+#     --output-dir results/inspection/hidden_bench_vanilla_full_all_tasks_preflight
 #
 # 2. Run all 65 cells with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \

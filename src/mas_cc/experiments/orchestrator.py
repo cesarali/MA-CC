@@ -2001,6 +2001,18 @@ class GridResult:
         }
 
 
+def _grid_cell_seed(
+    grid_seed: Seed, cell_index: int, *, common_random_numbers: bool
+) -> Seed:
+    """Cell stream, optionally shared for explicitly matched grid designs."""
+
+    return (
+        grid_seed
+        if common_random_numbers
+        else grid_seed.derive(f"grid-cell:{cell_index}")
+    )
+
+
 def _write_grid_summary(grid_dir: Path, grid: GridSpec, result: GridResult) -> None:
     compact = grid.base.storage.retention_policy.compact_scientific
     if not compact:
@@ -2118,10 +2130,18 @@ async def run_experiment_grid(
     )
 
     grid_seed = Seed(base.execution.seed)
+    common_random_numbers = bool(
+        base.experiment.metadata.get("common_random_numbers_across_grid", False)
+    )
     all_tasks: list[_EpisodeTask] = []
     total_rounds = 0
     for cell in cells:
-        cell_seed = grid_seed.derive(f"grid-cell:{cell.index}")
+        # Opt-in matched interventions may hold every stochastic stream fixed
+        # across grid cells.  The default retains the historical cell-derived
+        # streams exactly.
+        cell_seed = _grid_cell_seed(
+            grid_seed, cell.index, common_random_numbers=common_random_numbers
+        )
         cell_dir = cells_dir / cell.cell_id
         _write(cell_dir / "resolved_config.yaml", resolved_config_yaml(cell.config))
         _write(cell_dir / "overrides.json", _json(cell.to_dict()))

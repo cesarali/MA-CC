@@ -588,7 +588,7 @@ Provider-free structural check:
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/relational_reasoning/relational_imitation_round_feedback_no_control_smoke.yaml \
-  --output-dir inspection/relational_no_control_smoke_preflight
+  --output-dir results/inspection/relational_no_control_smoke_preflight
 ```
 
 No-control smoke run (q = 1, no controller, 2 rounds, 1 repetition):

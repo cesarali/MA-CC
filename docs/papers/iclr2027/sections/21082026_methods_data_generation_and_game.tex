@@ -1,0 +1,174 @@
+% Methods section draft for:
+% On the Thermodynamic Limits of Control in Multi-Agent Language Models
+% Scope of this file: synthetic data generation and multi-agent game only.
+% It is written as a section fragment that can be \input{} into the main paper.
+
+\section{Experimental System: Distributed Relational Reasoning}
+\label{sec:methods_game}
+
+We study feedback control in a multi-agent language-model population using a synthetic relational-reasoning environment with exact ground truth and fully auditable information flow. The environment is designed to separate three ingredients that are otherwise difficult to disentangle in natural-language multi-agent tasks: (i) the underlying reasoning problem, (ii) the distribution of task-relevant information across agents, and (iii) the social dynamics through which agents exchange information and revise their decisions. Each task is generated procedurally without language-model calls, and every fact held by every agent is known exactly throughout an episode.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth]{figures/Model1.png}
+    \caption{Overview of the multi-agent language-model control framework.}
+    \label{fig:model-overview}
+\end{figure}
+
+The central state variables for agent $i$ at population round $k$ are
+\begin{equation}
+    X_i(k) \in \mathcal{A},
+    \qquad
+    K_i(k) \subseteq \mathcal{F},
+\end{equation}
+where $X_i(k)$ is the agent's current voted relation, $\mathcal{A}$ is the finite answer set, $K_i(k)$ is the set of fact identifiers explicitly known by the agent, and $\mathcal{F}$ is the complete fact set of the task. Keeping the decision state $X_i$ and epistemic state $K_i$ separate is essential: two populations can have the same vote distribution while possessing very different amounts of task-relevant evidence.
+
+\subsection{Synthetic relational-reasoning tasks}
+\label{sec:task_generation}
+
+\paragraph{Symbolic world and ground truth.}
+Each task is built from a symbolic two-dimensional world. Entities occupy integer coordinates, and relations are drawn from the compass-relation alphabet
+\begin{equation}
+    \mathcal{R}=\{\mathrm{N},\mathrm{NE},\mathrm{E},\mathrm{SE},\mathrm{S},\mathrm{SW},\mathrm{W},\mathrm{NW}\}.
+\end{equation}
+A supporting chain of length $L$ is generated as a self-avoiding sequence of exact pairwise spatial relations. If the chain contains entities $v_0,\ldots,v_L$ and displacement vectors $d_1,\ldots,d_L$, then the ground-truth displacement between the queried endpoints is
+\begin{equation}
+    D = \sum_{\ell=1}^{L} d_\ell.
+\end{equation}
+The correct answer is the compass relation induced by $D$. Because the symbolic coordinates are generated first, the answer is determined exactly before any natural-language rendering occurs.
+
+\paragraph{Supporting facts and distractors.}
+The $L$ chain relations form the supporting fact set
+\begin{equation}
+    \mathcal{S}=\{f_1,\ldots,f_L\}\subset\mathcal{F}.
+\end{equation}
+To prevent the task from reducing to trivial lexical matching, we additionally generate distractor relations in a disconnected component of the symbolic world. These distractors are internally consistent but cannot alter the query answer or shorten the required proof. The full fact set is therefore
+\begin{equation}
+    \mathcal{F}=\mathcal{S}\cup\mathcal{D},
+\end{equation}
+with $\mathcal{D}$ the distractor set.
+
+\paragraph{Answer options.}
+Each task contains $K$ distinct candidate relations, exactly one of which is correct. The persistent state of the experiment stores semantic relations rather than display labels. For every LLM call, the candidate relations are independently mapped to temporary display labels (e.g., A/B/C) using a deterministic per-call shuffle. The returned display label is immediately mapped back to its semantic relation before the state is updated. Peer votes are likewise re-rendered in the receiving agent's current label mapping. This removes a globally stable answer-position or letter convention as a possible social attractor.
+
+\paragraph{Distributed information.}
+Each supporting fact is assigned initially to exactly $r$ distinct agents, where $r$ is the support redundancy. Thus, $r$ controls how widely each proof-relevant fact is replicated across the population; it does not denote the number of agents with the complete proof. Distractors are assigned independently according to their configured redundancy.
+
+For agent $i$, let $K_i(0)$ denote the initial fact set. We impose the distributed-information constraint
+\begin{equation}
+    \mathcal{S} \nsubseteq K_i(0)
+    \qquad \text{for every agent } i,
+\end{equation}
+while requiring
+\begin{equation}
+    \mathcal{S} \subseteq \bigcup_{i=1}^{N} K_i(0).
+\end{equation}
+Hence, no individual agent initially possesses the complete proof, whereas the population collectively does. This construction makes collective information transmission necessary while retaining exact knowledge of which evidence is available to whom.
+
+\paragraph{Natural-language rendering.}
+After the symbolic task is fixed, each relation is rendered into a canonical natural-language sentence by a deterministic template, without an LLM. The generator therefore introduces no model-dependent semantic variation into the ground truth. Each task stores the symbolic world, the natural-language facts, the answer options, the correct relation, and the exact agent--fact allocation.
+
+\paragraph{Validation and reproducibility.}
+Every generated task is validated before use. Validation checks world consistency, the required reasoning depth, uniqueness of the correct option, consistency of the rendered relations, distractor disconnection, population coverage of the proof, the no-single-agent-solution constraint, and all fact references. Task seeds are deterministic descendants of a dataset-level seed, while cryptographic fingerprints are stored for both individual tasks and the complete dataset. The dataset used in the main experiments is therefore frozen before any LLM interaction occurs.
+
+For the principal experiments in this work we use
+\begin{equation}
+    N=24,\qquad L=2,\qquad r=6,\qquad K=3,
+\end{equation}
+with four distractor facts of redundancy one. These values define the task distribution but not the controller; sensing and actuation parameters are introduced separately below.
+
+\subsection{Multi-agent relational imitation game}
+\label{sec:relational_game}
+
+An episode consists of an initialization stage followed by discrete population rounds. Agents have persistent identities, votes, and explicit knowledge sets. Within a round, agents update asynchronously: after each microscopic update, the focal agent's new vote and any newly acquired fact become immediately available to subsequent updates.
+
+\paragraph{Initialization.}
+At the beginning of an episode, each agent receives only the natural-language facts in its assigned set $K_i(0)$. Under the default \emph{local-vote} initialization, every agent makes one independent LLM decision using only this private evidence. This produces the initial vote vector
+\begin{equation}
+    \mathbf{X}(0)=\bigl(X_1(0),\ldots,X_N(0)\bigr).
+\end{equation}
+Because agents do not initially see the population's other votes or private facts, this stage measures the decisions induced by the distributed evidence before social interaction begins.
+
+\paragraph{Population state.}
+Let
+\begin{equation}
+    N_{j,k}=\sum_{i=1}^{N}\mathbb{I}\!\left[X_i(k)=a_j\right],
+    \qquad a_j\in\mathcal{A},
+\end{equation}
+be the number of agents voting for option $a_j$ before round $k$. The complete vote-count state is
+\begin{equation}
+    \mathbf{N}_k=(N_{1,k},\ldots,N_{K,k}),
+    \qquad \sum_{j=1}^{K}N_{j,k}=N.
+\end{equation}
+When analyzing a designated controller target $Z\in\mathcal{A}$, we additionally write
+\begin{equation}
+    n_{Z,k}=\sum_i \mathbb{I}[X_i(k)=Z],
+    \qquad
+    x_k=\frac{n_{Z,k}}{N}.
+\end{equation}
+The scalar $x_k$ is a useful coarse-grained population coordinate, but it is not assumed to contain the complete state of the LLM population.
+
+\paragraph{One population round.}
+Each population round contains exactly $N$ microscopic update positions. At every position, one focal agent is sampled and ordinarily observes $q$ social peers. In the main experiments $q=1$, so an uncontrolled focal update contains one peer message.
+
+A peer message contains the peer's current public vote and at most one explicitly shared fact already present in the peer's knowledge set. The peer's free-form reason is recorded for auditing but is not shown to other agents and is not fed back to the author. Consequently, the explicit shared fact is the only channel through which task evidence can move between agents. If focal agent $i$ is exposed to fact $f$, then
+\begin{equation}
+    K_i \leftarrow K_i\cup\{f\}.
+\end{equation}
+This makes epistemic transmission exactly observable rather than inferred from free-form text.
+
+After observing its private facts, current vote, and the currently visible social source, the focal LLM returns a new ballot. The response is parsed into a semantic relation and the focal vote is updated immediately,
+\begin{equation}
+    X_i \leftarrow X_i'.
+\end{equation}
+The process then continues to the next microscopic update position.
+
+\paragraph{External feedback controller.}
+The game includes an external round-level controller that acts through the same social interface rather than directly overwriting an agent's decision. Before round $k$, the controller samples $q_c$ distinct agents without replacement and observes their votes only. It does not observe their knowledge sets. Based on this sensor observation it chooses an action
+\begin{equation}
+    U_k\in\{\mathrm{NO\_OP},\mathrm{ADVOCATE}_Z\}.
+\end{equation}
+If $U_k=\mathrm{NO\_OP}$, the round proceeds using ordinary peer interactions. If $U_k=\mathrm{ADVOCATE}_Z$, exactly $b$ of the $N$ microscopic update positions are selected without replacement, and at each selected position one ordinary social slot is replaced by a persistent controller participant recommending target $Z$. Thus $q_c$ controls sensing capacity, whereas $b$ controls actuation capacity.
+
+The controller is rendered as another participant rather than as an authority. In the main experiments it uses \emph{recommendation-only} messages, meaning that it communicates a target vote but no supporting task fact. It can therefore influence decisions while leaving the epistemic state unchanged directly. This separation is important for distinguishing social steering from information transmission.
+
+The round-level causal structure can be summarized as
+\begin{equation}
+    \mathbf{N}_k
+    \longrightarrow Y_k
+    \longrightarrow U_k
+    \longrightarrow \{\text{$N$ asynchronous agent updates}\}
+    \longrightarrow \mathbf{N}_{k+1},
+\end{equation}
+where $Y_k$ denotes the controller's finite population sample. The sensing policy and the thermodynamic interpretation of this feedback loop are introduced separately.
+
+\paragraph{Epistemic observables.}
+Because every explicit fact transmission is recorded, we can measure the epistemic state of the population directly. Let $\mathcal{S}$ be the supporting fact set. We define the mean supporting-fact coverage
+\begin{equation}
+    \kappa_k
+    =\frac{1}{N}\sum_{i=1}^{N}
+      \frac{|K_i(k)\cap\mathcal{S}|}{|\mathcal{S}|},
+\end{equation}
+and the fraction of agents holding the complete proof
+\begin{equation}
+    \phi_k
+    =\frac{1}{N}\sum_{i=1}^{N}
+      \mathbb{I}\!\left[\mathcal{S}\subseteq K_i(k)\right].
+\end{equation}
+For $L=2$, we additionally track the number of agents possessing zero, one, or two supporting facts. These variables allow us to distinguish changes in collective belief from changes in collective knowledge.
+
+\paragraph{Why this environment is useful for control.}
+The construction gives us three simultaneously observable layers: the exact symbolic task, the explicit epistemic state $\{K_i(k)\}_{i=1}^{N}$, and the public decision state $\{X_i(k)\}_{i=1}^{N}$. The controller acts only through bounded social interventions, while the population continues to exchange evidence through ordinary peer interaction. As a result, changes in population behavior can be analyzed together with the information available to agents, rather than treating the LLM population as an opaque sequence of votes.
+
+% Suggested figure placement:
+% \begin{figure}[t]
+%   \centering
+%   \includegraphics[width=\linewidth]{figures/method_overview.pdf}
+%   \caption{Overview of the experimental system. (a) Synthetic relational tasks
+%   are generated from exact spatial relations and distributed across agents.
+%   (b) Agents update asynchronously using private evidence and a small social
+%   sample; the controller senses the population and can replace a bounded number
+%   of social slots with a recommendation. (c) The resulting population and
+%   epistemic trajectories are analyzed at the round level.}
+%   \label{fig:method_overview}
+% \end{figure}

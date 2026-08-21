@@ -273,7 +273,7 @@ Preflight makes no model calls.
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
   --config configs/runs/relational_reasoning/population_study_03/relational_population_study03_g_stochastic_feedback_pilot.yaml \
-  --output-dir inspection/relational_study03_g_preflight
+  --output-dir results/inspection/relational_study03_g_preflight
 ```
 
 Launch:

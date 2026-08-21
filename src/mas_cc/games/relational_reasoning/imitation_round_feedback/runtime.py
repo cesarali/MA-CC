@@ -706,6 +706,11 @@ async def run_relational_imitation_round_feedback_game(
             # --- votes ------------------------------------------------------
             "population_state_before": population_before,
             "population_state_after": population_after,
+            "agent_ids": [str(agent.agent_id) for agent in state.agents],
+            "initial_knowledge_class_by_agent": [
+                len(set(agent.initial_fact_ids) & set(state.supporting_fact_ids))
+                for agent in state.agents
+            ],
             "occupation_counts_before": _count_vector(
                 before_obs["occupation_counts"], options
             ),

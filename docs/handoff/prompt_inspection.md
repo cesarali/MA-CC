@@ -19,7 +19,7 @@ From the repository root:
 
 ```bash
 conda run -n MA-CC mas-cc prompt examples \
-  --output-dir inspection/paper_prompts
+  --output-dir results/inspection/paper_prompts
 ```
 
 The default reads the checked-in 32-agent HiddenBench exact-replication data.
@@ -31,7 +31,7 @@ It writes five readable requests:
 - a HiddenBench pre-discussion vote;
 - a HiddenBench post-discussion vote.
 
-Read `inspection/paper_prompts/all_requests.md` to see every request in one
+Read `results/inspection/paper_prompts/all_requests.md` to see every request in one
 document, or open an example's `request.md` for one interaction. The messages
 under **Exact messages sent to the LLM** are shown verbatim and in transmission
 order. The JSON files beside them are retained for machine checks.

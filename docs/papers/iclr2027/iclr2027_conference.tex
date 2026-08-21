@@ -14,9 +14,10 @@
 \usepackage{tcolorbox}
 \usepackage{graphicx}
 \usepackage{hyperref}
+\usepackage{lipsum}
 \usepackage{url}
 
-\title{The Thermodynamics of Control in Multi-Agent Language Models}
+\title{On the Thermodynamic Limits of Control in Multi-Agent Language Models}
 
 % Authors must not appear in the submitted version. They should be hidden
 % as long as the \iclrfinalcopy macro remains commented out below.
@@ -27,37 +28,19 @@
 
 \maketitle
 
-\section{Methodology}
-\label{sec:methodology}
+\input{sections/abstract}
 
-\begingroup
-% Begin with the game definition and information-analysis methodology.
-\def\ICLRMethodologySection{}
-\input{hiddenbench_round_feedback_game_report.tex}
-\endgroup
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/background}
+\input{sections/method}
+\input{sections/results}
+\input{sections/conclusion}
 
 \bibliography{iclr2027_conference}
 \bibliographystyle{iclr2027_conference}
 
 \appendix
-\section{Theory}
-\label{app:theory}
-\setcounter{subsection}{0}
-
-\begingroup
-% Render the standalone theory note as subsections of this appendix.
-\def\ICLRTheorySection{}
-\input{fixed_qvoter_round_feedback_theory.tex}
-\endgroup
-
-\section{Focal-Control Calibration Study}
-\label{app:focal-control-study}
-\setcounter{subsection}{0}
-
-\begingroup
-% Render the standalone calibration study as subsections of this appendix.
-\def\ICLRFocalKernelSection{}
-\input{focal_kernel_control_study.tex}
-\endgroup
+\input{sections/appendix}
 
 \end{document}

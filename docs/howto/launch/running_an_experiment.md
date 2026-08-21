@@ -142,10 +142,10 @@ The accompanying config points at the real University provider and needs `POTSDA
 ```bash
 conda run -n MA-CC mas-cc experiment preflight \
   --config configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml \
-  --output-dir inspection/experiment_tutorial/preflight
+  --output-dir results/inspection/experiment_tutorial/preflight
 ```
 
-This writes `inspection/experiment_tutorial/preflight/report.md`, which for this config reads:
+This writes `results/inspection/experiment_tutorial/preflight/report.md`, which for this config reads:
 
 ```text
 - Status: PASS (permitted)
@@ -166,7 +166,7 @@ ID, so you can hand its path straight to the next command.
 conda run --live-stream -n MA-CC mas-cc experiment run \
   --config configs/runs/old/naming_convention_experiment_tutorial_university_v3.yaml \
   --output-dir results \
-  --approve-preflight inspection/experiment_tutorial/preflight/preflight_id.txt
+  --approve-preflight results/inspection/experiment_tutorial/preflight/preflight_id.txt
 ```
 
 `--approve-preflight` is optional — `run` always does its own internal preflight check regardless —
@@ -326,7 +326,7 @@ the `grid:` section above and a budget scaled for the combined demand of both ce
 ```bash
 mas-cc experiment preflight \
   --config configs/runs/old/naming_convention_grid_tutorial_university_v3.yaml \
-  --output-dir inspection/grid_tutorial/preflight
+  --output-dir results/inspection/grid_tutorial/preflight
 ```
 
 For this config, that reports 2 cells, 6 total episodes (3 repetitions per cell), 324 conservative
@@ -338,7 +338,7 @@ shape to a single-cell experiment:
 mas-cc experiment run \
   --config configs/runs/old/naming_convention_grid_tutorial_university_v3.yaml \
   --output-dir results \
-  --approve-preflight inspection/grid_tutorial/preflight/preflight_id.txt
+  --approve-preflight results/inspection/grid_tutorial/preflight/preflight_id.txt
 ```
 
 ```text

@@ -44,7 +44,7 @@
 # Preflight before model inference:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment preflight \
 #     --config configs/runs/imitation_round_feedback/gpt-oss-steer-test-no-control.yaml \
-#     --output-dir inspection/gpt_oss_steer_test_no_control_preflight
+#     --output-dir results/inspection/gpt_oss_steer_test_no_control_preflight
 #
 # Launch with live console output:
 #   conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main experiment run \

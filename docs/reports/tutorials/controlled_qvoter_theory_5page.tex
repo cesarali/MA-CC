@@ -1,0 +1,236 @@
+\documentclass[9pt]{extarticle}
+\usepackage[a4paper,margin=0.62in]{geometry}
+\usepackage{amsmath,amssymb,mathtools,booktabs,array,graphicx,microtype}
+\usepackage[most]{tcolorbox}
+\usepackage[hidelinks]{hyperref}
+\graphicspath{{/mnt/data/theory5_assets/}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.18em}
+\newcommand{\Adv}{\textsc{Advocate}}
+\newcommand{\Noop}{\textsc{NoOp}}
+\newtcolorbox{boxx}{colback=gray!4,colframe=gray!45,boxrule=.4pt,arc=2pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+\newtcolorbox{key}{colback=green!2,colframe=green!38!black,boxrule=.45pt,arc=2pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+\begin{document}
+\begin{center}
+{\Large\bfseries Controlled $q$-Voter Theory for Round-Level Feedback}\\[-1mm]
+{\normalsize System definition and key transfer-entropy results}\hfill {\small 14 Aug 2026}
+\end{center}
+\vspace{-1mm}
+\begin{boxx}
+\textbf{The model.} A well-mixed population follows a unanimity $q$-voter rule. An external controller samples $q_c$ agents once per round, chooses \Noop\ or \Adv\ using a soft stochastic policy, and, if it advocates target $A$, replaces one of the $q$ social-input slots in exactly $b$ of the $N$ microscopic update positions selected uniformly in advance.
+\end{boxx}
+
+\section*{1. State, timing, and variables}
+\textbf{Simple picture.} Agents update one at a time; the controller acts only once per population round. In the binary theory, $A$ is the controller target and $B$ the alternative. At the beginning of round $k$,
+\[
+N_k=n\in\{0,\ldots,N\},\qquad x_k=n/N,
+\]
+where $n$ is the number of $A$ supporters. One round contains exactly $N$ focal-update opportunities.
+
+\begin{center}\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.13\linewidth}p{0.78\linewidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$N$ & population size and number of microscopic positions per round \\
+$q$ & number of social inputs seen by a focal agent \\
+$q_c$ & number of agents sensed by the controller at the round start \\
+$b$ & exact number of controlled positions in an advocacy round; $c=b/N$ \\
+$Y_k$ & number of target supporters found in the controller sample \\
+$U_k$ & round action: $\Noop$ or $\Adv$ \\
+$K_0,K_1$ & one-update kernels without / with controller advocacy \\
+$R_0,R_1$ & whole-round kernels under $\Noop$ / $\Adv$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The round protocol is
+\[
+\boxed{N_k\to Y_k\to U_k\to \underbrace{N\text{ microscopic updates}}_{\text{no new controller decision}}\to N_{k+1}.}
+\]
+If $U_k=\Adv$, a set $S_k\subset\{1,\ldots,N\}$ with $|S_k|=b$ is drawn uniformly \emph{before} the round. Choosing update positions, not fixed agent identities, preserves exchangeability.
+
+\section*{2. Population rule and microscopic kernels}
+\textbf{Simple picture.} The focal agent switches only when all $q$ inputs unanimously support the opposite opinion. At a controlled position, the controller simply occupies one social-input slot and says $A$; the focal response rule itself is unchanged.
+
+Ordinary update:
+\[
+\boxed{K_0(n+1\mid n)=\frac{N-n}{N}\frac{\binom{n}{q}}{\binom{N-1}{q}},\qquad
+K_0(n-1\mid n)=\frac{n}{N}\frac{\binom{N-n}{q}}{\binom{N-1}{q}}.}
+\]
+The diagonal term completes the row to one. Controlled update:
+\[
+\boxed{K_1(n+1\mid n)=\frac{N-n}{N}\frac{\binom{n}{q-1}}{\binom{N-1}{q-1}},\qquad K_1(n-1\mid n)=0.}
+\]
+Again the diagonal completes the row. The controlled kernel is asymmetric by design; transfer entropy does not require microscopic reversibility.
+
+\newpage
+\section*{3. Controller: finite sensing and a soft round decision}
+\textbf{Simple picture.} The unanimity rule belongs to the population. The sigmoid belongs only to the controller and decides whether the budget $b$ is activated for the next round.
+
+The controller samples $q_c$ agents without replacement:
+\[
+\boxed{S(y\mid n)=\Pr(Y_k=y\mid N_k=n)=\frac{\binom{n}{y}\binom{N-n}{q_c-y}}{\binom{N}{q_c}}.}
+\]
+Given the measured target fraction $y/q_c$,
+\[
+\boxed{\Pr(U_k=\Adv\mid Y_k=y)=\sigma\!\left[\beta\left(\theta-\frac{y}{q_c}\right)\right],\qquad \sigma(z)=\frac{1}{1+e^{-z}}.}
+\]
+Thus the exact probability of advocacy at true state $n$ is
+\[
+\boxed{a_n=\Pr(\Adv\mid n)=\sum_y S(y\mid n)\,\sigma\!\left[\beta\left(\theta-\frac{y}{q_c}\right)\right].}
+\]
+For $q_c=2$ and $\theta=1/2$, this simplifies exactly to
+\[
+\boxed{a(x)=\frac12+\frac12\tanh\!\left(\frac{\beta}{4}\right)(1-2x).}
+\]
+For the illustrative choice $\beta=4$, $a(x)=0.880797-0.761594x$.
+
+\begin{center}
+\includegraphics[width=.72\linewidth]{soft_policy.png}
+\end{center}
+\vspace{-2mm}
+{\small\textbf{Figure 1.} State-conditioned advocacy probability after averaging over the sensor for $N=32$, $\theta=1/2$, $\beta=4$. $q_c$ changes sensing fidelity; it does not change the unanimity population rule.}
+
+\begin{key}
+\textbf{Parameter roles.} $q$ = social interaction order; $q_c$ = sensing resource; $\theta$ = intervention trigger; $\beta$ = controller decision stochasticity; $c=b/N$ = actuation resource.
+\end{key}
+
+\section*{4. Whole-round kernels}
+\textbf{Simple picture.} $K_0,K_1$ describe one focal update, whereas transfer entropy is measured from one round to the next. We therefore propagate the microscopic process through all $N$ positions.
+
+Under \Noop,
+\[
+\boxed{R_0=K_0^N.}
+\]
+Under \Adv, exactly $b$ positions are controlled. Let $F_{r,j}$ be the transition matrix after $r$ positions with $j$ controlled positions already used. Starting from $F_{0,0}=I$,
+\[
+F_{r+1,j+1}\mathrel{+}=\frac{b-j}{N-r}F_{r,j}K_1,\qquad
+F_{r+1,j}\mathrel{+}=\frac{N-b-r+j}{N-r}F_{r,j}K_0,
+\]
+so that
+\[
+\boxed{R_1=F_{N,b}.}
+\]
+This is exact and averages over all uniformly preallocated control schedules without enumerating them.
+
+\newpage
+\section*{5. Exact finite-$N$ transfer entropy}
+\textbf{Simple picture.} Fix the current population state $n$. If knowing whether the controller chose \Adv\ or \Noop\ changes the distribution of the next-round state, the action carries information into the population dynamics.
+
+The action-marginalized next-state law is
+\[
+M_n(m)=[1-a_n]R_0(m\mid n)+a_nR_1(m\mid n).
+\]
+The exact state-local transfer entropy is
+\[
+\boxed{\begin{aligned}
+T(n)=&\,[1-a_n]\sum_mR_0(m\mid n)\log_2\frac{R_0(m\mid n)}{M_n(m)}\\
+&+a_n\sum_mR_1(m\mid n)\log_2\frac{R_1(m\mid n)}{M_n(m)}.
+\end{aligned}}
+\]
+Equivalently,
+\[
+\boxed{T(n)=\mathrm{JS}_{a_n}\!\left(R_0(\cdot\mid n),R_1(\cdot\mid n)\right),}
+\]
+a weighted Jensen-Shannon divergence between the exact no-control and advocacy round kernels. This is already an exact finite-population theoretical result: once $(N,q,q_c,b,\beta,\theta)$ are fixed, there is no empirical MI estimator in the calculation.
+
+If $P_k(n)$ is the distribution of states at the start of round $k$,
+\[
+\boxed{\mathcal T_k=I(U_k;N_{k+1}\mid N_k)=\sum_nP_k(n)T(n).}
+\]
+For a $K$-round experiment, the natural finite-horizon rate is
+\[
+\boxed{\overline{\mathcal T}^{(K)}=K^{-1}\sum_{k=0}^{K-1}\mathcal T_k.}
+\]
+The pure unanimity voter has absorbing consensus states, so long-time stationary TE can vanish after consensus. For comparison with finite LLM episodes, $T(n)$, $\mathcal T_k$, and $\overline{\mathcal T}^{(K)}$ are therefore more informative.
+
+\begin{key}
+\textbf{Two ingredients are required for positive TE.} The soft policy provides action variation at fixed state through $0<a_n<1$. The population kernels provide dynamical separation through $R_0\neq R_1$. If either ingredient disappears, $T(n)=0$.
+\end{key}
+
+\section*{6. Closed large-$N$ approximation}
+\textbf{Simple picture.} To understand how control should scale with $q$ and $b/N$, approximate the count fraction $x=n/N$ as continuous and compare the mean drift with and without advocacy.
+
+The ordinary and controlled drifts are
+\[
+f_0(x)=(1-x)x^q-x(1-x)^q,\qquad f_1(x)=(1-x)x^{q-1}.
+\]
+Their difference is
+\[
+\boxed{\Delta f_q(x)=x^{q-1}(1-x)^2+x(1-x)^q.}
+\]
+With $c=b/N$, an advocacy round changes the mean drift by approximately $c\Delta f_q(x)$. The ordinary local noise coefficient is
+\[
+\nu_0(x)=(1-x)x^q+x(1-x)^q-f_0(x)^2.
+\]
+A second-order Jensen-Shannon expansion gives
+\[
+\boxed{T_{\rm MF}(x)\approx\frac{a(x)[1-a(x)]}{2\ln2}\frac{Nc^2[\Delta f_q(x)]^2}{\nu_0(x)}.}
+\]
+Hence the characteristic weak-control scaling is $T_{\rm MF}\propto a(1-a)b^2/N$, modulated by the $q$-dependent response-to-noise ratio.
+
+\newpage
+\section*{7. Exact curves: what the classical theory predicts}
+\textbf{Simple picture.} The following are theory curves, not simulations. They use the exact $K_0,K_1\to R_0,R_1\to T(n)$ construction for $N=32$, $q_c=2$, $\theta=1/2$, $\beta=4$, while varying $q$ and the round budget $b$.
+
+\begin{center}
+\begin{minipage}{.49\linewidth}\centering
+\includegraphics[width=\linewidth]{exact_te_q1.png}
+\end{minipage}\hfill
+\begin{minipage}{.49\linewidth}\centering
+\includegraphics[width=\linewidth]{exact_te_q2.png}
+\end{minipage}
+\end{center}
+\vspace{-2mm}
+{\small\textbf{Figure 2.} Exact state-local TE. For $q=1$ (left), advocacy can seed target support even from $x=0$, so the boundary channel can be strong. For $q=2$ (right), $T(0)=0$: one controller input still requires one ordinary $A$ supporter to complete unanimity. The information channel therefore peaks in the interior.}
+
+\section*{8. The analytically stronger special case $q=1$}
+For $q=1$, ordinary copying has zero mean drift, $f_0(x)=0$, whereas a controlled position gives $f_1(x)=1-x$. With exactly $b$ controlled positions,
+\[
+\boxed{\mathbb E[x_{k+1}\mid x_k=x,\Adv]=1-(1-x)\left(1-\frac1N\right)^b,}
+\]
+while $\mathbb E[x_{k+1}\mid x_k=x,\Noop]=x$. Therefore
+\[
+\boxed{\Delta\mu_{q=1}(x)=(1-x)\left[1-\left(1-\frac1N\right)^b\right]\to(1-x)(1-e^{-c})}
+\]
+when $N\to\infty$ with $b=cN$.
+
+This creates a qualitative boundary distinction:
+\[
+\boxed{q=1:\ T(0)>0\text{ for }b>0,\qquad q\ge2:\ T(0)=0.}
+\]
+
+\newpage
+\section*{9. Control-budget dependence and compact comparison sheet}
+\textbf{Simple picture.} The final theoretical question is how much information can be injected as the round budget $c=b/N$ increases. The exact theory predicts a small-budget quadratic regime for $q\ge2$, followed by saturation as the two round kernels become increasingly distinguishable.
+
+\begin{center}
+\includegraphics[width=.75\linewidth]{max_te_vs_c.png}
+\end{center}
+\vspace{-2mm}
+{\small\textbf{Figure 3.} Maximum exact state-local TE over population states versus $c=b/N$ for $N=32$, $q_c=2$, $\theta=1/2$, $\beta=4$. For $q\ge2$ the low-budget behavior is consistent with the $c^2$ scaling of the mean-field approximation. $q=1$ departs earlier because advocacy opens otherwise inaccessible boundary transitions.}
+
+\begin{center}\small
+\begin{tabular}{p{0.30\linewidth}p{0.63\linewidth}}
+\toprule
+Object & Theoretical expression \\
+\midrule
+Sensor & $S(y\mid n)=\binom{n}{y}\binom{N-n}{q_c-y}/\binom{N}{q_c}$ \\
+Soft controller & $a_n=\sum_yS(y\mid n)\sigma[\beta(\theta-y/q_c)]$ \\
+Population response & unanimity $q$-voter, encoded by $K_0,K_1$ \\
+Round dynamics & $R_0=K_0^N$, $R_1=F_{N,b}$ \\
+Exact local TE & $T(n)=\mathrm{JS}_{a_n}[R_0(\cdot\mid n),R_1(\cdot\mid n)]$ \\
+Episode/round TE & $\mathcal T_k=\sum_nP_k(n)T(n)$ \\
+Mean-field separation & $\Delta f_q=x^{q-1}(1-x)^2+x(1-x)^q$ \\
+Weak-control TE & $T_{\rm MF}\approx\frac{a(1-a)}{2\ln2}\frac{Nc^2\Delta f_q^2}{\nu_0}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{key}
+\textbf{What is fixed in this benchmark.} Population response = unanimity $q$-voter; sensing = hypergeometric sample of size $q_c$; controller decision = soft sigmoid; timing = once per round; actuation = exactly $b$ preallocated positions, each replacing one of the $q$ social inputs with advocacy for $A$. The LLM simulations can now be compared against these classical predictions at matched $(N,q,q_c,b,\beta,\theta)$.
+\end{key}
+
+{\small\textbf{Theory anchors.} Irisarri et al., \emph{Stochastic Thermodynamics of Social Imitation beyond Energetics} (2026), motivates the nonlinear imitation mechanism. Horowitz and Sandberg, \emph{Second-law-like inequalities with information and their interpretations} (2014), motivates directional information in repeated feedback. The controlled kernel here is not constrained to be microscopically reversible.}
+\end{document}
