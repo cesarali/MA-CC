@@ -1,0 +1,104 @@
+#!/bin/bash
+# Relational reasoning population study 01 -- overnight reduction.
+#
+# One original grid cell per SLURM array task, with all four arms carried by a
+# SINGLE array. The four arms are independent runs scientifically, but they
+# share one upstream provider. Submitting them as one array means the throttle
+# bounds provider concurrency once, globally, instead of per arm -- and the
+# arms drain from a single queue, so the active shard count stays pinned at the
+# throttle until the very end instead of decaying as the short arms finish.
+#
+#   array index   arm                        cells   config suffix
+#   ---------------------------------------------------------------------------
+#     0 -  19     A  no control                 20   a_no_control
+#    20 -  59     B  pure social control        40   b_social_control
+#    60 -  99     C  epistemic control          40   c_epistemic_control
+#   100 - 119     D  adversarial diagnostic     20   d_adversarial_diagnostic
+#                                             ----
+#                                              120
+#
+# RATE LIMIT. request_concurrency is 8 per process and each shard owns an
+# independent provider client, so
+#
+#     simultaneous provider requests = array throttle x 8
+#
+# %4 -> 32 simultaneous. At the observed ~10 s latency that is ~192 req/min;
+# even at a pathological 1 s latency it is ~1,920 req/min, still under the
+# reported GPT-OSS allowance of 2,000 req/min. Do not raise the throttle
+# without redoing that arithmetic -- see
+# docs/howto/launch/parallel_hiddenbench_grid_runs.md.
+#
+# SUBMIT (always with a throttle):
+#
+#   sbatch --array=0-119%4 \
+#     scripts/Potsdam/SLURM/relational_population_study01_overnight_cell_array.job
+#
+# Resume after an interruption: storage.overwrite is false and checkpoint_mode
+# is episode, so re-submitting the same index range picks up where it stopped.
+# To redo only some cells, submit just those indices, e.g. --array=7,31,88%4.
+#
+#SBATCH --job-name=relstudy01_overnight
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --time=1-00:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy01_overnight_%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy01_overnight_%A_%a.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly CONFIG_DIR=configs/runs/relational_reasoning/population_study_01/overnight
+readonly RESULT_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study01_overnight
+readonly TASK_INDEX=${SLURM_ARRAY_TASK_ID:?submit this script as a SLURM array}
+
+# Map the global array index onto (arm, original cell index). The cell index
+# handed to the runner is the index within that arm's own grid, so the cell ID
+# and episode seeds are byte-identical to the unsharded run.
+if   (( TASK_INDEX >= 0   && TASK_INDEX <= 19  )); then
+  ARM=a_no_control;             CELL_INDEX=$(( TASK_INDEX - 0 ))
+elif (( TASK_INDEX >= 20  && TASK_INDEX <= 59  )); then
+  ARM=b_social_control;         CELL_INDEX=$(( TASK_INDEX - 20 ))
+elif (( TASK_INDEX >= 60  && TASK_INDEX <= 99  )); then
+  ARM=c_epistemic_control;      CELL_INDEX=$(( TASK_INDEX - 60 ))
+elif (( TASK_INDEX >= 100 && TASK_INDEX <= 119 )); then
+  ARM=d_adversarial_diagnostic; CELL_INDEX=$(( TASK_INDEX - 100 ))
+else
+  echo "[error] array index ${TASK_INDEX} outside 0..119" >&2
+  exit 2
+fi
+readonly ARM CELL_INDEX
+
+readonly CONFIG=${CONFIG_DIR}/relational_population_study01_${ARM}_overnight.yaml
+readonly SHARD_DIR=${RESULT_ROOT}/${ARM}/shard_$(printf '%04d' "${CELL_INDEX}")
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${SHARD_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing ${REPO_ROOT}/.env" >&2; exit 1; }
+
+mkdir -p "${SHARD_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] study=population_study_01_overnight arm=${ARM}"
+echo "[run] array_index=${TASK_INDEX} cell_index=${CELL_INDEX} job=${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+echo "[run] config=${CONFIG}"
+echo "[run] output=${SHARD_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" scripts/experiment_design/run_classical_grid_cell.py \
+  --config "${CONFIG}" \
+  --cell-index "${CELL_INDEX}" \
+  --output-dir "${SHARD_DIR}"
+
+echo "[done] arm=${ARM} cell_index=${CELL_INDEX} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

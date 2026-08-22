@@ -1,0 +1,128 @@
+#!/bin/bash
+# Relational reasoning population study 02 -- adversarial follow-up.
+#
+# One original grid cell per SLURM array task, with all three arms carried by a
+# SINGLE array, for the same reason as study 01: the arms are independent runs
+# scientifically but share one upstream provider, so a single array bounds
+# provider concurrency once, globally, instead of per arm.
+#
+#   array index   arm                              cells   config
+#   ---------------------------------------------------------------------------
+#     0 -   5     E  wrong-control budget scan         6   ..._e_wrong_budget_scan_L2_q1
+#     6 -   7     F1 L=3 q=2 no control                2   ..._f1_L3_q2_no_control
+#     8 -   9     F2 L=3 q=2 wrong control b=6         2   ..._f2_L3_q2_wrong_b06
+#                                                   ----
+#                                                     10
+#
+# Arm E cell order is (intervention_budget outer, task_id inner), matching the
+# table in the study README:
+#
+#   cell-0000 b=6  task_0001   cell-0002 b=12 task_0001   cell-0004 b=18 task_0001
+#   cell-0001 b=6  task_0002   cell-0003 b=12 task_0002   cell-0005 b=18 task_0002
+#
+# Arms F1/F2 are (task_0001, task_0002).
+#
+# RUNTIME. Every cell here is 2 episodes x 264 nominal calls, the same shape as
+# a study 01 cell. Measured on the 125 completed study 01 overnight cells:
+# median 16.7 min, p90 21.6 min, max 23.9 min per cell. --time=04:00:00 is
+# roughly a 10x margin on the median and still leaves room for provider
+# stalls; the L=3 arms carry longer prompts but the same call count.
+#
+# At %4 the 10 cells drain in 3 waves, so wall clock is ~50-70 min, not a night.
+#
+# RATE LIMIT. request_concurrency is 8 per process and each shard owns an
+# independent provider client, so
+#
+#     simultaneous provider requests = array throttle x 8
+#
+# %4 -> 32 simultaneous. At the observed ~10 s latency that is ~192 req/min;
+# even at a pathological 1 s latency it is ~1,920 req/min, still under the
+# reported GPT-OSS allowance of 2,000 req/min. Do not raise the throttle
+# without redoing that arithmetic -- see
+# docs/howto/launch/parallel_hiddenbench_grid_runs.md.
+#
+# SUBMIT (always with a throttle):
+#
+#   sbatch --array=0-9%4 \
+#     scripts/Potsdam/SLURM/relational_population_study02_cell_array.job
+#
+# Resume after an interruption: storage.overwrite is false and checkpoint_mode
+# is episode, so re-submitting the same index range picks up where it stopped.
+# To redo only some cells, submit just those indices, e.g. --array=3,8%4.
+#
+# AGGREGATE when the array is done:
+#
+#   python scripts/experiment_design/aggregate_grid_shards.py \
+#     --result-root /work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study02 \
+#     --output-dir  /work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study02_analysis \
+#     --expect-cells 10 --expect-episodes 20 --zip
+#
+#SBATCH --job-name=relstudy02
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --time=04:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy02_%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy02_%A_%a.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly CONFIG_DIR=configs/runs/relational_reasoning/population_study_02
+readonly RESULT_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study02
+readonly TASK_INDEX=${SLURM_ARRAY_TASK_ID:?submit this script as a SLURM array}
+
+# Map the global array index onto (arm, original cell index). The cell index
+# handed to the runner is the index within that arm's own grid, so the cell ID
+# and episode seeds are byte-identical to the unsharded run.
+if   (( TASK_INDEX >= 0 && TASK_INDEX <= 5 )); then
+  ARM=e_wrong_budget_scan
+  CONFIG_STEM=relational_population_study02_e_wrong_budget_scan_L2_q1
+  CELL_INDEX=$(( TASK_INDEX - 0 ))
+elif (( TASK_INDEX >= 6 && TASK_INDEX <= 7 )); then
+  ARM=f1_L3_q2_no_control
+  CONFIG_STEM=relational_population_study02_f1_L3_q2_no_control
+  CELL_INDEX=$(( TASK_INDEX - 6 ))
+elif (( TASK_INDEX >= 8 && TASK_INDEX <= 9 )); then
+  ARM=f2_L3_q2_wrong_b06
+  CONFIG_STEM=relational_population_study02_f2_L3_q2_wrong_b06
+  CELL_INDEX=$(( TASK_INDEX - 8 ))
+else
+  echo "[error] array index ${TASK_INDEX} outside 0..9" >&2
+  exit 2
+fi
+readonly ARM CONFIG_STEM CELL_INDEX
+
+readonly CONFIG=${CONFIG_DIR}/${CONFIG_STEM}.yaml
+readonly SHARD_DIR=${RESULT_ROOT}/${ARM}/shard_$(printf '%04d' "${CELL_INDEX}")
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${SHARD_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing ${REPO_ROOT}/.env" >&2; exit 1; }
+
+mkdir -p "${SHARD_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] study=population_study_02 arm=${ARM}"
+echo "[run] array_index=${TASK_INDEX} cell_index=${CELL_INDEX} job=${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+echo "[run] config=${CONFIG}"
+echo "[run] output=${SHARD_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" scripts/experiment_design/run_classical_grid_cell.py \
+  --config "${CONFIG}" \
+  --cell-index "${CELL_INDEX}" \
+  --output-dir "${SHARD_DIR}"
+
+echo "[done] arm=${ARM} cell_index=${CELL_INDEX} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

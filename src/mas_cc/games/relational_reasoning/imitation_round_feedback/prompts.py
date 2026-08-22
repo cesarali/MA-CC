@@ -141,6 +141,30 @@ DECISION_BASIS_SOCIAL = (
     "not shown to anyone."
 )
 
+DECISION_BASIS_SOCIAL_NONE_VISIBLE = (
+    "Make your own decision, using:\n"
+    "- the facts you currently know;\n"
+    "- your current position.\n"
+    "\n"
+    "No other participant's position is visible to you in this interaction.\n"
+    "\n"
+    "Other participants will see your vote and any fact you choose to share,\n"
+    "and nothing else. Your reason is your own record: it is not shown to\n"
+    "anyone."
+)
+"""A focal update whose social slots are all occluded (``message_mode: silent``).
+
+Distinct from ``DECISION_BASIS_INITIAL`` on purpose.  The initial text asserts
+that *no participant has stated a position yet*, which is true only at round 0;
+reusing it mid-episode would tell the occluded agent something false about the
+population and confound the placebo with a claim about everyone else.  This one
+says only that nothing is visible **in this interaction**, and asserts nothing
+about whether other participants have positions.
+
+It is bound like the other two - the block is ``dynamic``, so adding this value
+leaves the prompt definition, its version and its hash untouched.
+"""
+
 DECISION_INSTRUCTION = (
     "DECISION\n"
     "\n"
@@ -809,6 +833,7 @@ def build_relational_ballot_prompt(
     social_sources: Sequence[Mapping[str, Any]] = (),
     vote_visibility: str = "public",
     social_distrust: bool = True,
+    social_context: bool = False,
 ) -> RelationalBallotPrompt:
     """Bind one focal update, or - with no sources and no vote - one local vote.
 
@@ -834,7 +859,14 @@ def build_relational_ballot_prompt(
     ).bind(
         identity=identity,
         decision_basis=(
-            DECISION_BASIS_SOCIAL if social_sources else DECISION_BASIS_INITIAL
+            # No sources is ambiguous on its own: it is round 0 for everybody,
+            # and it is also an occluded focal update.  `social_context` is what
+            # separates them, so neither is described with the other's text.
+            DECISION_BASIS_SOCIAL
+            if social_sources
+            else DECISION_BASIS_SOCIAL_NONE_VISIBLE
+            if social_context
+            else DECISION_BASIS_INITIAL
         ),
         task={
             "question": question,
@@ -860,6 +892,7 @@ __all__ = [
     "CONTROL_RECOMMENDATION",
     "DECISION_BASIS_INITIAL",
     "DECISION_BASIS_SOCIAL",
+    "DECISION_BASIS_SOCIAL_NONE_VISIBLE",
     "DECISION_INSTRUCTION",
     "EVIDENCE_HEADER",
     "IMPLEMENTED_VOTE_VISIBILITIES",
