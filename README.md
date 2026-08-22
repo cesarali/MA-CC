@@ -28,6 +28,19 @@ key. The existing `.env` must not be committed.
 
 ## Commands
 
+Submit a folder of MA-CC experiment YAMLs as one preflighted SLURM config
+array, then build the canonical cross-run analysis package after it finishes:
+
+```bash
+mas-cc study submit --config-dir configs/runs/<study-folder>
+mas-cc study aggregate --study-dir results/<study-name>
+```
+
+An optional `study.yaml` fixes config order, study name, array throttle, and
+the `analysis.yaml` recipe. Individual experiment YAMLs remain the scientific
+source of truth. Aggregation is strict by default; `--allow-incomplete` is an
+explicit exploratory override and marks the resulting package incomplete.
+
 Run the complete offline matrix with deterministic mock responses:
 
 ```bash

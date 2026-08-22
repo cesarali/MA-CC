@@ -1,0 +1,176 @@
+# Study-wide offline analysis. All information statistics are computed from
+# pooled canonical observations by the existing round-feedback estimator.
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_population_actuation_cmi
+  - round_target_actuation_cmi
+  - round_truth_actuation_cmi
+  - round_order_actuation_cmi
+  - round_population_information_fraction
+  - round_target_information_fraction
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_order_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_susceptible_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_memory_target_signed_response
+  - round_epistemic_target_signed_response
+  - round_phi_target_signed_response
+  - round_susceptible_target_signed_response
+  - round_kappa_target_signed_response
+  - cell_current
+  - episode_current
+  - effective_affinity
+  - kinetic_compliance
+
+resampling:
+  bootstrap_resamples: 1000
+  null_permutations: 1000
+  confidence: 0.95
+  seed: 20260822
+
+derived:
+  - eta_ir
+
+# Declarative heatmaps use support masks automatically. The beta facet keeps
+# the main beta=4 atlas visually separate from the beta ablation.
+plots:
+  main_signed_response:
+    source: primary_estimates
+    metric: round_target_signed_response_share
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_target_cmi:
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_eta_ir:
+    source: derived_observables
+    metric: eta_ir
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_action_entropy:
+    source: primary_estimates
+    metric: round_controller_action_entropy
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_conditional_action_entropy:
+    source: primary_estimates
+    metric: round_controller_action_entropy_given_population
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_sensing_mi:
+    source: primary_estimates
+    metric: round_sensing_mi
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_memory_cmi:
+    source: primary_estimates
+    metric: round_memory_target_actuation_cmi
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_epistemic_cmi:
+    source: primary_estimates
+    metric: round_epistemic_target_actuation_cmi
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_phi_cmi:
+    source: primary_estimates
+    metric: round_phi_target_actuation_cmi
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_kappa_cmi:
+    source: primary_estimates
+    metric: round_kappa_target_actuation_cmi
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_h_eff:
+    source: primary_estimates
+    metric: effective_affinity
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_gamma_eff:
+    source: primary_estimates
+    metric: kinetic_compliance
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  main_J_c:
+    source: primary_estimates
+    metric: cell_current
+    x: intervention_budget
+    y: threshold
+    facet: beta
+    kind: heatmap
+  beta_target_cmi:
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: beta
+    facet: threshold
+    kind: heatmap
+  beta_signed_response:
+    source: primary_estimates
+    metric: round_target_signed_response_share
+    x: intervention_budget
+    y: beta
+    facet: threshold
+    kind: heatmap
+  beta_eta_ir:
+    source: derived_observables
+    metric: eta_ir
+    x: intervention_budget
+    y: beta
+    facet: threshold
+    kind: heatmap
+  beta_h_eff:
+    source: primary_estimates
+    metric: effective_affinity
+    x: intervention_budget
+    y: beta
+    facet: threshold
+    kind: heatmap
+  beta_gamma_eff:
+    source: primary_estimates
+    metric: kinetic_compliance
+    x: intervention_budget
+    y: beta
+    facet: threshold
+    kind: heatmap

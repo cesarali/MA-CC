@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=mas-cc-study
+#SBATCH --output=slurm-%A_%a.out
+#SBATCH --error=slurm-%A_%a.err
+
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: run_config_array.job SUBMISSION_MANIFEST" >&2
+  exit 2
+fi
+
+python -m mas_cc.studies.array_worker "$1"

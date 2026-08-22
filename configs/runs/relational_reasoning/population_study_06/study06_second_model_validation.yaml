@@ -1,0 +1,50 @@
+# Gate for the optional Study 06 Qwen robustness block. This is an established
+# relational-support benchmark config, not an experiment-run config, and is
+# therefore intentionally not listed in study.yaml.
+
+benchmark:
+  name: relational-study06-qwen-support-validation
+  description: >-
+    Position-balanced validation of full, partial, and zero relational evidence
+    before any Qwen control-efficiency result is considered interpretable.
+  seed: 20260822
+  tasks_per_condition: 20
+
+grid:
+  reasoning_depth: [2]
+  distractors: [0, 2, 4, 8]
+  num_options: [3]
+
+fixed:
+  population_size: 24
+  support_redundancy: 6
+  distractor_redundancy: 1
+  no_single_agent_solution: true
+
+evidence:
+  include_zero_condition: true
+  max_subsets_per_k: 4
+
+presentation:
+  # Correct semantics occupy A, B, and C equally within every cell.
+  mode: all_positions
+
+llm_provider:
+  type: university
+  model: gwdg/qwen3-30b-a3b-instruct-2507
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 0.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 10.0}
+
+output:
+  dir: results/benchmarks/relational_support
+
+limits:
+  # 4 distractor cells x 20 tasks x 4 evidence subsets x 3 positions.
+  max_requests: 1000
+  prompt_example_tasks: 2

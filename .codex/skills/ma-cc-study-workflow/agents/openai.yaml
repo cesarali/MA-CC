@@ -1,0 +1,7 @@
+interface:
+  display_name: "MA-CC Study Workflow"
+  short_description: "Design, run, and aggregate MA-CC studies"
+  default_prompt: "Use $ma-cc-study-workflow to create, preflight, run, or analyze this MA-CC study."
+
+policy:
+  allow_implicit_invocation: true

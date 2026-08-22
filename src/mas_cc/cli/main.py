@@ -172,6 +172,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="also create a copy-friendly zip excluding :Zone.Identifier sidecars",
     )
 
+    study = commands.add_parser(
+        "study", help="submit and aggregate a folder of ordinary experiment configs"
+    )
+    study_commands = study.add_subparsers(dest="study_command", required=True)
+    study_submit = study_commands.add_parser(
+        "submit", help="preflight every config and submit one SLURM config array"
+    )
+    study_submit.add_argument("--config-dir", type=Path, required=True)
+    study_submit.add_argument(
+        "--results-dir", type=Path,
+        help="common study result root (default: results/<study.name>)",
+    )
+    study_submit.add_argument(
+        "--throttle", type=int,
+        help="maximum number of simultaneously running SLURM array tasks",
+    )
+    study_submit.add_argument(
+        "--job-script", type=Path,
+        help="config-array job script (default: scripts/Potsdam/SLURM/run_config_array.job)",
+    )
+    study_aggregate = study_commands.add_parser(
+        "aggregate", help="validate, normalize, analyze, plot, report, and package a study"
+    )
+    study_aggregate.add_argument("--study-dir", type=Path, required=True)
+    study_aggregate.add_argument(
+        "--allow-incomplete", action="store_true",
+        help="produce explicitly incomplete exploratory output despite validation failures",
+    )
+
     synthetic = commands.add_parser(
         "synthetic", help="run the synthetic games whose closed-form answers we already know"
     )
@@ -535,6 +564,40 @@ def main(argv: Sequence[str] | None = None) -> int:
         if summary.get("archive"):
             print(f"  archive: {summary['archive']}")
         return 0
+    if args.command == "study" and args.study_command == "submit":
+        from mas_cc.studies import submit_study
+
+        try:
+            result = submit_study(
+                args.config_dir,
+                args.results_dir,
+                throttle=args.throttle,
+                job_script=args.job_script,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study {result.study_dir.name} submitted as SLURM job {result.job_id}: "
+            f"{len(result.entries)} config(s), {result.study_dir}"
+        )
+        return 0
+    if args.command == "study" and args.study_command == "aggregate":
+        from mas_cc.studies import aggregate_study
+
+        try:
+            summary = aggregate_study(
+                args.study_dir, allow_incomplete=args.allow_incomplete
+            )
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study {summary['study_id']} aggregated "
+            f"({'complete' if summary['complete'] else 'incomplete'}): "
+            f"{summary['archive']}"
+        )
+        return 0 if summary["complete"] else 1
     if args.command == "synthetic":
         from .synthetic import (
             DEFAULT_EPSILON_GRID,
