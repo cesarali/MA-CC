@@ -14,6 +14,7 @@ __pycache__/
 venv/
 
 .DS_Store
+.tags*
 
 # Generated benchmark artifacts (inspection bundles live in results/inspection/)
 results/
@@ -23,3 +24,6 @@ inspection/
 
 # Local data folder
 data/
+
+# Preflight / inspection artifacts (regenerable, provider-free)
+inspection/

@@ -280,6 +280,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 social_sources=social_sources,
                 vote_visibility=rules.vote_visibility,
                 social_distrust=rules.social_distrust,
+                # A focal update has a social context even when occlusion left
+                # nothing in it; an initial vote does not.
+                social_context=stage == FOCAL_UPDATE,
             ),
             retry_bound=rules.invalid_response_retries,
         )

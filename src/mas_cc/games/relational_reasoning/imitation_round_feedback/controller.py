@@ -19,6 +19,16 @@ be manipulated as a controlled variable:
     The same recommendation, plus exactly one fact of the frozen task, chosen
     **before the episode runs** and fixed for its whole duration.
 
+``message_mode: silent``
+    The **occlusion placebo**.  A controlled position still consumes one of the
+    focal's ordinary peer slots on exactly the schedule the other modes use, but
+    nothing is substituted into it: the focal simply sees one peer fewer.  No
+    vote, no recommendation, no fact and no new speaker enter the prompt, so the
+    only thing this mode removes is a peer-information opportunity.  It exists
+    to separate that loss from the directional influence of an adversarial
+    recommendation - run it against ``recommendation_only`` at the same budget
+    and the difference is the directional part.
+
 Fact selection is deterministic and never delegated to a model:
 ``controller_fact_id`` names one explicitly, or ``controller_fact_selector:
 supporting`` resolves to the task's first supporting fact in task order.  One
@@ -46,7 +56,10 @@ from ..data import RelationalTask
 
 RECOMMENDATION_ONLY = "recommendation_only"
 RECOMMENDATION_PLUS_FACT = "recommendation_plus_fact"
-MESSAGE_MODES = (RECOMMENDATION_ONLY, RECOMMENDATION_PLUS_FACT)
+SILENT = "silent"
+MESSAGE_MODES = (RECOMMENDATION_ONLY, RECOMMENDATION_PLUS_FACT, SILENT)
+FACTLESS_MESSAGE_MODES = (RECOMMENDATION_ONLY, SILENT)
+"""Modes that never put a fact in front of a focal agent."""
 
 SELECTOR_SUPPORTING = "supporting"
 FACT_SELECTORS = (SELECTOR_SUPPORTING,)
@@ -105,6 +118,17 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     @property
     def transmits_fact(self) -> bool:
         return self.message_mode == RECOMMENDATION_PLUS_FACT
+
+    @property
+    def transmits_recommendation(self) -> bool:
+        """Whether an actuated slot is occupied at all.
+
+        ``False`` only under ``silent``, where the slot is vacated rather than
+        filled: the runtime omits the source entirely instead of substituting
+        one, so nothing about the controller reaches the rendered prompt.
+        """
+
+        return self.message_mode != SILENT
 
     def resolve_fact_id(self, task: RelationalTask) -> str | None:
         """The one fact this controller cites for the whole episode, or ``None``.
@@ -227,13 +251,13 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                     "controller_fact_selector",
                 )
             )
-        if mode == RECOMMENDATION_ONLY and (
+        if mode in FACTLESS_MESSAGE_MODES and (
             values["controller_fact_id"] or values["controller_fact_selector"]
         ):
             issues.append(
                 ValidationIssue(
                     "control.options.message_mode",
-                    "'recommendation_only' transmits no fact; remove "
+                    f"{mode!r} transmits no fact; remove "
                     "controller_fact_id/controller_fact_selector or switch mode",
                 )
             )
@@ -246,8 +270,10 @@ def create_relational_round_budgeted_control(config: ControlConfig) -> Control:
 
 __all__ = [
     "ADVOCACY_SCHEDULES",
+    "FACTLESS_MESSAGE_MODES",
     "FACT_SELECTORS",
     "MESSAGE_MODES",
+    "SILENT",
     "RECOMMENDATION_ONLY",
     "RECOMMENDATION_PLUS_FACT",
     "SCHEDULE_ALWAYS",

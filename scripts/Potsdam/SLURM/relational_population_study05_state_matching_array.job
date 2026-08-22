@@ -1,0 +1,70 @@
+#!/bin/bash
+# Relational reasoning population study 05 -- state-matched one-round intervention.
+#
+# One array task per relational world. Each task runs one six-cell grid
+# (n_Z(0) in {6,9,12} x advocacy in {always,never}) with 10 repetitions,
+# giving 60 episodes and 1,440 nominal provider calls per task.
+#
+# Submit both worlds concurrently:
+#
+#   sbatch --array=0-1%2 \
+#     scripts/Potsdam/SLURM/relational_population_study05_state_matching_array.job
+#
+# Re-submitting an interrupted array index resumes its existing output because
+# checkpoint_mode is episode and storage.overwrite is false.
+
+#SBATCH --job-name=relstudy05
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --time=04:00:00
+#SBATCH --chdir=/home/ojedamarin/Projects/LanguageGames/MA-CC
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy05_%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/relstudy05_%A_%a.err
+
+set -euo pipefail
+
+readonly REPO_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly PYTHON=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC/bin/python
+readonly CONFIG_DIR=configs/runs/relational_reasoning/population_study_05
+readonly RESULT_ROOT=/work/ojedamarin/Projects/LanguageGames/MA-CC/results/relational_population_study05
+readonly TASK_INDEX=${SLURM_ARRAY_TASK_ID:?submit this script as a SLURM array}
+
+case "${TASK_INDEX}" in
+  0) TASK=task0001 ;;
+  1) TASK=task0002 ;;
+  *) echo "[error] array index ${TASK_INDEX} outside 0..1" >&2; exit 2 ;;
+esac
+readonly TASK
+
+readonly CONFIG=${CONFIG_DIR}/relational_population_study05_state_matching_${TASK}.yaml
+readonly OUTPUT_DIR=${RESULT_ROOT}/${TASK}
+
+export http_proxy=http://proxy2.uni-potsdam.de:3128
+export https_proxy=http://proxy2.uni-potsdam.de:3128
+export ftp_proxy=http://proxy2.uni-potsdam.de:3128
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export MPLCONFIGDIR=${OUTPUT_DIR}/.matplotlib
+
+[[ -x "${PYTHON}" ]] || { echo "[error] missing Python: ${PYTHON}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/${CONFIG}" ]] || { echo "[error] missing config: ${CONFIG}" >&2; exit 1; }
+[[ -f "${REPO_ROOT}/.env" ]] || { echo "[error] missing ${REPO_ROOT}/.env" >&2; exit 1; }
+
+mkdir -p "${OUTPUT_DIR}" "${MPLCONFIGDIR}"
+cd "${REPO_ROOT}"
+
+echo "[run] study=population_study_05 task=${TASK} (state-matched intervention)"
+echo "[run] array_index=${TASK_INDEX} job=${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+echo "[run] config=${CONFIG}"
+echo "[run] output=${OUTPUT_DIR} start_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+"${PYTHON}" -m mas_cc.cli.main experiment run \
+  --config "${CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --no-progress
+
+echo "[done] task=${TASK} end_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
