@@ -75,8 +75,11 @@ measurement of $\chi$.
 The controller action also leaves a strongly state-dependent information
 signature. We measure the reduced-state conditional mutual information
 \[
-T(n)=I(U;n_{k+1}\mid n_k=n).
+T_\pi(n)\equiv I(U_k;n_{k+1}\mid n_k=n),
 \]
+the action-to-population information induced by the chosen feedback policy
+\(\pi\). Here \(U_k\) is the policy-selected controller action and
+\(n_{k+1}\) is the population state after actuation.
 The empirical excess above a within-state permutation null is shown in
 Fig.~\ref{fig:landscapes}b. At small $b$ the signal is weak, whereas at
 $b=18$ a clear interior band appears. The exact finite-state theory produces
@@ -109,7 +112,7 @@ gain $\beta$ controls how sharply the controller switches between advocacy and
 NoOp after sensing. At small $\beta$, the action remains uncertain over a wide
 range of states; at large $\beta$, the policy becomes nearly deterministic
 except close to its switching threshold. Consequently increasing $\beta$ does
-not monotonically increase $T(n)$. Instead, the informative band narrows and
+not monotonically increase $T_\pi(n)$. Instead, the informative band narrows and
 moves toward the decision boundary (Fig.~\ref{fig:beta}a).
 
 The state-averaged theory curves make the same point in one dimension
@@ -171,7 +174,7 @@ $h_e^\star=2.19$ with bootstrap interval $[2.12,2.26]$, and evaluate
 \[
 \eta_{\rm th}^\star=
 \frac{h_e^\star J_c}
-{(F_{\rm eff}+h_e^\star)J_c+I(n;Y)+\Delta S_{\rm sys}}.
+{(F_{\rm eff}+h_e^\star)J_c+I(n_k;Y_k)+\Delta S_{\rm sys}}.
 \]
 The resource ordering is strikingly simple
 (Fig.~\ref{fig:efficiencies}b): $\eta_{\rm th}^\star$ increases with $b$ at every

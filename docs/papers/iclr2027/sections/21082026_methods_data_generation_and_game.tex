@@ -103,10 +103,13 @@ be the number of agents voting for option $a_j$ before round $k$. The complete v
 When analyzing a designated controller target $Z\in\mathcal{A}$, we additionally write
 \begin{equation}
     n_{Z,k}=\sum_i \mathbb{I}[X_i(k)=Z],
+    \qquad n_k\equiv n_{Z,k},
     \qquad
-    x_k=\frac{n_{Z,k}}{N}.
+    x_k=\frac{n_k}{N}.
 \end{equation}
-The scalar $x_k$ is a useful coarse-grained population coordinate, but it is not assumed to contain the complete state of the LLM population.
+Thus \(n_k\) is the target-support count used in the controller analysis.  The
+scalar $x_k$ is a useful coarse-grained population coordinate, but it is not
+assumed to contain the complete state of the LLM population.
 
 \paragraph{One population round.}
 
@@ -152,15 +155,17 @@ If $U_k=\mathrm{NO\_OP}$, the round proceeds using ordinary peer interactions. I
 
 The controller is rendered as another participant rather than as an authority. In the main experiments it uses \emph{recommendation-only} messages, meaning that it communicates a target vote but no supporting task fact. It can therefore influence decisions while leaving the epistemic state unchanged directly. This separation is important for distinguishing social steering from information transmission.
 
-The round-level causal structure can be summarized as
+Let \(Y_k\) be the number of target supporters in the controller's sample.
+The controller loop is
 \begin{equation}
-    \mathbf{N}_k
-    \longrightarrow Y_k
-    \longrightarrow U_k
-    \longrightarrow \{\text{$N$ asynchronous agent updates}\}
-    \longrightarrow \mathbf{N}_{k+1},
+    n_k \longrightarrow Y_k \stackrel{\pi}{\longrightarrow} U_k
+    \longrightarrow n_{k+1}.
 \end{equation}
-where $Y_k$ denotes the controller's finite population sample. The sensing policy and the thermodynamic interpretation of this feedback loop are introduced separately.
+Here \(Y_k\) is the controller's noisy observation of the current population
+state, \(U_k\) is the action drawn from the feedback policy \(\pi\), and
+\(n_{k+1}\) is the target-support count after the actuation step and the
+round's asynchronous population updates.  The policy is defined in
+Section~\ref{sec:feedback_efficiency}.
 
 \paragraph{Epistemic observables.}
 Because every explicit fact transmission is recorded, we can measure the epistemic state of the population directly. Let $\mathcal{S}$ be the supporting fact set. We define the mean supporting-fact coverage

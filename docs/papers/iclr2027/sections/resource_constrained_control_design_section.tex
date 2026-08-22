@@ -59,42 +59,42 @@ Unlike the information--response efficiency in Eq.~\eqref{eq:eta_ir}, \(\eta_{\m
 
 Equations~\eqref{eq:control_efficacy}--\eqref{eq:control_cost} naturally turn controller design into a constrained optimization problem. Let
 \[
-\pi=(q_c,b,\theta,\beta,h_c,\ldots)
+\boldsymbol{\varphi}=(q_c,b,\theta,\beta,h_c,\ldots)
 \]
 collect the tunable controller parameters. Different operational requirements lead to different, but closely related, design objectives. For example, one may seek the least expensive controller that achieves a desired response,
 \begin{equation}
 \boxed{
-\pi^\star
+\boldsymbol{\varphi}^\star
 =
-\arg\min_{\pi} C(\pi)
+\arg\min_{\boldsymbol{\varphi}} C(\boldsymbol{\varphi})
 \qquad
 \text{subject to}
 \qquad
-R(\pi)\ge R_{\mathrm{target}},
+R(\boldsymbol{\varphi})\ge R_{\mathrm{target}},
 }
 \label{eq:min_cost_control}
 \end{equation}
 or the strongest controller compatible with a fixed resource budget,
 \begin{equation}
 \boxed{
-\pi^\star
+\boldsymbol{\varphi}^\star
 =
-\arg\max_{\pi} R(\pi)
+\arg\max_{\boldsymbol{\varphi}} R(\boldsymbol{\varphi})
 \qquad
 \text{subject to}
 \qquad
-C(\pi)\le C_{\max}.
+C(\boldsymbol{\varphi})\le C_{\max}.
 }
 \label{eq:max_response_control}
 \end{equation}
 An equivalent scalarized formulation is
 \begin{equation}
 \boxed{
-\pi^\star
+\boldsymbol{\varphi}^\star
 =
-\arg\max_{\pi}
+\arg\max_{\boldsymbol{\varphi}}
 \left[
-R(\pi)-\lambda C(\pi)
+R(\boldsymbol{\varphi})-\lambda C(\boldsymbol{\varphi})
 \right],
 }
 \label{eq:scalarized_control}

@@ -26,13 +26,16 @@ over one population round.
 \subsection{Finite-information feedback controller}
 
 The controller observes a sample of \(q_c\) agents without replacement.  If
-\(Y\) is the number of target supporters in the sample, then
+\(Y_k\) is the number of target supporters in the sample at round \(k\), then
 \[
-Y\mid n \sim \mathrm{Hypergeom}(N,n,q_c).
+Y_k\mid n_k=n \sim \mathrm{Hypergeom}(N,n,q_c).
 \]
-Given \(Y=y\), the controller advocates for \(Z\) with probability
+We define the controller feedback policy by
 \[
-P(U=1\mid Y=y)
+\pi(u\mid y)
+\equiv P(U_k=u\mid Y_k=y),
+\qquad
+\pi(1\mid y)
 =
 \sigma\!\left[
 \beta\left(\theta-\frac{y}{q_c}\right)
@@ -40,15 +43,16 @@ P(U=1\mid Y=y)
 \qquad
 \sigma(z)=\frac{1}{1+e^{-z}},
 \]
-where \(U=1\) denotes advocacy and \(U=0\) denotes no intervention.  The
+where \(U_k=1\) denotes advocacy and \(U_k=0\) denotes no intervention.  Thus
+\(U_k\) is drawn from \(\pi(\cdot\mid Y_k)\) after sensing.  The
 state-dependent intervention probability is therefore
 \[
 a_n
 =
-P(U=1\mid n)
+P(U_k=1\mid n_k=n)
 =
 \sum_y
-P(Y=y\mid n)\,P(U=1\mid Y=y).
+P(Y_k=y\mid n_k=n)\,\pi(1\mid y).
 \]
 
 When the controller acts, a controlled microscopic interaction has finite
@@ -145,9 +149,9 @@ R_{h_c}(\cdot\mid n)
 denote the next-round target-count distributions under no intervention and
 advocacy, respectively.  The state-local action-to-population information is
 \begin{equation}
-T_{h_c}(n)
-=
-I(U;n'\mid n)
+T_\pi(n)
+\equiv
+I(U_k;n_{k+1}\mid n_k=n)
 =
 \operatorname{JS}_{a_n}
 \!\left[
@@ -156,10 +160,13 @@ R_{h_c}(\cdot\mid n)
 \right].
 \label{eq:action-population-information}
 \end{equation}
-This quantity is reported in bits. Because the target fraction lies in \([0,1]\), total
+The subscript \(\pi\) indicates that this information channel is induced by
+the chosen feedback policy: \(\pi\), together with the sensor model, determines
+the within-state action distribution \(a_n\).  This quantity is reported in
+bits. Because the target fraction lies in \([0,1]\), total
 variation together with Pinsker's inequality gives the exact bound
 \begin{equation}
-T_{h_c}(n)
+T_\pi(n)
 \ge
 \frac{2a_n(1-a_n)}{\ln 2}\,
 \chi_{h_c}(n/N)^2.
@@ -175,7 +182,7 @@ This motivates the bounded information--response efficiency
 \frac{
 2a_n(1-a_n)\chi_{h_c}(n/N)^2
 }{
-(\ln 2)\,T_{h_c}(n)
+(\ln 2)\,T_\pi(n)
 }
 \le 1.
 }
@@ -220,10 +227,13 @@ relevant information resource is therefore
 \[
 I_{\mathrm{sens}}
 =
-I(n;Y),
+I(n_k;Y_k),
 \]
 which is distinct from the downstream action-to-population information
-\(I(U;n'\mid n)\) used in Eq.~\eqref{eq:eta_ir}.  For the reversible
+\(T_\pi(n)=I(U_k;n_{k+1}\mid n_k=n)\) used in
+Eq.~\eqref{eq:eta_ir}.  The former is sensing information acquired about the
+current population state; the latter is information carried from the selected
+action into the post-actuation population state.  For the reversible
 actuation/load layer, comparison of the forward and reverse path measures
 gives
 \[
@@ -231,7 +241,7 @@ gives
 +
 (h_c-h_e)J_c
 +
-I(n;Y)
+I(n_k;Y_k)
 =
 D_{\mathrm{KL}}(P_F\Vert P_R)
 \ge 0.
@@ -242,7 +252,7 @@ h_eJ_c
 \le
 h_cJ_c
 +
-I(n;Y)
+I(n_k;Y_k)
 +
 \Delta S_{\mathrm{sys}}.
 \]
@@ -254,7 +264,7 @@ therefore
 =
 \frac{h_eJ_c}
 {
-h_cJ_c+I(n;Y)+\Delta S_{\mathrm{sys}}
+h_cJ_c+I(n_k;Y_k)+\Delta S_{\mathrm{sys}}
 }
 =
 \frac{h_eJ_c}
@@ -279,7 +289,7 @@ h_eJ_c+D_{\mathrm{KL}}(P_F\Vert P_R)
 mean response \(\chi^2\)
 &
 action-to-population information
-\(I(U;n'\mid n)\)
+\(T_\pi(n)\)
 &
 fraction of action-dependent information expressed as coherent mean motion
 \\[1ex]
@@ -287,7 +297,7 @@ fraction of action-dependent information expressed as coherent mean motion
 &
 useful load work \(h_eJ_c\)
 &
-control work \(h_cJ_c\), sensing information \(I(n;Y)\), and
+control work \(h_cJ_c\), sensing information \(I(n_k;Y_k)\), and
 \(\Delta S_{\mathrm{sys}}\)
 &
 finite-time efficiency of the reversible feedback-control layer
@@ -316,7 +326,7 @@ behaviorally, but its affinity-based work diverges; finite bias is therefore
 essential for a non-singular thermodynamic efficiency.
 
 Third, more sensing is not automatically better utilized. Increasing
-\(q_c\) can increase \(I(n;Y)\) without producing a proportional increase in
+\(q_c\) can increase \(I(n_k;Y_k)\) without producing a proportional increase in
 useful current, so additional information may reduce
 \(\eta_{\mathrm{th}}\).
 

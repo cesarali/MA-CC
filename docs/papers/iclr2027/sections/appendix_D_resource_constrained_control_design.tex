@@ -12,27 +12,27 @@ additional notion of efficiency.
 
 Let
 \[
-\pi=(q_c,b,\theta,\beta,h_c,\ldots)
+\boldsymbol{\varphi}=(q_c,b,\theta,\beta,h_c,\ldots)
 \]
 denote a controller configuration, and let \(\rho(n)\) be the population-state occupancy over the
 evaluation window. Since the state-local susceptibility is defined conditionally on advocacy,
 the expected controller-induced response per round is
 \begin{equation}
-R(\pi)
+R(\boldsymbol{\varphi})
 =
 \sum_{n=0}^{N}
 \rho(n)\,
-a_n(\pi)\,
+a_n(\boldsymbol{\varphi})\,
 \chi_{h_c}\!\left(\frac{n}{N}\right).
 \label{eq:app_expected_response}
 \end{equation}
 A direct operational interaction cost is
 \begin{equation}
-C_{\mathrm{op}}(\pi)
+C_{\mathrm{op}}(\boldsymbol{\varphi})
 =
 q_c
 +
-b\sum_{n=0}^{N}\rho(n)a_n(\pi),
+b\sum_{n=0}^{N}\rho(n)a_n(\boldsymbol{\varphi}),
 \label{eq:app_operational_cost}
 \end{equation}
 where the first term counts the agents sensed every round and the second counts the expected number
@@ -42,26 +42,26 @@ The most direct controller-design problem is therefore not to maximize an effici
 but to achieve a prescribed behavioral response at minimum cost,
 \begin{equation}
 \boxed{
-\pi^\star
+\boldsymbol{\varphi}^\star
 =
-\arg\min_{\pi} C_{\mathrm{op}}(\pi)
+\arg\min_{\boldsymbol{\varphi}} C_{\mathrm{op}}(\boldsymbol{\varphi})
 \qquad
 \text{subject to}
 \qquad
-R(\pi)\ge R_{\mathrm{req}} .
+R(\boldsymbol{\varphi})\ge R_{\mathrm{req}} .
 }
 \label{eq:app_min_cost_problem}
 \end{equation}
 Equivalently, for a fixed budget one may maximize the achievable response,
 \begin{equation}
 \boxed{
-\pi^\star
+\boldsymbol{\varphi}^\star
 =
-\arg\max_{\pi} R(\pi)
+\arg\max_{\boldsymbol{\varphi}} R(\boldsymbol{\varphi})
 \qquad
 \text{subject to}
 \qquad
-C_{\mathrm{op}}(\pi)\le C_{\max}.
+C_{\mathrm{op}}(\boldsymbol{\varphi})\le C_{\max}.
 }
 \label{eq:app_max_response_problem}
 \end{equation}
@@ -94,7 +94,7 @@ response is itself worth the extra interaction cost.
 
 The same logic applies to sensing. Increasing \(q_c\) can improve the controller's estimate of the
 population state and thereby modify \(a_n\), but sensing is useful only insofar as this change improves
-the required response. If a larger \(q_c\) increases acquired information while leaving \(R(\pi)\)
+the required response. If a larger \(q_c\) increases acquired information while leaving \(R(\boldsymbol{\varphi})\)
 essentially unchanged, the additional sensing is redundant for the stated control objective.
 
 \subsection{How the two efficiencies guide the feasible design}
@@ -111,16 +111,17 @@ The information--response efficiency is
 2a_n(1-a_n)\,
 \chi_{h_c}(n/N)^2
 }{
-(\ln 2)\,T_{h_c}(n)
+(\ln 2)\,T_\pi(n)
 }
 \le 1,
 \label{eq:app_eta_ir}
 \end{equation}
 with
 \[
-T_{h_c}(n)=I(U;n'\mid n).
+T_\pi(n)\equiv I(U_k;n_{k+1}\mid n_k=n).
 \]
-For fixed state \(n\), \(T_{h_c}(n)\) measures the complete action-dependent change in the next-state
+The subscript \(\pi\) records that this channel is induced by the chosen
+feedback policy. For fixed state \(n\), \(T_\pi(n)\) measures the complete action-dependent change in the next-state
 distribution, whereas \(\chi_{h_c}(n/N)\) retains only its coherent shift in mean target fraction.
 Consequently, a reduction in \(\eta_{\mathrm{IR}}(n)\) indicates that additional controller influence is
 being expressed increasingly through distributional changes that do not contribute proportionally to
@@ -139,16 +140,16 @@ The thermodynamic efficiency provides the complementary resource-conversion crit
 \frac{
 h_eJ_c
 }{
-h_cJ_c+I(n;Y)+\Delta S_{\mathrm{sys}}
+h_cJ_c+I(n_k;Y_k)+\Delta S_{\mathrm{sys}}
 }
 \le 1 .
 \label{eq:app_eta_th}
 \end{equation}
-Here \(h_cJ_c\) is generalized controller input work, \(I(n;Y)\) is the acquired sensing information,
+Here \(h_cJ_c\) is generalized controller input work, \(I(n_k;Y_k)\) is the acquired sensing information,
 and \(h_eJ_c\) is useful output against the opposing load. This relation makes two practical design
 rules explicit.
 
-First, more sensing is not automatically better. If increasing \(q_c\) raises \(I(n;Y)\) without a
+First, more sensing is not automatically better. If increasing \(q_c\) raises \(I(n_k;Y_k)\) without a
 proportional increase in useful current, the additional information increases the required resource
 accounting without delivering corresponding output. Second, stronger microscopic bias is not
 automatically better. Increasing \(h_c\) can increase \(J_c\), but it also raises the controller input

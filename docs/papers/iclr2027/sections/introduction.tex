@@ -38,13 +38,23 @@ We can consequently distinguish whether an intervention changes what agents \emp
 Moreover, by allowing the controller target to disagree with the objectively correct answer, controllability and task performance become distinct quantities: a controller can successfully steer the population while simultaneously moving it away from truth.
 This provides a controlled setting for asking when accumulated evidence makes a population resistant to external influence, when social pressure overwhelms reasoning, and whether the epistemic state of a collective changes the amount of control required to redirect it.
 
-To quantify these processes, we treat sensing and actuation as information channels.
-The information acquired by the controller can be measured through quantities such as
-$I(N_t;Y_t)$, while the information transmitted by an intervention into the future population can be measured through conditional mutual information such as
-\begin{equation}
-    I(U_t;N_{t+1}\mid N_t),
-\end{equation}
-or through its target-specific counterpart.
+To quantify these processes, we treat sensing and actuation as two distinct
+information channels.  Writing \(n_k\) for the current number of agents that
+support the controller target, \(Y_k\) for the controller's noisy observation
+of that count, \(U_k\) for the action selected from that observation, and
+\(n_{k+1}\) for the target-support count after actuation, the two quantities are
+\begin{align}
+    I(n_k;Y_k)
+    &\qquad \text{(sensing information)}, \\
+    T_\pi(n)
+    \equiv I(U_k;n_{k+1}\mid n_k=n)
+    &\qquad \text{(action-to-population information)}.
+\end{align}
+The first measures information acquired by the sensor about the current
+population state.  The second measures, at a fixed current state, how much the
+controller action is expressed in the population state after the actuation
+step; the subscript \(\pi\) indicates that this channel is induced by the chosen
+feedback policy.  We define \(\pi\) and the complete control loop below.
 These quantities are complemented by signed response statistics, population currents, and their fluctuations.
 This perspective connects naturally to feedback thermodynamics, where measurement and control are treated as coupled information-processing operations \citep{horowitz2014second}, and to recent stochastic-thermodynamic formulations of social imitation, where probability currents, dynamical activity, entropy production, and uncertainty relations characterize collective dynamics without requiring a literal energetic interpretation \citep{irisarri2026stochastic}.
 Importantly, thermodynamics is not the motivation for introducing the controller.
