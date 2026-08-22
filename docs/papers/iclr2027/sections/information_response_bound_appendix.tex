@@ -1,0 +1,491 @@
+% Required packages:
+% \usepackage{amsmath,amssymb}
+% \usepackage{xcolor}
+
+\subsection{Derivation of the Information--Response Bound}
+\label{app:information_response_bound}
+
+This appendix derives the bound
+\begin{equation}
+\boxed{
+T_{h_c}(n)
+\ge
+\frac{2a_n(1-a_n)}{\ln 2}\,
+\chi_{h_c}(n/N)^2
+}
+\label{eq:IR_bound_final}
+\end{equation}
+used to define the information--response efficiency.
+The derivation proceeds in three steps:
+(i) expressing the conditional mutual information as a weighted
+Jensen--Shannon divergence,
+(ii) applying Pinsker's inequality, and
+(iii) bounding the change in the mean target fraction by total variation.
+
+Throughout the derivation, the current population state \(n\) is held fixed.
+
+% ------------------------------------------------------------
+\subsubsection{Conditional mutual information as a Jensen--Shannon divergence}
+
+Let the binary control variable be
+\[
+U\in\{0,1\},
+\]
+where \(U=0\) denotes no intervention and \(U=1\) denotes advocacy of
+the controller target \(Z\). At population state \(n\), define
+\begin{equation}
+\Pr(U=1\mid n)=a_n,
+\qquad
+\Pr(U=0\mid n)=1-a_n.
+\end{equation}
+
+The corresponding next-round target-count distributions are
+\begin{align}
+R_0(n'\mid n)
+&=
+\Pr(n'\mid U=0,n),
+\\
+R_{h_c}(n'\mid n)
+&=
+\Pr(n'\mid U=1,n).
+\end{align}
+
+For notational convenience, while \(n\) is fixed, write
+\begin{equation}
+P(n')\equiv R_0(n'\mid n),
+\qquad
+Q(n')\equiv R_{h_c}(n'\mid n),
+\qquad
+a\equiv a_n.
+\label{eq:PQ_definitions}
+\end{equation}
+
+The conditional mutual information between the control action and the
+next population state is
+\begin{align}
+I(U;n'\mid n)
+&=
+\sum_{u,n'}
+\Pr(u,n'\mid n)
+\log_2
+\frac{
+\Pr(u,n'\mid n)
+}{
+\Pr(u\mid n)\Pr(n'\mid n)
+}.
+\label{eq:conditional_mi_start}
+\end{align}
+
+Using the factorization
+\[
+\Pr(u,n'\mid n)
+=
+\Pr(u\mid n)\Pr(n'\mid u,n),
+\]
+the factor \(\Pr(u\mid n)\) cancels inside the logarithm:
+\begin{align}
+I(U;n'\mid n)
+&=
+\sum_{u,n'}
+\Pr(u\mid n)\Pr(n'\mid u,n)
+\log_2
+\frac{
+\Pr(n'\mid u,n)
+}{
+\Pr(n'\mid n)
+}
+\nonumber\\
+&=
+\sum_u
+\Pr(u\mid n)
+D_{\mathrm{KL}}
+\left(
+\Pr(n'\mid u,n)
+\,\Vert\,
+\Pr(n'\mid n)
+\right).
+\label{eq:mi_as_average_kl}
+\end{align}
+
+We therefore need the next-state distribution when the value of \(U\)
+is not specified. By the law of total probability,
+\begin{align}
+\Pr(n'\mid n)
+&=
+\sum_{u\in\{0,1\}}
+\Pr(u\mid n)\Pr(n'\mid u,n)
+\nonumber\\
+&=
+(1-a)P(n')+aQ(n').
+\end{align}
+
+Define the mixture distribution
+\begin{equation}
+M(n')
+\equiv
+(1-a)P(n')+aQ(n').
+\label{eq:mixture_M}
+\end{equation}
+
+Substituting the two possible actions into
+Eq.~\eqref{eq:mi_as_average_kl} gives
+\begin{align}
+I(U;n'\mid n)
+&=
+(1-a)D_{\mathrm{KL}}(P\Vert M)
++
+aD_{\mathrm{KL}}(Q\Vert M).
+\label{eq:mi_two_kl}
+\end{align}
+
+The weighted Jensen--Shannon divergence is defined by
+\begin{equation}
+\operatorname{JS}_{a}(P,Q)
+\equiv
+(1-a)D_{\mathrm{KL}}(P\Vert M)
++
+aD_{\mathrm{KL}}(Q\Vert M),
+\qquad
+M=(1-a)P+aQ.
+\end{equation}
+
+Hence, exactly,
+\begin{equation}
+\boxed{
+I(U;n'\mid n)
+=
+\operatorname{JS}_{a}(P,Q)
+}
+\label{eq:mi_equals_js_short}
+\end{equation}
+or, restoring the original notation,
+\begin{equation}
+\boxed{
+T_{h_c}(n)
+\equiv
+I(U;n'\mid n)
+=
+\operatorname{JS}_{a_n}
+\left[
+R_0(\cdot\mid n),
+R_{h_c}(\cdot\mid n)
+\right].
+}
+\label{eq:mi_equals_js}
+\end{equation}
+
+Up to this point, all relations are exact; no bound has yet been used.
+
+% ------------------------------------------------------------
+\subsubsection{Pinsker bound on the Jensen--Shannon divergence}
+
+For two probability distributions \(A\) and \(B\), define their total
+variation distance as
+\begin{equation}
+\operatorname{TV}(A,B)
+\equiv
+\frac{1}{2}
+\sum_x
+\left|A(x)-B(x)\right|.
+\label{eq:tv_definition}
+\end{equation}
+
+Pinsker's inequality states that, when the Kullback--Leibler divergence
+is measured in bits,
+\begin{equation}
+D_{\mathrm{KL}}(A\Vert B)
+\ge
+\frac{2}{\ln 2}\,
+\operatorname{TV}(A,B)^2.
+\label{eq:pinsker_bits}
+\end{equation}
+The factor \(1/\ln 2\) appears because the standard Pinsker inequality
+is conventionally written for natural logarithms, whereas here the
+information is reported in bits.
+
+Applying Eq.~\eqref{eq:pinsker_bits} separately to the two KL terms in
+Eq.~\eqref{eq:mi_two_kl} yields
+\begin{align}
+T_{h_c}(n)
+&\ge
+\frac{2}{\ln 2}
+\left[
+(1-a)\operatorname{TV}(P,M)^2
++
+a\operatorname{TV}(Q,M)^2
+\right].
+\label{eq:pinsker_js_intermediate}
+\end{align}
+
+The two total variation distances simplify because \(M\) is a mixture
+of \(P\) and \(Q\). From
+\[
+M-P
+=
+(1-a)P+aQ-P
+=
+a(Q-P),
+\]
+we obtain
+\begin{align}
+\operatorname{TV}(P,M)
+&=
+\frac12
+\sum_{n'}
+\left|
+a\bigl(Q(n')-P(n')\bigr)
+\right|
+\nonumber\\
+&=
+a\,\operatorname{TV}(P,Q).
+\label{eq:tv_PM}
+\end{align}
+
+Similarly,
+\[
+Q-M
+=
+Q-(1-a)P-aQ
+=
+(1-a)(Q-P),
+\]
+and therefore
+\begin{equation}
+\operatorname{TV}(Q,M)
+=
+(1-a)\operatorname{TV}(P,Q).
+\label{eq:tv_QM}
+\end{equation}
+
+Substituting Eqs.~\eqref{eq:tv_PM}--\eqref{eq:tv_QM} into
+Eq.~\eqref{eq:pinsker_js_intermediate},
+\begin{align}
+T_{h_c}(n)
+&\ge
+\frac{2}{\ln 2}
+\left[
+(1-a)a^2
++
+a(1-a)^2
+\right]
+\operatorname{TV}(P,Q)^2
+\nonumber\\
+&=
+\frac{2}{\ln 2}
+a(1-a)
+\underbrace{
+\left[a+(1-a)\right]
+}_{=1}
+\operatorname{TV}(P,Q)^2.
+\end{align}
+
+Thus
+\begin{equation}
+\boxed{
+T_{h_c}(n)
+\ge
+\frac{2a(1-a)}{\ln 2}
+\operatorname{TV}(P,Q)^2.
+}
+\label{eq:js_tv_bound}
+\end{equation}
+
+Restoring \(a=a_n\), \(P=R_0\), and \(Q=R_{h_c}\),
+\begin{equation}
+T_{h_c}(n)
+\ge
+\frac{2a_n(1-a_n)}{\ln 2}
+\operatorname{TV}
+\left(
+R_0(\cdot\mid n),
+R_{h_c}(\cdot\mid n)
+\right)^2.
+\label{eq:js_tv_original}
+\end{equation}
+
+% ------------------------------------------------------------
+\subsubsection{From total variation to the mean target-fraction response}
+
+Let \(n'\in\{0,\ldots,N\}\) denote the next-round number of agents
+supporting the controller target. Define the corresponding target
+fraction
+\begin{equation}
+f(n')
+\equiv
+\frac{n'}{N}.
+\label{eq:f_definition}
+\end{equation}
+Since \(0\le n'\le N\),
+\begin{equation}
+0\le f(n')\le 1.
+\label{eq:f_bounded}
+\end{equation}
+
+Define the intervention-induced change in the mean target fraction by
+\begin{align}
+\chi_{h_c}(n/N)
+&\equiv
+\mathbb{E}_{R_{h_c}}
+\left[
+\frac{n'}{N}
+\middle| n
+\right]
+-
+\mathbb{E}_{R_0}
+\left[
+\frac{n'}{N}
+\middle| n
+\right]
+\nonumber\\
+&=
+\mathbb{E}_{Q}[f]
+-
+\mathbb{E}_{P}[f].
+\label{eq:chi_definition}
+\end{align}
+
+For completeness, we now show that any function satisfying
+\(0\le f\le1\) obeys
+\begin{equation}
+\left|
+\mathbb{E}_{Q}[f]
+-
+\mathbb{E}_{P}[f]
+\right|
+\le
+\operatorname{TV}(P,Q).
+\label{eq:bounded_expectation_tv}
+\end{equation}
+
+Define
+\[
+\Delta(n')\equiv Q(n')-P(n').
+\]
+Since both \(P\) and \(Q\) are normalized,
+\begin{equation}
+\sum_{n'}\Delta(n')=0.
+\end{equation}
+
+Let
+\[
+A_+
+=
+\left\{
+n':\Delta(n')\ge0
+\right\}.
+\]
+Then
+\begin{equation}
+\sum_{n'\in A_+}\Delta(n')
+=
+\operatorname{TV}(P,Q).
+\label{eq:positive_tv}
+\end{equation}
+
+Using Eq.~\eqref{eq:chi_definition},
+\begin{align}
+\chi_{h_c}(n/N)
+&=
+\sum_{n'}
+f(n')\Delta(n')
+\nonumber\\
+&=
+\sum_{n'\in A_+}
+f(n')\Delta(n')
++
+\sum_{n'\notin A_+}
+f(n')\Delta(n').
+\end{align}
+
+The second sum is non-positive because \(f(n')\ge0\) and
+\(\Delta(n')<0\) outside \(A_+\). Therefore
+\begin{align}
+\chi_{h_c}(n/N)
+&\le
+\sum_{n'\in A_+}
+f(n')\Delta(n')
+\nonumber\\
+&\le
+\sum_{n'\in A_+}
+\Delta(n')
+\nonumber\\
+&=
+\operatorname{TV}(P,Q),
+\end{align}
+where the second inequality uses \(f(n')\le1\).
+Repeating the argument after exchanging \(P\) and \(Q\) gives the
+corresponding lower bound. Hence
+\begin{equation}
+\boxed{
+|\chi_{h_c}(n/N)|
+\le
+\operatorname{TV}(P,Q).
+}
+\label{eq:chi_tv}
+\end{equation}
+
+Squaring both sides,
+\begin{equation}
+\chi_{h_c}(n/N)^2
+\le
+\operatorname{TV}(P,Q)^2.
+\label{eq:chi_tv_squared}
+\end{equation}
+
+Finally, combining Eqs.~\eqref{eq:js_tv_bound} and
+\eqref{eq:chi_tv_squared},
+\begin{align}
+T_{h_c}(n)
+&\ge
+\frac{2a_n(1-a_n)}{\ln 2}
+\operatorname{TV}
+\left(
+R_0(\cdot\mid n),
+R_{h_c}(\cdot\mid n)
+\right)^2
+\nonumber\\[1mm]
+&\ge
+\frac{2a_n(1-a_n)}{\ln 2}
+\chi_{h_c}(n/N)^2.
+\end{align}
+
+Therefore,
+\begin{equation}
+\boxed{
+T_{h_c}(n)
+\ge
+\frac{2a_n(1-a_n)}{\ln 2}\,
+\chi_{h_c}(n/N)^2.
+}
+\end{equation}
+
+For reference, the complete chain of relations is
+\begin{equation}
+\boxed{
+\begin{aligned}
+T_{h_c}(n)
+&=
+I(U;n'\mid n)
+\\
+&=
+\operatorname{JS}_{a_n}
+\left[
+R_0(\cdot\mid n),
+R_{h_c}(\cdot\mid n)
+\right]
+\\
+&\ge
+\frac{2a_n(1-a_n)}{\ln 2}
+\operatorname{TV}
+\left(
+R_0(\cdot\mid n),
+R_{h_c}(\cdot\mid n)
+\right)^2
+\\
+&\ge
+\frac{2a_n(1-a_n)}{\ln 2}
+\chi_{h_c}(n/N)^2.
+\end{aligned}
+}
+\label{eq:complete_IR_chain}
+\end{equation}

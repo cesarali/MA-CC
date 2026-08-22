@@ -1,4 +1,70 @@
 \section{Introduction}
 \label{sec:introduction}
 
-\lipsum[2-4]
+Large language models (LLMs) are increasingly deployed not only as individual problem solvers, but as components of \emph{multi-agent systems} in which many autonomous agents communicate, exchange information, and collectively determine an outcome.
+Recent work has shown that populations of LLM agents can exhibit genuinely collective phenomena, including spontaneous convention formation, amplification of population-level biases, and higher-order coordination that cannot be understood from isolated agents alone \citep{ashery2025emergent,riedl2026emergent}.
+These observations raise a complementary question that becomes increasingly important as such systems are deployed:
+\emph{how can an external agent control a collective of interacting LLMs?}
+In particular, we are interested not in unconstrained steering---where a controller can inspect and modify the entire system---but in the more realistic regime in which the controller itself has limited resources.
+
+We study this problem through a \emph{bounded feedback controller}.
+At each population round, the controller observes only a finite random sample of agents and must use this partial observation to decide whether to intervene.
+Its sensing capacity is therefore limited: the controller never observes the complete population state and its estimate is intrinsically noisy.
+Its actuation capacity is limited as well: even when it decides to act, it may replace the social input in only a bounded number of interactions.
+The resulting closed loop has the form
+\begin{equation}
+    N_t \longrightarrow Y_t \longrightarrow U_t \longrightarrow N_{t+1},
+\end{equation}
+where $N_t$ denotes the population state, $Y_t$ the controller's partial observation, and $U_t$ its intervention.
+This formulation makes imperfect information a consequence of finite sensing resources rather than an artificial source of observation noise, and separates two distinct constraints on control: \emph{how much of the system can be observed} and \emph{how much of it can be acted upon}.
+Our central question is therefore:
+\begin{quote}
+\emph{How efficiently can a resource-constrained feedback controller steer an interacting population of LLM agents when both information and actuation are limited?}
+\end{quote}
+
+Controlling an LLM population, however, should involve more than controlling a population of stochastic finite-state machines.
+The distinctive feature of language-model agents is precisely that their interactions can carry \emph{semantic information}: agents can possess different facts, communicate those facts through language, accumulate evidence, and reason over combinations of information.
+We therefore introduce an explicit \emph{epistemic load} into the collective dynamics using relational reasoning tasks with distributed evidence.
+The information required to solve each task is spread across the population so that the collective contains a complete proof while individual agents initially do not.
+Each agent consequently carries two coupled states: a social state, represented by its current answer or vote $X_i(t)$, and an epistemic state, represented by the set of supporting facts $K_i(t)$ available to it.
+Local language interactions can change either or both.
+An agent may adopt another agent's answer through social influence without acquiring the evidence that supports it, while an explicitly communicated fact may expand its knowledge and subsequently alter its reasoning.
+This distinction allows us to study how \emph{social influence, information propagation, and reasoning jointly determine controllability}.
+
+This separation is particularly important for feedback control.
+In our main setting, the controller communicates only a recommendation and does not provide task evidence.
+It can therefore directly perturb the social dynamics but cannot directly increase the epistemic content of the population.
+We can consequently distinguish whether an intervention changes what agents \emph{believe} from whether it changes what they \emph{know}.
+Moreover, by allowing the controller target to disagree with the objectively correct answer, controllability and task performance become distinct quantities: a controller can successfully steer the population while simultaneously moving it away from truth.
+This provides a controlled setting for asking when accumulated evidence makes a population resistant to external influence, when social pressure overwhelms reasoning, and whether the epistemic state of a collective changes the amount of control required to redirect it.
+
+To quantify these processes, we treat sensing and actuation as information channels.
+The information acquired by the controller can be measured through quantities such as
+$I(N_t;Y_t)$, while the information transmitted by an intervention into the future population can be measured through conditional mutual information such as
+\begin{equation}
+    I(U_t;N_{t+1}\mid N_t),
+\end{equation}
+or through its target-specific counterpart.
+These quantities are complemented by signed response statistics, population currents, and their fluctuations.
+This perspective connects naturally to feedback thermodynamics, where measurement and control are treated as coupled information-processing operations \citep{horowitz2014second}, and to recent stochastic-thermodynamic formulations of social imitation, where probability currents, dynamical activity, entropy production, and uncertainty relations characterize collective dynamics without requiring a literal energetic interpretation \citep{irisarri2026stochastic}.
+Importantly, thermodynamics is not the motivation for introducing the controller.
+Rather, it provides a principled language for characterizing the \emph{resource--response trade-offs} generated by the bounded feedback problem: how much information is acquired, how much intervention is applied, how large and reliable a population response is produced, and where additional control resources cease to be useful.
+
+Finally, we introduce a matched finite-population $q$-voter process as a classical reference model.
+The reference system is subjected to the same population size, local interaction structure, finite sensing process, stochastic feedback policy, and bounded actuation schedule as the LLM population.
+It therefore captures the response expected from a system whose collective dynamics arise from stochastic local imitation alone.
+This comparison is deliberately not intended to claim that LLM agents are $q$-voters.
+Instead, the $q$-voter provides a controlled null model in which semantic communication, distributed evidence, and language-based reasoning are absent.
+Agreement with this reference identifies behavior that can already be explained by ordinary stochastic social influence; systematic departures reveal where the epistemic and reasoning capabilities of language-model agents modify the control dynamics.
+
+Taken together, our goal is to develop a quantitative account of \emph{control efficiency in reasoning multi-agent systems}: how limited sensing and limited actuation are converted into directed changes of a collective state, and how this conversion is altered when the interacting agents communicate meaningful information and reason with it.
+Our main contributions are:
+\begin{itemize}
+    \item We formulate control of an LLM collective as a \emph{resource-constrained feedback problem}, explicitly separating finite sensing capacity from finite actuation capacity and treating imperfect state information as a consequence of bounded observation.
+
+    \item We introduce a relational multi-agent environment with distributed evidence that exposes both \emph{social} and \emph{epistemic} population dynamics, allowing us to distinguish changes in expressed belief from changes in the information available for reasoning.
+
+    \item We develop information-theoretic and stochastic-dynamical observables that quantify sensing, transmission of controller actions, directional response, currents, fluctuations, and the efficiency with which control resources are converted into collective change.
+
+    \item We construct a matched finite-$N$ $q$-voter reference under the same feedback protocol, providing a classical imitation baseline against which the specifically language- and reasoning-dependent behavior of the LLM population can be identified.
+\end{itemize}
