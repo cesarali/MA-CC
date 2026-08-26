@@ -2,6 +2,29 @@
 
 Implementation snapshot: 2026-08-22.
 
+## 2026-08-22 resource-planning correction
+
+The original config-array-only implementation underused Study 06 and inherited
+unsafe cluster defaults (one CPU, 4 GB, and a 24-hour limit for an estimated
+35-hour task). The study workflow now supports `execution.mode: auto`, which
+expands grids into deterministic original-cell shards, writes
+`execution_manifest.csv` and `execution_plan.json`, derives an RPM-bounded
+array throttle, and passes explicit CPU, memory, and time requests to the
+generic `run_study_cell_array.job` launcher. Each cell shard retains its
+original grid index, cell ID, overrides, and episode seeds. Canonical study
+aggregation continues to reconstruct cells and pool raw observations; scheduler
+IDs never enter scientific coordinates.
+
+### Potsdam output-root correction
+
+Production study data belongs under
+`/work/ojedamarin/Projects/LanguageGames/MA-CC/results`, not the home source
+checkout. Study policies can declare `execution.results_root` and
+`execution.require_results_under`; submission rejects an override outside the
+required root. Both generic launchers have a `/work/.../logs` direct-submit
+fallback, while the normal submitter overrides this with absolute
+`<study-result-root>/logs/slurm-%A_%a.{out,err}` paths.
+
 This handoff covers the implementation of
 `docs/tdd/features/orchestrator/22082026_TDD_standardized_study_submission_and_aggregation.md`.
 The code is the source of truth; this document explains the operational path,

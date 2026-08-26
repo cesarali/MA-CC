@@ -10,8 +10,9 @@ theta=[0.20,0.35,0.50,0.65,0.80]
 
 The main atlas has 30 policy conditions over four matched worlds. The targeted
 ablation adds `b=[8,16,24] x beta=[2,4,8]` at `theta=0.50`. Both use ten
-repetitions per task and condition. See [PREFLIGHT.md](PREFLIGHT.md) for the
-measured no-call budget report; main plus beta is estimated at 45 h 20 m.
+repetitions per task and condition. Submission expands these into 156 original
+scientific-cell shards. At the declared 18-node/900-RPM planning bound, ideal
+workload division is about 2 h 40 m before queueing and runtime variance.
 
 ## Scientific inheritance and changes
 
@@ -39,7 +40,8 @@ claim CRN pairing. They do preserve the same task set and study seed.
 
 ## Files
 
-- `study.yaml`: default config-array study; main then beta; throttle 1.
+- `study.yaml`: automatic cell-array policy, capped at 18 active nodes and an
+  estimated 864 RPM.
 - `study06_main_b_theta.yaml`: 120 cells, 1,200 episodes.
 - `study06_beta_ablation.yaml`: 36 cells, 360 episodes.
 - `analysis.yaml`: pooled canonical analysis, bootstrap/nulls/support, derived
@@ -49,7 +51,7 @@ claim CRN pairing. They do preserve the same task set and study seed.
 - `PREFLIGHT.md`: calls, token bounds, cost, timing, and concurrency report.
 
 No study-specific SLURM job exists. Submission uses the generic
-`scripts/Potsdam/SLURM/run_config_array.job`.
+`scripts/Potsdam/SLURM/run_study_cell_array.job`.
 
 ## Run the default study
 
@@ -58,7 +60,7 @@ From the repository root, submission (this is the provider-consuming step) is:
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main study submit \
   --config-dir configs/runs/relational_reasoning/population_study_06 \
-  --results-dir results/studies/relational_population_study_06
+  --results-dir /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_06
 ```
 
 `study.yaml` supplies throttle 1. Do not pass a larger `--throttle` without a
@@ -68,7 +70,7 @@ After all cells seal, aggregate offline with:
 
 ```bash
 conda run -n MA-CC --no-capture-output python -m mas_cc.cli.main study aggregate \
-  --study-dir results/studies/relational_population_study_06
+  --study-dir /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_06
 ```
 
 Strict aggregation is intentional. Use `--allow-incomplete` only for visibly

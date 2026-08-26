@@ -8,13 +8,15 @@ Qwen relational-support benchmark planned 960 requests and passed validation.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | main GPT-OSS atlas | 1 | 120 | 4 | 10 | 1,200 | 10 | 316,800 | 334,800 | 633,600 | 34 h 52 m 30 s |
 | GPT-OSS beta ablation | 1 | 36 | 4 | 10 | 360 | 10 | 95,040 | 100,440 | 190,080 | 10 h 27 m 45 s |
-| **default study total** | **2** | **156** | **4 matched** | **10** | **1,560** | **10** | **411,840** | **435,240** | **823,680** | **45 h 20 m 15 s** |
+| **default study total** | **2** | **156** | **4 matched** | **10** | **1,560** | **10** | **411,840** | **435,240** | **823,680** | **~2 h 40 m ideal at 18 active cell shards** |
 | Qwen validation gate | benchmark | 4 parameter cells | 20 generated tasks | — | 960 items | — | 960 | — | at most 1,000 | about 40 m at concurrency 4 |
 | optional Qwen anchor | 1 | 36 | 4 | 10 | 360 | 10 | 95,040 | 100,440 | 190,080 | 10 h 27 m 45 s |
 
-The default main + beta study fits the target by about 2 h 40 m under the
-preflight planning model. The optional model path does not fit in the same
-48-hour window and is gated/deferred accordingly.
+The original one-config-at-a-time estimate was 45 h 20 m. The automatic
+execution planner now distributes the 156 original cells with up to 18 active
+shards; ideal workload division is about 2 h 40 m before queueing, latency
+variance, and retries. Every shard requests four hours so its approximately
+17-minute expected cell workload has substantial headroom.
 
 ## Token and cost estimates
 
@@ -31,12 +33,12 @@ reported zero ordinary-input and output rates in proxy accounting units.
 
 ## Execution topology and provider safety
 
-`study.yaml` sets array throttle 1. Each array task has experiment parallelism
-8 and provider request concurrency 8, so effective simultaneous provider
-requests are capped at **8**, matching Study 04. The live preflight snapshot
-reported a 2,000 RPM ceiling. At the configured 10-second planning latency,
-eight in-flight requests imply roughly 48 RPM, well below that ceiling. Do not
-override the throttle above 1 without a new provider-load check.
+`study.yaml` selects automatic original-cell sharding. Each task has experiment
+parallelism 8 and provider request concurrency 8. The 900-RPM target and
+10-second planning latency yield an array throttle of 18: at most **144**
+simultaneous requests and an estimated **864 RPM**. The live snapshot reported
+a 2,000-RPM ceiling. Each shard requests 8 CPUs, 8 GB, and four hours. The
+submitter rejects a CLI throttle above the calculated bound.
 
 ## Preflight artifacts
 

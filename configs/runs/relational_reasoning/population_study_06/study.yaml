@@ -8,10 +8,19 @@ configs:
   - study06_beta_ablation.yaml
 
 execution:
-  mode: config_array
-  # The 48 h estimate assumes one eight-request worker at a time, matching the
-  # Study 04 timing basis and avoiding an unvalidated 16-request provider load.
-  throttle: 1
+  # Scientific cells are invariant; the scheduler distributes them as
+  # independent execution shards and reconstructs them during aggregation.
+  mode: auto
+  target_rpm: 900
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 18
+  cpus_per_task: 8
+  memory: 8G
+  time_limit: "04:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_06
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
 
 analysis:
   recipe: analysis.yaml
