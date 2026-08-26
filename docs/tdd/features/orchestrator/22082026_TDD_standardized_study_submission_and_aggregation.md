@@ -3,6 +3,20 @@
 **Date:** 2026-08-22  
 **Purpose:** implementation specification for a study-level workflow that standardizes experiment submission, SLURM parallelization, cross-run aggregation, existing information-theoretic analysis, derived observables, plotting, and packaging.
 
+## 2026-08-26 amendment: parallel compact analysis
+
+After a scientific cell seals, its worker retains canonical scientific
+observations. `study aggregate` calculates independent cell groups in parallel
+using the allocated CPU count and writes transient machine-readable progress to
+`analysis/progress.json`. Study-wide super-pooling across heterogeneous
+parameter cells is not a physical observable and is not produced. Execution
+timing and worker count must not alter seeds or scientific results.
+
+Persistent analysis caches and individual bootstrap/permutation draws are not
+part of the output contract. Reaggregation recomputes from canonical Parquet
+observations—even when source run trees are unavailable—and retains only compact
+uncertainty and null summaries.
+
 ---
 
 ## 1. Objective
@@ -471,12 +485,12 @@ analysis/tables/
 
     primary_estimates.parquet
     information_estimates.parquet
-    information_nulls.parquet
     support_diagnostics.parquet
     derived_observables.parquet
 ```
 
-CSV mirrors may be emitted for small tables; Parquet should be authoritative for large tables.
+Parquet is authoritative. Standardized analysis does not emit redundant table
+CSV mirrors.
 
 ### 12.1 `cells.parquet`
 
@@ -678,6 +692,8 @@ null_type
 null_mean
 null_std
 p_value
+null_permutations
+bootstrap_resamples
 
 n_observations
 n_episodes
@@ -687,7 +703,8 @@ support_status
 analysis_hash
 ```
 
-Detailed null draws live in `information_nulls.parquet`.
+Individual null and bootstrap draws are transient. Their compact summaries and
+calculation metadata live in estimator rows and `analysis_manifest.json`.
 
 Detailed support statistics live in `support_diagnostics.parquet`.
 
@@ -851,7 +868,6 @@ analysis/
         micro_slots.parquet
         primary_estimates.parquet
         information_estimates.parquet
-        information_nulls.parquet
         support_diagnostics.parquet
         derived_observables.parquet
 
@@ -866,6 +882,11 @@ analysis/
 ```
 
 The ZIP is the standard handoff artifact.
+
+It contains canonical scientific data, compact estimator summaries, support
+diagnostics, plots, reports, validation, and provenance. It never contains a
+persistent cache, individual null/bootstrap draws, run trees, or execution
+logs.
 
 It should be sufficient for another analyst to:
 - understand the study;

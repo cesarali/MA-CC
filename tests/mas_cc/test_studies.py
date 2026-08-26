@@ -3,7 +3,9 @@ from __future__ import annotations
 import csv
 import json
 import math
+import shutil
 import subprocess
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -275,6 +277,12 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
         "execution: {mode: auto, target_rpm: 60, assumed_latency_seconds: 1}\n",
         encoding="utf-8",
     )
+    analysis_recipe = config_dir / "analysis.yaml"
+    analysis_recipe.write_text(
+        "estimators: [round_sensing_mi]\n"
+        "resampling: {bootstrap_resamples: 1, null_permutations: 1, confidence: 0.95, seed: 7}\n",
+        encoding="utf-8",
+    )
     spec = discover_study(config_dir)
     study_dir = tmp_path / "study"
     submissions = build_submission_entries(spec, study_dir, git_commit="test")
@@ -288,7 +296,7 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
             {
                 "schema_version": 1,
                 "study_id": spec.name,
-                "analysis_recipe": None,
+                "analysis_recipe": str(analysis_recipe),
                 "expected_config_count": 1,
                 "expected_cell_count": 2,
                 "expected_episode_count": 2,
@@ -305,9 +313,63 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     cells = pd.read_parquet(study_dir / "analysis" / "tables" / "cells.parquet")
     assert len(cells) == 2
     assert set(cells["source_cell_id"]) == {"cell-0000", "cell-0001"}
+    analysis = study_dir / "analysis"
+    information = pd.read_parquet(analysis / "tables" / "information_estimates.parquet")
+    assert set(information["null_permutations"]) == {1}
+    assert set(information["bootstrap_resamples"]) == {1}
+    assert information["null_type"].notna().all()
+    assert information["null_mean"].notna().all()
+    assert information["null_std"].notna().all()
+    assert information["p_value"].notna().all()
+    assert not (analysis / "tables" / "information_nulls.parquet").exists()
+    assert not (analysis / "cache").exists()
+    assert not (analysis / "cell_cache").exists()
+    assert not list(analysis.rglob("*.pickle"))
+    assert not list((analysis / "tables").glob("*.csv"))
+    with zipfile.ZipFile(summary["archive"]) as archive:
+        names = set(archive.namelist())
+    assert {
+        "analysis_manifest.json",
+        "validation.json",
+        "validation.md",
+        "tables/cells.parquet",
+        "tables/episodes.parquet",
+        "tables/rounds.parquet",
+        "tables/micro_slots.parquet",
+        "tables/primary_estimates.parquet",
+        "tables/information_estimates.parquet",
+        "tables/support_diagnostics.parquet",
+        "tables/derived_observables.parquet",
+        "reports/summary.md",
+        "reports/methods.md",
+        "provenance/study_manifest.json",
+        "provenance/submission_manifest.csv",
+    } <= names
+    assert not any("cache/" in name or name.endswith(".pickle") for name in names)
+    assert not any(name.endswith("information_nulls.parquet") for name in names)
+    assert not any(name.startswith("tables/") and name.endswith(".csv") for name in names)
+
+    manifest = json.loads((analysis / "analysis_manifest.json").read_text())
+    assert manifest["resampling"] == {
+        "bootstrap_resamples": 1,
+        "confidence": 0.95,
+        "null_permutations": 1,
+        "seed": 7,
+    }
+    assert manifest["retention_contract"]["persistent_analysis_cache"] is False
+    assert manifest["retention_contract"]["individual_null_draws"] is False
+    assert manifest["retention_contract"]["individual_bootstrap_draws"] is False
+
+    before = information.sort_values(["cell_id", "metric"]).reset_index(drop=True)
+    for entry in submissions:
+        shutil.rmtree(entry.output_dir)
+    aggregate_study(study_dir)
+    after = pd.read_parquet(analysis / "tables" / "information_estimates.parquet")
+    after = after.sort_values(["cell_id", "metric"]).reset_index(drop=True)
+    pd.testing.assert_frame_equal(before, after)
 
 
-def test_aggregate_writes_canonical_package_and_reuses_cache(tmp_path):
+def test_aggregate_writes_compact_canonical_package(tmp_path):
     config_path = _standalone_config(tmp_path / "config.yaml")
     study_dir = tmp_path / "study"
     entries = build_submission_entries(
@@ -328,12 +390,10 @@ def test_aggregate_writes_canonical_package_and_reuses_cache(tmp_path):
     first = aggregate_study(study_dir)
     second = aggregate_study(study_dir)
     assert first["complete"] is True
-    assert first["cache_hit"] is False
-    assert second["cache_hit"] is True
     expected = {
         "cells.parquet", "episodes.parquet", "rounds.parquet", "micro_slots.parquet",
         "primary_estimates.parquet", "information_estimates.parquet",
-        "information_nulls.parquet", "support_diagnostics.parquet",
+        "support_diagnostics.parquet",
         "derived_observables.parquet",
     }
     tables = study_dir / "analysis" / "tables"
@@ -346,6 +406,10 @@ def test_aggregate_writes_canonical_package_and_reuses_cache(tmp_path):
         "config-0000/run"
     }
     assert Path(first["archive"]).is_file()
+    assert Path(second["archive"]).is_file()
+    assert not (study_dir / "analysis" / "cache").exists()
+    assert not list((study_dir / "analysis").rglob("*.pickle"))
+    assert not list(tables.glob("*.csv"))
 
     write_submission_manifest(
         study_dir / "submission_manifest.csv",

@@ -67,6 +67,31 @@ class BudgetLimits:
             "allow_unbounded_paid_requests": self.allow_unbounded_paid_requests,
         }
 
+    def compatibility_identity(self) -> dict[str, Any]:
+        """Return the effective ceilings, excluding mutable provenance metadata."""
+
+        value = self.to_dict()
+        cost = value.get("max_cost")
+        if isinstance(cost, dict):
+            value["max_cost"] = {
+                name: cost.get(name)
+                for name in ("amount", "unit", "provider", "model")
+            }
+        return value
+
+
+def _compatible_approved_limits(value: Any, limits: BudgetLimits) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    candidate = dict(value)
+    cost = candidate.get("max_cost")
+    if isinstance(cost, Mapping):
+        candidate["max_cost"] = {
+            name: cost.get(name)
+            for name in ("amount", "unit", "provider", "model")
+        }
+    return candidate == limits.compatibility_identity()
+
 
 def resolve_budget_limits(system: BudgetLimits, run: BudgetLimits | None) -> BudgetLimits:
     """Apply a run limit only when it is at least as strict as the system limit."""
@@ -400,7 +425,7 @@ class RuntimeBudgetGuard:
 
         if value.get("schema_version") != 1:
             raise ValueError("unsupported durable budget schema version")
-        if value.get("approved_limits") != self.limits.to_dict():
+        if not _compatible_approved_limits(value.get("approved_limits"), self.limits):
             raise ValueError("durable budget limits do not match the active run")
         outstanding = value.get("outstanding_reservation_ceilings", {})
         committed_cost = float((value.get("committed_cost") or {}).get("amount", 0.0))
@@ -433,7 +458,9 @@ class RuntimeBudgetGuard:
         if value.get("schema_version") != 1:
             raise ValueError("unsupported budget checkpoint schema version")
         status = value.get("status")
-        if not isinstance(status, dict) or status.get("approved_limits") != self.limits.to_dict():
+        if not isinstance(status, dict) or not _compatible_approved_limits(
+            status.get("approved_limits"), self.limits
+        ):
             raise ValueError("budget checkpoint limits do not match the active run")
         used = status.get("used_and_reserved", {})
         with self._lock:

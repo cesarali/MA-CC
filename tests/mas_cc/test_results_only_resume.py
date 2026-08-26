@@ -315,6 +315,43 @@ def test_pricing_identity_ignores_retrieval_time_but_not_rate_changes():
     assert _pricing_identity(first) != _pricing_identity(changed)
 
 
+def test_durable_budget_resume_ignores_limit_provenance_timestamp(tmp_path):
+    def money(amount, retrieved_at):
+        return MonetaryAmount(
+            amount,
+            "proxy_accounting_unit",
+            "resolved budget configuration",
+            "university",
+            "gwdg/openai-gpt-oss-120b",
+            "resolved run-specific limit",
+            retrieved_at,
+            "resolved-config-v1",
+        )
+
+    original = RuntimeBudgetGuard(BudgetLimits(max_cost=money(300, "2026-08-22T00:00:00Z")))
+    store = AtomicBudgetStateStore(
+        tmp_path / "budget_state.json",
+        resolved_budget_hash="budget",
+        pricing_snapshot_hash="pricing",
+    )
+    original.set_durable_state_sink(store.write)
+    reservation = original.reserve(
+        conservative_cost=money(0, "2026-08-22T00:00:00Z"),
+        input_tokens=10,
+        output_tokens=20,
+    )
+    original.reconcile(
+        reservation,
+        actual_cost=money(0, "2026-08-22T00:00:00Z"),
+        input_tokens=8,
+        output_tokens=12,
+    )
+
+    resumed = RuntimeBudgetGuard(BudgetLimits(max_cost=money(300, "2026-08-26T00:00:00Z")))
+    assert store.restore(resumed)
+    assert resumed.status()["used_and_reserved"]["requests"] == 1
+
+
 def test_temporary_episode_shard_is_not_a_resume_checkpoint(tmp_path, monkeypatch):
     identity = ScientificIdentity(
         "run", "run", "episode-0", 7, "config", "prompts", "pricing",

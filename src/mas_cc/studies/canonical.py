@@ -60,6 +60,8 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         ("game.population_size", "population_size"),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
+        ("control.options.beta", "beta"),
+        ("control.options.threshold", "threshold"),
     ):
         value = _nested(cell.resolved_config, dotted)
         if value is not None and label not in result:

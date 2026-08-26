@@ -1,6 +1,6 @@
 ---
 name: ma-cc-study-workflow
-description: Create, preflight, submit, monitor, aggregate, or post-process MA-CC experiments and studies using YAML scientific configs and the generic SLURM config-array workflow. Use for Study 04/06 variants, Potsdam runs, pooled estimator analysis, derived observables, and phase diagrams.
+description: Create, preflight, submit, monitor, aggregate, or post-process MA-CC experiments and studies using YAML scientific configs and the generic SLURM config-array workflow. Use for Study 04/06 variants, Potsdam runs, per-cell estimator analysis, derived observables, and phase diagrams.
 ---
 
 # MA-CC Study Workflow
@@ -34,8 +34,8 @@ family is demonstrably closer to the requested scientific design.
   shard boundaries are never scientific coordinates.
 - Reuse existing MI/CMI, bootstrap, null, and support estimators. Never
   implement another CMI estimator.
-- Compute pooled CMI from pooled canonical observations. Never average
-  shard-level or cell-level CMI estimates to manufacture pooled CMI.
+- Compute observables at their physical scientific-cell coordinates. Do not
+  manufacture a study-wide estimator by mixing heterogeneous parameter cells.
 - Treat `effective_affinity` (`h_eff`) and `kinetic_compliance` (`gamma_eff`) as
   measured outcomes, not sweep knobs.
 - With `artifact_profile: results_only`, preserve the round and micro-slot
@@ -118,6 +118,21 @@ Do not increase a throttle without recalculating provider load.
 Monitor the returned job with the site's ordinary `squeue`/`sacct` tools and
 verify task exit states and run/cell seals. For a scheduler smoke, use a tiny
 mock-provider study; never point a smoke test at a production study folder.
+
+Sealed cell-array workers retain canonical scientific observations; they do not
+publish persistent estimator, bootstrap, or permutation caches. In post-hoc
+aggregation, request multiple SLURM CPUs. Aggregation uses
+`SLURM_CPUS_PER_TASK` and exposes transient live state in
+`analysis/progress.json`, which is removed after success. Final study work joins
+cell outputs, computes compact estimator summaries, derives observables,
+renders plots, and packages the handoff.
+
+The standardized study analysis package contains canonical scientific data,
+compact estimator summaries, support diagnostics, plots, reports, validation,
+and provenance. Bootstrap/permutation draws and analysis caches are transient
+computational intermediates and are not retained. Parquet is authoritative;
+do not emit table-wide CSV mirrors or package source run trees and execution
+artifacts. Reaggregation recomputes from the canonical Parquet observations.
 
 ## Aggregate and extend analysis
 

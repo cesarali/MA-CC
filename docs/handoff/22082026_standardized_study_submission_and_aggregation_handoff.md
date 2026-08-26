@@ -2,6 +2,14 @@
 
 Implementation snapshot: 2026-08-22.
 
+## 2026-08-26 incremental-analysis correction
+
+Sealed cell workers now prepare deterministic atomic per-cell resampling
+fragments. Post-hoc aggregation reuses them, processes missing cell groups in
+parallel according to `SLURM_CPUS_PER_TASK`, persists every completed group,
+and reports progress in `analysis/progress.json`. Aggregation preserves each
+physical cell coordinate and does not create a heterogeneous study-wide pool.
+
 ## 2026-08-22 resource-planning correction
 
 The original config-array-only implementation underused Study 06 and inherited
@@ -290,12 +298,11 @@ analysis/tables/
     micro_slots.parquet
     primary_estimates.parquet
     information_estimates.parquet
-    information_nulls.parquet
     support_diagnostics.parquet
     derived_observables.parquet
 ```
 
-Small-table CSV mirrors are also written.
+Parquet is authoritative; redundant table CSV mirrors are not written.
 
 ### Cells
 
@@ -348,9 +355,8 @@ This preserves:
 - memory-conditioned variants;
 - existing support diagnostics.
 
-Per-cell groups and one pooled cross-run group are estimated from observations.
-The implementation never calculates pooled CMI as the mean of shard- or
-cell-level CMI values.
+Per-cell groups are estimated from observations. Heterogeneous scientific cells
+are not combined into a study-wide estimator group.
 
 When no new estimator recipe is supplied, compatible existing
 `round_information_estimates.csv`, `round_information_nulls.csv`, and
@@ -415,14 +421,16 @@ n_observations, n_episodes
 units, support_status, analysis_hash
 ```
 
-Detailed null draws stay in `information_nulls.parquet`.
+Null procedures still execute, but only `null_type`, `null_mean`, `null_std`,
+`p_value`, and `null_permutations` are retained. Bootstrap output likewise
+retains confidence limits and `bootstrap_resamples`, not individual draws.
 
 Information support rows preserve the current estimator diagnostics and add
 standardized fields such as action-0/action-1 counts, action entropy,
 dual-action support, occupied conditioning states, singleton fraction, and a
 sparse-state fraction. Plotting masks `support_status == unsupported`.
 
-## 12. Caching
+## 12. Reaggregation and transient computation
 
 The information `analysis_hash` includes:
 
@@ -433,19 +441,13 @@ The information `analysis_hash` includes:
 - requested statistics;
 - bootstrap/null/confidence/seed settings.
 
-Cached estimator products live under:
-
-```text
-analysis/cache/<analysis_hash>/
-    information_estimates.parquet
-    information_nulls.parquet
-    support_diagnostics.parquet
-```
-
-An unchanged second aggregation reads those files. Adding only a derived
-observable leaves the information hash unchanged, so CMI/null/support work is
-reused. Auxiliary current/affinity specifications and derived observables have
-separate hashes recorded in `analysis_manifest.json`.
+No persistent estimator cache is retained. An unchanged second aggregation
+recomputes from `cells.parquet`, `episodes.parquet`, `rounds.parquet`, and
+`micro_slots.parquet`. In-memory or invocation-local temporary computation is
+allowed, but successful aggregation removes it. Analysis hashes and calculation
+settings remain recorded in `analysis_manifest.json`. If the original run trees
+are no longer present, `study aggregate` uses these retained canonical tables
+and preserves the prior scientific input identity.
 
 ## 13. Derived observables and plots
 
@@ -499,7 +501,6 @@ analysis/
     validation.md
     analysis_manifest.json
     analysis_recipe.yaml              # when configured
-    cache/
     tables/
     plots/
     reports/
@@ -517,6 +518,12 @@ ZIP entries are sorted, use fixed timestamps and permissions, and exclude the
 ZIP itself and Windows `:Zone.Identifier` sidecars. The archive contains the
 machine-readable tables, reports, plots, validation, estimator identity,
 recipe, and submission/config provenance needed for handoff.
+
+The standardized study analysis package contains canonical scientific data,
+compact estimator summaries, support diagnostics, plots, reports, validation,
+and provenance. Bootstrap/permutation draws and analysis caches are transient
+computational intermediates and are not retained. Source run trees, SLURM logs,
+checkpoint/resume files, and provider/request logs are not packaged.
 
 ## 15. Tests and verification performed
 

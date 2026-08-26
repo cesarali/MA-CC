@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import hashlib
 import math
+import os
 import shutil
 import zipfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,8 +37,10 @@ PRIMARY_COLUMNS = (
     "study_id", "source_run_id", "cell_id", "metric", "estimator_version",
     "estimator_variant", "grouping_json", "conditioning_json", "estimate",
     "ci_low", "ci_high", "confidence", "null_type", "null_mean", "null_std",
-    "p_value", "n_observations", "n_episodes", "units", "support_status",
-    "analysis_hash",
+    "p_value", "null_permutations", "bootstrap_resamples", "n_observations",
+    "n_episodes", "units", "support_status", "p_plus", "p_minus",
+    "non_target_exposures", "non_target_to_target", "target_exposures",
+    "target_to_non_target", "analysis_hash",
 )
 
 ETA_IR_JOIN_KEYS = (
@@ -207,6 +211,52 @@ def _round_events(
     return events
 
 
+def _round_events_from_canonical(frame: pd.DataFrame) -> list[Any]:
+    """Rebuild estimator inputs exclusively from retained canonical rounds."""
+
+    if frame.empty:
+        return []
+    from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
+        adapt_round_record,
+    )
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+        adapt_relational_round_record,
+    )
+
+    events: list[Any] = []
+    for raw in frame.to_dict(orient="records"):
+        record = dict(raw)
+        for key, value in tuple(record.items()):
+            if isinstance(value, str) and value[:1] in {"[", "{"}:
+                try:
+                    record[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    pass
+            elif isinstance(value, float) and math.isnan(value):
+                record[key] = None
+        cell_id = str(record["cell_id"])
+        episode_id = str(record["episode_id"])
+        record_type = record.get("record_type")
+        if record_type == "relational_imitation_round_feedback":
+            events.append(
+                adapt_relational_round_record(
+                    record, cell_id=cell_id, episode_id=episode_id
+                )
+            )
+        elif record_type in {None, "imitation_round_feedback"} and all(
+            key in record
+            for key in (
+                "occupation_counts_before", "occupation_counts_after",
+                "target_count_before", "target_count_after",
+                "truth_count_before", "truth_count_after",
+            )
+        ):
+            events.append(
+                adapt_round_record(record, cell_id=cell_id, episode_id=episode_id)
+            )
+    return events
+
+
 def _support_status(row: Mapping[str, Any]) -> str:
     def finite(value: Any, default: float) -> float:
         try:
@@ -225,6 +275,40 @@ def _support_status(row: Mapping[str, Any]) -> str:
     return "adequate"
 
 
+def _run_information_group(payload: tuple[Any, ...]) -> tuple[list[Any], list[Any]]:
+    """Process-safe call into the established estimator engine."""
+
+    rows, statistics, settings, seed = payload
+    from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
+        round_information_analysis,
+    )
+
+    return round_information_analysis(
+        rows,
+        statistics=statistics,
+        bootstrap_resamples=int(settings["bootstrap_resamples"]),
+        null_permutations=int(settings["null_permutations"]),
+        confidence=float(settings["confidence"]),
+        seed=seed,
+    )
+
+
+def _write_analysis_progress(
+    path: Path, *, completed: int, total: int, active: str | None = None
+) -> None:
+    _write_json(
+        path,
+        {
+            "stage": "information_resampling",
+            "completed_groups": completed,
+            "total_groups": total,
+            "remaining_groups": total - completed,
+            "active_group": active,
+            "updated_at": _now(),
+        },
+    )
+
+
 def _information_tables(
     study_id: str,
     events: Sequence[Any],
@@ -232,10 +316,12 @@ def _information_tables(
     settings: Mapping[str, Any],
     analysis_hash: str,
     source_run_ids: Mapping[str, str],
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    *,
+    progress_path: Path | None = None,
+    workers: int = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
         ROUND_ANALYSIS_STATISTICS,
-        round_information_analysis,
     )
 
     unknown = sorted(set(statistics) - set(ROUND_ANALYSIS_STATISTICS))
@@ -244,49 +330,53 @@ def _information_tables(
     if not events or not statistics:
         return (
             pd.DataFrame(columns=PRIMARY_COLUMNS),
-            pd.DataFrame(columns=["study_id", "cell_id", "metric", "permutation", "null_type", "estimate", "analysis_hash"]),
             pd.DataFrame(columns=["study_id", "cell_id", "metric", "analysis_hash"]),
         )
 
     grouped: dict[str, list[Any]] = {}
     for event in events:
         grouped.setdefault(str(event.cell_id), []).append(event)
-    grouped["pooled"] = list(events)
     estimates: list[dict[str, Any]] = []
-    nulls: list[dict[str, Any]] = []
     support: list[dict[str, Any]] = []
     confidence = float(settings["confidence"])
-    for cell_id, rows in sorted(grouped.items()):
+    ordered = sorted(grouped.items())
+    completed_results: dict[str, tuple[list[Any], list[Any]]] = {}
+    pending: dict[str, tuple[Any, ...]] = {}
+    for cell_id, rows in ordered:
         group_seed = int(settings["seed"])
-        if cell_id != "pooled":
-            group_seed += int(hashlib.sha256(cell_id.encode("utf-8")).hexdigest()[:8], 16)
-        result_rows, null_rows = round_information_analysis(
-            rows,
-            statistics=statistics,
-            bootstrap_resamples=int(settings["bootstrap_resamples"]),
-            null_permutations=int(settings["null_permutations"]),
-            confidence=confidence,
-            seed=group_seed,
+        group_seed += int(hashlib.sha256(cell_id.encode("utf-8")).hexdigest()[:8], 16)
+        pending[cell_id] = (rows, statistics, dict(settings), group_seed)
+
+    total = len(ordered)
+    done = len(completed_results)
+    if progress_path is not None:
+        _write_analysis_progress(progress_path, completed=done, total=total)
+    if pending:
+        with ProcessPoolExecutor(max_workers=max(1, min(workers, len(pending)))) as pool:
+            futures = {
+                pool.submit(_run_information_group, payload): cell_id
+                for cell_id, payload in pending.items()
+            }
+            for future in as_completed(futures):
+                cell_id = futures[future]
+                value = future.result()
+                completed_results[cell_id] = value
+                done += 1
+                print(f"[analysis] information groups {done}/{total}: {cell_id}", flush=True)
+                if progress_path is not None:
+                    _write_analysis_progress(
+                        progress_path, completed=done, total=total, active=cell_id
+                    )
+
+    for cell_id, rows in ordered:
+        result_rows, null_rows = completed_results[cell_id]
+        source_run_id = source_run_ids.get(
+            cell_id.split("/", 1)[0], cell_id.split("/", 1)[0]
         )
-        source_run_id = "pooled"
-        if cell_id != "pooled":
-            source_run_id = source_run_ids.get(cell_id.split("/", 1)[0], cell_id.split("/", 1)[0])
         null_by_metric: dict[str, list[float]] = {}
         for item in null_rows:
             value = float(item["estimate"])
             null_by_metric.setdefault(str(item["statistic"]), []).append(value)
-            nulls.append(
-                {
-                    "study_id": study_id,
-                    "source_run_id": source_run_id,
-                    "cell_id": cell_id,
-                    "metric": item["statistic"],
-                    "permutation": item["permutation"],
-                    "null_type": item["null_type"],
-                    "estimate": value,
-                    "analysis_hash": analysis_hash,
-                }
-            )
         for item in result_rows:
             metric = str(item["statistic"])
             finite = [value for value in null_by_metric.get(metric, ()) if math.isfinite(value)]
@@ -314,6 +404,8 @@ def _information_tables(
                     "null_mean": item.get("null_mean"),
                     "null_std": math.nan if not finite else float(np.std(finite)),
                     "p_value": p_value,
+                    "null_permutations": len(finite),
+                    "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                     "n_observations": item.get("n_rounds"),
                     "n_episodes": item.get("n_episodes"),
                     "units": item.get("units"),
@@ -349,7 +441,7 @@ def _information_tables(
                     "sparse_state_fraction": item.get("round_singleton_fraction"),
                 }
             )
-    return pd.DataFrame(estimates, columns=PRIMARY_COLUMNS), pd.DataFrame(nulls), pd.DataFrame(support)
+    return pd.DataFrame(estimates, columns=PRIMARY_COLUMNS), pd.DataFrame(support)
 
 
 def _current_primary(
@@ -402,6 +494,8 @@ def _current_primary(
                         "null_mean": math.nan,
                         "null_std": math.nan,
                         "p_value": math.nan,
+                        "null_permutations": 0,
+                        "bootstrap_resamples": 0,
                         "n_observations": episode["K"],
                         "n_episodes": 1,
                         "units": "target_count",
@@ -428,6 +522,8 @@ def _current_primary(
                     "null_mean": math.nan,
                     "null_std": math.nan,
                     "p_value": math.nan,
+                    "null_permutations": 0,
+                    "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                     "n_observations": sum(int(episode["K"]) for episode in episodes),
                     "n_episodes": len(episodes),
                     "units": "target_count",
@@ -480,7 +576,7 @@ def _affinity_primary(
     support: list[dict[str, Any]] = []
     for summary in summaries:
         cell_id = str(summary["cell_id"])
-        source_run_id = "pooled" if cell_id == "pooled" else source_run_ids.get(
+        source_run_id = source_run_ids.get(
             cell_id.split("/", 1)[0], cell_id.split("/", 1)[0]
         )
         status = (
@@ -507,10 +603,18 @@ def _affinity_primary(
                     "null_mean": math.nan,
                     "null_std": math.nan,
                     "p_value": math.nan,
+                    "null_permutations": 0,
+                    "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                     "n_observations": summary["n_observations"],
                     "n_episodes": summary["n_episodes"],
                     "units": "nats" if metric == "effective_affinity" else "probability",
                     "support_status": status,
+                    "p_plus": summary["p_plus"],
+                    "p_minus": summary["p_minus"],
+                    "non_target_exposures": summary["n_plus"],
+                    "non_target_to_target": summary["k_plus"],
+                    "target_exposures": summary["n_minus"],
+                    "target_to_non_target": summary["k_minus"],
                     "analysis_hash": analysis_hash,
                 }
             )
@@ -535,9 +639,11 @@ def _affinity_primary(
     return pd.DataFrame(primary, columns=PRIMARY_COLUMNS), pd.DataFrame(support)
 
 
-def _ingest_existing_information(study_id: str, runs: tuple[DiscoveredRun, ...], analysis_hash: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def _ingest_existing_information(
+    study_id: str, runs: tuple[DiscoveredRun, ...], analysis_hash: str,
+    settings: Mapping[str, Any],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     estimates: list[pd.DataFrame] = []
-    nulls: list[pd.DataFrame] = []
     support: list[pd.DataFrame] = []
     for run in runs:
         candidates = sorted(run.path.glob("*_analysis/round_information_estimates.csv"))
@@ -547,11 +653,12 @@ def _ingest_existing_information(study_id: str, runs: tuple[DiscoveredRun, ...],
         estimate_path = candidates[0]
         prefix = f"config-{run.entry.array_index:04d}"
         raw = pd.read_csv(estimate_path)
+        raw = raw[raw["cell_id"].astype(str) != "pooled"].copy()
         normalized = pd.DataFrame(
             {
                 "study_id": study_id,
                 "source_run_id": run.run_id,
-                "cell_id": raw["cell_id"].map(lambda value: "pooled" if str(value) == "pooled" else f"{prefix}/{value}"),
+                "cell_id": raw["cell_id"].map(lambda value: f"{prefix}/{value}"),
                 "metric": raw["statistic"],
                 "estimator_version": "round-feedback-v1",
                 "estimator_variant": raw.get("main_estimator_variant", raw.get("estimator_variant")),
@@ -565,6 +672,8 @@ def _ingest_existing_information(study_id: str, runs: tuple[DiscoveredRun, ...],
                 "null_mean": raw.get("null_mean"),
                 "null_std": np.nan,
                 "p_value": np.nan,
+                "null_permutations": int(settings["null_permutations"]),
+                "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                 "n_observations": raw.get("n_rounds"),
                 "n_episodes": raw.get("n_episodes"),
                 "units": raw.get("units"),
@@ -573,25 +682,17 @@ def _ingest_existing_information(study_id: str, runs: tuple[DiscoveredRun, ...],
             }
         )
         estimates.append(normalized)
-        null_path = estimate_path.with_name("round_information_nulls.csv")
-        if null_path.is_file():
-            item = pd.read_csv(null_path).rename(columns={"statistic": "metric"})
-            item.insert(0, "study_id", study_id)
-            item.insert(1, "source_run_id", run.run_id)
-            item["cell_id"] = item["cell_id"].map(lambda value: "pooled" if str(value) == "pooled" else f"{prefix}/{value}")
-            item["analysis_hash"] = analysis_hash
-            nulls.append(item)
         support_path = estimate_path.with_name("round_support_diagnostics.csv")
         if support_path.is_file():
             item = pd.read_csv(support_path)
+            item = item[item["cell_id"].astype(str) != "pooled"].copy()
             item.insert(0, "study_id", study_id)
             item.insert(1, "source_run_id", run.run_id)
-            item["cell_id"] = item["cell_id"].map(lambda value: "pooled" if str(value) == "pooled" else f"{prefix}/{value}")
+            item["cell_id"] = item["cell_id"].map(lambda value: f"{prefix}/{value}")
             item["analysis_hash"] = analysis_hash
             support.append(item)
     return (
         pd.concat(estimates, ignore_index=True) if estimates else pd.DataFrame(columns=PRIMARY_COLUMNS),
-        pd.concat(nulls, ignore_index=True) if nulls else pd.DataFrame(),
         pd.concat(support, ignore_index=True) if support else pd.DataFrame(),
     )
 
@@ -614,7 +715,6 @@ def _derived(
     event_groups: dict[str, list[Any]] = {}
     for event in events:
         event_groups.setdefault(str(event.cell_id), []).append(event)
-    event_groups["pooled"] = list(events)
     rows: list[dict[str, Any]] = []
 
     # eta_IR's response is the target-state-matched signed actuation.  The
@@ -753,14 +853,50 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
     return paths
 
 
+def _reset_analysis_handoff(analysis_dir: Path, study_id: str) -> None:
+    """Remove obsolete products before writing the sole output contract."""
+
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "cache", "cell_cache", "tables", "plots", "plots-debug", "reports", "provenance"
+    ):
+        path = analysis_dir / name
+        if path.is_dir():
+            shutil.rmtree(path)
+    for name in (
+        "analysis_manifest.json", "analysis_recipe.yaml", "progress.json",
+        "validation.json", "validation.md", f"{study_id}_analysis.zip",
+    ):
+        (analysis_dir / name).unlink(missing_ok=True)
+    for path in analysis_dir.rglob("*.pickle"):
+        path.unlink(missing_ok=True)
+
+
 def _package(analysis_dir: Path, study_id: str) -> Path:
     destination = analysis_dir / f"{study_id}_analysis.zip"
     temporary = destination.with_suffix(".zip.tmp")
+    root_names = {
+        "validation.json", "validation.md", "analysis_manifest.json",
+        "analysis_recipe.yaml",
+    }
+    directory_names = {"tables", "plots", "reports", "provenance"}
+    paths = [path for name in root_names if (path := analysis_dir / name).is_file()]
+    for name in directory_names:
+        directory = analysis_dir / name
+        if directory.is_dir():
+            paths.extend(path for path in directory.rglob("*") if path.is_file())
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(analysis_dir.rglob("*")):
-            if not path.is_file() or path in {destination, temporary} or path.name.endswith(":Zone.Identifier"):
+        for path in sorted(paths):
+            relative = path.relative_to(analysis_dir)
+            if (
+                "cache" in relative.parts
+                or path.suffix in {".pickle", ".tmp"}
+                or path.name == "information_nulls.parquet"
+                or (path.suffix == ".csv" and "provenance" not in relative.parts)
+                or path.name.endswith(":Zone.Identifier")
+            ):
                 continue
-            info = zipfile.ZipInfo(str(path.relative_to(analysis_dir)).replace("\\", "/"))
+            info = zipfile.ZipInfo(str(relative).replace("\\", "/"))
             info.date_time = (1980, 1, 1, 0, 0, 0)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
@@ -817,14 +953,43 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     recipe, recipe_path = _recipe(study_manifest)
     settings = _resampling(recipe)
 
+    analysis_dir = root / "analysis"
+    retained_input_identity: str | None = None
     runs = discover_runs(entries)
     cells = discover_cells(runs)
-    canonical, context = build_canonical_tables(study_id, cells)
-    analysis_dir = root / "analysis"
+    retained_paths = {
+        name: analysis_dir / "tables" / f"{name}.parquet"
+        for name in ("cells", "episodes", "rounds", "micro_slots")
+    }
+    if cells:
+        canonical, _ = build_canonical_tables(study_id, cells)
+        validation = validate_study(entries, runs, cells, canonical)
+    elif all(path.is_file() for path in retained_paths.values()):
+        canonical = {
+            name: pd.read_parquet(path, engine="pyarrow")
+            for name, path in retained_paths.items()
+        }
+        prior_validation_path = analysis_dir / "validation.json"
+        if not prior_validation_path.is_file():
+            raise ValueError(
+                "canonical study tables exist without validation metadata: "
+                + str(analysis_dir)
+            )
+        validation = json.loads(prior_validation_path.read_text(encoding="utf-8"))
+        prior_manifest_path = analysis_dir / "analysis_manifest.json"
+        if prior_manifest_path.is_file():
+            prior_manifest = json.loads(prior_manifest_path.read_text(encoding="utf-8"))
+            retained_input_identity = prior_manifest.get("scientific_input_identity")
+        validation.setdefault("warnings", []).append(
+            "source run trees unavailable; reaggregated from retained canonical tables"
+        )
+    else:
+        canonical, _ = build_canonical_tables(study_id, cells)
+        validation = validate_study(entries, runs, cells, canonical)
+    _reset_analysis_handoff(analysis_dir, study_id)
     tables_dir = analysis_dir / "tables"
     tables_dir.mkdir(parents=True, exist_ok=True)
 
-    validation = validate_study(entries, runs, cells, canonical)
     validation["allow_incomplete"] = bool(allow_incomplete)
     if not validation["valid"] and allow_incomplete:
         validation["complete"] = False
@@ -838,10 +1003,8 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
 
     for name, frame in canonical.items():
         parquet_safe(frame).to_parquet(tables_dir / f"{name}.parquet", index=False, engine="pyarrow")
-        if name in {"cells", "episodes"}:
-            parquet_safe(frame).to_csv(tables_dir / f"{name}.csv", index=False)
 
-    input_identity = _scientific_identity(entries, cells, canonical)
+    input_identity = retained_input_identity or _scientific_identity(entries, cells, canonical)
     statistics = _requested_statistics(recipe)
     raw_estimators = recipe.get("estimators", ())
     requested_estimators = {str(name) for name in raw_estimators}
@@ -854,38 +1017,33 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
             "settings": settings,
         }
     )
-    cache_dir = analysis_dir / "cache" / analysis_hash
-    cache_files = {
-        "estimates": cache_dir / "information_estimates.parquet",
-        "nulls": cache_dir / "information_nulls.parquet",
-        "support": cache_dir / "support_diagnostics.parquet",
-    }
-    cache_hit = all(path.is_file() for path in cache_files.values())
-    events = _round_events(runs, context["scientific_frames"])
+    events = _round_events_from_canonical(canonical["rounds"])
     source_run_ids = {
-        f"config-{run.entry.array_index:04d}": run.run_id for run in runs
+        str(row["cell_id"]).split("/", 1)[0]: str(row["source_run_id"])
+        for row in canonical["cells"].to_dict(orient="records")
+        if row.get("cell_id") is not None and row.get("source_run_id") is not None
     }
-    if cache_hit:
-        information = pd.read_parquet(cache_files["estimates"])
-        nulls = pd.read_parquet(cache_files["nulls"])
-        support = pd.read_parquet(cache_files["support"])
+    source_run_ids.update(
+        {f"config-{run.entry.array_index:04d}": run.run_id for run in runs}
+    )
+    if statistics:
+        information, support = _information_tables(
+            study_id,
+            events,
+            statistics,
+            settings,
+            analysis_hash,
+            source_run_ids,
+            progress_path=analysis_dir / "progress.json",
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
+        )
     else:
-        if statistics:
-            information, nulls, support = _information_tables(
-                study_id, events, statistics, settings, analysis_hash, source_run_ids
-            )
-        else:
-            information, nulls, support = _ingest_existing_information(
-                study_id, runs, analysis_hash
-            )
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        parquet_safe(information).to_parquet(cache_files["estimates"], index=False)
-        parquet_safe(nulls).to_parquet(cache_files["nulls"], index=False)
-        parquet_safe(support).to_parquet(cache_files["support"], index=False)
+        information, support = _ingest_existing_information(
+            study_id, runs, analysis_hash, settings
+        )
 
     information = _attach_coordinates(information, canonical["cells"])
     support = _attach_coordinates(support, canonical["cells"])
-    nulls = _attach_coordinates(nulls, canonical["cells"])
     auxiliary_hash = canonical_hash(
         {
             "scientific_input_identity": input_identity,
@@ -915,9 +1073,19 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         auxiliary_hash,
         source_run_ids,
     )
-    primary = pd.concat(
-        [information, _attach_coordinates(current_primary, canonical["cells"]), _attach_coordinates(affinity_primary, canonical["cells"])],
-        ignore_index=True,
+    primary_frames = [
+        frame
+        for frame in (
+            information,
+            _attach_coordinates(current_primary, canonical["cells"]),
+            _attach_coordinates(affinity_primary, canonical["cells"]),
+        )
+        if not frame.empty
+    ]
+    primary = (
+        pd.concat(primary_frames, ignore_index=True)
+        if primary_frames
+        else pd.DataFrame(columns=PRIMARY_COLUMNS)
     )
     if not affinity_support.empty:
         support = pd.concat(
@@ -936,14 +1104,11 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     outputs = {
         "primary_estimates": primary,
         "information_estimates": information,
-        "information_nulls": nulls,
         "support_diagnostics": support,
         "derived_observables": derived,
     }
     for name, frame in outputs.items():
         parquet_safe(frame).to_parquet(tables_dir / f"{name}.parquet", index=False, engine="pyarrow")
-        if len(frame) <= 100_000:
-            parquet_safe(frame).to_csv(tables_dir / f"{name}.csv", index=False)
 
     plot_tables = {**canonical, **outputs}
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
@@ -972,7 +1137,7 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
                 "# Methods", "",
                 "Scientific identities were recovered from resolved configs, cell overrides, and compact scientific records.",
                 "Information estimates use the repository's established direct-counting round-feedback estimator, whole-episode bootstrap, configured nulls, and support diagnostics.",
-                "Execution shards were merged before pooled estimation; shard-level CMIs were not averaged.", "",
+                "Execution shards were reconstructed into scientific cells before per-cell estimation.", "",
                 f"Analysis hash: `{analysis_hash}`.", "",
             ]
         ),
@@ -1003,12 +1168,22 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         "analysis_hash": analysis_hash,
         "derived_hash": derived_hash,
         "auxiliary_analysis_hash": auxiliary_hash,
-        "cache_hit": cache_hit,
         "estimator_engine": "mas_cc.games.hidden_bench.imitation_round_feedback.analysis.round_information_analysis",
+        "requested_statistics": list(statistics),
+        "resampling": settings,
+        "retention_contract": {
+            "canonical_parquet": True,
+            "compact_estimator_summaries": True,
+            "persistent_analysis_cache": False,
+            "individual_null_draws": False,
+            "individual_bootstrap_draws": False,
+            "csv_table_mirrors": False,
+        },
         "plots": plots,
         "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
     }
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)
+    (analysis_dir / "progress.json").unlink(missing_ok=True)
     archive = _package(analysis_dir, study_id)
     return {
         "study_id": study_id,
@@ -1016,7 +1191,6 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         "analysis_dir": str(analysis_dir),
         "valid": validation["valid"],
         "complete": validation["complete"],
-        "cache_hit": cache_hit,
         "archive": str(archive),
         "counts": counts,
     }

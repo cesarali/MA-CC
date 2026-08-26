@@ -1,5 +1,5 @@
-# Study-wide offline analysis. All information statistics are computed from
-# pooled canonical observations by the existing round-feedback estimator.
+# Offline atlas analysis. Information statistics are computed independently
+# for every physical parameter cell using the established estimator.
 estimators:
   - round_sensing_mi
   - round_sensor_mae

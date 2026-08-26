@@ -101,7 +101,7 @@ def effective_affinity_analysis(
     confidence: float = 0.95,
     seed: int = 1,
 ) -> list[dict[str, Any]]:
-    """Return per-cell and pooled affinity/compliance summaries."""
+    """Return per-cell affinity/compliance summaries."""
 
     episodes = _episode_counts(rows)
     if not episodes:
@@ -109,14 +109,13 @@ def effective_affinity_analysis(
     groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for row in episodes:
         groups[str(row["cell_id"])].append(row)
-    groups["pooled"] = list(episodes)
     alpha = (1.0 - confidence) / 2.0
     output: list[dict[str, Any]] = []
     for group_index, (cell_id, group) in enumerate(sorted(groups.items())):
         rng = random.Random(seed + group_index)
         strata: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
         for row in group:
-            strata[str(row["cell_id"]) if cell_id == "pooled" else "cell"].append(row)
+            strata["cell"].append(row)
         draws: dict[str, list[float]] = {
             "effective_affinity": [], "kinetic_compliance": []
         }
