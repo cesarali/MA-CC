@@ -60,10 +60,19 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         ("game.population_size", "population_size"),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
+        ("game.options.epistemic_prompt_class", "epistemic_prompt_class"),
     ):
         value = _nested(cell.resolved_config, dotted)
         if value is not None and label not in result:
             result[label] = value
+    if "epistemic_prompt_class" not in result:
+        legacy = _nested(cell.resolved_config, "game.options.social_distrust")
+        if isinstance(legacy, bool):
+            result["epistemic_prompt_class"] = (
+                "strategic_uncertainty" if legacy else "distributed_information"
+            )
+        elif _nested(cell.resolved_config, "game.type") == "relational_imitation_round_feedback":
+            result["epistemic_prompt_class"] = "strategic_uncertainty"
     return result
 
 

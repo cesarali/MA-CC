@@ -33,6 +33,7 @@ from .prompts import (
     IMPLEMENTED_VOTE_VISIBILITIES,
     PROMPT_VERSION,
     VOTE_VISIBILITIES,
+    resolve_epistemic_prompt_class,
 )
 
 GAME_TYPE = "relational_imitation_round_feedback"
@@ -283,13 +284,19 @@ class RelationalRules:
     task_id: str | None
     vote_visibility: str
     prompt_version: int
-    social_distrust: bool
+    epistemic_prompt_class: str
     stop_on_consensus: bool
     initialization_mode: str
     initial_votes: tuple[str, ...] | None
     initial_distribution: Mapping[str, float] | None
     invalid_response_retries: int
     expected_validation_failure_rate: float
+
+    @property
+    def social_distrust(self) -> bool:
+        """Compatibility view of the retired boolean (only its two old arms)."""
+
+        return self.epistemic_prompt_class == "strategic_uncertainty"
 
     @classmethod
     def from_config(cls, config: GameConfig) -> "RelationalRules":
@@ -339,9 +346,16 @@ class RelationalRules:
                 f"{list(IMPLEMENTED_VOTE_VISIBILITIES)} is implemented"
             )
 
-        distrust = options.get("social_distrust", True)
-        if not isinstance(distrust, bool):
+        distrust = options.get("social_distrust")
+        if "social_distrust" in options and not isinstance(distrust, bool):
             raise ValueError("game.options.social_distrust must be a boolean")
+        prompt_class = options.get("epistemic_prompt_class")
+        if prompt_class is not None and not isinstance(prompt_class, str):
+            raise ValueError("game.options.epistemic_prompt_class must be a string")
+        try:
+            prompt_class = resolve_epistemic_prompt_class(prompt_class, distrust)
+        except ValueError as exc:
+            raise ValueError(f"game.options.{exc}") from exc
 
         prompt_version = options.get("prompt_version", PROMPT_VERSION)
         if isinstance(prompt_version, bool) or prompt_version != PROMPT_VERSION:
@@ -397,7 +411,7 @@ class RelationalRules:
             task_id=task_id,
             vote_visibility=visibility,
             prompt_version=int(prompt_version),
-            social_distrust=distrust,
+            epistemic_prompt_class=prompt_class,
             stop_on_consensus=bool(options.get("stop_on_consensus", False)),
             initialization_mode=initialization_mode,
             initial_votes=initial_votes,

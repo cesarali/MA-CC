@@ -13,7 +13,9 @@ from .controller import (
 from .game import RelationalImitationRoundFeedbackGame
 from .metrics import knowledge_observables, supporting_fact_coverage
 from .prompts import (
+    EPISTEMIC_PROMPT_CLASSES,
     SOCIAL_ENVIRONMENT,
+    epistemic_framing,
     agent_label,
     build_relational_ballot_prompt,
     control_label,
@@ -41,6 +43,7 @@ from .state import (
 
 __all__ = [
     "CONTROL_SOURCE_ID",
+    "EPISTEMIC_PROMPT_CLASSES",
     "GAME_TYPE",
     "MESSAGE_MODES",
     "RECOMMENDATION_ONLY",
@@ -62,6 +65,7 @@ __all__ = [
     "build_social_sources",
     "control_label",
     "create_relational_round_budgeted_control",
+    "epistemic_framing",
     "knowledge_observables",
     "parse_relational_ballot",
     "relational_public_ballot_prompt",
