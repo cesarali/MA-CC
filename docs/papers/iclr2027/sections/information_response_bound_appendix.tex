@@ -11,7 +11,7 @@ This appendix derives the bound
 T_\pi(n)
 \ge
 \frac{2a_n(1-a_n)}{\ln 2}\,
-\chi_{h_c}(n/N)^2
+\chi_{h,\gamma}(n/N)^2
 }
 \label{eq:IR_bound_final}
 \end{equation}
@@ -41,20 +41,20 @@ the controller target \(Z\). At population state \(n\), define
 
 The corresponding next-round target-count distributions are
 \begin{align}
-R_0(n'\mid n)
+Q_0(n'\mid n)
 &=
 \Pr(n'\mid U=0,n),
 \\
-R_{h_c}(n'\mid n)
+Q_1(n'\mid n)
 &=
 \Pr(n'\mid U=1,n).
 \end{align}
 
 For notational convenience, while \(n\) is fixed, write
 \begin{equation}
-P(n')\equiv R_0(n'\mid n),
+P(n')\equiv Q_0(n'\mid n),
 \qquad
-Q(n')\equiv R_{h_c}(n'\mid n),
+Q(n')\equiv Q_1(n'\mid n),
 \qquad
 a\equiv a_n.
 \label{eq:PQ_definitions}
@@ -172,8 +172,8 @@ I(U_k;n_{k+1}\mid n_k=n)
 =
 \operatorname{JS}_{a_n}
 \left[
-R_0(\cdot\mid n),
-R_{h_c}(\cdot\mid n)
+Q_0(\cdot\mid n),
+Q_1(\cdot\mid n)
 \right].
 }
 \label{eq:mi_equals_js}
@@ -295,15 +295,15 @@ T_\pi(n)
 \label{eq:js_tv_bound}
 \end{equation}
 
-Restoring \(a=a_n\), \(P=R_0\), and \(Q=R_{h_c}\),
+Restoring \(a=a_n\), \(P=Q_0\), and \(Q=Q_1\),
 \begin{equation}
 T_\pi(n)
 \ge
 \frac{2a_n(1-a_n)}{\ln 2}
 \operatorname{TV}
 \left(
-R_0(\cdot\mid n),
-R_{h_c}(\cdot\mid n)
+Q_0(\cdot\mid n),
+Q_1(\cdot\mid n)
 \right)^2.
 \label{eq:js_tv_original}
 \end{equation}
@@ -328,15 +328,15 @@ Since \(0\le n'\le N\),
 
 Define the intervention-induced change in the mean target fraction by
 \begin{align}
-\chi_{h_c}(n/N)
+\chi_{h,\gamma}(n/N)
 &\equiv
-\mathbb{E}_{R_{h_c}}
+\mathbb{E}_{Q_1}
 \left[
 \frac{n'}{N}
 \middle| n
 \right]
 -
-\mathbb{E}_{R_0}
+\mathbb{E}_{Q_0}
 \left[
 \frac{n'}{N}
 \middle| n
@@ -389,7 +389,7 @@ Then
 
 Using Eq.~\eqref{eq:chi_definition},
 \begin{align}
-\chi_{h_c}(n/N)
+\chi_{h,\gamma}(n/N)
 &=
 \sum_{n'}
 f(n')\Delta(n')
@@ -405,7 +405,7 @@ f(n')\Delta(n').
 The second sum is non-positive because \(f(n')\ge0\) and
 \(\Delta(n')<0\) outside \(A_+\). Therefore
 \begin{align}
-\chi_{h_c}(n/N)
+\chi_{h,\gamma}(n/N)
 &\le
 \sum_{n'\in A_+}
 f(n')\Delta(n')
@@ -422,7 +422,7 @@ Repeating the argument after exchanging \(P\) and \(Q\) gives the
 corresponding lower bound. Hence
 \begin{equation}
 \boxed{
-|\chi_{h_c}(n/N)|
+|\chi_{h,\gamma}(n/N)|
 \le
 \operatorname{TV}(P,Q).
 }
@@ -431,7 +431,7 @@ corresponding lower bound. Hence
 
 Squaring both sides,
 \begin{equation}
-\chi_{h_c}(n/N)^2
+\chi_{h,\gamma}(n/N)^2
 \le
 \operatorname{TV}(P,Q)^2.
 \label{eq:chi_tv_squared}
@@ -445,13 +445,13 @@ T_\pi(n)
 \frac{2a_n(1-a_n)}{\ln 2}
 \operatorname{TV}
 \left(
-R_0(\cdot\mid n),
-R_{h_c}(\cdot\mid n)
+Q_0(\cdot\mid n),
+Q_1(\cdot\mid n)
 \right)^2
 \nonumber\\[1mm]
 &\ge
 \frac{2a_n(1-a_n)}{\ln 2}
-\chi_{h_c}(n/N)^2.
+\chi_{h,\gamma}(n/N)^2.
 \end{align}
 
 Therefore,
@@ -460,7 +460,7 @@ Therefore,
 T_\pi(n)
 \ge
 \frac{2a_n(1-a_n)}{\ln 2}\,
-\chi_{h_c}(n/N)^2.
+\chi_{h,\gamma}(n/N)^2.
 }
 \end{equation}
 
@@ -475,21 +475,21 @@ I(U_k;n_{k+1}\mid n_k=n)
 &=
 \operatorname{JS}_{a_n}
 \left[
-R_0(\cdot\mid n),
-R_{h_c}(\cdot\mid n)
+Q_0(\cdot\mid n),
+Q_1(\cdot\mid n)
 \right]
 \\
 &\ge
 \frac{2a_n(1-a_n)}{\ln 2}
 \operatorname{TV}
 \left(
-R_0(\cdot\mid n),
-R_{h_c}(\cdot\mid n)
+Q_0(\cdot\mid n),
+Q_1(\cdot\mid n)
 \right)^2
 \\
 &\ge
 \frac{2a_n(1-a_n)}{\ln 2}
-\chi_{h_c}(n/N)^2.
+\chi_{h,\gamma}(n/N)^2.
 \end{aligned}
 }
 \label{eq:complete_IR_chain}

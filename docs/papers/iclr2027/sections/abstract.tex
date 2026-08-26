@@ -6,22 +6,26 @@ has two separate limits: it observes only a sample of the agents and can
 intervene in only a fixed number of their interactions. This setup lets us
 measure the distinct effects of sensing and actuation. We introduce finite-time
 measures for three aspects of control: how much an intervention changes the
-population, how much information about the intervention appears in the next
-population state, and how efficiently that information produces directed
-change. We also derive a finite-state model that separates the direction of
-control from the probability that an agent responds. In experiments with
-matched initial social and knowledge states, advocacy increases support for the
-controller's target in every tested condition, with susceptibilities from
-$0.100$ to $0.163$. The transmitted control information depends strongly on
-the population state. More actuation produces a wider informative region,
-whereas stronger feedback gain is predicted to concentrate information near
-the controller's decision boundary. Information--response efficiency increases
-with actuation across the full resource grid, from about $0.4\%$ to $2.5\%$ of
-the Pinsker upper bound. A calibrated finite-compliance model also reproduces
-the observed controlled current closely ($r=0.999$). Finally, an exploratory
-thermodynamic-efficiency measure shows diminishing returns from additional
-sensing when the added information does not produce proportional population
-change. In the regime studied here, actuation is therefore more useful than
-additional sensing. Our framework measures control efficiency while keeping it
-separate from whether the agents reach the correct answer.
+population, how efficiently action-dependent information becomes coherent
+population motion, and how efficiently the finite-time thermodynamic control
+budget becomes directed current. We derive a finite-state reference theory with a
+single measurable directional affinity $h$ and a kinetic compliance $\gamma$,
+which separates which direction controlled revisions favor from how readily
+agents revise at all. In experiments with matched initial social and knowledge
+states, advocacy increases support for the controller's target in every tested
+condition, with susceptibilities from $0.100$ to $0.163$. The transmitted
+control information depends strongly on the population state. More actuation
+produces a wider informative region, whereas stronger feedback gain is
+predicted to concentrate information near the controller's decision boundary.
+Information--response efficiency increases with actuation across the full
+resource grid, from about $0.4\%$ to $2.5\%$ of the Pinsker upper bound. A
+calibrated finite-compliance model also reproduces the observed controlled
+current closely ($r=0.999$). Finally, the single-affinity theory yields the
+exact finite-time identity
+$\Delta S_{\rm sys}+hJ_c+I(n_k;Y_k)=\Sigma\ge0$ and the bounded
+thermodynamic efficiency
+$\eta_{\rm th}=hJ_c/[hJ_c+I(n_k;Y_k)]$. The resulting theory predicts
+diminishing returns from additional sensing whenever the acquired information
+does not produce a proportional increase in directed current. Our framework measures control efficiency while
+keeping it separate from whether the agents reach the correct answer.
 \end{abstract}

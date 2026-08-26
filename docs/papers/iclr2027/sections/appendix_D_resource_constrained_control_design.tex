@@ -1,29 +1,25 @@
 \section{Resource-Constrained Control Design}
 \label{app:resource_constrained_control}
 
-The theory in Section~5 separates three questions that are often conflated in controller design:
-how strongly the population can be moved, how coherently controller influence is converted into that
-motion, and how efficiently sensing and actuation resources are converted into useful current.
-This appendix turns those quantities into a simple design prescription without introducing an
-additional notion of efficiency.
+The theory in Section~\ref{sec:feedback_efficiency} separates three questions that are often conflated in controller design: how strongly the population can be moved, how coherently controller influence is converted into that motion, and how efficiently the finite-time sensing--actuation budget is converted into directed current. This appendix turns susceptibility, the two bounded efficiencies, and an explicit operational interaction cost into a practical design prescription.
 
 \subsection{Minimum-cost control at prescribed response}
 \label{app:min_cost_control}
 
 Let
 \[
-\boldsymbol{\varphi}=(q_c,b,\theta,\beta,h_c,\ldots)
+\boldsymbol{\varphi}=(q_c,b,\theta,\beta,\ldots)
 \]
-denote a controller configuration, and let \(\rho(n)\) be the population-state occupancy over the
-evaluation window. Since the state-local susceptibility is defined conditionally on advocacy,
-the expected controller-induced response per round is
+denote the tunable feedback-controller configuration, and let \(\rho(n)\) be the population-state occupancy over the evaluation window. The microscopic channel parameters \(h\) and \(\gamma\) are treated separately: unless the implementation exposes a mechanism that changes them directly, they are calibrated properties of the population response rather than free design knobs.
+
+Since the state-local susceptibility is defined conditionally on advocacy, the expected controller-induced response per round is
 \begin{equation}
-R(\boldsymbol{\varphi})
+R(\boldsymbol{\varphi};h,\gamma)
 =
 \sum_{n=0}^{N}
 \rho(n)\,
 a_n(\boldsymbol{\varphi})\,
-\chi_{h_c}\!\left(\frac{n}{N}\right).
+\chi_{h,\gamma}\!\left(\frac{n}{N}\right).
 \label{eq:app_expected_response}
 \end{equation}
 A direct operational interaction cost is
@@ -35,11 +31,9 @@ q_c
 b\sum_{n=0}^{N}\rho(n)a_n(\boldsymbol{\varphi}),
 \label{eq:app_operational_cost}
 \end{equation}
-where the first term counts the agents sensed every round and the second counts the expected number
-of controlled microscopic opportunities.
+where the first term counts the agents sensed every round and the second counts the expected number of controlled microscopic opportunities.
 
-The most direct controller-design problem is therefore not to maximize an efficiency in isolation,
-but to achieve a prescribed behavioral response at minimum cost,
+The most direct controller-design problem is therefore not to maximize an efficiency in isolation, but to achieve a prescribed behavioral response at minimum operational cost,
 \begin{equation}
 \boxed{
 \boldsymbol{\varphi}^\star
@@ -48,145 +42,117 @@ but to achieve a prescribed behavioral response at minimum cost,
 \qquad
 \text{subject to}
 \qquad
-R(\boldsymbol{\varphi})\ge R_{\mathrm{req}} .
-}
+R(\boldsymbol{\varphi};h,\gamma)\ge R_{\mathrm{req}} .}
 \label{eq:app_min_cost_problem}
 \end{equation}
-Equivalently, for a fixed budget one may maximize the achievable response,
+Equivalently, for a fixed interaction budget one may maximize the achievable response,
 \begin{equation}
 \boxed{
 \boldsymbol{\varphi}^\star
 =
-\arg\max_{\boldsymbol{\varphi}} R(\boldsymbol{\varphi})
+\arg\max_{\boldsymbol{\varphi}} R(\boldsymbol{\varphi};h,\gamma)
 \qquad
 \text{subject to}
 \qquad
-C_{\mathrm{op}}(\boldsymbol{\varphi})\le C_{\max}.
-}
+C_{\mathrm{op}}(\boldsymbol{\varphi})\le C_{\max}.}
 \label{eq:app_max_response_problem}
 \end{equation}
-These formulations make the practical question explicit: once the required response has been fixed,
-how much sensing and actuation can be removed before performance falls below the desired level?
+These formulations make the practical question explicit: once the required response has been fixed, how much sensing and actuation can be removed before performance falls below the desired level?
 
-For the exact finite-bias \(q=1\) reference,
+For the exact finite-compliance \(q=1\) reference,
 \begin{equation}
-\chi_{h_c}(x)
+\chi_{h,\gamma}(x)
 =
-[\sigma(h_c)-x]\Lambda_b,
+[\sigma(h)-x]\Lambda_{b,\gamma},
 \qquad
-\Lambda_b
+\Lambda_{b,\gamma}
 =
-1-\left(1-\frac{1}{N}\right)^b .
+1-\left(1-\frac{\gamma}{N}\right)^b .
 \label{eq:app_susceptibility_recall}
 \end{equation}
-The marginal gain from one additional controlled opportunity is therefore
+The marginal gain from one additional controlled opportunity is
 \begin{equation}
-\Lambda_{b+1}-\Lambda_b
+\Lambda_{b+1,\gamma}-\Lambda_{b,\gamma}
 =
-\frac{1}{N}
-\left(1-\frac{1}{N}\right)^b ,
+\frac{\gamma}{N}
+\left(1-\frac{\gamma}{N}\right)^b,
 \label{eq:app_marginal_actuation_gain}
 \end{equation}
-which decreases monotonically with \(b\). Thus stronger actuation continues to increase the response,
-but each additional controlled opportunity contributes less than the previous one. Operationally,
-\(b\) should therefore be increased only until the required response is reached, unless additional
-response is itself worth the extra interaction cost.
+which decreases monotonically with \(b\). Thus stronger actuation continues to increase the mean response toward the set point, but each additional controlled opportunity contributes less than the previous one. The same logic applies to sensing: increasing \(q_c\) is useful only insofar as the improved state estimate changes the policy in a way that improves the required response.
 
-The same logic applies to sensing. Increasing \(q_c\) can improve the controller's estimate of the
-population state and thereby modify \(a_n\), but sensing is useful only insofar as this change improves
-the required response. If a larger \(q_c\) increases acquired information while leaving \(R(\boldsymbol{\varphi})\)
-essentially unchanged, the additional sensing is redundant for the stated control objective.
-
-\subsection{How the two efficiencies guide the feasible design}
+\subsection{How the two efficiencies guide feasible designs}
 \label{app:efficiency_guided_design}
 
-The constrained problem above specifies \emph{how to pay less}. The two bounded efficiencies from
-Section~5 specify whether a feasible controller is using its influence and its resources well.
+The operational problem above specifies how to purchase less control. The two
+bounded efficiencies from Section~\ref{sec:feedback_efficiency} then determine
+whether a feasible controller uses its influence and thermodynamic budget well.
 
 The information--response efficiency is
 \begin{equation}
 \eta_{\mathrm{IR}}(n)
 =
-\frac{
-2a_n(1-a_n)\,
-\chi_{h_c}(n/N)^2
-}{
-(\ln 2)\,T_\pi(n)
-}
+\frac{2a_n(1-a_n)\,\chi_{h,\gamma}(n/N)^2}
+{(\ln 2)\,T_\pi(n)}
 \le 1,
 \label{eq:app_eta_ir}
 \end{equation}
-with
-\[
-T_\pi(n)\equiv I(U_k;n_{k+1}\mid n_k=n).
-\]
-The subscript \(\pi\) records that this channel is induced by the chosen
-feedback policy. For fixed state \(n\), \(T_\pi(n)\) measures the complete action-dependent change in the next-state
-distribution, whereas \(\chi_{h_c}(n/N)\) retains only its coherent shift in mean target fraction.
-Consequently, a reduction in \(\eta_{\mathrm{IR}}(n)\) indicates that additional controller influence is
-being expressed increasingly through distributional changes that do not contribute proportionally to
-the desired mean motion.
+with $T_\pi(n)=I(U_k;n_{k+1}\mid n_k=n)$. It measures whether the
+action-dependent change in the full next-state distribution is expressed as a
+coherent shift in mean target fraction. Among settings with comparable cost and
+response, one should prefer regimes in which $\eta_{\mathrm{IR}}$ remains high
+over the states actually visited.
 
-This gives a first design criterion: among controller settings that satisfy the required response and
-have comparable operational cost, prefer regimes in which \(\eta_{\mathrm{IR}}\) remains high over the
-states that are actually visited. Importantly, \(\eta_{\mathrm{IR}}\) is a diagnostic rather than a
-stand-alone objective: a controller with negligible response can be uninteresting even if its
-information--response conversion is nearly ideal.
-
-The thermodynamic efficiency provides the complementary resource-conversion criterion,
+The thermodynamic efficiency is
 \begin{equation}
-\eta_{\mathrm{th}}
+\boxed{
+\eta_{\mathrm{th},k}
 =
-\frac{
-h_eJ_c
-}{
-h_cJ_c+I(n_k;Y_k)+\Delta S_{\mathrm{sys}}
-}
-\le 1 .
+\frac{hJ_{c,k}}{\Sigma_k-\Delta S_{\mathrm{sys},k}}
+=
+\frac{hJ_{c,k}}{hJ_{c,k}+I(n_k;Y_k)}
+\le 1.}
 \label{eq:app_eta_th}
 \end{equation}
-Here \(h_cJ_c\) is generalized controller input work, \(I(n_k;Y_k)\) is the acquired sensing information,
-and \(h_eJ_c\) is useful output against the opposing load. This relation makes two practical design
-rules explicit.
+Here $\Delta S_{\mathrm{sys},k}$ is the transient storage term and
+$\Sigma_k-\Delta S_{\mathrm{sys},k}$ is the non-storage finite-time control
+expenditure. The efficiency therefore reports the fraction of the generalized
+sensing--actuation expenditure expressed as affinity-weighted directed current.
+Its derivation from the forward/reverse path ratio is given in
+Appendix~\ref{app:thermodynamic_efficiency_derivation}.
 
-First, more sensing is not automatically better. If increasing \(q_c\) raises \(I(n_k;Y_k)\) without a
-proportional increase in useful current, the additional information increases the required resource
-accounting without delivering corresponding output. Second, stronger microscopic bias is not
-automatically better. Increasing \(h_c\) can increase \(J_c\), but it also raises the controller input
-\(h_cJ_c\); therefore the weakest bias compatible with the required response or current is generally
-the natural candidate in a minimum-cost design.
+Two practical rules follow directly. First, more sensing is not automatically
+better: if increasing $q_c$ raises $I(n_k;Y_k)$ without a proportional increase
+in $hJ_c$, it lowers $\eta_{\mathrm{th}}$. Second, more actuation is useful only
+while it continues to raise the required response; the exact susceptibility
+already shows diminishing marginal gains through
+$\Lambda_{b+1,\gamma}-\Lambda_{b,\gamma}$.
 
 Taken together, the design prescription is
 \begin{equation}
 \boxed{
 \begin{aligned}
-&\text{(i) specify the minimum acceptable response }R_{\mathrm{req}},\\
-&\text{(ii) reduce }q_c\text{ until further reduction degrades that response},\\
-&\text{(iii) reduce }b\text{ until further reduction degrades that response},\\
-&\text{(iv) use the weakest }h_c\text{ compatible with the required response or current},\\
-&\text{(v) among feasible controllers, prefer regimes with high }
-\eta_{\mathrm{IR}}
-\text{ and }
-\eta_{\mathrm{th}} .
-\end{aligned}
-}
+&\text{(i) specify the minimum acceptable response or current},\\
+&\text{(ii) minimize operational cost subject to that requirement},\\
+&\text{(iii) use }\eta_{\mathrm{IR}}\text{ to reject incoherent action channels},\\
+&\text{(iv) among feasible controllers, prefer larger }\eta_{\mathrm{th}},\\
+&\text{(v) retain }h\text{ and }\gamma\text{ as separate directional and kinetic diagnostics}.
+\end{aligned}}
 \label{eq:app_design_recipe}
 \end{equation}
-Thus susceptibility determines \emph{where control has leverage}, the cost constraint determines
-\emph{how much control must be purchased}, \(\eta_{\mathrm{IR}}\) determines whether the resulting
-influence is expressed coherently, and \(\eta_{\mathrm{th}}\) determines whether sensing and actuation
-resources are converted efficiently into useful directed current.
+Thus susceptibility determines where control has leverage, the operational cost
+determines how much control must be purchased, $\eta_{\mathrm{IR}}$ determines
+whether controller influence becomes coherent mean motion, and
+$\eta_{\mathrm{th}}$ determines whether sensing and actuation are converted
+efficiently into directed current.
 
 \subsection{Finite-time and nonstationary interpretation}
 \label{app:nonstationary_design}
 
 No stationarity assumption is required in the construction above. Let
 \begin{equation}
-\rho_k(n)=\Pr(N_k=n)
+\rho_k(n)=\Pr(n_k=n)
 \end{equation}
-denote the transient population distribution at round \(k\). Over a finite horizon of \(H\) rounds,
-the occupancy entering Eqs.~\eqref{eq:app_expected_response}--\eqref{eq:app_operational_cost} can be
-interpreted as the finite-time visitation distribution
+denote the transient population distribution at round \(k\). Over a finite horizon of \(H\) rounds, the occupancy entering Eqs.~(\ref{eq:app_expected_response})--(\ref{eq:app_operational_cost}) can be interpreted as the finite-time visitation distribution
 \begin{equation}
 \bar{\rho}_H(n)
 =
@@ -194,8 +160,4 @@ interpreted as the finite-time visitation distribution
 \sum_{k=0}^{H-1}\rho_k(n).
 \label{eq:app_finite_time_occupancy}
 \end{equation}
-Hence the operational design problem averages over the transient states actually visited during the
-experiment rather than over an equilibrium distribution. Likewise, the thermodynamic efficiency
-already retains the finite-time boundary contribution \(\Delta S_{\mathrm{sys}}\), which accounts for
-the fact that the system distribution changes during the feedback cycle. A stationary distribution is
-therefore only a special long-time limit of the present formulation, not an assumption required by it.
+Hence the operational design problem averages over the transient states actually visited during the experiment rather than over an equilibrium distribution. Likewise, Eq.~(\ref{eq:app_th_second_law}) retains the finite-time boundary contribution \(\Delta S_{\mathrm{sys},k}\), which accounts for the fact that the population ensemble changes during the feedback cycle. A stationary distribution is therefore only a special long-time limit of the present formulation, not an assumption required by it.

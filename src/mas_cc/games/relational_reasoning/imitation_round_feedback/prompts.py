@@ -76,6 +76,13 @@ MAX_REASON_CHARACTERS = 600
 essay - which truncates at ``max_output_tokens`` and breaks the JSON anyway -
 not to police wording."""
 
+EPISTEMIC_PROMPT_CLASSES = (
+    "naive",
+    "distributed_information",
+    "strategic_uncertainty",
+    "evidence_calibrated",
+)
+
 SOCIAL_ENVIRONMENT_DISTRUST = (
     "Participant identities persist across interactions.\n"
     "\n"
@@ -90,25 +97,74 @@ This is the default, and the historical text: an agent is told that some
 participants may not share its objective.  It is what makes an advocacy signal
 something the population can discount rather than something it must believe."""
 
-SOCIAL_ENVIRONMENT_NEUTRAL = (
+SOCIAL_ENVIRONMENT_DISTRIBUTED = (
     "Participant identities persist across interactions.\n"
     "\n"
-    "Different participants know different facts about this problem. No single\n"
-    "participant is guaranteed to know everything needed to answer. Every\n"
-    "participant is trying to identify the correct answer."
+    "Different participants may know different facts about this problem. No single\n"
+    "participant is guaranteed to know everything needed to answer. A fact known\n"
+    "by only one participant may still be important for identifying the correct\n"
+    "answer. Do not assume that the participants you see have all been given the\n"
+    "same information."
 )
-"""``social_distrust: false`` - the neutral cooperative baseline.
+SOCIAL_ENVIRONMENT_NAIVE = "Participant identities persist across interactions."
+SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED = (
+    "Participant identities persist across interactions.\n"
+    "\n"
+    "Different participants may know different facts about this problem, and some\n"
+    "participants may have objectives that differ from yours. Do not treat agreement\n"
+    "or majority support by itself as evidence that an answer is correct. Base your\n"
+    "decision on the explicit facts available to you and on whether those facts\n"
+    "support the conclusion. At the same time, do not dismiss a minority position\n"
+    "merely because few participants hold it: a fact known by only one participant\n"
+    "may be decisive. You do not know which participants, if any, have different\n"
+    "objectives."
+)
 
-Same distributed-information statement, no claim about anyone's objectives.
-Useful as the clean control arm: any difference against the distrust arm is
-then attributable to the strategic warning alone."""
+# Compatibility name for callers which selected the old non-distrust arm.
+SOCIAL_ENVIRONMENT_NEUTRAL = SOCIAL_ENVIRONMENT_DISTRIBUTED
 
 SOCIAL_ENVIRONMENT = SOCIAL_ENVIRONMENT_DISTRUST
 """Backwards-compatible alias for the default environment."""
 
 
+def resolve_epistemic_prompt_class(
+    epistemic_prompt_class: str | None = None,
+    social_distrust: bool | None = None,
+) -> str:
+    """Resolve the authoritative class and the deprecated boolean without ambiguity."""
+
+    legacy = None
+    if social_distrust is not None:
+        if not isinstance(social_distrust, bool):
+            raise ValueError("social_distrust must be a boolean")
+        legacy = "strategic_uncertainty" if social_distrust else "distributed_information"
+    selected = epistemic_prompt_class or legacy or "strategic_uncertainty"
+    if selected not in EPISTEMIC_PROMPT_CLASSES:
+        raise ValueError(
+            "epistemic_prompt_class must be one of " f"{list(EPISTEMIC_PROMPT_CLASSES)}"
+        )
+    if legacy is not None and selected != legacy:
+        raise ValueError(
+            "game.options.social_distrust contradicts "
+            "game.options.epistemic_prompt_class"
+        )
+    return selected
+
+
+def epistemic_framing(epistemic_prompt_class: str = "strategic_uncertainty") -> str:
+    """Return the sole fixed framing component for a scientific prompt class."""
+
+    selected = resolve_epistemic_prompt_class(epistemic_prompt_class)
+    return {
+        "naive": SOCIAL_ENVIRONMENT_NAIVE,
+        "distributed_information": SOCIAL_ENVIRONMENT_DISTRIBUTED,
+        "strategic_uncertainty": SOCIAL_ENVIRONMENT_DISTRUST,
+        "evidence_calibrated": SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED,
+    }[selected]
+
+
 def social_environment(social_distrust: bool = True) -> str:
-    """The environment text for one condition.
+    """Deprecated compatibility adapter for the former boolean condition.
 
     Both variants are bound as ``fixed`` blocks, so the choice is pinned by the
     prompt definition hash rather than by convention: a run at
@@ -116,7 +172,7 @@ def social_environment(social_distrust: bool = True) -> str:
     from one at ``true``, instead of a silently different prompt.
     """
 
-    return SOCIAL_ENVIRONMENT_DISTRUST if social_distrust else SOCIAL_ENVIRONMENT_NEUTRAL
+    return epistemic_framing(resolve_epistemic_prompt_class(social_distrust=social_distrust))
 
 DECISION_BASIS_INITIAL = (
     "Make your own decision, using the facts you currently know and nothing\n"
@@ -791,7 +847,8 @@ def relational_public_ballot_prompt(
     *,
     fact_ids: Sequence[str] = (),
     relations: Sequence[str] = (),
-    social_distrust: bool = True,
+    epistemic_prompt_class: str | None = None,
+    social_distrust: bool | None = None,
 ) -> RelationalBallotPrompt:
     """One prompt of this family.
 
@@ -805,7 +862,11 @@ def relational_public_ballot_prompt(
         PROMPT_VERSION,
         (
             IdentityBlock(),
-            SocialEnvironmentBlock(social_environment(social_distrust)),
+            SocialEnvironmentBlock(
+                epistemic_framing(
+                    resolve_epistemic_prompt_class(epistemic_prompt_class, social_distrust)
+                )
+            ),
             DecisionBasisBlock(),
             TaskBlock(),
             KnownFactsBlock(),
@@ -832,7 +893,8 @@ def build_relational_ballot_prompt(
     current_vote: str | None,
     social_sources: Sequence[Mapping[str, Any]] = (),
     vote_visibility: str = "public",
-    social_distrust: bool = True,
+    epistemic_prompt_class: str | None = None,
+    social_distrust: bool | None = None,
     social_context: bool = False,
 ) -> RelationalBallotPrompt:
     """Bind one focal update, or - with no sources and no vote - one local vote.
@@ -855,6 +917,7 @@ def build_relational_ballot_prompt(
         # The semantic alphabet in a call-independent order, so the contract -
         # and therefore the prompt definition - does not move with the shuffle.
         relations=tuple(sorted(option_letters.values())),
+        epistemic_prompt_class=epistemic_prompt_class,
         social_distrust=social_distrust,
     ).bind(
         identity=identity,
@@ -895,6 +958,7 @@ __all__ = [
     "DECISION_BASIS_SOCIAL_NONE_VISIBLE",
     "DECISION_INSTRUCTION",
     "EVIDENCE_HEADER",
+    "EPISTEMIC_PROMPT_CLASSES",
     "IMPLEMENTED_VOTE_VISIBILITIES",
     "MAX_REASON_CHARACTERS",
     "NO_KNOWN_FACTS",
@@ -902,6 +966,9 @@ __all__ = [
     "PROMPT_VERSION",
     "SOCIAL_ENVIRONMENT",
     "SOCIAL_ENVIRONMENT_DISTRUST",
+    "SOCIAL_ENVIRONMENT_DISTRIBUTED",
+    "SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED",
+    "SOCIAL_ENVIRONMENT_NAIVE",
     "SOCIAL_ENVIRONMENT_NEUTRAL",
     "VOTE_VISIBILITIES",
     "ParsedBallot",
@@ -911,6 +978,7 @@ __all__ = [
     "agent_label",
     "build_relational_ballot_prompt",
     "control_label",
+    "epistemic_framing",
     "localize_sources",
     "normalize_relational_vote",
     "normalize_shared_fact_id",
@@ -924,5 +992,6 @@ __all__ = [
     "render_social_sources",
     "shuffled_option_letters",
     "resolve_vote",
+    "resolve_epistemic_prompt_class",
     "social_environment",
 ]

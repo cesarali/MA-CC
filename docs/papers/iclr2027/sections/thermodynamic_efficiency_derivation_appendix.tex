@@ -1,0 +1,263 @@
+\subsection{Derivation of the Thermodynamic Efficiency}
+\label{app:thermodynamic_efficiency_derivation}
+
+This appendix derives the finite-time identity and the bounded thermodynamic
+control efficiency stated in Section~\ref{sec:thermodynamic_efficiency}. The
+calculation uses only the single directional affinity $h$, the kinetic
+compliance $\gamma$, and the finite sensor--policy channel.
+
+\subsubsection{Controlled transition ratio}
+
+For one controlled microscopic opportunity,
+\[
+K_{h,\gamma}(n+1\mid n)
+=\gamma\frac{N-n}{N}\sigma(h),
+\qquad
+K_{h,\gamma}(n\mid n+1)
+=\gamma\frac{n+1}{N}\sigma(-h).
+\]
+Since $\sigma(h)/\sigma(-h)=e^h$,
+\begin{align}
+\frac{K_{h,\gamma}(n+1\mid n)}{K_{h,\gamma}(n\mid n+1)}
+&=\frac{N-n}{n+1}e^h. 
+\label{eq:app_th_neighbor_ratio}
+\end{align}
+The compliance factor cancels exactly: $\gamma$ changes how frequently
+controlled revisions occur, but not their forward/reverse directional ratio.
+Define the combinatorial macrostate entropy
+\begin{equation}
+S_{\mathrm{mix}}(n)=\ln\binom{N}{n}.
+\label{eq:app_th_mixing_entropy}
+\end{equation}
+Because
+\[
+S_{\mathrm{mix}}(n+1)-S_{\mathrm{mix}}(n)
+=\ln\frac{N-n}{n+1},
+\]
+Eq.~(\ref{eq:app_th_neighbor_ratio}) becomes
+\begin{equation}
+\ln\frac{K_{h,\gamma}(n+1\mid n)}{K_{h,\gamma}(n\mid n+1)}
+=
+S_{\mathrm{mix}}(n+1)-S_{\mathrm{mix}}(n)+h.
+\label{eq:app_th_local_ratio}
+\end{equation}
+Equivalently, the positive weight
+\begin{equation}
+w_h(n)=\binom{N}{n}e^{hn}
+\label{eq:app_th_weight}
+\end{equation}
+satisfies
+\begin{equation}
+w_h(n)K_{h,\gamma}(m\mid n)
+=w_h(m)K_{h,\gamma}(n\mid m)
+\label{eq:app_th_weighted_reversibility}
+\end{equation}
+for every supported transition. Weighted reversibility is preserved under
+matrix multiplication. Hence for the $b$-opportunity advocacy kernel
+$Q_1=K_{h,\gamma}^{\,b}$,
+\begin{equation}
+\boxed{
+\ln\frac{Q_1(m\mid n)}{Q_1(n\mid m)}
+=
+S_{\mathrm{mix}}(m)-S_{\mathrm{mix}}(n)+h(m-n).}
+\label{eq:app_th_endpoint_ratio}
+\end{equation}
+For NoOp, $Q_0(m\mid n)=\delta_{mn}$.
+
+\subsubsection{Forward and reverse feedback paths}
+
+At feedback cycle $k$, let $p_k(n)=P(n_k=n)$. The forward path measure on
+$(n,y,u,m)$ is
+\begin{equation}
+P_F^{(k)}(n,y,u,m)
+=
+p_k(n)S(y\mid n)\pi(u\mid y)Q_u(m\mid n).
+\label{eq:app_th_forward_path}
+\end{equation}
+Its final population marginal is
+\begin{equation}
+p_{k+1}(m)
+=
+\sum_{n,y,u}P_F^{(k)}(n,y,u,m),
+\label{eq:app_th_forward_marginal}
+\end{equation}
+and the forward sensor marginal is
+\begin{equation}
+p_{Y,k}(y)=\sum_n p_k(n)S(y\mid n).
+\label{eq:app_th_sensor_marginal}
+\end{equation}
+We use the finite-time reverse reference
+\begin{equation}
+P_R^{(k)}(m,y,u,n)
+=
+p_{k+1}(m)p_{Y,k}(y)\pi(u\mid y)Q_u(n\mid m).
+\label{eq:app_th_reverse_path}
+\end{equation}
+The reverse reference starts from the forward final ensemble $p_{k+1}$ and
+therefore does not impose stationarity. The same policy factor
+$\pi(u\mid y)$ appears in both path weights and cancels from their ratio.
+
+Define the stochastic path irreversibility
+\begin{equation}
+\Sigma_k^\star
+\equiv
+\ln\frac{P_F^{(k)}(n,y,u,m)}{P_R^{(k)}(m,y,u,n)}.
+\label{eq:app_th_path_logratio}
+\end{equation}
+Substitution gives
+\begin{equation}
+\Sigma_k^\star
+=
+\ln\frac{p_k(n)}{p_{k+1}(m)}
++
+\ln\frac{S(y\mid n)}{p_{Y,k}(y)}
++
+\ln\frac{Q_u(m\mid n)}{Q_u(n\mid m)}.
+\label{eq:app_th_path_expansion}
+\end{equation}
+Introduce the pointwise sensing information
+\begin{equation}
+i_k(n;y)=\ln\frac{S(y\mid n)}{p_{Y,k}(y)},
+\label{eq:app_th_pointwise_information}
+\end{equation}
+the stochastic system entropy
+\begin{equation}
+s_{\mathrm{sys}}(n;p)
+=-\ln p(n)+S_{\mathrm{mix}}(n),
+\label{eq:app_th_stochastic_system_entropy}
+\end{equation}
+and the controlled target-count current increment
+\begin{equation}
+j_c=u(m-n).
+\label{eq:app_th_current_increment}
+\end{equation}
+For $u=0$, $m=n$ and $j_c=0$. For $u=1$,
+Eq.~(\ref{eq:app_th_endpoint_ratio}) applies. Therefore
+\begin{equation}
+\boxed{
+\Sigma_k^\star
+=
+\Delta s_{\mathrm{sys}}+h j_c+i_k(n;y).}
+\label{eq:app_th_path_identity}
+\end{equation}
+
+\subsubsection{Finite-time second law and mean controlled current}
+
+Averaging Eq.~(\ref{eq:app_th_path_identity}) over the forward ensemble gives
+\begin{equation}
+\Sigma_k
+\equiv
+\mathbb E_F[\Sigma_k^\star]
+=
+D_{\mathrm{KL}}\!\left(P_F^{(k)}\Vert P_R^{(k)}\right)
+\ge0.
+\label{eq:app_th_kl}
+\end{equation}
+The three average terms are
+\begin{align}
+\Delta S_{\mathrm{sys},k}
+&=S_{\mathrm{sys}}[p_{k+1}]-S_{\mathrm{sys}}[p_k],\\
+J_{c,k}&=\mathbb E_F[j_c],\\
+I_{\mathrm{sens},k}
+&=I(n_k;Y_k)
+=\sum_{n,y}p_k(n)S(y\mid n)
+\ln\frac{S(y\mid n)}{p_{Y,k}(y)},
+\end{align}
+where
+\begin{equation}
+S_{\mathrm{sys}}[p]
+=-\sum_n p(n)\ln p(n)
++\sum_n p(n)\ln\binom{N}{n}.
+\label{eq:app_th_system_entropy}
+\end{equation}
+Thus
+\begin{equation}
+\boxed{
+\Delta S_{\mathrm{sys},k}
++hJ_{c,k}
++I_{\mathrm{sens},k}
+=\Sigma_k\ge0.}
+\label{eq:app_th_second_law}
+\end{equation}
+
+The current can be obtained directly from the susceptibility. Conditional on
+$n_k=n$ and advocacy,
+\[
+\mathbb E[m-n\mid n,U=1]
+=N\chi_{h,\gamma}(n/N)
+=N\Lambda_{b,\gamma}
+\left[\sigma(h)-\frac{n}{N}\right].
+\]
+Advocacy occurs with probability $a_n$, so
+\begin{equation}
+\boxed{
+J_{c,k}
+=N\Lambda_{b,\gamma}
+\sum_n p_k(n)a_n
+\left[\sigma(h)-\frac{n}{N}\right].}
+\label{eq:app_th_mean_current}
+\end{equation}
+This is the same current entering the affinity term of
+Eq.~(\ref{eq:app_th_second_law}).
+
+\subsubsection{Thermodynamic control efficiency}
+
+Equation~(\ref{eq:app_th_second_law}) contains a finite-time boundary term,
+$\Delta S_{\mathrm{sys},k}$, because the population ensemble need not be
+stationary. To isolate the part of path irreversibility associated with the
+feedback operation itself, define the non-storage control expenditure
+\begin{equation}
+C_{\mathrm{th},k}
+\equiv
+\Sigma_k-\Delta S_{\mathrm{sys},k}.
+\label{eq:app_th_expenditure}
+\end{equation}
+Using Eq.~(\ref{eq:app_th_second_law}),
+\begin{equation}
+\boxed{
+C_{\mathrm{th},k}
+=hJ_{c,k}+I_{\mathrm{sens},k}.}
+\label{eq:app_th_expenditure_decomposition}
+\end{equation}
+The two contributions have distinct operational meanings. The first is the
+affinity-weighted directed population current produced by actuation; the second
+is the information acquired by sensing before the action is chosen.
+
+For target-directed operation, $hJ_{c,k}\ge0$. The fraction of the non-storage
+control expenditure expressed as directed current is therefore
+\begin{equation}
+\boxed{
+\eta_{\mathrm{th},k}
+\equiv
+\frac{hJ_{c,k}}{C_{\mathrm{th},k}}
+=
+\frac{hJ_{c,k}}{\Sigma_k-\Delta S_{\mathrm{sys},k}}
+=
+\frac{hJ_{c,k}}{hJ_{c,k}+I_{\mathrm{sens},k}}.}
+\label{eq:app_th_efficiency}
+\end{equation}
+Since $I_{\mathrm{sens},k}\ge0$,
+\begin{equation}
+0\le\eta_{\mathrm{th},k}\le1
+\qquad
+(hJ_{c,k}\ge0,\; C_{\mathrm{th},k}>0).
+\label{eq:app_th_efficiency_bound}
+\end{equation}
+At stationarity the boundary term vanishes and
+\begin{equation}
+\eta_{\mathrm{th}}
+=\frac{hJ_c}{\Sigma}.
+\label{eq:app_th_stationary_efficiency}
+\end{equation}
+The finite-time expression is therefore not obtained by silently assuming
+$\Delta S_{\mathrm{sys}}=0$; rather, it removes that transient storage term
+explicitly before forming the ratio.
+
+The efficiency makes the sensing--actuation trade-off transparent. Holding the
+sensor channel fixed, increasing actuation can raise $hJ_c$ and drive
+$\eta_{\mathrm{th}}$ toward one. Conversely, increasing $q_c$ can increase
+$I_{\mathrm{sens}}$ without a proportional increase in $J_c$, thereby reducing
+$\eta_{\mathrm{th}}$. Kinetic compliance enters through $J_c$: a controller can
+have a large directional affinity but low thermodynamic efficiency when agents
+rarely comply and the resulting current remains small relative to the sensing
+information acquired.

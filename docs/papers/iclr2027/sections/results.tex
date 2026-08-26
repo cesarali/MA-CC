@@ -4,10 +4,10 @@
 We organize the results around three complementary questions. First, how much
 can the controller move the population? Second, how efficiently is the
 controller-dependent information expressed as coherent population motion?
-Third, how efficiently are sensing and actuation resources converted into
-useful directed current? These questions correspond respectively to the
+Third, how efficiently is the finite-time thermodynamic control budget converted
+into directed current? These questions correspond respectively to the
 susceptibility $\chi$, the information--response efficiency $\eta_{\rm IR}$,
-and the finite-time thermodynamic efficiency $\eta_{\rm th}$.
+and the thermodynamic efficiency $\eta_{\rm th}$.
 
 \subsection{Control susceptibility is causal, finite, and state dependent}
 
@@ -33,20 +33,20 @@ with additional pre-existing support over the tested range.
 
 Microscopic controlled transitions provide a direct calibration of the
 finite-compliance description. Pooling the state-matched controlled updates
-gives an effective directional affinity $F_{\rm eff}=3.83$ and kinetic
+gives an effective directional affinity $h_{\rm eff}=3.83$ and kinetic
 compliance $\gamma_{\rm eff}=0.372$. Substituting these into
 \[
-\chi_{F,\gamma}(x)=
-[\sigma(F)-x]\left[1-\left(1-\frac{\gamma}{N}\right)^b\right]
+\chi_{h,\gamma}(x)=
+[\sigma(h)-x]\left[1-\left(1-\frac{\gamma}{N}\right)^b\right]
 \]
 gives the dashed finite-compliance reference in
-Fig.~\ref{fig:susceptibility}a. Because $F_{\rm eff}$ and $\gamma_{\rm eff}$ are estimated from the same microscopic trajectories, this is a calibrated reference rather than a parameter-free prediction. It nevertheless shows that separating directional bias from kinetic compliance removes much of the discrepancy with the idealized copying limit.
+Fig.~\ref{fig:susceptibility}a. Because $h_{\rm eff}$ and $\gamma_{\rm eff}$ are estimated from the same microscopic trajectories, this is a calibrated reference rather than a parameter-free prediction. It nevertheless shows that separating directional bias from kinetic compliance removes much of the discrepancy with the idealized copying limit.
 
 The exact theory also clarifies the role of compliance itself
 (Fig.~\ref{fig:susceptibility}b). Changing $\gamma$ rescales the magnitude of
 the response while leaving the zero-response set point
-$x^\star=\sigma(h_c)$ unchanged. This separation is useful empirically:
-$h_c$ (or the effective net affinity) controls which direction is favored,
+$x^\star=\sigma(h)$ unchanged. This separation is useful empirically:
+$h$ controls which direction is favored,
 whereas $\gamma$ controls how often a controlled opportunity actually produces
 a revision.
 
@@ -99,7 +99,7 @@ The robust conclusion is that control information is not uniform over population
 (a) Empirical signed population drift as a function of target support and
 actuation budget at $q_c=12$. (b) Empirical state-local action-to-population
 information above a within-state permutation null. (c) Exact theoretical
-state-local information landscape for the baseline finite-bias feedback
+state-local information landscape for the baseline single-affinity finite-compliance feedback
 controller. (d) Number of observed rounds supporting each empirical state
 bin.}
 \label{fig:landscapes}
@@ -156,56 +156,64 @@ need not be tight for these transition distributions.
 
 
 
-\subsection{A finite-time thermodynamic bridge exposes sensing costs}
+\subsection{Thermodynamic efficiency exposes the sensing--actuation trade-off}
 
-The same microscopic trajectories allow us to reconstruct most ingredients of
-the thermodynamic control channel. Across the nine resource cells, the fitted
-net affinity remains positive,
-$F_{\rm eff}\in[1.86,3.01]$, whereas kinetic compliance remains low,
-$\gamma_{\rm eff}\in[0.084,0.127]$. The resulting finite-compliance current
-matches the directly observed controlled current closely
-($r=0.999$, RMSE $=0.016$ target-count changes per round), providing an
-internal consistency check on the reduced microscopic description.
-
-A genuine empirical $\eta_{\rm th}$ additionally requires an independently
-identified opposing load. As an exploratory bridge, we summarize the
-population's NoOp tendency to leave the incorrect target by
-$h_e^\star=2.19$ with bootstrap interval $[2.12,2.26]$, and evaluate
+The single-affinity path identity leads to a bounded thermodynamic control
+efficiency without introducing an opposing load. Removing the transient system
+entropy term from the finite-time path irreversibility gives
 \[
-\eta_{\rm th}^\star=
-\frac{h_e^\star J_c}
-{(F_{\rm eff}+h_e^\star)J_c+I(n_k;Y_k)+\Delta S_{\rm sys}}.
+\Sigma-\Delta S_{\rm sys}=hJ_c+I(n_k;Y_k),
 \]
-The resource ordering is strikingly simple
-(Fig.~\ref{fig:efficiencies}b): $\eta_{\rm th}^\star$ increases with $b$ at every
-$q_c$, while increasing sensing at fixed $b$ generally lowers the efficiency
-proxy. At $b=18$, for example, it changes from $0.369$ at $q_c=6$ to $0.343$
-at $q_c=12$ and $0.296$ at $q_c=18$.
+and therefore
+\[
+\boxed{
+\eta_{\rm th}
+=
+\frac{hJ_c}{\Sigma-\Delta S_{\rm sys}}
+=
+\frac{hJ_c}{hJ_c+I(n_k;Y_k)}
+\le 1.}
+\]
+The numerator is the affinity-weighted target-directed current; the denominator
+is the non-storage part of the finite-time thermodynamic accounting. Thus
+$\eta_{\rm th}$ asks what fraction of the sensing-plus-actuation expenditure is
+expressed as directed population motion. Appendix~\ref{app:thermodynamic_efficiency_derivation}
+gives the complete path-measure derivation.
 
-The exact theory explains why this is possible. Increasing controller affinity
-need not increase thermodynamic efficiency because the generalized input work
-$h_cJ_c$ rises together with the current
-(Fig.~\ref{fig:efficiencies}c). Likewise, the empirical sensing information grows
-strongly with $q_c$ (Fig.~\ref{fig:efficiencies}d), but the corresponding controlled
-current does not increase proportionally. Additional sensing is therefore a
-resource only when the feedback policy can convert the extra information into
-useful directed motion.
+Figure~\ref{fig:efficiencies}b shows the exact single-affinity prediction for
+the same sensing budgets used experimentally, with $h=2$, $\gamma=0.75$,
+$\beta=4$, $\theta=1/2$, and $p_0(n)=\mathrm{Binomial}(24,0.25)$. At fixed
+$q_c$, the efficiency rises with actuation because the controlled current grows
+while the sensing information is fixed by the sensor channel. At fixed $b$,
+larger sensing budgets lower the efficiency unless the additional information
+produces a commensurate increase in current. For $b=18$, for example,
+\[
+\eta_{\rm th}=0.985,\;0.964,\;0.930
+\qquad\text{for }q_c=6,12,18.
+\]
+The result is therefore not that sensing is intrinsically undesirable, but that
+information that does not change the action-relevant population response is a
+thermodynamic overhead in this control objective.
 
-We retain the superscript $\star$ because the NoOp drift is not yet an
-independently imposed, mechanism-resolved load. The result should therefore be
-read as a thermodynamic bridge rather than the final empirical measurement of
-$\eta_{\rm th}$. Nevertheless, the observed resource ordering is robust to a
-broad range of assumed loads, and it identifies the main missing experiment:
-a direct calibration of epistemic resistance that separates $h_c$ from $h_e$.
+The empirical sensing measurements support precisely this mechanism
+(Fig.~\ref{fig:efficiencies}c). Increasing $q_c$ substantially raises
+$I(n_k;Y_k)$, whereas the calibrated controlled current changes much less across
+the same resource grid. Combined with the close agreement between the measured
+current and the finite-compliance current reported above, this yields a direct
+design prediction: in the present regime, adding actuation improves both
+$\eta_{\rm IR}$ and $\eta_{\rm th}$, whereas additional sensing is efficient
+only when the policy can convert it into additional directed current.
 
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=0.82\textwidth]{figures/fig_efficiencies_all.png}
-\caption{\textbf{Efficiency and resource conversion.}
+\caption{\textbf{The two control efficiencies and their resource dependence.}
 (a) Empirical information--response efficiency across the sensing--actuation grid.
-(b) Exploratory finite-time thermodynamic-efficiency proxy.
-(c) Exact theory: increasing controller affinity can reduce thermodynamic efficiency because input work grows with control strength.
-(d) Empirical sensing information, which rises strongly with $q_c$ without a proportional increase in controlled current.}
+(b) Exact single-affinity thermodynamic efficiency
+$\eta_{\rm th}=hJ_c/(hJ_c+I_{\rm sens})$ as the actuation budget is varied for
+the three sensing budgets used experimentally. (c) Empirical sensing
+information, which rises strongly with $q_c$ without a proportional increase in
+controlled current.}
 \label{fig:efficiencies}
 \end{figure*}
 
@@ -213,9 +221,9 @@ Taken together, the results support a single resource-conversion picture of
 feedback control. Susceptibility identifies where the population can be moved;
 state-local information identifies where the action is dynamically visible;
 $\eta_{\rm IR}$ quantifies how coherently that information appears as mean
-motion; and the thermodynamic analysis asks whether sensing and actuation are
-worth the directed current they produce. In the present regime, actuation is
-the dominant useful resource, while sensing displays clear diminishing
-returns. The theory additionally predicts that feedback gain $\beta$ should
-reshape, rather than simply amplify, the information channel, providing a
-focused next validation of the framework.
+motion; and $\eta_{\rm th}$ quantifies how efficiently the finite-time
+sensing--actuation budget is converted into affinity-weighted directed current.
+In the present regime, actuation is the dominant useful resource, while sensing
+displays clear diminishing returns. The theory additionally predicts that
+feedback gain $\beta$ should reshape, rather than simply amplify, the
+information channel, providing a focused next validation of the framework.

@@ -3,7 +3,7 @@
 
 The state-local susceptibility introduced above quantifies how strongly the population responds when the controller acts,
 \begin{equation}
-\chi_{h_c}(x)
+\chi_{h,\gamma}(x)
 =
 \mathbb{E}[x' \mid U=1,x]
 -
@@ -22,7 +22,7 @@ R
 \sum_n
 \rho(n)\,
 a_n\,
-\chi_{h_c}\!\left(\frac{n}{N}\right)
+\chi_{h,\gamma}\!\left(\frac{n}{N}\right)
 }
 \label{eq:control_efficacy}
 \end{equation}
@@ -59,9 +59,9 @@ Unlike the information--response efficiency in Eq.~\eqref{eq:eta_ir}, \(\eta_{\m
 
 Equations~\eqref{eq:control_efficacy}--\eqref{eq:control_cost} naturally turn controller design into a constrained optimization problem. Let
 \[
-\boldsymbol{\varphi}=(q_c,b,\theta,\beta,h_c,\ldots)
+\boldsymbol{\varphi}=(q_c,b,\theta,\beta,\ldots)
 \]
-collect the tunable controller parameters. Different operational requirements lead to different, but closely related, design objectives. For example, one may seek the least expensive controller that achieves a desired response,
+collect the tunable controller parameters; $h$ and $\gamma$ are calibrated properties of the controlled response unless the implementation exposes them directly. Different operational requirements lead to different, but closely related, design objectives. For example, one may seek the least expensive controller that achieves a desired response,
 \begin{equation}
 \boxed{
 \boldsymbol{\varphi}^\star
@@ -101,7 +101,7 @@ R(\boldsymbol{\varphi})-\lambda C(\boldsymbol{\varphi})
 \end{equation}
 where \(\lambda>0\) specifies the relative penalty assigned to controller interactions.
 
-These formulations emphasize that there is no unique notion of an ``optimal'' controller without specifying the resource constraint. A controller with larger \(b\) may produce a larger absolute response while being dominated by a weaker controller when the desired response can already be reached at substantially lower cost. The natural design object is therefore the Pareto frontier in the \((C,R)\) plane: controllers on this frontier achieve the largest available population response for a given interaction budget. State-dependent susceptibility further sharpens this picture, because controller resources should preferentially be spent in states for which \(\chi_{h_c}(x)\) is large rather than applied uniformly across the population trajectory.
+These formulations emphasize that there is no unique notion of an ``optimal'' controller without specifying the resource constraint. A controller with larger \(b\) may produce a larger absolute response while being dominated by a weaker controller when the desired response can already be reached at substantially lower cost. The natural design object is therefore the Pareto frontier in the \((C,R)\) plane: controllers on this frontier achieve the largest available population response for a given interaction budget. State-dependent susceptibility further sharpens this picture, because controller resources should preferentially be spent in states for which \(\chi_{h,\gamma}(x)\) is large rather than applied uniformly across the population trajectory.
 
 \paragraph{Finite-time and nonstationary interpretation.}
 No stationarity assumption is required in the definitions above. In a nonstationary process, let
