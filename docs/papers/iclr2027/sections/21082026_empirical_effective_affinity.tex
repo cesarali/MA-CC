@@ -1,40 +1,38 @@
-
 % ======================================================================
-% Empirical calibration of the effective control affinity
+% Empirical calibration of the single-affinity finite-compliance channel
 % Requires: amsmath, amssymb, booktabs
 % ======================================================================
 
-\subsection{Empirical calibration of the control affinity}
+\subsection{Empirical calibration of directional affinity and compliance}
 \label{subsec:effective_affinity}
 
-The finite-bias theory describes a controlled interaction through a directional
-affinity.  To connect this quantity to the LLM dynamics, we use the microscopic
-transitions observed in the state-matched intervention experiment.  We
-coarse-grain each focal agent's vote into two states: supporting the controller
-target \(Z\), or not supporting \(Z\).  Among controlled updates, we then
-estimate
+The single-affinity theory describes a controlled interaction using a directional
+bias $h$ and a kinetic compliance $\gamma$. To connect these quantities to the
+LLM dynamics, we use the microscopic transitions observed in the state-matched
+intervention experiment. We coarse-grain each focal agent's vote into two
+states: supporting the controller target $Z$, or not supporting $Z$. Among
+controlled updates, define
 \[
-p_{+}
-=
-P(\text{non-}Z\rightarrow Z\mid \text{controlled}),
+p_+=P(\text{non-}Z\rightarrow Z\mid\text{controlled}),
 \qquad
-p_{-}
-=
-P(Z\rightarrow \text{non-}Z\mid \text{controlled}).
+p_-=P(Z\rightarrow\text{non-}Z\mid\text{controlled}).
 \]
-The ratio of these two transition probabilities measures the directional
-asymmetry induced by control.  We therefore define the empirical net affinity
-as
+Under the finite-compliance kernel,
 \[
-\boxed{
-F_{\mathrm{eff}}
-=
-\ln\frac{p_{+}}{p_{-}} .
-}
+p_+=\gamma\sigma(h),
+\qquad
+p_-=\gamma\sigma(-h).
 \]
-A positive \(F_{\mathrm{eff}}\) means that controlled interactions favor
-motion toward the controller target, while \(F_{\mathrm{eff}}=0\) corresponds
-to equal forward and reverse transition probabilities.
+Therefore the two parameters are directly identifiable:
+\begin{equation}
+\boxed{
+\gamma_{\rm eff}=p_++p_-,
+\qquad
+h_{\rm eff}=\ln\frac{p_+}{p_-}.}
+\label{eq:empirical_single_affinity_calibration}
+\end{equation}
+The sum measures how readily a controlled opportunity produces any revision,
+whereas the ratio measures the direction favored conditional on revision.
 
 \begin{table}[t]
 \centering
@@ -44,90 +42,42 @@ to equal forward and reverse transition probabilities.
 \toprule
 Transition & Eligible updates & Observed transitions & Probability \\
 \midrule
-non-\(Z\rightarrow Z\) & 572 & 208 & \(p_{+}=0.364\) \\
-\(Z\rightarrow\) non-\(Z\) & 508 & 4 & \(p_{-}=0.0079\) \\
+non-$Z\rightarrow Z$ & 572 & 208 & $p_+=0.364$ \\
+$Z\rightarrow$ non-$Z$ & 508 & 4 & $p_-=0.0079$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Pooling all controlled updates gives
 \[
-\boxed{
-F_{\mathrm{eff}} = 3.83,
-}
+\boxed{h_{\rm eff}=3.83,\qquad \gamma_{\rm eff}=0.372,}
 \]
-corresponding to a forward-to-reverse transition ratio
+with forward-to-reverse transition ratio $e^{h_{\rm eff}}\simeq46.2$. Thus
+motion toward the controller target is strongly favored among revisions, while
+most controlled opportunities still leave the focal vote unchanged. A
+stratified episode-level bootstrap gives the approximate $95\%$ interval
 \[
-e^{F_{\mathrm{eff}}}\simeq 46.2.
-\]
-Thus, conditional on observing a controlled microscopic transition
-opportunity, motion toward the controller target is approximately \(46\) times
-more likely than motion away from it.  A stratified episode-level bootstrap
-gives the approximate \(95\%\) interval
-\[
-\boxed{
-F_{\mathrm{eff}}\in[3.06,\,4.88].
-}
-\]
-
-The transition probabilities also reveal an important kinetic distinction.
-In the minimal finite-bias kernel,
-\[
-p_{+}=\sigma(F),
-\qquad
-p_{-}=\sigma(-F),
-\]
-and therefore \(p_{+}+p_{-}=1\).  In the LLM trajectories, however,
-\[
-p_{+}+p_{-}=0.372.
-\]
-Most controlled updates therefore leave the focal vote unchanged.  The data
-show a strong \emph{directional bias} when revision occurs, together with a
-much smaller overall probability of revision.  A convenient way to separate
-these two effects is to introduce a kinetic compliance factor \(\gamma\),
-\[
-p_{+}=\gamma\,\sigma(F),
-\qquad
-p_{-}=\gamma\,\sigma(-F),
-\]
-which preserves the same forward-to-reverse affinity while allowing
-no-change events.  The empirical value is
-\[
-\boxed{
-\gamma_{\mathrm{eff}}
-=
-p_{+}+p_{-}
-=
-0.372.
-}
+\boxed{h_{\rm eff}\in[3.06,4.88].}
 \]
 
 \begin{table}[t]
 \centering
-\caption{Empirical quantities connecting the microscopic LLM dynamics to the
-finite-bias control description.}
+\caption{Empirical quantities connecting microscopic LLM dynamics to the
+single-affinity finite-compliance description.}
 \label{tab:effective_affinity_summary}
 \begin{tabular}{lll}
 \toprule
 Quantity & Estimate & Interpretation \\
 \midrule
-\(F_{\mathrm{eff}}\) & \(3.83\) & net directional affinity \\
-\(95\%\) CI for \(F_{\mathrm{eff}}\) & \([3.06,\,4.88]\) & bootstrap uncertainty \\
-\(e^{F_{\mathrm{eff}}}\) & \(46.2\) & forward/reverse transition ratio \\
-\(\gamma_{\mathrm{eff}}\) & \(0.372\) & probability scale for actual revision \\
+$h_{\rm eff}$ & $3.83$ & directional affinity \\
+$95\%$ CI for $h_{\rm eff}$ & $[3.06,4.88]$ & bootstrap uncertainty \\
+$e^{h_{\rm eff}}$ & $46.2$ & forward/reverse transition ratio \\
+$\gamma_{\rm eff}$ & $0.372$ & probability scale for actual revision \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-These measurements identify the \emph{net} directional affinity of the
-controlled LLM dynamics.  They do not by themselves separate the controller
-affinity \(h_c\) from the opposing load \(h_e\), since the thermodynamic model
-contains only their difference,
-\[
-F=h_c-h_e,
-\]
-at the level of controlled transition odds.  Estimating \(h_c\) and \(h_e\)
-individually requires an independent characterization of the opposing
-epistemic tendency.  We therefore use \(F_{\mathrm{eff}}\) here as the direct
-empirical calibration of control strength, while leaving the decomposition
-into input and load affinities to the thermodynamic efficiency analysis.
+No further decomposition of $h_{\rm eff}$ is required by the finite-time
+thermodynamic theory. The same measured affinity enters the susceptibility,
+the controlled current, and the path identity
+$\Delta S_{\rm sys}+hJ_c+I(n_k;Y_k)=\Sigma$.
