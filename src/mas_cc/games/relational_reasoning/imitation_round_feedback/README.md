@@ -358,7 +358,7 @@ game:
     social_group_size: 1     # q
     vote_visibility: public
     prompt_version: 1
-    social_distrust: true    # false = neutral cooperative baseline
+    epistemic_prompt_class: strategic_uncertainty
     stop_on_consensus: false
     invalid_response_retries: 1
     expected_validation_failure_rate: 0.05
@@ -387,7 +387,7 @@ control:
 | `game.options.social_group_size` | `q`, the number of visible social slots |
 | `game.options.dynamics_mode` | only `reasoning` is implemented; `classical` is refused explicitly |
 | `game.options.vote_visibility` | only `public` is implemented; `hidden` is reserved |
-| `game.options.social_distrust` | `true` (default) keeps the strategic-uncertainty wording — *some participants may have objectives that differ from yours*; `false` swaps in a neutral baseline in which every participant is trying to identify the correct answer. Both are `fixed` prompt blocks, so the condition is pinned by the prompt definition hash |
+| `game.options.epistemic_prompt_class` | `naive` \| `distributed_information` \| `strategic_uncertainty` (default) \| `evidence_calibrated`. This is a fixed prompt block and therefore changes the prompt definition hash. The deprecated `social_distrust` boolean remains accepted only as an unambiguous adapter (`true` → `strategic_uncertainty`, `false` → `distributed_information`); contradictory dual settings are refused. |
 | `game.options.initialization.mode` | `local_vote` (one provider call per agent from `K_i(0)` alone), `uniform_random` (provider-free), `explicit` (with `initial_votes`) |
 | `game.options.initialization.initial_distribution` | optional weights for `uniform_random` |
 | `game.options.stop_on_consensus` | checked only at round boundaries |

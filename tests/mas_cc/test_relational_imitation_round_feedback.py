@@ -39,6 +39,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     SOCIAL_ENVIRONMENT,
     SOCIAL_ENVIRONMENT_DISTRUST,
     SOCIAL_ENVIRONMENT_NEUTRAL,
+    EPISTEMIC_PROMPT_CLASSES,
     RelationalBallotContract,
     agent_label,
     control_label,
@@ -48,6 +49,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     render_control_reason,
     render_social_source,
     social_environment,
+    epistemic_framing,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
     knowledge_strata,
@@ -1853,8 +1855,8 @@ def test_social_distrust_false_swaps_in_the_neutral_cooperative_baseline():
         assert "objectives that differ from yours" not in prompt
         # The distributed-information statement survives; only the strategic
         # warning is replaced.
-        assert "Different participants know different facts" in prompt
-        assert "trying to identify the correct answer" in prompt
+        assert "Different participants may know different facts" in prompt
+        assert "fact known\nby only one participant" in prompt
 
 
 def test_the_two_environments_are_fixed_blocks_with_different_definitions():
@@ -1896,6 +1898,74 @@ def test_a_non_boolean_social_distrust_is_refused(value):
 
     with pytest.raises(ValueError, match="social_distrust must be a boolean"):
         create_game(config.game).rules(config.game)
+
+
+def _prompt_class(config, value):
+    options = {
+        key: item
+        for key, item in dict(config.game.options).items()
+        if key != "social_distrust"
+    }
+    options["epistemic_prompt_class"] = value
+    return replace(config, game=replace(config.game, options=options))
+
+
+@pytest.mark.parametrize("prompt_class", EPISTEMIC_PROMPT_CLASSES)
+def test_all_epistemic_prompt_classes_resolve_and_run(prompt_class):
+    config = _prompt_class(_config(rounds=1), prompt_class)
+    assert create_game(config.game).rules(config.game).epistemic_prompt_class == prompt_class
+    result, ballots = _run(config)
+    assert result.interactions
+    assert all(epistemic_framing(prompt_class) in text for text in ballots.prompts)
+
+
+def test_unknown_epistemic_prompt_class_is_refused():
+    config = _prompt_class(_config(rounds=1), "skeptical_super_agent")
+    with pytest.raises(ValueError, match="epistemic_prompt_class must be one of"):
+        create_game(config.game).rules(config.game)
+
+
+def test_legacy_and_categorical_prompt_settings_cannot_contradict():
+    config = _prompt_class(_config(rounds=1), "naive")
+    options = {**dict(config.game.options), "social_distrust": True}
+    config = replace(config, game=replace(config.game, options=options))
+    with pytest.raises(ValueError, match="social_distrust contradicts"):
+        create_game(config.game).rules(config.game)
+
+
+def test_epistemic_classes_change_only_the_fixed_framing_block():
+    prompts = {
+        name: relational_public_ballot_prompt(
+            fact_ids=("f1",), epistemic_prompt_class=name
+        )
+        for name in EPISTEMIC_PROMPT_CLASSES
+    }
+    baseline = prompts["strategic_uncertainty"]
+    assert baseline.block("social_environment").value == SOCIAL_ENVIRONMENT_DISTRUST
+    for prompt in prompts.values():
+        assert prompt.definition_hash != ""
+        assert [block.name for block in prompt.blocks] == [block.name for block in baseline.blocks]
+        for block in prompt.blocks:
+            if block.name != "social_environment":
+                assert block == baseline.block(block.name)
+    assert len({prompt.definition_hash for prompt in prompts.values()}) == 4
+
+
+def test_epistemic_class_content_has_the_intended_boundaries():
+    naive = epistemic_framing("naive").lower()
+    assert all(term not in naive for term in ("different facts", "objectives", "minority", "majority"))
+
+    distributed = epistemic_framing("distributed_information").lower()
+    assert "different participants may know different facts" in distributed
+    assert "fact known\nby only one participant" in distributed
+    assert all(term not in distributed for term in ("objectives", "strategic", "adversarial", "controller"))
+
+    calibrated = epistemic_framing("evidence_calibrated").lower()
+    assert "majority support by itself as evidence" in calibrated
+    assert "explicit facts" in calibrated
+    assert "minority position" in calibrated
+    assert "objectives that differ" in calibrated
+    assert all(term not in calibrated for term in ("controller", "adversary"))
 
 
 # ---- the advertised citable fact ids ------------------------------------
