@@ -581,6 +581,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Study {result.study_dir.name} submitted as SLURM job {result.job_id}: "
             f"{len(result.entries)} config(s), {result.study_dir}"
         )
+        if result.execution_plan is not None:
+            plan = result.execution_plan
+            print(
+                f"  Execution: {plan['shard_count']} cell shard(s), "
+                f"throttle {plan['array_throttle']}, "
+                f"{plan['total_episode_slots']} episode slot(s), "
+                f"{plan['total_request_concurrency']} request slot(s), "
+                f"~{plan['estimated_rpm']:.0f} RPM"
+            )
+            print(
+                f"  Resources: {plan['cpus_per_task']} CPU(s), {plan['memory']}, "
+                f"{plan['time_limit']} per active shard"
+            )
         return 0
     if args.command == "study" and args.study_command == "aggregate":
         from mas_cc.studies import aggregate_study

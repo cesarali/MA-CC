@@ -128,8 +128,15 @@ Optional explicit result root:
 ```bash
 mas_cc study submit \
   --config-dir configs/runs/relational_reasoning/population_study_06 \
-  --results-dir results/relational_population_study06
+  --results-dir /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_06
 ```
+
+On Potsdam, production results must resolve beneath
+`/work/ojedamarin/Projects/LanguageGames/MA-CC/results`. The study execution
+policy records that root and may reject CLI destinations outside it. Submission
+must create `<study-root>/logs` and pass absolute `sbatch --output` and
+`--error` patterns there. Relative SLURM log paths in the source repository are
+forbidden.
 
 ### Required behavior
 
@@ -159,7 +166,7 @@ The command itself must not become the experiment worker. It prepares the mappin
 
 ## 5. SLURM execution model
 
-### 5.1 Preferred mode: one array task per YAML config
+### 5.1 Compatibility mode: one array task per YAML config
 
 For:
 
@@ -217,11 +224,26 @@ one array task
         → episodes under existing execution.parallelism
 ```
 
-Do not normally create one task per episode.
+This mode is a compatibility fallback, not the preferred topology when YAML
+boundaries underuse available cluster or provider capacity.
 
-Do not normally create one task per cell.
+### 5.2 Preferred mode: planned scientific-cell shards
 
-### 5.2 Preserve existing in-process parallelism
+The scientific unit is the cell and the computational unit is the episode.
+Submission must expand original grid cells, preserve their indices and episode
+seed derivation, and create cell or cell-bundle execution shards independently
+of YAML-file boundaries. Each process runs one episode per configured async
+episode slot. Aggregation reconstructs complete cells before cell-level
+estimation and pools canonical observations before pooled estimation.
+
+The planner consumes cell/episode demand, request concurrency, live provider
+limits, planning latency, node limits, memory, CPUs, and time limits. It writes
+`execution_plan.json` and `execution_manifest.csv`, passes explicit resources
+to one generic SLURM launcher, and refuses a throttle above the declared RPM
+bound. Execution partitioning must not affect identities, observables, or phase
+diagrams.
+
+### 5.3 Preserve existing in-process parallelism
 
 If one YAML has:
 
@@ -239,7 +261,7 @@ the config still creates six scientific cells inside one normal MA-CC process.
 
 The study layer does not rewrite the experiment orchestrator.
 
-### 5.3 Cell sharding is exceptional
+### 5.4 Episode sharding and cell reconstruction
 
 Retain a generic cell-array launcher only for configurations that genuinely cannot fit in one allocation.
 
@@ -249,7 +271,10 @@ If used, preserve:
 - original seed derivation,
 - original scientific identity.
 
-Cell sharding must remain an execution detail.
+Cell sharding must remain an execution detail. Episode-level distribution may
+be added when workers write disjoint episode artifacts and cell sealing occurs
+only after every expected episode is reconstructed. Until that contract is
+implemented, use one original cell per shard and run its episodes concurrently.
 
 ---
 

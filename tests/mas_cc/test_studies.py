@@ -23,6 +23,13 @@ from mas_cc.studies.aggregation import (
     _requested_statistics,
 )
 from mas_cc.studies.manifest import StudySpec, discover_study
+from mas_cc.studies.execution import (
+    build_cell_execution_entries,
+    plan_cell_execution,
+    read_execution_manifest,
+    write_execution_manifest,
+)
+from mas_cc.studies.cell_worker import main as cell_worker_main
 from mas_cc.studies.submission import (
     array_task_command,
     build_submission_entries,
@@ -121,6 +128,183 @@ def test_submit_preflights_every_config_and_calls_sbatch_once(tmp_path, monkeypa
     assert (result.study_dir / "study_manifest.json").is_file()
     with (result.study_dir / "submission_manifest.csv").open(newline="") as stream:
         assert [int(row["array_index"]) for row in csv.DictReader(stream)] == [0, 1]
+
+
+def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
+    spec = discover_study(
+        "configs/runs/relational_reasoning/population_study_06"
+    )
+    submissions = build_submission_entries(spec, "results/test-study06", git_commit="test")
+    shards = build_cell_execution_entries(spec, submissions)
+    plan = plan_cell_execution(spec, len(shards))
+
+    assert len(shards) == 156
+    assert [(row.config_index, row.cell_index) for row in shards[:2]] == [(0, 0), (0, 1)]
+    assert shards[120].config_index == 1
+    assert shards[120].cell_index == 0
+    assert plan.array_throttle == 18
+    assert plan.total_request_concurrency == 144
+    assert plan.episode_slots_per_shard == 8
+    assert plan.total_episode_slots == 144
+    assert plan.estimated_rpm == 864
+    assert plan.estimated_rpm <= plan.target_rpm < 1000
+    assert plan.cpus_per_task == 8
+    assert plan.time_limit == "04:00:00"
+    assert plan.partition == "all"
+    assert plan.qos == "normal"
+
+
+def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
+    root = Path("configs/runs/relational_reasoning/population_study_07")
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, "/tmp/test-study07", git_commit="test")
+    shards = build_cell_execution_entries(spec, submissions)
+    plan = plan_cell_execution(spec, len(shards))
+    fine = load_run_config_or_grid(root / "study07_fine_beta_atlas.yaml")
+    truth = load_run_config_or_grid(root / "study07_truth_aligned_b_theta.yaml")
+
+    assert [entry.expected_cell_count for entry in submissions] == [144, 120]
+    assert [entry.expected_episode_count for entry in submissions] == [1440, 1200]
+    assert len(shards) == 264
+    assert plan.array_throttle == 18
+    assert plan.total_episode_slots == 144
+    assert plan.total_request_concurrency == 144
+    assert plan.estimated_rpm == 864
+    assert [(axis.path, list(axis.values)) for axis in fine.axes[:2]] == [
+        ("control.options.intervention_budget", [4, 8, 12, 16, 20, 24]),
+        ("control.options.beta", [0.5, 1.0, 2.0, 4.0, 8.0, 16.0]),
+    ]
+    assert [(axis.path, list(axis.values)) for axis in truth.axes[:2]] == [
+        ("control.options.intervention_budget", [4, 8, 12, 16, 20, 24]),
+        ("control.options.threshold", [0.2, 0.35, 0.5, 0.65, 0.8]),
+    ]
+    assert {cell.config.control.options["target"] for cell in fine.cells} == {2}
+    assert {cell.config.control.options["target"] for cell in truth.cells} == {"correct"}
+    assert {cell.config.execution.seed for cell in fine.cells + truth.cells} == {20260822}
+    assert {cell.config.execution.repetitions for cell in fine.cells + truth.cells} == {10}
+    study06_analysis = yaml.safe_load(
+        Path("configs/runs/relational_reasoning/population_study_06/analysis.yaml").read_text()
+    )
+    study07_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
+    for key in ("estimators", "resampling", "derived"):
+        assert study07_analysis[key] == study06_analysis[key]
+
+
+def test_auto_submission_writes_execution_plan_and_explicit_resources(
+    tmp_path, monkeypatch
+):
+    source = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+    )
+    config = tmp_path / "grid.yaml"
+    config.write_text(
+        yaml.safe_dump(source.base.to_dict(), sort_keys=False)
+        + "grid:\n  control.options.intervention_budget: [8, 16]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: auto}\nconfigs: [grid.yaml]\n"
+        "execution:\n  mode: auto\n  target_rpm: 900\n"
+        "  assumed_latency_seconds: 10\n  max_active_nodes: 18\n"
+        "  cpus_per_task: 8\n  memory: 8G\n  time_limit: '04:00:00'\n",
+        encoding="utf-8",
+    )
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 4243\n", "")
+
+    result = submit_study(tmp_path, tmp_path / "results", run=fake_run)
+    execution_rows = read_execution_manifest(result.study_dir / "execution_manifest.csv")
+    assert len(execution_rows) == 2
+    assert result.execution_plan["mode"] == "cell_array"
+    assert "--cpus-per-task=8" in calls[0]
+    assert "--partition=all" in calls[0]
+    assert "--qos=normal" in calls[0]
+    assert "--nodes=1" in calls[0]
+    assert "--ntasks=1" in calls[0]
+    assert "--mem=8G" in calls[0]
+    assert "--time=04:00:00" in calls[0]
+    assert any(
+        argument == f"--output={result.study_dir}/logs/slurm-%A_%a.out"
+        for argument in calls[0]
+    )
+    assert any(
+        argument == f"--error={result.study_dir}/logs/slurm-%A_%a.err"
+        for argument in calls[0]
+    )
+    assert any(argument.startswith("--array=0-1%") for argument in calls[0])
+
+
+def test_required_results_root_rejects_home_repository_destination(tmp_path):
+    _standalone_config(tmp_path / "config.yaml")
+    permitted = tmp_path / "work" / "results"
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: rooted}\nconfigs: [config.yaml]\nexecution:\n"
+        f"  results_root: {permitted}\n"
+        f"  require_results_under: {permitted}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="must be stored under"):
+        submit_study(tmp_path, tmp_path / "home-results", run=lambda *args, **kwargs: None)
+
+
+def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
+    raw = yaml.safe_load(
+        Path(
+            "configs/runs/relational_reasoning/"
+            "relational_imitation_round_feedback_controlled_smoke.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    raw["storage"]["artifact_profile"] = "results_only"
+    raw["storage"]["overwrite"] = False
+    raw["grid"] = {"control.options.intervention_budget": [0, 1]}
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    config = config_dir / "grid.yaml"
+    config.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    (config_dir / "study.yaml").write_text(
+        "study: {name: shard-smoke}\nconfigs: [grid.yaml]\n"
+        "execution: {mode: auto, target_rpm: 60, assumed_latency_seconds: 1}\n",
+        encoding="utf-8",
+    )
+    spec = discover_study(config_dir)
+    study_dir = tmp_path / "study"
+    submissions = build_submission_entries(spec, study_dir, git_commit="test")
+    write_submission_manifest(study_dir / "submission_manifest.csv", submissions)
+    shards = build_cell_execution_entries(spec, submissions)
+    execution_manifest = write_execution_manifest(
+        study_dir / "execution_manifest.csv", shards
+    )
+    (study_dir / "study_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "study_id": spec.name,
+                "analysis_recipe": None,
+                "expected_config_count": 1,
+                "expected_cell_count": 2,
+                "expected_episode_count": 2,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert cell_worker_main([str(execution_manifest), "0"]) == 0
+    assert cell_worker_main([str(execution_manifest), "1"]) == 0
+    summary = aggregate_study(study_dir)
+    assert summary["complete"] is True
+    cells = pd.read_parquet(study_dir / "analysis" / "tables" / "cells.parquet")
+    assert len(cells) == 2
+    assert set(cells["source_cell_id"]) == {"cell-0000", "cell-0001"}
 
 
 def test_aggregate_writes_canonical_package_and_reuses_cache(tmp_path):

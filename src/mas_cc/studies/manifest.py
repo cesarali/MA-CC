@@ -91,8 +91,11 @@ def discover_study(config_dir: str | Path) -> StudySpec:
 
     execution = dict(_mapping(raw.get("execution"), "execution"))
     mode = execution.get("mode", "config_array")
-    if mode != "config_array":
-        raise ValueError(f"unsupported study execution.mode {mode!r}; expected 'config_array'")
+    if mode not in {"config_array", "cell_array", "auto"}:
+        raise ValueError(
+            f"unsupported study execution.mode {mode!r}; expected "
+            "'config_array', 'cell_array', or 'auto'"
+        )
 
     analysis = _mapping(raw.get("analysis"), "analysis")
     recipe_value = analysis.get("recipe")

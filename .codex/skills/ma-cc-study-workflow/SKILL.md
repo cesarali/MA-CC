@@ -21,10 +21,11 @@ family is demonstrably closer to the requested scientific design.
 
 ## Preserve these invariants
 
-- Do not create a study-specific `.job` file. Use
-  `scripts/Potsdam/SLURM/run_config_array.job`. Add a different generic launcher
-  only when the scheduler allocation topology genuinely cannot be represented
-  by the existing launcher, and explain the topology difference.
+- Do not create a study-specific `.job` file. Use the generic
+  `scripts/Potsdam/SLURM/run_config_array.job` for config arrays or
+  `scripts/Potsdam/SLURM/run_study_cell_array.job` for planned cell arrays. Add
+  another launcher only when scheduler topology genuinely differs, and explain
+  that difference.
 - Put hypotheses, fixed parameters, sweep axes, seeds, models, budgets,
   retention, and analysis requests in YAML—not shell scripts.
 - Group related configs in one study folder with `study.yaml` and, when needed,
@@ -69,7 +70,38 @@ family is demonstrably closer to the requested scientific design.
 Do not submit if preflight denies launch, required credentials are absent, the
 result root is ambiguous, or the requested real-run authorization is missing.
 
-## Submit and monitor
+On the Potsdam cluster, real study outputs must live beneath
+`/work/ojedamarin/Projects/LanguageGames/MA-CC/results`, never beneath the home
+repository. Put the authoritative absolute destination in
+`study.yaml: execution.results_root` and guard it with
+`execution.require_results_under`. Before submission, verify the resolved
+study root and the generated manifest output paths. SLURM stdout/stderr must use
+absolute paths under `<study-result-root>/logs`; never rely on Slurm's relative
+`slurm-%A_%a.out/.err` default in the repository working directory.
+
+## Plan, submit, and monitor
+
+Treat the scientific cell as the aggregation unit and the episode as the
+computational unit. Execution topology must not change cell IDs, overrides,
+episode seeds, canonical observations, or estimator results.
+
+Before submission, inspect the generated execution plan and require it to:
+
+- expand workload independently of YAML-file boundaries;
+- use cell or cell-bundle shards when config-level tasks underuse the cluster;
+- report nodes/tasks, CPUs per task, episode slots, request concurrency, RPM,
+  memory, time limit, and expected wall time;
+- derive the array throttle from a declared provider RPM target and planning
+  latency, with a configurable node ceiling;
+- reject a requested throttle above the calculated provider-safe bound;
+- request explicit SLURM CPU, memory, and time resources;
+- ensure conservative shard duration fits the SLURM time limit.
+
+For remote API workloads, optimize useful request throughput rather than CPU
+allocation alone. Each configured episode slot runs one episode at a time;
+provider concurrency remains an independent hard semaphore. Prefer a live,
+model-specific concurrency probe when available and keep large runs below the
+declared RPM target. Published RPM is a ceiling, not guaranteed throughput.
 
 For an authorized real run, use:
 
@@ -77,10 +109,11 @@ For an authorized real run, use:
 mas-cc study submit --config-dir <folder>
 ```
 
-Pass `--results-dir <study-result-root>` when the destination should be
-explicit. The command preflights every config again and submits one generic
-config array. Let `study.yaml` or the CLI throttle bound array concurrency; do
-not increase it without recalculating provider load.
+Pass `--results-dir <study-result-root>` when overriding a permitted
+destination. The command preflights every config again and submits one generic
+study array. `execution.mode: auto` should generate execution shards and an
+`execution_plan.json`; config-array mode remains a compatibility fallback.
+Do not increase a throttle without recalculating provider load.
 
 Monitor the returned job with the site's ordinary `squeue`/`sacct` tools and
 verify task exit states and run/cell seals. For a scheduler smoke, use a tiny

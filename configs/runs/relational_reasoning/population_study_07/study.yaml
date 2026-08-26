@@ -1,0 +1,23 @@
+study:
+  name: relational-population-study-07
+
+configs:
+  - study07_fine_beta_atlas.yaml
+  - study07_truth_aligned_b_theta.yaml
+
+execution:
+  # Identical automatic cell-array topology and provider-load policy to Study 06.
+  mode: auto
+  target_rpm: 900
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 18
+  cpus_per_task: 8
+  memory: 8G
+  time_limit: "04:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_07
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+
+analysis:
+  recipe: analysis.yaml

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Generic cell-array launcher. Scientific mapping and resources are supplied
+# by the generated execution manifest and sbatch options.
 #SBATCH --job-name=mas-cc-study
 # Site-safe fallback for direct sbatch use. `mas-cc study submit` overrides
 # these with the selected study root's absolute logs directory.
@@ -8,8 +10,8 @@
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "usage: run_config_array.job SUBMISSION_MANIFEST" >&2
+  echo "usage: run_study_cell_array.job EXECUTION_MANIFEST" >&2
   exit 2
 fi
 
-python -m mas_cc.studies.array_worker "$1"
+python -m mas_cc.studies.cell_worker "$1"

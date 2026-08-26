@@ -1,0 +1,168 @@
+# Study 07 fine-beta atlas: actuation strength b x policy gain beta.
+# Fixed: N=24, q=1, q_c=12, theta=0.5, ten rounds, Study-06 semantics.
+# Shape: 6 b x 6 beta x 4 matched worlds x 10 repetitions = 1,440 episodes.
+# Calls: 380,160 nominal; 401,760 expected; 760,320 conservative.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Index 2 is incorrect in every selected task: 0001, 0002, 0003, 0004.
+    target: 2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 12
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260822
+  repetitions: 10
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 850000
+  max_input_tokens: 4000000000
+  max_output_tokens: 600000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+# Study aggregation performs the predeclared offline estimator pass over pooled
+# canonical observations. Avoid duplicating the same expensive bootstrap here.
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study07-fine-beta-atlas
+  description: >-
+    Study 07 fine 6 x 6 actuation/gain atlas at N=24, q=1, q_c=12,
+    theta=0.5 over four matched L2/r6 worlds and ten repetitions per cell.
+  tags: [relational, population-study-07, fine-beta-atlas, b-beta, N24, q1, qc12, theta05, results-only]
+  metadata:
+    study: population_study_07
+    phase: fine_beta_atlas
+    design: control_efficiency_b_beta
+    population_rounds: 10
+    social_group_size: 1
+    sensor_sample_size: 12
+    sensing_fraction: 0.5
+    policy_threshold: 0.50
+    worlds: 4
+    repetitions: 10
+    cells: 144
+    episodes: 1440
+    nominal_provider_requests: 380160
+    expected_provider_requests: 401760
+    conservative_provider_requests: 760320
+    common_random_numbers_across_grid: false
+    crn_note: current grid seeding derives streams from cell index; matched task set is retained but cross-cell CRN is not claimed
+    primary_analysis_family:
+      - round_target_signed_response_share
+      - round_target_actuation_cmi
+      - eta_ir
+      - round_memory_target_actuation_cmi
+      - effective_affinity
+      - kinetic_compliance
+
+grid:
+  # Axis order is fixed for reproducibility. Theta remains fixed at 0.5.
+  control.options.intervention_budget: [4, 8, 12, 16, 20, 24]
+  control.options.beta: [0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+  game.options.task_id: [task_0001, task_0002, task_0003, task_0004]

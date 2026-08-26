@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -86,6 +86,7 @@ class SubmissionResult:
     job_id: str | None
     entries: tuple[SubmissionEntry, ...]
     command: tuple[str, ...]
+    execution_plan: Mapping[str, Any] | None = None
 
 
 def build_submission_entries(
@@ -226,7 +227,19 @@ def submit_study(
 
     spec = discover_study(config_dir)
     runner = subprocess.run if run is None else run
-    study_dir = Path(results_dir or (Path("results") / spec.name)).expanduser().resolve()
+    configured_results = spec.execution.get("results_root")
+    study_dir = Path(
+        results_dir or configured_results or (Path("results") / spec.name)
+    ).expanduser().resolve()
+    required_results_under = spec.execution.get("require_results_under")
+    if required_results_under is not None:
+        required_root = Path(str(required_results_under)).expanduser().resolve()
+        try:
+            study_dir.relative_to(required_root)
+        except ValueError as exc:
+            raise ValueError(
+                f"study results must be stored under {required_root}, got {study_dir}"
+            ) from exc
     entries = build_submission_entries(spec, study_dir)
 
     # Preflight in a temporary root so a failed member cannot leave a study that
@@ -250,20 +263,77 @@ def submit_study(
         shutil.copytree(preflight_root, provenance)
 
     manifest_path = write_submission_manifest(study_dir / "submission_manifest.csv", entries)
+    logs_dir = study_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_pattern = logs_dir / "slurm-%A_%a.out"
+    stderr_pattern = logs_dir / "slurm-%A_%a.err"
     (study_dir / "study_manifest.json").write_text(
         json.dumps(_study_manifest(spec, entries), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
-    script = Path(job_script or "scripts/Potsdam/SLURM/run_config_array.job").resolve()
+    mode = str(spec.execution.get("mode", "config_array"))
+    execution_plan: Mapping[str, Any] | None = None
+    execution_manifest: Path | None = None
+    if mode in {"auto", "cell_array"}:
+        from .execution import (
+            build_cell_execution_entries,
+            plan_cell_execution,
+            write_execution_manifest,
+        )
+
+        shards = build_cell_execution_entries(spec, entries)
+        plan = plan_cell_execution(spec, len(shards))
+        if throttle is not None:
+            if throttle < 1:
+                raise ValueError("SLURM array throttle must be a positive integer")
+            if throttle > plan.array_throttle:
+                raise ValueError(
+                    f"requested throttle {throttle} exceeds planned RPM-safe throttle "
+                    f"{plan.array_throttle}"
+                )
+            plan = replace(
+                plan,
+                array_throttle=throttle,
+                total_request_concurrency=throttle * plan.request_concurrency_per_shard,
+                total_episode_slots=throttle * plan.episode_slots_per_shard,
+                estimated_rpm=(
+                    throttle * plan.request_concurrency_per_shard * 60.0
+                    / plan.assumed_latency_seconds
+                ),
+            )
+        execution_plan = plan.to_dict()
+        execution_manifest = write_execution_manifest(
+            study_dir / "execution_manifest.csv", shards
+        )
+        (study_dir / "execution_plan.json").write_text(
+            json.dumps(execution_plan, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        script = Path(
+            job_script or "scripts/Potsdam/SLURM/run_study_cell_array.job"
+        ).resolve()
+        array = f"0-{len(shards) - 1}%{plan.array_throttle}"
+        command = (
+            "sbatch", f"--partition={plan.partition}", f"--qos={plan.qos}",
+            "--nodes=1", "--ntasks=1", f"--array={array}",
+            f"--cpus-per-task={plan.cpus_per_task}", f"--mem={plan.memory}",
+            f"--time={plan.time_limit}", f"--output={stdout_pattern}",
+            f"--error={stderr_pattern}", str(script),
+            str(execution_manifest),
+        )
+    else:
+        script = Path(job_script or "scripts/Potsdam/SLURM/run_config_array.job").resolve()
+        configured_throttle = spec.execution.get("throttle")
+        limit = throttle if throttle is not None else configured_throttle
+        if limit is not None and (isinstance(limit, bool) or int(limit) < 1):
+            raise ValueError("SLURM array throttle must be a positive integer")
+        array = f"0-{len(entries) - 1}" + ("" if limit is None else f"%{int(limit)}")
+        command = (
+            "sbatch", f"--array={array}", f"--output={stdout_pattern}",
+            f"--error={stderr_pattern}", str(script), str(manifest_path),
+        )
     if not script.is_file():
-        raise ValueError(f"SLURM config-array job script does not exist: {script}")
-    configured_throttle = spec.execution.get("throttle")
-    limit = throttle if throttle is not None else configured_throttle
-    if limit is not None and (isinstance(limit, bool) or int(limit) < 1):
-        raise ValueError("SLURM array throttle must be a positive integer")
-    array = f"0-{len(entries) - 1}" + ("" if limit is None else f"%{int(limit)}")
-    command = ("sbatch", f"--array={array}", str(script), str(manifest_path))
+        raise ValueError(f"SLURM study job script does not exist: {script}")
     started = _now()
     try:
         completed = runner(command, check=True, capture_output=True, text=True)
@@ -299,6 +369,7 @@ def submit_study(
                 "array": array,
                 "command": list(command),
                 "stdout": stdout,
+                "execution_plan": execution_plan,
             },
             indent=2,
             sort_keys=True,
@@ -306,7 +377,9 @@ def submit_study(
         + "\n",
         encoding="utf-8",
     )
-    return SubmissionResult(study_dir, manifest_path, job_id, entries, command)
+    return SubmissionResult(
+        study_dir, manifest_path, job_id, entries, command, execution_plan
+    )
 
 
 __all__ = [
