@@ -241,6 +241,8 @@ analysis:
     # I(N_k ; Y_k): how much the q_c = 12 sample tells the controller about
     # the population it is about to act on.
     - round_sensing_mi
+    - round_target_sensing_mi
+    - round_target_susceptibility
     - round_sensor_mae
     - round_sensor_mse
 
@@ -305,6 +307,7 @@ analysis:
     - round_susceptible_target_signed_response
     - round_kappa_target_signed_response
   options:
+    theoretical_reference: single_affinity_revised
     # ~35 s for the whole 200-round pilot at these settings - negligible next
     # to the run itself, so there is no reason to economize here.
     bootstrap_resamples: 1000

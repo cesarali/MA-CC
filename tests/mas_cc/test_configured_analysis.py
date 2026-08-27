@@ -8,6 +8,7 @@ from mas_cc.experiments.configured_analysis import (
     per_cell_reports_enabled,
     run_configured_analysis,
     run_configured_cell_analysis,
+    validate_configured_analysis,
 )
 from mas_cc.games.hidden_bench.imitation.analysis import INFORMATION_STATISTICS
 
@@ -82,6 +83,27 @@ def test_configured_analysis_rejects_unknown_statistics_before_reading_results(t
     config = replace(config, analysis=replace(config.analysis, estimators=("typo_mi",)))
     with pytest.raises(ValueError, match="unsupported.*typo_mi"):
         run_configured_analysis(config, tmp_path)
+
+
+def test_relational_theoretical_reference_is_validated_before_launch():
+    spec = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/population_study_03/"
+        "relational_population_study03_g_stochastic_feedback_pilot_mock.yaml",
+        environment={},
+    )
+    config = spec.base if isinstance(spec, GridSpec) else spec
+    assert config.analysis.options["theoretical_reference"] == (
+        "single_affinity_revised"
+    )
+    invalid = replace(
+        config,
+        analysis=replace(
+            config.analysis,
+            options={**dict(config.analysis.options), "theoretical_reference": "typo"},
+        ),
+    )
+    with pytest.raises(ValueError, match="theoretical_reference.*single_affinity_revised"):
+        validate_configured_analysis(invalid)
 
 
 def test_cell_analysis_keeps_only_parameter_named_markdown_reports(tmp_path, monkeypatch):

@@ -437,11 +437,12 @@ async def run_relational_imitation_round_feedback_game(
     # `recommendation_only` does, instead of failing here.
     controller_fact_id: str | None = None
     message_mode = str(getattr(resolved_control, "message_mode", RECOMMENDATION_ONLY))
+    evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
+    state = game.initialize(config.game, config.execution.seed)
     resolver = getattr(resolved_control, "resolve_fact_id", None)
     if resolver is not None:
-        controller_fact_id = resolver(game.load_task(config.game))
+        controller_fact_id = resolver(game.load_task(config.game), config.execution.seed)
 
-    state = game.initialize(config.game, config.execution.seed)
     _notify(
         observer,
         "event",
@@ -604,6 +605,8 @@ async def run_relational_imitation_round_feedback_game(
                 "intervention_budget": intervention_budget,
                 "controlled_positions_hash_or_id": schedule_hash,
                 "controller_message_mode": message_mode,
+                "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
+                "controller_evidence_strategy": evidence_strategy,
                 "controller_episode_fact_id": controller_fact_id,
             }
             transition = game.apply_round_event_transition(
@@ -705,6 +708,19 @@ async def run_relational_imitation_round_feedback_game(
             "controller_advocate_probability": probability,
             "controller_advocacy_probability": probability,
             "controller_message_mode": message_mode,
+            "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
+            "controller_evidence_strategy": evidence_strategy,
+            "epistemic_condition": (
+                None if evidence_strategy is None else
+                f"{rules.receiver_epistemic_disposition}_{evidence_strategy}"
+            ),
+            "derived_epistemic_condition": (
+                None if evidence_strategy is None else
+                f"{rules.receiver_epistemic_disposition}_{evidence_strategy}"
+            ),
+            "controller_target_semantics": (
+                None if resolved_control is None else str(getattr(resolved_control, "target", None))
+            ),
             "controller_fact_id": round_controller_fact,
             "controller_episode_fact_id": controller_fact_id,
             "controller_fact_text": (

@@ -104,7 +104,17 @@ storage:
   overwrite: true
 
 analysis:
-  enabled: false
+  enabled: true
+  estimators:
+    - round_target_sensing_mi
+    - round_target_actuation_cmi
+    - round_target_susceptibility
+  options:
+    theoretical_reference: single_affinity_revised
+    bootstrap_resamples: 10
+    null_permutations: 10
+    confidence: 0.95
+    seed: 20260827
 
 metrics:
   enabled: true

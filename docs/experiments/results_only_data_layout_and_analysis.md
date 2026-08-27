@@ -112,8 +112,9 @@ marked explicitly.
     controller_action_summary.csv
     episode_epistemic_regime.csv
     round_epistemic_trajectory.csv
-    theory_comparison.csv
-    theory_state_curves.csv
+    single_affinity_theory_comparison.csv
+    matched_qvoter_null.csv               # only when explicitly requested
+    matched_qvoter_null_state_curves.csv  # only when explicitly requested
     currents/
       episode_currents.csv
       cell_current_summary.csv
@@ -321,31 +322,31 @@ scientific table is assembled. Its main files are:
 | File | How to use it |
 | --- | --- |
 | `round_information_estimates.csv` | Primary machine-readable table. Rows are keyed by `cell_id` and statistic, plus a `pooled` slice. Includes estimator variants, bootstrap interval, null summary, units, and statistic-matched support fields. |
-| `round_information_estimates.md` | Human-readable version of the estimates, with the matched classical theory section appended. |
+| `round_information_estimates.md` | Human-readable version of the empirical estimates. |
 | `round_information_nulls.csv` | Individual permutation/randomization-null draws. Use for null-distribution inspection, not just the stored mean. |
 | `round_support_diagnostics.csv` | Cell-wide support overview: conditioning coverage, dual-action support, and sparsity. Read before interpreting CMI. |
 | `controller_action_summary.csv` | Advocate/no-op counts and frequencies, mean policy probability, and controlled-position summaries. |
 | `episode_epistemic_regime.csv` | One row per episode with epistemic-regime and controller-action summaries. |
 | `round_epistemic_trajectory.csv` | Tidy round-level analysis table with controller action, population changes, epistemic state/bins, and resource coordinates. |
-| `theory_comparison.csv` | One matched finite-`N` q-voter comparison per cell, including empirical residuals and ratios. |
-| `theory_state_curves.csv` | State-resolved empirical/theory curves underlying the comparison. |
+| `single_affinity_theory_comparison.csv` | Revised single-affinity values beside empirical estimates, including canonical theory provenance. |
+| `matched_qvoter_null.csv` | Optional explicitly selected classical q-voter diagnostic; never a revised-theory fallback. |
+| `matched_qvoter_null_state_curves.csv` | State-resolved curves for the optional classical null. |
 | `currents/episode_currents.csv` | Per-episode integrated-current quantities and consistency checks. |
 | `currents/cell_current_summary.csv` | Bootstrap summaries of empirical and theory currents by task/cell. |
 | `analysis_summary.json` | Compact audit/index: data counts, estimator settings, memory-support warnings, theory applicability, current-analysis results, and optional Comet status. |
 
 Each Study 04 row contains cells with three distinct actuation budgets. Its
-pooled empirical estimates are valid descriptive calculations, but one pooled
-classical reference is not: `analysis_summary.json` and
-`theory_comparison.csv` mark the pooled theory row not applicable because it
-spans multiple controller parameter tuples. Use the **per-cell** theory rows.
+pooled empirical estimates are valid descriptive calculations. Revised theory
+is resolved per physical cell; heterogeneous pooled groups do not receive a
+theory row because they span multiple controller parameter tuples. Use the
+**per-cell** theory rows.
 
 The three qc06/qc12/qc18 YAMLs produce three separate run directories. There
 is no automatic parent directory that merges all three processes. For the full
 3 x 3 sensing/actuation surface, concatenate the per-cell rows from the three
 runs and retain the source run ID and cell ID as provenance. The coordinates
-are available in the round trajectory and are re-emitted as `theory_qc`,
-`theory_sensing_fraction`, `theory_b`, and `theory_c` in
-`theory_comparison.csv`.
+remain in canonical observations and are attached to the standardized
+study-level `single_affinity_theory_comparison.parquet`.
 
 ## 6. Running, resuming, and re-analyzing
 

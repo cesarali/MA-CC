@@ -1,4 +1,4 @@
-# Study 08A: epistemic prompt class x actuation strength under wrong control.
+# Study 08A: factorized epistemic condition x actuation under wrong control.
 # Fixed: N=24, q=1, q_c=12, theta=0.5, beta=4, ten rounds.
 # Shape: 4 prompts x 6 b x 4 matched worlds x 10 repetitions = 960 episodes.
 # Calls: 253,440 nominal; 267,840 expected; 506,880 conservative.
@@ -37,7 +37,7 @@ game:
     social_group_size: 1
     vote_visibility: public
     prompt_version: 1
-    epistemic_prompt_class: strategic_uncertainty
+    receiver_epistemic_disposition: vigilant
     stop_on_consensus: false
     invalid_response_retries: 1
     expected_validation_failure_rate: 0.05
@@ -55,7 +55,8 @@ control:
     beta: 4.0
     intervention_budget: 12
     advocacy_schedule: soft
-    message_mode: recommendation_only
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: neutral
 
 execution:
   seed: 20260822
@@ -132,7 +133,7 @@ observability:
 experiment:
   name: relational-study08-wrong-prompt-b-atlas
   description: >-
-    Study 08 wrong-control prompt-class x actuation atlas at N=24, q=1,
+    Study 08 wrong-control receiver x evidence-strategy x actuation atlas at N=24, q=1,
     q_c=12, theta=0.5, beta=4 over four matched worlds and ten repetitions.
   tags: [relational, population-study-08, wrong-control, prompt-class, b-atlas, N24, q1, qc12, beta4, results-only]
   metadata:
@@ -140,6 +141,7 @@ experiment:
     phase: wrong_prompt_atlas
     design: epistemic_prompt_control_efficiency
     controller_semantics: wrong
+    target_semantics: "false"
     population_rounds: 10
     social_group_size: 1
     sensor_sample_size: 12
@@ -154,16 +156,26 @@ experiment:
     conservative_provider_requests: 506880
     common_random_numbers_across_grid: true
     crn_note: all prompt, budget, and task cells share repetition-index streams; the truth block uses the same grid order and root seed
+    mandatory_message_mode: recommendation_plus_fact
+    # Names what the offline analysis genuinely computes, in the coordinates of
+    # the revised single-affinity theory. `round_target_susceptibility` is the
+    # canonical chi (target FRACTION, state matched on target_count_before);
+    # the magnetization response and the marginal share response remain
+    # available as diagnostics but are not this family.
     primary_analysis_family:
-      - round_target_signed_response_share
+      - round_target_susceptibility
       - round_target_actuation_cmi
       - eta_ir
-      - round_memory_target_actuation_cmi
       - effective_affinity
       - kinetic_compliance
+      - controlled_current
+      - target_sensing_information_nats
+      - eta_th
+      - round_memory_target_actuation_cmi
 
 grid:
   # Axis order is identical in both semantic blocks for paired seeds.
-  game.options.epistemic_prompt_class: [naive, distributed_information, strategic_uncertainty, evidence_calibrated]
+  game.options.receiver_epistemic_disposition: [naive, vigilant]
+  control.options.controller_evidence_strategy: [neutral, strategic]
   control.options.intervention_budget: [4, 8, 12, 16, 20, 24]
   game.options.task_id: [task_0001, task_0002, task_0003, task_0004]

@@ -3,8 +3,8 @@
 This document describes the `relational_imitation_round_feedback` game and the
 measurement plan used by
 `configs/runs/relational_reasoning/population_study_04/`. It covers the frozen
-task data, episode generation, runtime implementation, all 30 configured
-analysis statistics, matched classical theory, current estimators, and output
+task data, episode generation, runtime implementation, all 32 configured
+analysis statistics, revised single-affinity theory, current estimators, and output
 artifacts.
 
 The authoritative implementations are:
@@ -21,10 +21,11 @@ The authoritative implementations are:
   [`analysis.py`](../../../../src/mas_cc/games/hidden_bench/imitation_round_feedback/analysis.py)
   and generic [`estimators.py`](../../../../src/mas_cc/analysis/estimators.py)
   for direct-counting MI/CMI, bootstrap, null, and overlap diagnostics;
-- [`theory.py`](../../../../src/mas_cc/games/relational_reasoning/imitation_round_feedback/theory.py)
+- [`theory_revised.py`](../../../../src/mas_cc/games/relational_reasoning/imitation_round_feedback/theory_revised.py)
+  for the canonical deterministic single-affinity reference;
+- [`matched_qvoter.py`](../../../../src/mas_cc/games/relational_reasoning/imitation_round_feedback/matched_qvoter.py)
   and [`current.py`](../../../../src/mas_cc/games/relational_reasoning/imitation_round_feedback/current.py)
-  for the matched finite-`N` q-voter reference and finite-horizon current
-  analysis.
+  for the optional classical null and behavioral/revised-current analysis.
 
 ## 1. Basic explanation
 
@@ -273,8 +274,9 @@ retained because the offline analysis can be rerun without provider calls.
 | `runtime.py` | Runs the two clocks, derives RNG streams, senses, selects the round action, schedules exact-budget control, executes calls, and emits micro/round records. |
 | `metrics.py` | Reuses vote observables and adds exact knowledge observables and streaming metric adapters. |
 | relational `analysis.py` | Converts relational round rows to shared `RoundEvent`s; adds epistemic conditioning; runs per-cell and pooled analysis; writes theory comparisons. |
-| shared round `analysis.py` | Defines all 30 statistic names, direct-counting estimates, whole-episode bootstrap, policy/sensor nulls, entropy bounds, and support diagnostics. |
-| `theory.py` | Computes the deterministic matched finite-`N` q-voter kernels and transfer entropy. |
+| shared round `analysis.py` | Defines all 32 statistic names, direct-counting estimates, whole-episode bootstrap, policy/sensor nulls, entropy bounds, and support diagnostics. |
+| `theory_revised.py` | Canonical deterministic single-affinity theory and finite-horizon thermodynamics. |
+| `matched_qvoter.py` | Optional classical matched q-voter null; never a revised-theory fallback. |
 | `current.py` | Computes repeated-episode net target current and exact finite-horizon theory moments. |
 
 ## 6. Core recorded metrics
@@ -365,7 +367,19 @@ These are observational channel estimates under the logged policy, not a
 claim that CMI alone proves a causal effect. Sparse conditioning and action
 overlap must be checked alongside every estimate.
 
-## 8. All 30 configured analysis statistics
+Analysis-enabled relational configs select theory by stable scientific name:
+
+```yaml
+analysis:
+  options:
+    theoretical_reference: single_affinity_revised  # canonical default
+```
+
+`none` disables theory while retaining empirical estimates.
+`matched_qvoter_null` enables the separately named classical diagnostic.
+Unknown values fail preflight; arbitrary Python module paths are not accepted.
+
+## 8. All 32 configured analysis statistics
 
 Notation used below:
 
@@ -519,10 +533,12 @@ of a task/cell, the empirical estimators are:
 
 Zero mean and zero variance are left explicitly undefined or infinite as
 appropriate and accompanied by degeneracy flags; no smoothing is introduced.
-Whole-episode bootstrap intervals use the same 1,000-resample setting. Exact
-finite-horizon q-voter moments are computed from the matched closed-loop kernel
-and the empirical distribution of initial target counts, then reported beside
-empirical-minus-theory differences.
+Whole-episode bootstrap intervals use the same 1,000-resample setting. When
+microscopic controlled transitions identify finite `h` and `gamma`, revised
+single-affinity finite-horizon moments are computed in the isolated controlled
+layer and reported with explicit field names. Behavioral terminal current also
+contains ordinary social dynamics and is not the response-based controlled
+`J_c`.
 
 ## 12. Output files and how to read them
 
@@ -539,16 +555,17 @@ Repeat for `qc12` and `qc18`. The analysis is provider-free.
 | File | Contents |
 |---|---|
 | `round_information_estimates.csv` | all configured estimates, estimator variants, bootstrap intervals, null summaries, entropy ceilings, and support fields, per cell plus pooled |
-| `round_information_estimates.md` | compact estimate table followed by matched-theory interpretation |
+| `round_information_estimates.md` | compact empirical estimate table |
 | `round_information_nulls.csv` | one row per MI/CMI null randomization |
 | `round_support_diagnostics.csv` | overall per-cell and pooled support summaries |
 | `controller_action_summary.csv` | action counts, advocacy frequency/probability, and realized controlled positions |
 | `episode_epistemic_regime.csv` | per-episode knowledge regime and fact-exposure summaries |
 | `round_epistemic_trajectory.csv` | analysis-ready round sequence with target/truth counts, `kappa`, `phi`, `E_k`, and bin labels |
-| `theory_comparison.csv` | per-cell empirical/classical comparison and scientific coordinates |
-| `theory_state_curves.csv` | state-resolved sensing policy, response, local TE, and occupancy curves |
+| `single_affinity_theory_comparison.csv` | per-cell empirical/revised-theory comparison with canonical module/API provenance |
+| `matched_qvoter_null.csv` | optional, explicitly selected classical q-voter diagnostic |
+| `matched_qvoter_null_state_curves.csv` | state-resolved curves for that optional classical diagnostic only |
 | `currents/episode_currents.csv` | one net target current per episode and optional microscopic telescoping check |
-| `currents/cell_current_summary.csv` | empirical and exact-theory current moments, ratios, differences, and intervals |
+| `currents/cell_current_summary.csv` | empirical behavioral current and explicitly named revised single-affinity current fields when available |
 | `currents/**/current_analysis.md` | human-readable current report per task/cell |
 | `analysis_summary.json` | settings, counts, theory summaries, epistemic support warnings, current summaries, and Comet export status |
 
@@ -560,7 +577,8 @@ A practical reading order is:
    and null means.
 4. Use signed responses to determine direction.
 5. Compare unconditioned, exact-memory, joint-bin, and scalar-bin target CMIs.
-6. Compare the target CMI and signed response with the matched classical row.
+6. Compare empirical quantities with revised single-affinity rows; consult the
+   matched q-voter only when that classical null was explicitly requested.
 7. Use current mean/variance/SNR metrics for the finite-horizon repeated-episode
    outcome.
 

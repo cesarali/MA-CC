@@ -22,6 +22,7 @@ import json
 import math
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from mas_cc.games.hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
@@ -33,11 +34,11 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import 
     empirical_policy_curve,
     empirical_round_occupancy,
     finite_horizon_occupancy,
-    theory_comparison,
-    theory_parameters_for,
-    theory_state_curves,
+    matched_qvoter_comparison,
+    matched_qvoter_parameters_for,
+    matched_qvoter_state_curves,
 )
-from mas_cc.games.relational_reasoning.imitation_round_feedback.theory import (
+from mas_cc.games.relational_reasoning.imitation_round_feedback.matched_qvoter import (
     TheoryParameters,
     advocacy_probability_curve,
     advocate_round_kernel,
@@ -386,7 +387,7 @@ def test_a_run_without_a_controller_has_no_matched_protocol():
     record["controller_beta"] = None
     record["sensor_sample_size"] = None
     assert theory_parameters_from_record(record) is None
-    parameters, reason = theory_parameters_for(
+    parameters, reason = matched_qvoter_parameters_for(
         [adapt_relational_round_record(record, cell_id="cell")]
     )
     assert parameters is None
@@ -404,7 +405,7 @@ def test_cells_with_different_protocols_refuse_a_single_reference():
     first = _record(episode="a", index=0, action=ADVOCATE_TARGET)
     second = _record(episode="b", index=0, action=ADVOCATE_TARGET)
     second["intervention_budget"] = 6
-    parameters, reason = theory_parameters_for(
+    parameters, reason = matched_qvoter_parameters_for(
         [
             adapt_relational_round_record(first, cell_id="cell"),
             adapt_relational_round_record(second, cell_id="cell"),
@@ -465,7 +466,7 @@ def test_the_empirical_response_aggregate_is_the_pipelines_signed_response():
         _event(episode="b", index=1, action=NO_OP,
                before=(0, 16, 8), after=(0, 17, 7)),
     ]
-    comparison, _ = theory_comparison(
+    comparison, _ = matched_qvoter_comparison(
         rows, [], cell_id="cell", bootstrap_resamples=0, confidence=0.95, seed=1
     )
     expected = _signed_response(
@@ -488,7 +489,7 @@ def test_the_exact_theory_curve_is_never_bootstrapped():
         _event(episode="a", index=0, action=ADVOCATE_TARGET, before=(0, 20, 4)),
         _event(episode="b", index=0, action=NO_OP, before=(0, 16, 8)),
     ]
-    reference = classical_reference(theory_parameters_for(rows)[0])
+    reference = classical_reference(matched_qvoter_parameters_for(rows)[0])
     before = reference.local_te.copy()
     subsets = ([rows[0]], [rows[1]], rows, rows + rows)
     occupancies = {
@@ -514,7 +515,7 @@ def test_an_open_loop_run_is_marked_non_identifiable_but_still_compared():
         _event(episode="a", index=index, action=ADVOCATE_TARGET)
         for index in range(4)
     ]
-    comparison, curves = theory_comparison(
+    comparison, curves = matched_qvoter_comparison(
         rows, [], cell_id="cell", bootstrap_resamples=0, confidence=0.95, seed=1
     )
     assert comparison["theory_applicable"] is True
@@ -531,8 +532,8 @@ def test_the_state_curves_cover_every_state_and_carry_their_support():
         _event(episode="a", index=0, action=ADVOCATE_TARGET, before=(0, 20, 4)),
         _event(episode="a", index=1, action=NO_OP, before=(0, 20, 4)),
     ]
-    reference = classical_reference(theory_parameters_for(rows)[0])
-    curves = theory_state_curves(rows, reference, cell_id="cell")
+    reference = classical_reference(matched_qvoter_parameters_for(rows)[0])
+    curves = matched_qvoter_state_curves(rows, reference, cell_id="cell")
     assert len(curves) == 25
     assert [row["n_target"] for row in curves] == list(range(25))
     visited = next(row for row in curves if row["n_target"] == 4)
@@ -550,8 +551,8 @@ def test_the_state_curves_cover_every_state_and_carry_their_support():
 
 def test_the_q1_closed_form_column_matches_the_kernel_column():
     rows = [_event(episode="a", index=0, action=ADVOCATE_TARGET)]
-    reference = classical_reference(theory_parameters_for(rows)[0])
-    curves = theory_state_curves(rows, reference, cell_id="cell")
+    reference = classical_reference(matched_qvoter_parameters_for(rows)[0])
+    curves = matched_qvoter_state_curves(rows, reference, cell_id="cell")
     for row in curves:
         assert row["delta_mu_theory_q1_closed_form"] == pytest.approx(
             row["delta_mu_theory"], abs=1e-12
@@ -617,16 +618,34 @@ def test_the_existing_mi_outputs_are_identical_with_and_without_theory(tmp_path)
             theory_comparison_enabled=enabled,
         )
         frames[enabled] = pd.read_csv(destination / "round_information_estimates.csv")
+        if enabled:
+            assert (destination / "single_affinity_theory_comparison.csv").is_file()
+        else:
+            assert not (destination / "single_affinity_theory_comparison.csv").exists()
     pd.testing.assert_frame_equal(frames[False], frames[True])
 
 
-def test_the_analysis_writes_theory_beside_the_mi_results_by_default(tmp_path):
-    """Section 20: one command, both halves, no extra flag.
+def test_matched_qvoter_is_opt_in_and_uses_a_separate_namespace(tmp_path):
+    run = _write_run(tmp_path / "run")
+    destination = tmp_path / "analysis"
+    summary = analyze_relational_imitation_round_feedback(
+        run,
+        destination,
+        bootstrap_resamples=0,
+        null_permutations=0,
+        theoretical_reference="matched_qvoter_null",
+    )
+    assert (destination / "matched_qvoter_null.csv").is_file()
+    assert (destination / "matched_qvoter_null_state_curves.csv").is_file()
+    assert not (destination / "single_affinity_theory_comparison.csv").exists()
+    assert all(
+        row["reference"] == "matched_qvoter_classical_null"
+        for row in summary["matched_qvoter_classical_null"]
+    )
 
-    The classical reference is post-processing, not an optional study. A
-    completed run should not be able to produce an information number without
-    the matched classical number arriving in the same bundle.
-    """
+
+def test_the_analysis_writes_revised_reference_or_unavailable_by_default(tmp_path):
+    """The default never substitutes the matched q-voter for revised theory."""
 
     run = _write_run(tmp_path / "run")
     destination = tmp_path / "analysis"
@@ -634,30 +653,19 @@ def test_the_analysis_writes_theory_beside_the_mi_results_by_default(tmp_path):
         run, destination, bootstrap_resamples=25, null_permutations=25, seed=3
     )
 
-    assert (destination / "theory_comparison.csv").is_file()
-    assert (destination / "theory_state_curves.csv").is_file()
-
-    # The theory section lands in the SAME report as the MI table, not in a
-    # separate document, and the MI table it was appended to is still there.
+    table = destination / "single_affinity_theory_comparison.csv"
+    assert table.is_file()
+    assert not (destination / "theory_comparison.csv").exists()
+    assert not (destination / "matched_qvoter_null.csv").exists()
     report = (destination / "round_information_estimates.md").read_text()
     assert "# Round feedback information estimates" in report
-    assert "MATCHED CLASSICAL REFERENCE" in report
-    assert "target-count coarse graining" in report
-    assert "[NOT an efficiency]" in report
-    assert "theory_state_curves.csv" in report
-
-    entry = next(
-        row for row in summary["theory_comparison"] if row["cell_id"] == "cell-0000"
-    )
-    assert entry["applicable"] is True
-    assert entry["parameters"] == {
-        "N": 24, "q": 1, "q_c": 12, "b": 12, "c": 0.5, "beta": 4.0, "theta": 0.5,
+    frame = pd.read_csv(table)
+    assert set(frame["reference"]) == {"single_affinity_revised"}
+    assert set(frame["theory_module"]) == {
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.theory_revised"
     }
-    assert math.isfinite(entry["theory_te_emp_occ_bits"])
-    assert entry["delta_te_bits"] == pytest.approx(
-        entry["empirical_target_cmi_bits"] - entry["theory_te_emp_occ_bits"]
-    )
-    assert summary["theory_state_coarse_graining"] == "target_vs_not_target"
+    assert not frame["available"].any()
+    assert summary["theoretical_reference"] == "single_affinity_revised"
 
 
 def test_the_report_declines_rather_than_inventing_a_reference(tmp_path):
@@ -687,8 +695,7 @@ def test_the_report_declines_rather_than_inventing_a_reference(tmp_path):
         null_permutations=10,
         seed=1,
     )
-    entry = summary["theory_comparison"][0]
-    assert entry["applicable"] is False
-    assert "controller" in entry["skip_reason"]
-    report = (destination / "round_information_estimates.md").read_text()
-    assert "skipped:" in report
+    entry = summary["single_affinity_theory_comparison"][0]
+    assert entry["available"] is False
+    assert "identify a finite h" in entry["reason"]
+    assert entry["reference"] == "single_affinity_revised"

@@ -78,7 +78,11 @@ _SIGNED_RESPONSE_SOURCE: Mapping[str, str] = dict(
     zip(ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS, ROUND_MEMORY_STATISTICS, strict=True)
 )
 _SHARE_RESPONSE_STATISTICS = frozenset(
-    ("round_target_signed_response_share", *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS)
+    (
+        "round_target_signed_response_share",
+        "round_target_susceptibility",
+        *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS,
+    )
 )
 """Everything read off `delta_p_ctrl`, which not every game records."""
 ROUND_DIAGNOSTIC_STATISTICS = (
@@ -101,6 +105,27 @@ ROUND_DIAGNOSTIC_STATISTICS = (
 """Diagnostics on a FIXED conditioning. The augmented-conditioning family
 carries its own diagnostics next to its own CMIs, in
 `ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS`."""
+ROUND_SINGLE_AFFINITY_STATISTICS = (
+    "round_target_susceptibility",
+    "round_target_sensing_mi",
+)
+"""The two statistics whose definition is fixed by the single-affinity theory.
+
+`round_target_susceptibility` is the canonical `chi(n)` of that theory: the
+state-matched difference of mean target-*fraction* changes,
+`E[dx | ADVOCATE, n] - E[dx | NO_OP, n]` with `dx = (n_{k+1}-n_k)/N`.  It is
+NOT `round_target_signed_actuation`, which measures the same difference in
+aligned-magnetization units and is therefore larger by `K/(K-1)`.  The
+theory's Pinsker bound is stated in target-fraction units, so only this one
+may enter `eta_ir`.
+
+`round_target_sensing_mi` is `I(n_Z,k ; Y_Z,k)`, the *scalar* target sensing
+channel - how much the controller's finite sample tells it about the target
+count alone.  `round_sensing_mi` is the full K-option vector channel
+`I(N_k ; Y_k)` and is a different, larger quantity; the single-affinity
+`I_sens` is the scalar one.  Reported in bits like every other direct-counting
+estimate here; the nats-valued thermodynamic `I_sens` is a derived quantity
+built from the exact sensor kernel, not from this count."""
 # Appended, not interleaved: `round_information_analysis` seeds each statistic's
 # bootstrap from `seed + name_index`, so inserting a name anywhere but the end
 # would silently move every later statistic's resampling stream.
@@ -109,6 +134,7 @@ ROUND_ANALYSIS_STATISTICS = (
     *ROUND_DIAGNOSTIC_STATISTICS,
     *ROUND_MEMORY_STATISTICS,
     *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS,
+    *ROUND_SINGLE_AFFINITY_STATISTICS,
 )
 ROUND_ACTUATION_STATISTICS = (
     *ROUND_INFORMATION_STATISTICS[1:],
@@ -116,9 +142,32 @@ ROUND_ACTUATION_STATISTICS = (
 )
 """Everything that conditions on a current state and admits the policy null."""
 
-_BITS_STATISTICS = frozenset(ROUND_INFORMATION_STATISTICS) | frozenset(
-    ROUND_MEMORY_STATISTICS
+_BITS_STATISTICS = (
+    frozenset(ROUND_INFORMATION_STATISTICS)
+    | frozenset(ROUND_MEMORY_STATISTICS)
+    | frozenset({"round_target_sensing_mi"})
 )
+_RESPONSE_UNITS: Mapping[str, str] = {
+    # Read off `delta_p_ctrl`: a change in the TARGET FRACTION `n_Z/N`.
+    "round_target_susceptibility": "target_fraction_per_cycle",
+    "round_target_signed_response_share": "target_fraction_per_cycle",
+    **{
+        name: "target_fraction_per_cycle"
+        for name in ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS
+    },
+    # Read off `delta_m_*`: the same motion in ALIGNED MAGNETIZATION,
+    # `m = (K p - 1)/(K - 1)`, and therefore larger by `K/(K-1)`.
+    "round_target_signed_actuation": "aligned_magnetization_per_cycle",
+    "round_truth_signed_actuation": "aligned_magnetization_per_cycle",
+    "round_order_signed_actuation": "aligned_magnetization_per_cycle",
+}
+"""The coordinate each signed response is measured in, spelled out.
+
+These all used to be labelled `dimensionless`, which is true but useless: it
+made a target-fraction response and a magnetization response indistinguishable
+on a plot axis or in a joined table, and those two differ by `K/(K-1)`.  Naming
+the coordinate is what stops the wrong one being fed to `eta_ir`."""
+
 MICRO_SLOT_STATISTICS = (
     "micro_slot_focal_actuation_cmi",
     "micro_slot_target_signed_response",
@@ -205,6 +254,43 @@ class RoundEvent:
         """A coarser, lower-dimensional companion to `memory_state`."""
 
         return self.augmented_state("conditioning_epistemic_state")
+
+    @property
+    def target_index(self) -> int | None:
+        """Where the controller target sits in the task's option list.
+
+        Needed to read the *scalar* target coordinate out of the vector-valued
+        sensor record.  Games that do not publish `possible_answers` return
+        `None` and the scalar sensing statistic is skipped for them.
+        """
+
+        options = self.event.get("possible_answers")
+        if options is None:
+            return None
+        labels = [str(item) for item in options]
+        for key in ("analysis_target", "controller_target", "correct_answer"):
+            label = self.event.get(key)
+            if label is not None and str(label) in labels:
+                return labels.index(str(label))
+        return None
+
+    @property
+    def sensor_target_count(self) -> int | None:
+        """`Y_Z,k` - sampled agents voting for the target, or `None`.
+
+        The theory's sensing channel is `n_Z -> Y_Z`, a scalar-to-scalar
+        channel.  `Y_k` is the whole sampled count vector; this is its target
+        component.  Adapters that already publish `sensor_target_count` win,
+        so a game can record it directly instead of being reconstructed here.
+        """
+
+        value = self.event.get("sensor_target_count")
+        if value is not None:
+            return int(value)
+        vector, index = self.Y_k, self.target_index
+        if vector is None or index is None or index >= len(vector):
+            return None
+        return int(vector[index])
 
     @property
     def order_before(self) -> int:
@@ -308,6 +394,13 @@ _ROUND_OUTCOME: Mapping[str, Callable[[RoundEvent], Hashable]] = {
 def _estimate_for(name: str, rows: Sequence[RoundEvent]) -> Estimate:
     if name == "round_sensing_mi":
         return mutual_information([row.N_k for row in rows], [row.Y_k for row in rows])
+    if name == "round_target_sensing_mi":
+        # The single-affinity sensing channel: scalar count in, scalar count
+        # out.  Deliberately NOT the full occupation/sensor vectors.
+        return mutual_information(
+            [row.target_before for row in rows],
+            [row.sensor_target_count for row in rows],
+        )
     outcome = _ROUND_OUTCOME.get(name)
     if outcome is None:
         raise ValueError(f"unknown round information statistic {name!r}")
@@ -463,6 +556,16 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             state=lambda row: row.order_before,
             delta=lambda row: float(row.event["delta_m_order"]),
         )
+    if name == "round_target_susceptibility":
+        # THE canonical chi of the revised single-affinity theory: matched on
+        # `n_Z,k` exactly like `round_target_actuation_cmi`, and measured in
+        # target-FRACTION units so it can be squared inside the Pinsker
+        # numerator without a hidden K/(K-1) rescaling.
+        return _signed_response(
+            controlled,
+            state=lambda row: row.target_before,
+            delta=lambda row: float(row.event["delta_p_ctrl"]),
+        )
     if name == "round_target_signed_response_share":
         # `E[dp_Z | ADVOCATE] - E[dp_Z | NO_OP]` in raw share units, unmatched:
         # a constant conditioning state collapses `_signed_response` to exactly
@@ -600,11 +703,12 @@ def round_information_analysis(
     null_rows: list[dict[str, Any]] = []
 
     for name_index, name in enumerate(names):
-        eligible = (
-            [row for row in rows if row.Y_k is not None]
-            if name == "round_sensing_mi"
-            else [row for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
-        )
+        if name == "round_sensing_mi":
+            eligible = [row for row in rows if row.Y_k is not None]
+        elif name == "round_target_sensing_mi":
+            eligible = [row for row in rows if row.sensor_target_count is not None]
+        else:
+            eligible = [row for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
         # A statistic that needs a state or a delta the game does not record
         # drops out here rather than raising, which is what keeps the augmented
         # conditioning and the share-unit responses inert on runs without them.
@@ -663,14 +767,22 @@ def round_information_analysis(
                 seed=seed + 100_000 * (name_index + 1),
             )
             null_type = "policy_conditional_randomization"
-        elif name == "round_sensing_mi":
+        elif name in {"round_sensing_mi", "round_target_sensing_mi"}:
             permuted_values = []
+            key = (
+                "sensor_count_vector"
+                if name == "round_sensing_mi"
+                else "sensor_target_count"
+            )
             for permutation in range(null_permutations):
                 rng = np.random.default_rng(seed + 100_000 * (name_index + 1) + permutation)
-                sensors = [row.Y_k for row in eligible]
+                sensors = [
+                    row.Y_k if name == "round_sensing_mi" else row.sensor_target_count
+                    for row in eligible
+                ]
                 order = rng.permutation(len(sensors))
                 shuffled = [
-                    replace(row, event={**dict(row.event), "sensor_count_vector": sensors[int(index)]})
+                    replace(row, event={**dict(row.event), key: sensors[int(index)]})
                     for row, index in zip(eligible, order, strict=True)
                 ]
                 permuted_values.append(
@@ -721,10 +833,11 @@ def round_information_analysis(
                 "null_mean": (
                     math.nan if not finite_null else float(np.mean(finite_null))
                 ),
-                "units": "bits" if (
-                    name in _BITS_STATISTICS
-                    or "entropy" in name
-                ) else "dimensionless",
+                "units": (
+                    "bits"
+                    if (name in _BITS_STATISTICS or "entropy" in name)
+                    else _RESPONSE_UNITS.get(name, "dimensionless")
+                ),
                 "bootstrap_unit": "episode",
                 "conditional_action_entropy_bits": entropy_ceiling,
                 "entropy_bound_satisfied": entropy_bound_satisfied,
@@ -1238,6 +1351,7 @@ __all__ = [
     "ROUND_MEMORY_STATISTICS",
     "ROUND_DIAGNOSTIC_STATISTICS",
     "ROUND_INFORMATION_STATISTICS",
+    "ROUND_SINGLE_AFFINITY_STATISTICS",
     "RoundEvent",
     "adapt_round_record",
     "analyze_hidden_bench_imitation_round_feedback",

@@ -208,9 +208,10 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
 
     expected_axes = [
         (
-            "game.options.epistemic_prompt_class",
-            ["naive", "distributed_information", "strategic_uncertainty", "evidence_calibrated"],
+            "game.options.receiver_epistemic_disposition",
+            ["naive", "vigilant"],
         ),
+        ("control.options.controller_evidence_strategy", ["neutral", "strategic"]),
         ("control.options.intervention_budget", [4, 8, 12, 16, 20, 24]),
         ("game.options.task_id", ["task_0001", "task_0002", "task_0003", "task_0004"]),
     ]
@@ -221,6 +222,9 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
     assert len(shards) == 192
     assert {cell.config.control.options["target"] for cell in wrong.cells} == {2}
     assert {cell.config.control.options["target"] for cell in truth.cells} == {"correct"}
+    assert {cell.config.control.options["message_mode"] for cell in wrong.cells + truth.cells} == {
+        "recommendation_plus_fact"
+    }
     assert {
         cell.config.experiment.metadata["common_random_numbers_across_grid"]
         for cell in wrong.cells + truth.cells
@@ -237,8 +241,36 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
         Path("configs/runs/relational_reasoning/population_study_06/analysis.yaml").read_text()
     )
     study08_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
-    for key in ("estimators", "resampling", "derived"):
-        assert study08_analysis[key] == study06_analysis[key]
+    assert study08_analysis["resampling"] == study06_analysis["resampling"]
+    # Study 08 keeps every Study 06 estimator so the two remain comparable, and
+    # adds the single-affinity pair on top. Study 06's own recipe is left alone:
+    # rewriting a finished study's estimator list would change what its already
+    # published numbers mean.
+    assert set(study06_analysis["estimators"]) <= set(study08_analysis["estimators"])
+    assert {"round_target_susceptibility", "round_target_sensing_mi"} <= set(
+        study08_analysis["estimators"]
+    )
+    assert study08_analysis["derived"] == [
+        "round_target_susceptibility",
+        "eta_ir",
+        "target_sensing_information_nats",
+        "controlled_current",
+        "affinity_weighted_current_nats",
+        "thermodynamic_control_expenditure_nats",
+        "eta_th",
+        "factorial_contrasts",
+    ]
+    assert study08_analysis["state_local"] == ["x", "x_phi", "x_kappa"]
+    required_plots = {
+        f"{target}_{metric}_{resolution}"
+        for target in ("truth", "false")
+        for metric in ("tpi", "chi", "eta")
+        for resolution in ("x_b", "x_phi", "x_kappa")
+    }
+    assert required_plots <= set(study08_analysis["plots"])
+    assert {"b24_tpi_profile", "b24_chi_profile", "b24_eta_profile"} <= set(
+        study08_analysis["plots"]
+    )
 
 
 def test_auto_submission_writes_execution_plan_and_explicit_resources(
@@ -541,7 +573,38 @@ def test_memory_phi_alias_is_target_history_plus_phi_conditioning():
     }
 
 
-def test_eta_ir_requires_identical_grouping_and_conditioning_resolution():
+def _double_round_event(cell_id, episode_id, round_index, action, before, after):
+    """A minimal stand-in with the attributes the derived builders read."""
+
+    event = {
+        "N": 4,
+        "episode_id": episode_id,
+        "target_count_before": before,
+        "target_count_after": after,
+        "delta_p_ctrl": (after - before) / 4,
+        "sensor_sample_size": 2,
+        "controller_action": action,
+    }
+    return SimpleNamespace(
+        cell_id=cell_id,
+        episode_id=episode_id,
+        round_index=round_index,
+        U_k=action,
+        target_before=before,
+        target_after=after,
+        N_k=(before, 4 - before),
+        event=event,
+    )
+
+
+def test_state_local_eta_ir_joins_on_identical_grouping_and_conditioning():
+    """The state-local eta_IR(n) uses the target-FRACTION response.
+
+    `round_target_signed_actuation` is the same difference in aligned
+    magnetization and is larger by K/(K-1); squaring it inside the Pinsker
+    numerator would inflate the result, so it is not an eligible dependency.
+    """
+
     grouping = json.dumps({"cell_id": "cell"}, sort_keys=True)
     target_state = _conditioning_json("round_target_actuation_cmi")
     marginal_state = _conditioning_json("round_target_signed_response_share")
@@ -559,30 +622,192 @@ def test_eta_ir_requires_identical_grouping_and_conditioning_resolution():
         }
 
     events = [
-        SimpleNamespace(cell_id="cell", U_k="ADVOCATE_TARGET"),
-        SimpleNamespace(cell_id="cell", U_k="NO_OP"),
+        _double_round_event("cell", "episode", 0, "ADVOCATE_TARGET", 2, 3),
+        _double_round_event("cell", "episode", 1, "NO_OP", 2, 2),
     ]
     mismatched = pd.DataFrame(
         [
             estimate("round_target_actuation_cmi", 0.5, target_state),
-            estimate("round_target_signed_actuation", 0.25, marginal_state),
-            estimate("round_target_signed_response_share", 99.0, target_state),
+            estimate("round_target_susceptibility", 0.25, marginal_state),
+            estimate("round_target_signed_actuation", 0.375, target_state),
         ]
     )
-    assert _derived("study", ["eta_ir"], mismatched, events, "hash").empty
+    state_local, _ = _derived("study", ["eta_ir"], mismatched, events, "hash")
+    assert state_local[state_local["metric"] == "eta_ir_state_local"].empty
 
     matched = mismatched.copy()
     matched.loc[
-        matched["metric"] == "round_target_signed_actuation", "conditioning_json"
+        matched["metric"] == "round_target_susceptibility", "conditioning_json"
     ] = target_state
-    result = _derived("study", ["eta_ir"], matched, events, "hash")
+    result, comparison = _derived("study", ["eta_ir"], matched, events, "hash")
+    # the family runs on these doubles, but a study double records no
+    # controlled micro-slots, so the theory column honestly refuses
+    assert bool(comparison["available"].iloc[0]) is False
+    result = result[result["metric"] == "eta_ir_state_local"]
     assert len(result) == 1
     expected = 2 * 0.5 * 0.5 * 0.25**2 / (math.log(2) * 0.5)
     assert result.iloc[0]["estimate"] == pytest.approx(expected)
     assert result.iloc[0]["grouping_json"] == grouping
     assert result.iloc[0]["conditioning_json"] == target_state
     dependencies = json.loads(result.iloc[0]["dependencies_json"])
-    assert dependencies["metrics"][1] == "round_target_signed_actuation"
+    assert dependencies["metrics"][1] == "round_target_susceptibility"
+    assert dependencies["response_coordinate"] == "target_fraction"
+
+
+def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_path):
+    """The acceptance run: one offline analysis, no provider calls beyond the mock.
+
+    Checks the things a reader of the output table has to be able to trust -
+    that `eta_ir` is the occupancy-weighted one and not the legacy
+    magnetization-scaled value, that `eta_th` exists as a real column with its
+    two terms beside it, that `cell_current` and the full-vector sensing MI are
+    still present but are NOT what the thermodynamic quantities were built
+    from, and that every derived row says in machine-readable form what was
+    done to produce it.
+    """
+
+    raw = yaml.safe_load(
+        Path(
+            "configs/runs/relational_reasoning/"
+            "relational_imitation_round_feedback_controlled_smoke.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    raw["storage"]["overwrite"] = False
+    raw["grid"] = {"control.options.intervention_budget": [2, 4]}
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    (config_dir / "grid.yaml").write_text(
+        yaml.safe_dump(raw, sort_keys=False), encoding="utf-8"
+    )
+    (config_dir / "study.yaml").write_text(
+        "study: {name: single-affinity-smoke}\nconfigs: [grid.yaml]\n"
+        "execution: {mode: auto, target_rpm: 60, assumed_latency_seconds: 1}\n",
+        encoding="utf-8",
+    )
+    analysis_recipe = config_dir / "analysis.yaml"
+    analysis_recipe.write_text(
+        yaml.safe_dump(
+            {
+                "estimators": [
+                    "round_sensing_mi",
+                    "round_target_sensing_mi",
+                    "round_target_actuation_cmi",
+                    "round_target_susceptibility",
+                    "round_target_signed_actuation",
+                    "cell_current",
+                    "effective_affinity",
+                    "kinetic_compliance",
+                ],
+                "resampling": {
+                    "bootstrap_resamples": 4,
+                    "null_permutations": 1,
+                    "confidence": 0.95,
+                    "seed": 7,
+                },
+                "derived": [
+                    "round_target_susceptibility",
+                    "eta_ir",
+                    "target_sensing_information_nats",
+                    "controlled_current",
+                    "affinity_weighted_current_nats",
+                    "thermodynamic_control_expenditure_nats",
+                    "eta_th",
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    spec = discover_study(config_dir)
+    study_dir = tmp_path / "study"
+    submissions = build_submission_entries(spec, study_dir, git_commit="test")
+    write_submission_manifest(study_dir / "submission_manifest.csv", submissions)
+    shards = build_cell_execution_entries(spec, submissions)
+    execution_manifest = write_execution_manifest(
+        study_dir / "execution_manifest.csv", shards
+    )
+    (study_dir / "study_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "study_id": spec.name,
+                "analysis_recipe": str(analysis_recipe),
+                "expected_config_count": 1,
+                "expected_cell_count": 2,
+                "expected_episode_count": 2,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert cell_worker_main([str(execution_manifest), "0"]) == 0
+    assert cell_worker_main([str(execution_manifest), "1"]) == 0
+    aggregate_study(study_dir)
+
+    tables = study_dir / "analysis" / "tables"
+    primary = pd.read_parquet(tables / "primary_estimates.parquet")
+    derived = pd.read_parquet(tables / "derived_observables.parquet")
+
+    # --- response ---------------------------------------------------------
+    chi = primary[primary["metric"] == "round_target_susceptibility"]
+    assert not chi.empty
+    assert json.loads(chi.iloc[0]["conditioning_json"]) == {
+        "state": ["target_count_before"]
+    }
+    # the legacy magnetization response is retained, not replaced
+    assert not primary[primary["metric"] == "round_target_signed_actuation"].empty
+    # so is the full-vector sensing MI and the terminal behavioural current
+    assert not primary[primary["metric"] == "round_sensing_mi"].empty
+    assert not primary[primary["metric"] == "cell_current"].empty
+
+    # --- the derived family ----------------------------------------------
+    expected = {
+        "susceptibility_occupancy_weighted",
+        "eta_ir",
+        "eta_ir_pinsker_numerator_bits",
+        "eta_ir_denominator_T_bits",
+        "target_sensing_information_nats",
+        "target_sensing_information_horizon_nats",
+        "controlled_current",
+        "controlled_current_horizon",
+        "affinity_weighted_current_nats",
+        "thermodynamic_control_expenditure_nats",
+        "eta_th",
+    }
+    assert expected <= set(derived["metric"])
+
+    units = dict(zip(derived["metric"], derived["units"], strict=True))
+    assert units["eta_ir_pinsker_numerator_bits"] == "bits"
+    assert units["target_sensing_information_nats"] == "nats_per_cycle"
+    assert units["controlled_current"] == "target_count_per_cycle"
+    assert units["eta_th"] == "dimensionless"
+
+    family = derived[derived["metric"].isin(expected)]
+    assert set(family["theory_semantics_version"]) == {"single_affinity_v1"}
+    assert set(family["response_coordinate"]) == {"target_fraction"}
+    assert set(family["sensing_coordinate"]) == {"target_count"}
+    assert set(family["affinity_log_base"]) == {"e"}
+    assert set(family["bootstrap_unit"]) == {"episode"}
+    assert set(family["eta_ir_aggregation"]) == {"occupancy_ratio_of_sums"}
+    # support and validity travel with every row of the family
+    for column in (
+        "chi_dual_action_state_fraction",
+        "chi_identified_occupancy_mass",
+        "eta_ir_valid",
+        "eta_th_valid",
+        "eta_th_target_directed",
+    ):
+        assert column in family.columns
+    assert {"ci_low", "ci_high", "confidence"} <= set(family.columns)
+
+    # eta_ir is the occupancy-weighted headline; the state-resolved surface is
+    # a separately named metric so the two can never be confused in a join.
+    headline = derived[derived["metric"] == "eta_ir"]
+    assert len(headline) == len(set(headline["cell_id"]))
+    dependencies = json.loads(headline.iloc[0]["dependencies_json"])
+    assert "round_target_susceptibility" in dependencies["metrics"]
+    assert "round_target_signed_actuation" not in dependencies["metrics"]
 
 
 def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path):

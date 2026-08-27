@@ -452,7 +452,12 @@ def test_the_matched_signed_response_removes_an_epistemic_confound():
     assert values["round_phi_target_signed_response"]["estimate"] == pytest.approx(
         0.0, abs=1e-12
     )
-    assert values["round_phi_target_signed_response"]["units"] == "dimensionless"
+    # Named coordinate, not just "dimensionless": this is a target-FRACTION
+    # response, and the magnetization response beside it differs by K/(K-1).
+    assert (
+        values["round_phi_target_signed_response"]["units"]
+        == "target_fraction_per_cycle"
+    )
     # And it reports the sparsity of the conditioning it was matched on.
     assert values["round_phi_target_signed_response"]["round_conditioning_state_count"] == 2
 

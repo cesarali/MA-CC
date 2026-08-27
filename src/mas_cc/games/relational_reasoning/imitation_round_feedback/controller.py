@@ -42,6 +42,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar
+import math
 
 from mas_cc.config import ControlConfig
 from mas_cc.control import Control
@@ -63,6 +64,16 @@ FACTLESS_MESSAGE_MODES = (RECOMMENDATION_ONLY, SILENT)
 
 SELECTOR_SUPPORTING = "supporting"
 FACT_SELECTORS = (SELECTOR_SUPPORTING,)
+
+EVIDENCE_NEUTRAL = "neutral"
+EVIDENCE_STRATEGIC = "strategic"
+CONTROLLER_EVIDENCE_STRATEGIES = (EVIDENCE_NEUTRAL, EVIDENCE_STRATEGIC)
+
+_DIRECTION_VECTORS = {
+    "NORTH": (0, 1), "NORTHEAST": (1, 1), "EAST": (1, 0),
+    "SOUTHEAST": (1, -1), "SOUTH": (0, -1), "SOUTHWEST": (-1, -1),
+    "WEST": (-1, 0), "NORTHWEST": (-1, 1),
+}
 
 SCHEDULE_SOFT = "soft"
 SCHEDULE_ALWAYS = "always"
@@ -92,6 +103,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     message_mode: str = RECOMMENDATION_ONLY
     controller_fact_id: str | None = None
     controller_fact_selector: str | None = None
+    controller_evidence_strategy: str | None = None
     advocacy_schedule: str = SCHEDULE_SOFT
 
     policy: ClassVar[str] = "soft_target"
@@ -130,7 +142,23 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
 
         return self.message_mode != SILENT
 
-    def resolve_fact_id(self, task: RelationalTask) -> str | None:
+    def resolved_target_for_task(self, task: RelationalTask, episode_seed: int) -> str:
+        if isinstance(self.target, int):
+            if self.target < 0 or self.target >= len(task.semantic_answers):
+                raise ValueError(f"controller target index {self.target} is outside task options")
+            return task.semantic_answers[self.target]
+        if self.target == "correct":
+            return task.correct_relation
+        if self.target == "random_incorrect":
+            from mas_cc.core import Seed
+            candidates = tuple(x for x in task.semantic_answers if x != task.correct_relation)
+            rng = Seed(episode_seed).derive(
+                f"hidden-bench-imitation-random-incorrect-target:{task.task_id}"
+            ).create_random()
+            return rng.choice(candidates)
+        return str(self.target)
+
+    def resolve_fact_id(self, task: RelationalTask, episode_seed: int = 0) -> str | None:
         """The one fact this controller cites for the whole episode, or ``None``.
 
         Resolution is deterministic and validated against the frozen task, so a
@@ -147,6 +175,33 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                     f"not a fact of task {task.task_id!r}"
                 )
             return self.controller_fact_id
+        if self.controller_evidence_strategy == EVIDENCE_NEUTRAL:
+            # The first frozen fact is a stable rule independent of target and seed.
+            return task.fact_order[0]
+        if self.controller_evidence_strategy == EVIDENCE_STRATEGIC:
+            target = self.resolved_target_for_task(task, episode_seed)
+            if target not in _DIRECTION_VECTORS:
+                raise ValueError(
+                    f"task {task.task_id!r} target {target!r} has no symbolic direction"
+                )
+            tx, ty = _DIRECTION_VECTORS[target]
+            scored: list[tuple[float, int, str]] = []
+            for index, fact_id in enumerate(task.fact_order):
+                relation = task.fact(fact_id).relation
+                if relation not in _DIRECTION_VECTORS:
+                    continue
+                fx, fy = _DIRECTION_VECTORS[relation]
+                score = (tx * fx + ty * fy) / math.sqrt(
+                    (tx * tx + ty * ty) * (fx * fx + fy * fy)
+                )
+                if score > 0:
+                    scored.append((score, -index, fact_id))
+            if not scored:
+                raise ValueError(
+                    f"task {task.task_id!r}/target {target!r} is strategically "
+                    "inadmissible: no real fact has positive directional alignment"
+                )
+            return max(scored)[2]
         if self.controller_fact_selector == SELECTOR_SUPPORTING:
             if not task.supporting_fact_ids:
                 raise ValueError(
@@ -233,26 +288,39 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             selector = None
         values["controller_fact_selector"] = None if selector is None else str(selector)
 
-        if values["controller_fact_id"] and values["controller_fact_selector"]:
+        strategy = options.get("controller_evidence_strategy")
+        if strategy is not None and strategy not in CONTROLLER_EVIDENCE_STRATEGIES:
+            issues.append(ValidationIssue(
+                "control.options.controller_evidence_strategy",
+                f"must be one of {list(CONTROLLER_EVIDENCE_STRATEGIES)}",
+            ))
+            strategy = None
+        values["controller_evidence_strategy"] = strategy
+
+        evidence_sources = sum(bool(value) for value in (
+            values["controller_fact_id"], values["controller_fact_selector"], strategy
+        ))
+        if evidence_sources > 1:
             issues.append(
                 ValidationIssue(
                     "control.options.controller_fact_id",
-                    "cannot be combined with controller_fact_selector; the citation "
+                    "cannot be combined with controller_fact_selector or "
+                    "controller_evidence_strategy; the citation "
                     "must have exactly one deterministic source",
                 )
             )
         if mode == RECOMMENDATION_PLUS_FACT and not (
-            values["controller_fact_id"] or values["controller_fact_selector"]
+            values["controller_fact_id"] or values["controller_fact_selector"] or strategy
         ):
             issues.append(
                 ValidationIssue(
                     "control.options.message_mode",
-                    "'recommendation_plus_fact' requires controller_fact_id or "
-                    "controller_fact_selector",
+                    "'recommendation_plus_fact' requires controller_evidence_strategy "
+                    "(or the legacy controller_fact_id/controller_fact_selector)",
                 )
             )
         if mode in FACTLESS_MESSAGE_MODES and (
-            values["controller_fact_id"] or values["controller_fact_selector"]
+            values["controller_fact_id"] or values["controller_fact_selector"] or strategy
         ):
             issues.append(
                 ValidationIssue(
@@ -272,6 +340,9 @@ __all__ = [
     "ADVOCACY_SCHEDULES",
     "FACTLESS_MESSAGE_MODES",
     "FACT_SELECTORS",
+    "CONTROLLER_EVIDENCE_STRATEGIES",
+    "EVIDENCE_NEUTRAL",
+    "EVIDENCE_STRATEGIC",
     "MESSAGE_MODES",
     "SILENT",
     "RECOMMENDATION_ONLY",

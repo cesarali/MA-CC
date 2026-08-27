@@ -62,8 +62,13 @@ def _conditioning_json(metric: str) -> str:
     if metric in {
         "round_target_actuation_cmi",
         "round_target_signed_actuation",
+        # The canonical chi is matched on exactly the CMI's state, which is
+        # what makes the two joinable into a state-local eta_IR at all.
+        "round_target_susceptibility",
     }:
         return json.dumps(target_state, sort_keys=True)
+    if metric == "round_target_sensing_mi":
+        return json.dumps({"state": [], "channel": ["target_count"]}, sort_keys=True)
     if metric == "round_target_signed_response_share":
         return json.dumps({"state": ["marginal"]}, sort_keys=True)
     for stem, extra_state in augmented.items():
@@ -444,6 +449,84 @@ def _information_tables(
     return pd.DataFrame(estimates, columns=PRIMARY_COLUMNS), pd.DataFrame(support)
 
 
+def _state_local_primary(
+    study_id: str,
+    events: Sequence[Any],
+    recipe: Mapping[str, Any],
+    analysis_hash: str,
+    source_run_ids: Mapping[str, str],
+) -> pd.DataFrame:
+    """Estimate requested state slices through the authoritative estimator."""
+
+    requested = recipe.get("state_local", ())
+    if isinstance(requested, (str, bytes)) or not isinstance(requested, Sequence):
+        raise ValueError("analysis state_local must be a list")
+    coordinates = {
+        "x": None,
+        "x_phi": "conditioning_phi_bin",
+        "x_kappa": "conditioning_kappa_bin",
+    }
+    unknown = sorted(set(map(str, requested)) - set(coordinates))
+    if unknown:
+        raise ValueError("unknown state-local analysis resolution(s): " + ", ".join(unknown))
+    if not requested:
+        return pd.DataFrame(columns=PRIMARY_COLUMNS)
+    from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import round_information_analysis
+
+    by_cell: dict[str, list[Any]] = {}
+    for event in events:
+        by_cell.setdefault(str(event.cell_id), []).append(event)
+    rows: list[dict[str, Any]] = []
+    statistics = (
+        "round_target_actuation_cmi",
+        "round_target_signed_actuation",
+        # The canonical chi. `round_target_signed_actuation` stays beside it as
+        # the legacy magnetization diagnostic; the two differ by K/(K-1) and
+        # only this one may enter eta_IR.
+        "round_target_susceptibility",
+    )
+    for cell_id, cell_rows in sorted(by_cell.items()):
+        for resolution in map(str, requested):
+            extra = coordinates[resolution]
+            slices: dict[tuple[Any, ...], list[Any]] = {}
+            for event in cell_rows:
+                x = event.event.get("target_count_before")
+                value = None if extra is None else event.event.get(extra)
+                if x is None or (extra is not None and value is None):
+                    continue
+                slices.setdefault((x,) if extra is None else (x, value), []).append(event)
+            for slice_values, sample in sorted(slices.items(), key=lambda item: str(item[0])):
+                if len({str(event.U_k) for event in sample if event.U_k is not None}) < 2:
+                    continue
+                estimates, _ = round_information_analysis(
+                    sample, statistics=statistics, bootstrap_resamples=0,
+                    null_permutations=0, confidence=0.95, seed=1,
+                )
+                grouping = {"cell_id": cell_id, "resolution": resolution, "target_count_before": slice_values[0]}
+                if extra is not None:
+                    grouping[extra] = slice_values[1]
+                for item in estimates:
+                    rows.append({
+                        "study_id": study_id,
+                        "source_run_id": source_run_ids.get(cell_id.split("/", 1)[0], cell_id.split("/", 1)[0]),
+                        "cell_id": cell_id,
+                        "metric": str(item["statistic"]),
+                        "estimator_version": "round-feedback-v1",
+                        "estimator_variant": item.get("main_estimator_variant", item.get("estimator_variant")),
+                        "grouping_json": json.dumps(grouping, sort_keys=True),
+                        "conditioning_json": _conditioning_json(str(item["statistic"])),
+                        "estimate": item["estimate"],
+                        "ci_low": math.nan, "ci_high": math.nan, "confidence": 0.95,
+                        "null_type": None, "null_mean": math.nan, "null_std": math.nan,
+                        "p_value": math.nan, "null_permutations": 0, "bootstrap_resamples": 0,
+                        "n_observations": item.get("n_rounds"), "n_episodes": item.get("n_episodes"),
+                        "units": item.get("units"), "support_status": _support_status(item),
+                        "analysis_hash": analysis_hash,
+                        **grouping,
+                    })
+    return pd.DataFrame(rows)
+
+
 def _current_primary(
     study_id: str,
     events: Sequence[Any],
@@ -470,6 +553,7 @@ def _current_primary(
                 bootstrap_resamples=int(settings["bootstrap_resamples"]),
                 confidence=confidence,
                 seed=int(settings["seed"]) + index,
+                theoretical_reference="none",
             )
         except (KeyError, TypeError, ValueError):
             continue
@@ -697,18 +781,53 @@ def _ingest_existing_information(
     )
 
 
-def _derived(
+DERIVED_COLUMNS = (
+    "study_id", "source_run_id", "cell_id", "metric", "grouping_json",
+    "conditioning_json", "estimate", "ci_low", "ci_high", "confidence",
+    "units", "dependencies_json", "support_status", "analysis_hash",
+)
+
+SINGLE_AFFINITY_DERIVED = (
+    "round_target_susceptibility",
+    "eta_ir",
+    "target_sensing_information_nats",
+    "controlled_current",
+    "affinity_weighted_current_nats",
+    "thermodynamic_control_expenditure_nats",
+    "eta_th",
+)
+"""Naming any one of these in `derived:` requests the whole coupled family.
+
+They are ingredients of one estimator, not seven independent numbers: the same
+state-matched `chi(n)`, the same action weights and the same episode bootstrap
+feed all of them.  Emitting only a subset would let a reader join an `eta_th`
+to a `J_c` that came from a different resample.  The recipe still lists them
+individually so the intent is readable."""
+
+
+def _eta_ir_state_local(
     study_id: str,
     requested: Sequence[Any],
     estimates: pd.DataFrame,
     events: Sequence[Any],
     analysis_hash: str,
 ) -> pd.DataFrame:
-    columns = [
-        "study_id", "source_run_id", "cell_id", "metric", "grouping_json",
-        "conditioning_json", "estimate", "units", "dependencies_json",
-        "support_status", "analysis_hash",
-    ]
+    """State-resolved `eta_IR(n)` - the theory's own state-local ratio.
+
+    Repaired relative to the first implementation: the response is now
+    `round_target_susceptibility` (target fraction), not
+    `round_target_signed_actuation` (aligned magnetization).  On the K=3 tasks
+    the old numerator was inflated by `(3/2)^2 = 2.25`, because the Pinsker
+    bound is stated in the fraction coordinate.  The fix routes through the
+    fraction estimator rather than dividing by 2.25 afterwards, so it is
+    correct for any K.
+
+    This is the state-resolved surface the heatmaps read.  The headline
+    per-cell number is the occupancy-weighted `eta_ir` from
+    :func:`_build_eta_ir`, which is a ratio of sums over these same states.
+    """
+
+    columns = list(DERIVED_COLUMNS)
     names = {str(value) for value in requested}
     if "eta_ir" not in names or estimates.empty:
         return pd.DataFrame(columns=columns)
@@ -717,11 +836,10 @@ def _derived(
         event_groups.setdefault(str(event.cell_id), []).append(event)
     rows: list[dict[str, Any]] = []
 
-    # eta_IR's response is the target-state-matched signed actuation.  The
-    # marginal share response is intentionally ineligible: it does not have
-    # the CMI's target-before conditioning and cannot be silently joined to it.
     cmi = estimates[estimates["metric"] == "round_target_actuation_cmi"].copy()
-    response = estimates[estimates["metric"] == "round_target_signed_actuation"].copy()
+    response = estimates[
+        estimates["metric"] == "round_target_susceptibility"
+    ].copy()
     for dependency, frame in (("CMI", cmi), ("signed response", response)):
         duplicates = frame.duplicated(list(ETA_IR_JOIN_KEYS), keep=False)
         if duplicates.any():
@@ -738,6 +856,15 @@ def _derived(
     for item in joined.to_dict(orient="records"):
         cell_id = str(item["cell_id"])
         group = event_groups.get(cell_id, [])
+        try:
+            grouping = json.loads(str(item["grouping_json"]))
+        except (TypeError, json.JSONDecodeError):
+            grouping = {}
+        if "target_count_before" in grouping:
+            group = [event for event in group if event.event.get("target_count_before") == grouping["target_count_before"]]
+        for key in ("conditioning_phi_bin", "conditioning_kappa_bin"):
+            if key in grouping:
+                group = [event for event in group if event.event.get(key) == grouping[key]]
         controlled = [
             event
             for event in group
@@ -754,27 +881,442 @@ def _derived(
                 "study_id": study_id,
                 "source_run_id": item["source_run_id"],
                 "cell_id": cell_id,
-                "metric": "eta_ir",
+                "metric": "eta_ir_state_local",
                 "grouping_json": item["grouping_json"],
                 "conditioning_json": item["conditioning_json"],
                 "estimate": value,
+                "ci_low": math.nan,
+                "ci_high": math.nan,
+                "confidence": math.nan,
                 "units": "dimensionless",
                 "dependencies_json": json.dumps(
                     {
                         "join_keys": list(ETA_IR_JOIN_KEYS),
                         "metrics": [
                             "round_target_actuation_cmi",
-                            "round_target_signed_actuation",
+                            "round_target_susceptibility",
                             "action_frequency",
                         ],
+                        "response_coordinate": "target_fraction",
                     },
                     sort_keys=True,
                 ),
                 "support_status": str(item["support_status_cmi"]),
                 "analysis_hash": analysis_hash,
+                **grouping,
             }
         )
-    return pd.DataFrame(rows, columns=columns)
+    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=columns)
+
+
+def _micro_rows_by_cell(micro_slots: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    """Micro-slot records grouped by study cell, with the round's action attached.
+
+    `h` and `gamma` are read off individual controlled vote slots, but whether
+    a slot was inside an advocating round is a property of the round record.
+    The two are joined here, once, so every builder below sees the same table.
+    """
+
+    if micro_slots.empty:
+        return {}
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in micro_slots.to_dict(orient="records"):
+        cell_id = str(row.get("cell_id", "run"))
+        grouped.setdefault(cell_id, []).append(row)
+    return grouped
+
+
+def _single_affinity_by_cell(
+    events: Sequence[Any],
+    micro_slots: pd.DataFrame,
+    settings: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Run the whole coupled estimator once per cell.
+
+    One call, not four: the bootstrap has to resample episodes once and
+    recompute every ingredient inside that resample, so `eta_ir`, `J_c`,
+    `I_sens` and `eta_th` cannot be estimated in separate passes without
+    losing the correlations their intervals depend on.
+    """
+
+    from mas_cc.analysis.single_affinity import single_affinity_analysis
+
+    by_cell: dict[str, list[Any]] = {}
+    for event in events:
+        by_cell.setdefault(str(event.cell_id), []).append(event)
+    micro_by_cell = _micro_rows_by_cell(micro_slots)
+    round_targets: dict[tuple[str, str, int], Mapping[str, Any]] = {}
+    for event in events:
+        local = str(
+            event.event.get("episode_id", str(event.episode_id).rsplit("/", 1)[-1])
+        )
+        round_targets[(str(event.cell_id), local, int(event.round_index))] = event.event
+
+    result: dict[str, dict[str, Any]] = {}
+    for index, (cell_id, rows) in enumerate(sorted(by_cell.items())):
+        micro: list[dict[str, Any]] = []
+        for row in micro_by_cell.get(cell_id, ()):
+            try:
+                key = (cell_id, str(row["episode_id"]), int(row["round_index"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            round_event = round_targets.get(key, {})
+            micro.append(
+                {
+                    **row,
+                    "analysis_target": row.get("analysis_target")
+                    or row.get("round_controller_target")
+                    or round_event.get("analysis_target")
+                    or round_event.get("controller_target"),
+                    "round_controller_action": row.get("round_controller_action")
+                    or round_event.get("controller_action"),
+                }
+            )
+        bundle = single_affinity_analysis(
+            rows,
+            micro,
+            bootstrap_resamples=int(settings["bootstrap_resamples"]),
+            confidence=float(settings["confidence"]),
+            seed=int(settings["seed"]) + index,
+        )
+        bundle["_rows"], bundle["_micro"] = rows, micro
+        result[cell_id] = bundle
+    return result
+
+
+def _single_affinity_theory_comparison(
+    study_id: str,
+    bundles: Mapping[str, Mapping[str, Any]],
+    source_run_ids: Mapping[str, str],
+    analysis_hash: str,
+) -> pd.DataFrame:
+    """Empirical and exact single-affinity values side by side, per cell.
+
+    The theory column is evaluated on the cell's own empirical occupancy, so a
+    gap between the columns means the LLM population departed from the
+    single-affinity kernel - not that the two were averaged over different
+    states.  A cell that does not pin down one protocol or one finite affinity
+    gets a row saying why instead of a table of NaNs.  The matched q-voter
+    reference is a separate classical null and never appears here.
+    """
+
+    from mas_cc.analysis.single_affinity import PROVENANCE, theory_comparison
+
+    rows: list[dict[str, Any]] = []
+    for cell_id, bundle in sorted(bundles.items()):
+        prefix = cell_id.split("/", 1)[0]
+        comparison = theory_comparison(
+            bundle.get("_rows", ()), bundle.get("_micro", ())
+        )
+        common = {
+            "study_id": study_id,
+            "source_run_id": source_run_ids.get(prefix, prefix),
+            "cell_id": cell_id,
+            "analysis_hash": analysis_hash,
+            **PROVENANCE,
+        }
+        if not comparison["available"]:
+            rows.append(
+                {
+                    **common,
+                    "quantity": None,
+                    "units": None,
+                    "empirical": math.nan,
+                    "single_affinity_theory": math.nan,
+                    "residual": math.nan,
+                    "reference": "single_affinity_revised",
+                    "available": False,
+                    "reason": comparison["reason"],
+                }
+            )
+            continue
+        for item in comparison["rows"]:
+            rows.append(
+                {**common, **item, "available": True, "reason": None}
+            )
+    return pd.DataFrame(rows)
+
+
+_SINGLE_AFFINITY_UNITS: Mapping[str, str] = {
+    "susceptibility_occupancy_weighted": "target_fraction_per_cycle",
+    "eta_ir": "dimensionless",
+    "eta_ir_pinsker_numerator_bits": "bits",
+    "eta_ir_denominator_T_bits": "bits",
+    "target_sensing_information_nats": "nats_per_cycle",
+    "target_sensing_information_horizon_nats": "nats",
+    "controlled_current": "target_count_per_cycle",
+    "controlled_current_horizon": "target_count",
+    "affinity_weighted_current_nats": "nats_per_horizon",
+    "thermodynamic_control_expenditure_nats": "nats_per_horizon",
+    "eta_th": "dimensionless",
+}
+"""Every emitted quantity's units, in one table, so a bits/nats mix-up has to
+be made here in the open rather than inferred from a column name."""
+
+_SINGLE_AFFINITY_AUDIT = (
+    "chi_state_count",
+    "chi_identified_state_count",
+    "chi_dual_action_state_fraction",
+    "chi_dual_action_event_fraction",
+    "chi_identified_occupancy_mass",
+    "eta_ir_identified_occupancy_mass",
+    "eta_ir_support_mass",
+    "eta_ir_valid",
+    "eta_th_identified_occupancy_mass",
+    "eta_th_target_directed",
+    "eta_th_valid",
+    "target_sensing_valid",
+    "affinity_valid",
+    "effective_affinity",
+    "kinetic_compliance",
+    "p_plus",
+    "p_minus",
+    "plus_transitions",
+    "plus_eligible",
+    "minus_transitions",
+    "minus_eligible",
+    "controlled_current_rounds",
+    "target_sensing_information_rounds",
+    "n_rounds",
+    "n_episodes",
+    "n_micro_slots",
+)
+"""Support, identifiability and validity carried on every row of the family.
+
+Repeated on each row on purpose: a `eta_th` read out of the table on its own
+still says how much occupancy mass it was identified on and whether the
+bounded reading applied."""
+
+
+def _single_affinity_rows(
+    study_id: str,
+    metrics: Sequence[str],
+    bundles: Mapping[str, Mapping[str, Any]],
+    source_run_ids: Mapping[str, str],
+    dependencies: Mapping[str, Sequence[str]],
+    analysis_hash: str,
+) -> list[dict[str, Any]]:
+    """One long-form derived row per (cell, quantity), with its interval."""
+
+    from mas_cc.analysis.single_affinity import PROVENANCE
+
+    rows: list[dict[str, Any]] = []
+    for cell_id, bundle in sorted(bundles.items()):
+        prefix = cell_id.split("/", 1)[0]
+        audit = {
+            key: bundle.get(key)
+            for key in _SINGLE_AFFINITY_AUDIT
+            if key in bundle
+        }
+        # `_rows`/`_micro` are handles for the theory comparison, not data.
+        for metric in metrics:
+            rows.append(
+                {
+                    "study_id": study_id,
+                    "source_run_id": source_run_ids.get(prefix, prefix),
+                    "cell_id": cell_id,
+                    "metric": metric,
+                    "grouping_json": json.dumps({"cell_id": cell_id}, sort_keys=True),
+                    "conditioning_json": json.dumps(
+                        {"state": ["target_count_before"]}, sort_keys=True
+                    ),
+                    "estimate": bundle.get(metric, math.nan),
+                    "ci_low": bundle.get(f"{metric}_ci_low", math.nan),
+                    "ci_high": bundle.get(f"{metric}_ci_high", math.nan),
+                    "confidence": bundle.get("confidence", math.nan),
+                    "units": _SINGLE_AFFINITY_UNITS.get(metric, "dimensionless"),
+                    "dependencies_json": json.dumps(
+                        {"metrics": list(dependencies.get(metric, ()))}, sort_keys=True
+                    ),
+                    "support_status": _single_affinity_support(metric, bundle),
+                    "analysis_hash": analysis_hash,
+                    **audit,
+                    **PROVENANCE,
+                }
+            )
+    return rows
+
+
+def _single_affinity_support(metric: str, bundle: Mapping[str, Any]) -> str:
+    """`adequate` / `limited` / `unsupported` for one quantity of the family.
+
+    A quantity is unsupported when its own validity flag is false - no
+    identified state, no positive information denominator, or a transition
+    direction that never fired - and limited when it is identified on less
+    than a quarter of the visited occupancy mass.
+    """
+
+    def flag(name: str) -> bool:
+        return bool(bundle.get(name, False))
+
+    if metric.startswith("eta_ir") and not flag("eta_ir_valid"):
+        return "unsupported"
+    if metric == "eta_th" and not flag("eta_th_valid"):
+        return "unsupported"
+    if metric in {
+        "affinity_weighted_current_nats",
+        "thermodynamic_control_expenditure_nats",
+    } and not (flag("affinity_valid") and flag("controlled_current_valid")):
+        return "unsupported"
+    if metric.startswith("controlled_current") and not flag("controlled_current_valid"):
+        return "unsupported"
+    if metric.startswith("target_sensing"):
+        # Sensing needs an occupancy and the known sensor kernel, nothing from
+        # the response - so it is not gated on chi's identifiability below.
+        return "adequate" if flag("target_sensing_valid") else "unsupported"
+    mass = bundle.get("chi_identified_occupancy_mass")
+    try:
+        mass = float(mass)
+    except (TypeError, ValueError):
+        return "limited"
+    if not math.isfinite(mass) or mass <= 0.0:
+        return "unsupported"
+    return "adequate" if mass >= 0.25 else "limited"
+
+
+def _build_susceptibility(study_id, bundles, source_run_ids, analysis_hash):
+    """Occupancy-weighted `chi`, as a summary of the state-resolved estimator."""
+
+    return _single_affinity_rows(
+        study_id,
+        ("susceptibility_occupancy_weighted",),
+        bundles,
+        source_run_ids,
+        {"susceptibility_occupancy_weighted": ("round_target_susceptibility",)},
+        analysis_hash,
+    )
+
+
+def _build_eta_ir(study_id, bundles, source_run_ids, analysis_hash):
+    """Headline `eta_IR` plus the numerator and denominator it is a ratio of."""
+
+    dependencies = {
+        "eta_ir": (
+            "round_target_susceptibility",
+            "round_target_actuation_cmi",
+            "empirical_action_weight",
+            "empirical_occupancy",
+        ),
+        "eta_ir_pinsker_numerator_bits": (
+            "round_target_susceptibility",
+            "empirical_action_weight",
+            "empirical_occupancy",
+        ),
+        "eta_ir_denominator_T_bits": ("round_target_actuation_cmi",),
+    }
+    return _single_affinity_rows(
+        study_id, tuple(dependencies), bundles, source_run_ids, dependencies, analysis_hash
+    )
+
+
+def _build_target_sensing_information(study_id, bundles, source_run_ids, analysis_hash):
+    """Scalar-channel `I_sens` in nats, per cycle and over the horizon."""
+
+    dependencies = {
+        "target_sensing_information_nats": (
+            "empirical_occupancy",
+            "exact_hypergeometric_sensor_kernel",
+        ),
+        "target_sensing_information_horizon_nats": (
+            "empirical_occupancy",
+            "exact_hypergeometric_sensor_kernel",
+        ),
+    }
+    return _single_affinity_rows(
+        study_id, tuple(dependencies), bundles, source_run_ids, dependencies, analysis_hash
+    )
+
+
+def _build_controlled_current(study_id, bundles, source_run_ids, analysis_hash):
+    """Response-based `J_c`. Not `cell_current`, which is a terminal difference."""
+
+    dependencies = {
+        "controlled_current": (
+            "round_target_susceptibility",
+            "empirical_action_weight",
+            "empirical_occupancy",
+        ),
+        "controlled_current_horizon": (
+            "round_target_susceptibility",
+            "empirical_action_weight",
+            "empirical_occupancy",
+        ),
+    }
+    return _single_affinity_rows(
+        study_id, tuple(dependencies), bundles, source_run_ids, dependencies, analysis_hash
+    )
+
+
+def _build_eta_th(study_id, bundles, source_run_ids, analysis_hash):
+    """`h J_c / (h J_c + I_sens)` over the horizon, with its two terms beside it."""
+
+    dependencies = {
+        "affinity_weighted_current_nats": (
+            "effective_affinity",
+            "controlled_current_horizon",
+        ),
+        "thermodynamic_control_expenditure_nats": (
+            "effective_affinity",
+            "controlled_current_horizon",
+            "target_sensing_information_horizon_nats",
+        ),
+        "eta_th": (
+            "affinity_weighted_current_nats",
+            "thermodynamic_control_expenditure_nats",
+        ),
+    }
+    return _single_affinity_rows(
+        study_id, tuple(dependencies), bundles, source_run_ids, dependencies, analysis_hash
+    )
+
+
+def _derived(
+    study_id: str,
+    requested: Sequence[Any],
+    estimates: pd.DataFrame,
+    events: Sequence[Any],
+    analysis_hash: str,
+    *,
+    micro_slots: pd.DataFrame | None = None,
+    settings: Mapping[str, Any] | None = None,
+    source_run_ids: Mapping[str, str] | None = None,
+    theoretical_reference: str = "single_affinity_revised",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """`(derived observables, single-affinity theory comparison)`."""
+
+    names = {str(value) for value in requested}
+    frames = [
+        _eta_ir_state_local(study_id, requested, estimates, events, analysis_hash)
+    ]
+    comparison = pd.DataFrame()
+    if names.intersection(SINGLE_AFFINITY_DERIVED) and events:
+        bundles = _single_affinity_by_cell(
+            events,
+            pd.DataFrame() if micro_slots is None else micro_slots,
+            settings or {"bootstrap_resamples": 0, "confidence": 0.95, "seed": 1},
+        )
+        run_ids = dict(source_run_ids or {})
+        rows: list[dict[str, Any]] = []
+        rows.extend(_build_susceptibility(study_id, bundles, run_ids, analysis_hash))
+        rows.extend(_build_eta_ir(study_id, bundles, run_ids, analysis_hash))
+        rows.extend(
+            _build_target_sensing_information(study_id, bundles, run_ids, analysis_hash)
+        )
+        rows.extend(_build_controlled_current(study_id, bundles, run_ids, analysis_hash))
+        rows.extend(_build_eta_th(study_id, bundles, run_ids, analysis_hash))
+        if rows:
+            frames.append(pd.DataFrame(rows))
+        if theoretical_reference == "single_affinity_revised":
+            comparison = _single_affinity_theory_comparison(
+                study_id, bundles, run_ids, analysis_hash
+            )
+    frames = [frame for frame in frames if not frame.empty]
+    derived = (
+        pd.DataFrame(columns=list(DERIVED_COLUMNS))
+        if not frames
+        else pd.concat(frames, ignore_index=True, sort=False)
+    )
+    return derived, comparison
 
 
 def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFrame:
@@ -789,13 +1331,96 @@ def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFram
     return frame.merge(coordinates, on="cell_id", how="left", suffixes=("", "_coordinate"))
 
 
+def _factorial_contrasts(
+    primary: pd.DataFrame, derived: pd.DataFrame, requested: Sequence[Any], analysis_hash: str
+) -> pd.DataFrame:
+    """Matched descriptive factorial differences, not a new estimator."""
+
+    if "factorial_contrasts" not in {str(value) for value in requested}:
+        return pd.DataFrame()
+    frames = [frame for frame in (primary, derived) if not frame.empty]
+    if not frames:
+        return pd.DataFrame()
+    source = pd.concat(frames, ignore_index=True, sort=False)
+    needed = {
+        "receiver_epistemic_disposition", "controller_evidence_strategy",
+        "target_semantics", "intervention_budget", "task_id", "metric", "estimate",
+    }
+    if not needed.issubset(source.columns):
+        return pd.DataFrame()
+    source = source[source["metric"].isin({
+        "round_target_actuation_cmi",
+        "round_target_signed_actuation",
+        "round_target_susceptibility",
+        "eta_ir",
+        "eta_ir_state_local",
+        "eta_th",
+        "controlled_current",
+        "target_sensing_information_nats",
+    })].copy()
+    keys = ["metric", "intervention_budget", "task_id"]
+    rows: list[dict[str, Any]] = []
+
+    def differences(frame, axis, low, high, kind, extra):
+        index = [*keys, *extra]
+        pivot = frame.pivot_table(index=index, columns=axis, values="estimate", aggfunc="mean")
+        if low not in pivot or high not in pivot:
+            return
+        for coordinates, value in (pivot[high] - pivot[low]).items():
+            values = coordinates if isinstance(coordinates, tuple) else (coordinates,)
+            record = dict(zip(index, values, strict=True))
+            base_metric = str(record.pop("metric"))
+            if record.get("receiver_epistemic_disposition") and record.get(
+                "controller_evidence_strategy"
+            ):
+                record["derived_epistemic_condition"] = (
+                    f"{record['receiver_epistemic_disposition']}_"
+                    f"{record['controller_evidence_strategy']}"
+                )
+            rows.append({
+                **record,
+                "study_id": str(frame["study_id"].iloc[0]),
+                "source_run_id": "matched-factorial-contrast",
+                "cell_id": f"contrast-{kind}-{len(rows):06d}",
+                "metric": f"delta_{kind}_{base_metric}",
+                "contrast_type": kind,
+                "estimate": float(value),
+                "units": "descriptive_difference",
+                "support_status": "descriptive_only",
+                "grouping_json": json.dumps(record, sort_keys=True, default=str),
+                "conditioning_json": "{}",
+                "dependencies_json": json.dumps({"high": high, "low": low, "axis": axis}),
+                "analysis_hash": analysis_hash,
+            })
+
+    differences(source, "receiver_epistemic_disposition", "naive", "vigilant", "vigilance", ["controller_evidence_strategy", "target_semantics"])
+    differences(source, "controller_evidence_strategy", "neutral", "strategic", "evidence_strategy", ["receiver_epistemic_disposition", "target_semantics"])
+    differences(source, "target_semantics", "false", "truth", "truth_false", ["receiver_epistemic_disposition", "controller_evidence_strategy"])
+    return pd.DataFrame(rows)
+
+
+def _value_label(metric: str, subset: pd.DataFrame) -> str:
+    """`metric [units]`, with the units taken from the row being plotted.
+
+    Bits and nats appear on the same page in this family, and a fraction
+    response and a magnetization response look identical on an unlabelled
+    axis. The estimator already records units per row, so the label is read
+    from there rather than guessed from the metric name.
+    """
+
+    if "units" not in subset:
+        return metric
+    units = sorted({str(value) for value in subset["units"].dropna().unique()})
+    return metric if len(units) != 1 or not units[0] else f"{metric} [{units[0]}]"
+
+
 def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame], destination: Path) -> list[str]:
     raw = recipe.get("plots", {})
     destination.mkdir(parents=True, exist_ok=True)
     if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
         builtins = {
             "target_cmi_x_b": {"source": "primary_estimates", "metric": "round_target_actuation_cmi"},
-            "eta_ir_x_b": {"source": "derived_observables", "metric": "eta_ir"},
+            "eta_ir_x_b": {"source": "derived_observables", "metric": "eta_ir_state_local"},
             "memory_conditioning": {"source": "primary_estimates", "metric": "round_memory_target_actuation_cmi"},
             "h_eff_phi_b": {"source": "primary_estimates", "metric": "effective_affinity"},
             "gamma_eff_phi_b": {"source": "primary_estimates", "metric": "kinetic_compliance"},
@@ -815,17 +1440,27 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
             continue
         metric = str(spec.get("metric", ""))
         subset = frame[frame["metric"].astype(str) == metric] if metric and "metric" in frame else frame
+        filters = spec.get("filters", {})
+        if isinstance(filters, Mapping):
+            for column, expected in filters.items():
+                if str(column) in subset:
+                    subset = subset[subset[str(column)].astype(str) == str(expected)]
+        value_column = str(spec.get("value", ""))
+        if value_column and value_column in subset:
+            subset = subset.copy()
+            subset["estimate"] = pd.to_numeric(subset[value_column], errors="coerce")
         if "support_status" in subset:
             subset = subset[subset["support_status"].astype(str) != "unsupported"]
         x, y = str(spec.get("x", "")), str(spec.get("y", ""))
         if subset.empty or "estimate" not in subset:
             continue
-        if x not in subset or y not in subset:
+        kind = str(spec.get("kind", "heatmap"))
+        if x not in subset or (kind != "line" and y not in subset):
             figure, axis = plt.subplots(figsize=(max(5, len(subset) * 0.5), 4))
             labels = subset.get("cell_id", pd.Series(range(len(subset)))).astype(str)
             axis.bar(range(len(subset)), subset["estimate"].astype(float))
             axis.set_xticks(range(len(subset)), labels=labels, rotation=45, ha="right")
-            axis.set_ylabel(metric)
+            axis.set_ylabel(_value_label(metric, subset))
             axis.set_title(str(name))
             figure.tight_layout()
             path = destination / f"{name}.png"
@@ -839,8 +1474,22 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
         finite_estimates = finite_estimates[np.isfinite(finite_estimates)]
         shared_vmin = float(finite_estimates.min()) if len(finite_estimates) else None
         shared_vmax = float(finite_estimates.max()) if len(finite_estimates) else None
-        figure, axes = plt.subplots(1, len(groups), squeeze=False, figsize=(5 * len(groups), 4))
-        for axis, (label, group) in zip(axes[0], groups, strict=True):
+        two_by_two = str(spec.get("layout", "")) == "2x2" and len(groups) == 4
+        nrows, ncols = (2, 2) if two_by_two else (1, len(groups))
+        figure, axes = plt.subplots(nrows, ncols, squeeze=False, figsize=(5 * ncols, 4 * nrows))
+        for axis, (label, group) in zip(axes.flat, groups, strict=True):
+            if kind == "line":
+                series = str(spec.get("series", ""))
+                line_groups = [("all", group)] if series not in group else group.groupby(series, dropna=False)
+                for series_label, line_group in line_groups:
+                    values = line_group.groupby(x, dropna=False)["estimate"].mean().sort_index()
+                    axis.plot(values.index, values.values, marker="o", label=str(series_label))
+                if series in group:
+                    axis.legend()
+                axis.set_xlabel(x)
+                axis.set_ylabel(_value_label(value_column or metric, subset))
+                axis.set_title(str(label))
+                continue
             pivot = group.pivot_table(index=y, columns=x, values="estimate", aggfunc="mean")
             image = axis.imshow(
                 pivot.to_numpy(dtype=float), aspect="auto", origin="lower",
@@ -851,13 +1500,82 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
             axis.set_xlabel(x)
             axis.set_ylabel(y)
             axis.set_title(str(label) if facet in subset else metric)
-            figure.colorbar(image, ax=axis)
+            figure.colorbar(image, ax=axis, label=_value_label(metric, subset))
         figure.tight_layout()
         path = destination / f"{name}.png"
         figure.savefig(path, dpi=150)
         plt.close(figure)
         paths.append(str(path))
     return paths
+
+
+SINGLE_AFFINITY_METHODS = (
+    "## Single-affinity derived observables", "",
+    "`eta_ir`, `eta_th` and their components are stated in the coordinates of",
+    "the revised single-affinity theory, so an empirical number and the exact",
+    "theory number of the same name are directly comparable.",
+    "",
+    "**Corrected `eta_ir`.** The response entering the Pinsker numerator is",
+    "`round_target_susceptibility`: the state-matched difference of mean",
+    "target-*fraction* changes, `E[dx|ADVOCATE,n] - E[dx|NO_OP,n]`. The first",
+    "implementation used `round_target_signed_actuation`, the same difference",
+    "in aligned-magnetization units, which is larger by `K/(K-1)` and so",
+    "inflated the squared numerator by `(K/(K-1))^2` - 2.25x on a three-option",
+    "task. Rows carrying the corrected definition are stamped",
+    "`theory_semantics_version = single_affinity_v1`; rows without that stamp",
+    "predate the correction and are not comparable to them.",
+    "",
+    "**Headline `eta_ir` is occupancy weighted.** It is a ratio of sums,",
+    "`sum_n p(n) B_IR(n) / I(U;n'|n)`, not a mean of state-local ratios. The",
+    "state-resolved surface is published separately as `eta_ir_state_local`.",
+    "",
+    "**`controlled_current` is not `cell_current`.** The thermodynamic current",
+    "is `N sum_n p_k(n) a(n) chi(n)`, evaluated state by state and summed over",
+    "the horizon. `cell_current` remains available and remains the terminal",
+    "episode difference `n_Z,H - n_Z,0`, a behavioural outcome that also",
+    "contains the ordinary social dynamics.",
+    "",
+    "**`target_sensing_information_nats` is not `round_sensing_mi`.** The",
+    "thermodynamic sensing term is the scalar channel `I(n_Z;Y_Z)` in nats,",
+    "computed from the empirical occupancy and the exact hypergeometric sensor",
+    "kernel, summed round by round. `round_sensing_mi` remains available and",
+    "remains the full K-option vector channel `I(N;Y)` in bits.",
+    "",
+    "**Units.** `chi` target fraction; `T_pi` and the Pinsker numerator bits;",
+    "`h`, `h*J_c` and `I_sens` nats; `J_c` target counts per cycle.",
+    "",
+    "**Intervals.** Both efficiencies are bootstrapped by resampling whole",
+    "episodes and recomputing every ingredient inside each replicate, never by",
+    "combining separately bootstrapped intervals for `h`, `J_c` and `I_sens`.",
+    "",
+    "**Separate references.** The matched q-voter theory is a classical null",
+    "reported elsewhere and is never substituted into these formulas.", "",
+)
+"""What a reader of the derived table needs in order to trust or reject it.
+
+Written into `reports/methods.md` whenever derived observables exist, because
+the one thing a corrected estimator must not do is arrive silently under the
+old name."""
+
+
+def _derived_semantics(derived: pd.DataFrame) -> dict[str, Any]:
+    """The provenance stamp, lifted out of the table into the manifest."""
+
+    from mas_cc.analysis.single_affinity import PROVENANCE
+
+    if derived.empty or "theory_semantics_version" not in derived:
+        return {}
+    return {
+        **PROVENANCE,
+        "metrics": sorted(
+            {
+                str(value)
+                for value in derived.loc[
+                    derived["theory_semantics_version"].notna(), "metric"
+                ]
+            }
+        ),
+    }
 
 
 def _reset_analysis_handoff(analysis_dir: Path, study_id: str) -> None:
@@ -873,6 +1591,7 @@ def _reset_analysis_handoff(analysis_dir: Path, study_id: str) -> None:
     for name in (
         "analysis_manifest.json", "analysis_recipe.yaml", "progress.json",
         "validation.json", "validation.md", f"{study_id}_analysis.zip",
+        "theory_comparison.csv", "theory_state_curves.csv",
     ):
         (analysis_dir / name).unlink(missing_ok=True)
     for path in analysis_dir.rglob("*.pickle"):
@@ -958,6 +1677,15 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     study_id = str(study_manifest["study_id"])
     entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
+    from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
+
+    theoretical_reference = recipe.get(
+        "theoretical_reference", "single_affinity_revised"
+    )
+    if theoretical_reference not in {"single_affinity_revised", "none"}:
+        raise ValueError(
+            "analysis theoretical_reference must be single_affinity_revised or none"
+        )
     settings = _resampling(recipe)
 
     analysis_dir = root / "analysis"
@@ -1022,6 +1750,8 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
             "estimator_version": "round-feedback-v1",
             "statistics": statistics,
             "settings": settings,
+            "theoretical_reference": theoretical_reference,
+            "theory_provenance": dict(theory_provenance),
         }
     )
     events = _round_events_from_canonical(canonical["rounds"])
@@ -1080,12 +1810,17 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         auxiliary_hash,
         source_run_ids,
     )
+    state_local = _attach_coordinates(
+        _state_local_primary(study_id, events, recipe, analysis_hash, source_run_ids),
+        canonical["cells"],
+    )
     primary_frames = [
         frame
         for frame in (
             information,
             _attach_coordinates(current_primary, canonical["cells"]),
             _attach_coordinates(affinity_primary, canonical["cells"]),
+            state_local,
         )
         if not frame.empty
     ]
@@ -1103,10 +1838,29 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     if isinstance(derived_raw, (str, bytes)) or not isinstance(derived_raw, Sequence):
         raise ValueError("analysis derived must be a list")
     derived_hash = canonical_hash(
-        {"primary_analysis_hash": analysis_hash, "derived": list(derived_raw), "version": 1}
+        {
+            "primary_analysis_hash": analysis_hash,
+            "derived": list(derived_raw),
+            "version": 1,
+            "theoretical_reference": theoretical_reference,
+            "theory_provenance": dict(theory_provenance),
+        }
     )
-    derived = _derived(study_id, derived_raw, information, events, derived_hash)
+    derived, theory_comparison = _derived(
+        study_id,
+        derived_raw,
+        primary,
+        events,
+        derived_hash,
+        micro_slots=canonical["micro_slots"],
+        settings=settings,
+        source_run_ids=source_run_ids,
+        theoretical_reference=str(theoretical_reference),
+    )
     derived = _attach_coordinates(derived, canonical["cells"])
+    contrasts = _factorial_contrasts(primary, derived, derived_raw, derived_hash)
+    if not contrasts.empty:
+        derived = pd.concat([derived, contrasts], ignore_index=True, sort=False)
 
     outputs = {
         "primary_estimates": primary,
@@ -1114,10 +1868,18 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    if theoretical_reference == "single_affinity_revised":
+        outputs["single_affinity_theory_comparison"] = _attach_coordinates(
+            theory_comparison, canonical["cells"]
+        )
     for name, frame in outputs.items():
         parquet_safe(frame).to_parquet(tables_dir / f"{name}.parquet", index=False, engine="pyarrow")
 
-    plot_tables = {**canonical, **outputs}
+    plot_tables = {
+        **canonical,
+        "rounds": _attach_coordinates(canonical["rounds"], canonical["cells"]),
+        **outputs,
+    }
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
     reports = analysis_dir / "reports"
     reports.mkdir(parents=True, exist_ok=True)
@@ -1133,7 +1895,8 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
                 f"- Round records: {counts['round_rows']}",
                 f"- Micro-slot records: {counts['micro_slot_rows']}",
                 f"- Primary estimates: {len(primary)}",
-                f"- Derived observables: {len(derived)}", "",
+                f"- Derived observables: {len(derived)}",
+                f"- Single-affinity theory comparison rows: {len(theory_comparison)}", "",
             ]
         ),
         encoding="utf-8",
@@ -1146,6 +1909,7 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
                 "Information estimates use the repository's established direct-counting round-feedback estimator, whole-episode bootstrap, configured nulls, and support diagnostics.",
                 "Execution shards were reconstructed into scientific cells before per-cell estimation.", "",
                 f"Analysis hash: `{analysis_hash}`.", "",
+                *(SINGLE_AFFINITY_METHODS if not derived.empty else ()),
             ]
         ),
         encoding="utf-8",
@@ -1175,6 +1939,8 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         "analysis_hash": analysis_hash,
         "derived_hash": derived_hash,
         "auxiliary_analysis_hash": auxiliary_hash,
+        "theory": dict(theory_provenance),
+        "theoretical_reference": theoretical_reference,
         "estimator_engine": "mas_cc.games.hidden_bench.imitation_round_feedback.analysis.round_information_analysis",
         "requested_statistics": list(statistics),
         "resampling": settings,
@@ -1188,6 +1954,7 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         },
         "plots": plots,
         "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
+        "derived_semantics": _derived_semantics(derived),
     }
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)
     (analysis_dir / "progress.json").unlink(missing_ok=True)
@@ -1203,4 +1970,9 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     }
 
 
-__all__ = ["ESTIMATOR_ALIASES", "aggregate_study"]
+__all__ = [
+    "DERIVED_COLUMNS",
+    "ESTIMATOR_ALIASES",
+    "SINGLE_AFFINITY_DERIVED",
+    "aggregate_study",
+]

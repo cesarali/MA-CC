@@ -1,9 +1,10 @@
 """Finite-horizon controller-target current analysis for completed episodes.
 
 This module is post-processing only.  It reads the same ``RoundEvent`` objects
-as the relational information analysis, resamples them by whole episode with
-the shared bootstrap helper, and evaluates the already-established exact
-finite-N q-voter kernels.  It never imports or invokes a provider runtime.
+as the relational information analysis and resamples them by whole episode.
+Terminal behavioral current remains empirical; an explicitly requested
+theoretical comparison is supplied by the canonical single-affinity facade.
+It never imports or invokes a provider runtime.
 """
 
 from __future__ import annotations
@@ -19,19 +20,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation_round_feedback.analysis import (
     RoundEvent,
     bootstrap_episode_rows,
 )
-from .theory import (
-    ClassicalReference,
-    classical_reference,
-    finite_horizon_current_moments_for_episodes,
-    q1_current_closed_forms,
-    q1_mean_response,
-    theory_parameters_from_record,
-)
+from mas_cc.analysis.single_affinity import finite_horizon_current_comparison
 
 
 CURRENT_VALUE_NAMES = (
@@ -60,16 +53,16 @@ CURRENT_SUMMARY_REQUIRED_FIELDS = (
     "current_fano_dispersion_empirical",
     "current_precision_irisarri_empirical",
     "current_snr2_empirical",
-    "current_mean_theory",
-    "current_variance_theory",
-    "current_fano_dispersion_theory",
-    "current_precision_irisarri_theory",
-    "current_snr2_theory",
-    "current_mean_empirical_minus_theory",
-    "current_variance_empirical_minus_theory",
-    "current_fano_dispersion_empirical_minus_theory",
-    "current_precision_irisarri_empirical_minus_theory",
-    "current_snr2_empirical_minus_theory",
+    "current_mean_single_affinity_theory",
+    "current_variance_single_affinity_theory",
+    "current_fano_dispersion_single_affinity_theory",
+    "current_precision_irisarri_single_affinity_theory",
+    "current_snr2_single_affinity_theory",
+    "current_mean_empirical_minus_single_affinity_theory",
+    "current_variance_empirical_minus_single_affinity_theory",
+    "current_fano_dispersion_empirical_minus_single_affinity_theory",
+    "current_precision_irisarri_empirical_minus_single_affinity_theory",
+    "current_snr2_empirical_minus_single_affinity_theory",
     "current_precision_support",
     "current_snr2_zero_variance_nonzero_mean",
     "current_snr2_degenerate_zero_current",
@@ -248,48 +241,15 @@ def _analysis_target(episodes: Sequence[Mapping[str, Any]]) -> str:
     return next(iter(targets)) if len(targets) == 1 else "episode_specific_controller_target"
 
 
-def _initial_distribution(episodes: Sequence[Mapping[str, Any]], N: int) -> np.ndarray:
-    distribution = np.zeros(N + 1, dtype=float)
-    for row in episodes:
-        distribution[int(row["initial_target_count"])] += 1.0
-    distribution /= len(episodes)
-    return distribution
-
-
-def _theory_kernel(
-    rows: Sequence[RoundEvent], reference: ClassicalReference
-) -> tuple[str, np.ndarray]:
-    actions = [row.U_k for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
-    probabilities = [row.p_k for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
-    if actions and all(action == ADVOCATE_TARGET for action in actions) and all(
-        value is not None and math.isclose(float(value), 1.0, abs_tol=1e-12)
-        for value in probabilities
-    ):
-        return "always_ADVOCATE", reference.R1
-    if actions and all(action == NO_OP for action in actions) and all(
-        value is not None and math.isclose(float(value), 0.0, abs_tol=1e-12)
-        for value in probabilities
-    ):
-        return "always_NO_OP", reference.R0
-    return "stochastic_feedback", reference.closed_loop_kernel
-
-
 def _current_summary_without_bootstrap(
     rows: Sequence[RoundEvent],
     episodes: Sequence[Mapping[str, Any]],
     *,
-    theory_enabled: bool,
+    theoretical_reference: str,
+    micro: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     first = rows[0]
-    parameters = None
-    found = {
-        item.key: item
-        for item in (theory_parameters_from_record(row.event) for row in rows)
-        if item is not None
-    }
-    if len(found) == 1:
-        parameters = next(iter(found.values()))
-    N = parameters.N if parameters is not None else sum(first.N_k)
+    N = sum(first.N_k)
     repetitions = len(episodes)
     empirical = empirical_current_statistics(
         [float(row["episode_current"]) for row in episodes]
@@ -300,20 +260,12 @@ def _current_summary_without_bootstrap(
         "task_id": str(first.event.get("task_id") or "task-unspecified"),
         "analysis_target": _analysis_target(episodes),
         "N": N,
-        "q": parameters.q if parameters is not None else first.event.get("social_group_size"),
-        "q_c": parameters.q_c if parameters is not None else first.event.get("sensor_sample_size"),
-        "b": parameters.b if parameters is not None else first.event.get("intervention_budget"),
-        "c": (
-            parameters.actuation_fraction
-            if parameters is not None
-            else first.event.get("actuation_fraction")
-        ),
-        "beta": parameters.beta if parameters is not None else first.event.get("controller_beta"),
-        "theta": (
-            parameters.theta
-            if parameters is not None
-            else first.event.get("controller_threshold")
-        ),
+        "q": first.event.get("social_group_size"),
+        "q_c": first.event.get("sensor_sample_size"),
+        "b": first.event.get("intervention_budget"),
+        "c": first.event.get("actuation_fraction"),
+        "beta": first.event.get("controller_beta"),
+        "theta": first.event.get("controller_threshold"),
         "K": horizons[0] if len(horizons) == 1 else "mixed:" + ",".join(map(str, horizons)),
         "n_repetitions": repetitions,
         **empirical,
@@ -326,57 +278,42 @@ def _current_summary_without_bootstrap(
         "current_snr2_degenerate_zero_current": empirical[
             "current_snr2_degenerate_zero_current_empirical"
         ],
-        "theory_mode": "unavailable",
+        "theory_mode": theoretical_reference,
         "theory_applicable": False,
         "theory_skip_reason": None,
     }
 
     theory_mean = theory_variance = math.nan
-    if not theory_enabled:
-        row["theory_skip_reason"] = "matched theory comparison disabled"
-    elif parameters is None:
-        row["theory_skip_reason"] = (
-            "no single matched (N, q, q_c, b, beta, theta) tuple applies"
-        )
+    if theoretical_reference == "none":
+        row["theory_skip_reason"] = "single-affinity theory comparison disabled"
     else:
-        reference = classical_reference(parameters)
-        mode, kernel = _theory_kernel(rows, reference)
-        moments = finite_horizon_current_moments_for_episodes(
-            kernel,
-            [int(item["initial_target_count"]) for item in episodes],
-            [int(item["K"]) for item in episodes],
-        )
-        theory_mean = moments["mean"]
-        theory_variance = moments["variance"]
+        comparison = finite_horizon_current_comparison(rows, micro, episodes)
         row.update(
-            {
-                "theory_mode": mode,
-                "theory_applicable": True,
-                "current_second_moment_theory": moments["second_moment"],
-            }
+            {key: value for key, value in comparison.items() if key not in {"mean", "variance", "second_moment", "parameters"}}
         )
-        if parameters.q == 1:
-            initial = _initial_distribution(episodes, N)
-            row.update(q1_current_closed_forms(initial, N=N, b=parameters.b))
-            row["q1_current_closed_form_matches_kernel"] = bool(
-                np.allclose(
-                    reference.mean_response,
-                    [q1_mean_response(n / N, N=N, b=parameters.b) for n in range(N + 1)],
-                    atol=1e-12,
-                    rtol=1e-12,
-                )
-            )
+        row["theory_applicable"] = bool(comparison["available"])
+        row["theory_skip_reason"] = comparison["reason"]
+        if comparison["available"]:
+            theory_mean = float(comparison["mean"])
+            theory_variance = float(comparison["variance"])
+            row["current_second_moment_single_affinity_theory"] = comparison[
+                "second_moment"
+            ]
 
     theory = {
-        "current_mean_theory": theory_mean,
-        "current_variance_theory": theory_variance,
-        **_safe_metric_ratios(theory_mean, theory_variance, suffix="theory"),
+        "current_mean_single_affinity_theory": theory_mean,
+        "current_variance_single_affinity_theory": theory_variance,
+        **_safe_metric_ratios(
+            theory_mean, theory_variance, suffix="single_affinity_theory"
+        ),
     }
     row.update(theory)
     for name in CURRENT_VALUE_NAMES:
         empirical_value = float(row[f"{name}_empirical"])
-        theory_value = float(row[f"{name}_theory"])
-        row[f"{name}_empirical_minus_theory"] = empirical_value - theory_value
+        theory_value = float(row[f"{name}_single_affinity_theory"])
+        row[f"{name}_empirical_minus_single_affinity_theory"] = (
+            empirical_value - theory_value
+        )
     return row
 
 
@@ -408,7 +345,8 @@ def current_cell_summary(
     bootstrap_resamples: int,
     confidence: float,
     seed: int,
-    theory_enabled: bool = True,
+    theoretical_reference: str = "single_affinity_revised",
+    micro: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """One task/cell summary and its episode-current rows."""
 
@@ -416,7 +354,7 @@ def current_cell_summary(
         raise ValueError("current summary requires at least one round")
     episodes = episode_current_rows(rows)
     summary = _current_summary_without_bootstrap(
-        rows, episodes, theory_enabled=theory_enabled
+        rows, episodes, theoretical_reference=theoretical_reference, micro=micro
     )
     draws = bootstrap_episode_rows(
         sorted(rows, key=lambda row: (row.episode_id, row.round_index)),
@@ -429,14 +367,14 @@ def current_cell_summary(
         drawn_episodes = [_episode_row(block) for block in occurrences]
         bootstrap_rows.append(
             _current_summary_without_bootstrap(
-                list(draw), drawn_episodes, theory_enabled=theory_enabled
+                list(draw), drawn_episodes, theoretical_reference="none"
             )
         )
     alpha = (1.0 - confidence) / 2.0
     for field in (
         *(f"{name}_empirical" for name in CURRENT_VALUE_NAMES),
-        *(f"{name}_theory" for name in CURRENT_VALUE_NAMES),
-        *(f"{name}_empirical_minus_theory" for name in CURRENT_VALUE_NAMES),
+        *(f"{name}_single_affinity_theory" for name in CURRENT_VALUE_NAMES),
+        *(f"{name}_empirical_minus_single_affinity_theory" for name in CURRENT_VALUE_NAMES),
     ):
         values = [
             float(row[field])
@@ -478,8 +416,9 @@ def write_current_report(row: Mapping[str, Any], path: Path) -> None:
         "# Controller-target current analysis",
         "",
         "This report measures the net population current toward the controller "
-        "target over repeated LLM episodes and compares it with the exact "
-        "finite-N controlled q-voter at the same matched parameters. The primary "
+        "target over repeated LLM episodes and, when calibrated microscopic "
+        "records are available, compares that coordinate with the revised "
+        "single-affinity isolated controlled layer. The primary "
         "quantities are the mean current, current variance, Fano-like dispersion, "
         "and the squared signal-to-noise ratio SNR². The report also gives the "
         "inverse-Fano / Irisarri-style precision explicitly so there is no "
@@ -503,7 +442,7 @@ def write_current_report(row: Mapping[str, Any], path: Path) -> None:
         f"support/repetition warning: {row['current_precision_support']}",
         "```",
         "",
-        "## Exact matched q-voter current",
+        "## Revised single-affinity finite-horizon current",
         "",
         "```text",
         f"theory mode: {row['theory_mode']}",
@@ -516,18 +455,21 @@ def write_current_report(row: Mapping[str, Any], path: Path) -> None:
         f"theta={_format(row['theta'])}",
         f"K={_format(row['K'])}",
         "",
-        f"mean current: {_format(row['current_mean_theory'])}",
-        f"variance: {_format(row['current_variance_theory'])}",
+        f"mean current: {_format(row['current_mean_single_affinity_theory'])}",
+        f"variance: {_format(row['current_variance_single_affinity_theory'])}",
         "Fano-like dispersion Var/|mean|: "
-        + _format(row["current_fano_dispersion_theory"]),
+        + _format(row["current_fano_dispersion_single_affinity_theory"]),
         "Irisarri-style precision |mean|/Var: "
-        + _format(row["current_precision_irisarri_theory"]),
-        f"SNR²: {_format(row['current_snr2_theory'])}",
+        + _format(row["current_precision_irisarri_single_affinity_theory"]),
+        f"SNR²: {_format(row['current_snr2_single_affinity_theory'])}",
         "```",
         "",
         "## Direct comparison",
         "",
-        "| Quantity | Empirical | Exact q-voter | Empirical - theory |",
+        "The empirical value includes ordinary social updates. The theoretical "
+        "value evolves the isolated controlled layer; it is not the response-based J_c.",
+        "",
+        "| Quantity | Empirical behavioral | Revised single-affinity | Residual |",
         "|---|---:|---:|---:|",
     ]
     labels = {
@@ -540,32 +482,8 @@ def write_current_report(row: Mapping[str, Any], path: Path) -> None:
     for name in CURRENT_VALUE_NAMES:
         lines.append(
             f"| {labels[name]} | {_format(row[f'{name}_empirical'])} | "
-            f"{_format(row[f'{name}_theory'])} | "
-            f"{_format(row[f'{name}_empirical_minus_theory'])} |"
-        )
-    if row.get("q") == 1 and "q1_current_response_closed_form_theory" in row:
-        lines.extend(
-            [
-                "",
-                "## q=1 genuine one-round closed form",
-                "",
-                "These values average the closed form over the empirical initial "
-                "target-count distribution. The finite-horizon values above remain "
-                "the exact matrix result for all K rounds.",
-                "",
-                "```text",
-                "NO_OP mean current: "
-                + _format(row["q1_current_mean_noop_closed_form_theory"]),
-                "ADVOCATE mean current: "
-                + _format(row["q1_current_mean_advocate_closed_form_theory"]),
-                "ADVOCATE - NO_OP response: "
-                + _format(row["q1_current_response_closed_form_theory"]),
-                "response in population-fraction coordinates: "
-                + _format(row["q1_current_response_fraction_closed_form_theory"]),
-                "closed form matches exact one-round kernels: "
-                + _format(row["q1_current_closed_form_matches_kernel"]),
-                "```",
-            ]
+            f"{_format(row[f'{name}_single_affinity_theory'])} | "
+            f"{_format(row[f'{name}_empirical_minus_single_affinity_theory'])} |"
         )
     if row.get("theory_skip_reason"):
         lines.extend(["", f"Theory note: {row['theory_skip_reason']}."])
@@ -584,7 +502,7 @@ def write_current_analysis(
     bootstrap_resamples: int,
     confidence: float,
     seed: int,
-    theory_enabled: bool = True,
+    theoretical_reference: str = "single_affinity_revised",
     micro: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Path]]:
     """Write episode CSV, one summary CSV, and one report per task/cell."""
@@ -600,7 +518,8 @@ def write_current_analysis(
             bootstrap_resamples=bootstrap_resamples,
             confidence=confidence,
             seed=seed + index,
-            theory_enabled=theory_enabled,
+            theoretical_reference=theoretical_reference,
+            micro=[row for row in micro if str(row.get("cell_id", group[0].cell_id)) == group[0].cell_id],
         )
         summaries.append(summary)
     # Reconstruct once with optional microscopic records so the authoritative
@@ -637,18 +556,16 @@ def current_analysis_comet_metrics(
     metrics: dict[str, float] = {}
     field_names = {
         "current_mean_empirical": "current/mean_empirical",
-        "current_mean_theory": "current/mean_theory",
+        "current_mean_single_affinity_theory": "current/mean_single_affinity_theory",
         "current_variance_empirical": "current/variance_empirical",
-        "current_variance_theory": "current/variance_theory",
+        "current_variance_single_affinity_theory": "current/variance_single_affinity_theory",
         "current_fano_dispersion_empirical": "current/fano_dispersion_empirical",
-        "current_fano_dispersion_theory": "current/fano_dispersion_theory",
+        "current_fano_dispersion_single_affinity_theory": "current/fano_dispersion_single_affinity_theory",
         "current_precision_irisarri_empirical": "current/precision_irisarri_empirical",
-        "current_precision_irisarri_theory": "current/precision_irisarri_theory",
+        "current_precision_irisarri_single_affinity_theory": "current/precision_irisarri_single_affinity_theory",
         "current_snr2_empirical": "current/snr2_empirical",
-        "current_snr2_theory": "current/snr2_theory",
+        "current_snr2_single_affinity_theory": "current/snr2_single_affinity_theory",
         "n_repetitions": "current/n_repetitions",
-        "q1_current_response_closed_form_theory": "current/q1_response_closed_form_theory",
-        "q1_current_closed_form_matches_kernel": "current/q1_closed_form_matches_kernel",
     }
     many = len(rows) > 1
     for row in rows:

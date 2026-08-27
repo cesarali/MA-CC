@@ -68,7 +68,7 @@ social_distrust: true                 initialization: local_vote
 stop_on_consensus: false              semantic option shuffling (per call)
 artifact_profile: results_only
 provider / model / temperature / max_output_tokens / concurrency: identical
-analysis.estimators: identical, all 30 names
+analysis.estimators: identical, all 32 names
 analysis.options: identical (1000 bootstrap, 1000 null, epistemic_bins 4)
 ```
 
@@ -165,9 +165,9 @@ cell-independent, so all 540 episodes advocate one fixed relation per world.
 
 ---
 
-## What the classical theory already predicts
+## Optional historical classical null
 
-The matched finite-`N` q-voter reference is deterministic, so the study's null
+The matched finite-`N` q-voter reference is deterministic, so an optional null
 hypothesis can be computed **before** a single call is made. Uniform-occupancy
 mean `T_qv(n)`, in bits, at `N=24, q=1, beta=4, theta=0.5`:
 
@@ -184,23 +184,24 @@ memoryless imitation population barely benefits from a better sensor at fixed
 
 That makes the sensing axis the interesting one: **a strong empirical `q_c`
 dependence would be a departure from the classical reference**, not a
-confirmation of it. The matched-theory postprocessing reports exactly that
-residual per cell.
+confirmation of it. It is not emitted by default and must be selected
+explicitly as `matched_qvoter_null`; it is never substituted for revised
+theory.
 
 ---
 
 ## What each cell produces automatically
 
-`analysis.enabled: true` with all 30 estimator names declared, so every finished
-run writes its own report — plus the matched classical reference, which the
-relational analyzer now computes as standard post-processing:
+`analysis.enabled: true` with the estimator family declared, so every finished
+run writes its own empirical report plus the revised single-affinity comparison
+or an explicit unavailable reason:
 
 - target CMI `I(U_k ; n_Z,k+1 | n_Z,k)`, sensing MI `I(N_k ; Y_k)`, signed response;
 - `φ`-, susceptible-, `κ`-conditioned CMIs and their matched signed responses;
 - full-`E_k` memory-aware CMI and the joint `(κ,φ)` diagnostic;
 - support / overlap / sparsity diagnostics, bootstrap CIs, policy-conditional nulls;
-- matched finite-`N` q-voter theory: exact `a_n`, occupancy-matched `T_qv`,
-  exact `q=1` response, empirical-vs-theory residual and ratio.
+- revised single-affinity `chi`, `T_pi`, `eta_IR`, `J_c`, `I_sens`, and
+  `eta_th`, calibrated from retained microscopic transitions.
 
 ### The scientific coordinates land on every round record
 
@@ -215,27 +216,16 @@ Which is what makes the resource-space plots possible afterwards:
 | `beta` | `controller_beta` |
 | `threshold` | `controller_threshold` |
 
-They are re-emitted in `theory_comparison.csv` as `theory_qc`,
-`theory_sensing_fraction`, `theory_b`, `theory_c`, `theory_beta`,
-`theory_theta`, so one concatenation of the three rows' `theory_comparison.csv`
-is the whole `(q_c/N, b/N)` surface.
+They remain on canonical observations and are attached to the standardized
+study-level `single_affinity_theory_comparison.parquet`, whose rows carry the
+`single_affinity_revised` reference stamp.
 
-### ⚠ The **pooled** row's theory comparison is deliberately not applicable
+### ⚠ Revised theory is never pooled across physical cells
 
-Each config's analysis emits per-cell rows **and** a pooled row. Because the six
-cells of a row span three different `b` values, they have three different
-classical references, and the pooled slice correctly reports:
-
-```
-theory_applicable = False
-theory_skip_reason = "rows span 3 distinct (N, q, q_c, b, beta, theta) tuples;
-                      a single classical reference does not apply"
-```
-
-That is the intended behaviour, not a failure — averaging them would compare the
-run against a controller nobody configured. **The per-cell theory rows are the
-ones to read.** The pooled *empirical* MI/CMI estimates are still computed as
-usual.
+Each config's empirical analysis emits per-cell rows and a pooled descriptive
+row. Because the cells span different `b` values, revised theory comparison is
+emitted only per physical cell. No pooled theory tuple is manufactured. The
+pooled empirical MI/CMI estimates remain available as descriptive calculations.
 
 ---
 

@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_import_mas_cc_has_no_heavy_or_external_side_effect_imports():
@@ -51,3 +52,13 @@ print(json.dumps(sorted(
         [sys.executable, "-c", script], capture_output=True, text=True, check=True
     )
     assert json.loads(result.stdout) == []
+
+
+def test_production_analysis_never_imports_legacy_relational_theory():
+    root = Path("src/mas_cc")
+    offenders = []
+    for path in root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if "from .theory" in text or "imitation_round_feedback.theory import" in text:
+            offenders.append(str(path))
+    assert offenders == []
