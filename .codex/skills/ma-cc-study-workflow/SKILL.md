@@ -8,6 +8,33 @@ description: Create, preflight, submit, monitor, aggregate, or post-process MA-C
 Work from the repository root. Keep scientific design separate from scheduler
 topology and reuse the repository's established analysis engines.
 
+## Potsdam dedicated environment
+
+When operating on Potsdam or submitting to its SLURM cluster, use the dedicated
+Conda environment `MA-CC` for every Python, `mas-cc`, and pytest command. The
+canonical Potsdam Conda executable is
+`/home/ojedamarin/.local/share/miniforge3/bin/conda`. Prefer the explicit forms
+below because environment activation does not persist between agent tool
+calls:
+
+```bash
+/home/ojedamarin/.local/share/miniforge3/bin/conda run -n MA-CC python ...
+/home/ojedamarin/.local/share/miniforge3/bin/conda run -n MA-CC mas-cc ...
+/home/ojedamarin/.local/share/miniforge3/bin/conda run -n MA-CC python -m pytest ...
+```
+
+Use `--live-stream` for long-running execution, monitoring, or aggregation
+where buffered output would hide progress. On Potsdam, never substitute
+`/usr/bin/python`, create a study-specific environment, or install dependencies
+into the system interpreter. Before real submission, verify the environment
+with a credential-free import check for `mas_cc`, `pandas`, and `pyarrow`.
+Ensure the SLURM job inherits or explicitly invokes this same `MA-CC`
+environment; the login shell's system Python is not a valid fallback.
+
+Outside Potsdam, use the existing environment and setup conventions of the
+local checkout. Do not require the Potsdam environment name or absolute Conda
+path on a developer's local machine.
+
 ## Read the architecture first
 
 Before designing, submitting, or changing analysis, read:
@@ -102,6 +129,11 @@ allocation alone. Each configured episode slot runs one episode at a time;
 provider concurrency remains an independent hard semaphore. Prefer a live,
 model-specific concurrency probe when available and keep large runs below the
 declared RPM target. Published RPM is a ceiling, not guaranteed throughput.
+Standardized workers also apply the shared adaptive provider coordinator from
+`execution.provider_load_control`. Keep it enabled for real remote-provider
+studies: start conservatively, bound it by planned request capacity and target
+RPM, and let local/global circuit breakers respond to 429/5xx bursts. Do not
+replace it with game-specific throttling or a study-specific job file.
 
 For an authorized real run, use:
 
@@ -149,7 +181,7 @@ For a new efficiency, phase diagram, or plot that existing raw records support:
 
 1. add a derived observable and/or analysis recipe entry;
 2. rerun `study aggregate`;
-3. reuse cached primary estimates where their data and specification match;
+3. recompute from the retained canonical Parquet observations;
 4. do not rerun LLM calls.
 
 Rerun LLM calls only when the requested result genuinely needs raw fields or

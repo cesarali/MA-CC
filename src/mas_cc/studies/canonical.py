@@ -63,6 +63,7 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         ("control.options.beta", "beta"),
         ("control.options.threshold", "threshold"),
         ("game.options.epistemic_prompt_class", "epistemic_prompt_class"),
+        ("experiment.metadata.controller_semantics", "controller_semantics"),
     ):
         value = _nested(cell.resolved_config, dotted)
         if value is not None and label not in result:

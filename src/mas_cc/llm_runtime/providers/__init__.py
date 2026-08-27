@@ -28,6 +28,11 @@ from .pricing import (
     snapshot_sha256,
 )
 from .errors import ProviderError
+from .load_control import (
+    ProviderLoadControlConfig,
+    RequestLease,
+    SharedProviderCoordinator,
+)
 from .model_profiles import (
     ModelProfile,
     ModelProfileRegistry,
@@ -75,8 +80,11 @@ __all__ = [
     "PricingCatalog",
     "ProviderCapabilities",
     "ProviderError",
+    "ProviderLoadControlConfig",
     "ProviderRegistry",
     "ProviderUsage",
+    "RequestLease",
+    "SharedProviderCoordinator",
     "ProfiledLLMProvider",
     "TemperatureRule",
     "apply_model_profile",

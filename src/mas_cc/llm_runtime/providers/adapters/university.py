@@ -8,6 +8,7 @@ from typing import Any
 from mas_cc.llm_runtime.config import LLMProviderConfig
 
 from ._openai_compatible import OpenAICompatibleProvider
+from ..load_control import SharedProviderCoordinator
 
 
 class UniversityProvider(OpenAICompatibleProvider):
@@ -17,6 +18,7 @@ class UniversityProvider(OpenAICompatibleProvider):
         *,
         environment: Mapping[str, str] | None = None,
         session: Any | None = None,
+        request_coordinator: SharedProviderCoordinator | None = None,
     ) -> None:
         self._windows_proxy_configured = False
         super().__init__(
@@ -27,6 +29,7 @@ class UniversityProvider(OpenAICompatibleProvider):
             discover_endpoint=True,
             environment=environment,
             session=session,
+            request_coordinator=request_coordinator,
         )
 
     def _get_session(self):

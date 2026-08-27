@@ -835,10 +835,17 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
             continue
         facet = spec.get("facet")
         groups = [("all", subset)] if facet not in subset else list(subset.groupby(str(facet), dropna=False))
+        finite_estimates = pd.to_numeric(subset["estimate"], errors="coerce")
+        finite_estimates = finite_estimates[np.isfinite(finite_estimates)]
+        shared_vmin = float(finite_estimates.min()) if len(finite_estimates) else None
+        shared_vmax = float(finite_estimates.max()) if len(finite_estimates) else None
         figure, axes = plt.subplots(1, len(groups), squeeze=False, figsize=(5 * len(groups), 4))
         for axis, (label, group) in zip(axes[0], groups, strict=True):
             pivot = group.pivot_table(index=y, columns=x, values="estimate", aggfunc="mean")
-            image = axis.imshow(pivot.to_numpy(dtype=float), aspect="auto", origin="lower")
+            image = axis.imshow(
+                pivot.to_numpy(dtype=float), aspect="auto", origin="lower",
+                vmin=shared_vmin, vmax=shared_vmax,
+            )
             axis.set_xticks(range(len(pivot.columns)), labels=[str(value) for value in pivot.columns])
             axis.set_yticks(range(len(pivot.index)), labels=[str(value) for value in pivot.index])
             axis.set_xlabel(x)

@@ -3,6 +3,7 @@ import json
 import sys
 import threading
 import time
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -108,6 +109,19 @@ class _Session:
         self.closed = True
 
 
+class _CountingCoordinator:
+    def __init__(self):
+        self.acquired = 0
+        self.outcomes = []
+
+    async def acquire(self):
+        self.acquired += 1
+        return SimpleNamespace(token=str(self.acquired))
+
+    async def release(self, lease, **outcome):
+        self.outcomes.append((lease.token, outcome))
+
+
 def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata():
     body = {
         "id": "req-1",
@@ -139,6 +153,32 @@ def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata(
         {"role": "user", "content": "A or B?"},
     ]
     assert "metadata" not in sent
+
+
+def test_cluster_coordinator_accounts_for_each_retry_attempt():
+    body = {
+        "id": "req-coordinated",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _CountingCoordinator()
+    session = _Session(
+        [_Response(500, {}, headers={"Retry-After": "0"}), _Response(200, body)]
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY", max_retries=1,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+        request_coordinator=coordinator,
+    )
+
+    assert asyncio.run(provider.complete(_request())).content == "A"
+    assert coordinator.acquired == 2
+    assert [outcome["success"] for _, outcome in coordinator.outcomes] == [False, True]
+    assert coordinator.outcomes[0][1]["status_code"] == 500
 
 
 def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():

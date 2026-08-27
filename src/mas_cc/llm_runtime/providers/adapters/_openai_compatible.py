@@ -17,6 +17,7 @@ from ..errors import ProviderError
 from ..capabilities import ProviderCapabilities
 from ..requests import CompletionRequest
 from ..responses import CompletionResponse, ProviderUsage
+from ..load_control import SharedProviderCoordinator
 
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
@@ -58,6 +59,7 @@ class OpenAICompatibleProvider:
         discover_endpoint: bool = False,
         environment: Mapping[str, str] | None = None,
         session: Any | None = None,
+        request_coordinator: SharedProviderCoordinator | None = None,
     ) -> None:
         if environment is None:
             _load_dotenv_if_available()
@@ -95,6 +97,7 @@ class OpenAICompatibleProvider:
         self._endpoint_lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(self._concurrency)
         self._session = session
+        self._request_coordinator = request_coordinator
         self._closed = False
         self._jitter = random.Random()
 
@@ -111,6 +114,30 @@ class OpenAICompatibleProvider:
             self._session = requests.Session()
         return self._session
 
+    async def _coordinated_get(self, url: str, **kwargs: Any) -> Any:
+        lease = None
+        started = time.perf_counter()
+        try:
+            if self._request_coordinator is not None:
+                lease = await self._request_coordinator.acquire()
+            response = await asyncio.to_thread(self._get_session().get, url, **kwargs)
+            if lease is not None:
+                retryable = self._is_retryable(response.status_code)
+                await self._request_coordinator.release(
+                    lease, success=not retryable, retryable=retryable,
+                    status_code=response.status_code,
+                    latency_seconds=time.perf_counter() - started,
+                )
+                lease = None
+            return response
+        except Exception:
+            if lease is not None:
+                await self._request_coordinator.release(
+                    lease, success=False, retryable=True, status_code=None,
+                    latency_seconds=time.perf_counter() - started,
+                )
+            raise
+
     async def discover_models(self) -> tuple[str, ...]:
         """Return advertised model ids while sharing normal endpoint discovery."""
 
@@ -119,18 +146,15 @@ class OpenAICompatibleProvider:
         async with self._endpoint_lock:
             if self._available_models is not None:
                 return self._available_models
-            session = self._get_session()
             url = f"{self._base_url}/models"
             try:
-                response = await asyncio.to_thread(
-                    session.get,
+                response = await self._coordinated_get(
                     url,
                     headers={"Authorization": f"Bearer {self._key}"},
                     timeout=self._timeout,
                 )
                 if response.status_code == 404:
-                    response = await asyncio.to_thread(
-                        session.get,
+                    response = await self._coordinated_get(
                         f"{self._base_url}/v1/models",
                         headers={"Authorization": f"Bearer {self._key}"},
                         timeout=self._timeout,
@@ -230,7 +254,11 @@ class OpenAICompatibleProvider:
         async with self._semaphore:
             for retry in range(self._max_retries + 1):
                 response = None
+                lease = None
+                attempt_started = time.perf_counter()
                 try:
+                    if self._request_coordinator is not None:
+                        lease = await self._request_coordinator.acquire()
                     response = await asyncio.to_thread(
                         self._get_session().post,
                         self._chat_url,
@@ -239,6 +267,13 @@ class OpenAICompatibleProvider:
                         timeout=self._timeout,
                     )
                     if self._is_retryable(response.status_code) and retry < self._max_retries:
+                        if lease is not None:
+                            await self._request_coordinator.release(
+                                lease, success=False, retryable=True,
+                                status_code=response.status_code,
+                                latency_seconds=time.perf_counter() - attempt_started,
+                            )
+                            lease = None
                         await asyncio.sleep(self._retry_delay(response, retry))
                         continue
                     response.raise_for_status()
@@ -250,6 +285,13 @@ class OpenAICompatibleProvider:
                             choice, request, response.status_code
                         )
                         raise TypeError("message content is not a string")
+                    if lease is not None:
+                        await self._request_coordinator.release(
+                            lease, success=True, retryable=False,
+                            status_code=response.status_code,
+                            latency_seconds=time.perf_counter() - attempt_started,
+                        )
+                        lease = None
                     latency = time.perf_counter() - started
                     return CompletionResponse(
                         content=content,
@@ -268,6 +310,13 @@ class OpenAICompatibleProvider:
                     # Already diagnosed and already normalized - in particular
                     # the exhausted reasoning budget above, which must not be
                     # retried into three identical paid failures.
+                    if lease is not None:
+                        status = getattr(response, "status_code", None)
+                        await self._request_coordinator.release(
+                            lease, success=False, retryable=self._is_retryable(status),
+                            status_code=status,
+                            latency_seconds=time.perf_counter() - attempt_started,
+                        )
                     raise
                 except (KeyError, IndexError, TypeError, ValueError) as exc:
                     # Shared OpenAI-compatible proxies occasionally return an
@@ -275,6 +324,13 @@ class OpenAICompatibleProvider:
                     # envelope. Never accept that body, but treat it like the
                     # transient upstream fault it is and spend the configured
                     # bounded retries before failing the logical request.
+                    if lease is not None:
+                        await self._request_coordinator.release(
+                            lease, success=False, retryable=True,
+                            status_code=getattr(response, "status_code", None),
+                            latency_seconds=time.perf_counter() - attempt_started,
+                        )
+                        lease = None
                     if retry < self._max_retries:
                         await asyncio.sleep(self._retry_delay(response, retry))
                         continue
@@ -287,6 +343,13 @@ class OpenAICompatibleProvider:
                     ) from exc
                 except Exception as exc:
                     status = getattr(response, "status_code", None)
+                    if lease is not None:
+                        await self._request_coordinator.release(
+                            lease, success=False, retryable=self._is_retryable(status),
+                            status_code=status,
+                            latency_seconds=time.perf_counter() - attempt_started,
+                        )
+                        lease = None
                     # `status is None` means the request never produced a
                     # response at all: a connect or read timeout, a dropped
                     # connection, a VPN blip.  That is the *most* common
@@ -331,15 +394,16 @@ class OpenAICompatibleProvider:
             status_code=status,
         )
 
-    @staticmethod
-    def _retry_delay(response: Any, retry: int) -> float:
+    def _retry_delay(self, response: Any, retry: int) -> float:
         retry_after = getattr(response, "headers", {}).get("Retry-After")
         try:
             if retry_after is not None:
                 return max(0.0, float(retry_after))
         except (TypeError, ValueError):
             pass
-        return 0.5 * (2**retry)
+        # Full jitter prevents synchronized SLURM workers from retrying a
+        # degraded shared endpoint in the same sub-second wave.
+        return self._jitter.uniform(0.0, min(60.0, 2.0 * (2**retry)))
 
     def close(self) -> None:
         self._closed = True

@@ -1,0 +1,92 @@
+# Study 08 compact per-cell analysis. State-local extensions consume the same
+# canonical rounds and micro-slots; no estimator implementation is duplicated.
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_population_actuation_cmi
+  - round_target_actuation_cmi
+  - round_truth_actuation_cmi
+  - round_order_actuation_cmi
+  - round_population_information_fraction
+  - round_target_information_fraction
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_order_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_susceptible_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_memory_target_signed_response
+  - round_epistemic_target_signed_response
+  - round_phi_target_signed_response
+  - round_susceptible_target_signed_response
+  - round_kappa_target_signed_response
+  - cell_current
+  - episode_current
+  - effective_affinity
+  - kinetic_compliance
+
+resampling:
+  bootstrap_resamples: 1000
+  null_permutations: 1000
+  confidence: 0.95
+  seed: 20260822
+
+derived:
+  - eta_ir
+
+# Comparison-ready summaries use a common color scale across semantic panels.
+# Canonical rounds retain x, phi, kappa, and time for the TDD's subsequent
+# state-local/profile/evolution views without another provider run.
+plots:
+  prompt_target_cmi: &primary_plot
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: epistemic_prompt_class
+    facet: controller_semantics
+    kind: heatmap
+  prompt_signed_response:
+    <<: *primary_plot
+    metric: round_target_signed_response_share
+  prompt_eta_ir:
+    <<: *primary_plot
+    source: derived_observables
+    metric: eta_ir
+  prompt_action_entropy:
+    <<: *primary_plot
+    metric: round_controller_action_entropy
+  prompt_sensing_mi:
+    <<: *primary_plot
+    metric: round_sensing_mi
+  prompt_memory_cmi:
+    <<: *primary_plot
+    metric: round_memory_target_actuation_cmi
+  prompt_epistemic_cmi:
+    <<: *primary_plot
+    metric: round_epistemic_target_actuation_cmi
+  prompt_phi_cmi:
+    <<: *primary_plot
+    metric: round_phi_target_actuation_cmi
+  prompt_kappa_cmi:
+    <<: *primary_plot
+    metric: round_kappa_target_actuation_cmi
+  prompt_h_eff:
+    <<: *primary_plot
+    metric: effective_affinity
+  prompt_gamma_eff:
+    <<: *primary_plot
+    metric: kinetic_compliance
+  prompt_current:
+    <<: *primary_plot
+    metric: cell_current

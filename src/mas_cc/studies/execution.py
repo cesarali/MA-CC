@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Sequence
 
 from mas_cc.config import GridSpec, load_run_config_or_grid
+from mas_cc.llm_runtime.providers.load_control import ProviderLoadControlConfig
 
 from .manifest import StudySpec
 from .submission import SubmissionEntry
@@ -46,6 +47,7 @@ class ExecutionPlan:
     time_limit: str
     partition: str
     qos: str
+    provider_load_control: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -99,12 +101,22 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
     if throttle < 1:
         raise ValueError("planned array throttle must be positive")
     cpus = int(policy.get("cpus_per_task", episode_slots))
+    total_concurrency = throttle * per_shard
+    control = ProviderLoadControlConfig.from_mapping(
+        policy.get("provider_load_control"),
+        defaults={
+            "initial_concurrency": min(24, total_concurrency),
+            "minimum_concurrency": min(4, total_concurrency),
+            "maximum_concurrency": total_concurrency,
+            "target_rpm": target_rpm,
+        },
+    )
     return ExecutionPlan(
         mode="cell_array",
         shard_count=shard_count,
         array_throttle=throttle,
         request_concurrency_per_shard=per_shard,
-        total_request_concurrency=throttle * per_shard,
+        total_request_concurrency=total_concurrency,
         episode_slots_per_shard=episode_slots,
         total_episode_slots=throttle * episode_slots,
         target_rpm=target_rpm,
@@ -115,6 +127,7 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
         time_limit=str(policy.get("time_limit", "04:00:00")),
         partition=str(policy.get("partition", "all")),
         qos=str(policy.get("qos", "normal")),
+        provider_load_control=control.to_dict(),
     )
 
 

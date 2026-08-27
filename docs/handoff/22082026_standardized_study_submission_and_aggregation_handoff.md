@@ -609,6 +609,15 @@ round-information, and current-analysis paths pass.
 
 ## 16. Known limitations and recommended next work
 
+Standardized remote-provider studies install a shared adaptive coordinator
+from the generic array worker. The default starts at 24 cluster-wide HTTP
+attempts (or the lower planned ceiling), enforces target RPM, pauses an
+individually unhealthy worker, and opens a global breaker for widespread
+failures. Concurrency recovers additively after healthy intervals. Overrides
+belong in `study.yaml` under `execution.provider_load_control`; `mode: off` is
+reserved for deliberate diagnostics. Live state under
+`<study-root>/runtime/provider-control` is excluded from analysis packages.
+
 1. **Scheduler environment is site-dependent.**
    `run_config_array.job` assumes `python` resolves to an environment containing
    the installed repository. Add a generic Potsdam environment/bootstrap block
@@ -674,6 +683,7 @@ round-information, and current-analysis paths pass.
 - SLURM task numbers and directory names are not scientific coordinates.
 - Submission preflights every config before the one scheduler mutation.
 - Study resubmission reuses existing output roots and checkpoint semantics.
+- Provider load control is execution-only and shared across SLURM workers.
 - Canonical tables retain source provenance and qualified identities.
 - MI/CMI/bootstrap/null/support come from the established estimator engine.
 - Pooled estimates operate on pooled observations, never averaged shard CMI.

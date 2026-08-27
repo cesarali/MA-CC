@@ -8,6 +8,7 @@ from typing import Any
 from mas_cc.llm_runtime.config import LLMProviderConfig
 
 from ._openai_compatible import OpenAICompatibleProvider
+from ..load_control import SharedProviderCoordinator
 
 
 class OpenAIProvider(OpenAICompatibleProvider):
@@ -17,6 +18,7 @@ class OpenAIProvider(OpenAICompatibleProvider):
         *,
         environment: Mapping[str, str] | None = None,
         session: Any | None = None,
+        request_coordinator: SharedProviderCoordinator | None = None,
     ) -> None:
         super().__init__(
             config,
@@ -25,4 +27,5 @@ class OpenAIProvider(OpenAICompatibleProvider):
             fixed_base_url="https://api.openai.com/v1",
             environment=environment,
             session=session,
+            request_coordinator=request_coordinator,
         )

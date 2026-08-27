@@ -81,8 +81,15 @@ def create_llm_provider(
     """Construct one adapter; this is the only public provider creation path."""
 
     selected = registry or create_default_provider_registry()
-    if environment is not None and config.type in {"openai", "university"}:
-        adapter_options["environment"] = environment
+    if config.type in {"openai", "university"}:
+        from .load_control import coordinator_from_environment
+
+        if environment is not None:
+            adapter_options["environment"] = environment
+        adapter_options.setdefault(
+            "request_coordinator",
+            coordinator_from_environment(config, environment=environment),
+        )
     provider = selected.create(config, **adapter_options)
     if config.type.strip().lower() in {"openai", "university"}:
         profiles = profile_registry or default_model_profile_registry()

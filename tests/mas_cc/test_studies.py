@@ -154,6 +154,11 @@ def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
     assert plan.time_limit == "04:00:00"
     assert plan.partition == "all"
     assert plan.qos == "normal"
+    assert plan.provider_load_control["mode"] == "shared_adaptive"
+    assert plan.provider_load_control["initial_concurrency"] == 24
+    assert plan.provider_load_control["minimum_concurrency"] == 4
+    assert plan.provider_load_control["maximum_concurrency"] == 144
+    assert plan.provider_load_control["target_rpm"] == 900
 
 
 def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
@@ -190,6 +195,50 @@ def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
     study07_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
     for key in ("estimators", "resampling", "derived"):
         assert study07_analysis[key] == study06_analysis[key]
+
+
+def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
+    root = Path("configs/runs/relational_reasoning/population_study_08")
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, "/tmp/test-study08", git_commit="test")
+    shards = build_cell_execution_entries(spec, submissions)
+    plan = plan_cell_execution(spec, len(shards))
+    wrong = load_run_config_or_grid(root / "study08_wrong_prompt_b.yaml")
+    truth = load_run_config_or_grid(root / "study08_truth_prompt_b.yaml")
+
+    expected_axes = [
+        (
+            "game.options.epistemic_prompt_class",
+            ["naive", "distributed_information", "strategic_uncertainty", "evidence_calibrated"],
+        ),
+        ("control.options.intervention_budget", [4, 8, 12, 16, 20, 24]),
+        ("game.options.task_id", ["task_0001", "task_0002", "task_0003", "task_0004"]),
+    ]
+    assert [(axis.path, list(axis.values)) for axis in wrong.axes] == expected_axes
+    assert [(axis.path, list(axis.values)) for axis in truth.axes] == expected_axes
+    assert [entry.expected_cell_count for entry in submissions] == [96, 96]
+    assert [entry.expected_episode_count for entry in submissions] == [960, 960]
+    assert len(shards) == 192
+    assert {cell.config.control.options["target"] for cell in wrong.cells} == {2}
+    assert {cell.config.control.options["target"] for cell in truth.cells} == {"correct"}
+    assert {
+        cell.config.experiment.metadata["common_random_numbers_across_grid"]
+        for cell in wrong.cells + truth.cells
+    } == {True}
+    assert {cell.config.execution.seed for cell in wrong.cells + truth.cells} == {20260822}
+    assert {cell.config.execution.repetitions for cell in wrong.cells + truth.cells} == {10}
+    assert plan.array_throttle == 18
+    assert plan.total_request_concurrency == 144
+    assert plan.estimated_rpm == 864
+    assert plan.cpus_per_task == 8
+    assert plan.time_limit == "04:00:00"
+
+    study06_analysis = yaml.safe_load(
+        Path("configs/runs/relational_reasoning/population_study_06/analysis.yaml").read_text()
+    )
+    study08_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
+    for key in ("estimators", "resampling", "derived"):
+        assert study08_analysis[key] == study06_analysis[key]
 
 
 def test_auto_submission_writes_execution_plan_and_explicit_resources(

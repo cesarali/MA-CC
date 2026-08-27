@@ -96,6 +96,13 @@ def discover_study(config_dir: str | Path) -> StudySpec:
             f"unsupported study execution.mode {mode!r}; expected "
             "'config_array', 'cell_array', or 'auto'"
         )
+    provider_load_control = execution.get("provider_load_control")
+    if provider_load_control is not None:
+        from mas_cc.llm_runtime.providers.load_control import ProviderLoadControlConfig
+
+        ProviderLoadControlConfig.from_mapping(
+            _mapping(provider_load_control, "execution.provider_load_control")
+        )
 
     analysis = _mapping(raw.get("analysis"), "analysis")
     recipe_value = analysis.get("recipe")

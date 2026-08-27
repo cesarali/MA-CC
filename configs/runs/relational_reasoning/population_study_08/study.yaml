@@ -1,0 +1,23 @@
+study:
+  name: relational-population-study-08
+
+configs:
+  - study08_wrong_prompt_b.yaml
+  - study08_truth_prompt_b.yaml
+
+execution:
+  # Identical automatic cell-array topology and provider-load policy to Studies 06/07.
+  mode: auto
+  target_rpm: 900
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 18
+  cpus_per_task: 8
+  memory: 8G
+  time_limit: "04:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_08
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+
+analysis:
+  recipe: analysis.yaml
