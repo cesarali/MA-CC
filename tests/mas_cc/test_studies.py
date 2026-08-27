@@ -155,7 +155,7 @@ def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
     assert plan.partition == "all"
     assert plan.qos == "normal"
     assert plan.provider_load_control["mode"] == "shared_adaptive"
-    assert plan.provider_load_control["initial_concurrency"] == 24
+    assert plan.provider_load_control["initial_concurrency"] == 144
     assert plan.provider_load_control["minimum_concurrency"] == 4
     assert plan.provider_load_control["maximum_concurrency"] == 144
     assert plan.provider_load_control["target_rpm"] == 900

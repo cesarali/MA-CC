@@ -252,7 +252,8 @@ class OpenAICompatibleProvider:
         }
         started = time.perf_counter()
         async with self._semaphore:
-            for retry in range(self._max_retries + 1):
+            retry = 0
+            while True:
                 response = None
                 lease = None
                 attempt_started = time.perf_counter()
@@ -266,7 +267,9 @@ class OpenAICompatibleProvider:
                         json=payload,
                         timeout=self._timeout,
                     )
-                    if self._is_retryable(response.status_code) and retry < self._max_retries:
+                    if self._is_retryable(response.status_code) and self._can_retry(
+                        retry, started
+                    ):
                         if lease is not None:
                             await self._request_coordinator.release(
                                 lease, success=False, retryable=True,
@@ -275,6 +278,7 @@ class OpenAICompatibleProvider:
                             )
                             lease = None
                         await asyncio.sleep(self._retry_delay(response, retry))
+                        retry += 1
                         continue
                     response.raise_for_status()
                     body = response.json()
@@ -331,8 +335,9 @@ class OpenAICompatibleProvider:
                             latency_seconds=time.perf_counter() - attempt_started,
                         )
                         lease = None
-                    if retry < self._max_retries:
+                    if self._can_retry(retry, started):
                         await asyncio.sleep(self._retry_delay(response, retry))
+                        retry += 1
                         continue
                     raise ProviderError(
                         f"The {self.name} response did not match the chat-completions schema.",
@@ -358,8 +363,9 @@ class OpenAICompatibleProvider:
                     # skipped the retry loop entirely - so a configured
                     # `max_retries: 2` silently bought nothing, and one slow
                     # generation killed a whole episode.
-                    if self._is_retryable(status) and retry < self._max_retries:
+                    if self._is_retryable(status) and self._can_retry(retry, started):
                         await asyncio.sleep(self._retry_delay(response, retry))
+                        retry += 1
                         continue
                     raise self._normalize_transport_error(
                         exc, operation="completion", status_code=status
@@ -371,6 +377,18 @@ class OpenAICompatibleProvider:
         """No response at all, rate limiting, or a server fault."""
 
         return status is None or status == 429 or status >= 500
+
+    def _can_retry(self, retry: int, started: float) -> bool:
+        """Keep coordinated logical requests alive through provider outages."""
+
+        if retry < self._max_retries:
+            return True
+        if self._request_coordinator is None:
+            return False
+        return (
+            time.perf_counter() - started
+            < self._request_coordinator.config.retry_max_elapsed_seconds
+        )
 
     def _normalize_transport_error(
         self, exc: Exception, *, operation: str, status_code: int | None = None
@@ -402,8 +420,16 @@ class OpenAICompatibleProvider:
         except (TypeError, ValueError):
             pass
         # Full jitter prevents synchronized SLURM workers from retrying a
-        # degraded shared endpoint in the same sub-second wave.
-        return self._jitter.uniform(0.0, min(60.0, 2.0 * (2**retry)))
+        # degraded shared endpoint in the same wave. Coordinated runs use a
+        # long capped schedule; standalone callers retain bounded retries.
+        if self._request_coordinator is None:
+            initial, maximum = 2.0, 60.0
+        else:
+            policy = self._request_coordinator.config
+            initial = policy.retry_backoff_initial_seconds
+            maximum = policy.retry_backoff_max_seconds
+        exponent = min(retry, 30)
+        return self._jitter.uniform(0.0, min(maximum, initial * (2**exponent)))
 
     def close(self) -> None:
         self._closed = True

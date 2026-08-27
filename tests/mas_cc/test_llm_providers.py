@@ -15,6 +15,7 @@ from mas_cc.llm_runtime.providers import (
     CompletionRequest,
     CompletionResponse,
     ProviderError,
+    ProviderLoadControlConfig,
     ProviderUsage,
     create_llm_provider,
 )
@@ -113,6 +114,7 @@ class _CountingCoordinator:
     def __init__(self):
         self.acquired = 0
         self.outcomes = []
+        self.config = ProviderLoadControlConfig()
 
     async def acquire(self):
         self.acquired += 1
@@ -179,6 +181,40 @@ def test_cluster_coordinator_accounts_for_each_retry_attempt():
     assert coordinator.acquired == 2
     assert [outcome["success"] for _, outcome in coordinator.outcomes] == [False, True]
     assert coordinator.outcomes[0][1]["status_code"] == 500
+
+
+def test_coordinated_request_survives_beyond_adapter_retry_count():
+    body = {
+        "id": "req-recovered",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _CountingCoordinator()
+    session = _Session(
+        [
+            _Response(500, {}, headers={"Retry-After": "0"}),
+            _Response(500, {}, headers={"Retry-After": "0"}),
+            _Response(200, body),
+        ]
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY", max_retries=0,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+        request_coordinator=coordinator,
+    )
+
+    response = asyncio.run(provider.complete(_request()))
+
+    assert response.content == "A"
+    assert response.retries == 2
+    assert coordinator.acquired == 3
+    assert [outcome["success"] for _, outcome in coordinator.outcomes] == [
+        False, False, True,
+    ]
 
 
 def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():

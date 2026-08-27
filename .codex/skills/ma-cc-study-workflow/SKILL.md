@@ -131,8 +131,10 @@ model-specific concurrency probe when available and keep large runs below the
 declared RPM target. Published RPM is a ceiling, not guaranteed throughput.
 Standardized workers also apply the shared adaptive provider coordinator from
 `execution.provider_load_control`. Keep it enabled for real remote-provider
-studies: start conservatively, bound it by planned request capacity and target
-RPM, and let local/global circuit breakers respond to 429/5xx bursts. Do not
+studies: start at the planned provider-safe concurrency ceiling, reduce quickly
+on retryable failures, and recover upward after stable service. Retryable calls
+must remain inside the same in-memory episode during bounded provider outages
+instead of sacrificing the episode after a few rapid attempts. Do not
 replace it with game-specific throttling or a study-specific job file.
 
 For an authorized real run, use:

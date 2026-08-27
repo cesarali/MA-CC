@@ -258,13 +258,16 @@ bound. Execution partitioning must not affect identities, observables, or phase
 diagrams.
 
 Remote-provider cell arrays use one study-wide adaptive request coordinator.
-The execution-only `execution.provider_load_control` policy defaults to a
-conservative 24 concurrent attempts, bounded by planned request capacity and
+The execution-only `execution.provider_load_control` policy starts at the
+planned provider-safe concurrency ceiling, bounded by request capacity and
 target RPM. Every HTTP attempt, including retries, obtains a leased permit via
-atomic state under `<study-root>/runtime/provider-control`. Workers have local
-cooldowns, while widespread failures reduce the shared limit and open a global
-circuit breaker. Sustained success restores capacity additively; expired
-leases recover capacity after process or node failure.
+atomic state under `<study-root>/runtime/provider-control/job-<job-id>`.
+Workers have local cooldowns, while widespread failures reduce the shared
+limit and open a global circuit breaker. Sustained success restores capacity
+additively; expired
+leases recover capacity after process or node failure. Retryable logical calls
+remain alive with capped exponential backoff for the configured outage window,
+so transient provider failures pause rather than terminate an in-memory episode.
 
 The coordinator belongs to the provider runtime below every game. It must not
 alter cell identities, episode seeds, or observables. Its live state is an

@@ -610,13 +610,16 @@ round-information, and current-analysis paths pass.
 ## 16. Known limitations and recommended next work
 
 Standardized remote-provider studies install a shared adaptive coordinator
-from the generic array worker. The default starts at 24 cluster-wide HTTP
-attempts (or the lower planned ceiling), enforces target RPM, pauses an
+from the generic array worker. The default starts at the planned provider-safe
+HTTP-attempt ceiling, enforces target RPM, pauses an
 individually unhealthy worker, and opens a global breaker for widespread
-failures. Concurrency recovers additively after healthy intervals. Overrides
+failures. Concurrency recovers additively after healthy intervals. Retryable
+logical calls wait with capped exponential jitter for up to the configured
+outage window, preserving the current in-memory episode. Overrides
 belong in `study.yaml` under `execution.provider_load_control`; `mode: off` is
-reserved for deliberate diagnostics. Live state under
-`<study-root>/runtime/provider-control` is excluded from analysis packages.
+reserved for deliberate diagnostics. Each submission starts fresh under
+`<study-root>/runtime/provider-control/job-<job-id>`; this live state is
+excluded from analysis packages.
 
 1. **Scheduler environment is site-dependent.**
    `run_config_array.job` assumes `python` resolves to an environment containing

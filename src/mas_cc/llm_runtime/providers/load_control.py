@@ -48,7 +48,7 @@ class ProviderLoadControlConfig:
     """Execution-only policy shared by every remote request in one study."""
 
     mode: str = "shared_adaptive"
-    initial_concurrency: int = 24
+    initial_concurrency: int = 144
     minimum_concurrency: int = 4
     maximum_concurrency: int = 144
     target_rpm: int = 900
@@ -58,11 +58,14 @@ class ProviderLoadControlConfig:
     local_failure_threshold: int = 3
     local_cooldown_seconds: float = 30.0
     global_min_samples: int = 12
-    global_failure_ratio: float = 0.25
+    global_failure_ratio: float = 0.10
     global_cooldown_seconds: float = 60.0
     decrease_factor: float = 0.5
     increase_step: int = 1
     increase_interval_seconds: float = 30.0
+    retry_max_elapsed_seconds: float = 300.0
+    retry_backoff_initial_seconds: float = 2.0
+    retry_backoff_max_seconds: float = 60.0
 
     @classmethod
     def from_mapping(
@@ -80,7 +83,7 @@ class ProviderLoadControlConfig:
             raise ValueError("execution.provider_load_control.mode must be 'off' or 'shared_adaptive'")
         config = cls(
             mode=mode,
-            initial_concurrency=_integer(values, "initial_concurrency", 24, minimum=1),
+            initial_concurrency=_integer(values, "initial_concurrency", 144, minimum=1),
             minimum_concurrency=_integer(values, "minimum_concurrency", 4, minimum=1),
             maximum_concurrency=_integer(values, "maximum_concurrency", 144, minimum=1),
             target_rpm=_integer(values, "target_rpm", 900, minimum=1),
@@ -90,12 +93,21 @@ class ProviderLoadControlConfig:
             local_failure_threshold=_integer(values, "local_failure_threshold", 3, minimum=1),
             local_cooldown_seconds=_number(values, "local_cooldown_seconds", 30.0, minimum=0.0),
             global_min_samples=_integer(values, "global_min_samples", 12, minimum=1),
-            global_failure_ratio=_number(values, "global_failure_ratio", 0.25, minimum=0.0),
+            global_failure_ratio=_number(values, "global_failure_ratio", 0.10, minimum=0.0),
             global_cooldown_seconds=_number(values, "global_cooldown_seconds", 60.0, minimum=0.0),
             decrease_factor=_number(values, "decrease_factor", 0.5, minimum=0.01),
             increase_step=_integer(values, "increase_step", 1, minimum=1),
             increase_interval_seconds=_number(
                 values, "increase_interval_seconds", 30.0, minimum=0.1
+            ),
+            retry_max_elapsed_seconds=_number(
+                values, "retry_max_elapsed_seconds", 300.0, minimum=0.0
+            ),
+            retry_backoff_initial_seconds=_number(
+                values, "retry_backoff_initial_seconds", 2.0, minimum=0.01
+            ),
+            retry_backoff_max_seconds=_number(
+                values, "retry_backoff_max_seconds", 60.0, minimum=0.01
             ),
         )
         if not config.minimum_concurrency <= config.initial_concurrency <= config.maximum_concurrency:
@@ -104,6 +116,8 @@ class ProviderLoadControlConfig:
             )
         if config.global_failure_ratio > 1 or config.decrease_factor > 1:
             raise ValueError("global_failure_ratio and decrease_factor must be <= 1")
+        if config.retry_backoff_initial_seconds > config.retry_backoff_max_seconds:
+            raise ValueError("retry backoff initial seconds must not exceed its maximum")
         return config
 
     def to_dict(self) -> dict[str, Any]:
