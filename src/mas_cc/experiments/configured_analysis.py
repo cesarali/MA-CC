@@ -11,6 +11,9 @@ from mas_cc.config import RunConfig
 
 
 RELATIONAL_ROUND_FEEDBACK = "relational_imitation_round_feedback"
+RELATIONAL_THEORETICAL_REFERENCES = frozenset(
+    {"single_affinity_revised", "none", "matched_qvoter_null"}
+)
 ROUND_FEEDBACK_GAME_TYPES = frozenset(
     {"hidden_bench_imitation_round_feedback", RELATIONAL_ROUND_FEEDBACK}
 )
@@ -108,6 +111,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         # three scalar epistemic conditionings are fixed at three bins by
         # design and deliberately have no dial.
         allowed_options.add("epistemic_bins")
+        allowed_options.add("theoretical_reference")
     unknown_options = sorted(set(options) - allowed_options)
     if unknown_options:
         raise ValueError(
@@ -121,6 +125,16 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         raise ValueError("analysis.options.confidence must be between zero and one")
     run_id = f"{config.experiment.name}-{config.execution.seed}"
     if config.game.type == RELATIONAL_ROUND_FEEDBACK:
+        theoretical_reference = options.get(
+            "theoretical_reference", "single_affinity_revised"
+        )
+        if not isinstance(theoretical_reference, str) or theoretical_reference not in (
+            RELATIONAL_THEORETICAL_REFERENCES
+        ):
+            raise ValueError(
+                "analysis.options.theoretical_reference must be one of: "
+                + ", ".join(sorted(RELATIONAL_THEORETICAL_REFERENCES))
+            )
         return {
             "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
             "null_permutations": _integer_option(options, "null_permutations", 1000),
@@ -128,6 +142,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
             "seed": _integer_option(options, "seed", config.execution.seed),
             "statistics": statistics,
             "epistemic_bins": _integer_option(options, "epistemic_bins", 4),
+            "theoretical_reference": theoretical_reference,
             # Current analysis is aggregate post-processing, so it follows the
             # same master-only Comet gate as the other configured analyzers.
             "comet_export": analysis.comet_export and config.logging.comet,

@@ -281,6 +281,8 @@ analysis:
     # the population it is about to act on. This is the quantity the q_c axis
     # exists to move, so it is the first thing to read off this study.
     - round_sensing_mi
+    - round_target_sensing_mi
+    - round_target_susceptibility
     - round_sensor_mae
     - round_sensor_mse
 
@@ -341,6 +343,7 @@ analysis:
     - round_susceptible_target_signed_response
     - round_kappa_target_signed_response
   options:
+    theoretical_reference: single_affinity_revised
     bootstrap_resamples: 1000
     null_permutations: 1000
     confidence: 0.95

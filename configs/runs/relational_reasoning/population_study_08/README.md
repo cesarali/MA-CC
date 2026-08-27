@@ -97,3 +97,45 @@ truth/false 2×2 families for `T_pi`, signed response (`chi`), and `eta_IR`, plu
 evolution. Unsupported slices remain blank. The derived table also contains
 descriptive vigilance, evidence-strategy, and truth-minus-false differences;
 these are explicitly contrasts rather than new efficiency definitions.
+
+## Single-affinity coordinates (corrected semantics)
+
+The efficiency family is stated in the coordinates of the revised
+single-affinity theory, so an empirical number and the exact theory number of
+the same name are directly comparable. Three names changed meaning or arrived
+new; everything they replaced is still in the output under its own name.
+
+- **`round_target_susceptibility` is the canonical `chi`.** It is the
+  state-matched difference of mean target-*fraction* changes,
+  `E[dx | ADVOCATE, n] - E[dx | NO_OP, n]`, conditioned on
+  `target_count_before`. `round_target_signed_actuation` measures the same
+  difference in aligned-magnetization units and is therefore larger by
+  `K/(K-1)`; it is retained as a diagnostic and is no longer what `eta_ir`
+  consumes. On these three-option tasks the earlier `eta_ir` numerator was
+  inflated by `(3/2)^2 = 2.25` for exactly that reason.
+- **`eta_ir` is occupancy weighted.** It is a ratio of sums,
+  `sum_n p(n) B_IR(n) / I(U; n' | n)`, not a mean of state-local ratios. The
+  state-resolved surface the 2x2 heatmaps read is published separately as
+  `eta_ir_state_local`.
+- **`controlled_current` is not `cell_current`.** The thermodynamic current is
+  `N sum_n p_k(n) a(n) chi(n)`, summed over the horizon. `cell_current` remains
+  the terminal episode difference, a behavioural outcome that also contains the
+  ordinary social dynamics.
+- **`target_sensing_information_nats` is not `round_sensing_mi`.** The
+  thermodynamic sensing term is the scalar channel `I(n_Z; Y_Z)` in nats, built
+  from the empirical occupancy and the exact hypergeometric sensor kernel, one
+  round at a time. `round_sensing_mi` remains the full K-option vector channel
+  `I(N; Y)` in bits.
+- **`eta_th = h*J_c / (h*J_c + I_sens)`** over the horizon, with `h` calibrated
+  from controlled microscopic vote transitions using natural logs. Cases where
+  the controller pushed against its own affinity are flagged
+  (`eta_th_target_directed = false`), never clipped into `[0,1]`.
+
+Both efficiencies carry percentile intervals from a whole-episode bootstrap
+that recomputes every ingredient inside each replicate. Every derived row is
+stamped `theory_semantics_version = single_affinity_v1`; rows without that stamp
+predate the correction and must not be pooled with these.
+`analysis/tables/single_affinity_theory_comparison.parquet` puts the empirical
+and exact values of `chi, T_pi, eta_IR, J_c, I_sens, eta_th` side by side for
+each calibrated cell. The matched q-voter theory remains a separate classical
+reference and is never substituted into these formulas.

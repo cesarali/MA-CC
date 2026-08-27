@@ -253,8 +253,23 @@ def build_canonical_tables(
         )
         rich_rounds = _rich_rows(study_id, cell, "round_trajectory.jsonl", "round_trajectory.jsonl")
         round_rows.extend(rich_rounds or _compact_round_rows(study_id, cell, frame))
+        # Micro-slot records live in different files per artifact profile:
+        # `results_only` compaction writes a dedicated `micro_slot_trajectory`,
+        # while the `full` profile leaves them interleaved in the generic
+        # `trajectory.jsonl`.  Both are harvested, because `h` and `gamma` -
+        # and therefore `eta_th` - are read off these rows, and a profile that
+        # merely files them elsewhere must not make those quantities vanish.
+        # The generic file is filtered to genuine slot events by
+        # `within_round_index`, the same marker the game analyzers use.
         micro_rows.extend(
-            _rich_rows(study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl")
+            _rich_rows(
+                study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl"
+            )
+            or [
+                row
+                for row in _rich_rows(study_id, cell, "trajectory.jsonl", "trajectory.jsonl")
+                if row.get("within_round_index") is not None
+            ]
         )
 
     tables = {

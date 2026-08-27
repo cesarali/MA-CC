@@ -1,5 +1,7 @@
 # Offline atlas analysis. Information statistics are computed independently
 # for every physical parameter cell using the established estimator.
+theoretical_reference: single_affinity_revised
+
 estimators:
   - round_sensing_mi
   - round_sensor_mae
@@ -43,7 +45,13 @@ resampling:
   seed: 20260822
 
 derived:
+  - round_target_susceptibility
   - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
 
 # Declarative heatmaps use support masks automatically. The beta facet keeps
 # the main beta=4 atlas visually separate from the beta ablation.

@@ -20,11 +20,13 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.current import (
     episode_current_rows,
     write_current_analysis,
 )
-from mas_cc.games.relational_reasoning.imitation_round_feedback.theory import (
+from mas_cc.games.relational_reasoning.imitation_round_feedback.matched_qvoter import (
     TheoryParameters,
     classical_reference,
-    finite_horizon_current_moments,
     q1_current_closed_forms,
+)
+from mas_cc.games.relational_reasoning.imitation_round_feedback.theory_revised import (
+    finite_horizon_current_moments,
 )
 
 
@@ -176,12 +178,13 @@ def test_cell_summary_uses_stochastic_kernel_when_realized_actions_do_not_vary()
         rows, bootstrap_resamples=5, confidence=0.95, seed=7
     )
     assert [row["episode_current"] for row in episodes] == [1, 3]
-    assert summary["theory_mode"] == "stochastic_feedback"
+    assert summary["theory_mode"] == "single_affinity_revised"
     assert summary["current_mean_empirical"] == pytest.approx(2.0)
     assert summary["current_variance_empirical"] == pytest.approx(2.0)
     assert summary["current_precision_support"] == "descriptive_only"
     assert summary["current_bootstrap_unit"] == "episode"
-    assert summary["q1_current_closed_form_matches_kernel"] is True
+    assert summary["theory_applicable"] is False
+    assert "do not identify a finite h" in summary["theory_skip_reason"]
 
 
 def test_tasks_are_not_pooled_and_both_sides_share_each_report(tmp_path):
@@ -206,13 +209,13 @@ def test_tasks_are_not_pooled_and_both_sides_share_each_report(tmp_path):
     for path in reports:
         text = path.read_text(encoding="utf-8")
         assert "Empirical repeated-episode current" in text
-        assert "Exact matched q-voter current" in text
+        assert "Revised single-affinity finite-horizon current" in text
         assert "Direct comparison" in text
     frame = pd.read_csv(tmp_path / "currents" / "cell_current_summary.csv")
     assert set(CURRENT_SUMMARY_REQUIRED_FIELDS) <= set(frame.columns)
 
 
-def test_comet_current_keys_include_empirical_and_theory_values():
+def test_comet_current_keys_do_not_emit_generic_or_unavailable_theory_values():
     summary, _ = current_cell_summary(
         [_event(episode="e0"), _event(episode="e1", after=3)],
         bootstrap_resamples=0,
@@ -222,19 +225,13 @@ def test_comet_current_keys_include_empirical_and_theory_values():
     metrics = current_analysis_comet_metrics([summary])
     assert {
         "current/mean_empirical",
-        "current/mean_theory",
         "current/variance_empirical",
-        "current/variance_theory",
         "current/fano_dispersion_empirical",
-        "current/fano_dispersion_theory",
         "current/precision_irisarri_empirical",
-        "current/precision_irisarri_theory",
         "current/snr2_empirical",
-        "current/snr2_theory",
         "current/n_repetitions",
-        "current/q1_response_closed_form_theory",
-        "current/q1_closed_form_matches_kernel",
     } <= set(metrics)
+    assert not any(key.endswith("_theory") for key in metrics)
 
 
 class _FakeCometSink:
@@ -299,5 +296,6 @@ def test_comet_off_keeps_local_results_and_master_sink_gets_only_aggregates(tmp_
     logged, step = sink.logged[0]
     assert step == 0
     assert "current/mean_empirical" in logged
-    assert "current/mean_theory" in logged
+    assert "current/mean_theory" not in logged
+    assert not any(key.endswith("_theory") for key in logged)
     assert all("prompt" not in key and "provider" not in key for key in logged)

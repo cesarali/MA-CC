@@ -1,5 +1,7 @@
 # Study 08 compact per-cell analysis. State-local extensions consume the same
 # canonical rounds and micro-slots; no estimator implementation is duplicated.
+theoretical_reference: single_affinity_revised
+
 estimators:
   - round_sensing_mi
   - round_sensor_mae
@@ -17,6 +19,12 @@ estimators:
   - round_dual_action_event_fraction
   - round_single_action_slice_fraction
   - round_singleton_fraction
+  # THE canonical chi of the single-affinity theory: state matched on
+  # target_count_before, in target-FRACTION units. The two below it measure the
+  # same response in other coordinates and stay as diagnostics only - the
+  # magnetization one is larger by K/(K-1) and must never enter eta_ir.
+  - round_target_susceptibility
+  - round_target_sensing_mi
   - round_target_signed_response_share
   - round_target_signed_actuation
   - round_truth_signed_actuation
@@ -42,8 +50,18 @@ resampling:
   confidence: 0.95
   seed: 20260822
 
+# The single-affinity derived family. These are one coupled estimator, not
+# seven independent numbers: the same state-matched chi(n), the same empirical
+# action weights and one whole-episode bootstrap feed all of them, so naming
+# any of them computes all of them with matched resamples.
 derived:
+  - round_target_susceptibility
   - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
   - factorial_contrasts
 
 state_local: [x, x_phi, x_kappa]
@@ -90,9 +108,36 @@ plots:
   prompt_gamma_eff:
     <<: *primary_plot
     metric: kinetic_compliance
+  # `cell_current` is the terminal episode difference - a behavioural outcome,
+  # NOT the thermodynamic controlled current. Both are plotted, under names
+  # that say which is which.
   prompt_current:
     <<: *primary_plot
     metric: cell_current
+  prompt_chi:
+    <<: *primary_plot
+    source: derived_observables
+    metric: susceptibility_occupancy_weighted
+  prompt_controlled_current:
+    <<: *primary_plot
+    source: derived_observables
+    metric: controlled_current
+  prompt_sensing_nats:
+    <<: *primary_plot
+    source: derived_observables
+    metric: target_sensing_information_nats
+  prompt_eta_th:
+    <<: *primary_plot
+    source: derived_observables
+    metric: eta_th
+  prompt_affinity_weighted_current:
+    <<: *primary_plot
+    source: derived_observables
+    metric: affinity_weighted_current_nats
+  prompt_control_expenditure:
+    <<: *primary_plot
+    source: derived_observables
+    metric: thermodynamic_control_expenditure_nats
 
   evolution_phi:
     source: rounds
@@ -158,19 +203,19 @@ plots:
     filters: {resolution: x, target_semantics: false}
   truth_chi_x_b:
     <<: *truth_x_b
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
   false_chi_x_b:
     <<: *truth_x_b
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
     filters: {resolution: x, target_semantics: false}
   truth_eta_x_b:
     <<: *truth_x_b
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local
   false_eta_x_b:
     <<: *truth_x_b
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local
     filters: {resolution: x, target_semantics: false}
 
   truth_tpi_x_phi: &truth_x_phi
@@ -183,19 +228,19 @@ plots:
     filters: {resolution: x_phi, target_semantics: false}
   truth_chi_x_phi:
     <<: *truth_x_phi
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
   false_chi_x_phi:
     <<: *truth_x_phi
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
     filters: {resolution: x_phi, target_semantics: false}
   truth_eta_x_phi:
     <<: *truth_x_phi
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local
   false_eta_x_phi:
     <<: *truth_x_phi
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local
     filters: {resolution: x_phi, target_semantics: false}
 
   truth_tpi_x_kappa: &truth_x_kappa
@@ -207,19 +252,19 @@ plots:
     filters: {resolution: x_kappa, target_semantics: false}
   truth_chi_x_kappa:
     <<: *truth_x_kappa
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
   false_chi_x_kappa:
     <<: *truth_x_kappa
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
     filters: {resolution: x_kappa, target_semantics: false}
   truth_eta_x_kappa:
     <<: *truth_x_kappa
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local
   false_eta_x_kappa:
     <<: *truth_x_kappa
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local
     filters: {resolution: x_kappa, target_semantics: false}
 
   b24_tpi_profile: &b24_profile
@@ -232,8 +277,8 @@ plots:
     kind: line
   b24_chi_profile:
     <<: *b24_profile
-    metric: round_target_signed_actuation
+    metric: round_target_susceptibility
   b24_eta_profile:
     <<: *b24_profile
     source: derived_observables
-    metric: eta_ir
+    metric: eta_ir_state_local

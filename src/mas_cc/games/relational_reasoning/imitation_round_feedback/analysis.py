@@ -104,7 +104,7 @@ from .current import (
     read_relational_micro_events,
     write_current_analysis,
 )
-from .theory import (
+from .matched_qvoter import (
     ClassicalReference,
     TheoryParameters,
     binary_entropy_bits,
@@ -269,14 +269,37 @@ def adapt_relational_round_record(
     epistemic = epistemic_conditioning_values(record)
     total = sum(before)
 
+    # The controller senses a *scalar*: how many of its q_c sampled agents
+    # voted for the target.  The runtime records the whole sampled count
+    # vector, so the scalar coordinate the single-affinity theory needs is
+    # projected out here once rather than re-derived at every call site.
+    sensor_vector = record.get("sensor_count_vector")
+    sensor_target_count = (
+        None
+        if sensor_vector is None or target_index >= len(sensor_vector)
+        else int(sensor_vector[target_index])
+    )
+
     event = {
         **dict(record),
         "target_count_before": before[target_index],
         "target_count_after": after[target_index],
         "truth_count_before": before[truth_index],
         "truth_count_after": after[truth_index],
+        "target_fraction_before": before[target_index] / total,
+        "target_fraction_after": after[target_index] / total,
         "delta_p_ctrl": (after[target_index] - before[target_index]) / total,
         "delta_p_truth": (after[truth_index] - before[truth_index]) / total,
+        "sensor_target_count": sensor_target_count,
+        # Protocol parameters under the names the theory uses, so the single
+        # affinity estimators never have to know the runtime's field spelling.
+        "logged_advocacy_probability": record.get(
+            "controller_advocate_probability",
+            record.get("controller_advocacy_probability"),
+        ),
+        "beta": record.get("controller_beta"),
+        "theta": record.get("controller_threshold"),
+        "b": record.get("intervention_budget"),
         "conditioning_memory_state": (
             None if memory is None else [int(value) for value in memory]
         ),
@@ -489,7 +512,7 @@ def _controlled(rows: Sequence[RoundEvent]) -> list[RoundEvent]:
     return [row for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
 
 
-def theory_parameters_for(
+def matched_qvoter_parameters_for(
     rows: Sequence[RoundEvent],
 ) -> tuple[TheoryParameters | None, str | None]:
     """The one matched protocol these rows share, or `(None, reason)`.
@@ -598,7 +621,7 @@ def empirical_response_curve(
     return result
 
 
-def theory_state_curves(
+def matched_qvoter_state_curves(
     rows: Sequence[RoundEvent], reference: ClassicalReference, *, cell_id: str
 ) -> list[dict[str, Any]]:
     """The state-resolved table behind every plot in the report bundle.
@@ -873,7 +896,7 @@ def _epistemic_interpretation(
     ), values
 
 
-def theory_comparison(
+def matched_qvoter_comparison(
     rows: Sequence[RoundEvent],
     estimates: Sequence[Mapping[str, Any]],
     *,
@@ -891,7 +914,7 @@ def theory_comparison(
     theory is provably the number in the MI table.
     """
 
-    parameters, skip = theory_parameters_for(rows)
+    parameters, skip = matched_qvoter_parameters_for(rows)
     if parameters is None:
         return (
             {
@@ -903,7 +926,7 @@ def theory_comparison(
         )
     reference = classical_reference(parameters)
     eligible = _controlled(rows)
-    curves = theory_state_curves(rows, reference, cell_id=cell_id)
+    curves = matched_qvoter_state_curves(rows, reference, cell_id=cell_id)
     N = parameters.N
 
     cmi_row: Mapping[str, Any] = next(
@@ -1319,7 +1342,8 @@ def analyze_relational_imitation_round_feedback(
     seed: int = 1,
     statistics: Sequence[str] | None = None,
     epistemic_bins: int = DEFAULT_EPISTEMIC_BINS,
-    theory_comparison_enabled: bool = True,
+    theoretical_reference: str = "single_affinity_revised",
+    theory_comparison_enabled: bool | None = None,
     comet_export: bool = False,
     comet_project: str = "mas-cc",
     comet_run_name: str | None = None,
@@ -1328,15 +1352,29 @@ def analyze_relational_imitation_round_feedback(
 ) -> dict[str, Any]:
     """Run the shared round-feedback pipeline over a relational grid.
 
-    The matched classical q-voter reference is computed as part of this, not
-    as a second command: a completed run should never have an information
-    number without a classical number at the same controller resources beside
-    it. `theory_comparison_enabled` exists only so the flag can be turned off
-    deliberately; a run that simply lacks the controller parameters skips the
-    comparison on its own and says so in the report.
+    Revised single-affinity theory is the canonical default.  ``none`` keeps
+    all empirical analysis and suppresses theory; ``matched_qvoter_null`` is
+    an explicitly separate classical diagnostic.  The boolean argument is a
+    one-release compatibility shim and never restores the old generic output.
     """
 
+    allowed_references = {
+        "single_affinity_revised",
+        "none",
+        "matched_qvoter_null",
+    }
+    if theory_comparison_enabled is not None:
+        theoretical_reference = (
+            "single_affinity_revised" if theory_comparison_enabled else "none"
+        )
+    if theoretical_reference not in allowed_references:
+        raise ValueError(
+            "theoretical_reference must be one of: "
+            + ", ".join(sorted(allowed_references))
+        )
+
     rounds = read_relational_round_records(run_dir, epistemic_bins=epistemic_bins)
+    micro = read_relational_micro_events(run_dir)
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
 
@@ -1346,7 +1384,24 @@ def analyze_relational_imitation_round_feedback(
     actions: list[dict[str, Any]] = []
     regimes: list[dict[str, Any]] = []
     theory_rows: list[dict[str, Any]] = []
-    theory_curves: list[dict[str, Any]] = []
+    classical_null_rows: list[dict[str, Any]] = []
+    classical_null_curves: list[dict[str, Any]] = []
+    from mas_cc.analysis.single_affinity import (
+        PROVENANCE as SINGLE_AFFINITY_PROVENANCE,
+        theory_comparison as single_affinity_theory_comparison,
+    )
+    from mas_cc.storage import canonical_hash
+
+    micro_by_cell: dict[str, list[dict[str, Any]]] = {}
+    for item in micro:
+        micro_by_cell.setdefault(str(item.get("cell_id", "run")), []).append(item)
+    comparison_hash = canonical_hash(
+        {
+            "rounds": len(rounds),
+            "micro_slots": len(micro),
+            "theory": dict(SINGLE_AFFINITY_PROVENANCE),
+        }
+    )
     by_cell = _grouped(rounds, key=lambda row: row.cell_id)
     for cell_id, group in by_cell.items():
         cell_estimates, cell_nulls = round_information_analysis(
@@ -1361,8 +1416,38 @@ def analyze_relational_imitation_round_feedback(
         nulls.extend({"cell_id": cell_id, **row} for row in cell_nulls)
         support.append({"cell_id": cell_id, **_support(group)})
         actions.append({"cell_id": cell_id, **controller_action_summary(group)})
-        if theory_comparison_enabled:
-            comparison, curves = theory_comparison(
+        if theoretical_reference == "single_affinity_revised":
+            comparison = single_affinity_theory_comparison(
+                group, micro_by_cell.get(cell_id, ())
+            )
+            common = {
+                "study_id": None,
+                "source_run_id": Path(run_dir).name,
+                "cell_id": cell_id,
+                **SINGLE_AFFINITY_PROVENANCE,
+                "analysis_hash": comparison_hash,
+            }
+            if comparison["available"]:
+                theory_rows.extend(
+                    {**common, **item, "available": True, "reason": None}
+                    for item in comparison["rows"]
+                )
+            else:
+                theory_rows.append(
+                    {
+                        **common,
+                        "quantity": None,
+                        "units": None,
+                        "empirical": math.nan,
+                        "single_affinity_theory": math.nan,
+                        "residual": math.nan,
+                        "reference": "single_affinity_revised",
+                        "available": False,
+                        "reason": comparison["reason"],
+                    }
+                )
+        elif theoretical_reference == "matched_qvoter_null":
+            comparison, curves = matched_qvoter_comparison(
                 group,
                 cell_estimates,
                 cell_id=cell_id,
@@ -1370,8 +1455,10 @@ def analyze_relational_imitation_round_feedback(
                 confidence=confidence,
                 seed=seed,
             )
-            theory_rows.append(comparison)
-            theory_curves.extend(curves)
+            classical_null_rows.append(
+                {**comparison, "reference": "matched_qvoter_classical_null"}
+            )
+            classical_null_curves.extend(curves)
         for episode_id, episode in _grouped(
             group, key=lambda row: row.episode_id
         ).items():
@@ -1402,12 +1489,10 @@ def analyze_relational_imitation_round_feedback(
     nulls.extend({"cell_id": "pooled", **row} for row in pooled_nulls)
     support.append({"cell_id": "pooled", **_support(rounds)})
     actions.append({"cell_id": "pooled", **controller_action_summary(rounds)})
-    if theory_comparison_enabled:
-        # `theory_parameters_for` refuses a group spanning several parameter
-        # tuples, so a pooled slice over heterogeneous cells marks itself not
-        # applicable instead of averaging cells against a reference none of
-        # them ran under.
-        pooled_comparison, pooled_curves = theory_comparison(
+    if theoretical_reference == "matched_qvoter_null":
+        # The optional diagnostic retains the legacy pooled refusal semantics;
+        # revised theory is never constructed across physical cells.
+        pooled_comparison, pooled_curves = matched_qvoter_comparison(
             rounds,
             pooled_estimates,
             cell_id="pooled",
@@ -1415,8 +1500,10 @@ def analyze_relational_imitation_round_feedback(
             confidence=confidence,
             seed=seed,
         )
-        theory_rows.append(pooled_comparison)
-        theory_curves.extend(pooled_curves)
+        classical_null_rows.append(
+            {**pooled_comparison, "reference": "matched_qvoter_classical_null"}
+        )
+        classical_null_curves.extend(pooled_curves)
 
     pd.DataFrame(estimates).to_csv(
         destination / "round_information_estimates.csv", index=False
@@ -1425,17 +1512,14 @@ def analyze_relational_imitation_round_feedback(
     _write_markdown(estimates, report)
     if theory_rows:
         pd.DataFrame(theory_rows).to_csv(
-            destination / "theory_comparison.csv", index=False
+            destination / "single_affinity_theory_comparison.csv", index=False
         )
-        pd.DataFrame(theory_curves).to_csv(
-            destination / "theory_state_curves.csv", index=False
+    if classical_null_rows:
+        pd.DataFrame(classical_null_rows).to_csv(
+            destination / "matched_qvoter_null.csv", index=False
         )
-        # Appended after `_write_markdown`, which rewrites the file wholesale.
-        append_theory_report(
-            report,
-            theory_rows,
-            curves_filename="theory_state_curves.csv",
-            table_filename="theory_comparison.csv",
+        pd.DataFrame(classical_null_curves).to_csv(
+            destination / "matched_qvoter_null_state_curves.csv", index=False
         )
     pd.DataFrame(nulls).to_csv(destination / "round_information_nulls.csv", index=False)
     pd.DataFrame(support).to_csv(
@@ -1448,14 +1532,17 @@ def analyze_relational_imitation_round_feedback(
         destination / "episode_epistemic_regime.csv", index=False
     )
 
-    micro = read_relational_micro_events(run_dir)
     current_rows, current_episodes, current_reports = write_current_analysis(
         rounds,
         destination,
         bootstrap_resamples=bootstrap_resamples,
         confidence=confidence,
         seed=seed,
-        theory_enabled=theory_comparison_enabled,
+        theoretical_reference=(
+            theoretical_reference
+            if theoretical_reference in {"single_affinity_revised", "none"}
+            else "none"
+        ),
         micro=micro,
     )
     pd.DataFrame(
@@ -1528,41 +1615,9 @@ def analyze_relational_imitation_round_feedback(
         # The classical comparison, in the same summary the CLI already
         # prints, so "what did this run measure" and "what would the matched
         # classical controller have measured" arrive together.
-        "theory_comparison": [
-            {
-                "cell_id": row["cell_id"],
-                "applicable": row["theory_applicable"],
-                "skip_reason": row.get("theory_skip_reason"),
-                **(
-                    {}
-                    if not row["theory_applicable"]
-                    else {
-                        "parameters": {
-                            "N": row["theory_N"],
-                            "q": row["theory_q"],
-                            "q_c": row["theory_qc"],
-                            "b": row["theory_b"],
-                            "c": row["theory_c"],
-                            "beta": row["theory_beta"],
-                            "theta": row["theory_theta"],
-                        },
-                        "empirical_target_cmi_bits": row["empirical_target_cmi_bits"],
-                        "theory_te_emp_occ_bits": row["theory_te_emp_occ_bits"],
-                        "delta_te_bits": row["delta_te_bits"],
-                        "te_ratio": (
-                            row["te_ratio"] if row["te_ratio_defined"] else None
-                        ),
-                        "delta_mu_empirical": row["delta_mu_empirical"],
-                        "delta_mu_theory": row["delta_mu_theory"],
-                        "policy_mae": row["policy_mae"],
-                        "identifiable": row["te_comparison_identifiable"],
-                        "interpretation": row["theory_interpretation"],
-                        "epistemic_interpretation": row["epistemic_interpretation"],
-                    }
-                ),
-            }
-            for row in theory_rows
-        ],
+        "theoretical_reference": theoretical_reference,
+        "single_affinity_theory_comparison": theory_rows,
+        "matched_qvoter_classical_null": classical_null_rows,
         "theory_state_coarse_graining": "target_vs_not_target",
         "current_analysis": current_rows,
         "current_episode_rows": len(current_episodes),
@@ -1620,9 +1675,9 @@ __all__ = [
     "empirical_response_curve",
     "empirical_round_occupancy",
     "finite_horizon_occupancy",
-    "theory_comparison",
-    "theory_parameters_for",
-    "theory_state_curves",
+    "matched_qvoter_comparison",
+    "matched_qvoter_parameters_for",
+    "matched_qvoter_state_curves",
     "COARSE_BIN_EDGES",
     "COARSE_BIN_LABELS",
     "DEFAULT_EPISTEMIC_BINS",

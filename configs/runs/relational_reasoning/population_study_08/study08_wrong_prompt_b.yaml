@@ -157,13 +157,21 @@ experiment:
     common_random_numbers_across_grid: true
     crn_note: all prompt, budget, and task cells share repetition-index streams; the truth block uses the same grid order and root seed
     mandatory_message_mode: recommendation_plus_fact
+    # Names what the offline analysis genuinely computes, in the coordinates of
+    # the revised single-affinity theory. `round_target_susceptibility` is the
+    # canonical chi (target FRACTION, state matched on target_count_before);
+    # the magnetization response and the marginal share response remain
+    # available as diagnostics but are not this family.
     primary_analysis_family:
-      - round_target_signed_response_share
+      - round_target_susceptibility
       - round_target_actuation_cmi
       - eta_ir
-      - round_memory_target_actuation_cmi
       - effective_affinity
       - kinetic_compliance
+      - controlled_current
+      - target_sensing_information_nats
+      - eta_th
+      - round_memory_target_actuation_cmi
 
 grid:
   # Axis order is identical in both semantic blocks for paired seeds.
