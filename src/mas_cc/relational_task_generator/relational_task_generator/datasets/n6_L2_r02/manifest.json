@@ -1,0 +1,21 @@
+{
+  "schema_version": "spatial_relational_dataset_v1",
+  "dataset_seed": 20260827,
+  "num_tasks": 1,
+  "config": {
+    "population_size": 6,
+    "reasoning_depth": 2,
+    "support_redundancy": 2,
+    "distractors": 1,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "task_files": [
+    "task_0001.json"
+  ],
+  "task_fingerprints_sha256": {
+    "task_0001.json": "dbba0b302063a8d25a408651e329e4031968d8baf59a8373bc585e3f87b653b2"
+  },
+  "dataset_fingerprint_sha256": "acd70c6fad0da83fbdc01a451ff8ccb258e18197f6476cd56c0bedef146dba55"
+}

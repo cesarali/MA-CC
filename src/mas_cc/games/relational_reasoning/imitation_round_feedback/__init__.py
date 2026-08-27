@@ -1,6 +1,9 @@
 """Relational reasoning imitation with one controller decision per round."""
 
 from .controller import (
+    CONTROLLER_EVIDENCE_STRATEGIES,
+    EVIDENCE_NEUTRAL,
+    EVIDENCE_STRATEGIC,
     MESSAGE_MODES,
     RECOMMENDATION_ONLY,
     RECOMMENDATION_PLUS_FACT,
@@ -13,7 +16,7 @@ from .controller import (
 from .game import RelationalImitationRoundFeedbackGame
 from .metrics import knowledge_observables, supporting_fact_coverage
 from .prompts import (
-    EPISTEMIC_PROMPT_CLASSES,
+    RECEIVER_EPISTEMIC_DISPOSITIONS,
     SOCIAL_ENVIRONMENT,
     epistemic_framing,
     agent_label,
@@ -43,7 +46,10 @@ from .state import (
 
 __all__ = [
     "CONTROL_SOURCE_ID",
-    "EPISTEMIC_PROMPT_CLASSES",
+    "CONTROLLER_EVIDENCE_STRATEGIES",
+    "EVIDENCE_NEUTRAL",
+    "EVIDENCE_STRATEGIC",
+    "RECEIVER_EPISTEMIC_DISPOSITIONS",
     "GAME_TYPE",
     "MESSAGE_MODES",
     "RECOMMENDATION_ONLY",

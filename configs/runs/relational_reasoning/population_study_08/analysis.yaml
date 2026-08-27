@@ -44,6 +44,9 @@ resampling:
 
 derived:
   - eta_ir
+  - factorial_contrasts
+
+state_local: [x, x_phi, x_kappa]
 
 # Comparison-ready summaries use a common color scale across semantic panels.
 # Canonical rounds retain x, phi, kappa, and time for the TDD's subsequent
@@ -53,8 +56,8 @@ plots:
     source: primary_estimates
     metric: round_target_actuation_cmi
     x: intervention_budget
-    y: epistemic_prompt_class
-    facet: controller_semantics
+    y: derived_epistemic_condition
+    facet: target_semantics
     kind: heatmap
   prompt_signed_response:
     <<: *primary_plot
@@ -90,3 +93,147 @@ plots:
   prompt_current:
     <<: *primary_plot
     metric: cell_current
+
+  evolution_phi:
+    source: rounds
+    value: full_proof_agent_share_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+  evolution_kappa:
+    source: rounds
+    value: mean_supporting_fact_coverage_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+  evolution_truth_share:
+    source: rounds
+    value: truth_vote_share_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+  evolution_target_share:
+    source: rounds
+    value: controller_target_share_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+
+  vigilance_cmi_contrast:
+    source: derived_observables
+    metric: delta_vigilance_round_target_actuation_cmi
+    x: intervention_budget
+    y: controller_evidence_strategy
+    facet: target_semantics
+    kind: heatmap
+  evidence_cmi_contrast:
+    source: derived_observables
+    metric: delta_evidence_strategy_round_target_actuation_cmi
+    x: intervention_budget
+    y: receiver_epistemic_disposition
+    facet: target_semantics
+    kind: heatmap
+  truth_false_eta_contrast:
+    source: derived_observables
+    metric: delta_truth_false_eta_ir
+    x: intervention_budget
+    y: derived_epistemic_condition
+    kind: heatmap
+
+  truth_tpi_x_b: &truth_x_b
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: target_count_before
+    facet: derived_epistemic_condition
+    filters: {resolution: x, target_semantics: truth}
+    layout: 2x2
+    kind: heatmap
+  false_tpi_x_b:
+    <<: *truth_x_b
+    filters: {resolution: x, target_semantics: false}
+  truth_chi_x_b:
+    <<: *truth_x_b
+    metric: round_target_signed_actuation
+  false_chi_x_b:
+    <<: *truth_x_b
+    metric: round_target_signed_actuation
+    filters: {resolution: x, target_semantics: false}
+  truth_eta_x_b:
+    <<: *truth_x_b
+    source: derived_observables
+    metric: eta_ir
+  false_eta_x_b:
+    <<: *truth_x_b
+    source: derived_observables
+    metric: eta_ir
+    filters: {resolution: x, target_semantics: false}
+
+  truth_tpi_x_phi: &truth_x_phi
+    <<: *truth_x_b
+    x: target_count_before
+    y: conditioning_phi_bin
+    filters: {resolution: x_phi, target_semantics: truth}
+  false_tpi_x_phi:
+    <<: *truth_x_phi
+    filters: {resolution: x_phi, target_semantics: false}
+  truth_chi_x_phi:
+    <<: *truth_x_phi
+    metric: round_target_signed_actuation
+  false_chi_x_phi:
+    <<: *truth_x_phi
+    metric: round_target_signed_actuation
+    filters: {resolution: x_phi, target_semantics: false}
+  truth_eta_x_phi:
+    <<: *truth_x_phi
+    source: derived_observables
+    metric: eta_ir
+  false_eta_x_phi:
+    <<: *truth_x_phi
+    source: derived_observables
+    metric: eta_ir
+    filters: {resolution: x_phi, target_semantics: false}
+
+  truth_tpi_x_kappa: &truth_x_kappa
+    <<: *truth_x_phi
+    y: conditioning_kappa_bin
+    filters: {resolution: x_kappa, target_semantics: truth}
+  false_tpi_x_kappa:
+    <<: *truth_x_kappa
+    filters: {resolution: x_kappa, target_semantics: false}
+  truth_chi_x_kappa:
+    <<: *truth_x_kappa
+    metric: round_target_signed_actuation
+  false_chi_x_kappa:
+    <<: *truth_x_kappa
+    metric: round_target_signed_actuation
+    filters: {resolution: x_kappa, target_semantics: false}
+  truth_eta_x_kappa:
+    <<: *truth_x_kappa
+    source: derived_observables
+    metric: eta_ir
+  false_eta_x_kappa:
+    <<: *truth_x_kappa
+    source: derived_observables
+    metric: eta_ir
+    filters: {resolution: x_kappa, target_semantics: false}
+
+  b24_tpi_profile: &b24_profile
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: target_count_before
+    series: derived_epistemic_condition
+    facet: target_semantics
+    filters: {resolution: x, intervention_budget: 24}
+    kind: line
+  b24_chi_profile:
+    <<: *b24_profile
+    metric: round_target_signed_actuation
+  b24_eta_profile:
+    <<: *b24_profile
+    source: derived_observables
+    metric: eta_ir

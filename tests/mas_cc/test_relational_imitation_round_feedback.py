@@ -38,6 +38,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     NO_KNOWN_FACTS,
     SOCIAL_ENVIRONMENT,
     SOCIAL_ENVIRONMENT_DISTRUST,
+    SOCIAL_ENVIRONMENT_VIGILANT,
     SOCIAL_ENVIRONMENT_NEUTRAL,
     EPISTEMIC_PROMPT_CLASSES,
     RelationalBallotContract,
@@ -1906,14 +1907,14 @@ def _prompt_class(config, value):
         for key, item in dict(config.game.options).items()
         if key != "social_distrust"
     }
-    options["epistemic_prompt_class"] = value
+    options["receiver_epistemic_disposition"] = value
     return replace(config, game=replace(config.game, options=options))
 
 
-@pytest.mark.parametrize("prompt_class", EPISTEMIC_PROMPT_CLASSES)
+@pytest.mark.parametrize("prompt_class", ("naive", "vigilant"))
 def test_all_epistemic_prompt_classes_resolve_and_run(prompt_class):
     config = _prompt_class(_config(rounds=1), prompt_class)
-    assert create_game(config.game).rules(config.game).epistemic_prompt_class == prompt_class
+    assert create_game(config.game).rules(config.game).receiver_epistemic_disposition == prompt_class
     result, ballots = _run(config)
     assert result.interactions
     assert all(epistemic_framing(prompt_class) in text for text in ballots.prompts)
@@ -1921,7 +1922,7 @@ def test_all_epistemic_prompt_classes_resolve_and_run(prompt_class):
 
 def test_unknown_epistemic_prompt_class_is_refused():
     config = _prompt_class(_config(rounds=1), "skeptical_super_agent")
-    with pytest.raises(ValueError, match="epistemic_prompt_class must be one of"):
+    with pytest.raises(ValueError, match="receiver_epistemic_disposition must be one of"):
         create_game(config.game).rules(config.game)
 
 
@@ -1936,36 +1937,28 @@ def test_legacy_and_categorical_prompt_settings_cannot_contradict():
 def test_epistemic_classes_change_only_the_fixed_framing_block():
     prompts = {
         name: relational_public_ballot_prompt(
-            fact_ids=("f1",), epistemic_prompt_class=name
+            fact_ids=("f1",), receiver_epistemic_disposition=name
         )
-        for name in EPISTEMIC_PROMPT_CLASSES
+        for name in ("naive", "vigilant")
     }
-    baseline = prompts["strategic_uncertainty"]
-    assert baseline.block("social_environment").value == SOCIAL_ENVIRONMENT_DISTRUST
+    baseline = prompts["vigilant"]
+    assert baseline.block("social_environment").value == SOCIAL_ENVIRONMENT_VIGILANT
     for prompt in prompts.values():
         assert prompt.definition_hash != ""
         assert [block.name for block in prompt.blocks] == [block.name for block in baseline.blocks]
         for block in prompt.blocks:
             if block.name != "social_environment":
                 assert block == baseline.block(block.name)
-    assert len({prompt.definition_hash for prompt in prompts.values()}) == 4
+    assert len({prompt.definition_hash for prompt in prompts.values()}) == 2
 
 
 def test_epistemic_class_content_has_the_intended_boundaries():
     naive = epistemic_framing("naive").lower()
     assert all(term not in naive for term in ("different facts", "objectives", "minority", "majority"))
 
-    distributed = epistemic_framing("distributed_information").lower()
-    assert "different participants may know different facts" in distributed
-    assert "fact known\nby only one participant" in distributed
-    assert all(term not in distributed for term in ("objectives", "strategic", "adversarial", "controller"))
-
-    calibrated = epistemic_framing("evidence_calibrated").lower()
-    assert "majority support by itself as evidence" in calibrated
-    assert "explicit facts" in calibrated
-    assert "minority position" in calibrated
-    assert "objectives that differ" in calibrated
-    assert all(term not in calibrated for term in ("controller", "adversary"))
+    vigilant = epistemic_framing("vigilant").lower()
+    assert "objectives that differ" in vigilant
+    assert all(term not in vigilant for term in ("controller", "adversary"))
 
 
 # ---- the advertised citable fact ids ------------------------------------

@@ -444,6 +444,77 @@ def _information_tables(
     return pd.DataFrame(estimates, columns=PRIMARY_COLUMNS), pd.DataFrame(support)
 
 
+def _state_local_primary(
+    study_id: str,
+    events: Sequence[Any],
+    recipe: Mapping[str, Any],
+    analysis_hash: str,
+    source_run_ids: Mapping[str, str],
+) -> pd.DataFrame:
+    """Estimate requested state slices through the authoritative estimator."""
+
+    requested = recipe.get("state_local", ())
+    if isinstance(requested, (str, bytes)) or not isinstance(requested, Sequence):
+        raise ValueError("analysis state_local must be a list")
+    coordinates = {
+        "x": None,
+        "x_phi": "conditioning_phi_bin",
+        "x_kappa": "conditioning_kappa_bin",
+    }
+    unknown = sorted(set(map(str, requested)) - set(coordinates))
+    if unknown:
+        raise ValueError("unknown state-local analysis resolution(s): " + ", ".join(unknown))
+    if not requested:
+        return pd.DataFrame(columns=PRIMARY_COLUMNS)
+    from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import round_information_analysis
+
+    by_cell: dict[str, list[Any]] = {}
+    for event in events:
+        by_cell.setdefault(str(event.cell_id), []).append(event)
+    rows: list[dict[str, Any]] = []
+    statistics = ("round_target_actuation_cmi", "round_target_signed_actuation")
+    for cell_id, cell_rows in sorted(by_cell.items()):
+        for resolution in map(str, requested):
+            extra = coordinates[resolution]
+            slices: dict[tuple[Any, ...], list[Any]] = {}
+            for event in cell_rows:
+                x = event.event.get("target_count_before")
+                value = None if extra is None else event.event.get(extra)
+                if x is None or (extra is not None and value is None):
+                    continue
+                slices.setdefault((x,) if extra is None else (x, value), []).append(event)
+            for slice_values, sample in sorted(slices.items(), key=lambda item: str(item[0])):
+                if len({str(event.U_k) for event in sample if event.U_k is not None}) < 2:
+                    continue
+                estimates, _ = round_information_analysis(
+                    sample, statistics=statistics, bootstrap_resamples=0,
+                    null_permutations=0, confidence=0.95, seed=1,
+                )
+                grouping = {"cell_id": cell_id, "resolution": resolution, "target_count_before": slice_values[0]}
+                if extra is not None:
+                    grouping[extra] = slice_values[1]
+                for item in estimates:
+                    rows.append({
+                        "study_id": study_id,
+                        "source_run_id": source_run_ids.get(cell_id.split("/", 1)[0], cell_id.split("/", 1)[0]),
+                        "cell_id": cell_id,
+                        "metric": str(item["statistic"]),
+                        "estimator_version": "round-feedback-v1",
+                        "estimator_variant": item.get("main_estimator_variant", item.get("estimator_variant")),
+                        "grouping_json": json.dumps(grouping, sort_keys=True),
+                        "conditioning_json": _conditioning_json(str(item["statistic"])),
+                        "estimate": item["estimate"],
+                        "ci_low": math.nan, "ci_high": math.nan, "confidence": 0.95,
+                        "null_type": None, "null_mean": math.nan, "null_std": math.nan,
+                        "p_value": math.nan, "null_permutations": 0, "bootstrap_resamples": 0,
+                        "n_observations": item.get("n_rounds"), "n_episodes": item.get("n_episodes"),
+                        "units": item.get("units"), "support_status": _support_status(item),
+                        "analysis_hash": analysis_hash,
+                        **grouping,
+                    })
+    return pd.DataFrame(rows)
+
+
 def _current_primary(
     study_id: str,
     events: Sequence[Any],
@@ -738,6 +809,15 @@ def _derived(
     for item in joined.to_dict(orient="records"):
         cell_id = str(item["cell_id"])
         group = event_groups.get(cell_id, [])
+        try:
+            grouping = json.loads(str(item["grouping_json"]))
+        except (TypeError, json.JSONDecodeError):
+            grouping = {}
+        if "target_count_before" in grouping:
+            group = [event for event in group if event.event.get("target_count_before") == grouping["target_count_before"]]
+        for key in ("conditioning_phi_bin", "conditioning_kappa_bin"):
+            if key in grouping:
+                group = [event for event in group if event.event.get(key) == grouping[key]]
         controlled = [
             event
             for event in group
@@ -772,9 +852,10 @@ def _derived(
                 ),
                 "support_status": str(item["support_status_cmi"]),
                 "analysis_hash": analysis_hash,
+                **grouping,
             }
         )
-    return pd.DataFrame(rows, columns=columns)
+    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=columns)
 
 
 def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFrame:
@@ -787,6 +868,67 @@ def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFram
     }
     coordinates = cells[[column for column in cells.columns if column == "cell_id" or column not in drop]]
     return frame.merge(coordinates, on="cell_id", how="left", suffixes=("", "_coordinate"))
+
+
+def _factorial_contrasts(
+    primary: pd.DataFrame, derived: pd.DataFrame, requested: Sequence[Any], analysis_hash: str
+) -> pd.DataFrame:
+    """Matched descriptive factorial differences, not a new estimator."""
+
+    if "factorial_contrasts" not in {str(value) for value in requested}:
+        return pd.DataFrame()
+    frames = [frame for frame in (primary, derived) if not frame.empty]
+    if not frames:
+        return pd.DataFrame()
+    source = pd.concat(frames, ignore_index=True, sort=False)
+    needed = {
+        "receiver_epistemic_disposition", "controller_evidence_strategy",
+        "target_semantics", "intervention_budget", "task_id", "metric", "estimate",
+    }
+    if not needed.issubset(source.columns):
+        return pd.DataFrame()
+    source = source[source["metric"].isin({
+        "round_target_actuation_cmi", "round_target_signed_actuation", "eta_ir"
+    })].copy()
+    keys = ["metric", "intervention_budget", "task_id"]
+    rows: list[dict[str, Any]] = []
+
+    def differences(frame, axis, low, high, kind, extra):
+        index = [*keys, *extra]
+        pivot = frame.pivot_table(index=index, columns=axis, values="estimate", aggfunc="mean")
+        if low not in pivot or high not in pivot:
+            return
+        for coordinates, value in (pivot[high] - pivot[low]).items():
+            values = coordinates if isinstance(coordinates, tuple) else (coordinates,)
+            record = dict(zip(index, values, strict=True))
+            base_metric = str(record.pop("metric"))
+            if record.get("receiver_epistemic_disposition") and record.get(
+                "controller_evidence_strategy"
+            ):
+                record["derived_epistemic_condition"] = (
+                    f"{record['receiver_epistemic_disposition']}_"
+                    f"{record['controller_evidence_strategy']}"
+                )
+            rows.append({
+                **record,
+                "study_id": str(frame["study_id"].iloc[0]),
+                "source_run_id": "matched-factorial-contrast",
+                "cell_id": f"contrast-{kind}-{len(rows):06d}",
+                "metric": f"delta_{kind}_{base_metric}",
+                "contrast_type": kind,
+                "estimate": float(value),
+                "units": "descriptive_difference",
+                "support_status": "descriptive_only",
+                "grouping_json": json.dumps(record, sort_keys=True, default=str),
+                "conditioning_json": "{}",
+                "dependencies_json": json.dumps({"high": high, "low": low, "axis": axis}),
+                "analysis_hash": analysis_hash,
+            })
+
+    differences(source, "receiver_epistemic_disposition", "naive", "vigilant", "vigilance", ["controller_evidence_strategy", "target_semantics"])
+    differences(source, "controller_evidence_strategy", "neutral", "strategic", "evidence_strategy", ["receiver_epistemic_disposition", "target_semantics"])
+    differences(source, "target_semantics", "false", "truth", "truth_false", ["receiver_epistemic_disposition", "controller_evidence_strategy"])
+    return pd.DataFrame(rows)
 
 
 def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame], destination: Path) -> list[str]:
@@ -815,12 +957,22 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
             continue
         metric = str(spec.get("metric", ""))
         subset = frame[frame["metric"].astype(str) == metric] if metric and "metric" in frame else frame
+        filters = spec.get("filters", {})
+        if isinstance(filters, Mapping):
+            for column, expected in filters.items():
+                if str(column) in subset:
+                    subset = subset[subset[str(column)].astype(str) == str(expected)]
+        value_column = str(spec.get("value", ""))
+        if value_column and value_column in subset:
+            subset = subset.copy()
+            subset["estimate"] = pd.to_numeric(subset[value_column], errors="coerce")
         if "support_status" in subset:
             subset = subset[subset["support_status"].astype(str) != "unsupported"]
         x, y = str(spec.get("x", "")), str(spec.get("y", ""))
         if subset.empty or "estimate" not in subset:
             continue
-        if x not in subset or y not in subset:
+        kind = str(spec.get("kind", "heatmap"))
+        if x not in subset or (kind != "line" and y not in subset):
             figure, axis = plt.subplots(figsize=(max(5, len(subset) * 0.5), 4))
             labels = subset.get("cell_id", pd.Series(range(len(subset)))).astype(str)
             axis.bar(range(len(subset)), subset["estimate"].astype(float))
@@ -839,8 +991,22 @@ def _render_plots(recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame],
         finite_estimates = finite_estimates[np.isfinite(finite_estimates)]
         shared_vmin = float(finite_estimates.min()) if len(finite_estimates) else None
         shared_vmax = float(finite_estimates.max()) if len(finite_estimates) else None
-        figure, axes = plt.subplots(1, len(groups), squeeze=False, figsize=(5 * len(groups), 4))
-        for axis, (label, group) in zip(axes[0], groups, strict=True):
+        two_by_two = str(spec.get("layout", "")) == "2x2" and len(groups) == 4
+        nrows, ncols = (2, 2) if two_by_two else (1, len(groups))
+        figure, axes = plt.subplots(nrows, ncols, squeeze=False, figsize=(5 * ncols, 4 * nrows))
+        for axis, (label, group) in zip(axes.flat, groups, strict=True):
+            if kind == "line":
+                series = str(spec.get("series", ""))
+                line_groups = [("all", group)] if series not in group else group.groupby(series, dropna=False)
+                for series_label, line_group in line_groups:
+                    values = line_group.groupby(x, dropna=False)["estimate"].mean().sort_index()
+                    axis.plot(values.index, values.values, marker="o", label=str(series_label))
+                if series in group:
+                    axis.legend()
+                axis.set_xlabel(x)
+                axis.set_ylabel(value_column or metric)
+                axis.set_title(str(label))
+                continue
             pivot = group.pivot_table(index=y, columns=x, values="estimate", aggfunc="mean")
             image = axis.imshow(
                 pivot.to_numpy(dtype=float), aspect="auto", origin="lower",
@@ -1080,12 +1246,17 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
         auxiliary_hash,
         source_run_ids,
     )
+    state_local = _attach_coordinates(
+        _state_local_primary(study_id, events, recipe, analysis_hash, source_run_ids),
+        canonical["cells"],
+    )
     primary_frames = [
         frame
         for frame in (
             information,
             _attach_coordinates(current_primary, canonical["cells"]),
             _attach_coordinates(affinity_primary, canonical["cells"]),
+            state_local,
         )
         if not frame.empty
     ]
@@ -1105,8 +1276,11 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     derived_hash = canonical_hash(
         {"primary_analysis_hash": analysis_hash, "derived": list(derived_raw), "version": 1}
     )
-    derived = _derived(study_id, derived_raw, information, events, derived_hash)
+    derived = _derived(study_id, derived_raw, primary, events, derived_hash)
     derived = _attach_coordinates(derived, canonical["cells"])
+    contrasts = _factorial_contrasts(primary, derived, derived_raw, derived_hash)
+    if not contrasts.empty:
+        derived = pd.concat([derived, contrasts], ignore_index=True, sort=False)
 
     outputs = {
         "primary_estimates": primary,
@@ -1117,7 +1291,11 @@ def aggregate_study(study_dir: str | Path, *, allow_incomplete: bool = False) ->
     for name, frame in outputs.items():
         parquet_safe(frame).to_parquet(tables_dir / f"{name}.parquet", index=False, engine="pyarrow")
 
-    plot_tables = {**canonical, **outputs}
+    plot_tables = {
+        **canonical,
+        "rounds": _attach_coordinates(canonical["rounds"], canonical["cells"]),
+        **outputs,
+    }
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
     reports = analysis_dir / "reports"
     reports.mkdir(parents=True, exist_ok=True)

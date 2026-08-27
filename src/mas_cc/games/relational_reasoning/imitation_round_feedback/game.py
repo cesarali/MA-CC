@@ -279,7 +279,11 @@ class RelationalImitationRoundFeedbackGame(Game):
                 current_vote=agent.committed_action,
                 social_sources=social_sources,
                 vote_visibility=rules.vote_visibility,
-                epistemic_prompt_class=rules.epistemic_prompt_class,
+                receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
+                social_distrust=config.options.get(
+                    "social_distrust",
+                    True if "receiver_epistemic_disposition" not in config.options else None,
+                ),
                 # A focal update has a social context even when occlusion left
                 # nothing in it; an initial vote does not.
                 social_context=stage == FOCAL_UPDATE,
@@ -820,7 +824,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 known_facts=facts,
                 fact_ids=("f1", "f2"),
                 current_vote=None,
-                epistemic_prompt_class=rules.epistemic_prompt_class,
+                receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
             ),
         )
         update = PromptScenario(
@@ -846,7 +850,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                     for slot in range(rules.social_group_size)
                 ),
                 vote_visibility=rules.vote_visibility,
-                epistemic_prompt_class=rules.epistemic_prompt_class,
+                receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
             ),
         )
         initialization_calls = (
@@ -909,7 +913,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "population_rounds": rules.rounds,
                 "social_group_size": rules.social_group_size,
                 "vote_visibility": rules.vote_visibility,
-                "epistemic_prompt_class": rules.epistemic_prompt_class,
+                "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
                 "task_id": rules.task_id,
                 "initial_votes_provider_supplied": rules.initial_votes is not None,
             },

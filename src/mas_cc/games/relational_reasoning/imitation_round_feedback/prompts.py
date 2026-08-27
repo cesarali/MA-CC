@@ -76,11 +76,12 @@ MAX_REASON_CHARACTERS = 600
 essay - which truncates at ``max_output_tokens`` and breaks the JSON anyway -
 not to police wording."""
 
+RECEIVER_EPISTEMIC_DISPOSITIONS = ("naive", "vigilant")
+# Deprecated import compatibility. New configuration must use the factorized
+# receiver axis; these names remain only so historical prompt artifacts/tests
+# can still be inspected and reproduced.
 EPISTEMIC_PROMPT_CLASSES = (
-    "naive",
-    "distributed_information",
-    "strategic_uncertainty",
-    "evidence_calibrated",
+    "naive", "distributed_information", "strategic_uncertainty", "evidence_calibrated"
 )
 
 SOCIAL_ENVIRONMENT_DISTRUST = (
@@ -107,6 +108,14 @@ SOCIAL_ENVIRONMENT_DISTRIBUTED = (
     "same information."
 )
 SOCIAL_ENVIRONMENT_NAIVE = "Participant identities persist across interactions."
+SOCIAL_ENVIRONMENT_VIGILANT = (
+    "Participant identities persist across interactions.\n"
+    "\n"
+    "Some participants may have objectives that differ from yours. Do not accept a\n"
+    "recommendation merely because another participant gives it. Evaluate whether\n"
+    "the explicit evidence you actually have supports the conclusion, and remain\n"
+    "aware that a source may present only part of the relevant information."
+)
 SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED = (
     "Participant identities persist across interactions.\n"
     "\n"
@@ -127,39 +136,54 @@ SOCIAL_ENVIRONMENT = SOCIAL_ENVIRONMENT_DISTRUST
 """Backwards-compatible alias for the default environment."""
 
 
-def resolve_epistemic_prompt_class(
-    epistemic_prompt_class: str | None = None,
+def resolve_receiver_epistemic_disposition(
+    receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
 ) -> str:
-    """Resolve the authoritative class and the deprecated boolean without ambiguity."""
+    """Resolve the factorized receiver axis and the deprecated boolean adapter."""
 
     legacy = None
     if social_distrust is not None:
         if not isinstance(social_distrust, bool):
             raise ValueError("social_distrust must be a boolean")
-        legacy = "strategic_uncertainty" if social_distrust else "distributed_information"
-    selected = epistemic_prompt_class or legacy or "strategic_uncertainty"
-    if selected not in EPISTEMIC_PROMPT_CLASSES:
+        legacy = "vigilant" if social_distrust else "naive"
+    selected = receiver_epistemic_disposition or legacy or "vigilant"
+    if selected not in RECEIVER_EPISTEMIC_DISPOSITIONS:
         raise ValueError(
-            "epistemic_prompt_class must be one of " f"{list(EPISTEMIC_PROMPT_CLASSES)}"
+            "receiver_epistemic_disposition must be one of "
+            f"{list(RECEIVER_EPISTEMIC_DISPOSITIONS)}"
         )
     if legacy is not None and selected != legacy:
         raise ValueError(
             "game.options.social_distrust contradicts "
-            "game.options.epistemic_prompt_class"
+            "game.options.receiver_epistemic_disposition"
         )
     return selected
 
 
-def epistemic_framing(epistemic_prompt_class: str = "strategic_uncertainty") -> str:
-    """Return the sole fixed framing component for a scientific prompt class."""
+def resolve_epistemic_prompt_class(
+    epistemic_prompt_class: str | None = None,
+    social_distrust: bool | None = None,
+) -> str:
+    """Deprecated prompt-only resolver for historical artifact replay."""
+    legacy = None if social_distrust is None else (
+        "strategic_uncertainty" if social_distrust else "distributed_information"
+    )
+    selected = epistemic_prompt_class or legacy or "strategic_uncertainty"
+    if selected not in EPISTEMIC_PROMPT_CLASSES:
+        raise ValueError(f"epistemic_prompt_class must be one of {list(EPISTEMIC_PROMPT_CLASSES)}")
+    if legacy is not None and selected != legacy:
+        raise ValueError("game.options.social_distrust contradicts game.options.epistemic_prompt_class")
+    return selected
 
-    selected = resolve_epistemic_prompt_class(epistemic_prompt_class)
+
+def epistemic_framing(receiver_epistemic_disposition: str = "vigilant") -> str:
+    """Return the sole fixed framing component for the receiver disposition."""
+
+    selected = resolve_receiver_epistemic_disposition(receiver_epistemic_disposition)
     return {
         "naive": SOCIAL_ENVIRONMENT_NAIVE,
-        "distributed_information": SOCIAL_ENVIRONMENT_DISTRIBUTED,
-        "strategic_uncertainty": SOCIAL_ENVIRONMENT_DISTRUST,
-        "evidence_calibrated": SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED,
+        "vigilant": SOCIAL_ENVIRONMENT_VIGILANT,
     }[selected]
 
 
@@ -172,7 +196,7 @@ def social_environment(social_distrust: bool = True) -> str:
     from one at ``true``, instead of a silently different prompt.
     """
 
-    return epistemic_framing(resolve_epistemic_prompt_class(social_distrust=social_distrust))
+    return SOCIAL_ENVIRONMENT_DISTRUST if social_distrust else SOCIAL_ENVIRONMENT_DISTRIBUTED
 
 DECISION_BASIS_INITIAL = (
     "Make your own decision, using the facts you currently know and nothing\n"
@@ -847,7 +871,7 @@ def relational_public_ballot_prompt(
     *,
     fact_ids: Sequence[str] = (),
     relations: Sequence[str] = (),
-    epistemic_prompt_class: str | None = None,
+    receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
 ) -> RelationalBallotPrompt:
     """One prompt of this family.
@@ -863,9 +887,12 @@ def relational_public_ballot_prompt(
         (
             IdentityBlock(),
             SocialEnvironmentBlock(
-                epistemic_framing(
-                    resolve_epistemic_prompt_class(epistemic_prompt_class, social_distrust)
-                )
+                # Explicit legacy boolean replays its historical bytes. New
+                # configs omit it and use the factorized disposition text.
+                (SOCIAL_ENVIRONMENT_DISTRUST if social_distrust else
+                 SOCIAL_ENVIRONMENT_DISTRIBUTED)
+                if social_distrust is not None else
+                epistemic_framing(receiver_epistemic_disposition or "vigilant")
             ),
             DecisionBasisBlock(),
             TaskBlock(),
@@ -893,7 +920,7 @@ def build_relational_ballot_prompt(
     current_vote: str | None,
     social_sources: Sequence[Mapping[str, Any]] = (),
     vote_visibility: str = "public",
-    epistemic_prompt_class: str | None = None,
+    receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
     social_context: bool = False,
 ) -> RelationalBallotPrompt:
@@ -917,7 +944,7 @@ def build_relational_ballot_prompt(
         # The semantic alphabet in a call-independent order, so the contract -
         # and therefore the prompt definition - does not move with the shuffle.
         relations=tuple(sorted(option_letters.values())),
-        epistemic_prompt_class=epistemic_prompt_class,
+        receiver_epistemic_disposition=receiver_epistemic_disposition,
         social_distrust=social_distrust,
     ).bind(
         identity=identity,
@@ -958,6 +985,7 @@ __all__ = [
     "DECISION_BASIS_SOCIAL_NONE_VISIBLE",
     "DECISION_INSTRUCTION",
     "EVIDENCE_HEADER",
+    "RECEIVER_EPISTEMIC_DISPOSITIONS",
     "EPISTEMIC_PROMPT_CLASSES",
     "IMPLEMENTED_VOTE_VISIBILITIES",
     "MAX_REASON_CHARACTERS",
@@ -969,6 +997,7 @@ __all__ = [
     "SOCIAL_ENVIRONMENT_DISTRIBUTED",
     "SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED",
     "SOCIAL_ENVIRONMENT_NAIVE",
+    "SOCIAL_ENVIRONMENT_VIGILANT",
     "SOCIAL_ENVIRONMENT_NEUTRAL",
     "VOTE_VISIBILITIES",
     "ParsedBallot",
@@ -992,6 +1021,7 @@ __all__ = [
     "render_social_sources",
     "shuffled_option_letters",
     "resolve_vote",
+    "resolve_receiver_epistemic_disposition",
     "resolve_epistemic_prompt_class",
     "social_environment",
 ]

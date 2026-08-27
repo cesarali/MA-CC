@@ -33,7 +33,7 @@ from .prompts import (
     IMPLEMENTED_VOTE_VISIBILITIES,
     PROMPT_VERSION,
     VOTE_VISIBILITIES,
-    resolve_epistemic_prompt_class,
+    resolve_receiver_epistemic_disposition,
 )
 
 GAME_TYPE = "relational_imitation_round_feedback"
@@ -284,7 +284,7 @@ class RelationalRules:
     task_id: str | None
     vote_visibility: str
     prompt_version: int
-    epistemic_prompt_class: str
+    receiver_epistemic_disposition: str
     stop_on_consensus: bool
     initialization_mode: str
     initial_votes: tuple[str, ...] | None
@@ -296,7 +296,7 @@ class RelationalRules:
     def social_distrust(self) -> bool:
         """Compatibility view of the retired boolean (only its two old arms)."""
 
-        return self.epistemic_prompt_class == "strategic_uncertainty"
+        return self.receiver_epistemic_disposition == "vigilant"
 
     @classmethod
     def from_config(cls, config: GameConfig) -> "RelationalRules":
@@ -349,11 +349,18 @@ class RelationalRules:
         distrust = options.get("social_distrust")
         if "social_distrust" in options and not isinstance(distrust, bool):
             raise ValueError("game.options.social_distrust must be a boolean")
-        prompt_class = options.get("epistemic_prompt_class")
+        if "epistemic_prompt_class" in options:
+            raise ValueError(
+                "game.options.epistemic_prompt_class is retired; use "
+                "game.options.receiver_epistemic_disposition (naive or vigilant)"
+            )
+        prompt_class = options.get("receiver_epistemic_disposition")
         if prompt_class is not None and not isinstance(prompt_class, str):
-            raise ValueError("game.options.epistemic_prompt_class must be a string")
+            raise ValueError(
+                "game.options.receiver_epistemic_disposition must be a string"
+            )
         try:
-            prompt_class = resolve_epistemic_prompt_class(prompt_class, distrust)
+            prompt_class = resolve_receiver_epistemic_disposition(prompt_class, distrust)
         except ValueError as exc:
             raise ValueError(f"game.options.{exc}") from exc
 
@@ -411,7 +418,7 @@ class RelationalRules:
             task_id=task_id,
             vote_visibility=visibility,
             prompt_version=int(prompt_version),
-            epistemic_prompt_class=prompt_class,
+            receiver_epistemic_disposition=prompt_class,
             stop_on_consensus=bool(options.get("stop_on_consensus", False)),
             initialization_mode=initialization_mode,
             initial_votes=initial_votes,

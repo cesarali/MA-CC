@@ -62,20 +62,30 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
         ("control.options.threshold", "threshold"),
-        ("game.options.epistemic_prompt_class", "epistemic_prompt_class"),
+        ("game.options.receiver_epistemic_disposition", "receiver_epistemic_disposition"),
+        ("control.options.controller_evidence_strategy", "controller_evidence_strategy"),
+        ("control.options.message_mode", "message_mode"),
+        ("control.options.target", "controller_target_semantics"),
         ("experiment.metadata.controller_semantics", "controller_semantics"),
+        ("experiment.metadata.target_semantics", "target_semantics"),
     ):
         value = _nested(cell.resolved_config, dotted)
         if value is not None and label not in result:
             result[label] = value
-    if "epistemic_prompt_class" not in result:
+    if "receiver_epistemic_disposition" not in result:
         legacy = _nested(cell.resolved_config, "game.options.social_distrust")
         if isinstance(legacy, bool):
-            result["epistemic_prompt_class"] = (
-                "strategic_uncertainty" if legacy else "distributed_information"
-            )
+            result["receiver_epistemic_disposition"] = "vigilant" if legacy else "naive"
         elif _nested(cell.resolved_config, "game.type") == "relational_imitation_round_feedback":
-            result["epistemic_prompt_class"] = "strategic_uncertainty"
+            result["receiver_epistemic_disposition"] = "vigilant"
+    if result.get("receiver_epistemic_disposition") and result.get(
+        "controller_evidence_strategy"
+    ):
+        result["epistemic_condition"] = (
+            f"{result['receiver_epistemic_disposition']}_"
+            f"{result['controller_evidence_strategy']}"
+        )
+        result["derived_epistemic_condition"] = result["epistemic_condition"]
     return result
 
 

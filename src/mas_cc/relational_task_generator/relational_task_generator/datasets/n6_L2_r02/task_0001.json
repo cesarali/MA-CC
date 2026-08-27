@@ -1,0 +1,148 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 874272090446871458,
+  "generation": {
+    "dataset_seed": 20260827,
+    "task_index": 1,
+    "population_size": 6,
+    "reasoning_depth": 2,
+    "support_redundancy": 2,
+    "distractors": 1,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zora",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Feni",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Garo",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Belo",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zora",
+        "relation": "SOUTH",
+        "object": "Maro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Maro",
+        "relation": "WEST",
+        "object": "Feni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Garo",
+        "relation": "NORTH",
+        "object": "Belo",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zora",
+    "reference": "Feni",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHWEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Zora relative to Feni?",
+    "facts": {
+      "f1": "Zora is south of Maro.",
+      "f2": "Maro is west of Feni.",
+      "f3": "Garo is north of Belo."
+    },
+    "reasoning_chain": [
+      "Zora is south of Maro.",
+      "Maro is west of Feni."
+    ]
+  }
+}

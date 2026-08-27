@@ -208,9 +208,10 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
 
     expected_axes = [
         (
-            "game.options.epistemic_prompt_class",
-            ["naive", "distributed_information", "strategic_uncertainty", "evidence_calibrated"],
+            "game.options.receiver_epistemic_disposition",
+            ["naive", "vigilant"],
         ),
+        ("control.options.controller_evidence_strategy", ["neutral", "strategic"]),
         ("control.options.intervention_budget", [4, 8, 12, 16, 20, 24]),
         ("game.options.task_id", ["task_0001", "task_0002", "task_0003", "task_0004"]),
     ]
@@ -221,6 +222,9 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
     assert len(shards) == 192
     assert {cell.config.control.options["target"] for cell in wrong.cells} == {2}
     assert {cell.config.control.options["target"] for cell in truth.cells} == {"correct"}
+    assert {cell.config.control.options["message_mode"] for cell in wrong.cells + truth.cells} == {
+        "recommendation_plus_fact"
+    }
     assert {
         cell.config.experiment.metadata["common_random_numbers_across_grid"]
         for cell in wrong.cells + truth.cells
@@ -237,8 +241,20 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
         Path("configs/runs/relational_reasoning/population_study_06/analysis.yaml").read_text()
     )
     study08_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
-    for key in ("estimators", "resampling", "derived"):
+    for key in ("estimators", "resampling"):
         assert study08_analysis[key] == study06_analysis[key]
+    assert study08_analysis["derived"] == ["eta_ir", "factorial_contrasts"]
+    assert study08_analysis["state_local"] == ["x", "x_phi", "x_kappa"]
+    required_plots = {
+        f"{target}_{metric}_{resolution}"
+        for target in ("truth", "false")
+        for metric in ("tpi", "chi", "eta")
+        for resolution in ("x_b", "x_phi", "x_kappa")
+    }
+    assert required_plots <= set(study08_analysis["plots"])
+    assert {"b24_tpi_profile", "b24_chi_profile", "b24_eta_profile"} <= set(
+        study08_analysis["plots"]
+    )
 
 
 def test_auto_submission_writes_execution_plan_and_explicit_resources(

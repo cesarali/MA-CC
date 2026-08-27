@@ -1,0 +1,137 @@
+# Minimal local Study 08 prompt-class inspection.
+# Shape: 4 prompt classes x 1 fixed condition x 3 episodes = 12 episodes.
+
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    response: '{"vote":"C","reason":"local prompt inspection","shared_fact_id":"none"}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 6
+  horizon: 3
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n6_L2_r02
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 3
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 3
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: neutral
+
+execution:
+  seed: 20260827
+  # In MA-CC, repetitions are independent episode seeds within each cell.
+  repetitions: 3
+  parallelism: 3
+  fail_fast: true
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 1000
+  max_input_tokens: 10000000
+  max_output_tokens: 1000000
+  allow_unbounded_paid_requests: true
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 2
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    sweep_experiment: false
+
+experiment:
+  name: relational-study08-local-epistemic-prompt-examples
+  description: >-
+    Local mock-provider Study 08 inspection with six agents, three rounds,
+    three episodes per prompt class, and no additional sweep axes.
+  tags: [relational, population-study-08, local, mock, prompt-class, prompt-examples, N6]
+  metadata:
+    study: population_study_08
+    phase: local_prompt_examples
+    design: epistemic_prompt_inspection
+    controller_semantics: truth
+    population_rounds: 3
+    social_group_size: 1
+    sensor_sample_size: 3
+    intervention_budget: 3
+    worlds: 1
+    episodes_per_prompt_class: 3
+    cells: 4
+    episodes: 12
+
+grid:
+  game.options.receiver_epistemic_disposition: [naive, vigilant]
+  control.options.controller_evidence_strategy: [neutral, strategic]
