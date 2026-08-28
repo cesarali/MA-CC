@@ -1,0 +1,271 @@
+# Study 09a reuses the authoritative Study 08 epistemic estimators. The four
+# epistemic classes are derived from disposition x evidence strategy; target
+# semantics remains a separate comparison axis.
+theoretical_reference: single_affinity_revised
+
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_population_actuation_cmi
+  - round_target_actuation_cmi
+  - round_truth_actuation_cmi
+  - round_order_actuation_cmi
+  - round_population_information_fraction
+  - round_target_information_fraction
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - round_target_susceptibility
+  - round_target_sensing_mi
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_order_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_susceptible_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_memory_target_signed_response
+  - round_epistemic_target_signed_response
+  - round_phi_target_signed_response
+  - round_susceptible_target_signed_response
+  - round_kappa_target_signed_response
+  - cell_current
+  - episode_current
+  - effective_affinity
+  - kinetic_compliance
+
+resampling:
+  bootstrap_resamples: 1000
+  null_permutations: 1000
+  confidence: 0.95
+  seed: 20260828
+
+derived:
+  - round_target_susceptibility
+  - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
+  - factorial_contrasts
+
+state_local: [x, x_phi, x_kappa]
+
+plots:
+  epistemic_target_cmi: &primary_plot
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: derived_epistemic_condition
+    facet: target_semantics
+    kind: heatmap
+  epistemic_signed_response:
+    <<: *primary_plot
+    metric: round_target_signed_response_share
+  epistemic_eta_ir:
+    <<: *primary_plot
+    source: derived_observables
+    metric: eta_ir
+  epistemic_action_entropy:
+    <<: *primary_plot
+    metric: round_controller_action_entropy
+  epistemic_sensing_mi:
+    <<: *primary_plot
+    metric: round_sensing_mi
+  epistemic_memory_cmi:
+    <<: *primary_plot
+    metric: round_memory_target_actuation_cmi
+  epistemic_condition_cmi:
+    <<: *primary_plot
+    metric: round_epistemic_target_actuation_cmi
+  epistemic_phi_cmi:
+    <<: *primary_plot
+    metric: round_phi_target_actuation_cmi
+  epistemic_kappa_cmi:
+    <<: *primary_plot
+    metric: round_kappa_target_actuation_cmi
+  epistemic_h_eff:
+    <<: *primary_plot
+    metric: effective_affinity
+  epistemic_gamma_eff:
+    <<: *primary_plot
+    metric: kinetic_compliance
+  epistemic_current:
+    <<: *primary_plot
+    metric: cell_current
+  epistemic_chi:
+    <<: *primary_plot
+    source: derived_observables
+    metric: susceptibility_occupancy_weighted
+  epistemic_controlled_current:
+    <<: *primary_plot
+    source: derived_observables
+    metric: controlled_current
+  epistemic_sensing_nats:
+    <<: *primary_plot
+    source: derived_observables
+    metric: target_sensing_information_nats
+  epistemic_eta_th:
+    <<: *primary_plot
+    source: derived_observables
+    metric: eta_th
+  epistemic_affinity_weighted_current:
+    <<: *primary_plot
+    source: derived_observables
+    metric: affinity_weighted_current_nats
+  epistemic_control_expenditure:
+    <<: *primary_plot
+    source: derived_observables
+    metric: thermodynamic_control_expenditure_nats
+
+  evolution_phi:
+    source: rounds
+    value: full_proof_agent_share_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+  evolution_kappa:
+    source: rounds
+    value: mean_supporting_fact_coverage_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+  evolution_truth_share:
+    source: rounds
+    value: truth_vote_share_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+  evolution_target_share:
+    source: rounds
+    value: controller_target_share_before
+    x: round_index
+    series: derived_epistemic_condition
+    facet: target_semantics
+    kind: line
+
+  vigilance_cmi_contrast:
+    source: derived_observables
+    metric: delta_vigilance_round_target_actuation_cmi
+    x: intervention_budget
+    y: controller_evidence_strategy
+    facet: target_semantics
+    kind: heatmap
+  evidence_cmi_contrast:
+    source: derived_observables
+    metric: delta_evidence_strategy_round_target_actuation_cmi
+    x: intervention_budget
+    y: receiver_epistemic_disposition
+    facet: target_semantics
+    kind: heatmap
+  truth_false_eta_contrast:
+    source: derived_observables
+    metric: delta_truth_false_eta_ir
+    x: intervention_budget
+    y: derived_epistemic_condition
+    kind: heatmap
+
+  truth_tpi_x_b: &truth_x_b
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: target_count_before
+    facet: derived_epistemic_condition
+    filters: {resolution: x, target_semantics: truth}
+    layout: 2x2
+    kind: heatmap
+  false_tpi_x_b:
+    <<: *truth_x_b
+    filters: {resolution: x, target_semantics: false}
+  truth_chi_x_b:
+    <<: *truth_x_b
+    metric: round_target_susceptibility
+  false_chi_x_b:
+    <<: *truth_x_b
+    metric: round_target_susceptibility
+    filters: {resolution: x, target_semantics: false}
+  truth_eta_x_b:
+    <<: *truth_x_b
+    source: derived_observables
+    metric: eta_ir_state_local
+  false_eta_x_b:
+    <<: *truth_x_b
+    source: derived_observables
+    metric: eta_ir_state_local
+    filters: {resolution: x, target_semantics: false}
+
+  truth_tpi_x_phi: &truth_x_phi
+    <<: *truth_x_b
+    x: target_count_before
+    y: conditioning_phi_bin
+    filters: {resolution: x_phi, target_semantics: truth}
+  false_tpi_x_phi:
+    <<: *truth_x_phi
+    filters: {resolution: x_phi, target_semantics: false}
+  truth_chi_x_phi:
+    <<: *truth_x_phi
+    metric: round_target_susceptibility
+  false_chi_x_phi:
+    <<: *truth_x_phi
+    metric: round_target_susceptibility
+    filters: {resolution: x_phi, target_semantics: false}
+  truth_eta_x_phi:
+    <<: *truth_x_phi
+    source: derived_observables
+    metric: eta_ir_state_local
+  false_eta_x_phi:
+    <<: *truth_x_phi
+    source: derived_observables
+    metric: eta_ir_state_local
+    filters: {resolution: x_phi, target_semantics: false}
+
+  truth_tpi_x_kappa: &truth_x_kappa
+    <<: *truth_x_phi
+    y: conditioning_kappa_bin
+    filters: {resolution: x_kappa, target_semantics: truth}
+  false_tpi_x_kappa:
+    <<: *truth_x_kappa
+    filters: {resolution: x_kappa, target_semantics: false}
+  truth_chi_x_kappa:
+    <<: *truth_x_kappa
+    metric: round_target_susceptibility
+  false_chi_x_kappa:
+    <<: *truth_x_kappa
+    metric: round_target_susceptibility
+    filters: {resolution: x_kappa, target_semantics: false}
+  truth_eta_x_kappa:
+    <<: *truth_x_kappa
+    source: derived_observables
+    metric: eta_ir_state_local
+  false_eta_x_kappa:
+    <<: *truth_x_kappa
+    source: derived_observables
+    metric: eta_ir_state_local
+    filters: {resolution: x_kappa, target_semantics: false}
+
+  b12_tpi_profile: &b12_profile
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: target_count_before
+    series: derived_epistemic_condition
+    facet: target_semantics
+    filters: {resolution: x, intervention_budget: 12}
+    kind: line
+  b12_chi_profile:
+    <<: *b12_profile
+    metric: round_target_susceptibility
+  b12_eta_profile:
+    <<: *b12_profile
+    source: derived_observables
+    metric: eta_ir_state_local
