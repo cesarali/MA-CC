@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import logging
 import os
 import random
 import time
@@ -21,6 +22,7 @@ from ..load_control import SharedProviderCoordinator
 
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
+LOGGER = logging.getLogger(__name__)
 
 
 def _load_dotenv_if_available() -> None:
@@ -123,7 +125,7 @@ class OpenAICompatibleProvider:
             response = await asyncio.to_thread(self._get_session().get, url, **kwargs)
             if lease is not None:
                 retryable = self._is_retryable(response.status_code)
-                await self._request_coordinator.release(
+                await self._release_attempt(
                     lease, success=not retryable, retryable=retryable,
                     status_code=response.status_code,
                     latency_seconds=time.perf_counter() - started,
@@ -132,11 +134,24 @@ class OpenAICompatibleProvider:
             return response
         except Exception:
             if lease is not None:
-                await self._request_coordinator.release(
+                await self._release_attempt(
                     lease, success=False, retryable=True, status_code=None,
                     latency_seconds=time.perf_counter() - started,
                 )
             raise
+
+    async def _release_attempt(self, lease: Any, **outcome: Any) -> None:
+        """Never sacrifice a valid provider response to coordination telemetry."""
+
+        if self._request_coordinator is None:
+            return
+        try:
+            await self._request_coordinator.release(lease, **outcome)
+        except Exception as exc:
+            LOGGER.warning(
+                "provider load-control release failed; the lease will expire: %s",
+                type(exc).__name__,
+            )
 
     async def discover_models(self) -> tuple[str, ...]:
         """Return advertised model ids while sharing normal endpoint discovery."""
@@ -271,7 +286,7 @@ class OpenAICompatibleProvider:
                         retry, started
                     ):
                         if lease is not None:
-                            await self._request_coordinator.release(
+                            await self._release_attempt(
                                 lease, success=False, retryable=True,
                                 status_code=response.status_code,
                                 latency_seconds=time.perf_counter() - attempt_started,
@@ -290,7 +305,7 @@ class OpenAICompatibleProvider:
                         )
                         raise TypeError("message content is not a string")
                     if lease is not None:
-                        await self._request_coordinator.release(
+                        await self._release_attempt(
                             lease, success=True, retryable=False,
                             status_code=response.status_code,
                             latency_seconds=time.perf_counter() - attempt_started,
@@ -316,7 +331,7 @@ class OpenAICompatibleProvider:
                     # retried into three identical paid failures.
                     if lease is not None:
                         status = getattr(response, "status_code", None)
-                        await self._request_coordinator.release(
+                        await self._release_attempt(
                             lease, success=False, retryable=self._is_retryable(status),
                             status_code=status,
                             latency_seconds=time.perf_counter() - attempt_started,
@@ -329,7 +344,7 @@ class OpenAICompatibleProvider:
                     # transient upstream fault it is and spend the configured
                     # bounded retries before failing the logical request.
                     if lease is not None:
-                        await self._request_coordinator.release(
+                        await self._release_attempt(
                             lease, success=False, retryable=True,
                             status_code=getattr(response, "status_code", None),
                             latency_seconds=time.perf_counter() - attempt_started,
@@ -349,7 +364,7 @@ class OpenAICompatibleProvider:
                 except Exception as exc:
                     status = getattr(response, "status_code", None)
                     if lease is not None:
-                        await self._request_coordinator.release(
+                        await self._release_attempt(
                             lease, success=False, retryable=self._is_retryable(status),
                             status_code=status,
                             latency_seconds=time.perf_counter() - attempt_started,

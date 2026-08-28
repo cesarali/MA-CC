@@ -124,6 +124,11 @@ class _CountingCoordinator:
         self.outcomes.append((lease.token, outcome))
 
 
+class _ReleaseFailingCoordinator(_CountingCoordinator):
+    async def release(self, lease, **outcome):
+        raise RuntimeError("simulated shared-filesystem telemetry failure")
+
+
 def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata():
     body = {
         "id": "req-1",
@@ -215,6 +220,24 @@ def test_coordinated_request_survives_beyond_adapter_retry_count():
     assert [outcome["success"] for _, outcome in coordinator.outcomes] == [
         False, False, True,
     ]
+
+
+def test_coordination_release_failure_does_not_destroy_valid_response():
+    body = {
+        "id": "req-valid-despite-telemetry",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY"
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=_Session([_Response(200, body)]),
+        request_coordinator=_ReleaseFailingCoordinator(),
+    )
+
+    assert asyncio.run(provider.complete(_request())).content == "A"
 
 
 def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():
