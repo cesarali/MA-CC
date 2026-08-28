@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Generic Potsdam launcher for provider-backed MA-CC probes.
+# Resource requests and absolute log paths are supplied by sbatch.
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: run_probe.job PROBE_CONFIG OUTPUT_DIR" >&2
+  exit 2
+fi
+
+readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly PROBE_CONFIG=$1
+readonly OUTPUT_DIR=$2
+
+exec "$CONDA_EXE" run -n MA-CC --live-stream \
+  mas-cc probe run --config "$PROBE_CONFIG" --output-dir "$OUTPUT_DIR"
