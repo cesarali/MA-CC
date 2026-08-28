@@ -1,0 +1,165 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0005",
+  "seed": 8265528234237022195,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 5,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Tavi",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Ralo",
+        "coordinates": {
+          "x": 1000,
+          "y": 998
+        }
+      },
+      {
+        "name": "Savi",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Kavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Tavi",
+        "relation": "SOUTHEAST",
+        "object": "Faro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Ralo",
+        "relation": "SOUTHEAST",
+        "object": "Savi",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Savi",
+        "relation": "SOUTHWEST",
+        "object": "Kavi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Tavi",
+    "reference": "Faro",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Tavi relative to Faro?",
+    "facts": {
+      "f1": "Tavi is southeast of Faro.",
+      "f2": "Ralo is southeast of Savi.",
+      "f3": "Savi is southwest of Kavi."
+    },
+    "reasoning_chain": [
+      "Tavi is southeast of Faro."
+    ]
+  }
+}

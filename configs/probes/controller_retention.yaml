@@ -1,0 +1,49 @@
+# Focused local diagnostic before q>1 population experiments.
+# This is not a game: each provider call is one isolated focal-agent decision.
+#
+# Preflight (no provider calls):
+#   mas-cc probe preflight --config configs/probes/controller_retention.yaml
+# Run:
+#   mas-cc probe run --config configs/probes/controller_retention.yaml
+# Analyze saved calls without contacting the provider:
+#   mas-cc probe analyze --config configs/probes/controller_retention.yaml
+
+# Start with one model. Additional models can be added here without changing
+# the analysis code; each additional model contributes another 240 calls.
+models:
+  - label: gpt_oss_120b
+    provider: university
+    model: gwdg/openai-gpt-oss-120b
+    credentials_env: POTSDAM_API_KEY
+    base_url_env: BASE_POTSDAM_LLM_URL
+    temperature: 0.0
+    max_output_tokens: 4096
+    timeout_seconds: 180
+    max_retries: 2
+
+tasks:
+  dataset_dirs:
+    1: src/mas_cc/relational_task_generator/relational_task_generator/datasets/probe_n12_L1_k3
+    2: src/mas_cc/relational_task_generator/relational_task_generator/datasets/probe_n12_L2_k3
+  tasks_per_depth: 12
+
+design:
+  seed: 20260828
+  reasoning_depths: [1, 2]
+  q_values: [2, 3]
+  receivers: [naive]
+  targets: [truth, "false"]
+  replicates: 1
+
+execution:
+  workers: 4
+  backend: process_pool
+  resume: true
+  # The provider adapter owns transport retries. The probe does not wrap it in
+  # another retry loop, which avoids multiplicative retries.
+  max_retries: 0
+  provider_concurrency_caps:
+    university: 4
+
+storage:
+  output_dir: results/probes/controller_retention

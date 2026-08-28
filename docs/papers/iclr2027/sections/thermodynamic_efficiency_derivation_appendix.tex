@@ -243,6 +243,49 @@ Since $I_{\mathrm{sens},k}\ge0$,
 (hJ_{c,k}\ge0,\; C_{\mathrm{th},k}>0).
 \label{eq:app_th_efficiency_bound}
 \end{equation}
+For a finite horizon, sum Eq.~(\ref{eq:app_th_second_law}) over
+$k=0,\ldots,H-1$:
+\begin{equation}
+\sum_{k=0}^{H-1}\Delta S_{\mathrm{sys},k}
++h\sum_{k=0}^{H-1}J_{c,k}
++\sum_{k=0}^{H-1}I_{\mathrm{sens},k}
+=\sum_{k=0}^{H-1}\Sigma_k.
+\label{eq:app_th_horizon_sum}
+\end{equation}
+Because the system-entropy increments telescope,
+\begin{equation}
+S_{\mathrm{sys}}[p_H]-S_{\mathrm{sys}}[p_0]
++hJ_c^{(H)}+I_{\mathrm{sens}}^{(H)}
+=\Sigma^{(H)},
+\label{eq:app_th_horizon_identity}
+\end{equation}
+where
+\begin{equation}
+J_c^{(H)}\equiv\sum_{k=0}^{H-1}J_{c,k},\qquad
+I_{\mathrm{sens}}^{(H)}\equiv\sum_{k=0}^{H-1}I_{\mathrm{sens},k},\qquad
+\Sigma^{(H)}\equiv\sum_{k=0}^{H-1}\Sigma_k.
+\label{eq:app_th_horizon_quantities}
+\end{equation}
+The accumulated non-storage expenditure and corresponding efficiency are
+therefore
+\begin{equation}
+C_{\mathrm{th}}^{(H)}
+=hJ_c^{(H)}+I_{\mathrm{sens}}^{(H)},
+\qquad
+\eta_{\mathrm{th}}^{(H)}
+=\frac{hJ_c^{(H)}}{C_{\mathrm{th}}^{(H)}}.
+\label{eq:app_th_horizon_efficiency}
+\end{equation}
+In general,
+\begin{equation}
+\eta_{\mathrm{th}}^{(H)}
+\ne
+\frac{1}{H}\sum_{k=0}^{H-1}\eta_{\mathrm{th},k},
+\label{eq:app_th_not_mean_efficiency}
+\end{equation}
+because thermodynamic efficiency is a nonlinear ratio and the cycle-wise
+expenditures need not be equal.
+
 At stationarity the boundary term vanishes and
 \begin{equation}
 \eta_{\mathrm{th}}

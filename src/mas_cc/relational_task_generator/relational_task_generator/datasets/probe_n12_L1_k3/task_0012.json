@@ -1,0 +1,165 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0012",
+  "seed": 346917438649098897,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 12,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Teni",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Delo",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Kora",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Pelo",
+        "relation": "NORTHEAST",
+        "object": "Caro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Teni",
+        "relation": "SOUTHEAST",
+        "object": "Delo",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Delo",
+        "relation": "WEST",
+        "object": "Kora",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Pelo",
+    "reference": "Caro",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Pelo relative to Caro?",
+    "facts": {
+      "f1": "Pelo is northeast of Caro.",
+      "f2": "Teni is southeast of Delo.",
+      "f3": "Delo is west of Kora."
+    },
+    "reasoning_chain": [
+      "Pelo is northeast of Caro."
+    ]
+  }
+}

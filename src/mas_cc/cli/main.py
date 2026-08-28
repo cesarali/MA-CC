@@ -22,7 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("version", help="print the installed MAS-CC version")
 
-    prompt = commands.add_parser("prompt", help="compile and inspect prompts without an LLM")
+    prompt = commands.add_parser(
+        "prompt", help="compile and inspect prompts without an LLM"
+    )
     prompt_commands = prompt.add_subparsers(dest="prompt_command", required=True)
     examples = prompt_commands.add_parser(
         "examples", help="write paper-grounded prompts as readable Markdown"
@@ -48,7 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
         "test", help="compile one prompt, run static preflight, and send one completion"
     )
     provider_test.add_argument(
-        "--provider", choices=("mock", "openai", "university", "gemma_local"), required=True
+        "--provider",
+        choices=("mock", "openai", "university", "gemma_local"),
+        required=True,
     )
     provider_test.add_argument(
         "--prompt",
@@ -78,11 +82,13 @@ def build_parser() -> argparse.ArgumentParser:
     game_run.add_argument("--output-dir", type=Path, required=True)
 
     game_preflight = game_commands.add_parser(
-        "preflight", help="price exactly one episode of this config; no provider calls sent"
+        "preflight",
+        help="price exactly one episode of this config; no provider calls sent",
     )
     game_preflight.add_argument("--config", type=Path, required=True)
     game_preflight.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help="artifact destination (default: this config's storage.output_dir)",
     )
 
@@ -95,11 +101,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     game_episode.add_argument("--config", type=Path, required=True)
     game_episode.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help="artifact destination (default: this config's storage.output_dir)",
     )
     game_episode.add_argument(
-        "--no-preflight", dest="skip_preflight", action="store_true",
+        "--no-preflight",
+        dest="skip_preflight",
+        action="store_true",
         help="skip the cost/token estimate and its launch gate; runtime budget "
         "enforcement stays on regardless",
     )
@@ -107,13 +116,17 @@ def build_parser() -> argparse.ArgumentParser:
     experiment = commands.add_parser(
         "experiment", help="price and run many concurrent episodes of one resolved game"
     )
-    experiment_commands = experiment.add_subparsers(dest="experiment_command", required=True)
+    experiment_commands = experiment.add_subparsers(
+        dest="experiment_command", required=True
+    )
     experiment_preflight = experiment_commands.add_parser(
-        "preflight", help="estimate total calls/tokens/cost/runtime without provider I/O"
+        "preflight",
+        help="estimate total calls/tokens/cost/runtime without provider I/O",
     )
     experiment_preflight.add_argument("--config", type=Path, required=True)
     experiment_preflight.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help="artifact destination (default: this config's storage.output_dir)",
     )
     experiment_run = experiment_commands.add_parser(
@@ -121,23 +134,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     experiment_run.add_argument("--config", type=Path, required=True)
     experiment_run.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help="artifact destination (default: this config's storage.output_dir)",
     )
     experiment_run.add_argument(
-        "--approve-preflight", type=Path,
+        "--approve-preflight",
+        type=Path,
         help="path to a preflight_id.txt written by `experiment preflight`",
     )
     experiment_run.add_argument(
-        "--resume", dest="resume", action="store_true", default=True,
+        "--resume",
+        dest="resume",
+        action="store_true",
+        default=True,
         help="skip episodes already completed in --output-dir (default)",
     )
     experiment_run.add_argument(
-        "--no-resume", dest="resume", action="store_false",
+        "--no-resume",
+        dest="resume",
+        action="store_false",
         help="ignore any previously completed episodes and re-run everything",
     )
     experiment_run.add_argument(
-        "--no-progress", dest="show_progress", action="store_false", default=True,
+        "--no-progress",
+        dest="show_progress",
+        action="store_false",
+        default=True,
         help="disable tqdm progress bars; log one line per completed episode instead",
     )
     experiment_aggregate = experiment_commands.add_parser(
@@ -145,11 +168,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="recompute a finished run's cell aggregates from its episode files only",
     )
     experiment_aggregate.add_argument(
-        "--run-dir", type=Path, required=True,
+        "--run-dir",
+        type=Path,
+        required=True,
         help="an `experiment run` output directory (a grid's, or a single experiment's)",
     )
     experiment_aggregate.add_argument(
-        "--config", type=Path,
+        "--config",
+        type=Path,
         help="take the aggregation: section from this config instead of the run's own; "
         "use to re-band, re-window, or change the fill rule without re-running episodes",
     )
@@ -181,30 +207,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     study_submit.add_argument("--config-dir", type=Path, required=True)
     study_submit.add_argument(
-        "--results-dir", type=Path,
+        "--results-dir",
+        type=Path,
         help="common study result root (default: results/<study.name>)",
     )
     study_submit.add_argument(
-        "--throttle", type=int,
+        "--throttle",
+        type=int,
         help="maximum number of simultaneously running SLURM array tasks",
     )
     study_submit.add_argument(
-        "--job-script", type=Path,
+        "--job-script",
+        type=Path,
         help="config-array job script (default: scripts/Potsdam/SLURM/run_config_array.job)",
     )
     study_aggregate = study_commands.add_parser(
-        "aggregate", help="validate, normalize, analyze, plot, report, and package a study"
+        "aggregate",
+        help="validate, normalize, analyze, plot, report, and package a study",
     )
     study_aggregate.add_argument("--study-dir", type=Path, required=True)
     study_aggregate.add_argument(
-        "--allow-incomplete", action="store_true",
+        "--allow-incomplete",
+        action="store_true",
         help="produce explicitly incomplete exploratory output despite validation failures",
     )
 
     synthetic = commands.add_parser(
-        "synthetic", help="run the synthetic games whose closed-form answers we already know"
+        "synthetic",
+        help="run the synthetic games whose closed-form answers we already know",
     )
-    synthetic_commands = synthetic.add_subparsers(dest="synthetic_command", required=True)
+    synthetic_commands = synthetic.add_subparsers(
+        dest="synthetic_command", required=True
+    )
     synthetic_truth = synthetic_commands.add_parser(
         "truth", help="print the closed form for a config without running anything"
     )
@@ -212,7 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     synthetic_truth.add_argument("--output-dir", type=Path)
 
     synthetic_episode = synthetic_commands.add_parser(
-        "episode", help="fidelity mode: one episode through prompts, provider, parser and recorder"
+        "episode",
+        help="fidelity mode: one episode through prompts, provider, parser and recorder",
     )
     synthetic_episode.add_argument("--config", type=Path, required=True)
     synthetic_episode.add_argument("--output-dir", type=Path)
@@ -223,10 +258,15 @@ def build_parser() -> argparse.ArgumentParser:
     synthetic_sweep.add_argument("--config", type=Path, required=True)
     synthetic_sweep.add_argument("--output-dir", type=Path)
     synthetic_sweep.add_argument(
-        "--seeds", type=int, default=200, help="episodes per grid point (default: %(default)s)"
+        "--seeds",
+        type=int,
+        default=200,
+        help="episodes per grid point (default: %(default)s)",
     )
     synthetic_sweep.add_argument(
-        "--epsilon-grid", nargs="+", type=float,
+        "--epsilon-grid",
+        nargs="+",
+        type=float,
         help="noise levels to sweep (default: 0.0 to 0.5 in steps of 0.05)",
     )
 
@@ -237,18 +277,26 @@ def build_parser() -> argparse.ArgumentParser:
     synthetic_empowerment.add_argument("--config", type=Path, required=True)
     synthetic_empowerment.add_argument("--output-dir", type=Path)
     synthetic_empowerment.add_argument(
-        "--condition", default="epsilon",
+        "--condition",
+        default="epsilon",
         help="the swept axis: a game.options key, or population_size/horizon",
     )
     synthetic_empowerment.add_argument(
-        "--values", nargs="+", required=True, help="the condition values making up the grid",
+        "--values",
+        nargs="+",
+        required=True,
+        help="the condition values making up the grid",
     )
     synthetic_empowerment.add_argument(
-        "--repetitions", type=int, default=50, help="episodes per cell (default: %(default)s)",
+        "--repetitions",
+        type=int,
+        default=50,
+        help="episodes per cell (default: %(default)s)",
     )
     synthetic_empowerment.add_argument("--horizons", nargs="+", type=int, default=[1])
     synthetic_empowerment.add_argument(
-        "--macrostate-bins", type=int,
+        "--macrostate-bins",
+        type=int,
         help="bin the macrostate onto this many common levels; required when sweeping "
         "population_size, and strongly advised otherwise (see the plug-in bias)",
     )
@@ -259,21 +307,44 @@ def build_parser() -> argparse.ArgumentParser:
     synthetic_parity.add_argument("--config", type=Path, required=True)
     synthetic_parity.add_argument("--output-dir", type=Path)
     synthetic_parity.add_argument(
-        "--seeds", type=int, default=5, help="fidelity episodes to check (default: %(default)s)"
+        "--seeds",
+        type=int,
+        default=5,
+        help="fidelity episodes to check (default: %(default)s)",
     )
 
-    analysis = commands.add_parser("analysis", help="offline analysis over completed run/grid output")
+    theory = commands.add_parser(
+        "theory", help="run provider-free calculations for the single-affinity theory"
+    )
+    theory_commands = theory.add_subparsers(dest="theory_command", required=True)
+    theory_simulate = theory_commands.add_parser(
+        "simulate",
+        help="simulate n -> Y -> U -> n' and compare trajectories with exact theory",
+    )
+    theory_simulate.add_argument(
+        "--config", type=Path, required=True, help="theory simulation YAML"
+    )
+    theory_simulate.add_argument(
+        "--output-dir", type=Path, required=True, help="artifact directory"
+    )
+
+    analysis = commands.add_parser(
+        "analysis", help="offline analysis over completed run/grid output"
+    )
     analysis_commands = analysis.add_subparsers(dest="analysis_command", required=True)
     empowerment = analysis_commands.add_parser(
         "empowerment",
         help="estimate mutual information between a swept control condition and the outcome",
     )
     empowerment.add_argument(
-        "--grid-dir", type=Path, required=True,
+        "--grid-dir",
+        type=Path,
+        required=True,
         help="a completed `mas-cc experiment run --config <grid-config>` output directory",
     )
     empowerment.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help="analysis destination (default: <grid-dir>/analysis)",
     )
     empowerment.add_argument(
@@ -290,11 +361,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="derive the HiddenBench imitation pilot report and four discrete information estimates",
     )
     imitation_analysis.add_argument(
-        "--run-dir", type=Path, required=True,
+        "--run-dir",
+        type=Path,
+        required=True,
         help="a completed hidden_bench_imitation run or grid directory",
     )
     imitation_analysis.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help="analysis destination (default: <run-dir>/hidden_bench_imitation_analysis)",
     )
     imitation_analysis.add_argument("--bootstrap-resamples", type=int, default=1000)
@@ -307,17 +381,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="derive round-level sensing, actuation, slot, and current estimates",
     )
     round_feedback_analysis.add_argument(
-        "--run-dir", type=Path, required=True,
+        "--run-dir",
+        type=Path,
+        required=True,
         help="a completed hidden_bench_imitation_round_feedback run or grid directory",
     )
     round_feedback_analysis.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help=(
             "analysis destination (default: "
             "<run-dir>/hidden_bench_imitation_round_feedback_analysis)"
         ),
     )
-    round_feedback_analysis.add_argument("--bootstrap-resamples", type=int, default=1000)
+    round_feedback_analysis.add_argument(
+        "--bootstrap-resamples", type=int, default=1000
+    )
     round_feedback_analysis.add_argument("--null-permutations", type=int, default=1000)
     round_feedback_analysis.add_argument("--confidence", type=float, default=0.95)
     round_feedback_analysis.add_argument("--seed", type=int, default=1)
@@ -327,11 +406,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="the same round-level estimators over a relational reasoning grid",
     )
     relational_analysis.add_argument(
-        "--run-dir", type=Path, required=True,
+        "--run-dir",
+        type=Path,
+        required=True,
         help="a completed relational_imitation_round_feedback run or grid directory",
     )
     relational_analysis.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         help=(
             "analysis destination (default: "
             "<run-dir>/relational_imitation_round_feedback_analysis)"
@@ -342,7 +424,9 @@ def build_parser() -> argparse.ArgumentParser:
     relational_analysis.add_argument("--confidence", type=float, default=0.95)
     relational_analysis.add_argument("--seed", type=int, default=1)
     relational_analysis.add_argument(
-        "--epistemic-bins", type=int, default=4,
+        "--epistemic-bins",
+        type=int,
+        default=4,
         help="bins per axis for the coarse (kappa, phi) diagnostic conditioning",
     )
 
@@ -350,7 +434,9 @@ def build_parser() -> argparse.ArgumentParser:
         "benchmark",
         help="single-model task-validation benchmarks (no game, no agents)",
     )
-    benchmark_commands = benchmark.add_subparsers(dest="benchmark_command", required=True)
+    benchmark_commands = benchmark.add_subparsers(
+        dest="benchmark_command", required=True
+    )
     relational_support = benchmark_commands.add_parser(
         "relational-support",
         help="does holding the supporting facts decide whether a model solves the task?",
@@ -375,17 +461,51 @@ def build_parser() -> argparse.ArgumentParser:
             help="skip regenerating each task from its stored seed (faster, weaker)",
         )
     relational_support_summarize = relational_support_commands.add_parser(
-        "summarize", help="turn rows.jsonl into the A_k, per-subset and L=2 headline tables"
+        "summarize",
+        help="turn rows.jsonl into the A_k, per-subset and L=2 headline tables",
     )
     relational_support_summarize.add_argument(
-        "--input-dir", type=Path, required=True, help="a completed benchmark output directory"
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="a completed benchmark output directory",
     )
     relational_support_summarize.add_argument("--output-dir", type=Path)
 
-    inspect = commands.add_parser("inspect", help="produce stable phase inspection artifacts")
+    probe = commands.add_parser(
+        "probe",
+        help="provider-backed diagnostic probes; one prompt per call, no population loop",
+    )
+    probe_commands = probe.add_subparsers(dest="probe_command", required=True)
+    for name, description in (
+        ("preflight", "count calls and run every design check; send nothing"),
+        ("run", "preflight, then send the outstanding calls and write the report"),
+        ("analyze", "rebuild tables, plots, and the report from an existing run"),
+    ):
+        sub = probe_commands.add_parser(name, help=description)
+        sub.add_argument(
+            "--config",
+            type=Path,
+            default=Path("configs/probes/controller_retention.yaml"),
+            help="probe configuration (default: %(default)s)",
+        )
+        sub.add_argument(
+            "--output-dir",
+            type=Path,
+            help="artifact directory (default: storage.output_dir from the config)",
+        )
+
+    inspect = commands.add_parser(
+        "inspect", help="produce stable phase inspection artifacts"
+    )
     inspect_commands = inspect.add_subparsers(dest="inspect_command", required=True)
     phase = inspect_commands.add_parser("phase", help="inspect one implemented phase")
-    phase.add_argument("number", type=int, choices=(1, 2, 3, 4, 5, 6, 7), help="implemented phase number")
+    phase.add_argument(
+        "number",
+        type=int,
+        choices=(1, 2, 3, 4, 5, 6, 7),
+        help="implemented phase number",
+    )
     phase.add_argument(
         "--config",
         type=Path,
@@ -403,11 +523,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="prompt component for Phase 3 (default: %(default)s)",
     )
     phase.add_argument("--amendment", choices=("provider-economics-v2",))
-    phase.add_argument("--provider", choices=("mock", "openai", "university", "gemma_local"), default="university")
-    phase.add_argument("--pricing-mode", choices=("live", "cached", "offline"), default="offline")
+    phase.add_argument(
+        "--provider",
+        choices=("mock", "openai", "university", "gemma_local"),
+        default="university",
+    )
+    phase.add_argument(
+        "--pricing-mode", choices=("live", "cached", "offline"), default="offline"
+    )
     phase.add_argument("--pricing-cache", type=Path)
     phase.add_argument(
-        "--live-completion", action="store_true",
+        "--live-completion",
+        action="store_true",
         help="after immediate live revalidation, send one billable completion",
     )
     return parser
@@ -482,7 +609,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .episode import run_game_episode
 
         try:
-            run_game_episode(args.config, args.output_dir, skip_preflight=args.skip_preflight)
+            run_game_episode(
+                args.config, args.output_dir, skip_preflight=args.skip_preflight
+            )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
@@ -514,8 +643,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         try:
             result = run_experiment_command(
-                args.config, args.output_dir, resume=args.resume,
-                show_progress=args.show_progress, approve_preflight=args.approve_preflight,
+                args.config,
+                args.output_dir,
+                resume=args.resume,
+                show_progress=args.show_progress,
+                approve_preflight=args.approve_preflight,
             )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
@@ -639,18 +771,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                             return raw
 
                 run_synthetic_empowerment(
-                    args.config, args.output_dir, condition=args.condition,
+                    args.config,
+                    args.output_dir,
+                    condition=args.condition,
                     values=[_typed(value) for value in args.values],
-                    repetitions=args.repetitions, horizons=tuple(args.horizons),
+                    repetitions=args.repetitions,
+                    horizons=tuple(args.horizons),
                     macrostate_bins=args.macrostate_bins,
                 )
             elif args.synthetic_command == "sweep":
                 run_synthetic_sweep(
-                    args.config, args.output_dir, seeds=args.seeds,
+                    args.config,
+                    args.output_dir,
+                    seeds=args.seeds,
                     epsilon_grid=tuple(args.epsilon_grid or DEFAULT_EPSILON_GRID),
                 )
             else:
-                summary = run_synthetic_parity(args.config, args.output_dir, seeds=args.seeds)
+                summary = run_synthetic_parity(
+                    args.config, args.output_dir, seeds=args.seeds
+                )
                 # A parity failure means the full pipeline and the bare sampler
                 # disagree on the same seed, which is a real finding, not a
                 # warning - so it leaves through a non-zero exit status.
@@ -659,15 +798,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         return 0
+    if args.command == "theory" and args.theory_command == "simulate":
+        from mas_cc.games.relational_reasoning.imitation_round_feedback.theory_simulation import (
+            run_theory_simulation,
+        )
+
+        try:
+            result = run_theory_simulation(args.config, args.output_dir)
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Single-affinity theory simulation completed: "
+            f"{result.config.episodes} episode(s), {result.config.rounds} cycle(s), "
+            f"{args.output_dir}"
+        )
+        return 0
     if args.command == "analysis" and args.analysis_command == "empowerment":
         from .analysis import run_analysis_empowerment_command
 
         try:
             summary = run_analysis_empowerment_command(
-                args.grid_dir, args.output_dir,
-                condition_column=args.condition_column, horizons=tuple(args.horizons),
+                args.grid_dir,
+                args.output_dir,
+                condition_column=args.condition_column,
+                horizons=tuple(args.horizons),
                 bootstrap_resamples=args.bootstrap_resamples,
-                null_permutations=args.null_permutations, seed=args.seed,
+                null_permutations=args.null_permutations,
+                seed=args.seed,
             )
         except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
             print(str(exc), file=sys.stderr)
@@ -691,7 +849,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0
-    if args.command == "analysis" and args.analysis_command == "hidden-bench-round-feedback":
+    if (
+        args.command == "analysis"
+        and args.analysis_command == "hidden-bench-round-feedback"
+    ):
         from .analysis import run_hidden_bench_round_feedback_analysis_command
 
         try:
@@ -708,7 +869,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0
-    if args.command == "analysis" and args.analysis_command == "relational-round-feedback":
+    if (
+        args.command == "analysis"
+        and args.analysis_command == "relational-round-feedback"
+    ):
         from .analysis import run_relational_round_feedback_analysis_command
 
         try:
@@ -750,7 +914,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.output_dir,
                 verify_reproducibility=not args.skip_reproducibility_check,
             )
-        except (ConfigurationError, ProviderError, OSError, ValueError, RuntimeError) as exc:
+        except (
+            ConfigurationError,
+            ProviderError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"{message}: {destination}")
+        return 0 if ok else 1
+    if args.command == "probe":
+        from .probe import run_controller_retention_probe
+
+        try:
+            ok, destination, message = run_controller_retention_probe(
+                args.config, args.output_dir, mode=args.probe_command
+            )
+        except (
+            ConfigurationError,
+            ProviderError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(f"{message}: {destination}")
@@ -758,13 +946,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "inspect" and args.inspect_command == "phase":
         from .inspect import inspect_phase_1, inspect_phase_2, inspect_phase_3
 
-        output_dir = args.output_dir or Path(f"results/inspection/phase_{args.number:02d}")
+        output_dir = args.output_dir or Path(
+            f"results/inspection/phase_{args.number:02d}"
+        )
         try:
             if args.number == 1:
                 passed = inspect_phase_1(output_dir)
             elif args.number == 2:
                 passed = inspect_phase_2(
-                    args.config or Path("configs/runs/old/provider_smoke_test.yaml"), output_dir
+                    args.config or Path("configs/runs/old/provider_smoke_test.yaml"),
+                    output_dir,
                 )
             elif args.number == 3:
                 passed = inspect_phase_3(args.prompt, output_dir)
@@ -773,9 +964,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     from .provider_economics import inspect_phase_4_amendment
 
                     passed = inspect_phase_4_amendment(
-                        args.config or Path("configs/runs/old/provider_smoke_test.yaml"),
-                        output_dir, provider=args.provider,
-                        pricing_mode=args.pricing_mode, cache_path=args.pricing_cache,
+                        args.config
+                        or Path("configs/runs/old/provider_smoke_test.yaml"),
+                        output_dir,
+                        provider=args.provider,
+                        pricing_mode=args.pricing_mode,
+                        cache_path=args.pricing_cache,
                         live_completion=args.live_completion,
                     )
                 else:
@@ -786,7 +980,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 from .game import run_game_inspection
 
                 passed = run_game_inspection(
-                    args.config or Path("configs/runs/old/toy_game_smoke_test.yaml"), output_dir
+                    args.config or Path("configs/runs/old/toy_game_smoke_test.yaml"),
+                    output_dir,
                 )
             elif args.number == 6:
                 from .game import run_game_inspection
@@ -800,13 +995,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 from .phase7 import run_phase_7_inspection
 
                 passed = run_phase_7_inspection(
-                    args.config or Path("configs/runs/old/naming_convention_smoke_test_v3.yaml"),
+                    args.config
+                    or Path("configs/runs/old/naming_convention_smoke_test_v3.yaml"),
                     output_dir,
                 )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        print(f"Phase {args.number} inspection {'passed' if passed else 'failed'}: {output_dir}")
+        print(
+            f"Phase {args.number} inspection {'passed' if passed else 'failed'}: {output_dir}"
+        )
         return 0 if passed else 1
     parser.error("unsupported command")
     return 2

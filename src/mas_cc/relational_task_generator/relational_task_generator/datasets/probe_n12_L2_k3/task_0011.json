@@ -1,0 +1,187 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0011",
+  "seed": 10806519549349625739,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 11,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": -1,
+          "y": -2
+        }
+      },
+      {
+        "name": "Naro",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Renu",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Savi",
+        "coordinates": {
+          "x": 999,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Delo",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Kiro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Caro",
+        "relation": "SOUTH",
+        "object": "Naro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Naro",
+        "relation": "SOUTHWEST",
+        "object": "Renu",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Savi",
+        "relation": "NORTH",
+        "object": "Delo",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Delo",
+        "relation": "NORTHWEST",
+        "object": "Kiro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Caro",
+    "reference": "Renu",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1",
+        "f2",
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Caro relative to Renu?",
+    "facts": {
+      "f1": "Caro is south of Naro.",
+      "f2": "Naro is southwest of Renu.",
+      "f3": "Savi is north of Delo.",
+      "f4": "Delo is northwest of Kiro."
+    },
+    "reasoning_chain": [
+      "Caro is south of Naro.",
+      "Naro is southwest of Renu."
+    ]
+  }
+}

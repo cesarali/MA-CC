@@ -1,0 +1,188 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0006",
+  "seed": 7740930153018514247,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 6,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Seni",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Demi",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Haro",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Leni",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zani",
+        "relation": "NORTH",
+        "object": "Jeni",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Jeni",
+        "relation": "SOUTHEAST",
+        "object": "Seni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Demi",
+        "relation": "WEST",
+        "object": "Haro",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Haro",
+        "relation": "SOUTHEAST",
+        "object": "Leni",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zani",
+    "reference": "Seni",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "EAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Zani relative to Seni?",
+    "facts": {
+      "f1": "Zani is north of Jeni.",
+      "f2": "Jeni is southeast of Seni.",
+      "f3": "Demi is west of Haro.",
+      "f4": "Haro is southeast of Leni."
+    },
+    "reasoning_chain": [
+      "Zani is north of Jeni.",
+      "Jeni is southeast of Seni."
+    ]
+  }
+}

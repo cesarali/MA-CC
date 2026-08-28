@@ -138,8 +138,11 @@ action information overall.}
 The information--response efficiency asks how much of the controller-dependent
 change in the full next-state distribution is expressed as a coherent shift of
 the mean target fraction. Using the bounded quantity defined in
-Section~\ref{sec:feedback_efficiency}, the occupancy-averaged empirical values
-are small in absolute terms but systematic across the resource grid
+Section~\ref{sec:feedback_efficiency}, we report the finite-horizon
+information--response efficiency $\eta_{\rm IR}^{(H)}$, obtained as the ratio
+of the accumulated occupancy-weighted Pinsker response terms to the accumulated
+state-local action-to-population information over the evaluation horizon. The
+empirical values are small in absolute terms but systematic across the resource grid
 (Fig.~\ref{fig:efficiencies}a). They range from approximately $0.4\%$ to $2.5\%$ of
 the rigorous Pinsker bound and increase with $b$ for every sensing budget. At
 $q_c=12$, for example,
@@ -179,6 +182,13 @@ is the non-storage part of the finite-time thermodynamic accounting. Thus
 $\eta_{\rm th}$ asks what fraction of the sensing-plus-actuation expenditure is
 expressed as directed population motion. Appendix~\ref{app:thermodynamic_efficiency_derivation}
 gives the complete path-measure derivation.
+
+For empirical trajectories, we report the finite-horizon thermodynamic
+efficiency $\eta_{\rm th}^{(H)}$. The affinity-weighted controlled current and
+scalar target-sensing information are accumulated cycle by cycle, and the
+efficiency ratio is formed only after this accumulation. We therefore do not
+average the cycle-wise efficiencies, and we do not compute sensing information
+from a single pooled occupancy distribution.
 
 Figure~\ref{fig:efficiencies}b shows the exact single-affinity prediction for
 the same sensing budgets used experimentally, with $h=2$, $\gamma=0.75$,

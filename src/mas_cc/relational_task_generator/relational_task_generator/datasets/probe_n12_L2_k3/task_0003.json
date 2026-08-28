@@ -1,0 +1,189 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0003",
+  "seed": 3145825638826882744,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 3,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Seni",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Savi",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zani",
+        "relation": "WEST",
+        "object": "Jeni",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Jeni",
+        "relation": "SOUTHEAST",
+        "object": "Seni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Meno",
+        "relation": "NORTH",
+        "object": "Savi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Savi",
+        "relation": "WEST",
+        "object": "Bavi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zani",
+    "reference": "Seni",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTH"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f3"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Zani relative to Seni?",
+    "facts": {
+      "f1": "Zani is west of Jeni.",
+      "f2": "Jeni is southeast of Seni.",
+      "f3": "Meno is north of Savi.",
+      "f4": "Savi is west of Bavi."
+    },
+    "reasoning_chain": [
+      "Zani is west of Jeni.",
+      "Jeni is southeast of Seni."
+    ]
+  }
+}

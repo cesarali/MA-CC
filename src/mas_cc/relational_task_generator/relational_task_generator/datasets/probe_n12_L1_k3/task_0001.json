@@ -1,0 +1,166 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 7473446316198562528,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 1,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Nira",
+        "coordinates": {
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Lumo",
+        "coordinates": {
+          "x": 1002,
+          "y": 999
+        }
+      },
+      {
+        "name": "Daro",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Nira",
+        "relation": "NORTH",
+        "object": "Faro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lumo",
+        "relation": "SOUTHEAST",
+        "object": "Daro",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Daro",
+        "relation": "EAST",
+        "object": "Mira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Nira",
+    "reference": "Faro",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Nira relative to Faro?",
+    "facts": {
+      "f1": "Nira is north of Faro.",
+      "f2": "Lumo is southeast of Daro.",
+      "f3": "Daro is east of Mira."
+    },
+    "reasoning_chain": [
+      "Nira is north of Faro."
+    ]
+  }
+}

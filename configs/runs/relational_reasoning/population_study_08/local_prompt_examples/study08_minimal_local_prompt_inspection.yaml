@@ -1,0 +1,144 @@
+# Smallest locally launched Study 08 run with real university-model calls.
+# Shape: 4 prompt-class cells x 1 repetition = 4 episodes.
+# Per cell: 6 agents x 4 rounds = 30 expected calls.
+# Total: 4 x 30 = 120 expected calls.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 1
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 6
+  horizon: 4
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n6_L2_r02
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 4
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    # Base values are overwritten by the two-axis Study 08 grid below.
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 3
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: strategic
+
+execution:
+  seed: 20260828
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  # Four cells need 120 expected calls and up to 240 under the retry bound.
+  max_provider_requests: 300
+  max_input_tokens: 10000000
+  max_output_tokens: 1000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    progress: true
+    show_metrics: false
+    # results_only keeps this bounded Markdown sample beside the compact data.
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results/local/study08_minimal_real_prompt_grid
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: false
+  comet_export: []
+
+# The experiment runner otherwise uses its default cell metrics even when
+# metrics.enabled is false. Empty lists prevent metric plots/tables here.
+aggregation:
+  cell_metrics: []
+  sweep_metrics: []
+  null_permutations: 0
+
+experiment:
+  name: relational-study08-minimal-real-prompt-grid
+  description: >-
+    Four locally launched university-model cells spanning the complete Study
+    08 prompt-class grid, with one six-agent, four-round episode and one
+    retained prompt per cell, compact results, and no metrics.
+  tags: [relational, population-study-08, local-launch, university, prompt-inspection, N6]
+  metadata:
+    study: population_study_08
+    phase: minimal_local_prompt_inspection
+    controller_semantics: truth
+    population_rounds: 4
+    social_group_size: 1
+    sensor_sample_size: 3
+    intervention_budget: 3
+    cells: 4
+    repetitions_per_cell: 1
+    episodes: 4
+    expected_provider_requests_per_cell: 30
+    expected_provider_requests: 120
+    conservative_provider_requests: 240
+
+grid:
+  # Cartesian product -> four prompt classes/cells:
+  # naive_neutral, naive_strategic, vigilant_neutral, vigilant_strategic.
+  game.options.receiver_epistemic_disposition: [naive, vigilant]
+  control.options.controller_evidence_strategy: [neutral, strategic]
