@@ -160,4 +160,27 @@ denote the transient population distribution at round \(k\). Over a finite horiz
 \sum_{k=0}^{H-1}\rho_k(n).
 \label{eq:app_finite_time_occupancy}
 \end{equation}
+The visitation distribution $\bar{\rho}_H$ can be used directly for observables
+that are linear in the occupancy, such as the expected controlled response and
+current. For example,
+\begin{equation}
+\frac{1}{H}\sum_{k=0}^{H-1}J_{c,k}
+=N\sum_n\bar{\rho}_H(n)a_n\chi(n).
+\label{eq:app_occupancy_average_current}
+\end{equation}
+Sensing information is different because mutual information is nonlinear in
+the state distribution. In general,
+\begin{equation}
+I_{\mathrm{sens}}[\bar{\rho}_H]
+\ne
+\frac{1}{H}\sum_{k=0}^{H-1}I_{\mathrm{sens}}[\rho_k].
+\label{eq:app_nonpooled_sensing_information}
+\end{equation}
+Finite-horizon thermodynamic accounting therefore evaluates
+$I_{\mathrm{sens},k}$ from each transient distribution $\rho_k$ and accumulates
+the resulting cycle-wise contributions before forming
+$\eta_{\mathrm{th}}^{(H)}$. This preserves the finite-time interpretation
+without imposing stationarity or replacing the transient sequence by a single
+pooled ensemble.
+
 Hence the operational design problem averages over the transient states actually visited during the experiment rather than over an equilibrium distribution. Likewise, Eq.~(\ref{eq:app_th_second_law}) retains the finite-time boundary contribution \(\Delta S_{\mathrm{sys},k}\), which accounts for the fact that the population ensemble changes during the feedback cycle. A stationary distribution is therefore only a special long-time limit of the present formulation, not an assumption required by it.

@@ -1,0 +1,165 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0003",
+  "seed": 3145825638826882744,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 3,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Wali",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Yaro",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zani",
+        "relation": "NORTHWEST",
+        "object": "Wali",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Yaro",
+        "relation": "NORTH",
+        "object": "Pelo",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Pelo",
+        "relation": "WEST",
+        "object": "Lira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zani",
+    "reference": "Wali",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHWEST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Zani relative to Wali?",
+    "facts": {
+      "f1": "Zani is northwest of Wali.",
+      "f2": "Yaro is north of Pelo.",
+      "f3": "Pelo is west of Lira."
+    },
+    "reasoning_chain": [
+      "Zani is northwest of Wali."
+    ]
+  }
+}

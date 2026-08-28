@@ -1,0 +1,166 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0007",
+  "seed": 10807052538148537947,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 7,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": 1001,
+          "y": 998
+        }
+      },
+      {
+        "name": "Javi",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Feni",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Pelo",
+        "relation": "SOUTHWEST",
+        "object": "Vero",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Maro",
+        "relation": "SOUTHEAST",
+        "object": "Javi",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Javi",
+        "relation": "SOUTH",
+        "object": "Feni",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Pelo",
+    "reference": "Vero",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHWEST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Pelo relative to Vero?",
+    "facts": {
+      "f1": "Pelo is southwest of Vero.",
+      "f2": "Maro is southeast of Javi.",
+      "f3": "Javi is south of Feni."
+    },
+    "reasoning_chain": [
+      "Pelo is southwest of Vero."
+    ]
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0006",
+  "seed": 7740930153018514247,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 6,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Romi",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Tero",
+        "coordinates": {
+          "x": 1000,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 1001,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zani",
+        "relation": "SOUTHEAST",
+        "object": "Romi",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Tero",
+        "relation": "NORTHWEST",
+        "object": "Pelo",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Pelo",
+        "relation": "NORTHEAST",
+        "object": "Caro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zani",
+    "reference": "Romi",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1",
+        "f3"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Zani relative to Romi?",
+    "facts": {
+      "f1": "Zani is southeast of Romi.",
+      "f2": "Tero is northwest of Pelo.",
+      "f3": "Pelo is northeast of Caro."
+    },
+    "reasoning_chain": [
+      "Zani is southeast of Romi."
+    ]
+  }
+}

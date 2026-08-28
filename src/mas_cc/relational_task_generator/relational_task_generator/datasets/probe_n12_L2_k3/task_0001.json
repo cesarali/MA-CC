@@ -1,0 +1,188 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 7473446316198562528,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 1,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Nira",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Belo",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Daro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Lumo",
+        "coordinates": {
+          "x": 998,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Navi",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Tero",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Nira",
+        "relation": "NORTH",
+        "object": "Belo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Belo",
+        "relation": "SOUTHEAST",
+        "object": "Daro",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Lumo",
+        "relation": "NORTHWEST",
+        "object": "Navi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Navi",
+        "relation": "WEST",
+        "object": "Tero",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Nira",
+    "reference": "Daro",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "EAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "EAST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTH"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Nira relative to Daro?",
+    "facts": {
+      "f1": "Nira is north of Belo.",
+      "f2": "Belo is southeast of Daro.",
+      "f3": "Lumo is northwest of Navi.",
+      "f4": "Navi is west of Tero."
+    },
+    "reasoning_chain": [
+      "Nira is north of Belo.",
+      "Belo is southeast of Daro."
+    ]
+  }
+}

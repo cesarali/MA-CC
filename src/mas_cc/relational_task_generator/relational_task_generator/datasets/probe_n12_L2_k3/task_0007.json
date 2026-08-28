@@ -1,0 +1,188 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0007",
+  "seed": 10807052538148537947,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 7,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 1,
+          "y": -2
+        }
+      },
+      {
+        "name": "Zora",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Javi",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Fira",
+        "coordinates": {
+          "x": 1000,
+          "y": 998
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Wira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Pelo",
+        "relation": "SOUTHEAST",
+        "object": "Zora",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Zora",
+        "relation": "SOUTH",
+        "object": "Javi",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Fira",
+        "relation": "SOUTHWEST",
+        "object": "Vero",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Vero",
+        "relation": "SOUTHEAST",
+        "object": "Wira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Pelo",
+    "reference": "Javi",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "EAST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Pelo relative to Javi?",
+    "facts": {
+      "f1": "Pelo is southeast of Zora.",
+      "f2": "Zora is south of Javi.",
+      "f3": "Fira is southwest of Vero.",
+      "f4": "Vero is southeast of Wira."
+    },
+    "reasoning_chain": [
+      "Pelo is southeast of Zora.",
+      "Zora is south of Javi."
+    ]
+  }
+}

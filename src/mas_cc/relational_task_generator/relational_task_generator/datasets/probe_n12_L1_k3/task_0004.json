@@ -1,0 +1,164 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0004",
+  "seed": 16902461950291770668,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 4,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Feni",
+        "coordinates": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Rivo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 998
+        }
+      },
+      {
+        "name": "Haro",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Kiro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Feni",
+        "relation": "NORTHEAST",
+        "object": "Rivo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Gavi",
+        "relation": "SOUTHWEST",
+        "object": "Haro",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Haro",
+        "relation": "SOUTHEAST",
+        "object": "Kiro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Feni",
+    "reference": "Rivo",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1",
+        "f3"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Feni relative to Rivo?",
+    "facts": {
+      "f1": "Feni is northeast of Rivo.",
+      "f2": "Gavi is southwest of Haro.",
+      "f3": "Haro is southeast of Kiro."
+    },
+    "reasoning_chain": [
+      "Feni is northeast of Rivo."
+    ]
+  }
+}

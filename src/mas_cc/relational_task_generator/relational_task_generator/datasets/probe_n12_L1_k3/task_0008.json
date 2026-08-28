@@ -1,0 +1,165 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0008",
+  "seed": 3557018236023581175,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 8,
+    "population_size": 12,
+    "reasoning_depth": 1,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Bira",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Rivo",
+        "coordinates": {
+          "x": 1001,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Havi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Bira",
+        "relation": "SOUTHEAST",
+        "object": "Maro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Yani",
+        "relation": "WEST",
+        "object": "Rivo",
+        "role": "distractor"
+      },
+      {
+        "id": "f3",
+        "subject": "Rivo",
+        "relation": "NORTHEAST",
+        "object": "Havi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Bira",
+    "reference": "Maro",
+    "reasoning_depth": 1,
+    "supporting_fact_ids": [
+      "f1"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Bira relative to Maro?",
+    "facts": {
+      "f1": "Bira is southeast of Maro.",
+      "f2": "Yani is west of Rivo.",
+      "f3": "Rivo is northeast of Havi."
+    },
+    "reasoning_chain": [
+      "Bira is southeast of Maro."
+    ]
+  }
+}

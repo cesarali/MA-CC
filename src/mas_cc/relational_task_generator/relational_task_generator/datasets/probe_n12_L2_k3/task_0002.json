@@ -1,0 +1,190 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0002",
+  "seed": 3070273083776054309,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 2,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": -2,
+          "y": 1
+        }
+      },
+      {
+        "name": "Feni",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Nori",
+        "coordinates": {
+          "x": 1002,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Peni",
+        "coordinates": {
+          "x": 1001,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Kelo",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Gavi",
+        "relation": "NORTHWEST",
+        "object": "Feni",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Feni",
+        "relation": "WEST",
+        "object": "Meno",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Nori",
+        "relation": "SOUTHEAST",
+        "object": "Peni",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Peni",
+        "relation": "NORTHEAST",
+        "object": "Kelo",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Gavi",
+    "reference": "Meno",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTH"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Gavi relative to Meno?",
+    "facts": {
+      "f1": "Gavi is northwest of Feni.",
+      "f2": "Feni is west of Meno.",
+      "f3": "Nori is southeast of Peni.",
+      "f4": "Peni is northeast of Kelo."
+    },
+    "reasoning_chain": [
+      "Gavi is northwest of Feni.",
+      "Feni is west of Meno."
+    ]
+  }
+}

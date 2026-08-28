@@ -1,0 +1,190 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0012",
+  "seed": 346917438649098897,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 12,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 2,
+          "y": 1
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Vani",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 999
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 1001,
+          "y": 999
+        }
+      },
+      {
+        "name": "Wira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Pelo",
+        "relation": "NORTHEAST",
+        "object": "Lira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lira",
+        "relation": "EAST",
+        "object": "Vani",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Gavi",
+        "relation": "WEST",
+        "object": "Yani",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Yani",
+        "relation": "SOUTHEAST",
+        "object": "Wira",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Pelo",
+    "reference": "Vani",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1",
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Pelo relative to Vani?",
+    "facts": {
+      "f1": "Pelo is northeast of Lira.",
+      "f2": "Lira is east of Vani.",
+      "f3": "Gavi is west of Yani.",
+      "f4": "Yani is southeast of Wira."
+    },
+    "reasoning_chain": [
+      "Pelo is northeast of Lira.",
+      "Lira is east of Vani."
+    ]
+  }
+}

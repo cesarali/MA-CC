@@ -159,6 +159,38 @@ It measures how much of the action-dependent change in the full next-state
 distribution is expressed as coherent mean target motion. The derivation is in
 Appendix~\ref{app:information_response_bound}.
 
+\paragraph{Finite-horizon aggregation.}
+The efficiency above is defined locally at a fixed population state. In a
+nonstationary experiment, the state occupancy changes from cycle to cycle. Let
+\begin{equation}
+B_{\mathrm{IR}}(n)
+\equiv
+\frac{2a_n(1-a_n)}{\ln 2}\,
+\chi_{h,\gamma}(n/N)^2
+\label{eq:ir_response_term}
+\end{equation}
+denote the state-local Pinsker response term. For a finite horizon of $H$
+feedback cycles, we define the experiment-level information--response
+efficiency by accumulating the state-weighted numerator and denominator before
+forming the ratio:
+\begin{equation}
+\boxed{
+\eta_{\mathrm{IR}}^{(H)}
+=
+\frac{
+\sum_{k=0}^{H-1}\sum_n p_k(n)B_{\mathrm{IR}}(n)
+}{
+\sum_{k=0}^{H-1}\sum_n p_k(n)T_\pi(n)
+}.}
+\label{eq:eta_ir_finite_horizon}
+\end{equation}
+Because $B_{\mathrm{IR}}(n)\le T_\pi(n)$ state by state, the finite-horizon
+ratio remains bounded, $0\le\eta_{\mathrm{IR}}^{(H)}\le1$. This quantity is
+distinct from an arithmetic average of the state-local ratios
+$\eta_{\mathrm{IR}}(n)$: it measures the fraction of the total
+action-dependent information transmitted over the evaluation horizon that is
+expressed through the response lower bound.
+
 \subsection{Finite-time thermodynamic efficiency}
 \label{sec:thermodynamic_efficiency}
 
@@ -225,7 +257,42 @@ this non-storage expenditure expressed as affinity-weighted directed current:
 For $hJ_{c,k}\ge0$ and $C_{\mathrm{th},k}>0$,
 $0\le\eta_{\mathrm{th},k}\le1$. At stationarity,
 $\Delta S_{\mathrm{sys},k}=0$ and the same result reduces to
-$\eta_{\mathrm{th}}=hJ_c/\Sigma$. Thus additional sensing lowers
+$\eta_{\mathrm{th}}=hJ_c/\Sigma$.
+
+\paragraph{Finite-horizon aggregation.}
+The quantities above are defined for one feedback cycle because the population
+distribution $p_k(n)$ generally changes with $k$. For an experiment of $H$
+feedback cycles, summing Eq.~(\ref{eq:finite_time_second_law}) gives
+\begin{equation}
+S_{\mathrm{sys}}[p_H]-S_{\mathrm{sys}}[p_0]
++h\sum_{k=0}^{H-1}J_{c,k}
++\sum_{k=0}^{H-1}I_{\mathrm{sens},k}
+=\sum_{k=0}^{H-1}\Sigma_k,
+\label{eq:finite_horizon_second_law}
+\end{equation}
+where the system-entropy increments telescope. The corresponding finite-horizon
+non-storage expenditure is
+\begin{equation}
+C_{\mathrm{th}}^{(H)}
+=h\sum_{k=0}^{H-1}J_{c,k}
++\sum_{k=0}^{H-1}I_{\mathrm{sens},k},
+\label{eq:finite_horizon_expenditure}
+\end{equation}
+and the finite-horizon thermodynamic efficiency is
+\begin{equation}
+\boxed{
+\eta_{\mathrm{th}}^{(H)}
+=
+\frac{h\sum_{k=0}^{H-1}J_{c,k}}
+{h\sum_{k=0}^{H-1}J_{c,k}
++\sum_{k=0}^{H-1}I_{\mathrm{sens},k}}.}
+\label{eq:eta_th_finite_horizon}
+\end{equation}
+Thus the experiment-level efficiency is a ratio of accumulated directed
+current to accumulated non-storage expenditure, rather than the arithmetic
+mean $H^{-1}\sum_k\eta_{\mathrm{th},k}$. This distinction is essential in the
+nonstationary regime because the control expenditure can vary substantially
+across cycles. Thus additional sensing lowers
 thermodynamic efficiency whenever it increases acquired information without a
 commensurate increase in directed current, whereas stronger effective actuation
 raises the efficiency when it increases $hJ_c$ faster than the sensing term.

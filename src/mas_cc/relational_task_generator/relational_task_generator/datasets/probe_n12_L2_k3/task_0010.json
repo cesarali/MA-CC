@@ -1,0 +1,189 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0010",
+  "seed": 4852952409722851147,
+  "generation": {
+    "dataset_seed": 20260828,
+    "task_index": 10,
+    "population_size": 12,
+    "reasoning_depth": 2,
+    "support_redundancy": 4,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": false
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Ralo",
+        "coordinates": {
+          "x": -2,
+          "y": 0
+        }
+      },
+      {
+        "name": "Kelo",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Vela",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Selo",
+        "coordinates": {
+          "x": 999,
+          "y": 998
+        }
+      },
+      {
+        "name": "Kavi",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Jora",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Ralo",
+        "relation": "NORTHWEST",
+        "object": "Kelo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Kelo",
+        "relation": "SOUTHWEST",
+        "object": "Vela",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Selo",
+        "relation": "SOUTH",
+        "object": "Kavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Kavi",
+        "relation": "SOUTHWEST",
+        "object": "Jora",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Ralo",
+    "reference": "Vela",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHWEST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2",
+        "f3"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Ralo relative to Vela?",
+    "facts": {
+      "f1": "Ralo is northwest of Kelo.",
+      "f2": "Kelo is southwest of Vela.",
+      "f3": "Selo is south of Kavi.",
+      "f4": "Kavi is southwest of Jora."
+    },
+    "reasoning_chain": [
+      "Ralo is northwest of Kelo.",
+      "Kelo is southwest of Vela."
+    ]
+  }
+}

@@ -175,3 +175,158 @@ population rounds). All 72 responses passed validation without a retry or
 provider error. The prompt definition hash was constant across the episode,
 whereas every instance hash was unique, confirming that one fixed template was
 bound to 72 call-specific views.
+
+\subsection{Epistemic conditions: receiver disposition and controller evidence}
+\label{app:relational-epistemic-conditions}
+
+The population game and the controller each expose one binary epistemic knob,
+and the two are set independently. The first,
+\texttt{receiver\_epistemic\_disposition}, decides what every agent is told
+about the social channel it listens to. The second,
+\texttt{controller\_evidence\_strategy}, decides which single fact the
+controller is allowed to cite when it speaks. They live at
+\texttt{game.options} and \texttt{control.options} respectively. Crossing them
+gives the four conditions used throughout Study~08, recorded in each round
+record as \texttt{derived\_epistemic\_condition}:
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+Condition & Receiver disposition & Controller evidence \\
+\midrule
+\texttt{naive\_neutral}      & \texttt{naive}    & \texttt{neutral} \\
+\texttt{naive\_strategic}    & \texttt{naive}    & \texttt{strategic} \\
+\texttt{vigilant\_neutral}   & \texttt{vigilant} & \texttt{neutral} \\
+\texttt{vigilant\_strategic} & \texttt{vigilant} & \texttt{strategic} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The two axes act at different places in the loop. The receiver axis is a
+\emph{text} intervention: it rewrites one fixed system block, identically for
+every agent and every call of an episode. The controller axis is a
+\emph{content} intervention: it changes no template text at all, only which
+proposition of the frozen task the controller puts into its social slot. An
+agent therefore cannot read the controller's strategy off the wording of its
+prompt, and the two manipulations remain separately attributable.
+
+\paragraph{Receiver epistemic disposition.}
+This axis substitutes the \texttt{social\_environment} block, the second system
+block of the manifest. Both variants are bound as \texttt{fixed}: they are part
+of the episode's prompt definition rather than of any per-call view, so within
+one cell every one of the episode's prompts carries the same wording.
+\texttt{naive} states only that identities persist, and says nothing about
+whether a visible participant is worth believing. \texttt{vigilant} adds an
+explicit instruction to discount a bare recommendation and to check the
+evidence actually in hand. The two blocks are reproduced below exactly as sent.
+
+\begin{relpromptbox}{\texttt{social\_environment} --- \texttt{naive}}
+\small\raggedright
+\setlength{\parindent}{0pt}
+Participant identities persist across interactions.
+\end{relpromptbox}
+
+\begin{relpromptbox}{\texttt{social\_environment} --- \texttt{vigilant}}
+\small\raggedright
+\setlength{\parindent}{0pt}
+Participant identities persist across interactions.
+
+\medskip
+Some participants may have objectives that differ from yours. Do not accept a
+recommendation merely because another participant gives it. Evaluate whether
+the explicit evidence you actually have supports the conclusion, and remain
+aware that a source may present only part of the relevant information.
+\end{relpromptbox}
+
+Nothing else in the prompt moves with this axis. In the audited grid the block
+is estimated at 6 tokens under \texttt{naive} and 55 under \texttt{vigilant},
+carrying the whole per-prompt difference of 160 versus 209 estimated tokens.
+The block manifest --- names, order, roles, and bindings --- is byte-identical
+across all four cells, because it records prompt \emph{structure}; the
+condition is pinned by the \texttt{receiver\_epistemic\_disposition} field
+of each cell's resolved configuration and is visible in the rendered text
+itself.
+
+The audited Study~04 prompt displayed earlier in this appendix predates this
+factorization. It shows the older combined block, which asserts both
+distributed information and possible objective divergence in one paragraph.
+The factorized axis separates those two claims, and Study~08 uses only the
+\texttt{naive}/\texttt{vigilant} pair above.
+
+\paragraph{Controller evidence strategy.}
+Evidence reaches the population only in the controller's message mode
+\texttt{recommendation\_\hspace{0pt}plus\_\hspace{0pt}fact}, in which the
+controller occupies its social slot with both a vote and exactly one fact of
+the frozen task.
+That fact is chosen once, before the episode runs, by a deterministic rule that
+never consults a model:
+
+\begin{itemize}[leftmargin=1.3em,itemsep=1pt,topsep=3pt]
+  \item \texttt{neutral} takes the first fact in the task's frozen fact order.
+    The choice ignores which relation the controller advocates, so the cited
+    evidence is fixed by the task alone.
+  \item \texttt{strategic} takes the admissible fact whose relation points most
+    nearly in the advocated direction. Each of the eight compass relations has
+    a symbolic displacement vector; the controller scores every fact by the
+    cosine between its relation vector and the advocated relation's vector,
+    discards every fact scoring zero or below, and cites the survivor with the
+    highest score, breaking ties toward the earlier fact. If no fact has
+    positive alignment the configuration is rejected at launch rather than
+    silently advocating without evidence.
+\end{itemize}
+
+\texttt{strategic} is thus the selective-evidence arm: the controller still
+never fabricates anything, since only real facts of the task are admissible,
+but it is free to cite the true statement that best flatters its target and to
+stay silent about the rest. \texttt{neutral} removes that freedom while holding
+the recommendation, the budget, and the number of exposures fixed, so the
+difference between the arms isolates the value of evidence \emph{selection}.
+
+\paragraph{Worked example.}
+Study~08's task \texttt{task\_0001} asks where Zora is relative to Feni, with
+frozen fact order $(\texttt{f1},\texttt{f2},\texttt{f3})$:
+\texttt{f1}~``Zora is south of Maro'' (SOUTH), \texttt{f2}~``Maro is west of
+Feni'' (WEST), and the distractor \texttt{f3}~``Garo is north of Belo''
+(NORTH), which mentions neither query entity. The correct relation is
+SOUTHWEST. The rules then resolve as follows.
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+Advocated relation & \texttt{neutral} & \texttt{strategic} \\
+\midrule
+SOUTHWEST (correct) & \texttt{f1} (SOUTH) & \texttt{f1} (SOUTH) \\
+NORTHWEST           & \texttt{f1} (SOUTH) & \texttt{f2} (WEST) \\
+NORTH               & \texttt{f1} (SOUTH) & \texttt{f3} (NORTH) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The last row is the informative one. Advocating NORTH, the neutral controller
+must cite \texttt{f1}, whose southward relation openly contradicts its own
+recommendation. The strategic controller instead cites \texttt{f3}: a true
+statement, pointing north, about two entities irrelevant to the question. Under
+\texttt{naive} the agent is given no reason to notice the substitution; under
+\texttt{vigilant} it is told in so many words to check whether the evidence it
+holds supports the conclusion.
+
+\paragraph{Audited grid.}
+The four conditions were run once end to end against a live model. Each cell is
+one episode of $N=6$ agents over 4 population rounds with a single visible
+social slot ($K=1$), sensor sample $q_c=3$, exact budget $b=3$, target
+\texttt{correct}, \texttt{recommendation\_plus\_fact}, on
+\texttt{gwdg/openai-gpt-oss-120b} at temperature~0 with seed \texttt{20260828}.
+Each cell issued 30 calls --- 6 local-initialization ballots and $6\times4=24$
+focal updates --- for 120 in total, matching the recorded request count
+exactly, so no response required a retry.
+
+In this particular task the two evidence arms coincide: the advocated relation
+is the correct one, SOUTHWEST, and the tie between \texttt{f1} and \texttt{f2}
+--- both at cosine $1/\sqrt{2}$ --- resolves to the earlier fact, which is also
+the neutral rule's choice. All four cells therefore exposed \texttt{f1}, and the
+evidence axis is degenerate here by construction. The grid is a prompt- and
+plumbing-level audit of the four conditions, not an estimate of their effect;
+the axis separates only on tasks and targets where alignment discriminates, as
+the two lower rows of the worked example show.
