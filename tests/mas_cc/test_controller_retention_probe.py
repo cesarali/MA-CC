@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from mas_cc.games.relational_reasoning.data import list_relational_task_ids, load_relational_task
+from mas_cc.games.relational_reasoning.data import (
+    list_relational_task_ids,
+    load_relational_task,
+)
 from mas_cc.probes.controller_retention import vignette as vignette_module
 from mas_cc.probes.controller_retention.analysis import (
     build_response_rows,
@@ -17,7 +20,11 @@ from mas_cc.probes.controller_retention.analysis import (
     pair_outcomes,
     r_exposure,
 )
-from mas_cc.probes.controller_retention.config import ProbeConfigError, build_probe_config, load_probe_config
+from mas_cc.probes.controller_retention.config import (
+    ProbeConfigError,
+    build_probe_config,
+    load_probe_config,
+)
 from mas_cc.probes.controller_retention.design import (
     ARMS_BY_Q,
     NO_OP,
@@ -28,11 +35,22 @@ from mas_cc.probes.controller_retention.design import (
     controller_slot_count,
 )
 from mas_cc.probes.controller_retention.execution import build_call_specs
-from mas_cc.probes.controller_retention.preflight import preflight_payload, run_preflight
-from mas_cc.probes.controller_retention.runner import PAIRED_EFFECTS_CSV, REPORT_MARKDOWN, analyze, prepare
+from mas_cc.probes.controller_retention.preflight import (
+    preflight_payload,
+    run_preflight,
+)
+from mas_cc.probes.controller_retention.runner import (
+    PAIRED_EFFECTS_CSV,
+    REPORT_MARKDOWN,
+    analyze,
+    prepare,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATASETS = REPO_ROOT / "src/mas_cc/relational_task_generator/relational_task_generator/datasets"
+DATASETS = (
+    REPO_ROOT
+    / "src/mas_cc/relational_task_generator/relational_task_generator/datasets"
+)
 L1_DIR = DATASETS / "probe_n12_L1_k3"
 L2_DIR = DATASETS / "probe_n12_L2_k3"
 CONFIG_PATH = REPO_ROOT / "configs/probes/controller_retention.yaml"
@@ -41,14 +59,20 @@ CONFIG_PATH = REPO_ROOT / "configs/probes/controller_retention.yaml"
 @pytest.fixture(scope="module")
 def tasks() -> dict[int, tuple]:
     return {
-        depth: tuple(load_relational_task(directory, task_id) for task_id in list_relational_task_ids(directory)[:2])
+        depth: tuple(
+            load_relational_task(directory, task_id)
+            for task_id in list_relational_task_ids(directory)[:2]
+        )
         for depth, directory in ((1, L1_DIR), (2, L2_DIR))
     }
 
 
 def _grid(tasks) -> tuple:
     fingerprints = {
-        (task.reasoning_depth, task.task_id): f"fp-{task.reasoning_depth}-{task.task_id}"
+        (
+            task.reasoning_depth,
+            task.task_id,
+        ): f"fp-{task.reasoning_depth}-{task.task_id}"
         for group in tasks.values()
         for task in group
     }
@@ -64,7 +88,12 @@ def _task_for(tasks, item):
 def _config_payload(model_count: int = 1):
     return {
         "models": [
-            {"label": f"m{i}", "provider": "mock", "model": f"model-{i}", "max_retries": 0}
+            {
+                "label": f"m{i}",
+                "provider": "mock",
+                "model": f"model-{i}",
+                "max_retries": 0,
+            }
             for i in range(model_count)
         ],
         "tasks": {
@@ -105,7 +134,14 @@ def test_config_accepts_any_nonempty_model_count():
 
 
 @pytest.mark.parametrize(
-    "q,arm,expected", [(2, NO_OP, 0), (2, ONE_SLOT, 1), (3, NO_OP, 0), (3, ONE_SLOT, 1), (3, TWO_SLOTS, 2)]
+    "q,arm,expected",
+    [
+        (2, NO_OP, 0),
+        (2, ONE_SLOT, 1),
+        (3, NO_OP, 0),
+        (3, ONE_SLOT, 1),
+        (3, TWO_SLOTS, 2),
+    ],
 )
 def test_controller_slot_counts(q, arm, expected):
     assert controller_slot_count(q, arm) == expected
@@ -120,7 +156,9 @@ def test_shared_vignette_has_exact_requested_arms(tasks):
         for arm in ARMS_BY_Q[item.q]:
             sources = vignette_module.social_sources(task, item, arm)
             assert len(sources) == item.q
-            assert sum(source["source_type"] == "control" for source in sources) == controller_slot_count(item.q, arm)
+            assert sum(
+                source["source_type"] == "control" for source in sources
+            ) == controller_slot_count(item.q, arm)
             rendered = vignette_module.rendered_blocks(task, item, arm)
             differing = {name for name in baseline if baseline[name] != rendered[name]}
             assert differing == (set() if arm == NO_OP else {"social_information"})
@@ -145,7 +183,8 @@ def test_call_specs_share_one_q3_noop_and_are_deterministic():
     assert len({spec.call_id for spec in specs}) == 240
     assert sum(spec.vignette.q == 3 and spec.arm == NO_OP for spec in specs) == 48
     assert [spec.call_id for spec in specs] == [
-        spec.call_id for spec in build_call_specs(config, run_preflight(config).vignettes)
+        spec.call_id
+        for spec in build_call_specs(config, run_preflight(config).vignettes)
     ]
 
 
@@ -160,7 +199,9 @@ def test_response_contract_rejects_incomplete_json(tasks, monkeypatch):
 
         async def complete(self, request):
             return CompletionResponse(
-                content='{"vote":"A"}', provider="mock", model="m",
+                content='{"vote":"A"}',
+                provider="mock",
+                model="m",
                 usage=ProviderUsage(input_tokens=1, output_tokens=1),
             )
 
@@ -177,21 +218,29 @@ def test_response_contract_rejects_incomplete_json(tasks, monkeypatch):
 def test_analysis_uses_shared_noop_and_computes_rescue(tmp_path):
     config = build_probe_config(_config_payload())
     preflight = run_preflight(config)
-    selected = [item for item in preflight.vignettes if item.reasoning_depth == 1 and item.target_semantics == "false"][:12]
+    selected = [
+        item
+        for item in preflight.vignettes
+        if item.reasoning_depth == 1 and item.target_semantics == "false"
+    ][:12]
     raw = []
     model = config.models[0]
     for item in selected:
         for arm in ARMS_BY_Q[item.q]:
             hit = arm == TWO_SLOTS or (arm == ONE_SLOT and item.q == 2)
-            raw.append({
-                "call_id": item.call_id(model.call_identity, arm),
-                "model_label": model.label,
-                "arm": arm,
-                "vignette_id": item.vignette_id,
-                "final_vote_semantic": item.controller_target_semantic if hit else item.truth_semantic,
-                "parse_ok": True,
-                "latency": 0.1,
-            })
+            raw.append(
+                {
+                    "call_id": item.call_id(model.call_identity, arm),
+                    "model_label": model.label,
+                    "arm": arm,
+                    "vignette_id": item.vignette_id,
+                    "final_vote_semantic": item.controller_target_semantic
+                    if hit
+                    else item.truth_semantic,
+                    "parse_ok": True,
+                    "latency": 0.1,
+                }
+            )
     rows = build_response_rows(config, preflight.vignettes, preflight.tasks, raw)
     effects = cell_effects(pair_outcomes(rows))
     index = effect_index(effects)
@@ -211,15 +260,30 @@ def test_mock_end_to_end_report(tmp_path, monkeypatch):
     run = prepare(config, tmp_path)
 
     def fake_execute(spec, max_retries=0):
-        vote = spec.vignette.controller_target_semantic if spec.arm != NO_OP else spec.vignette.truth_semantic
+        vote = (
+            spec.vignette.controller_target_semantic
+            if spec.arm != NO_OP
+            else spec.vignette.truth_semantic
+        )
         return execution.CallResult(
-            call_id=spec.call_id, model_label=spec.model.label, arm=spec.arm,
-            vignette_id=spec.pair_id, response_text="{}", final_vote_semantic=vote,
-            parse_ok=True, provider_error=None, validation_error=None, attempts=1,
-            latency=0.01, input_tokens=10, output_tokens=5,
+            call_id=spec.call_id,
+            model_label=spec.model.label,
+            arm=spec.arm,
+            vignette_id=spec.pair_id,
+            response_text="{}",
+            final_vote_semantic=vote,
+            parse_ok=True,
+            provider_error=None,
+            validation_error=None,
+            attempts=1,
+            latency=0.01,
+            input_tokens=10,
+            output_tokens=5,
         )
 
-    monkeypatch.setattr(execution, "_worker_entry", lambda payload: fake_execute(*payload))
+    monkeypatch.setattr(
+        execution, "_worker_entry", lambda payload: fake_execute(*payload)
+    )
     runner.execute(run, stream=None)
     runner.analyze(run)
     assert run.completed_successfully
@@ -233,15 +297,40 @@ def test_mock_end_to_end_report(tmp_path, monkeypatch):
 
 
 def test_failed_rows_are_not_completed(tmp_path):
-    from mas_cc.probes.controller_retention.execution import RAW_CALLS_FILENAME, successful_call_ids
+    from mas_cc.probes.controller_retention.execution import (
+        RAW_CALLS_FILENAME,
+        successful_call_ids,
+    )
 
     path = tmp_path / RAW_CALLS_FILENAME
     path.write_text(
-        "\n".join([
-            json.dumps({"call_id": "ok", "parse_ok": True, "provider_error": None, "validation_error": None}),
-            json.dumps({"call_id": "provider", "parse_ok": False, "provider_error": "timeout"}),
-            json.dumps({"call_id": "invalid", "parse_ok": False, "validation_error": "bad JSON"}),
-        ]) + "\n",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "call_id": "ok",
+                        "parse_ok": True,
+                        "provider_error": None,
+                        "validation_error": None,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "call_id": "provider",
+                        "parse_ok": False,
+                        "provider_error": "timeout",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "call_id": "invalid",
+                        "parse_ok": False,
+                        "validation_error": "bad JSON",
+                    }
+                ),
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
     assert successful_call_ids(path) == {"ok"}
@@ -266,9 +355,16 @@ def test_one_plot_per_model(tmp_path):
 
 def test_the_probe_does_not_modify_the_production_game():
     import inspect
-    from mas_cc.games.relational_reasoning.imitation_round_feedback import controller, runtime
+    from mas_cc.games.relational_reasoning.imitation_round_feedback import (
+        controller,
+        runtime,
+    )
 
-    assert controller.MESSAGE_MODES == ("recommendation_only", "recommendation_plus_fact", "silent")
+    assert controller.MESSAGE_MODES == (
+        "recommendation_only",
+        "recommendation_plus_fact",
+        "silent",
+    )
     signature = inspect.signature(runtime.build_social_sources)
     assert "replaced_peer_slot" in signature.parameters
     assert "controller_slots" not in signature.parameters

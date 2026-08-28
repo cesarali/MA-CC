@@ -171,7 +171,9 @@ def _tuple(value: Any, name: str, allowed: Sequence[Any] | None = None) -> tuple
     if allowed is not None:
         unknown = [item for item in items if item not in allowed]
         if unknown:
-            raise ProbeConfigError(f"{name}: {unknown[0]!r} is not one of {list(allowed)}")
+            raise ProbeConfigError(
+                f"{name}: {unknown[0]!r} is not one of {list(allowed)}"
+            )
     return items
 
 
@@ -205,27 +207,31 @@ def build_probe_config(
             if not entry.get(key):
                 raise ProbeConfigError(f"models[{index}].{key} is required")
         model = ModelSpec(
-                label=str(entry["label"]),
-                provider=str(entry["provider"]),
-                model=str(entry["model"]),
-                credentials_env=_optional_str(entry.get("credentials_env")),
-                base_url_env=_optional_str(entry.get("base_url_env")),
-                temperature=float(entry.get("temperature", 0.0)),
-                max_output_tokens=int(entry.get("max_output_tokens", 4096)),
-                timeout_seconds=float(entry.get("timeout_seconds", 180.0)),
-                max_retries=int(entry.get("max_retries", 2)),
-                request_concurrency=int(entry.get("request_concurrency", 1)),
-                seed=_optional_int(entry.get("seed")),
-                options=dict(entry.get("options") or {}),
-            )
+            label=str(entry["label"]),
+            provider=str(entry["provider"]),
+            model=str(entry["model"]),
+            credentials_env=_optional_str(entry.get("credentials_env")),
+            base_url_env=_optional_str(entry.get("base_url_env")),
+            temperature=float(entry.get("temperature", 0.0)),
+            max_output_tokens=int(entry.get("max_output_tokens", 4096)),
+            timeout_seconds=float(entry.get("timeout_seconds", 180.0)),
+            max_retries=int(entry.get("max_retries", 2)),
+            request_concurrency=int(entry.get("request_concurrency", 1)),
+            seed=_optional_int(entry.get("seed")),
+            options=dict(entry.get("options") or {}),
+        )
         if model.max_output_tokens < 1:
-            raise ProbeConfigError(f"models[{index}].max_output_tokens must be positive")
+            raise ProbeConfigError(
+                f"models[{index}].max_output_tokens must be positive"
+            )
         if model.timeout_seconds <= 0:
             raise ProbeConfigError(f"models[{index}].timeout_seconds must be positive")
         if model.max_retries < 0:
             raise ProbeConfigError(f"models[{index}].max_retries must be non-negative")
         if model.request_concurrency < 1:
-            raise ProbeConfigError(f"models[{index}].request_concurrency must be positive")
+            raise ProbeConfigError(
+                f"models[{index}].request_concurrency must be positive"
+            )
         models.append(model)
     labels = [spec.label for spec in models]
     if len(set(labels)) != len(labels):
@@ -236,7 +242,9 @@ def build_probe_config(
         raise ProbeConfigError("tasks must be a mapping")
     raw_dirs = tasks_section.get("dataset_dirs")
     if not isinstance(raw_dirs, Mapping) or not raw_dirs:
-        raise ProbeConfigError("tasks.dataset_dirs must map reasoning depth to a directory")
+        raise ProbeConfigError(
+            "tasks.dataset_dirs must map reasoning depth to a directory"
+        )
     dataset_dirs = {int(key): str(value) for key, value in raw_dirs.items()}
     explicit = {
         int(key): tuple(str(item) for item in value)
@@ -263,7 +271,10 @@ def build_probe_config(
         seed=int(design_section.get("seed", 20260828)),
         reasoning_depths=depths,
         q_values=tuple(
-            int(value) for value in _tuple(design_section.get("q_values", [2, 3]), "design.q_values")
+            int(value)
+            for value in _tuple(
+                design_section.get("q_values", [2, 3]), "design.q_values"
+            )
         ),
         receivers=tuple(
             str(value)
@@ -314,7 +325,9 @@ def build_probe_config(
         max_retries=int(execution_section.get("max_retries", 2)),
         provider_concurrency_caps={
             str(key): int(value)
-            for key, value in (execution_section.get("provider_concurrency_caps") or {}).items()
+            for key, value in (
+                execution_section.get("provider_concurrency_caps") or {}
+            ).items()
         },
     )
     if execution.max_retries != 0:
@@ -322,10 +335,14 @@ def build_probe_config(
             "execution.max_retries must be 0; provider adapters own transport retries"
         )
     if any(value < 1 for value in execution.provider_concurrency_caps.values()):
-        raise ProbeConfigError("execution.provider_concurrency_caps values must be positive")
+        raise ProbeConfigError(
+            "execution.provider_concurrency_caps values must be positive"
+        )
 
     storage = payload.get("storage") or {}
-    output_dir = Path(str(storage.get("output_dir", "results/probes/controller_retention")))
+    output_dir = Path(
+        str(storage.get("output_dir", "results/probes/controller_retention"))
+    )
     return ProbeConfig(
         models=tuple(models),
         dataset_dirs=dataset_dirs,

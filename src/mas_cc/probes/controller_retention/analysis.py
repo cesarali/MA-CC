@@ -78,7 +78,8 @@ class ResponseRow:
             "controller_slots": self.controller_slots,
             "controller_exposure_fraction": round(self.controller_exposure_fraction, 4),
             "ordinary_peer_vote_count_vector": "|".join(
-                f"{key}:{value}" for key, value in sorted(self.ordinary_peer_vote_count_vector.items())
+                f"{key}:{value}"
+                for key, value in sorted(self.ordinary_peer_vote_count_vector.items())
             ),
             "option_permutation_seed": self.option_permutation_seed,
             "prompt_definition_hash": self.prompt_definition_hash,
@@ -91,7 +92,9 @@ class ResponseRow:
             "validation_error": self.validation_error or "",
             "latency": round(self.latency, 3),
             "input_tokens": self.input_tokens if self.input_tokens is not None else "",
-            "output_tokens": self.output_tokens if self.output_tokens is not None else "",
+            "output_tokens": self.output_tokens
+            if self.output_tokens is not None
+            else "",
             "call_id": self.call_id,
         }
 
@@ -147,16 +150,24 @@ def build_response_rows(
                 arm=arm,
                 controller_slots=item.controller_slots(arm),
                 controller_exposure_fraction=item.controller_exposure_fraction(arm),
-                ordinary_peer_vote_count_vector=item.vote_count_vector(task.semantic_answers, arm),
+                ordinary_peer_vote_count_vector=item.vote_count_vector(
+                    task.semantic_answers, arm
+                ),
                 option_permutation_seed=item.option_permutation_seed,
-                prompt_definition_hash=vignette_module.build_prompt(task, item, arm).definition_hash,
+                prompt_definition_hash=vignette_module.build_prompt(
+                    task, item, arm
+                ).definition_hash,
                 vignette_id=item.vignette_id,
                 replicate=item.replicate,
                 final_vote_semantic=vote,
                 final_is_controller_target=vote == item.controller_target_semantic,
                 parse_ok=bool(raw.get("parse_ok")),
-                provider_error=str(raw["provider_error"]) if raw.get("provider_error") else None,
-                validation_error=str(raw["validation_error"]) if raw.get("validation_error") else None,
+                provider_error=str(raw["provider_error"])
+                if raw.get("provider_error")
+                else None,
+                validation_error=str(raw["validation_error"])
+                if raw.get("validation_error")
+                else None,
                 latency=float(raw.get("latency") or 0.0),
                 input_tokens=_int_or_none(raw.get("input_tokens")),
                 output_tokens=_int_or_none(raw.get("output_tokens")),
@@ -289,7 +300,9 @@ class ModelQuality:
         }
 
 
-def model_quality(rows: Sequence[ResponseRow], scheduled: Mapping[str, int]) -> tuple[ModelQuality, ...]:
+def model_quality(
+    rows: Sequence[ResponseRow], scheduled: Mapping[str, int]
+) -> tuple[ModelQuality, ...]:
     grouped: dict[str, list[ResponseRow]] = {}
     for row in rows:
         grouped.setdefault(row.model_label, []).append(row)
@@ -304,7 +317,9 @@ def model_quality(rows: Sequence[ResponseRow], scheduled: Mapping[str, int]) -> 
                 successful=sum(row.parse_ok for row in group),
                 provider_errors=sum(bool(row.provider_error) for row in group),
                 validation_failures=sum(bool(row.validation_error) for row in group),
-                median_latency=latencies[len(latencies) // 2] if latencies else float("nan"),
+                median_latency=latencies[len(latencies) // 2]
+                if latencies
+                else float("nan"),
                 input_tokens=sum(row.input_tokens or 0 for row in group),
                 output_tokens=sum(row.output_tokens or 0 for row in group),
             )

@@ -89,7 +89,9 @@ def prepare(config: ProbeConfig, output_dir: Path | None = None) -> ProbeRun:
     (root / PREFLIGHT_JSON).write_text(
         json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
     )
-    return ProbeRun(config=config, preflight=preflight, payload=payload, output_dir=root)
+    return ProbeRun(
+        config=config, preflight=preflight, payload=payload, output_dir=root
+    )
 
 
 def execute(run: ProbeRun, *, stream: Any = sys.stderr) -> ProbeRun:
@@ -132,9 +134,7 @@ def analyze(run: ProbeRun) -> ProbeRun:
     )
     pairs = pair_outcomes(rows)
     effects = cell_effects(pairs)
-    scheduled = {
-        spec.label: 240 for spec in run.config.models
-    }
+    scheduled = {spec.label: 240 for spec in run.config.models}
     quality = model_quality(rows, scheduled)
 
     run.payload = preflight_payload(
@@ -154,7 +154,9 @@ def analyze(run: ProbeRun) -> ProbeRun:
     try:
         from .plots import render_all
 
-        produced = render_all(effects, [spec.label for spec in run.config.models], plot_dir)
+        produced = render_all(
+            effects, [spec.label for spec in run.config.models], plot_dir
+        )
     except ImportError:
         # matplotlib is optional for the analysis path; the tables still stand.
         produced = {spec.label: [] for spec in run.config.models}

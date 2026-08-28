@@ -107,7 +107,9 @@ class Vignette:
     def controller_exposure_fraction(self, arm: str) -> float:
         return self.controller_slots(arm) / self.q
 
-    def vote_count_vector(self, semantic_answers: Sequence[str], arm: str) -> dict[str, int]:
+    def vote_count_vector(
+        self, semantic_answers: Sequence[str], arm: str
+    ) -> dict[str, int]:
         counts = {str(option): 0 for option in semantic_answers}
         controlled = self.controller_slots(arm)
         for vote in self.ordinary_peer_votes[controlled:]:
@@ -147,7 +149,9 @@ def controller_target_for(task: RelationalTask, target_semantics: str) -> str:
     raise ValueError(f"target_semantics must be one of {list(TARGET_SEMANTICS)}")
 
 
-def initial_vote_semantic(task: RelationalTask, controller_target: str, role: str) -> str:
+def initial_vote_semantic(
+    task: RelationalTask, controller_target: str, role: str
+) -> str:
     if role == VOTE_CONTROLLER_TARGET:
         return controller_target
     if role == VOTE_TRUTH:

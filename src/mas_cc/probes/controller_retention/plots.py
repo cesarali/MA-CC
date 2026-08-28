@@ -37,20 +37,24 @@ def controller_retention_plot(
     for row, depth in enumerate((1, 2)):
         for column, target in enumerate(("truth", "false")):
             axis = axes[row][column]
-            one = [
-                index.get((model_label, depth, target, q, ONE_SLOT))
-                for q in (2, 3)
-            ]
+            one = [index.get((model_label, depth, target, q, ONE_SLOT)) for q in (2, 3)]
             xs = [q for q, effect in zip((2, 3), one) if effect is not None]
             ys = [effect.delta_c for effect in one if effect is not None]
             if xs:
                 axis.plot(xs, ys, "-o", label="one_slot")
             two = index.get((model_label, depth, target, 3, TWO_SLOTS))
             if two is not None:
-                axis.scatter([3], [two.delta_c], marker="s", s=60, label="two_slots (probe-only)")
+                axis.scatter(
+                    [3], [two.delta_c], marker="s", s=60, label="two_slots (probe-only)"
+                )
                 rescue = r_exposure(index, two.key)
                 if rescue is not None:
-                    axis.annotate(f"rescue {rescue:+.3f}", (3, two.delta_c), xytext=(-70, 12), textcoords="offset points")
+                    axis.annotate(
+                        f"rescue {rescue:+.3f}",
+                        (3, two.delta_c),
+                        xytext=(-70, 12),
+                        textcoords="offset points",
+                    )
             axis.axhline(0.0, color="black", linewidth=0.8)
             axis.set_ylim(*DELTA_LIMITS)
             axis.set_xticks((2, 3))

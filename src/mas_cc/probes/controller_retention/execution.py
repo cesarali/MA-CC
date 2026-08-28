@@ -8,7 +8,12 @@ import os
 import sys
 import threading
 import time
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    Future,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -192,7 +197,9 @@ def _worker_entry(payload: tuple[CallSpec, int]) -> CallResult:
     return execute_call(*payload)
 
 
-def build_call_specs(config: ProbeConfig, vignettes: tuple[Vignette, ...]) -> tuple[CallSpec, ...]:
+def build_call_specs(
+    config: ProbeConfig, vignettes: tuple[Vignette, ...]
+) -> tuple[CallSpec, ...]:
     per_model: list[list[CallSpec]] = []
     for model in config.models:
         specs = [
@@ -290,6 +297,7 @@ def run_calls(
     results: list[CallResult] = []
     payloads = [(spec, 0) for spec in specs]
     with raw_path.open("a", encoding="utf-8") as handle:
+
         def record(result: CallResult) -> None:
             handle.write(json.dumps(result.to_row(), sort_keys=True) + "\n")
             handle.flush()
@@ -300,10 +308,15 @@ def run_calls(
             for payload in payloads:
                 record(_worker_entry(payload))
         else:
-            pool_type = ThreadPoolExecutor if config.execution.backend == "thread_pool" else ProcessPoolExecutor
+            pool_type = (
+                ThreadPoolExecutor
+                if config.execution.backend == "thread_pool"
+                else ProcessPoolExecutor
+            )
             with pool_type(max_workers=workers) as pool:
                 futures: dict[Future, CallSpec] = {
-                    pool.submit(_worker_entry, payload): payload[0] for payload in payloads
+                    pool.submit(_worker_entry, payload): payload[0]
+                    for payload in payloads
                 }
                 for future in as_completed(futures):
                     record(future.result())

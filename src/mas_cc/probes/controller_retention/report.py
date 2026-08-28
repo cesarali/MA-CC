@@ -26,7 +26,9 @@ def _table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
         return ["_No complete matched rows._", ""]
     return [
         "| " + " | ".join(headers) + " |",
-        "|" + "|".join("---:" if index else "---" for index, _ in enumerate(headers)) + "|",
+        "|"
+        + "|".join("---:" if index else "---" for index, _ in enumerate(headers))
+        + "|",
         *("| " + " | ".join(row) + " |" for row in rows),
         "",
     ]
@@ -65,7 +67,12 @@ def build_report(
     lines += _table(
         ["Setting", "Value"],
         [
-            ["Models", ", ".join(f"`{model.label}` (`{model.model}`)" for model in config.models)],
+            [
+                "Models",
+                ", ".join(
+                    f"`{model.label}` (`{model.model}`)" for model in config.models
+                ),
+            ],
             ["Reasoning depths `L`", "1, 2"],
             ["Visible slots `q`", "2, 3"],
             ["Targets", "truth, false"],
@@ -75,7 +82,10 @@ def build_report(
             ["Replicates", "1"],
             ["Calls per model", str(calls.get("calls_per_model", 240))],
             ["Total calls", str(calls.get("calls_total", NA))],
-            ["Workers", str(preflight.get("concurrency", {}).get("effective_workers", NA))],
+            [
+                "Workers",
+                str(preflight.get("concurrency", {}).get("effective_workers", NA)),
+            ],
         ],
     )
     lines += ["## Cross-model summary", ""]
@@ -90,29 +100,66 @@ def build_report(
             if effect.key[3:] == (3, TWO_SLOTS)
             and (value := r_exposure(index, effect.key)) is not None
         )
-        summary_rows.append([
-            f"`{model.label}`", _num(q2), _num(q3), _num(None if q2 is None or q3 is None else q3 - q2), _num(rescue)
-        ])
+        summary_rows.append(
+            [
+                f"`{model.label}`",
+                _num(q2),
+                _num(q3),
+                _num(None if q2 is None or q3 is None else q3 - q2),
+                _num(rescue),
+            ]
+        )
     lines += _table(
-        ["Model", "Mean Delta_C q=2", "Mean Delta_C q=3 one-slot", "q=3 minus q=2", "Mean exposure rescue"],
+        [
+            "Model",
+            "Mean Delta_C q=2",
+            "Mean Delta_C q=3 one-slot",
+            "q=3 minus q=2",
+            "Mean exposure rescue",
+        ],
         summary_rows,
     )
 
     for number, model in enumerate(config.models, start=1):
         mine = sorted(
             (effect for effect in effects if effect.key[0] == model.label),
-            key=lambda effect: (effect.key[1], effect.key[2], effect.key[3], effect.key[4]),
+            key=lambda effect: (
+                effect.key[1],
+                effect.key[2],
+                effect.key[3],
+                effect.key[4],
+            ),
         )
-        lines += [f"## Model {number}: `{model.label}`", "", f"Provider model: `{model.model}`", ""]
+        lines += [
+            f"## Model {number}: `{model.label}`",
+            "",
+            f"Provider model: `{model.model}`",
+            "",
+        ]
         rows = [
             [
-                str(effect.key[1]), str(effect.key[2]), str(effect.key[3]), str(effect.key[4]),
-                str(effect.n_pairs), _rate(effect.p_controlled), _rate(effect.p_noop), _num(effect.delta_c),
+                str(effect.key[1]),
+                str(effect.key[2]),
+                str(effect.key[3]),
+                str(effect.key[4]),
+                str(effect.n_pairs),
+                _rate(effect.p_controlled),
+                _rate(effect.p_noop),
+                _num(effect.delta_c),
             ]
             for effect in mine
         ]
         lines += _table(
-            ["L", "Target", "q", "Exposure", "N vignettes", "P target", "P target NOOP", "Delta_C"],
+            [
+                "L",
+                "Target",
+                "q",
+                "Exposure",
+                "N vignettes",
+                "P target",
+                "P target NOOP",
+                "Delta_C",
+            ],
             rows,
         )
         rescue_rows: list[list[str]] = []
@@ -121,15 +168,25 @@ def build_report(
                 q2 = index.get((model.label, depth, target, 2, ONE_SLOT))
                 q3_one = index.get((model.label, depth, target, 3, ONE_SLOT))
                 q3_two = index.get((model.label, depth, target, 3, TWO_SLOTS))
-                rescue_rows.append([
-                    str(depth), target,
-                    _num(q2.delta_c if q2 else None),
-                    _num(q3_one.delta_c if q3_one else None),
-                    _num(q3_two.delta_c if q3_two else None),
-                    _num(r_exposure(index, q3_two.key) if q3_two else None),
-                ])
+                rescue_rows.append(
+                    [
+                        str(depth),
+                        target,
+                        _num(q2.delta_c if q2 else None),
+                        _num(q3_one.delta_c if q3_one else None),
+                        _num(q3_two.delta_c if q3_two else None),
+                        _num(r_exposure(index, q3_two.key) if q3_two else None),
+                    ]
+                )
         lines += _table(
-            ["L", "Target", "Delta_C q=2", "Delta_C q=3 one-slot", "Delta_C q=3 two-slots", "Exposure rescue"],
+            [
+                "L",
+                "Target",
+                "Delta_C q=2",
+                "Delta_C q=3 one-slot",
+                "Delta_C q=3 two-slots",
+                "Exposure rescue",
+            ],
             rescue_rows,
         )
         for path in plot_paths.get(model.label, ()):
@@ -190,7 +247,9 @@ def _model_interpretation(label: str, index: Mapping[tuple, CellEffect]) -> list
     return lines
 
 
-def _interpretation_table(config: ProbeConfig, index: Mapping[tuple, CellEffect]) -> list[str]:
+def _interpretation_table(
+    config: ProbeConfig, index: Mapping[tuple, CellEffect]
+) -> list[str]:
     rows: list[list[str]] = []
     for model in config.models:
         changes: list[float] = []
@@ -215,29 +274,51 @@ def _interpretation_table(config: ProbeConfig, index: Mapping[tuple, CellEffect]
         mean_change = _mean(changes)
         mean_rescue = _mean(rescues)
         q2_values = [
-            effect.delta_c for key, effect in index.items()
+            effect.delta_c
+            for key, effect in index.items()
             if key[0] == model.label and key[3:] == (2, ONE_SLOT)
         ]
         q3_values = [
-            effect.delta_c for key, effect in index.items()
+            effect.delta_c
+            for key, effect in index.items()
             if key[0] == model.label and key[3:] == (3, ONE_SLOT)
         ]
         viability = (
-            NA if not q2_values or not q3_values else
-            "q=2 and q=3" if _mean(q3_values) is not None and _mean(q3_values) > 0.05 else
-            "q=2 only" if _mean(q2_values) is not None and _mean(q2_values) > 0.05 else
-            "neither clearly supported"
+            NA
+            if not q2_values or not q3_values
+            else "q=2 and q=3"
+            if _mean(q3_values) is not None and _mean(q3_values) > 0.05
+            else "q=2 only"
+            if _mean(q2_values) is not None and _mean(q2_values) > 0.05
+            else "neither clearly supported"
         )
-        rows.append([
-            f"`{model.label}`",
-            "yes" if mean_change is not None and mean_change < 0 else "no clear decrease" if mean_change is not None else NA,
-            "yes" if mean_rescue is not None and mean_rescue > 0 else "no clear rescue" if mean_rescue is not None else NA,
-            _num(None if not truth or not false else _mean(truth) - _mean(false)),
-            _num(None if not l1 or not l2 else _mean(l2) - _mean(l1)),
-            viability,
-        ])
+        rows.append(
+            [
+                f"`{model.label}`",
+                "yes"
+                if mean_change is not None and mean_change < 0
+                else "no clear decrease"
+                if mean_change is not None
+                else NA,
+                "yes"
+                if mean_rescue is not None and mean_rescue > 0
+                else "no clear rescue"
+                if mean_rescue is not None
+                else NA,
+                _num(None if not truth or not false else _mean(truth) - _mean(false)),
+                _num(None if not l1 or not l2 else _mean(l2) - _mean(l1)),
+                viability,
+            ]
+        )
     return _table(
-        ["Model", "Decrease q=2→3?", "Exposure rescue?", "Truth minus false", "L=2 minus L=1", "Population follow-up"],
+        [
+            "Model",
+            "Decrease q=2→3?",
+            "Exposure rescue?",
+            "Truth minus false",
+            "L=2 minus L=1",
+            "Population follow-up",
+        ],
         rows,
     )
 

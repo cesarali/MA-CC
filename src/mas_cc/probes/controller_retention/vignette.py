@@ -239,9 +239,7 @@ def rendered_blocks(
     return {block.name: block.content for block in compiled.blocks}
 
 
-def visible_slot_count(
-    task: RelationalTask, vignette: Vignette, arm: str
-) -> int:
+def visible_slot_count(task: RelationalTask, vignette: Vignette, arm: str) -> int:
     return len(social_sources(task, vignette, arm))
 
 
