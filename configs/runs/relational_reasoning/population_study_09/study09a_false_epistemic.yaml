@@ -9,7 +9,7 @@ llm_provider:
   base_url_env: BASE_POTSDAM_LLM_URL
   timeout_seconds: 180
   max_retries: 2
-  request_concurrency: 8
+  request_concurrency: 5
   temperature: 0.0
   max_output_tokens: 4096
   options:

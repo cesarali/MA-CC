@@ -32,6 +32,7 @@ from mas_cc.studies.execution import (
     write_execution_manifest,
 )
 from mas_cc.studies.cell_worker import main as cell_worker_main
+from mas_cc.studies.canonical import _coordinates
 from mas_cc.studies.submission import (
     array_task_command,
     build_submission_entries,
@@ -73,6 +74,22 @@ def test_study_manifest_is_stable_and_excludes_orchestration_yaml(tmp_path):
     )
     with pytest.raises(ValueError, match="duplicate"):
         discover_study(tmp_path)
+
+
+def test_controller_target_semantics_has_stable_text_type_across_matched_blocks():
+    def cell(target):
+        return SimpleNamespace(
+            overrides={},
+            resolved_config={"control": {"options": {"target": target}}},
+        )
+
+    false_coordinates = _coordinates(cell(2))
+    truth_coordinates = _coordinates(cell("correct"))
+
+    assert false_coordinates["controller_target_semantics"] == "2"
+    assert truth_coordinates["controller_target_semantics"] == "correct"
+    frame = pd.DataFrame([false_coordinates, truth_coordinates])
+    assert frame["controller_target_semantics"].map(type).eq(str).all()
 
 
 def test_submission_manifest_and_array_mapping_are_deterministic(tmp_path):
@@ -130,6 +147,20 @@ def test_submit_preflights_every_config_and_calls_sbatch_once(tmp_path, monkeypa
     assert (result.study_dir / "study_manifest.json").is_file()
     with (result.study_dir / "submission_manifest.csv").open(newline="") as stream:
         assert [int(row["array_index"]) for row in csv.DictReader(stream)] == [0, 1]
+
+
+def test_potsdam_study_launchers_pin_dedicated_conda_environment():
+    expected_conda = "/home/ojedamarin/.local/share/miniforge3/bin/conda"
+    launchers = (
+        Path("scripts/Potsdam/SLURM/run_config_array.job"),
+        Path("scripts/Potsdam/SLURM/run_study_cell_array.job"),
+    )
+
+    for launcher in launchers:
+        script = launcher.read_text(encoding="utf-8")
+        assert f"readonly CONDA_EXE={expected_conda}" in script
+        assert 'run -n MA-CC --live-stream' in script
+        assert "\npython -m mas_cc.studies." not in script
 
 
 def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():

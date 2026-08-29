@@ -71,6 +71,12 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
     ):
         value = _nested(cell.resolved_config, dotted)
         if value is not None and label not in result:
+            # Target semantics deliberately permits both an integer option
+            # index (adversarial control) and the symbolic value ``correct``.
+            # Store the coordinate as text so matched truth/false studies have
+            # one stable Parquet type without changing either meaning.
+            if label == "controller_target_semantics":
+                value = str(value)
             result[label] = value
     if "receiver_epistemic_disposition" not in result:
         legacy = _nested(cell.resolved_config, "game.options.social_distrust")
