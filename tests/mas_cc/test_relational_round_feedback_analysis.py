@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 
+import pandas as pd
 import pytest
 
 from mas_cc.games.hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
@@ -83,7 +84,13 @@ def _record(
 
 def test_adapter_resolves_target_and_truth_counts_from_the_option_vector():
     row = adapt_relational_round_record(
-        _record(episode="e0", index=0, action=ADVOCATE_TARGET, before=(14, 5, 5), after=(10, 5, 9))
+        _record(
+            episode="e0",
+            index=0,
+            action=ADVOCATE_TARGET,
+            before=(14, 5, 5),
+            after=(10, 5, 9),
+        )
     )
     # `EAST` is index 2 and `WEST` index 1: the pipeline's scalar channels have
     # to come from the label, never from a positional assumption.
@@ -101,7 +108,8 @@ def test_an_uncontrolled_record_falls_back_to_the_correct_answer():
 
 def test_epistemic_bins_are_coarse_and_bounded():
     row = adapt_relational_round_record(
-        _record(episode="e0", index=0, action=NO_OP, kappa=1.0, phi=0.4), epistemic_bins=4
+        _record(episode="e0", index=0, action=NO_OP, kappa=1.0, phi=0.4),
+        epistemic_bins=4,
     )
     # kappa = 1.0 must land in the last bin rather than off the end.
     assert row.epistemic_state == (3, 1)
@@ -147,7 +155,10 @@ def test_memory_conditioning_recovers_an_effect_the_plain_cmi_averages_away():
     support = {row["statistic"]: row for row in estimates}
     # Each statistic reports the sparsity of its OWN conditioning state.
     assert support["round_target_actuation_cmi"]["round_conditioning_state_count"] == 1
-    assert support["round_memory_target_actuation_cmi"]["round_conditioning_state_count"] == 2
+    assert (
+        support["round_memory_target_actuation_cmi"]["round_conditioning_state_count"]
+        == 2
+    )
 
 
 def test_a_constant_memory_state_leaves_the_estimate_untouched():
@@ -184,7 +195,11 @@ def test_a_constant_memory_state_leaves_the_estimate_untouched():
 def test_budget_and_sensor_bookkeeping_is_reported_per_action():
     rows = [
         adapt_relational_round_record(
-            _record(episode="e0", index=index, action=ADVOCATE_TARGET if index < 7 else NO_OP)
+            _record(
+                episode="e0",
+                index=index,
+                action=ADVOCATE_TARGET if index < 7 else NO_OP,
+            )
         )
         for index in range(10)
     ]
@@ -199,7 +214,9 @@ def test_budget_and_sensor_bookkeeping_is_reported_per_action():
 def test_analysis_writes_the_report_and_flags_memory_support(tmp_path):
     episodes = tmp_path / "cells" / "cell-0000" / "data" / "episodes" / "cell-0000-0000"
     episodes.mkdir(parents=True)
-    (tmp_path / "cells" / "cell-0000" / "overrides.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "cells" / "cell-0000" / "overrides.json").write_text(
+        "{}", encoding="utf-8"
+    )
     (episodes / "round_trajectory.jsonl").write_text(
         "\n".join(
             json.dumps(
@@ -245,6 +262,57 @@ def test_analysis_writes_the_report_and_flags_memory_support(tmp_path):
         math.isfinite(float(row["estimate"]))
         for row in summary["memory_conditioning_support"]
     )
+
+
+def test_analysis_exports_persistence_diagnostics_and_requires_no_theory(tmp_path):
+    episode = tmp_path / "data" / "episodes" / "episode-0"
+    episode.mkdir(parents=True)
+    record = {
+        **_record(episode="episode-0", index=0, action=NO_OP),
+        "epistemic_persistence": 0.8,
+        "active_mean_supporting_fact_coverage_before": 0.5,
+        "active_mean_supporting_fact_coverage_after_interactions": 0.75,
+        "active_mean_supporting_fact_coverage_after": 0.5,
+        "active_full_proof_agent_share_before": 0.0,
+        "active_full_proof_agent_share_after_interactions": 0.25,
+        "active_full_proof_agent_share_after": 0.0,
+        "historical_mean_supporting_fact_coverage_before": 0.75,
+        "historical_mean_supporting_fact_coverage_after": 1.0,
+        "historical_full_proof_agent_share_before": 0.5,
+        "historical_full_proof_agent_share_after": 1.0,
+        "new_peer_facts": 2,
+        "new_controller_facts": 1,
+        "reactivated_peer_fact_count": 3,
+        "reactivated_controller_fact_count": 4,
+        "persistence_deactivated_fact_count": 5,
+        "persistence_deactivated_supporting_fact_count": 2,
+    }
+    (episode / "round_trajectory.jsonl").write_text(
+        json.dumps(record) + "\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="theoretical_reference must be 'none'"):
+        analyze_relational_imitation_round_feedback(
+            tmp_path,
+            tmp_path / "rejected",
+            bootstrap_resamples=0,
+            null_permutations=0,
+        )
+
+    analyze_relational_imitation_round_feedback(
+        tmp_path,
+        tmp_path / "analysis",
+        bootstrap_resamples=0,
+        null_permutations=0,
+        theoretical_reference="none",
+    )
+    trajectory = pd.read_csv(tmp_path / "analysis" / "round_epistemic_trajectory.csv")
+    row = trajectory.iloc[0]
+    assert row["epistemic_persistence"] == pytest.approx(0.8)
+    assert row["active_kappa_after_interactions"] == pytest.approx(0.75)
+    assert row["historical_kappa_after"] == pytest.approx(1.0)
+    assert row["reactivated_peer_facts"] == 3
+    assert row["persistence_deactivated_facts"] == 5
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +362,9 @@ def test_kappa_is_the_already_recorded_coverage_and_is_not_recomputed():
     # Deliberately inconsistent with the strata: if kappa were being derived
     # from the histogram this would come out 0.5, not 0.8125.
     values = epistemic_conditioning_values(
-        _record(episode="e0", index=0, action=NO_OP, strata_before=(12, 12, 0), kappa=0.8125)
+        _record(
+            episode="e0", index=0, action=NO_OP, strata_before=(12, 12, 0), kappa=0.8125
+        )
     )
     assert values["kappa"] == pytest.approx(0.8125)
 
@@ -359,7 +429,9 @@ def test_each_coarse_conditioning_recovers_the_effect_the_plain_cmi_averages_awa
         null_permutations=4,
     )
     values = {row["statistic"]: row for row in estimates}
-    assert values["round_target_actuation_cmi"]["estimate"] == pytest.approx(0.0, abs=1e-9)
+    assert values["round_target_actuation_cmi"]["estimate"] == pytest.approx(
+        0.0, abs=1e-9
+    )
     assert values[statistic]["estimate"] == pytest.approx(1.0, abs=1e-9)
 
     row = values[statistic]
@@ -368,7 +440,9 @@ def test_each_coarse_conditioning_recovers_the_effect_the_plain_cmi_averages_awa
     assert row["estimator_variant"] == "direct_counting"
     assert row["null_type"] == "policy_conditional_randomization"
     assert row["bootstrap_unit"] == "episode"
-    assert math.isfinite(row["bootstrap_ci_low"]) and math.isfinite(row["bootstrap_ci_high"])
+    assert math.isfinite(row["bootstrap_ci_low"]) and math.isfinite(
+        row["bootstrap_ci_high"]
+    )
     assert row["conditional_action_entropy_bits"] >= row["estimate"]
     assert row["entropy_bound_satisfied"] is True
     assert row["round_conditioning_state_count"] == 2
@@ -459,7 +533,10 @@ def test_the_matched_signed_response_removes_an_epistemic_confound():
         == "target_fraction_per_cycle"
     )
     # And it reports the sparsity of the conditioning it was matched on.
-    assert values["round_phi_target_signed_response"]["round_conditioning_state_count"] == 2
+    assert (
+        values["round_phi_target_signed_response"]["round_conditioning_state_count"]
+        == 2
+    )
 
 
 def test_phi_and_susceptible_agree_when_the_binning_is_a_relabelling():

@@ -17,6 +17,7 @@ from .manifest import StudySpec, discover_study
 
 
 FALSE_TAKEOVER_CONTRACT = "relational_false_takeover_v1"
+PERSISTENCE_EXPLORATORY_CONTRACT = "relational_persistence_exploratory_v1"
 
 
 def _repo_root(path: Path) -> Path:
@@ -48,12 +49,263 @@ def _require(condition: bool, message: str, errors: list[str]) -> None:
         errors.append(message)
 
 
+def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any]:
+    """Validate Study 09c's exact 12-cell finite-persistence design."""
+
+    errors: list[str] = []
+    _require(len(spec.configs) == 1, "study must list exactly one config", errors)
+    cells: list[Any] = []
+    axes: list[tuple[str, list[Any]]] = []
+    if spec.configs:
+        source = load_run_config_or_grid(spec.configs[0])
+        _require(
+            isinstance(source, GridSpec), "experiment must be a grid config", errors
+        )
+        if isinstance(source, GridSpec):
+            axes = [(axis.path, list(axis.values)) for axis in source.axes]
+            cells = [cell.config for cell in source.cells]
+    _require(
+        axes
+        == [
+            ("game.options.epistemic_persistence", [0.6, 0.8, 0.9]),
+            ("control.options.intervention_budget", [3, 6, 9, 12]),
+        ],
+        f"grid axes must be rho=[0.6, 0.8, 0.9] then b=[3, 6, 9, 12], got {axes}",
+        errors,
+    )
+
+    populations: set[int] = set()
+    rounds: set[int] = set()
+    q_values: set[int] = set()
+    depths: set[int] = set()
+    redundancies: set[int] = set()
+    sensors: set[int] = set()
+    budgets: set[int] = set()
+    persistence: set[float] = set()
+    tasks: set[str] = set()
+    targets: set[str] = set()
+    truths: set[str] = set()
+    dispositions: set[str] = set()
+    strategies: set[str] = set()
+    modes: set[str] = set()
+    schedules: set[str] = set()
+    betas: set[float] = set()
+    thresholds: set[float] = set()
+    repetitions: set[int] = set()
+    resolved_cells: set[tuple[float, int]] = set()
+    task_audit: dict[str, Any] = {}
+
+    for config in cells:
+        game = config.game
+        options = game.options
+        control_options = config.control.options
+        dataset = _dataset_path(spec, options.get("task_dataset_dir"))
+        manifest_path = dataset / "manifest.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            errors.append(f"invalid frozen dataset manifest {manifest_path}: {exc}")
+            continue
+        dataset_config = manifest.get("config", {})
+        populations.add(int(game.population_size))
+        depths.add(int(dataset_config.get("reasoning_depth", -1)))
+        redundancies.add(int(dataset_config.get("support_redundancy", -1)))
+        rounds.add(int(options.get("rounds", -1)))
+        q_values.add(int(options.get("social_group_size", -1)))
+        sensors.add(int(control_options.get("sensor_sample_size", -1)))
+        budget = int(control_options.get("intervention_budget", -1))
+        rho = float(options.get("epistemic_persistence", -1.0))
+        budgets.add(budget)
+        persistence.add(rho)
+        resolved_cells.add((rho, budget))
+        task_id = str(options.get("task_id"))
+        tasks.add(task_id)
+        dispositions.add(str(options.get("receiver_epistemic_disposition")))
+        strategies.add(str(control_options.get("controller_evidence_strategy")))
+        modes.add(str(control_options.get("message_mode")))
+        schedules.add(str(control_options.get("advocacy_schedule")))
+        betas.add(float(control_options.get("beta")))
+        thresholds.add(float(control_options.get("threshold")))
+        repetitions.add(int(config.execution.repetitions))
+        try:
+            task = load_relational_task(dataset, task_id, population_size=12)
+            raw_task = json.loads(Path(task.source_path).read_text(encoding="utf-8"))
+            controller = create_control(config.control)
+            target = controller.resolved_target_for_task(task, config.execution.seed)
+            fact_id = controller.resolve_fact_id(task, config.execution.seed)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"cannot validate task/controller: {exc}")
+            continue
+        generation = raw_task.get("generation", {})
+        redundancies.add(int(generation.get("support_redundancy", -1)))
+        targets.add(target)
+        truths.add(task.correct_relation)
+        _require(
+            target != task.correct_relation, "controller target must be false", errors
+        )
+        _require(
+            fact_id in task.facts,
+            "strategic evidence must be a frozen true fact",
+            errors,
+        )
+        _require(
+            len(task.supporting_fact_ids) == 3,
+            "task supporting-fact depth must equal 3",
+            errors,
+        )
+        _require(
+            all(
+                sum(
+                    fact_id_value in task.known_facts(agent_id)
+                    for agent_id in task.agent_ids
+                )
+                == 3
+                for fact_id_value in task.supporting_fact_ids
+            ),
+            "every supporting fact must have redundancy 3",
+            errors,
+        )
+        metadata = config.experiment.metadata
+        _require(
+            metadata.get("ground_truth") == task.correct_relation,
+            "metadata truth is incorrect",
+            errors,
+        )
+        _require(
+            metadata.get("controller_target") == target,
+            "metadata target is incorrect",
+            errors,
+        )
+        _require(
+            metadata.get("controller_target_is_truth") is False,
+            "metadata must mark target false",
+            errors,
+        )
+        task_audit = {
+            "task_id": task_id,
+            "fingerprint_sha256": _task_fingerprint(Path(task.source_path)),
+            "ground_truth": task.correct_relation,
+            "controller_target": target,
+            "controller_target_is_truth": False,
+            "strategic_fact_id": fact_id,
+            "strategic_fact_relation": task.fact(fact_id).relation,
+            "strategic_fact_text": task.fact_text(fact_id),
+        }
+
+    _require(
+        populations == {12},
+        f"population size must be [12], got {sorted(populations)}",
+        errors,
+    )
+    _require(rounds == {30}, f"rounds must be [30], got {sorted(rounds)}", errors)
+    _require(q_values == {2}, f"q values must be [2], got {sorted(q_values)}", errors)
+    _require(depths == {3}, f"L values must be [3], got {sorted(depths)}", errors)
+    _require(
+        redundancies == {3},
+        f"support redundancy must be [3], got {sorted(redundancies)}",
+        errors,
+    )
+    _require(sensors == {6}, f"sensor size must be [6], got {sorted(sensors)}", errors)
+    _require(
+        persistence == {0.6, 0.8, 0.9},
+        f"rho values are incorrect: {sorted(persistence)}",
+        errors,
+    )
+    _require(
+        budgets == {3, 6, 9, 12}, f"b values are incorrect: {sorted(budgets)}", errors
+    )
+    _require(
+        tasks == {"task_0002"},
+        f"task must be task_0002 only, got {sorted(tasks)}",
+        errors,
+    )
+    _require(truths == {"NORTH"}, f"truth must be NORTH, got {sorted(truths)}", errors)
+    _require(
+        targets == {"NORTHWEST"},
+        f"false target must be NORTHWEST, got {sorted(targets)}",
+        errors,
+    )
+    _require(
+        dispositions == {"naive"},
+        f"receiver must be naive, got {sorted(dispositions)}",
+        errors,
+    )
+    _require(
+        strategies == {"strategic"},
+        f"evidence must be strategic, got {sorted(strategies)}",
+        errors,
+    )
+    _require(
+        modes == {"recommendation_plus_fact"},
+        f"message mode is incorrect: {sorted(modes)}",
+        errors,
+    )
+    _require(
+        schedules == {"soft"}, f"schedule must be soft, got {sorted(schedules)}", errors
+    )
+    _require(betas == {4.0}, f"beta must be [4.0], got {sorted(betas)}", errors)
+    _require(
+        thresholds == {0.75}, f"theta must be [0.75], got {sorted(thresholds)}", errors
+    )
+    _require(
+        repetitions == {1},
+        f"repetitions must be [1], got {sorted(repetitions)}",
+        errors,
+    )
+    _require(
+        len(cells) == 12, f"resolved cells must total 12, got {len(cells)}", errors
+    )
+    _require(
+        len(resolved_cells) == 12,
+        f"rho/b cells must be unique and total 12, got {len(resolved_cells)}",
+        errors,
+    )
+    total_episodes = sum(config.execution.repetitions for config in cells)
+    _require(
+        total_episodes == 12, f"total episodes must be 12, got {total_episodes}", errors
+    )
+
+    report = {
+        "contract": PERSISTENCE_EXPLORATORY_CONTRACT,
+        "status": "failed" if errors else "permitted",
+        "population_size": sorted(populations),
+        "rounds": sorted(rounds),
+        "q_values": sorted(q_values),
+        "L_values": sorted(depths),
+        "support_redundancy": sorted(redundancies),
+        "sensor_size": sorted(sensors),
+        "rho_values": sorted(persistence),
+        "b_values": sorted(budgets),
+        "target_semantics": ["false only"] if targets else [],
+        "receiver_dispositions": sorted(dispositions),
+        "evidence_strategies": sorted(strategies),
+        "message_modes": sorted(modes),
+        "beta": sorted(betas),
+        "theta": sorted(thresholds),
+        "schedule": sorted(schedules),
+        "number_of_frozen_tasks": len(tasks),
+        "repetitions": sorted(repetitions),
+        "structural_regimes": len(resolved_cells),
+        "resolved_regimes": [list(value) for value in sorted(resolved_cells)],
+        "total_cells": len(cells),
+        "total_episodes": total_episodes,
+        "matched_revised_theory_applicable": False,
+        "tasks": [task_audit] if task_audit else [],
+        "errors": errors,
+    }
+    if errors:
+        raise ValueError("Study preflight contract failed:\n- " + "\n- ".join(errors))
+    return report
+
+
 def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
     """Validate the optional cross-config contract without invoking an LLM."""
 
     contract = spec.preflight.get("contract")
     if contract is None:
         return {"contract": None, "status": "not_requested"}
+    if contract == PERSISTENCE_EXPLORATORY_CONTRACT:
+        return _validate_persistence_exploratory_contract(spec)
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 
@@ -414,6 +666,7 @@ def run_study_preflight(
         f"- L values: {design['L_values']}",
         f"- Support redundancy: {design['support_redundancy']}",
         f"- Sensor size q_c: {design['sensor_size']}",
+        *([f"- rho values: {design['rho_values']}"] if "rho_values" in design else []),
         f"- b values: {design['b_values']}",
         f"- Target semantics: {design['target_semantics']}",
         f"- Receiver dispositions: {design['receiver_dispositions']}",
@@ -422,7 +675,7 @@ def run_study_preflight(
         f"- beta: {design['beta']}",
         f"- theta: {design['theta']}",
         f"- Schedule: {design['schedule']}",
-        f"- Frozen tasks: {design['number_of_frozen_tasks']}",
+        f"- Frozen tasks: {design.get('number_of_frozen_tasks', design.get('frozen_tasks'))}",
         f"- Repetitions: {design['repetitions']}",
         f"- Structural regimes: {design['structural_regimes']} {design['resolved_regimes']}",
         f"- Total episodes: {design['total_episodes']}",
@@ -446,6 +699,7 @@ def run_study_preflight(
 
 __all__ = [
     "FALSE_TAKEOVER_CONTRACT",
+    "PERSISTENCE_EXPLORATORY_CONTRACT",
     "StudyPreflightResult",
     "run_study_preflight",
     "validate_study_preflight_contract",

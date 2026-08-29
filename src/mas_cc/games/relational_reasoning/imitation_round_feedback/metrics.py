@@ -20,10 +20,25 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from mas_cc.metrics import ActionSharePerOption, AgentCurrentValue, DominantValueShare, RoundView
+from mas_cc.metrics import (
+    ActionSharePerOption,
+    AgentCurrentValue,
+    DominantValueShare,
+    RoundView,
+)
 from mas_cc.metrics.base import MetricKey, StreamingMetric
 
 from .state import RelationalGameState
+
+
+def _fact_ids(agent: Any, attribute: str) -> tuple[str, ...]:
+    """Read a fact state while preserving old-state active-fact fallback."""
+
+    if attribute == "active_fact_ids" and hasattr(agent, "active_fact_ids"):
+        return tuple(str(item) for item in agent.active_fact_ids)
+    if attribute == "known_fact_ids" and hasattr(agent, "known_fact_ids"):
+        return tuple(str(item) for item in agent.known_fact_ids)
+    return tuple(str(item) for item in agent.attributes.get(attribute, ()))
 
 
 def supporting_fact_coverage(
@@ -38,9 +53,12 @@ def supporting_fact_coverage(
 
 
 def knowledge_observables(
-    agents: Sequence[Any], supporting_fact_ids: Sequence[str]
+    agents: Sequence[Any],
+    supporting_fact_ids: Sequence[str],
+    *,
+    fact_ids_attribute: str = "known_fact_ids",
 ) -> dict[str, Any]:
-    """Population-level knowledge state, from ``K_1..K_N`` alone.
+    """Population-level epistemic state from one fact-list attribute.
 
     ``full_proof_agent_share`` is the fraction of agents that could, in
     principle, derive the answer alone.  On a ``no_single_agent_solution`` task
@@ -51,14 +69,12 @@ def knowledge_observables(
     supporting = set(supporting_fact_ids)
     coverages = [
         supporting_fact_coverage(
-            tuple(str(item) for item in agent.attributes.get("known_fact_ids", ())),
+            _fact_ids(agent, fact_ids_attribute),
             supporting_fact_ids,
         )
         for agent in agents
     ]
-    total_known = sum(
-        len(tuple(agent.attributes.get("known_fact_ids", ()))) for agent in agents
-    )
+    total_known = sum(len(_fact_ids(agent, fact_ids_attribute)) for agent in agents)
     return {
         "mean_supporting_fact_coverage": (
             sum(coverages) / len(coverages) if coverages else 0.0
@@ -72,7 +88,7 @@ def knowledge_observables(
             sum(
                 1
                 for agent in agents
-                if fact_id in set(agent.attributes.get("known_fact_ids", ()))
+                if fact_id in set(_fact_ids(agent, fact_ids_attribute))
             )
             for fact_id in sorted(supporting)
         ],
@@ -85,6 +101,8 @@ def knowledge_strata(
     supporting_fact_ids: Sequence[str],
     correct_answer: str,
     votes: Mapping[str, str] | None = None,
+    *,
+    fact_ids_attribute: str = "known_fact_ids",
 ) -> dict[str, Any]:
     """Population split by *how much of the proof* each agent holds.
 
@@ -110,7 +128,7 @@ def knowledge_strata(
     counts = [0] * (depth + 1)
     correct = [0] * (depth + 1)
     for agent in agents:
-        known = set(str(item) for item in agent.attributes.get("known_fact_ids", ()))
+        known = set(_fact_ids(agent, fact_ids_attribute))
         k = len(known & supporting)
         counts[k] += 1
         vote = (
@@ -124,9 +142,7 @@ def knowledge_strata(
     result: dict[str, Any] = {}
     for k in range(depth + 1):
         result[f"knowledge_share_k{k}"] = counts[k] / total if total else 0.0
-        result[f"truth_share_k{k}"] = (
-            correct[k] / counts[k] if counts[k] else None
-        )
+        result[f"truth_share_k{k}"] = correct[k] / counts[k] if counts[k] else None
     result["knowledge_stratum_counts"] = counts
     result["truth_counts_by_stratum"] = correct
     return result
@@ -176,6 +192,8 @@ METRICS = [
     _SummaryMetric("controller_fact_exposures"),
     _SummaryMetric("new_peer_facts"),
     _SummaryMetric("new_controller_facts"),
+    _SummaryMetric("reactivated_peer_facts"),
+    _SummaryMetric("reactivated_controller_facts"),
 ]
 
 

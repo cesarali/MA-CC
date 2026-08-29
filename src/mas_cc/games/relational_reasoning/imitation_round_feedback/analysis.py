@@ -335,7 +335,9 @@ def read_relational_round_records(
     root: str | Path, *, epistemic_bins: int = DEFAULT_EPISTEMIC_BINS
 ) -> list[RoundEvent]:
     source = Path(root)
-    paths = [source] if source.is_file() else sorted(source.rglob("round_trajectory.jsonl"))
+    paths = (
+        [source] if source.is_file() else sorted(source.rglob("round_trajectory.jsonl"))
+    )
     if not paths:
         raise FileNotFoundError(f"no round_trajectory.jsonl files under {source}")
     rows: list[RoundEvent] = []
@@ -353,13 +355,13 @@ def read_relational_round_records(
                 )
             )
     if not rows:
-        raise ValueError(f"round trajectory files under {source} contain no round records")
+        raise ValueError(
+            f"round trajectory files under {source} contain no round records"
+        )
     return rows
 
 
-def _grouped(
-    rows: Sequence[RoundEvent], key: Any
-) -> dict[Hashable, list[RoundEvent]]:
+def _grouped(rows: Sequence[RoundEvent], key: Any) -> dict[Hashable, list[RoundEvent]]:
     result: dict[Hashable, list[RoundEvent]] = defaultdict(list)
     for row in rows:
         result[key(row)].append(row)
@@ -419,9 +421,7 @@ def epistemic_regime_summary(rows: Sequence[RoundEvent]) -> dict[str, Any]:
 
     def series(field: str) -> list[float]:
         return [
-            float(row.event[field])
-            for row in rows
-            if row.event.get(field) is not None
+            float(row.event[field]) for row in rows if row.event.get(field) is not None
         ]
 
     result: dict[str, Any] = {}
@@ -444,6 +444,24 @@ def epistemic_regime_summary(rows: Sequence[RoundEvent]) -> dict[str, Any]:
     result["mean_controller_fact_exposures"] = _mean(
         [row.event.get("controller_fact_exposures") for row in rows]
     )
+    result["historical_kappa_final"] = _mean(
+        [
+            row.event.get("historical_mean_supporting_fact_coverage_after")
+            for row in rows[-1:]
+        ]
+    )
+    result["historical_phi_final"] = _mean(
+        [row.event.get("historical_full_proof_agent_share_after") for row in rows[-1:]]
+    )
+    result["mean_reactivated_peer_facts"] = _mean(
+        [row.event.get("reactivated_peer_fact_count") for row in rows]
+    )
+    result["mean_reactivated_controller_facts"] = _mean(
+        [row.event.get("reactivated_controller_fact_count") for row in rows]
+    )
+    result["mean_persistence_deactivated_facts"] = _mean(
+        [row.event.get("persistence_deactivated_fact_count") for row in rows]
+    )
     return result
 
 
@@ -455,7 +473,10 @@ def _partition_identical(rows: Sequence[RoundEvent]) -> bool:
     """
 
     pairs = {
-        (row.event.get("conditioning_phi_bin"), row.event.get("conditioning_susceptible_bin"))
+        (
+            row.event.get("conditioning_phi_bin"),
+            row.event.get("conditioning_susceptible_bin"),
+        )
         for row in rows
     }
     forward = {phi for phi, _ in pairs}
@@ -795,6 +816,7 @@ def _theory_residual_bootstrap(
         differences.append(empirical - theoretical)
         if theoretical > TE_RATIO_FLOOR:
             ratios.append(empirical / theoretical)
+
     def interval(values: list[float], prefix: str) -> dict[str, float]:
         if not values:
             return {f"{prefix}_ci_low": math.nan, f"{prefix}_ci_high": math.nan}
@@ -802,6 +824,7 @@ def _theory_residual_bootstrap(
             f"{prefix}_ci_low": float(np.quantile(values, alpha)),
             f"{prefix}_ci_high": float(np.quantile(values, 1.0 - alpha)),
         }
+
     return {
         **interval(differences, "delta_te"),
         **interval(ratios, "te_ratio"),
@@ -860,7 +883,7 @@ def _interpretation(
 
 
 def _epistemic_interpretation(
-    estimates: Sequence[Mapping[str, Any]]
+    estimates: Sequence[Mapping[str, Any]],
 ) -> tuple[str, dict[str, float]]:
     """Cases D and E: does the channel survive conditioning on what agents know?
 
@@ -949,9 +972,7 @@ def matched_qvoter_comparison(
     identifiable = len(actions) > 1
 
     delta_te = empirical_te - theory_te
-    ratio = (
-        empirical_te / theory_te if theory_te > TE_RATIO_FLOOR else math.nan
-    )
+    ratio = empirical_te / theory_te if theory_te > TE_RATIO_FLOOR else math.nan
 
     self_te = math.nan
     if self_occupancy and len(eligible):
@@ -967,9 +988,7 @@ def matched_qvoter_comparison(
     calibration = _policy_calibration(curves)
 
     advocate_rounds = sum(1 for row in eligible if row.U_k == ADVOCATE_TARGET)
-    advocate_fraction = (
-        advocate_rounds / len(eligible) if eligible else math.nan
-    )
+    advocate_fraction = advocate_rounds / len(eligible) if eligible else math.nan
     theory_advocacy = float(occupancy @ reference.advocacy)
     mean_field_te = float(
         np.nansum(
@@ -988,9 +1007,7 @@ def matched_qvoter_comparison(
         **parameters.as_fields(),
         # --- A. empirical information channel, quoted from the MI table ----
         "empirical_target_cmi_bits": empirical_te,
-        "empirical_target_cmi_ci_low": float(
-            cmi_row.get("bootstrap_ci_low", math.nan)
-        ),
+        "empirical_target_cmi_ci_low": float(cmi_row.get("bootstrap_ci_low", math.nan)),
         "empirical_target_cmi_ci_high": float(
             cmi_row.get("bootstrap_ci_high", math.nan)
         ),
@@ -1040,9 +1057,7 @@ def matched_qvoter_comparison(
         "n_episodes": int(
             cmi_row.get("n_episodes", len({row.episode_id for row in eligible}))
         ),
-        "round_conditioning_state_count": cmi_row.get(
-            "round_conditioning_state_count"
-        ),
+        "round_conditioning_state_count": cmi_row.get("round_conditioning_state_count"),
         "round_singleton_fraction": cmi_row.get("round_singleton_fraction"),
         "round_dual_action_state_fraction": cmi_row.get(
             "round_dual_action_state_fraction"
@@ -1260,13 +1275,11 @@ def append_theory_report(
                 "Support:",
                 f"    dual-action-state fraction = "
                 f"{_number(row['round_dual_action_state_fraction'])}",
-                f"    singleton fraction = "
-                f"{_number(row['round_singleton_fraction'])}",
+                f"    singleton fraction = {_number(row['round_singleton_fraction'])}",
                 f"    overlap observation fraction = "
                 f"{_number(row['round_dual_action_event_fraction'])}",
                 f"    actions observed = {row['number_of_actions_observed']}",
-                f"    TE comparison identifiable = "
-                f"{row['te_comparison_identifiable']}",
+                f"    TE comparison identifiable = {row['te_comparison_identifiable']}",
                 "```",
                 "",
                 f"**{row['theory_interpretation']}** - "
@@ -1374,6 +1387,13 @@ def analyze_relational_imitation_round_feedback(
         )
 
     rounds = read_relational_round_records(run_dir, epistemic_bins=epistemic_bins)
+    finite_persistence = any(
+        float(row.event.get("epistemic_persistence", 1.0)) < 1.0 for row in rounds
+    )
+    if finite_persistence and theoretical_reference != "none":
+        raise ValueError(
+            "theoretical_reference must be 'none' for finite epistemic persistence"
+        )
     micro = read_relational_micro_events(run_dir)
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
@@ -1566,6 +1586,61 @@ def analyze_relational_imitation_round_feedback(
                 "kappa_after": row.event.get("mean_supporting_fact_coverage"),
                 "phi_before": row.event.get("phi_before"),
                 "phi_after": row.event.get("full_proof_agent_share"),
+                "epistemic_persistence": row.event.get("epistemic_persistence", 1.0),
+                "active_kappa_before": row.event.get(
+                    "active_mean_supporting_fact_coverage_before",
+                    row.event.get("mean_supporting_fact_coverage_before"),
+                ),
+                "active_kappa_after_interactions": row.event.get(
+                    "active_mean_supporting_fact_coverage_after_interactions",
+                    row.event.get("mean_supporting_fact_coverage"),
+                ),
+                "active_kappa_after": row.event.get(
+                    "active_mean_supporting_fact_coverage_after",
+                    row.event.get("mean_supporting_fact_coverage"),
+                ),
+                "active_phi_before": row.event.get(
+                    "active_full_proof_agent_share_before",
+                    row.event.get("full_proof_agent_share_before"),
+                ),
+                "active_phi_after_interactions": row.event.get(
+                    "active_full_proof_agent_share_after_interactions",
+                    row.event.get("full_proof_agent_share"),
+                ),
+                "active_phi_after": row.event.get(
+                    "active_full_proof_agent_share_after",
+                    row.event.get("full_proof_agent_share"),
+                ),
+                "historical_kappa_before": row.event.get(
+                    "historical_mean_supporting_fact_coverage_before",
+                    row.event.get("mean_supporting_fact_coverage_before"),
+                ),
+                "historical_kappa_after": row.event.get(
+                    "historical_mean_supporting_fact_coverage_after",
+                    row.event.get("mean_supporting_fact_coverage"),
+                ),
+                "historical_phi_before": row.event.get(
+                    "historical_full_proof_agent_share_before",
+                    row.event.get("full_proof_agent_share_before"),
+                ),
+                "historical_phi_after": row.event.get(
+                    "historical_full_proof_agent_share_after",
+                    row.event.get("full_proof_agent_share"),
+                ),
+                "new_peer_facts": row.event.get("new_peer_facts", 0),
+                "new_controller_facts": row.event.get("new_controller_facts", 0),
+                "reactivated_peer_facts": row.event.get(
+                    "reactivated_peer_fact_count", 0
+                ),
+                "reactivated_controller_facts": row.event.get(
+                    "reactivated_controller_fact_count", 0
+                ),
+                "persistence_deactivated_facts": row.event.get(
+                    "persistence_deactivated_fact_count", 0
+                ),
+                "persistence_deactivated_supporting_facts": row.event.get(
+                    "persistence_deactivated_supporting_fact_count", 0
+                ),
                 "susceptible_before": row.event.get("susceptible_before"),
                 "E_k": row.memory_state,
                 "epistemic_bin": row.epistemic_state,

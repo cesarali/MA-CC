@@ -70,24 +70,27 @@ The loader is `games/relational_reasoning/data.py`. See §9 for what it refuses.
 
 ## 2. Knowledge state
 
-Every agent carries two independent variables:
+Every agent carries three independent variables:
 
 ```text
-X_i(t)  the currently voted option label   -> agent.committed_action
-K_i(t)  the exact set of known fact ids    -> agent.known_fact_ids
+X_i(t)  the currently voted option label       -> agent.committed_action
+H_i(t)  every fact id ever received            -> agent.known_fact_ids
+K_i(t)  facts currently available to reasoning -> agent.active_fact_ids
 ```
 
-`X_i` moves whenever the agent votes. `K_i` moves **only** when another
-participant exposes a fact to *this* agent at an interaction it took part in.
-An agent may hold the complete proof and still vote wrongly; it may vote
-correctly knowing nothing. Nothing in the implementation derives one from the
-other.
+`X_i` moves whenever the agent votes. `H_i` grows when another participant
+exposes a new fact to *this* agent. `K_i` can also shrink at the end of a
+population round. Each active fact survives independently with probability
+`game.options.epistemic_persistence`, written as rho. The default is `1.0`,
+which exactly preserves the earlier behavior and consumes no persistence
+random numbers. A valid later exposure reactivates an inactive historical fact.
 
 The full ballot is `(X_i, R_i, S_i)`: vote, reason, and the one fact id the
 agent chose to expose. Only `X_i` and `S_i` are ever **rendered** — `R_i` is
 recorded for analysis and shown to nobody, not to peers and not back to its own
-author on a later turn (§4). `K_i` itself is private: it reaches that agent's
-own prompt and nowhere else.
+author on a later turn (§4). Active `K_i` is private: it reaches that agent's
+own prompt and nowhere else. Historical `H_i` remains available only for
+provenance and historical diagnostics.
 
 Every acquired fact also carries its provenance:
 

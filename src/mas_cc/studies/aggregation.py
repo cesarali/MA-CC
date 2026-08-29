@@ -2157,6 +2157,15 @@ def aggregate_study(
         }
     )
     events = _round_events_from_canonical(canonical["rounds"])
+    if theoretical_reference != "none" and any(
+        event.event.get("record_type") == "relational_imitation_round_feedback"
+        and float(event.event.get("epistemic_persistence", 1.0)) < 1.0
+        for event in events
+    ):
+        raise ValueError(
+            "analysis theoretical_reference must be none for finite epistemic "
+            "persistence"
+        )
     endpoint_recipe = recipe.get("episode_endpoints")
     episode_endpoints = pd.DataFrame()
     episode_endpoint_summary = pd.DataFrame()
@@ -2164,16 +2173,23 @@ def aggregate_study(
         if not isinstance(endpoint_recipe, Mapping):
             raise ValueError("analysis episode_endpoints must be a mapping")
         classifier = str(endpoint_recipe.get("classifier", ""))
-        if classifier != "relational_false_takeover_v1":
-            raise ValueError(
-                "unsupported episode endpoint classifier; expected "
-                "relational_false_takeover_v1"
-            )
-        from .episode_endpoints import relational_false_takeover_tables
+        if classifier not in {
+            "relational_false_takeover_v1",
+            "relational_persistence_exploratory_v1",
+        }:
+            raise ValueError("unsupported episode endpoint classifier")
+        if classifier == "relational_false_takeover_v1":
+            from .episode_endpoints import relational_false_takeover_tables
 
-        episode_endpoints, episode_endpoint_summary = relational_false_takeover_tables(
-            events, canonical["cells"]
-        )
+            episode_endpoints, episode_endpoint_summary = (
+                relational_false_takeover_tables(events, canonical["cells"])
+            )
+        else:
+            from .episode_endpoints import relational_persistence_tables
+
+            episode_endpoints, episode_endpoint_summary = relational_persistence_tables(
+                events, canonical["cells"]
+            )
         parquet_safe(episode_endpoints).to_parquet(
             tables_dir / "episode_endpoints.parquet", index=False, engine="pyarrow"
         )
@@ -2312,10 +2328,16 @@ def aggregate_study(
     plot_tables = {
         **canonical,
         "rounds": _attach_coordinates(canonical["rounds"], canonical["cells"]),
+        "episode_endpoints": episode_endpoints,
+        "episode_endpoint_summary": episode_endpoint_summary,
         **outputs,
     }
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
-    if not episode_endpoints.empty:
+    if (
+        not episode_endpoints.empty
+        and str((endpoint_recipe or {}).get("classifier", ""))
+        == "relational_false_takeover_v1"
+    ):
         plots.extend(
             _render_false_takeover_plots(
                 events,
@@ -2362,7 +2384,11 @@ def aggregate_study(
         ),
         encoding="utf-8",
     )
-    if not episode_endpoints.empty:
+    if (
+        not episode_endpoints.empty
+        and str((endpoint_recipe or {}).get("classifier", ""))
+        == "relational_false_takeover_v1"
+    ):
         from .episode_endpoints import false_takeover_markdown
 
         (reports / "false_takeover.md").write_text(

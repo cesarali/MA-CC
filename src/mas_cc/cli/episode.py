@@ -21,7 +21,10 @@ from mas_cc.config import RunConfig, load_run_config, resolved_config_yaml
 from mas_cc.control import create_control
 from mas_cc.experiments.console import format_episode_banner, format_money, print_banner
 from mas_cc.games import create_game, game_metrics
-from mas_cc.games.naming_convention import NamingConventionGame, run_naming_convention_game_sync
+from mas_cc.games.naming_convention import (
+    NamingConventionGame,
+    run_naming_convention_game_sync,
+)
 from mas_cc.llm_runtime.providers import (
     BudgetGuardedProvider,
     RuntimeBudgetGuard,
@@ -30,14 +33,20 @@ from mas_cc.llm_runtime.providers import (
 )
 from mas_cc.metrics import FinalMetric, StreamingMetric, plot_streaming_metrics
 from mas_cc.observability import DetailedAuditPolicy, RunRecorder, price_snapshot_hash
-from mas_cc.planning import GamePreflightEstimate, estimate_input_tokens, static_game_preflight
+from mas_cc.planning import (
+    GamePreflightEstimate,
+    estimate_input_tokens,
+    static_game_preflight,
+)
 from mas_cc.llm_runtime.prompts import PromptMarkdownLogger
 from mas_cc.storage import results_run_dir
 
 from .game import _budgets, _pricing_terms, _quote
 from .inspect import _write
 
-_DECISIONS_PER_INTERACTION = 2  # naming_convention is always a simultaneous pair decision
+_DECISIONS_PER_INTERACTION = (
+    2  # naming_convention is always a simultaneous pair decision
+)
 
 
 def _json(value: Any) -> str:
@@ -45,9 +54,13 @@ def _json(value: Any) -> str:
 
 
 def _destination(config: RunConfig, output_dir: str | Path | None) -> Path:
-    base = Path(output_dir) if output_dir is not None else Path(config.storage.output_dir)
+    base = (
+        Path(output_dir) if output_dir is not None else Path(config.storage.output_dir)
+    )
     run_id = f"{config.experiment.name}-{config.execution.seed}"
-    return results_run_dir(base, game=config.game.type, experiment=config.experiment.name, run_id=run_id)
+    return results_run_dir(
+        base, game=config.game.type, experiment=config.experiment.name, run_id=run_id
+    )
 
 
 def _load_naming_convention_game(config: RunConfig) -> NamingConventionGame:
@@ -59,7 +72,9 @@ def _load_naming_convention_game(config: RunConfig) -> NamingConventionGame:
     return game
 
 
-def run_game_preflight(config_path: str | Path, output_dir: str | Path | None = None) -> GamePreflightEstimate:
+def run_game_preflight(
+    config_path: str | Path, output_dir: str | Path | None = None
+) -> GamePreflightEstimate:
     """Zero-provider-I/O cost estimate for exactly one episode of this config."""
 
     source = Path(config_path).resolve()
@@ -69,9 +84,13 @@ def run_game_preflight(config_path: str | Path, output_dir: str | Path | None = 
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)
     estimate = static_game_preflight(
-        plan, config.prompt, config.llm_provider,
+        plan,
+        config.prompt,
+        config.llm_provider,
         assumed_output_tokens=config.llm_provider.max_output_tokens,
-        pricing_quote=quote, system_budget=system_budget, run_budget=run_budget,
+        pricing_quote=quote,
+        system_budget=system_budget,
+        run_budget=run_budget,
         explicit_override=config.pricing.explicit_unknown_price_override,
         allow_stale_pricing=not config.pricing.require_fresh_at_launch,
     )
@@ -121,17 +140,28 @@ class _EpisodeProgress:
             from tqdm.auto import tqdm
 
             self._round_bar = tqdm(
-                total=total_rounds, desc="Rounds", unit="round",
-                dynamic_ncols=True, position=0, mininterval=0.25,
+                total=total_rounds,
+                desc="Rounds",
+                unit="round",
+                dynamic_ncols=True,
+                position=0,
+                mininterval=0.25,
             )
             self._decision_bar = tqdm(
-                total=_DECISIONS_PER_INTERACTION, desc="Decisions", unit="decision",
-                dynamic_ncols=True, position=1, mininterval=0.25, leave=False,
+                total=_DECISIONS_PER_INTERACTION,
+                desc="Decisions",
+                unit="decision",
+                dynamic_ncols=True,
+                position=1,
+                mininterval=0.25,
+                leave=False,
             )
 
     def decision_tick(self, round_index: int, agent_id: Any) -> None:
         if self._decision_bar is not None:
-            self._decision_bar.set_postfix_str(f"round {round_index} | {agent_id}", refresh=False)
+            self._decision_bar.set_postfix_str(
+                f"round {round_index} | {agent_id}", refresh=False
+            )
             self._decision_bar.update(1)
 
     def round_tick(self, round_index: int) -> None:
@@ -169,8 +199,12 @@ class _EpisodeObserver:
     """
 
     def __init__(
-        self, recorder: RunRecorder, guard: RuntimeBudgetGuard, progress: _EpisodeProgress,
-        prompt_logger: PromptMarkdownLogger | None, prompt_example_rounds: int,
+        self,
+        recorder: RunRecorder,
+        guard: RuntimeBudgetGuard,
+        progress: _EpisodeProgress,
+        prompt_logger: PromptMarkdownLogger | None,
+        prompt_example_rounds: int,
         failure_logger: PromptMarkdownLogger,
     ) -> None:
         self.recorder = recorder
@@ -215,15 +249,21 @@ class _EpisodeObserver:
                 interaction_id=f"round_{round_index:03d}_attempt_{attempt}_{self._failure_count:03d}",
                 title=f"REJECTED — round {round_index}, attempt {attempt}, agent {agent_id}",
                 metadata={
-                    "round_index": round_index, "agent_id": str(agent_id), "attempt": attempt,
-                    "provider_error": None if provider_error is None else str(provider_error),
+                    "round_index": round_index,
+                    "agent_id": str(agent_id),
+                    "attempt": attempt,
+                    "provider_error": None
+                    if provider_error is None
+                    else str(provider_error),
                 },
                 response=payload.get("response"),
                 validation_error=payload.get("validation_error"),
             )
 
     def record_interaction(self, **payload: Any) -> None:
-        self.recorder.record_interaction(**payload, budget_status=self.guard.checkpoint_state())
+        self.recorder.record_interaction(
+            **payload, budget_status=self.guard.checkpoint_state()
+        )
         self.progress.round_tick(payload.get("round_index"))
 
     def record_trajectory(self, **payload: Any) -> None:
@@ -232,9 +272,19 @@ class _EpisodeObserver:
     def record_round_trajectory(self, **payload: Any) -> None:
         self.recorder.record_round_trajectory(**payload)
 
+    def record_round_boundary(self, **payload: Any) -> None:
+        self.recorder.record_round_boundary(
+            **payload, budget_status=self.guard.checkpoint_state()
+        )
 
-def _print_final_metrics(result: Any, metrics: tuple[Any, ...], to_round_view: Any) -> None:
-    views = tuple(to_round_view(interaction.transition.next_state) for interaction in result.interactions)
+
+def _print_final_metrics(
+    result: Any, metrics: tuple[Any, ...], to_round_view: Any
+) -> None:
+    views = tuple(
+        to_round_view(interaction.transition.next_state)
+        for interaction in result.interactions
+    )
     if not views:
         return
     print("Metrics:")
@@ -242,13 +292,20 @@ def _print_final_metrics(result: Any, metrics: tuple[Any, ...], to_round_view: A
         if isinstance(metric, StreamingMetric):
             for key, value in metric.compute_round(views[-1]).items():
                 label = "population" if key is None else str(key)
-                print(f"  {metric.name} [{label}]: {value:g}" if isinstance(value, (int, float)) else f"  {metric.name} [{label}]: {value}")
+                print(
+                    f"  {metric.name} [{label}]: {value:g}"
+                    if isinstance(value, (int, float))
+                    else f"  {metric.name} [{label}]: {value}"
+                )
         elif isinstance(metric, FinalMetric):
             print(f"  {metric.name}: {metric.compute_final(views)}")
 
 
 def run_game_episode(
-    config_path: str | Path, output_dir: str | Path | None = None, *, skip_preflight: bool = False,
+    config_path: str | Path,
+    output_dir: str | Path | None = None,
+    *,
+    skip_preflight: bool = False,
 ) -> bool:
     """Run exactly one episode of this config, config-driven, no other flags.
 
@@ -270,9 +327,13 @@ def run_game_episode(
     preflight: GamePreflightEstimate | None = None
     if not skip_preflight:
         preflight = static_game_preflight(
-            plan, config.prompt, config.llm_provider,
-            assumed_output_tokens=config.llm_provider.max_output_tokens, pricing_quote=quote,
-            system_budget=system_budget, run_budget=run_budget,
+            plan,
+            config.prompt,
+            config.llm_provider,
+            assumed_output_tokens=config.llm_provider.max_output_tokens,
+            pricing_quote=quote,
+            system_budget=system_budget,
+            run_budget=run_budget,
             explicit_override=config.pricing.explicit_unknown_price_override,
             allow_stale_pricing=not config.pricing.require_fresh_at_launch,
         )
@@ -282,7 +343,9 @@ def run_game_episode(
             )
     runtime_quote = _quote(config) if config.pricing.mode == "live" else quote
     if _pricing_terms(runtime_quote) != _pricing_terms(quote):
-        raise ValueError("live pricing changed during immediate pre-launch revalidation")
+        raise ValueError(
+            "live pricing changed during immediate pre-launch revalidation"
+        )
 
     destination = _destination(config, output_dir)
     # Written now, before any provider call, not after a successful finish —
@@ -290,59 +353,98 @@ def run_game_episode(
     # need the exact config that produced it, to replay or debug against.
     _write(destination / "resolved_config.yaml", resolved_config_yaml(config))
     budget_description = (
-        "unbounded" if run_budget.max_cost is None and system_budget.max_cost is None
-        else format_money(run_budget.max_cost if run_budget.max_cost is not None else system_budget.max_cost)
+        "unbounded"
+        if run_budget.max_cost is None and system_budget.max_cost is None
+        else format_money(
+            run_budget.max_cost
+            if run_budget.max_cost is not None
+            else system_budget.max_cost
+        )
     )
-    definition_hash = plan.decision_stages[0].representative_prompt.bound_prompt.definition_hash
+    definition_hash = plan.decision_stages[
+        0
+    ].representative_prompt.bound_prompt.definition_hash
     print_banner(
         format_episode_banner(
-            experiment_name=config.experiment.name, game_type=config.game.type,
-            game_version=game.spec.version, provider=config.llm_provider.type,
-            model=config.llm_provider.model, population_size=config.game.population_size,
-            horizon=config.game.horizon, prompt_family=config.prompt.prompt_family,
-            prompt_version=config.prompt.prompt_version, prompt_definition_hash=definition_hash,
+            experiment_name=config.experiment.name,
+            game_type=config.game.type,
+            game_version=game.spec.version,
+            provider=config.llm_provider.type,
+            model=config.llm_provider.model,
+            population_size=config.game.population_size,
+            horizon=config.game.horizon,
+            prompt_family=config.prompt.prompt_family,
+            prompt_version=config.prompt.prompt_version,
+            prompt_definition_hash=definition_hash,
             budget_description=budget_description,
             preflight_expected_cost=(
-                "skipped" if preflight is None else format_money(preflight.costs.expected)
+                "skipped"
+                if preflight is None
+                else format_money(preflight.costs.expected)
             ),
             preflight_conservative_cost=(
-                "skipped" if preflight is None else format_money(preflight.costs.conservative)
+                "skipped"
+                if preflight is None
+                else format_money(preflight.costs.conservative)
             ),
-            preflight_status="skipped (--no-preflight)" if preflight is None else preflight.launch_status,
+            preflight_status="skipped (--no-preflight)"
+            if preflight is None
+            else preflight.launch_status,
             output_dir=str(destination),
         )
     )
-    policy = DetailedAuditPolicy.from_mapping(config.logging.options.get("detailed_prompt_audit"))
+    policy = DetailedAuditPolicy.from_mapping(
+        config.logging.options.get("detailed_prompt_audit")
+    )
     metrics, to_round_view = game_metrics(game)
     recorder = RunRecorder(
-        destination, run_id=f"{config.experiment.name}-{config.execution.seed}",
-        resolved_config=config.to_dict(), policy=policy, comet_enabled=config.logging.comet,
+        destination,
+        run_id=f"{config.experiment.name}-{config.execution.seed}",
+        resolved_config=config.to_dict(),
+        policy=policy,
+        comet_enabled=config.logging.comet,
         project_name=str(config.logging.options.get("comet_project", "mas-cc")),
         checkpoint_enabled=config.storage.checkpoints,
         price_snapshot_hash=price_snapshot_hash(runtime_quote.to_dict()),
-        metrics=metrics, to_round_view=to_round_view,
-        comet_metric_export=config.metrics.comet_export_names() if config.metrics.enabled else (),
+        metrics=metrics,
+        to_round_view=to_round_view,
+        comet_metric_export=config.metrics.comet_export_names()
+        if config.metrics.enabled
+        else (),
         binning=config.metrics.binning_policy(config.game.population_size),
     )
     guard = RuntimeBudgetGuard(resolve_budget_limits(system_budget, run_budget))
     provider = create_llm_provider(config.llm_provider)
     guarded = BudgetGuardedProvider(
-        provider, guard, runtime_quote.pricing,
-        input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
+        provider,
+        guard,
+        runtime_quote.pricing,
+        input_token_estimator=estimate_input_tokens,
+        input_token_multiplier=1.0,
     )
 
     show_progress = bool(config.logging.options.get("progress", True))
     show_metrics = bool(config.logging.options.get("show_metrics", False))
-    example_count = int(dict(config.logging.options.get("prompt_examples", {}) or {}).get("count", 0))
+    example_count = int(
+        dict(config.logging.options.get("prompt_examples", {}) or {}).get("count", 0)
+    )
 
     progress = _EpisodeProgress(total_rounds=config.game.horizon, show=show_progress)
-    prompt_logger = PromptMarkdownLogger(destination / "prompts", overwrite=True) if example_count > 0 else None
+    prompt_logger = (
+        PromptMarkdownLogger(destination / "prompts", overwrite=True)
+        if example_count > 0
+        else None
+    )
     failure_logger = PromptMarkdownLogger(destination / "failures", overwrite=True)
-    observer = _EpisodeObserver(recorder, guard, progress, prompt_logger, example_count, failure_logger)
+    observer = _EpisodeObserver(
+        recorder, guard, progress, prompt_logger, example_count, failure_logger
+    )
     control = create_control(config.control)
 
     try:
-        result = run_naming_convention_game_sync(game, config, guarded, observer=observer, control=control)
+        result = run_naming_convention_game_sync(
+            game, config, guarded, observer=observer, control=control
+        )
     except Exception as exc:
         recorder.event("run_failed", error_type=type(exc).__name__, error=str(exc))
         recorder.finalize(status="failed", budget_status=guard.checkpoint_state())
@@ -356,14 +458,18 @@ def run_game_episode(
         guarded.close()
         progress.close()
 
-    summary = recorder.finalize(status="completed", budget_status=guard.checkpoint_state())
+    summary = recorder.finalize(
+        status="completed", budget_status=guard.checkpoint_state()
+    )
 
     if show_metrics and metrics and to_round_view is not None:
         _print_final_metrics(result, metrics, to_round_view)
 
     plotted: list[Path] = []
     if metrics:
-        plotted = plot_streaming_metrics(destination / "metrics" / "streaming.csv", destination / "metrics" / "plots")
+        plotted = plot_streaming_metrics(
+            destination / "metrics" / "streaming.csv", destination / "metrics" / "plots"
+        )
 
     print(
         f"Episode complete: {len(result.interactions)} interactions, "
@@ -371,13 +477,19 @@ def run_game_episode(
     )
     print(f"Output: {destination}")
     if example_count > 0:
-        print(f"Prompt examples ({len(observer._logged_rounds)}): {destination / 'prompts'}")
+        print(
+            f"Prompt examples ({len(observer._logged_rounds)}): {destination / 'prompts'}"
+        )
     if observer._failure_count:
-        print(f"Rejected response(s) ({observer._failure_count}): {destination / 'failures'}")
+        print(
+            f"Rejected response(s) ({observer._failure_count}): {destination / 'failures'}"
+        )
     if plotted:
         print(f"Metric plots ({len(plotted)}): {destination / 'metrics' / 'plots'}")
     comet_names = config.metrics.comet_export_names() if config.metrics.enabled else ()
     if comet_names:
-        print(f"Metrics exported to Comet ({len(comet_names)}): {', '.join(comet_names)}")
+        print(
+            f"Metrics exported to Comet ({len(comet_names)}): {', '.join(comet_names)}"
+        )
     print(f"Comet: {summary['comet']['status']}")
     return True

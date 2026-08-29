@@ -37,7 +37,12 @@ from mas_cc.control import InteractionControlSignal
 from mas_cc.core import AgentId, InteractionId, Seed
 from mas_cc.games.protocols import Action, DecisionRequest, Game, GameSpec, Observation
 from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
-from mas_cc.planning import DecisionStagePlan, GameCallPlan, InteractionCount, PromptScenario
+from mas_cc.planning import (
+    DecisionStagePlan,
+    GameCallPlan,
+    InteractionCount,
+    PromptScenario,
+)
 
 from ...hidden_bench.imitation.metrics import population_observables
 from ..data import RelationalTask, load_relational_task
@@ -52,6 +57,7 @@ from .prompts import (
     shuffled_option_letters,
 )
 from .state import (
+    ACTIVE_FACT_IDS,
     CONTROLLER_SOURCE,
     FOCAL_UPDATE,
     GAME_TYPE,
@@ -63,6 +69,7 @@ from .state import (
     RelationalRoundRecord,
     RelationalRules,
     RelationalTransition,
+    reasoning_fact_ids,
 )
 
 BALLOT_STAGES = (INITIAL_VOTE, FOCAL_UPDATE)
@@ -122,6 +129,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                     memory=(),
                     attributes={
                         "known_fact_ids": list(known),
+                        "active_fact_ids": list(known),
                         "initial_fact_ids": list(known),
                         "fact_provenance": {
                             fact_id: {
@@ -173,10 +181,14 @@ class RelationalImitationRoundFeedbackGame(Game):
         elif rules.initialization_mode == "local_vote":
             return None
         else:
-            distribution = rules.initial_distribution or {option: 1.0 for option in options}
+            distribution = rules.initial_distribution or {
+                option: 1.0 for option in options
+            }
             unknown = sorted(set(distribution) - set(options))
             if unknown:
-                raise ValueError(f"initial_distribution contains unknown options: {unknown}")
+                raise ValueError(
+                    f"initial_distribution contains unknown options: {unknown}"
+                )
             labels = list(options)
             weights = [float(distribution.get(option, 0.0)) for option in labels]
             rng = root.derive("relational-provider-free-initialization").create_random()
@@ -202,9 +214,11 @@ class RelationalImitationRoundFeedbackGame(Game):
         same decision - a retry must not silently change what "B" means.
         """
 
-        stream = Seed(int(state.data["seed"])).derive(
-            f"relational-option-order:{stage}:{focal}:{state.turn}"
-        ).create_random()
+        stream = (
+            Seed(int(state.data["seed"]))
+            .derive(f"relational-option-order:{stage}:{focal}:{state.turn}")
+            .create_random()
+        )
         return shuffled_option_letters(state.possible_answers, stream)
 
     def _citable_fact_ids(
@@ -212,8 +226,8 @@ class RelationalImitationRoundFeedbackGame(Game):
     ) -> tuple[str, ...]:
         """``K_i(t)`` in the task's own fact order - what the agent may share."""
 
-        known = set(agent.known_fact_ids)
-        return tuple(fact_id for fact_id in state.fact_ids if fact_id in known)
+        active = set(reasoning_fact_ids(agent, state.epistemic_persistence))
+        return tuple(fact_id for fact_id in state.fact_ids if fact_id in active)
 
     def _known_fact_lines(
         self, state: RelationalGameState, agent: RelationalAgentState
@@ -239,7 +253,9 @@ class RelationalImitationRoundFeedbackGame(Game):
 
         rules = self.rules(config)
         agent = state.relational_agent(focal)
-        resolved_id = interaction_id or InteractionId(f"interaction-{state.turn + 1:04d}")
+        resolved_id = interaction_id or InteractionId(
+            f"interaction-{state.turn + 1:04d}"
+        )
         shared_before = agent.public_shared_fact_id
         letters = self.option_letters(state, focal, stage=stage)
         observation = Observation(
@@ -254,6 +270,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 # `K_i` alone: an audit record must never become the channel
                 # that leaks the information whose spread is being measured.
                 "known_fact_ids": list(agent.known_fact_ids),
+                "active_fact_ids": list(
+                    reasoning_fact_ids(agent, rules.epistemic_persistence)
+                ),
                 "current_vote": agent.committed_action,
                 # Recorded, not rendered: the prompt shows this agent only its
                 # vote.  These two are here so an audit row still describes the
@@ -282,7 +301,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
                 social_distrust=config.options.get(
                     "social_distrust",
-                    True if "receiver_epistemic_disposition" not in config.options else None,
+                    True
+                    if "receiver_epistemic_disposition" not in config.options
+                    else None,
                 ),
                 # A focal update has a social context even when occlusion left
                 # nothing in it; an initial vote does not.
@@ -352,7 +373,9 @@ class RelationalImitationRoundFeedbackGame(Game):
         """
 
         visible = request.observation.visible_state
-        letters = {str(key): str(value) for key, value in visible["option_letters"].items()}
+        letters = {
+            str(key): str(value) for key, value in visible["option_letters"].items()
+        }
         # `parse_relational_ballot` resolves a letter against the letter
         # alphabet, and also accepts the relation name spelled out - which is
         # already semantic and needs no translation.
@@ -362,7 +385,9 @@ class RelationalImitationRoundFeedbackGame(Game):
             request.agent_id,
             vote
             if vote is not None
-            else (str(ballot.raw_vote) if ballot.raw_vote is not None else "<unparsed>"),
+            else (
+                str(ballot.raw_vote) if ballot.raw_vote is not None else "<unparsed>"
+            ),
             request.stage,
             {
                 "kind": "relational_ballot",
@@ -397,11 +422,17 @@ class RelationalImitationRoundFeedbackGame(Game):
 
         issues: list[ValidationIssue] = []
         if action.agent_id != request.agent_id:
-            issues.append(ValidationIssue("action.agent_id", "must match request agent"))
-        if not action.metadata.get("resolved") or action.value not in state.possible_answers:
+            issues.append(
+                ValidationIssue("action.agent_id", "must match request agent")
+            )
+        if (
+            not action.metadata.get("resolved")
+            or action.value not in state.possible_answers
+        ):
             issues.append(
                 ValidationIssue(
-                    "action.value", f"must resolve to one of {list(state.possible_answers)}"
+                    "action.value",
+                    f"must resolve to one of {list(state.possible_answers)}",
                 )
             )
         reason = action.metadata.get("reason")
@@ -410,7 +441,8 @@ class RelationalImitationRoundFeedbackGame(Game):
         elif len(reason.strip()) > MAX_REASON_CHARACTERS:
             issues.append(
                 ValidationIssue(
-                    "action.reason", f"must be at most {MAX_REASON_CHARACTERS} characters"
+                    "action.reason",
+                    f"must be at most {MAX_REASON_CHARACTERS} characters",
                 )
             )
         if not action.metadata.get("shared_fact_present"):
@@ -422,13 +454,18 @@ class RelationalImitationRoundFeedbackGame(Game):
             )
         shared = action.metadata.get("shared_fact_id")
         if shared is not None:
-            known = set(state.relational_agent(request.agent_id).known_fact_ids)
-            if str(shared) not in known:
+            active = set(
+                reasoning_fact_ids(
+                    state.relational_agent(request.agent_id),
+                    self.rules(config).epistemic_persistence,
+                )
+            )
+            if str(shared) not in active:
                 issues.append(
                     ValidationIssue(
                         "action.shared_fact_id",
-                        f"{shared!r} is not among the facts this agent knows "
-                        f"({sorted(known) or 'none'})",
+                        f"{shared!r} is not among this agent's active facts "
+                        f"({sorted(active) or 'none'})",
                         shared,
                     )
                 )
@@ -442,7 +479,9 @@ class RelationalImitationRoundFeedbackGame(Game):
         """Commit the first ballots.  No fact moves: nobody has seen anyone yet."""
 
         if len(actions) != len(state.agents):
-            raise ValueError("initialization requires one local vote per population agent")
+            raise ValueError(
+                "initialization requires one local vote per population agent"
+            )
         by_agent = {action.agent_id: action for action in actions}
         agents = []
         votes: list[str] = []
@@ -509,7 +548,9 @@ class RelationalImitationRoundFeedbackGame(Game):
 
         rules = self.rules(config)
         if action.value not in state.possible_answers:
-            raise ValueError("focal transition destination is outside the task option alphabet")
+            raise ValueError(
+                "focal transition destination is outside the task option alphabet"
+            )
         options = state.possible_answers
         before = [str(agent.committed_action) for agent in state.agents]
         focal_index = next(
@@ -518,6 +559,7 @@ class RelationalImitationRoundFeedbackGame(Game):
         before_focal = before[focal_index]
         focal_agent = state.relational_agent(focal)
         known_before = focal_agent.known_fact_ids
+        active_before = reasoning_fact_ids(focal_agent, rules.epistemic_persistence)
 
         exposures = self._exposures(social_sources)
         peer_exposed = tuple(fact for fact, kind, _ in exposures if kind == PEER_SOURCE)
@@ -525,8 +567,11 @@ class RelationalImitationRoundFeedbackGame(Game):
             fact for fact, kind, _ in exposures if kind == CONTROLLER_SOURCE
         )
         known_set = set(known_before)
+        active_set = set(active_before)
         new_peer: list[str] = []
         new_controller: list[str] = []
+        reactivated_peer: list[str] = []
+        reactivated_controller: list[str] = []
         provenance = dict(focal_agent.fact_provenance)
         round_index = None if round_fields is None else round_fields.get("round_index")
         within_round_index = (
@@ -537,8 +582,16 @@ class RelationalImitationRoundFeedbackGame(Game):
         # one that owns the provenance entry.
         for fact_id, kind, source_id in exposures:
             if fact_id in known_set:
+                if fact_id not in active_set:
+                    active_set.add(fact_id)
+                    (
+                        reactivated_controller
+                        if kind == CONTROLLER_SOURCE
+                        else reactivated_peer
+                    ).append(fact_id)
                 continue
             known_set.add(fact_id)
+            active_set.add(fact_id)
             (new_controller if kind == CONTROLLER_SOURCE else new_peer).append(fact_id)
             provenance[fact_id] = {
                 "source": kind,
@@ -548,15 +601,16 @@ class RelationalImitationRoundFeedbackGame(Game):
             }
         order = state.fact_ids
         known_after = tuple(fact_id for fact_id in order if fact_id in known_set)
+        active_after = tuple(fact_id for fact_id in order if fact_id in active_set)
 
         shared_after = action.metadata.get("shared_fact_id")
         shared_after = None if shared_after is None else str(shared_after)
-        if shared_after is not None and shared_after not in set(known_before):
+        if shared_after is not None and shared_after not in set(active_before):
             # Belt and braces: `validate_action` already rejects this, and the
             # runtime never hand-builds an action.  Reaching here would mean an
             # agent published evidence it never held.
             raise ValueError(
-                f"agent {focal} cannot share fact {shared_after!r}: it is not in K_i(t)"
+                f"agent {focal} cannot share fact {shared_after!r}: it is not active"
             )
 
         agents = list(state.agents)
@@ -568,6 +622,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "public_reason": action.metadata.get("reason"),
                 "public_shared_fact_id": shared_after,
                 "known_fact_ids": list(known_after),
+                ACTIVE_FACT_IDS: list(active_after),
                 "fact_provenance": provenance,
             },
             memory=(
@@ -595,8 +650,14 @@ class RelationalImitationRoundFeedbackGame(Game):
         before_obs = population_observables(
             before, options, state.correct_answer, analysis_target
         )
-        after_obs = population_observables(after, options, state.correct_answer, analysis_target)
-        knowledge_after = knowledge_observables(agents, state.supporting_fact_ids)
+        after_obs = population_observables(
+            after, options, state.correct_answer, analysis_target
+        )
+        knowledge_after = knowledge_observables(
+            agents,
+            state.supporting_fact_ids,
+            fact_ids_attribute=ACTIVE_FACT_IDS,
+        )
         truth_increment = int(action.value == state.correct_answer) - int(
             before_focal == state.correct_answer
         )
@@ -636,19 +697,31 @@ class RelationalImitationRoundFeedbackGame(Game):
             # --- knowledge state (§16) -------------------------------------
             "focal_known_fact_ids_before": list(known_before),
             "focal_known_fact_ids_after": list(known_after),
+            "focal_active_fact_ids_before": list(active_before),
+            "focal_active_fact_ids_after": list(active_after),
             "peer_exposed_fact_ids": list(peer_exposed),
             "controller_fact_id": controller_exposed[0] if controller_exposed else None,
             "new_peer_fact_ids": list(new_peer),
             "new_controller_fact_ids": list(new_controller),
+            "reactivated_peer_fact_ids": list(reactivated_peer),
+            "reactivated_controller_fact_ids": list(reactivated_controller),
             "peer_fact_exposures": len(peer_exposed),
             "controller_fact_exposures": len(controller_exposed),
             "new_peer_facts": len(new_peer),
             "new_controller_facts": len(new_controller),
+            "reactivated_peer_facts": len(reactivated_peer),
+            "reactivated_controller_facts": len(reactivated_controller),
             "focal_supporting_fact_coverage_before": _coverage(
                 known_before, state.supporting_fact_ids
             ),
             "focal_supporting_fact_coverage_after": _coverage(
                 known_after, state.supporting_fact_ids
+            ),
+            "focal_active_supporting_fact_coverage_before": _coverage(
+                active_before, state.supporting_fact_ids
+            ),
+            "focal_active_supporting_fact_coverage_after": _coverage(
+                active_after, state.supporting_fact_ids
             ),
             # --- controller ------------------------------------------------
             "controller_enabled": signal is not None,
@@ -656,7 +729,9 @@ class RelationalImitationRoundFeedbackGame(Game):
             "controller_target": target,
             "analysis_target": analysis_target,
             "controller_message": None if signal is None else signal.message,
-            "controller_policy": None if signal is None else signal.metadata.get("policy"),
+            "controller_policy": None
+            if signal is None
+            else signal.metadata.get("policy"),
             "controller_threshold": (
                 None if signal is None else signal.metadata.get("threshold")
             ),
@@ -706,7 +781,9 @@ class RelationalImitationRoundFeedbackGame(Game):
             "truth_switch_toward": truth_increment == 1,
             "truth_switch_away": truth_increment == -1,
             "truth_vote_share": after_obs["p_truth"],
-            "mean_supporting_fact_coverage": knowledge_after["mean_supporting_fact_coverage"],
+            "mean_supporting_fact_coverage": knowledge_after[
+                "mean_supporting_fact_coverage"
+            ],
             "full_proof_agent_share": knowledge_after["full_proof_agent_share"],
             "possible_answers": list(options),
             "correct_answer": state.correct_answer,
@@ -774,7 +851,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 if str(source.get("source_type")) == "control"
                 else PEER_SOURCE
             )
-            source_id = None if kind == CONTROLLER_SOURCE else str(source.get("source_id"))
+            source_id = (
+                None if kind == CONTROLLER_SOURCE else str(source.get("source_id"))
+            )
             found.append((str(fact_id), kind, source_id))
         return tuple(found)
 

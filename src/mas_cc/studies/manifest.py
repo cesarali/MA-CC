@@ -10,6 +10,9 @@ import yaml
 
 
 _RESERVED = frozenset({"study.yaml", "analysis.yaml"})
+_PREFLIGHT_CONTRACTS = frozenset(
+    {"relational_false_takeover_v1", "relational_persistence_exploratory_v1"}
+)
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
@@ -141,10 +144,10 @@ def discover_study(config_dir: str | Path) -> StudySpec:
 
     preflight = dict(_mapping(raw.get("preflight"), "preflight"))
     contract = preflight.get("contract")
-    if contract is not None and contract != "relational_false_takeover_v1":
+    if contract is not None and contract not in _PREFLIGHT_CONTRACTS:
         raise ValueError(
-            "unsupported study preflight.contract; expected "
-            "'relational_false_takeover_v1'"
+            "unsupported study preflight.contract; expected one of "
+            + ", ".join(sorted(_PREFLIGHT_CONTRACTS))
         )
 
     return StudySpec(
