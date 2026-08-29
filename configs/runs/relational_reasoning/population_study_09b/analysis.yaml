@@ -1,0 +1,35 @@
+theoretical_reference: none
+
+# Empirical diagnostics only. The revised single-affinity theory is q=1 and is
+# not treated as exact matched theory for q=2 or q=3.
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_target_actuation_cmi
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - episode_current
+  - cell_current
+
+resampling:
+  bootstrap_resamples: 0
+  null_permutations: 0
+  confidence: 0.95
+  seed: 20260829
+
+derived: []
+
+episode_endpoints:
+  classifier: relational_false_takeover_v1
+
+# The endpoint stage renders the three preregistered plots directly so every
+# individual episode remains visible. No broad figure suite is requested.
+plots: {}

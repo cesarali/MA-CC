@@ -202,6 +202,11 @@ def build_parser() -> argparse.ArgumentParser:
         "study", help="submit and aggregate a folder of ordinary experiment configs"
     )
     study_commands = study.add_subparsers(dest="study_command", required=True)
+    study_preflight = study_commands.add_parser(
+        "preflight", help="validate every config and the optional strict study contract"
+    )
+    study_preflight.add_argument("--config-dir", type=Path, required=True)
+    study_preflight.add_argument("--output-dir", type=Path, required=True)
     study_submit = study_commands.add_parser(
         "submit", help="preflight every config and submit one SLURM config array"
     )
@@ -695,6 +700,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if summary.get("archive"):
             print(f"  archive: {summary['archive']}")
+        return 0
+    if args.command == "study" and args.study_command == "preflight":
+        from mas_cc.studies import run_study_preflight
+
+        try:
+            result = run_study_preflight(args.config_dir, args.output_dir)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        design = result.design
+        print(f"Study preflight permitted: {result.config_dir}")
+        print(
+            f"  {design['total_cells']} cells, {design['total_episodes']} episodes, "
+            f"{design['provider_calls']['lower']} nominal provider calls"
+        )
+        print(f"  Report: {result.output_dir / 'report.md'}")
         return 0
     if args.command == "study" and args.study_command == "submit":
         from mas_cc.studies import submit_study
