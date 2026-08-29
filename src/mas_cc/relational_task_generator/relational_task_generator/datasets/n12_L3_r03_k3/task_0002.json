@@ -1,0 +1,209 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0002",
+  "seed": 11511988360119458157,
+  "generation": {
+    "dataset_seed": 20260829,
+    "task_index": 2,
+    "population_size": 12,
+    "reasoning_depth": 3,
+    "support_redundancy": 3,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 0,
+          "y": 2
+        }
+      },
+      {
+        "name": "Garo",
+        "coordinates": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Peni",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Davi",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Vero",
+        "relation": "NORTHWEST",
+        "object": "Garo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Garo",
+        "relation": "NORTH",
+        "object": "Peni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Peni",
+        "relation": "EAST",
+        "object": "Zani",
+        "role": "supporting"
+      },
+      {
+        "id": "f4",
+        "subject": "Mira",
+        "relation": "EAST",
+        "object": "Davi",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Davi",
+        "relation": "NORTHWEST",
+        "object": "Pelo",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Vero",
+    "reference": "Zani",
+    "reasoning_depth": 3,
+    "supporting_fact_ids": [
+      "f1",
+      "f2",
+      "f3"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTH"
+      },
+      {
+        "label": "B",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "C",
+        "relation": "SOUTHEAST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Vero relative to Zani?",
+    "facts": {
+      "f1": "Vero is northwest of Garo.",
+      "f2": "Garo is north of Peni.",
+      "f3": "Peni is east of Zani.",
+      "f4": "Mira is east of Davi.",
+      "f5": "Davi is northwest of Pelo."
+    },
+    "reasoning_chain": [
+      "Vero is northwest of Garo.",
+      "Garo is north of Peni.",
+      "Peni is east of Zani."
+    ]
+  }
+}
