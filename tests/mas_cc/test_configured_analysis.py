@@ -53,7 +53,9 @@ def test_configured_hidden_bench_analysis_forwards_every_setting(tmp_path, monke
     )
 
 
-def test_comet_export_is_off_when_the_logging_master_switch_is_off(tmp_path, monkeypatch):
+def test_comet_export_is_off_when_the_logging_master_switch_is_off(
+    tmp_path, monkeypatch
+):
     captured = {}
 
     def fake_analyze(run_dir, output_dir, **kwargs):
@@ -78,7 +80,9 @@ def test_disabled_configured_analysis_is_a_noop(tmp_path):
     assert run_configured_analysis(config, tmp_path) is None
 
 
-def test_configured_analysis_rejects_unknown_statistics_before_reading_results(tmp_path):
+def test_configured_analysis_rejects_unknown_statistics_before_reading_results(
+    tmp_path,
+):
     config = _config()
     config = replace(config, analysis=replace(config.analysis, estimators=("typo_mi",)))
     with pytest.raises(ValueError, match="unsupported.*typo_mi"):
@@ -102,21 +106,60 @@ def test_relational_theoretical_reference_is_validated_before_launch():
             options={**dict(config.analysis.options), "theoretical_reference": "typo"},
         ),
     )
-    with pytest.raises(ValueError, match="theoretical_reference.*single_affinity_revised"):
+    with pytest.raises(
+        ValueError, match="theoretical_reference.*single_affinity_revised"
+    ):
         validate_configured_analysis(invalid)
 
 
-def test_cell_analysis_keeps_only_parameter_named_markdown_reports(tmp_path, monkeypatch):
+def test_persistence_analysis_requires_no_theoretical_reference():
+    spec = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/population_study_03/"
+        "relational_population_study03_g_stochastic_feedback_pilot_mock.yaml",
+        environment={},
+    )
+    config = spec.base if isinstance(spec, GridSpec) else spec
+    persistent = replace(
+        config,
+        game=replace(
+            config.game,
+            options={**dict(config.game.options), "epistemic_persistence": 0.9},
+        ),
+    )
+
+    with pytest.raises(ValueError, match="theoretical_reference must be 'none'"):
+        validate_configured_analysis(persistent)
+
+    no_theory = replace(
+        persistent,
+        analysis=replace(
+            persistent.analysis,
+            options={
+                **dict(persistent.analysis.options),
+                "theoretical_reference": "none",
+            },
+        ),
+    )
+    validate_configured_analysis(no_theory)
+
+
+def test_cell_analysis_keeps_only_parameter_named_markdown_reports(
+    tmp_path, monkeypatch
+):
     captured = {}
 
     def fake_analyze(run_dir, output_dir, **kwargs):
         captured.update(run_dir=Path(run_dir), output_dir=Path(output_dir), **kwargs)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        (Path(output_dir) / "information_estimates.md").write_text("# MI\n", encoding="utf-8")
+        (Path(output_dir) / "information_estimates.md").write_text(
+            "# MI\n", encoding="utf-8"
+        )
         (Path(output_dir) / "truth_current_estimates.md").write_text(
             "# Truth current\n", encoding="utf-8"
         )
-        (Path(output_dir) / "large_intermediate.csv").write_text("discarded\n", encoding="utf-8")
+        (Path(output_dir) / "large_intermediate.csv").write_text(
+            "discarded\n", encoding="utf-8"
+        )
         return {"n_events": 20}
 
     monkeypatch.setattr(
@@ -148,7 +191,9 @@ def test_cell_analysis_keeps_only_parameter_named_markdown_reports(tmp_path, mon
     assert summary is not None
     assert summary["cell_report_slug"] == suffix
     assert (reports / f"information_estimates__{suffix}.md").read_text() == "# MI\n"
-    assert (reports / f"truth_current_estimates__{suffix}.md").read_text() == "# Truth current\n"
+    assert (
+        reports / f"truth_current_estimates__{suffix}.md"
+    ).read_text() == "# Truth current\n"
     assert set(path.name for path in reports.iterdir()) == {
         f"information_estimates__{suffix}.md",
         f"truth_current_estimates__{suffix}.md",

@@ -16,7 +16,9 @@ from mas_cc.planning import static_experiment_preflight, static_grid_preflight
 
 
 def _toy_config(**execution_overrides) -> RunConfig:
-    config = load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={})
+    config = load_run_config(
+        "configs/runs/old/toy_game_smoke_test.yaml", environment={}
+    )
     return replace(config, execution=replace(config.execution, **execution_overrides))
 
 
@@ -25,15 +27,24 @@ def _with_ample_budget(config: RunConfig) -> RunConfig:
         config,
         budget=replace(
             config.budget,
-            max_provider_requests=10_000, max_input_tokens=10_000_000,
-            max_output_tokens=10_000, max_cost_per_run=100.0, system_max_cost_per_run=100.0,
+            max_provider_requests=10_000,
+            max_input_tokens=10_000_000,
+            max_output_tokens=10_000,
+            max_cost_per_run=100.0,
+            system_max_cost_per_run=100.0,
         ),
     )
 
 
 def test_grid_spec_expands_the_cartesian_product_in_stable_order():
     base = _toy_config()
-    grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3)), GridAxis("llm_provider.temperature", (0.0, 0.5))))
+    grid = GridSpec(
+        base=base,
+        axes=(
+            GridAxis("game.horizon", (2, 3)),
+            GridAxis("llm_provider.temperature", (0.0, 0.5)),
+        ),
+    )
     cells = grid.cells
     assert [cell.overrides for cell in cells] == [
         {"game.horizon": 2, "llm_provider.temperature": 0.0},
@@ -42,17 +53,53 @@ def test_grid_spec_expands_the_cartesian_product_in_stable_order():
         {"game.horizon": 3, "llm_provider.temperature": 0.5},
     ]
     assert [cell.config.game.horizon for cell in cells] == [2, 2, 3, 3]
-    assert [cell.config.llm_provider.temperature for cell in cells] == [0.0, 0.5, 0.0, 0.5]
+    assert [cell.config.llm_provider.temperature for cell in cells] == [
+        0.0,
+        0.5,
+        0.0,
+        0.5,
+    ]
     # The base config is untouched; only each cell's own config carries the override.
-    assert base.game.horizon == load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={}).game.horizon
+    assert (
+        base.game.horizon
+        == load_run_config(
+            "configs/runs/old/toy_game_smoke_test.yaml", environment={}
+        ).game.horizon
+    )
     assert grid.grid_id == GridSpec(base=base, axes=grid.axes).grid_id  # deterministic
+
+
+def test_relational_grid_can_sweep_epistemic_persistence():
+    base = load_run_config(
+        "configs/runs/relational_reasoning/"
+        "relational_imitation_round_feedback_no_control_smoke.yaml",
+        environment={},
+    )
+    grid = GridSpec(
+        base=base,
+        axes=(
+            GridAxis(
+                "game.options.epistemic_persistence",
+                (0.94, 0.97, 1.0),
+            ),
+        ),
+    )
+
+    assert [
+        create_game(cell.config.game).rules(cell.config.game).epistemic_persistence
+        for cell in grid.cells
+    ] == [0.94, 0.97, 1.0]
 
 
 def test_common_random_numbers_share_episode_streams_only_when_opted_in():
     root = Seed(20260821)
 
-    matched = [_grid_cell_seed(root, index, common_random_numbers=True) for index in range(3)]
-    ordinary = [_grid_cell_seed(root, index, common_random_numbers=False) for index in range(3)]
+    matched = [
+        _grid_cell_seed(root, index, common_random_numbers=True) for index in range(3)
+    ]
+    ordinary = [
+        _grid_cell_seed(root, index, common_random_numbers=False) for index in range(3)
+    ]
 
     assert [int(seed.derive("episode:7")) for seed in matched] == [
         int(root.derive("episode:7"))
@@ -61,7 +108,16 @@ def test_common_random_numbers_share_episode_streams_only_when_opted_in():
 
 
 @pytest.mark.parametrize(
-    "path", ["llm_provider.type", "llm_provider.model", "game.type", "budget.max_cost_per_run", "pricing.mode", "budget", "pricing"]
+    "path",
+    [
+        "llm_provider.type",
+        "llm_provider.model",
+        "game.type",
+        "budget.max_cost_per_run",
+        "pricing.mode",
+        "budget",
+        "pricing",
+    ],
 )
 def test_grid_axis_forbids_sweeping_shared_identity_fields(path):
     with pytest.raises(ConfigurationError, match="cannot sweep"):
@@ -77,15 +133,20 @@ def test_grid_spec_rejects_a_bad_dotted_path_eagerly():
 def test_static_grid_preflight_sums_per_cell_estimates():
     base = _toy_config()
     grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3)),))
-    quote = OfflinePricingSource().fetch(base.llm_provider.type, base.llm_provider.model)
+    quote = OfflinePricingSource().fetch(
+        base.llm_provider.type, base.llm_provider.model
+    )
 
     game = create_game(base.game)
     manual_total_expected = 0
     for cell in grid.cells:
         plan = game.call_plan(cell.config.game)
         per_cell = static_experiment_preflight(
-            plan, cell.config.prompt, cell.config.llm_provider,
-            episode_count=cell.config.execution.repetitions, pricing_quote=quote,
+            plan,
+            cell.config.prompt,
+            cell.config.llm_provider,
+            episode_count=cell.config.execution.repetitions,
+            pricing_quote=quote,
             assumed_output_tokens=1,
         )
         manual_total_expected += per_cell.total_provider_requests.expected
@@ -100,19 +161,29 @@ def test_static_grid_preflight_sums_per_cell_estimates():
 def test_static_grid_preflight_checks_budget_once_against_the_combined_total():
     base = _toy_config()
     grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3)),))
-    quote = OfflinePricingSource().fetch(base.llm_provider.type, base.llm_provider.model)
+    quote = OfflinePricingSource().fetch(
+        base.llm_provider.type, base.llm_provider.model
+    )
     game = create_game(base.game)
     one_cell_requests = static_experiment_preflight(
-        game.call_plan(grid.cells[0].config.game), grid.cells[0].config.prompt,
-        grid.cells[0].config.llm_provider, episode_count=grid.cells[0].config.execution.repetitions,
-        pricing_quote=quote, assumed_output_tokens=1,
+        game.call_plan(grid.cells[0].config.game),
+        grid.cells[0].config.prompt,
+        grid.cells[0].config.llm_provider,
+        episode_count=grid.cells[0].config.execution.repetitions,
+        pricing_quote=quote,
+        assumed_output_tokens=1,
     ).total_provider_requests.conservative
 
     tight_budget = BudgetLimits(max_requests=one_cell_requests + 1)
     estimate = static_grid_preflight(
-        grid, pricing_quote=quote, assumed_output_tokens=1, run_budget=tight_budget,
+        grid,
+        pricing_quote=quote,
+        assumed_output_tokens=1,
+        run_budget=tight_budget,
     )
-    assert estimate.launch_status == "denied"  # sum across both cells exceeds one cell's worth
+    assert (
+        estimate.launch_status == "denied"
+    )  # sum across both cells exceeds one cell's worth
 
 
 def test_run_experiment_grid_runs_every_cell_and_resumes_per_episode(tmp_path: Path):
@@ -166,9 +237,7 @@ def test_grid_runs_requested_configured_analysis_at_each_cell_completion(
         record_cell,
     )
 
-    result = run_experiment_grid_sync(
-        grid, tmp_path, resume=False, show_progress=False
-    )
+    result = run_experiment_grid_sync(grid, tmp_path, resume=False, show_progress=False)
 
     assert result.completed == 2
     assert sorted((cell_id, horizon) for cell_id, horizon, _ in calls) == [
@@ -181,9 +250,7 @@ def test_grid_runs_requested_configured_analysis_at_each_cell_completion(
     }
 
     calls.clear()
-    resumed = run_experiment_grid_sync(
-        grid, tmp_path, resume=True, show_progress=False
-    )
+    resumed = run_experiment_grid_sync(grid, tmp_path, resume=True, show_progress=False)
     assert resumed.skipped_resumed == 2
     assert sorted((cell_id, horizon) for cell_id, horizon, _ in calls) == [
         ("cell-0000", 2),
@@ -191,9 +258,13 @@ def test_grid_runs_requested_configured_analysis_at_each_cell_completion(
     ]
 
 
-def test_run_experiment_grid_fail_fast_aborts_across_every_cell_not_just_one(tmp_path: Path, monkeypatch):
+def test_run_experiment_grid_fail_fast_aborts_across_every_cell_not_just_one(
+    tmp_path: Path, monkeypatch
+):
     base = _with_ample_budget(_toy_config(repetitions=1, parallelism=1, fail_fast=True))
-    grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3, 4)),))  # 3 cells x 1 episode = 3 tasks
+    grid = GridSpec(
+        base=base, axes=(GridAxis("game.horizon", (2, 3, 4)),)
+    )  # 3 cells x 1 episode = 3 tasks
 
     from mas_cc.games.runner import run_game as real_run_game
 
@@ -213,12 +284,16 @@ def test_run_experiment_grid_fail_fast_aborts_across_every_cell_not_just_one(tmp
     assert len(calls) == 1
 
 
-def test_run_experiment_grid_shares_one_concurrency_pool_across_cells(tmp_path: Path, monkeypatch):
+def test_run_experiment_grid_shares_one_concurrency_pool_across_cells(
+    tmp_path: Path, monkeypatch
+):
     """The whole point of 'combined concurrency': parallelism bounds *all* episodes
     from *every* cell together, not parallelism-per-cell."""
 
     base = _with_ample_budget(_toy_config(repetitions=2, parallelism=2))
-    grid = GridSpec(base=base, axes=(GridAxis("game.horizon", (2, 3)),))  # 2 cells x 2 episodes = 4 tasks
+    grid = GridSpec(
+        base=base, axes=(GridAxis("game.horizon", (2, 3)),)
+    )  # 2 cells x 2 episodes = 4 tasks
 
     from mas_cc.games.runner import run_game as real_run_game
 

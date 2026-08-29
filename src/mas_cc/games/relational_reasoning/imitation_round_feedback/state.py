@@ -1,24 +1,25 @@
 """Configuration and typed records for ``relational_imitation_round_feedback``.
 
-Two state variables per agent, and they are genuinely independent:
+Three state variables per agent, and they are genuinely independent:
 
-    X_i(t)  the currently voted option label      -> ``committed_action``
-    K_i(t)  the exact set of fact ids it knows    -> ``known_fact_ids``
+    X_i(t)  the currently voted option label       -> ``committed_action``
+    H_i(t)  every fact id it has ever received     -> ``known_fact_ids``
+    K_i(t)  fact ids available for reasoning now   -> ``active_fact_ids``
 
-``X_i`` moves when the agent votes.  ``K_i`` moves only when some other
-participant exposes a fact to *this* agent at an interaction it took part in.
-An agent can hold the complete proof and still vote wrongly, and it can vote
-correctly while knowing nothing - keeping the two apart is the entire point of
-this game, so nothing in this module ever derives one from the other.
+``X_i`` moves when the agent votes.  ``H_i`` grows only when another
+participant exposes a new fact to *this* agent.  ``K_i`` can also shrink at a
+population-round persistence boundary and grow again when a valid fact is
+communicated.  Nothing in this module derives a vote from either fact set.
 
 ``(X_i, S_i)`` - vote and publicly exposed fact id - is the whole socially
 visible state.  ``R_i``, the free-form reason, is recorded for analysis and
 rendered to nobody: not to peers, and not back to its own author on a later
-turn.  ``K_i`` is private and reaches only the owning agent's own prompt.
+turn.  Active ``K_i`` is private and reaches only the owning agent's own prompt.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,7 @@ INITIAL_VOTE = "initial_vote"
 FOCAL_UPDATE = "focal_update"
 
 KNOWN_FACT_IDS = "known_fact_ids"
+ACTIVE_FACT_IDS = "active_fact_ids"
 COMMITTED_ACTION = "committed_action"
 PUBLIC_REASON = "public_reason"
 PUBLIC_SHARED_FACT_ID = "public_shared_fact_id"
@@ -70,13 +72,34 @@ teleportation" invariant is exactly the claim that nothing else ever does."""
 
 @dataclass(frozen=True, slots=True)
 class RelationalAgentState(AgentState):
-    """One agent's knowledge set and its standing public ballot."""
+    """One agent's historical/active facts and its standing public ballot."""
 
     @property
     def known_fact_ids(self) -> tuple[str, ...]:
-        """``K_i(t)`` - the fact ids this agent currently knows."""
+        """``H_i(t)`` - every fact id this agent has legitimately received."""
 
         return tuple(str(item) for item in self.attributes.get(KNOWN_FACT_IDS, ()))
+
+    @property
+    def active_fact_ids(self) -> tuple[str, ...]:
+        """``K_i(t)`` - fact ids currently available to this agent's reasoning.
+
+        The fallback keeps old serialized states readable.  Such states were
+        created before finite persistence existed, so all historical facts
+        were active by definition.
+        """
+
+        raw = self.attributes.get(ACTIVE_FACT_IDS)
+        active = (
+            self.known_fact_ids if raw is None else tuple(str(item) for item in raw)
+        )
+        unknown = set(active) - set(self.known_fact_ids)
+        if unknown:
+            raise ValueError(
+                f"agent {self.agent_id} has active facts outside known_fact_ids: "
+                f"{sorted(unknown)}"
+            )
+        return active
 
     @property
     def committed_action(self) -> str | None:
@@ -113,6 +136,7 @@ class RelationalAgentState(AgentState):
             "public_reason": self.public_reason,
             "public_shared_fact_id": self.public_shared_fact_id,
             "known_fact_ids": list(self.known_fact_ids),
+            "active_fact_ids": list(self.active_fact_ids),
             "initial_fact_ids": list(self.initial_fact_ids),
             "fact_provenance": _thaw(self.attributes.get("fact_provenance", {})),
             "memory": _thaw(self.memory),
@@ -145,7 +169,9 @@ class RelationalGameState(GameState):
         call, see ``game.RelationalImitationRoundFeedbackGame.option_letters``.
         """
 
-        return {str(key): str(value) for key, value in self.task["option_relations"].items()}
+        return {
+            str(key): str(value) for key, value in self.task["option_relations"].items()
+        }
 
     @property
     def correct_answer(self) -> str:
@@ -175,6 +201,15 @@ class RelationalGameState(GameState):
     def termination_reason(self) -> str | None:
         value = self.data.get("termination_reason")
         return None if value is None else str(value)
+
+    @property
+    def epistemic_persistence(self) -> float:
+        """The per-round survival probability for currently active facts."""
+
+        rules = self.data.get("rules", {})
+        if not isinstance(rules, Mapping):
+            return 1.0
+        return float(rules.get("epistemic_persistence", 1.0))
 
     def fact_text(self, fact_id: str) -> str:
         """The frozen deterministic rendering of one fact."""
@@ -265,6 +300,22 @@ def _positive_int(value: Any, field: str, *, minimum: int = 1) -> int:
     return int(value)
 
 
+def reasoning_fact_ids(
+    agent: RelationalAgentState, epistemic_persistence: float
+) -> tuple[str, ...]:
+    """Return facts available to reasoning under the configured regime."""
+
+    if epistemic_persistence == 1.0:
+        active = agent.active_fact_ids
+        if set(active) != set(agent.known_fact_ids):
+            raise ValueError(
+                f"agent {agent.agent_id} must have active_fact_ids == known_fact_ids "
+                "when epistemic_persistence is 1.0"
+            )
+        return agent.known_fact_ids
+    return agent.active_fact_ids
+
+
 @dataclass(frozen=True, slots=True)
 class RelationalRules:
     """Everything the game reads out of ``game.options``, validated once.
@@ -291,6 +342,7 @@ class RelationalRules:
     initial_distribution: Mapping[str, float] | None
     invalid_response_retries: int
     expected_validation_failure_rate: float
+    epistemic_persistence: float
 
     @property
     def social_distrust(self) -> bool:
@@ -307,7 +359,9 @@ class RelationalRules:
         n_agents = int(options.get("n_agents", config.population_size))
         if n_agents != config.population_size:
             raise ValueError("game.options.n_agents must equal game.population_size")
-        rounds = _positive_int(options.get("rounds", config.horizon), "game.options.rounds")
+        rounds = _positive_int(
+            options.get("rounds", config.horizon), "game.options.rounds"
+        )
         social_group_size = _positive_int(
             options.get("social_group_size", 1), "game.options.social_group_size"
         )
@@ -319,7 +373,9 @@ class RelationalRules:
 
         mode = str(options.get("dynamics_mode", "reasoning"))
         if mode not in DYNAMICS_MODES:
-            raise ValueError(f"game.options.dynamics_mode must be one of {list(DYNAMICS_MODES)}")
+            raise ValueError(
+                f"game.options.dynamics_mode must be one of {list(DYNAMICS_MODES)}"
+            )
         if mode not in IMPLEMENTED_DYNAMICS_MODES:
             raise ValueError(
                 f"game.options.dynamics_mode {mode!r} is not implemented for "
@@ -360,7 +416,9 @@ class RelationalRules:
                 "game.options.receiver_epistemic_disposition must be a string"
             )
         try:
-            prompt_class = resolve_receiver_epistemic_disposition(prompt_class, distrust)
+            prompt_class = resolve_receiver_epistemic_disposition(
+                prompt_class, distrust
+            )
         except ValueError as exc:
             raise ValueError(f"game.options.{exc}") from exc
 
@@ -371,7 +429,9 @@ class RelationalRules:
                 f"game.options.prompt_version must be {PROMPT_VERSION}"
             )
 
-        initialization = _mapping(options.get("initialization"), "game.options.initialization")
+        initialization = _mapping(
+            options.get("initialization"), "game.options.initialization"
+        )
         initialization_mode = str(initialization.get("mode", "local_vote"))
         if initialization_mode not in INITIALIZATION_MODES:
             raise ValueError(
@@ -386,7 +446,9 @@ class RelationalRules:
                 raise ValueError("initialization.initial_votes must be a list")
             initial_votes = tuple(str(item) for item in initial_votes_raw)
             if len(initial_votes) != n_agents:
-                raise ValueError("initialization.initial_votes must contain one vote per agent")
+                raise ValueError(
+                    "initialization.initial_votes must contain one vote per agent"
+                )
         if initialization_mode == "explicit" and initial_votes is None:
             raise ValueError(
                 "initialization.mode 'explicit' requires initialization.initial_votes"
@@ -398,15 +460,32 @@ class RelationalRules:
                 distribution_raw, "game.options.initialization.initial_distribution"
             )
             distribution = {str(key): float(value) for key, value in values.items()}
-            if any(value < 0 for value in distribution.values()) or sum(distribution.values()) <= 0:
-                raise ValueError("initial_distribution weights must be non-negative and nonzero")
+            if (
+                any(value < 0 for value in distribution.values())
+                or sum(distribution.values()) <= 0
+            ):
+                raise ValueError(
+                    "initial_distribution weights must be non-negative and nonzero"
+                )
 
         retries = options.get("invalid_response_retries", 0)
         if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
-            raise ValueError("game.options.invalid_response_retries must be an integer >= 0")
+            raise ValueError(
+                "game.options.invalid_response_retries must be an integer >= 0"
+            )
         expected_failure = float(options.get("expected_validation_failure_rate", 0.0))
         if not 0 <= expected_failure <= 1:
             raise ValueError("expected_validation_failure_rate must be between 0 and 1")
+        persistence_raw = options.get("epistemic_persistence", 1.0)
+        if isinstance(persistence_raw, bool) or not isinstance(
+            persistence_raw, (int, float)
+        ):
+            raise ValueError("game.options.epistemic_persistence must be a number")
+        persistence = float(persistence_raw)
+        if not math.isfinite(persistence) or not 0.0 <= persistence <= 1.0:
+            raise ValueError(
+                "game.options.epistemic_persistence must be between 0.0 and 1.0"
+            )
 
         return cls(
             n_agents=n_agents,
@@ -425,13 +504,17 @@ class RelationalRules:
             initial_distribution=distribution,
             invalid_response_retries=int(retries),
             expected_validation_failure_rate=expected_failure,
+            epistemic_persistence=persistence,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {field: _thaw(getattr(self, field)) for field in self.__dataclass_fields__}
+        return {
+            field: _thaw(getattr(self, field)) for field in self.__dataclass_fields__
+        }
 
 
 __all__ = [
+    "ACTIVE_FACT_IDS",
     "COMMITTED_ACTION",
     "CONTROLLER_SOURCE",
     "DYNAMICS_MODES",
@@ -452,4 +535,5 @@ __all__ = [
     "RelationalRoundRecord",
     "RelationalRules",
     "RelationalTransition",
+    "reasoning_fact_ids",
 ]

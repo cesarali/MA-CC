@@ -96,7 +96,9 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         diagnostics = tuple(
             name for name in requested if name in CONTROLLER_DIAGNOSTIC_STATISTICS
         )
-        current_statistics = tuple(name for name in requested if name in CURRENT_STATISTICS)
+        current_statistics = tuple(
+            name for name in requested if name in CURRENT_STATISTICS
+        )
 
     options = dict(analysis.options)
     allowed_options = {
@@ -115,7 +117,8 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
     unknown_options = sorted(set(options) - allowed_options)
     if unknown_options:
         raise ValueError(
-            "unknown HiddenBench imitation analysis option(s): " + ", ".join(unknown_options)
+            "unknown HiddenBench imitation analysis option(s): "
+            + ", ".join(unknown_options)
         )
     if not isinstance(options.get("per_cell_reports", False), bool):
         raise ValueError("analysis.options.per_cell_reports must be a boolean")
@@ -135,8 +138,18 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
                 "analysis.options.theoretical_reference must be one of: "
                 + ", ".join(sorted(RELATIONAL_THEORETICAL_REFERENCES))
             )
+        persistence = config.game.options.get("epistemic_persistence", 1.0)
+        if isinstance(persistence, bool) or not isinstance(persistence, (int, float)):
+            raise ValueError("game.options.epistemic_persistence must be a number")
+        if float(persistence) < 1.0 and theoretical_reference != "none":
+            raise ValueError(
+                "analysis.options.theoretical_reference must be 'none' when "
+                "game.options.epistemic_persistence is below 1.0"
+            )
         return {
-            "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
+            "bootstrap_resamples": _integer_option(
+                options, "bootstrap_resamples", 1000
+            ),
             "null_permutations": _integer_option(options, "null_permutations", 1000),
             "confidence": confidence,
             "seed": _integer_option(options, "seed", config.execution.seed),
@@ -146,9 +159,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
             # Current analysis is aggregate post-processing, so it follows the
             # same master-only Comet gate as the other configured analyzers.
             "comet_export": analysis.comet_export and config.logging.comet,
-            "comet_project": str(
-                config.logging.options.get("comet_project", "mas-cc")
-            ),
+            "comet_project": str(config.logging.options.get("comet_project", "mas-cc")),
             "comet_run_name": f"{run_id}/analysis",
         }
     return {
@@ -184,10 +195,7 @@ def _report_slug(config: RunConfig, cell_id: str) -> str:
     task = config.game.options.get("task_id", "task-unspecified")
     q = config.game.options.get("social_group_size", 1)
     q_c = config.control.options.get("sensor_sample_size", "none")
-    raw = (
-        f"{cell_id}__task-{task}__N-{config.game.population_size}"
-        f"__q-{q}__qc-{q_c}"
-    )
+    raw = f"{cell_id}__task-{task}__N-{config.game.population_size}__q-{q}__qc-{q_c}"
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("-.")
 
 
@@ -242,7 +250,9 @@ def run_configured_analysis(
             **round_arguments,
         )
 
-    from mas_cc.games.hidden_bench.imitation.analysis import analyze_hidden_bench_imitation
+    from mas_cc.games.hidden_bench.imitation.analysis import (
+        analyze_hidden_bench_imitation,
+    )
 
     return analyze_hidden_bench_imitation(
         root,
