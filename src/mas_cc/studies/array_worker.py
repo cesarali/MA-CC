@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .submission import array_task_command, resolve_array_entry
-from .runtime import configure_study_provider_load_control
+from .runtime import configure_study_provider_load_control, validate_study_execution_site
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
         print("SLURM_ARRAY_TASK_ID is not set", file=sys.stderr)
         return 2
     try:
+        validate_study_execution_site(arguments[0])
         configure_study_provider_load_control(arguments[0])
         entry = resolve_array_entry(Path(arguments[0]), int(raw_index))
         from mas_cc.cli.main import main as cli_main

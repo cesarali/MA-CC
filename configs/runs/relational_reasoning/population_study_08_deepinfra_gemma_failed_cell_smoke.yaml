@@ -1,0 +1,140 @@
+# Diagnostic reproduction of production Study 08 wrong-prompt cell-0051.
+# This deliberately retains invalid provider replies for post-mortem inspection.
+
+llm_provider:
+  type: deepinfra
+  model: google/gemma-4-E4B-it
+  credentials_env: DEEPINFRA_API_KEY
+  timeout_seconds: 120
+  max_retries: 8
+  request_concurrency: 24
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 5.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0004
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 5
+    max_reason_characters: 16384
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: 2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 4
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: neutral
+
+execution:
+  seed: 20260822
+  repetitions: 1
+  parallelism: 1
+  fail_fast: false
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 25.0
+  max_cost_per_run: 25.0
+  max_provider_requests: 2000
+  max_input_tokens: 20000000
+  max_output_tokens: 7000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 100
+      scope: cell
+    detailed_prompt_audit:
+      enabled: true
+      always_log_first_n_rounds: 0
+      max_logged_prompts_per_game: 100
+      max_logged_prompts_per_run: 100
+
+storage:
+  output_dir: /pscratch/sd/d/dfarough/MA-CC-results/smoke/deepinfra-gemma-failed-cell
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study08-deepinfra-gemma-failed-cell-smoke
+  description: Fully audited reproduction of wrong-prompt cell-0051, task_0004.
+  tags: [relational, population-study-08, wrong-control, deepinfra, gemma-4-e4b-it, diagnostic]
+  metadata:
+    study: population_study_08
+    source_cell: cell-0051
+    llm_provider: deepinfra
+    llm_model: google/gemma-4-E4B-it

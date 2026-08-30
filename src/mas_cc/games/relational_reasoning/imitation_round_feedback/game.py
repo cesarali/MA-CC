@@ -238,6 +238,15 @@ class RelationalImitationRoundFeedbackGame(Game):
         """The single provider call behind one focal update."""
 
         rules = self.rules(config)
+        max_reason_characters = config.options.get(
+            "max_reason_characters", MAX_REASON_CHARACTERS
+        )
+        if (
+            isinstance(max_reason_characters, bool)
+            or not isinstance(max_reason_characters, int)
+            or max_reason_characters < 1
+        ):
+            raise ValueError("game.options.max_reason_characters must be a positive integer")
         agent = state.relational_agent(focal)
         resolved_id = interaction_id or InteractionId(f"interaction-{state.turn + 1:04d}")
         shared_before = agent.public_shared_fact_id
@@ -287,6 +296,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 # A focal update has a social context even when occlusion left
                 # nothing in it; an initial vote does not.
                 social_context=stage == FOCAL_UPDATE,
+                max_reason_characters=max_reason_characters,
             ),
             retry_bound=rules.invalid_response_retries,
         )
@@ -407,10 +417,27 @@ class RelationalImitationRoundFeedbackGame(Game):
         reason = action.metadata.get("reason")
         if not isinstance(reason, str) or not reason.strip():
             issues.append(ValidationIssue("action.reason", "must be non-empty text"))
-        elif len(reason.strip()) > MAX_REASON_CHARACTERS:
+        else:
+            max_reason_characters = config.options.get(
+                "max_reason_characters", MAX_REASON_CHARACTERS
+            )
+            if (
+                isinstance(max_reason_characters, bool)
+                or not isinstance(max_reason_characters, int)
+                or max_reason_characters < 1
+            ):
+                raise ValueError(
+                    "game.options.max_reason_characters must be a positive integer"
+                )
+        if (
+            isinstance(reason, str)
+            and reason.strip()
+            and len(reason.strip()) > max_reason_characters
+        ):
             issues.append(
                 ValidationIssue(
-                    "action.reason", f"must be at most {MAX_REASON_CHARACTERS} characters"
+                    "action.reason",
+                    f"must be at most {max_reason_characters} characters",
                 )
             )
         if not action.metadata.get("shared_fact_present"):
@@ -825,6 +852,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 fact_ids=("f1", "f2"),
                 current_vote=None,
                 receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
+                max_reason_characters=int(
+                    config.options.get("max_reason_characters", MAX_REASON_CHARACTERS)
+                ),
             ),
         )
         update = PromptScenario(
@@ -848,6 +878,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                         "shared_fact_text": "Kavi is east of Tero.",
                     }
                     for slot in range(rules.social_group_size)
+                ),
+                max_reason_characters=int(
+                    config.options.get("max_reason_characters", MAX_REASON_CHARACTERS)
                 ),
                 vote_visibility=rules.vote_visibility,
                 receiver_epistemic_disposition=rules.receiver_epistemic_disposition,

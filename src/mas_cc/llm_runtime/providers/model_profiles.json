@@ -47,6 +47,102 @@
         "max_tokens: HTTP 200",
         "max_completion_tokens: HTTP 200"
       ]
+    },
+    {
+      "provider_type": "neuralwatt",
+      "model": "deepseek-v4-flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-28T17:46:08Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "NeuralWatt's authenticated customer model catalog listed deepseek-v4-flash on 2026-08-28.",
+        "The catalog reports system-role and JSON-mode support, a 1,048,560-token context limit, and a 65,536-token output limit.",
+        "A live MA-CC smoke completion returned HTTP 200 with a system message, temperature=0, max_tokens, and seed in the same request."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "deepseek-ai/DeepSeek-V4-Flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed deepseek-ai/DeepSeek-V4-Flash on 2026-08-30.",
+        "The model metadata reports OpenAI chat, JSON, structured-output, tool, and seed support with a 1,048,576-token context and 65,536-token output limit.",
+        "Temperature and system-message support are documented metadata; confirm them with the opt-in live MA-CC smoke before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "google/gemma-4-26B-A4B-it",
+      "family": "gemma",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed google/gemma-4-26B-A4B-it as active on 2026-08-30.",
+        "The model metadata reports OpenAI chat, JSON, structured-output, tools, temperature, and seed support with a 262,144-token context.",
+        "System-message support is provisionally enabled for the opt-in live MA-CC smoke and must pass before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "google/gemma-4-31B-it-turbo",
+      "family": "gemma",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed google/gemma-4-31B-it-turbo as active on 2026-08-30.",
+        "The model metadata reports OpenAI compatibility, JSON-object response format, tools, reasoning, temperature, and seed support with a 262,144-token context and 16,384-token output limit.",
+        "System-message support is provisionally enabled for the opt-in live MA-CC smoke and must pass before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "google/gemma-4-E4B-it",
+      "family": "gemma",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed google/gemma-4-E4B-it as active on 2026-08-30.",
+        "The model page documents OpenAI chat and system messages; public metadata reports tools, reasoning, temperature, and seed support with a 131,072-token context.",
+        "A live request on 2026-08-30 returned HTTP 405 when response_format=json_object was present, despite the generic metadata field. DeepInfraProvider therefore disables only its JSON-object default for this exact model.",
+        "The Study 08 variant retains its explicit 4,096-token output cap; confirm prompt-only JSON compliance with the opt-in live MA-CC smoke before production."
+      ]
     }
   ]
 }

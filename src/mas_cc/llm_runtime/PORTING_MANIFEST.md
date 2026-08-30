@@ -35,10 +35,12 @@ src/mas_cc/llm_runtime/
 │   └── adapters/
 │       ├── __init__.py
 │       ├── mock.py                 # MockLLMProvider
+│       ├── deepinfra.py            # DeepInfraProvider
+│       ├── neuralwatt.py           # NeuralWattProvider
 │       ├── openai.py               # OpenAIProvider
 │       ├── university.py           # UniversityProvider
 │       ├── gemma_local.py          # GemmaLocalProvider
-│       ├── _openai_compatible.py   # OpenAICompatibleProvider (shared base for openai/university)
+│       ├── _openai_compatible.py   # OpenAICompatibleProvider (shared remote HTTP base)
 │       └── _potsdam_network.py     # Windows VPN-bridge helper used only by UniversityProvider
 └── prompts/
     ├── __init__.py
@@ -81,12 +83,14 @@ repository" below) rather than merely documented.
 ## Concrete provider classes
 
 - `MockLLMProvider` (`providers/adapters/mock.py`) — deterministic, no network, used in tests
+- `DeepInfraProvider` (`providers/adapters/deepinfra.py`) — DeepInfra OpenAI-compatible API with isolated credentials/routing, account-limit discovery, and a provider-scoped JSON-object response default
+- `NeuralWattProvider` (`providers/adapters/neuralwatt.py`) — NeuralWatt OpenAI-compatible API with isolated credentials/routing and a provider-scoped JSON-object response default
 - `OpenAIProvider` (`providers/adapters/openai.py`) — official OpenAI chat-completions API
 - `UniversityProvider` (`providers/adapters/university.py`) — University of Potsdam OpenAI-compatible proxy
 - `GemmaLocalProvider` (`providers/adapters/gemma_local.py`) — local Transformers/accelerate model
-- `OpenAICompatibleProvider` (`providers/adapters/_openai_compatible.py`) — shared HTTP base class for `OpenAIProvider`/`UniversityProvider`; private, not part of the public surface
+- `OpenAICompatibleProvider` (`providers/adapters/_openai_compatible.py`) — shared HTTP base class for `DeepInfraProvider`/`NeuralWattProvider`/`OpenAIProvider`/`UniversityProvider`; private, not part of the public surface
 
-All four are registered lazily by string module path in
+All six are registered lazily by string module path in
 `create_default_provider_registry()`; importing `llm_runtime.providers` (or
 `llm_runtime.providers.adapters`) never imports `openai`, `requests`,
 `torch`, or `transformers` — those are imported lazily inside adapter
@@ -97,8 +101,8 @@ methods, only when a call is actually made.
 in the packaged `model_profiles.json`, applies known temperature/seed rules,
 and warns once for each automatic rule applied. Unknown entries remain usable
 through a profile explicitly marked `probe_source="inferred"`. The adapter's
-`discover_models()` method is shared with the opt-in exploratory probe so model
-listing and normal university endpoint discovery cannot drift apart.
+`discover_models()` method is shared by provider dispatch and model probing so
+model listing and normal endpoint discovery cannot drift apart.
 
 ## Prompt subsystem classes/functions
 
@@ -129,7 +133,7 @@ subpackages directly.
   dependency on `mas_cc.core` or any other part of this repository — see
   "Copying to another repository" below.
 - **mock:** none.
-- **openai / university** (`OpenAICompatibleProvider`): `requests` (imported
+- **deepinfra / neuralwatt / openai / university** (`OpenAICompatibleProvider`): `requests` (imported
   lazily inside `_get_session`).
 - **gemma_local:** `torch`, `transformers`, `accelerate`, `safetensors`,
   `huggingface-hub` (all imported lazily inside `GemmaLocalProvider`'s model
@@ -151,6 +155,8 @@ installed — verified by
 ## Environment variables
 
 - `OPENAI_API_KEY` — default credentials env var name for `OpenAIProvider` (overridable via `LLMProviderConfig.credentials_env`)
+- `DEEPINFRA_API_KEY` — default credentials env var name for `DeepInfraProvider`
+- `NEURALWATT_API_KEY` — default credentials env var name for `NeuralWattProvider`
 - `POTSDAM_API_KEY` — default credentials env var name for `UniversityProvider`
 - `BASE_POTSDAM_LLM_URL` — default base-URL env var name for `UniversityProvider`
 - `HF_HOME` — optional; if unset, `GemmaLocalProvider` leaves the Hugging Face cache location to its default resolution

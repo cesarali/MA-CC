@@ -17,7 +17,7 @@ from mas_cc.config.grid import GridAxis, GridCell
 from mas_cc.experiments import run_experiment_grid_sync
 
 from .execution import read_execution_manifest
-from .runtime import configure_study_provider_load_control
+from .runtime import configure_study_provider_load_control, validate_study_execution_site
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         print("SLURM_ARRAY_TASK_ID is not set", file=sys.stderr)
         return 2
     try:
+        validate_study_execution_site(args[0])
         configure_study_provider_load_control(args[0])
         entries = read_execution_manifest(args[0])
         index = int(raw_index)

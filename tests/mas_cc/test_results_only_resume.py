@@ -20,6 +20,7 @@ from mas_cc.llm_runtime.providers import (
     RuntimeBudgetGuard,
 )
 from mas_cc.metrics.aggregate import excluded_cell_episodes, read_cell_episodes
+from mas_cc.observability import DetailedAuditPolicy, RunRecorder
 from mas_cc.storage import (
     ScientificIdentity,
     compact_run_directory,
@@ -376,6 +377,44 @@ def test_temporary_episode_shard_is_not_a_resume_checkpoint(tmp_path, monkeypatc
     assert not destination.exists()
     assert destination.with_name(destination.name + ".tmp").is_file()
     assert discover_episode_artifact(tmp_path, identity) is None
+
+
+def test_restarted_compact_episode_discards_only_partial_trajectory_streams(tmp_path):
+    """A four-hour wall restart must begin one episode at round zero."""
+
+    cell_dir = tmp_path / "cell-0001"
+    episode_id = "cell-0001-0007"
+    resume_dir = cell_dir / ".resume" / episode_id
+    auxiliary_dir = cell_dir / "round_records" / episode_id
+    auxiliary_dir.mkdir(parents=True)
+    round_path = auxiliary_dir / "round_trajectory.jsonl"
+    micro_path = auxiliary_dir / "micro_slot_trajectory.jsonl"
+    round_path.write_text('{"round_index": 0}\n', encoding="utf-8")
+    micro_path.write_text(
+        '{"round_index": 0, "within_round_index": 0}\n', encoding="utf-8"
+    )
+    resume_dir.mkdir(parents=True)
+    prompt_candidates = resume_dir / "prompt_candidates.json.gz"
+    prompt_candidates.write_bytes(b"durable prompt sample")
+
+    identity = ScientificIdentity(
+        "run", "cell-0001", episode_id, 7, "config", "prompts", "pricing",
+        "relational_imitation_round_feedback", "classical", "none", "task",
+    )
+    config = _results_only_config(repetitions=1)
+    RunRecorder(
+        resume_dir,
+        run_id=f"cell-0001/{episode_id}",
+        resolved_config=config.to_dict(),
+        policy=DetailedAuditPolicy(),
+        retention_policy=config.storage.retention_policy,
+        scientific_identity=identity,
+        scientific_path=resume_dir / "scientific_events.parquet",
+    )
+
+    assert not round_path.exists()
+    assert not micro_path.exists()
+    assert prompt_candidates.read_bytes() == b"durable prompt sample"
 
 
 def test_changed_config_is_rejected_before_provider_construction(tmp_path, monkeypatch):

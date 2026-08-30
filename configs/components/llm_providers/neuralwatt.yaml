@@ -1,0 +1,11 @@
+schema_version: 1
+type: neuralwatt
+model: deepseek-v4-flash
+credentials_env: NEURALWATT_API_KEY
+timeout_seconds: 120
+max_retries: 2
+request_concurrency: 4
+temperature: 0.0
+max_output_tokens: 256
+options:
+  estimated_latency_seconds: 5.0

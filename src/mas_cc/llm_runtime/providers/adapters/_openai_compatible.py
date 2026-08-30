@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 import os
 import random
+import re
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -21,6 +23,82 @@ from ..load_control import SharedProviderCoordinator
 
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
+_JSON_OBJECT_RESPONSE_FORMAT = {"type": "json_object"}
+_TOOL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
+
+
+def _response_format_from_options(
+    options: Mapping[str, Any], *, provider_name: str
+) -> dict[str, str] | None:
+    """Resolve the one structured-output mode shared by chat-completions APIs.
+
+    Structured output is deliberately opt-in at the concrete provider-config
+    boundary.  That keeps existing OpenAI-compatible routes unchanged while
+    allowing experiments whose response contract already requires JSON to ask
+    supporting proxies to enforce JSON syntax on the wire.
+    """
+
+    value = options.get("response_format")
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or dict(value) != _JSON_OBJECT_RESPONSE_FORMAT:
+        raise ProviderError(
+            f"{provider_name} options.response_format currently supports only "
+            "{'type': 'json_object'}.",
+            provider=provider_name,
+            code="configuration_error",
+            retryable=False,
+        )
+    return dict(_JSON_OBJECT_RESPONSE_FORMAT)
+
+
+def _plain_json_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _plain_json_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_plain_json_value(item) for item in value]
+    return value
+
+
+def _structured_output_tool_from_options(
+    options: Mapping[str, Any], *, provider_name: str
+) -> dict[str, Any] | None:
+    value = options.get("structured_output_tool")
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ProviderError(
+            f"{provider_name} options.structured_output_tool must be a mapping.",
+            provider=provider_name,
+            code="configuration_error",
+            retryable=False,
+        )
+    allowed = {"name", "description", "parameters"}
+    unknown = set(value) - allowed
+    name = value.get("name")
+    description = value.get("description")
+    parameters = value.get("parameters")
+    if (
+        unknown
+        or not isinstance(name, str)
+        or _TOOL_NAME.fullmatch(name) is None
+        or not isinstance(description, str)
+        or not description.strip()
+        or not isinstance(parameters, Mapping)
+        or parameters.get("type") != "object"
+    ):
+        raise ProviderError(
+            f"{provider_name} options.structured_output_tool requires only a valid "
+            "name, non-empty description, and object JSON Schema parameters.",
+            provider=provider_name,
+            code="configuration_error",
+            retryable=False,
+        )
+    return {
+        "name": name,
+        "description": description,
+        "parameters": _plain_json_value(parameters),
+    }
 
 
 def _load_dotenv_if_available() -> None:
@@ -91,6 +169,20 @@ class OpenAICompatibleProvider:
         self._timeout = config.timeout_seconds
         self._max_retries = config.max_retries
         self._concurrency = config.request_concurrency
+        self._response_format = _response_format_from_options(
+            config.options, provider_name=provider_name
+        )
+        self._structured_output_tool = _structured_output_tool_from_options(
+            config.options, provider_name=provider_name
+        )
+        if self._response_format is not None and self._structured_output_tool is not None:
+            raise ProviderError(
+                f"{provider_name} response_format and structured_output_tool are "
+                "mutually exclusive.",
+                provider=provider_name,
+                code="configuration_error",
+                retryable=False,
+            )
         self._discover_endpoint = discover_endpoint
         self._chat_url: str | None = None if discover_endpoint else f"{self._base_url}/chat/completions"
         self._available_models: tuple[str, ...] | None = None
@@ -246,6 +338,15 @@ class OpenAICompatibleProvider:
             payload["temperature"] = request.temperature
         if request.seed is not None:
             payload["seed"] = request.seed
+        if self._response_format is not None:
+            payload["response_format"] = dict(self._response_format)
+        if self._structured_output_tool is not None:
+            function = copy.deepcopy(self._structured_output_tool)
+            payload["tools"] = [{"type": "function", "function": function}]
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": function["name"]},
+            }
         headers = {
             "Authorization": f"Bearer {self._key}",
             "Content-Type": "application/json",
@@ -279,7 +380,25 @@ class OpenAICompatibleProvider:
                     response.raise_for_status()
                     body = response.json()
                     choice = body["choices"][0]
-                    content = choice["message"]["content"]
+                    message = choice["message"]
+                    if not isinstance(message, Mapping):
+                        raise TypeError("message is not an object")
+                    content = message.get("content")
+                    if self._structured_output_tool is not None:
+                        tool_calls = message.get("tool_calls")
+                        if not isinstance(tool_calls, list) or len(tool_calls) != 1:
+                            raise TypeError("expected exactly one structured-output tool call")
+                        function = tool_calls[0].get("function")
+                        if (
+                            not isinstance(function, Mapping)
+                            or function.get("name") != self._structured_output_tool["name"]
+                            or not isinstance(function.get("arguments"), str)
+                        ):
+                            raise TypeError("structured-output tool call is malformed")
+                        arguments = function["arguments"]
+                        if not isinstance(json.loads(arguments), Mapping):
+                            raise TypeError("structured-output tool arguments are not an object")
+                        content = arguments
                     if not isinstance(content, str):
                         self._raise_if_reasoning_exhausted(
                             choice, request, response.status_code
@@ -379,6 +498,8 @@ class OpenAICompatibleProvider:
         retryable = self._is_retryable(status)
         if status in (401, 403):
             code = "authentication_failed"
+        elif status == 402:
+            code = "payment_required"
         elif status == 429:
             code = "rate_limited"
         elif status is not None:

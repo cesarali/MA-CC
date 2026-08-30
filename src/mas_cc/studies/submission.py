@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -213,25 +214,31 @@ def _study_manifest(spec: StudySpec, entries: Sequence[SubmissionEntry]) -> dict
     }
 
 
-def submit_study(
+def prepare_study(
     config_dir: str | Path,
     results_dir: str | Path | None = None,
     *,
     throttle: int | None = None,
     job_script: str | Path | None = None,
-    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+    require_results_under: str | Path | None = None,
+    execution_site: str = "unspecified",
 ) -> SubmissionResult:
-    """Preflight all configs, publish manifests, then call ``sbatch`` exactly once."""
+    """Preflight all configs and publish manifests without contacting a scheduler."""
 
     from mas_cc.cli.experiment import run_experiment_preflight
 
+    if execution_site not in {"unspecified", "potsdam", "nersc"}:
+        raise ValueError("execution_site must be 'unspecified', 'potsdam', or 'nersc'")
     spec = discover_study(config_dir)
-    runner = subprocess.run if run is None else run
     configured_results = spec.execution.get("results_root")
     study_dir = Path(
         results_dir or configured_results or (Path("results") / spec.name)
     ).expanduser().resolve()
-    required_results_under = spec.execution.get("require_results_under")
+    required_results_under = (
+        require_results_under
+        if require_results_under is not None
+        else spec.execution.get("require_results_under")
+    )
     if required_results_under is not None:
         required_root = Path(str(required_results_under)).expanduser().resolve()
         try:
@@ -240,6 +247,15 @@ def submit_study(
             raise ValueError(
                 f"study results must be stored under {required_root}, got {study_dir}"
             ) from exc
+        if require_results_under is not None:
+            spec = replace(
+                spec,
+                execution={
+                    **spec.execution,
+                    "results_root": str(study_dir),
+                    "require_results_under": str(required_root),
+                },
+            )
     entries = build_submission_entries(spec, study_dir)
 
     # Preflight in a temporary root so a failed member cannot leave a study that
@@ -334,6 +350,63 @@ def submit_study(
         )
     if not script.is_file():
         raise ValueError(f"SLURM study job script does not exist: {script}")
+    prepared = _now()
+    (study_dir / "preparation.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "prepared",
+                "prepared_at": prepared,
+                "execution_site": execution_site,
+                "array": array,
+                "worker_manifest": str(execution_manifest or manifest_path),
+                "execution_plan": execution_plan,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return SubmissionResult(
+        study_dir, manifest_path, None, entries, command, execution_plan
+    )
+
+
+def submit_study(
+    config_dir: str | Path,
+    results_dir: str | Path | None = None,
+    *,
+    throttle: int | None = None,
+    job_script: str | Path | None = None,
+    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> SubmissionResult:
+    """Prepare a study, then call ``sbatch`` exactly once."""
+
+    if run is None and os.environ.get("NERSC_HOST") == "perlmutter":
+        raise ValueError(
+            "batch study submission is disabled on NERSC Perlmutter; use "
+            "`mas-cc study prepare` followed by `scripts/nersc/run_study.sh` "
+            "so the allocation uses --qos=interactive"
+        )
+    prepared = prepare_study(
+        config_dir,
+        results_dir,
+        throttle=throttle,
+        job_script=job_script,
+        execution_site="potsdam",
+    )
+    runner = subprocess.run if run is None else run
+    command = prepared.command
+    study_dir = prepared.study_dir
+    array = next(
+        (
+            argument.removeprefix("--array=")
+            for argument in command
+            if argument.startswith("--array=")
+        ),
+        "",
+    )
     started = _now()
     try:
         completed = runner(command, check=True, capture_output=True, text=True)
@@ -369,7 +442,7 @@ def submit_study(
                 "array": array,
                 "command": list(command),
                 "stdout": stdout,
-                "execution_plan": execution_plan,
+                "execution_plan": prepared.execution_plan,
             },
             indent=2,
             sort_keys=True,
@@ -378,7 +451,12 @@ def submit_study(
         encoding="utf-8",
     )
     return SubmissionResult(
-        study_dir, manifest_path, job_id, entries, command, execution_plan
+        study_dir,
+        prepared.manifest_path,
+        job_id,
+        prepared.entries,
+        command,
+        prepared.execution_plan,
     )
 
 
@@ -390,6 +468,7 @@ __all__ = [
     "build_submission_entries",
     "read_submission_manifest",
     "resolve_array_entry",
+    "prepare_study",
     "submit_study",
     "write_submission_manifest",
 ]

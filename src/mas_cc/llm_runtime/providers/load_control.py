@@ -146,6 +146,7 @@ class SharedProviderCoordinator:
             "limit": self.config.initial_concurrency,
             "leases": {},
             "dispatches": [],
+            "next_dispatch_at": now,
             "events": [],
             "node_pauses": {},
             "global_pause_until": 0.0,
@@ -218,6 +219,15 @@ class SharedProviderCoordinator:
                 return None, max(
                     self.config.polling_seconds, 60.0 - (now - float(state["dispatches"][0]))
                 )
+            # A rolling-window ceiling alone permits a large startup burst and
+            # then forces every worker to idle until the oldest dispatch ages
+            # out.  Pace admissions globally so target_rpm is also a smooth
+            # request rate.  This matters for providers that accept a high
+            # outstanding-request count by queueing it at sharply higher
+            # latency instead of returning 429.
+            next_dispatch_at = float(state.get("next_dispatch_at", now))
+            if next_dispatch_at > now:
+                return None, max(0.01, next_dispatch_at - now)
             token = uuid.uuid4().hex
             state["leases"][token] = {
                 "worker": self.worker_id,
@@ -226,6 +236,13 @@ class SharedProviderCoordinator:
                 "expires_at": now + self.config.lease_seconds,
             }
             state["dispatches"].append(now)
+            dispatch_interval = 60.0 / self.config.target_rpm
+            # Retain the virtual schedule so lock/fsync overhead does not get
+            # added to every interval.  Bound lateness to one interval: after
+            # a pause at most one catch-up admission can happen immediately,
+            # rather than replaying an accumulated burst.
+            scheduled_at = max(next_dispatch_at, now - dispatch_interval)
+            state["next_dispatch_at"] = scheduled_at + dispatch_interval
             return RequestLease(token), 0.0
 
         return self._transaction(operation)
@@ -262,15 +279,27 @@ class SharedProviderCoordinator:
             local_failures = [item for item in failures if item.get("node") == self.node_id]
             if retryable and len(local_failures) >= self.config.local_failure_threshold:
                 state["node_pauses"][self.node_id] = now + self.config.local_cooldown_seconds
-            if (
-                retryable
+            global_failure_burst = (
+                bool(failures)
                 and len(state["events"]) >= self.config.global_min_samples
                 and len(failures) / len(state["events"]) >= self.config.global_failure_ratio
-            ):
-                state["global_pause_until"] = max(
-                    float(state.get("global_pause_until", 0)),
-                    now + self.config.global_cooldown_seconds,
-                )
+            )
+            if global_failure_burst:
+                # A synchronized failure burst can arrive after an idle minute,
+                # when the rolling window contains fewer than
+                # ``global_min_samples``.  Successful retries then supply the
+                # remaining samples.  Evaluate the rolling ratio on every
+                # release so that recovery traffic does not hide the burst.
+                # Do not keep extending an already-active pause on successes;
+                # only fresh retryable failures may extend it.
+                pause_until = float(state.get("global_pause_until", 0))
+                if retryable:
+                    state["global_pause_until"] = max(
+                        pause_until,
+                        now + self.config.global_cooldown_seconds,
+                    )
+                elif pause_until <= now:
+                    state["global_pause_until"] = now + self.config.global_cooldown_seconds
                 if (
                     now - float(state.get("last_decrease_at", 0))
                     >= self.config.global_cooldown_seconds

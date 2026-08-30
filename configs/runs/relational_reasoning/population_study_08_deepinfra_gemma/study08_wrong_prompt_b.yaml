@@ -1,0 +1,197 @@
+# Study 08A: factorized epistemic condition x actuation under wrong control.
+# Fixed: N=24, q=1, q_c=12, theta=0.5, beta=4, ten rounds.
+# Shape: 4 prompts x 6 b x 4 matched worlds x 10 repetitions = 960 episodes.
+# Calls: 253,440 nominal; 267,840 expected; 1,520,640 conservative.
+
+llm_provider:
+  type: deepinfra
+  model: google/gemma-4-E4B-it
+  credentials_env: DEEPINFRA_API_KEY
+  timeout_seconds: 120
+  # DeepInfra 5xx/429 responses remain bounded and desynchronized by the
+  # shared OpenAI-compatible retry transport.
+  max_retries: 8
+  # The computational unit remains one episode per worker. Cross-cell
+  # episode parallelism is controlled study-wide, not inside a game.
+  request_concurrency: 1
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    # Replace with the measured Study 08 latency after the live smoke.
+    estimated_latency_seconds: 5.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    # A production study contains more than half a million expected decisions.
+    # At the declared 5% validation-failure rate, two attempts make at least
+    # one terminal malformed-response failure effectively certain. Six total
+    # attempts reduce that study-wide risk below one percent while leaving the
+    # expected-attempt estimate (1 / 0.95) unchanged.
+    invalid_response_retries: 5
+    max_reason_characters: 16384
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Index 2 is incorrect in every selected task: 0001, 0002, 0003, 0004.
+    target: 2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 12
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: neutral
+
+execution:
+  seed: 20260822
+  repetitions: 10
+  parallelism: 1
+  fail_fast: false
+
+pricing:
+  # DeepInfra publishes model metadata; preflight uses the dated, auditable
+  # offline Gemma catalogue entry.
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: USD
+  # Explicit production override approved for the 4,096-token cap and six
+  # validation attempts. Expected spend is unchanged; these finite limits
+  # admit the deliberately pessimistic all-attempts conservative bound.
+  system_max_cost_per_run: 2500.0
+  max_cost_per_run: 2500.0
+  max_provider_requests: 2000000
+  max_input_tokens: 15000000000
+  max_output_tokens: 8000000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+# Study aggregation performs the predeclared offline estimator pass over pooled
+# canonical observations. Avoid duplicating the same expensive bootstrap here.
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study08-wrong-prompt-b-atlas-deepinfra-gemma
+  description: >-
+    Study 08 wrong-control receiver x evidence-strategy x actuation atlas at N=24, q=1,
+    q_c=12, theta=0.5, beta=4 over four matched worlds and ten repetitions.
+  tags: [relational, population-study-08, wrong-control, prompt-class, b-atlas, N24, q1, qc12, beta4, deepinfra, gemma-4-e4b-it, results-only]
+  metadata:
+    study: population_study_08
+    phase: wrong_prompt_atlas
+    design: epistemic_prompt_control_efficiency
+    controller_semantics: wrong
+    target_semantics: "false"
+    population_rounds: 10
+    social_group_size: 1
+    sensor_sample_size: 12
+    sensing_fraction: 0.5
+    beta: 4.0
+    worlds: 4
+    repetitions: 10
+    cells: 96
+    episodes: 960
+    llm_provider: deepinfra
+    llm_model: google/gemma-4-E4B-it
+    nominal_provider_requests: 253440
+    expected_provider_requests: 267840
+    conservative_provider_requests: 1520640
+    common_random_numbers_across_grid: true
+    crn_note: all prompt, budget, and task cells share repetition-index streams; the truth block uses the same grid order and root seed
+    mandatory_message_mode: recommendation_plus_fact
+    # Names what the offline analysis genuinely computes, in the coordinates of
+    # the revised single-affinity theory. `round_target_susceptibility` is the
+    # canonical chi (target FRACTION, state matched on target_count_before);
+    # the magnetization response and the marginal share response remain
+    # available as diagnostics but are not this family.
+    primary_analysis_family:
+      - round_target_susceptibility
+      - round_target_actuation_cmi
+      - eta_ir
+      - effective_affinity
+      - kinetic_compliance
+      - controlled_current
+      - target_sensing_information_nats
+      - eta_th
+      - round_memory_target_actuation_cmi
+
+grid:
+  # Axis order is identical in both semantic blocks for paired seeds.
+  game.options.receiver_epistemic_disposition: [naive, vigilant]
+  control.options.controller_evidence_strategy: [neutral, strategic]
+  control.options.intervention_budget: [4, 8, 12, 16, 20, 24]
+  game.options.task_id: [task_0001, task_0002, task_0003, task_0004]

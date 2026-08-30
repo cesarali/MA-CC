@@ -707,7 +707,7 @@ def default_pricing_catalog() -> PricingCatalog:
     """Small dated catalog; unknown models deliberately remain unknown."""
 
     retrieved = "2026-08-02T00:00:00Z"
-    version = "2026-08-02-provider-economics-v2"
+    version = "2026-08-30-provider-economics-v7"
     common = {"retrieved_at": retrieved, "version": version}
     return PricingCatalog(
         version=version,
@@ -717,6 +717,57 @@ def default_pricing_catalog() -> PricingCatalog:
             ModelPricing("openai", "gpt-4o-mini", 0.15, 0.60, "USD", "official OpenAI pricing table",
                          "https://developers.openai.com/api/docs/pricing", cached_input_per_million=0.075,
                          **common),
+            ModelPricing(
+                "neuralwatt", "deepseek-v4-flash", 0.14, 0.28, "USD",
+                "NeuralWatt authenticated model-catalog pricing metadata",
+                "https://portal.neuralwatt.com/models/deepseek-v4-flash",
+                retrieved_at="2026-08-28T00:00:00Z",
+                version="2026-08-28-neuralwatt-catalog-v1",
+                cached_input_per_million=0.028,
+                limits=ProviderLimits(
+                    maximum_input_tokens=1_048_560,
+                    maximum_output_tokens=65_536,
+                ),
+            ),
+            ModelPricing(
+                "deepinfra", "deepseek-ai/DeepSeek-V4-Flash", 0.09, 0.18, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/deepseek-ai/DeepSeek-V4-Flash",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-public-model-v1",
+                cached_input_per_million=0.018,
+                limits=ProviderLimits(
+                    maximum_input_tokens=1_048_576,
+                    maximum_output_tokens=65_536,
+                ),
+            ),
+            ModelPricing(
+                "deepinfra", "google/gemma-4-26B-A4B-it", 0.07, 0.34, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/google/gemma-4-26B-A4B-it",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-gemma-public-model-v1",
+                limits=ProviderLimits(maximum_input_tokens=262_144),
+            ),
+            ModelPricing(
+                "deepinfra", "google/gemma-4-31B-it-turbo", 0.09, 0.34, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/google/gemma-4-31B-it-turbo",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-gemma-turbo-public-model-v1",
+                limits=ProviderLimits(
+                    maximum_input_tokens=262_144,
+                    maximum_output_tokens=16_384,
+                ),
+            ),
+            ModelPricing(
+                "deepinfra", "google/gemma-4-E4B-it", 0.02, 0.10, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/google/gemma-4-E4B-it",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-gemma-e4b-public-model-v1",
+                limits=ProviderLimits(maximum_input_tokens=131_072),
+            ),
             ModelPricing("university", "gwdg/qwen3-30b-a3b-instruct-2507", 0.0, 0.0,
                          "proxy_accounting_unit", "University proxy model-info snapshot; currency unspecified",
                          "docs/university_llm_api.md dated snapshot", limits=ProviderLimits(requests_per_minute=2000),

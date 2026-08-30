@@ -12,4 +12,5 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
+export MAS_CC_EXECUTION_SITE=potsdam
 python -m mas_cc.studies.array_worker "$1"

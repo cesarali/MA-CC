@@ -1,0 +1,14 @@
+schema_version: 1
+type: deepinfra
+model: deepseek-ai/DeepSeek-V4-Flash
+credentials_env: DEEPINFRA_API_KEY
+timeout_seconds: 120
+max_retries: 2
+# DeepInfra documents a default 200 outstanding requests per model. This local
+# cap is intentionally lower; NERSC studies additionally use the shared,
+# cross-process provider coordinator.
+request_concurrency: 32
+temperature: 0.0
+max_output_tokens: 4096
+options:
+  estimated_latency_seconds: 5.0

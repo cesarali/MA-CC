@@ -245,11 +245,17 @@ It is bound like the other two - the block is ``dynamic``, so adding this value
 leaves the prompt definition, its version and its hash untouched.
 """
 
+MANDATORY_VOTE_INSTRUCTION = (
+    "Not voting or abstaining is not an option. You must always choose exactly one\n"
+    "of the available option letters, even when the evidence available to you is\n"
+    "incomplete or inconclusive. Never return `none`, `null`, `unknown`, or any\n"
+    "other value for `vote`."
+)
+
 DECISION_INSTRUCTION = (
     "DECISION\n"
     "\n"
     "Work out which option the facts available to you support, and vote for it.\n"
-    "\n"
     "Your reason should briefly explain your choice, for your own record.\n"
     "\n"
     "Sharing a fact is the only way to pass information to other participants. You\n"
@@ -459,7 +465,9 @@ class TaskBlock(PromptBlock[Mapping[str, Any]]):
             "\n"
             f"{options}\n"
             "\n"
-            "Exactly one of these answers is correct. Vote by its letter."
+            "Exactly one of these answers is correct. Vote by its letter.\n"
+            "\n"
+            f"{MANDATORY_VOTE_INSTRUCTION}"
         )
 
 
@@ -731,6 +739,13 @@ class RelationalBallotContract(ResponseContract):
 
         return tuple(str(item) for item in self.options.get("relations", ()))
 
+    @property
+    def max_reason_characters(self) -> int:
+        value = self.options.get("max_reason_characters", MAX_REASON_CHARACTERS)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("max_reason_characters must be a positive integer")
+        return value
+
     def instruction(self) -> str:
         options = " | ".join(self.allowed_values)
         # `none` is always last and always present: an agent that knows nothing
@@ -743,7 +758,7 @@ class RelationalBallotContract(ResponseContract):
             "\n"
             "{\n"
             f'  "vote": "<{options}>",\n'
-            '  "reason": "<brief private reason>",\n'
+            f'  "reason": "<private reason; at most {self.max_reason_characters} characters>",\n'
             f'  "shared_fact_id": "<{citable}>"\n'
             "}"
         )
@@ -775,11 +790,11 @@ class RelationalBallotContract(ResponseContract):
             return ValidationResult.failure(
                 ValidationIssue("response.reason", "must be non-empty text")
             )
-        if len(reason.strip()) > MAX_REASON_CHARACTERS:
+        if len(reason.strip()) > self.max_reason_characters:
             return ValidationResult.failure(
                 ValidationIssue(
                     "response.reason",
-                    f"must be at most {MAX_REASON_CHARACTERS} characters",
+                    f"must be at most {self.max_reason_characters} characters",
                 )
             )
         if "shared_fact_id" not in parsed:
@@ -873,6 +888,7 @@ def relational_public_ballot_prompt(
     relations: Sequence[str] = (),
     receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
+    max_reason_characters: int = MAX_REASON_CHARACTERS,
 ) -> RelationalBallotPrompt:
     """One prompt of this family.
 
@@ -905,6 +921,7 @@ def relational_public_ballot_prompt(
             options={
                 "fact_ids": tuple(fact_ids),
                 "relations": tuple(relations),
+                "max_reason_characters": max_reason_characters,
             },
         ),
     )
@@ -923,6 +940,7 @@ def build_relational_ballot_prompt(
     receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
     social_context: bool = False,
+    max_reason_characters: int = MAX_REASON_CHARACTERS,
 ) -> RelationalBallotPrompt:
     """Bind one focal update, or - with no sources and no vote - one local vote.
 
@@ -946,6 +964,7 @@ def build_relational_ballot_prompt(
         relations=tuple(sorted(option_letters.values())),
         receiver_epistemic_disposition=receiver_epistemic_disposition,
         social_distrust=social_distrust,
+        max_reason_characters=max_reason_characters,
     ).bind(
         identity=identity,
         decision_basis=(

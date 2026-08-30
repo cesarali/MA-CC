@@ -1351,3 +1351,95 @@ ONE REPRODUCIBLE ANALYSIS ZIP
 The study layer standardizes orchestration and outputs.
 
 It must make the existing scientific machinery easier to use, not replace it.
+
+---
+
+# 27. NERSC Perlmutter interactive execution
+
+NERSC is a genuinely different scheduler topology: MA-CC production work must
+use real-time CPU allocations and must never enter the regular batch queue.
+The ordinary real `study submit` path fails closed on Perlmutter before
+preflight or scheduler contact.
+The only permitted allocation request is:
+
+```bash
+salloc --qos=interactive --constraint=cpu ...
+```
+
+The NERSC interactive QoS is limited to four nodes and four hours. Each
+Perlmutter CPU node has 128 physical cores. The generic launchers under
+`scripts/nersc/` enforce those limits and reject any QoS override.
+
+The scientific execution mapping is unchanged. NERSC separates preparation
+from the scheduler mutation:
+
+```bash
+mas-cc study prepare \
+  --config-dir <folder> \
+  --results-dir <study-result-root> \
+  --require-results-under <site-results-root> \
+  --execution-site nersc
+
+scripts/nersc/run_study.sh \
+  --account <cpu-project> \
+  --nodes <1-4> \
+  --study-dir <study-result-root>
+```
+
+`study prepare` performs the ordinary preflight and writes
+`study_manifest.json`, `submission_manifest.csv`, and, for cell mode,
+`execution_manifest.csv` plus `execution_plan.json`. It does not call a
+scheduler. The NERSC launcher then partitions the same manifest indices across
+one rank per allocated node and starts the existing generic cell/config
+workers. The plan's provider-safe throttle, CPU request, memory request,
+scientific identities, episode seeds, and shared provider-load coordinator are
+preserved. Scheduler QoS and partition fields from a Potsdam-oriented plan are
+execution-site metadata only and cannot override NERSC's fixed interactive CPU
+allocation.
+
+The explicit preparation-only result boundary makes a site migration auditable:
+it replaces the source study's site-specific result guard in the generated
+`study_manifest.json`, while ordinary `study submit` continues to enforce the
+source guard without an override.
+
+Preparation also records `execution_site: nersc`. The NERSC planner rejects a
+Potsdam or unstamped preparation and requires every manifest output beneath the
+prepared study root. Generic Potsdam jobs stamp workers as `potsdam`; generic
+NERSC ranks stamp them as `nersc`; shared workers fail before provider setup if
+the stamp and preparation differ. Source study manifests retain Potsdam-safe
+`/work`, partition, and QoS defaults. NERSC scheduler and `/pscratch` values
+exist only in `scripts/nersc/` and the external prepared result tree.
+
+All NERSC results, worker logs, and allocation provenance must be stored on
+`/pscratch` outside the source repository and home directory. No
+study-specific NERSC launcher is permitted.
+
+Long studies use the generic detached control entry point:
+
+```bash
+scripts/nersc/start_study_supervisor.sh \
+  --account <cpu-project> \
+  --nodes <1-4> \
+  --study-dir <prepared-study-result-root> \
+  --aggregate
+```
+
+The launcher establishes a new session, records its PID and combined log under
+the external study root, and acquires a per-study lock before returning. It
+therefore survives the originating Herdr/SSH/agent session ending. The
+supervisor requests one four-hour interactive CPU allocation at a time. After
+each allocation exits it inspects completed cell seals, failed episode
+manifests, and completed unsealed episode manifests. A clean incomplete study
+causes another fresh interactive allocation against the same deterministic
+manifest and output root; a recorded scientific failure stops automatic
+rollover. Strict aggregation is requested only after all expected cell seals
+exist. Its own completion probe requires a complete analysis manifest and the
+final ZIP; clean allocation interruption retries in a fresh interactive
+allocation, while recorded strict-validation failure stops the supervisor.
+
+This control plane never changes scientific identity, resume validation,
+provider policy, or Potsdam launchers. It never falls back to another QoS.
+Detachment guarantees independence from a user session, not survival of a
+login-node reboot. Scheduler-hosted control across platform maintenance would
+require NERSC `workflow` QoS access; without it, the idempotent `--ensure`
+entry point is used to restart the same supervisor after service restoration.

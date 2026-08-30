@@ -1,0 +1,147 @@
+# Production-like, credential-free NERSC validation of the Study 04/06
+# scientific and execution path.
+#
+# Shape: 2 sensing levels x 3 actuation budgets x 2 matched worlds x
+# 30 repetitions = 12 cells and 360 episodes. Every episode has N=24 and ten
+# rounds, producing 264 nominal mock completions and retained round/micro data.
+
+llm_provider:
+  type: mock
+  model: deterministic-production-like-smoke
+  request_concurrency: 8
+  temperature: 0.0
+  max_output_tokens: 128
+  options:
+    response: '{"vote":"C","reason":"production-like smoke","shared_fact_id":"none"}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Index 2 is incorrect in both selected matched worlds.
+    target: 2
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 6
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+
+execution:
+  seed: 20260828
+  repetitions: 30
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 250000
+  max_input_tokens: 2000000000
+  max_output_tokens: 100000000
+  allow_unbounded_paid_requests: true
+
+logging:
+  level: INFO
+  console: false
+  audit: true
+  comet: false
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+# The study aggregator performs the estimator pass over reconstructed complete
+# cells. Keeping run-local analysis off prevents duplicate resampling work.
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    sweep_experiment: false
+
+experiment:
+  name: nersc-production-like-cmi-grid
+  description: >-
+    Credential-free NERSC cell-array and strict-aggregation validation using
+    the Study 04/06 N=24 ten-round protocol across sensing, actuation, and
+    matched-world cells with thirty episodes per cell.
+  tags:
+    - relational
+    - nersc
+    - production-like-smoke
+    - cmi
+    - multi-cell
+    - results-only
+  metadata:
+    study: nersc_production_like_cmi_smoke
+    design: sensing_actuation_resource_grid
+    population_rounds: 10
+    worlds: 2
+    repetitions: 30
+    cells: 12
+    episodes: 360
+    nominal_mock_completions: 95040
+    common_random_numbers_across_grid: false
+
+grid:
+  # Axis order is fixed so scientific cell indices and episode seeds remain
+  # reproducible. These are scientific coordinates, not scheduler settings.
+  control.options.sensor_sample_size: [6, 18]
+  control.options.intervention_budget: [6, 12, 18]
+  game.options.task_id: [task_0001, task_0002]

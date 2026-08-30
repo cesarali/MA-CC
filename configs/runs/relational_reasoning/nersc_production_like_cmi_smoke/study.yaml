@@ -1,0 +1,24 @@
+study:
+  name: nersc-production-like-cmi-smoke
+
+configs:
+  - production_like_cmi_grid.yaml
+
+execution:
+  # One original scientific cell per generic worker, distributed by the
+  # NERSC interactive launcher. The mock has no provider RPM ceiling, but the
+  # planner still carries a finite declared bound and concurrency accounting.
+  mode: auto
+  target_rpm: 100000
+  assumed_latency_seconds: 0.1
+  max_active_nodes: 12
+  cpus_per_task: 8
+  memory: 8G
+  time_limit: "00:30:00"
+  partition: cpu
+  qos: interactive
+  results_root: /pscratch/sd/d/dfarough/MA-CC-results/studies/nersc-production-like-cmi-smoke-20260828
+  require_results_under: /pscratch/sd/d/dfarough/MA-CC-results
+
+analysis:
+  recipe: analysis.yaml

@@ -1,0 +1,13 @@
+schema_version: 1
+type: deepinfra
+model: google/gemma-4-E4B-it
+credentials_env: DEEPINFRA_API_KEY
+timeout_seconds: 120
+max_retries: 2
+# The authenticated account reports 200 outstanding requests per model and
+# 1,100,000 tokens/minute. Start lower until the Study 08 prompt is measured.
+request_concurrency: 32
+temperature: 0.0
+max_output_tokens: 4096
+options:
+  estimated_latency_seconds: 5.0

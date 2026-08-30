@@ -16,6 +16,9 @@ from .model_profiles import ModelProfileRegistry, default_model_profile_registry
 from .profiles import ProfiledLLMProvider
 
 ProviderFactory = Callable[..., LLMProvider]
+OPENAI_COMPATIBLE_PROVIDER_TYPES = frozenset(
+    {"deepinfra", "neuralwatt", "openai", "university"}
+)
 
 
 @dataclass(slots=True)
@@ -64,6 +67,8 @@ def create_default_provider_registry() -> ProviderRegistry:
     registry = ProviderRegistry()
     prefix = "mas_cc.llm_runtime.providers.adapters"
     registry.register("mock", f"{prefix}.mock:MockLLMProvider")
+    registry.register("deepinfra", f"{prefix}.deepinfra:DeepInfraProvider")
+    registry.register("neuralwatt", f"{prefix}.neuralwatt:NeuralWattProvider")
     registry.register("openai", f"{prefix}.openai:OpenAIProvider")
     registry.register("university", f"{prefix}.university:UniversityProvider")
     registry.register("gemma_local", f"{prefix}.gemma_local:GemmaLocalProvider")
@@ -81,7 +86,8 @@ def create_llm_provider(
     """Construct one adapter; this is the only public provider creation path."""
 
     selected = registry or create_default_provider_registry()
-    if config.type in {"openai", "university"}:
+    provider_type = config.type.strip().lower()
+    if provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
         from .load_control import coordinator_from_environment
 
         if environment is not None:
@@ -91,7 +97,7 @@ def create_llm_provider(
             coordinator_from_environment(config, environment=environment),
         )
     provider = selected.create(config, **adapter_options)
-    if config.type.strip().lower() in {"openai", "university"}:
+    if provider_type in OPENAI_COMPATIBLE_PROVIDER_TYPES:
         profiles = profile_registry or default_model_profile_registry()
-        return ProfiledLLMProvider(provider, config.type, profiles)
+        return ProfiledLLMProvider(provider, provider_type, profiles)
     return provider

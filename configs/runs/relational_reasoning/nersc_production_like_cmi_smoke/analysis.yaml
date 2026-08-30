@@ -1,0 +1,88 @@
+# Production-like offline analysis over reconstructed complete scientific
+# cells. All information quantities reuse the established round estimator.
+theoretical_reference: single_affinity_revised
+
+estimators:
+  - round_sensing_mi
+  - round_target_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_population_actuation_cmi
+  - round_target_actuation_cmi
+  - round_truth_actuation_cmi
+  - round_order_actuation_cmi
+  - round_population_information_fraction
+  - round_target_information_fraction
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_order_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_memory_target_signed_response
+  - round_phi_target_signed_response
+  - round_kappa_target_signed_response
+  - cell_current
+  - episode_current
+  - effective_affinity
+  - kinetic_compliance
+
+resampling:
+  bootstrap_resamples: 200
+  null_permutations: 200
+  confidence: 0.95
+  seed: 20260828
+
+derived:
+  - round_target_susceptibility
+  - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
+
+plots:
+  target_cmi_surface:
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+    x: intervention_budget
+    y: sensor_sample_size
+    facet: task_id
+    kind: heatmap
+  sensing_mi_surface:
+    source: primary_estimates
+    metric: round_sensing_mi
+    x: intervention_budget
+    y: sensor_sample_size
+    facet: task_id
+    kind: heatmap
+  support_surface:
+    source: primary_estimates
+    metric: round_dual_action_event_fraction
+    x: intervention_budget
+    y: sensor_sample_size
+    facet: task_id
+    kind: heatmap
+  eta_ir_surface:
+    source: derived_observables
+    metric: eta_ir
+    x: intervention_budget
+    y: sensor_sample_size
+    facet: task_id
+    kind: heatmap
+  effective_affinity_surface:
+    source: primary_estimates
+    metric: effective_affinity
+    x: intervention_budget
+    y: sensor_sample_size
+    facet: task_id
+    kind: heatmap

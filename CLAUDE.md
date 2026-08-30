@@ -66,3 +66,44 @@ Do not hide uncertainty behind confident-sounding technical language.
 The environment, experiment, and workflow rules for this repository live in
 [AGENTS.md](AGENTS.md). Follow those as well — this file governs *how you
 explain things*, `AGENTS.md` governs *what you do*.
+
+### NERSC Perlmutter environment
+
+When working in this checkout on NERSC Perlmutter, use the existing `MA-CC`
+Conda environment. It is physically stored outside the limited home directory
+at:
+
+```text
+/pscratch/sd/d/dfarough/conda_envs/MA-CC
+```
+
+The repository is `/pscratch/sd/d/dfarough/MA-CC`, and Conda's writable
+package cache is `/pscratch/sd/d/dfarough/conda_pkgs`. The displayed path
+`~/.conda/envs/MA-CC` is a symlink to the physical `/pscratch` environment; do
+not create another environment under the home directory.
+
+Load the NERSC Python module in every new shell or agent command group, then
+run commands through the named environment:
+
+```bash
+module load python/3.11-24.1.0
+conda run -n MA-CC python ...
+conda run -n MA-CC python -m pytest ...
+conda run -n MA-CC mas-cc ...
+```
+
+Do not use the system Python or install project dependencies into it. Follow
+the fuller cluster and experiment rules in [AGENTS.md](AGENTS.md).
+
+All production work on NERSC must run on Perlmutter CPU compute nodes through
+an `salloc` interactive allocation. Always use `--qos=interactive` together
+with `--constraint=cpu`. Never use `sbatch`, the `regular` quality of service
+(QoS, the scheduler queue policy), or a default/omitted QoS for this project.
+Interactive allocations may use one to four nodes for at most four hours, and
+each CPU node has 128 physical cores. Use the checked launchers in
+`scripts/nersc/`; they refuse any other QoS. Keep results and logs under
+`/pscratch/sd/d/dfarough/MA-CC-results`, outside the repository and home
+directory. Use `scripts/nersc/start_study_supervisor.sh` for studies that may
+cross the four-hour walltime; it detaches from the agent/SSH session and safely
+resumes the same prepared result root through successive interactive
+allocations.

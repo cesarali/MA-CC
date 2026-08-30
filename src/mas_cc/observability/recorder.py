@@ -265,6 +265,18 @@ class RunRecorder:
             auxiliary_dir.mkdir(parents=True, exist_ok=True)
             self._round_trajectory_path = auxiliary_dir / "round_trajectory.jsonl"
             self._micro_slot_trajectory_path = auxiliary_dir / "micro_slot_trajectory.jsonl"
+            # A compact checkpoint is published only after the whole episode
+            # succeeds.  If a scheduler wall kills the process first, the
+            # episode is deliberately restarted from round zero; its partial
+            # append-only trajectory streams therefore belong to the abandoned
+            # attempt, not to the new one.  Reset only those uncommitted
+            # streams.  Durable provider accounting and prompt candidates live
+            # elsewhere under ``.resume`` and remain intact.
+            for partial_path in (
+                self._round_trajectory_path,
+                self._micro_slot_trajectory_path,
+            ):
+                partial_path.unlink(missing_ok=True)
         else:
             self._round_trajectory_path = self.output_dir / "round_trajectory.jsonl"
             self._micro_slot_trajectory_path = self.output_dir / "micro_slot_trajectory.jsonl"

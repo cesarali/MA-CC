@@ -692,3 +692,77 @@ reserved for deliberate diagnostics. Live state under
 - Strict validation precedes final analysis unless the user explicitly chooses
   visibly incomplete exploratory output.
 - The ZIP is a downstream reproducible handoff artifact, not scientific truth.
+
+## 19. NERSC Perlmutter interactive handoff
+
+NERSC production execution is interactive-only. Never use `sbatch`, the
+regular QoS, or an omitted/default QoS. Use the CPU project account with an
+explicit `salloc --qos=interactive --constraint=cpu` request. Current limits
+are four nodes and four hours; a CPU node has 128 physical cores.
+`mas-cc study submit` fails closed when `NERSC_HOST=perlmutter`.
+
+The working NERSC sequence is:
+
+```bash
+module load python/3.11-24.1.0
+conda run -n MA-CC mas-cc study prepare \
+  --config-dir <study-config-folder> \
+  --results-dir /pscratch/sd/d/dfarough/MA-CC-results/studies/<study-root> \
+  --require-results-under /pscratch/sd/d/dfarough/MA-CC-results \
+  --execution-site nersc
+
+scripts/nersc/run_study.sh \
+  --account m4539 \
+  --nodes 4 \
+  --study-dir /pscratch/sd/d/dfarough/MA-CC-results/studies/<study-root>
+```
+
+The first command preflights and writes manifests without contacting SLURM.
+The second command is the sole scheduler mutation. It uses one `srun` rank per
+node, caps worker processes by the generated throttle and the plan's CPU/memory
+requirements, and invokes the unchanged `cell_worker` or `array_worker` for
+each manifest index. Logs live below
+`<study-root>/logs/nersc-<allocation-id>/`.
+
+The prepared tree is explicitly stamped for `nersc`, and the NERSC planner
+rejects a Potsdam or unstamped preparation as well as any worker output path
+outside that prepared root. Potsdam's two generic jobs stamp their workers as
+`potsdam`; shared workers reject a site mismatch before provider construction.
+Keep checked-in `study.yaml` result and scheduler defaults Potsdam-safe. NERSC
+rebinds only generated execution metadata under `/pscratch`, so site topology
+never changes source scientific configs, resolved identities, or provider
+runtime semantics.
+
+Use `scripts/nersc/run_command.sh` for a single compute-node command and
+`scripts/nersc/allocate_cpu.sh` when an interactive shell is required. All
+launchers reject a QoS override, more than four nodes, or more than four hours.
+The credential-free compute smoke is documented in `scripts/nersc/README.md`.
+
+For production studies that can exceed four hours, start the generic detached
+supervisor after preparation:
+
+```bash
+scripts/nersc/start_study_supervisor.sh \
+  --account m4539 \
+  --nodes 4 \
+  --study-dir /pscratch/sd/d/dfarough/MA-CC-results/studies/<study-root> \
+  --aggregate
+```
+
+It returns only after a `nohup`/new-session child owns the study lock, so the
+rollover loop survives Herdr, SSH, and agent-session inactivity. PID, lock, and
+combined logs are under `<study-root>/runtime/`. Each four-hour allocation is
+foreground to that detached supervisor. When it exits, the supervisor
+recounts seals and episode manifests and requests a fresh interactive CPU
+allocation only if the study is clean and incomplete. It reuses the exact
+prepared root and relies on existing episode validation/resume. Recorded
+scientific failure stops rollover. With `--aggregate`, strict aggregation gets
+its own interactive allocation after all cells seal. An interrupted or
+unavailable aggregation allocation is retried until both the complete analysis
+manifest and ZIP exist; recorded strict-validation failure stops retrying.
+
+Use `--ensure` for an idempotent restart. This protects against duplicate
+supervisors and safely continues after a control-plane interruption. No
+login-node process can survive a login-node reboot; scheduler-hosted control
+would require NERSC's `workflow` QoS, which is not enabled for the current
+project. Never substitute `regular`.

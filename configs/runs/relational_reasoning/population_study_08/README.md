@@ -48,21 +48,46 @@ All selected facts below are exact members of the frozen task.
 | `task_0003` | `NORTH` | `EAST` | `f1` | `f4` (`NORTH`) | `f1` (`EAST`) | yes |
 | `task_0004` | `SOUTHEAST` | `NORTHWEST` | `f1` | `f1` (`SOUTHEAST`) | `f6` (`NORTHWEST`) | yes |
 
-## Preflight snapshot (2026-08-27)
+## Preflight snapshot (updated 2026-08-29)
 
-Both configs passed live-pricing experiment preflight independently: 96 cells,
-960 episodes, 267,840 expected requests and 506,880 conservative requests per
+Both NeuralWatt configs passed offline-catalog experiment preflight independently: 96 cells,
+960 episodes, 267,840 expected requests and 1,520,640 conservative requests per
 config. Combined Study 08 demand is 192 cells, 1,920 episodes, 535,680 expected
-requests and 1,013,760 conservative requests. Reported monetary cost is `0.00`
-in the provider's `proxy_accounting_unit`; this is the provider's current zero
-token-rate accounting result, not a currency-valued prediction.
+requests and 3,041,280 conservative requests. The dated catalog estimate is
+approximately 647.26 USD expected and 3,674.80 USD conservative.
 
-The per-config serial-equivalent rough estimate is 100,440 seconds. Automatic
-cell-array execution uses 192 shards, throttle 18, eight episode slots and eight
-request permits per shard: 144 concurrent episode slots/request permits and an
-864 RPM planning estimate beneath the declared 900 RPM target. The conservative
-per-cell duration fits the four-hour SLURM limit. Actual wall time depends on
-provider latency and adaptive load control.
+Each decision permits five validation retries (six total attempts). The first
+production launch demonstrated that the previous two-attempt setting could
+terminate a whole episode after two malformed provider responses. At the
+declared 5% invalid-response rate, six attempts reduce the expected number of
+terminal malformed decisions across the complete study below 0.01. This is an
+execution-integrity setting: it changes no prompt, seed, scientific coordinate,
+or estimator, and the expected request/cost estimate remains unchanged.
+
+Retryable HTTP transport faults have a separate nine-attempt bound with the
+provider adapter's full-jitter exponential backoff. The shared provider
+coordinator opens its global breaker at a 5% rolling retryable-failure ratio and
+locally pauses a node after two failures. These execution-only settings were
+added after a live synchronized HTTP 503 burst exhausted the former three
+attempts while the older 25% breaker threshold was diluted by a preceding
+healthy minute. The coordinator starts at two requests and waits five healthy
+minutes before each additive increase toward five; this prevents the
+30-second recovery oscillation observed during the same provider incident.
+
+Automatic cell-array execution uses 192 shards, throttle five, one episode slot
+and one local request permit per shard. The study-wide runtime coordinator caps
+all Potsdam or NERSC workers at five in-flight NeuralWatt requests and applies a
+500-RPM rolling gate. At the benchmark-informed 1.5-second planning latency this
+is 200 RPM; the measured exact-prompt run reached approximately 211 RPM. The
+NeuralWatt provider adapter supplies `response_format: json_object` by default;
+the game and study configs contain no transport override, and the much slower
+forced-tool protocol is not part of the corrected production run. The expected
+provider time is roughly 42 hours and NERSC therefore resumes the same prepared
+root across successive four-hour interactive allocations.
+
+The checked-in result guard and scheduler fields remain Potsdam-safe under
+`/work`. NERSC preparation explicitly stamps and rebinds generated artifacts
+under `/pscratch`; it does not edit these source configs.
 
 The deterministic preflight estimator reports 353/416 representative input
 tokens for naive initialization/update prompts and 402/465 for vigilant ones.

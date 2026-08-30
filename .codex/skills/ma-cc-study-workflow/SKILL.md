@@ -31,9 +31,27 @@ with a credential-free import check for `mas_cc`, `pandas`, and `pyarrow`.
 Ensure the SLURM job inherits or explicitly invokes this same `MA-CC`
 environment; the login shell's system Python is not a valid fallback.
 
-Outside Potsdam, use the existing environment and setup conventions of the
-local checkout. Do not require the Potsdam environment name or absolute Conda
-path on a developer's local machine.
+## NERSC Perlmutter environment and interactive-only scheduler
+
+In the NERSC checkout at `/pscratch/sd/d/dfarough/MA-CC`, load
+`python/3.11-24.1.0` and use the existing `MA-CC` Conda environment physically
+stored at `/pscratch/sd/d/dfarough/conda_envs/MA-CC`. Its package cache is
+`/pscratch/sd/d/dfarough/conda_pkgs`; never recreate it in the home directory.
+
+Lightweight preflights and unit tests may run on a login node. All production
+experiments, study workers, and compute-heavy post-processing must use
+Perlmutter CPU nodes through `salloc --qos=interactive --constraint=cpu`.
+Never use `sbatch`, the regular QoS, or an omitted/default QoS for NERSC MA-CC
+work. Interactive allocations are limited to four nodes and four hours, with
+128 physical CPU cores per node. Use `scripts/nersc/`; its launchers hard-code
+the QoS, reject non-interactive allocations, and place logs with results on
+`/pscratch`, outside the repository. Prepare standardized study manifests with
+`mas-cc study prepare` before running them with
+`scripts/nersc/run_study.sh`.
+
+Outside Potsdam and NERSC, use the existing environment and setup conventions
+of the local checkout. Do not require either cluster's environment name or
+absolute Conda path on a developer's local machine.
 
 ## Read the architecture first
 
@@ -52,7 +70,9 @@ family is demonstrably closer to the requested scientific design.
   `scripts/Potsdam/SLURM/run_config_array.job` for config arrays or
   `scripts/Potsdam/SLURM/run_study_cell_array.job` for planned cell arrays. Add
   another launcher only when scheduler topology genuinely differs, and explain
-  that difference.
+  that difference. NERSC's interactive-only `salloc` topology is implemented
+  once by the generic launchers under `scripts/nersc/`; never create a
+  study-specific NERSC launcher.
 - Put hypotheses, fixed parameters, sweep axes, seeds, models, budgets,
   retention, and analysis requests in YAML—not shell scripts.
 - Group related configs in one study folder with `study.yaml` and, when needed,
@@ -146,6 +166,21 @@ destination. The command preflights every config again and submits one generic
 study array. `execution.mode: auto` should generate execution shards and an
 `execution_plan.json`; config-array mode remains a compatibility fallback.
 Do not increase a throttle without recalculating provider load.
+
+On NERSC, do not use the submit command because it calls Potsdam's `sbatch`
+topology; the real submit path fails closed when `NERSC_HOST=perlmutter`. Use
+the equivalent two-stage path:
+
+```bash
+mas-cc study prepare --config-dir <folder> --results-dir <study-result-root> \
+  --require-results-under <site-results-root>
+scripts/nersc/run_study.sh --account <cpu-project> --nodes <1-4> \
+  --study-dir <study-result-root>
+```
+
+The NERSC runner retains the generated scientific mapping and provider-safe
+throttle, then distributes generic cell/config workers across whole CPU nodes
+inside an allocation whose QoS is fixed to `interactive`.
 
 Monitor the returned job with the site's ordinary `squeue`/`sacct` tools and
 verify task exit states and run/cell seals. For a scheduler smoke, use a tiny

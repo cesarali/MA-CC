@@ -202,6 +202,31 @@ def build_parser() -> argparse.ArgumentParser:
         "study", help="submit and aggregate a folder of ordinary experiment configs"
     )
     study_commands = study.add_subparsers(dest="study_command", required=True)
+    study_prepare = study_commands.add_parser(
+        "prepare",
+        help="preflight every config and write worker manifests without submitting",
+    )
+    study_prepare.add_argument("--config-dir", type=Path, required=True)
+    study_prepare.add_argument(
+        "--results-dir",
+        type=Path,
+        help="common study result root (default: results/<study.name>)",
+    )
+    study_prepare.add_argument(
+        "--throttle",
+        type=int,
+        help="maximum number of simultaneously running worker processes",
+    )
+    study_prepare.add_argument(
+        "--require-results-under",
+        type=Path,
+        help="explicit site result boundary recorded in the prepared manifest",
+    )
+    study_prepare.add_argument(
+        "--execution-site",
+        choices=("nersc", "potsdam"),
+        help="stamp prepared artifacts for one scheduler adapter",
+    )
     study_submit = study_commands.add_parser(
         "submit", help="preflight every config and submit one SLURM config array"
     )
@@ -695,6 +720,40 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if summary.get("archive"):
             print(f"  archive: {summary['archive']}")
+        return 0
+    if args.command == "study" and args.study_command == "prepare":
+        from mas_cc.studies import prepare_study
+
+        try:
+            result = prepare_study(
+                args.config_dir,
+                args.results_dir,
+                throttle=args.throttle,
+                require_results_under=args.require_results_under,
+                execution_site=args.execution_site or "unspecified",
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        worker_manifest = (
+            result.study_dir / "execution_manifest.csv"
+            if result.execution_plan is not None
+            else result.manifest_path
+        )
+        print(
+            f"Study {result.study_dir.name} prepared: {len(result.entries)} config(s), "
+            f"{result.study_dir}"
+        )
+        print(f"  Worker manifest: {worker_manifest}")
+        if result.execution_plan is not None:
+            plan = result.execution_plan
+            print(
+                f"  Execution: {plan['shard_count']} cell shard(s), "
+                f"throttle {plan['array_throttle']}, "
+                f"{plan['total_episode_slots']} episode slot(s), "
+                f"{plan['total_request_concurrency']} request slot(s), "
+                f"~{plan['estimated_rpm']:.0f} RPM"
+            )
         return 0
     if args.command == "study" and args.study_command == "submit":
         from mas_cc.studies import submit_study

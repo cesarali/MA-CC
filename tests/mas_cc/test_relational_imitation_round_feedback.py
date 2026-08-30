@@ -34,6 +34,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     DECISION_BASIS_INITIAL,
     DECISION_BASIS_SOCIAL_NONE_VISIBLE,
     EVIDENCE_HEADER,
+    MANDATORY_VOTE_INSTRUCTION,
     MAX_REASON_CHARACTERS,
     NO_KNOWN_FACTS,
     SOCIAL_ENVIRONMENT,
@@ -1234,6 +1235,11 @@ def test_prompt_snapshot():
     assert set(letters.values()) == set(OPTIONS)
     assert "\n".join(f"- {k}) {v}" for k, v in sorted(letters.items())) in prompt
     assert "Vote by its letter." in prompt
+    assert "Not voting or abstaining is not an option." in prompt
+    assert "must always choose exactly one" in prompt
+    assert "even when the evidence available to you is" in prompt
+    assert "incomplete or inconclusive" in prompt
+    assert "Never return `none`, `null`, `unknown`" in prompt
     assert "\nYOUR CURRENT KNOWLEDGE\n" in prompt
     # The standing position is the vote and nothing else.
     assert f"YOUR CURRENT POSITION\n\nVote: {event['focal_vote_before']}\n" in prompt
@@ -1244,10 +1250,27 @@ def test_prompt_snapshot():
         "\n"
         "{\n"
         '  "vote": "<A | B | C>",\n'
-        '  "reason": "<brief private reason>",\n'
+        '  "reason": "<private reason; at most 600 characters>",\n'
         f'  "shared_fact_id": "<{citable}>"\n'
         "}"
     )
+
+
+def test_mandatory_vote_instruction_is_a_system_message():
+    config = _config(rounds=1, q=1)
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    request = game.initial_vote_requests(state, config.game)[0]
+    compiled = request.prompt.compile()
+    system_text = "\n".join(
+        message.content for message in compiled.messages if message.role.value == "system"
+    )
+    non_system_text = "\n".join(
+        message.content for message in compiled.messages if message.role.value != "system"
+    )
+
+    assert MANDATORY_VOTE_INSTRUCTION in system_text
+    assert MANDATORY_VOTE_INSTRUCTION not in non_system_text
 
 
 def test_a_rendered_source_is_identity_vote_and_evidence_and_never_its_reason():
@@ -1996,6 +2019,23 @@ def test_the_contract_rejects_a_fact_the_agent_does_not_hold():
     rejected = contract.validate('{"vote":"A","reason":"ok","shared_fact_id":"f1"}')
     assert not rejected.is_valid
     assert rejected.issues[0].field == "response.shared_fact_id"
+
+
+def test_the_reason_limit_can_be_scoped_to_one_relational_prompt():
+    contract = RelationalBallotContract(
+        allowed_values=LETTERS,
+        options={
+            "fact_ids": (),
+            "relations": ("NORTH",),
+            "max_reason_characters": 16_384,
+        },
+    )
+    response = json.dumps(
+        {"vote": "A", "reason": "x" * 4_096, "shared_fact_id": "none"}
+    )
+
+    assert "at most 16384 characters" in contract.instruction()
+    assert contract.validate(response).is_valid
 
 
 def test_an_agent_that_knows_nothing_may_cite_nothing():
