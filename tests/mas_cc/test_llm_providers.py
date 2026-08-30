@@ -15,6 +15,7 @@ from mas_cc.llm_runtime.providers import (
     CompletionRequest,
     CompletionResponse,
     ProviderError,
+    ProviderLoadControlConfig,
     ProviderUsage,
     create_llm_provider,
 )
@@ -113,6 +114,7 @@ class _CountingCoordinator:
     def __init__(self):
         self.acquired = 0
         self.outcomes = []
+        self.config = ProviderLoadControlConfig()
 
     async def acquire(self):
         self.acquired += 1
@@ -120,6 +122,22 @@ class _CountingCoordinator:
 
     async def release(self, lease, **outcome):
         self.outcomes.append((lease.token, outcome))
+
+
+class _ReleaseFailingCoordinator(_CountingCoordinator):
+    async def release(self, lease, **outcome):
+        raise RuntimeError("simulated shared-filesystem telemetry failure")
+
+
+class _HeartbeatCoordinator(_CountingCoordinator):
+    def __init__(self):
+        super().__init__()
+        self.config = ProviderLoadControlConfig(heartbeat_seconds=0.01, lease_seconds=1)
+        self.renewals = 0
+
+    async def renew(self, lease, **kwargs):
+        self.renewals += 1
+        return True
 
 
 def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata():
@@ -167,8 +185,10 @@ def test_cluster_coordinator_accounts_for_each_retry_attempt():
     )
     provider = create_llm_provider(
         LLMProviderConfig(
-            type="openai", model="gpt-4o-mini",
-            credentials_env="TEST_API_KEY", max_retries=1,
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            max_retries=1,
         ),
         environment={"TEST_API_KEY": "test-secret"},
         session=session,
@@ -181,6 +201,92 @@ def test_cluster_coordinator_accounts_for_each_retry_attempt():
     assert coordinator.outcomes[0][1]["status_code"] == 500
 
 
+def test_coordinated_request_survives_beyond_adapter_retry_count():
+    body = {
+        "id": "req-recovered",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _CountingCoordinator()
+    session = _Session(
+        [
+            _Response(500, {}, headers={"Retry-After": "0"}),
+            _Response(500, {}, headers={"Retry-After": "0"}),
+            _Response(200, body),
+        ]
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            max_retries=0,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+        request_coordinator=coordinator,
+    )
+
+    response = asyncio.run(provider.complete(_request()))
+
+    assert response.content == "A"
+    assert response.retries == 2
+    assert coordinator.acquired == 3
+    assert [outcome["success"] for _, outcome in coordinator.outcomes] == [
+        False,
+        False,
+        True,
+    ]
+
+
+def test_coordination_release_failure_does_not_destroy_valid_response():
+    body = {
+        "id": "req-valid-despite-telemetry",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY"
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=_Session([_Response(200, body)]),
+        request_coordinator=_ReleaseFailingCoordinator(),
+    )
+
+    assert asyncio.run(provider.complete(_request())).content == "A"
+
+
+def test_slow_http_attempt_is_renewed_and_released():
+    import time
+
+    body = {
+        "id": "req-slow",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _HeartbeatCoordinator()
+    session = _Session([_Response(200, body)])
+    original_post = session.post
+
+    def slow_post(*args, **kwargs):
+        time.sleep(0.04)
+        return original_post(*args, **kwargs)
+
+    session.post = slow_post
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY"
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+        request_coordinator=coordinator,
+    )
+    assert asyncio.run(provider.complete(_request())).content == "A"
+    assert coordinator.renewals >= 1
+    assert len(coordinator.outcomes) == 1
+
+
 def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():
     valid = {
         "id": "req-2",
@@ -190,7 +296,11 @@ def test_openai_compatible_adapter_retries_a_transient_malformed_success_body():
     }
     session = _Session(
         [
-            _Response(200, {"temporarily": "not-a-chat-envelope"}, headers={"Retry-After": "0"}),
+            _Response(
+                200,
+                {"temporarily": "not-a-chat-envelope"},
+                headers={"Retry-After": "0"},
+            ),
             _Response(200, valid),
         ]
     )
@@ -306,10 +416,15 @@ def test_university_discovers_v1_endpoint_and_rejects_unlisted_model_safely():
         base_url_env="TEST_BASE_URL",
         max_retries=0,
     )
-    session = _Session([], gets=[_Response(404, {}), _Response(200, {"data": [{"id": "other"}]})])
+    session = _Session(
+        [], gets=[_Response(404, {}), _Response(200, {"data": [{"id": "other"}]})]
+    )
     provider = create_llm_provider(
         config,
-        environment={"TEST_API_KEY": "test-secret", "TEST_BASE_URL": "https://example.invalid"},
+        environment={
+            "TEST_API_KEY": "test-secret",
+            "TEST_BASE_URL": "https://example.invalid",
+        },
         session=session,
     )
     with pytest.raises(ProviderError) as captured:
@@ -381,10 +496,15 @@ def test_static_preflight_counts_calls_cost_runtime_and_budget_without_provider_
         assumed_output_tokens=2,
         budget=BudgetCeiling(1),
     )
-    assert estimate.estimated_total_input_tokens == estimate.estimated_input_tokens_per_call * 5
+    assert (
+        estimate.estimated_total_input_tokens
+        == estimate.estimated_input_tokens_per_call * 5
+    )
     assert estimate.estimated_total_output_tokens == 10
     assert estimate.expected_cost_usd is not None
-    assert estimate.conservative_cost_bound_usd == pytest.approx(estimate.expected_cost_usd * 1.5)
+    assert estimate.conservative_cost_bound_usd == pytest.approx(
+        estimate.expected_cost_usd * 1.5
+    )
     assert estimate.rough_runtime_seconds == 4.5
     assert estimate.within_budget is True
 
@@ -438,10 +558,15 @@ def test_a_transport_timeout_is_retried_like_any_other_transient_failure():
         "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
     }
-    session = _timeout_session([_Timeout(TimeoutError("read timed out")), _Response(200, body)])
+    session = _timeout_session(
+        [_Timeout(TimeoutError("read timed out")), _Response(200, body)]
+    )
     provider = create_llm_provider(
         LLMProviderConfig(
-            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY", max_retries=2
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            max_retries=2,
         ),
         environment={"TEST_API_KEY": "test-secret"},
         session=session,
@@ -457,7 +582,10 @@ def test_an_exhausted_timeout_reports_itself_as_retryable_and_never_leaks_the_ke
     session = _timeout_session([_Timeout(TimeoutError("read timed out"))] * 2)
     provider = create_llm_provider(
         LLMProviderConfig(
-            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY", max_retries=1
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            max_retries=1,
         ),
         environment={"TEST_API_KEY": "test-secret"},
         session=session,
@@ -477,7 +605,10 @@ def test_authentication_and_client_errors_are_never_retried():
     session = _Session([_Response(401, {}), _Response(400, {})])
     provider = create_llm_provider(
         LLMProviderConfig(
-            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY", max_retries=3
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            max_retries=3,
         ),
         environment={"TEST_API_KEY": "test-secret"},
         session=session,

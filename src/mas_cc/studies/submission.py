@@ -111,7 +111,9 @@ def build_submission_entries(
         )
         label = _slug(path.stem)
         if label in labels:
-            raise ValueError(f"experiment configs map to duplicate output label {label!r}")
+            raise ValueError(
+                f"experiment configs map to duplicate output label {label!r}"
+            )
         labels.add(label)
         resolved_identity: Mapping[str, Any]
         if isinstance(source, GridSpec):
@@ -141,11 +143,15 @@ def build_submission_entries(
     return tuple(entries)
 
 
-def write_submission_manifest(path: str | Path, entries: Sequence[SubmissionEntry]) -> Path:
+def write_submission_manifest(
+    path: str | Path, entries: Sequence[SubmissionEntry]
+) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=SUBMISSION_COLUMNS, lineterminator="\n")
+        writer = csv.DictWriter(
+            stream, fieldnames=SUBMISSION_COLUMNS, lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(asdict(entry) for entry in entries)
     return destination
@@ -173,7 +179,9 @@ def read_submission_manifest(path: str | Path) -> tuple[SubmissionEntry, ...]:
         for row in rows
     )
     if [entry.array_index for entry in entries] != list(range(len(entries))):
-        raise ValueError("submission manifest array_index values must be contiguous from zero")
+        raise ValueError(
+            "submission manifest array_index values must be contiguous from zero"
+        )
     return entries
 
 
@@ -199,18 +207,27 @@ def array_task_command(entry: SubmissionEntry) -> tuple[str, ...]:
     )
 
 
-def _study_manifest(spec: StudySpec, entries: Sequence[SubmissionEntry]) -> dict[str, Any]:
+def _study_manifest(
+    spec: StudySpec, entries: Sequence[SubmissionEntry]
+) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "study_id": spec.name,
         "config_dir": str(spec.config_dir),
-        "study_manifest_source": None if spec.manifest_path is None else str(spec.manifest_path),
-        "analysis_recipe": None if spec.analysis_recipe is None else str(spec.analysis_recipe),
+        "study_manifest_source": None
+        if spec.manifest_path is None
+        else str(spec.manifest_path),
+        "analysis_recipe": None
+        if spec.analysis_recipe is None
+        else str(spec.analysis_recipe),
         "execution": dict(spec.execution),
+        "preflight": dict(spec.preflight),
         "configs": [asdict(entry) for entry in entries],
         "expected_config_count": len(entries),
         "expected_cell_count": sum(entry.expected_cell_count for entry in entries),
-        "expected_episode_count": sum(entry.expected_episode_count for entry in entries),
+        "expected_episode_count": sum(
+            entry.expected_episode_count for entry in entries
+        ),
     }
 
 
@@ -230,6 +247,9 @@ def prepare_study(
     if execution_site not in {"unspecified", "potsdam", "nersc"}:
         raise ValueError("execution_site must be 'unspecified', 'potsdam', or 'nersc'")
     spec = discover_study(config_dir)
+    from .preflight import validate_study_preflight_contract
+
+    validate_study_preflight_contract(spec)
     configured_results = spec.execution.get("results_root")
     study_dir = Path(
         results_dir or configured_results or (Path("results") / spec.name)
@@ -278,7 +298,9 @@ def prepare_study(
             shutil.rmtree(provenance)
         shutil.copytree(preflight_root, provenance)
 
-    manifest_path = write_submission_manifest(study_dir / "submission_manifest.csv", entries)
+    manifest_path = write_submission_manifest(
+        study_dir / "submission_manifest.csv", entries
+    )
     logs_dir = study_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     stdout_pattern = logs_dir / "slurm-%A_%a.out"
@@ -314,7 +336,9 @@ def prepare_study(
                 total_request_concurrency=throttle * plan.request_concurrency_per_shard,
                 total_episode_slots=throttle * plan.episode_slots_per_shard,
                 estimated_rpm=(
-                    throttle * plan.request_concurrency_per_shard * 60.0
+                    throttle
+                    * plan.request_concurrency_per_shard
+                    * 60.0
                     / plan.assumed_latency_seconds
                 ),
             )
@@ -323,30 +347,44 @@ def prepare_study(
             study_dir / "execution_manifest.csv", shards
         )
         (study_dir / "execution_plan.json").write_text(
-            json.dumps(execution_plan, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            json.dumps(execution_plan, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
         script = Path(
             job_script or "scripts/Potsdam/SLURM/run_study_cell_array.job"
         ).resolve()
         array = f"0-{len(shards) - 1}%{plan.array_throttle}"
         command = (
-            "sbatch", f"--partition={plan.partition}", f"--qos={plan.qos}",
-            "--nodes=1", "--ntasks=1", f"--array={array}",
-            f"--cpus-per-task={plan.cpus_per_task}", f"--mem={plan.memory}",
-            f"--time={plan.time_limit}", f"--output={stdout_pattern}",
-            f"--error={stderr_pattern}", str(script),
+            "sbatch",
+            f"--partition={plan.partition}",
+            f"--qos={plan.qos}",
+            "--nodes=1",
+            "--ntasks=1",
+            f"--array={array}",
+            f"--cpus-per-task={plan.cpus_per_task}",
+            f"--mem={plan.memory}",
+            f"--time={plan.time_limit}",
+            f"--output={stdout_pattern}",
+            f"--error={stderr_pattern}",
+            str(script),
             str(execution_manifest),
         )
     else:
-        script = Path(job_script or "scripts/Potsdam/SLURM/run_config_array.job").resolve()
+        script = Path(
+            job_script or "scripts/Potsdam/SLURM/run_config_array.job"
+        ).resolve()
         configured_throttle = spec.execution.get("throttle")
         limit = throttle if throttle is not None else configured_throttle
         if limit is not None and (isinstance(limit, bool) or int(limit) < 1):
             raise ValueError("SLURM array throttle must be a positive integer")
         array = f"0-{len(entries) - 1}" + ("" if limit is None else f"%{int(limit)}")
         command = (
-            "sbatch", f"--array={array}", f"--output={stdout_pattern}",
-            f"--error={stderr_pattern}", str(script), str(manifest_path),
+            "sbatch",
+            f"--array={array}",
+            f"--output={stdout_pattern}",
+            f"--error={stderr_pattern}",
+            str(script),
+            str(manifest_path),
         )
     if not script.is_file():
         raise ValueError(f"SLURM study job script does not exist: {script}")

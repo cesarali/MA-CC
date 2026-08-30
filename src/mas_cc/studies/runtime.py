@@ -63,7 +63,7 @@ def configure_study_provider_load_control(manifest_path: str | Path) -> None:
         resolved = ProviderLoadControlConfig.from_mapping(
             raw if isinstance(raw, Mapping) else None,
             defaults={
-                "initial_concurrency": min(24, total),
+                "initial_concurrency": total,
                 "minimum_concurrency": min(4, total),
                 "maximum_concurrency": total,
                 "target_rpm": target,
@@ -76,20 +76,20 @@ def configure_study_provider_load_control(manifest_path: str | Path) -> None:
         os.environ.pop(LOAD_CONTROL_DIR_ENV, None)
         return
 
-    control_root = study_root / "runtime" / "provider-control"
+    job_id = os.environ.get("SLURM_ARRAY_JOB_ID") or os.environ.get("SLURM_JOB_ID") or "local"
+    control_root = study_root / "runtime" / "provider-control" / f"job-{job_id}"
     control_root.mkdir(parents=True, exist_ok=True)
     settings = control_root / "settings.json"
-    if not settings.exists():
-        fd, temporary = tempfile.mkstemp(prefix="settings-", suffix=".tmp", dir=control_root)
+    fd, temporary = tempfile.mkstemp(prefix="settings-", suffix=".tmp", dir=control_root)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(resolved, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        os.replace(temporary, settings)
+    finally:
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                json.dump(resolved, stream, indent=2, sort_keys=True)
-                stream.write("\n")
-            os.replace(temporary, settings)
-        finally:
-            try:
-                os.unlink(temporary)
-            except FileNotFoundError:
-                pass
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
     os.environ[LOAD_CONTROL_CONFIG_ENV] = json.dumps(resolved, sort_keys=True)
     os.environ[LOAD_CONTROL_DIR_ENV] = str(control_root)

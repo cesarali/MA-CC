@@ -32,7 +32,14 @@ from mas_cc.storage import (
     write_completed_episode,
 )
 
-STREAMING_METRIC_FIELDS = ["round_index", "episode_id", "agent_id", "series", "metric_name", "value"]
+STREAMING_METRIC_FIELDS = [
+    "round_index",
+    "episode_id",
+    "agent_id",
+    "series",
+    "metric_name",
+    "value",
+]
 """Column order of ``metrics/streaming.csv``, and the marker for its schema.
 
 ``agent_id`` is set for agent-scope metrics, ``series`` for option-scope ones,
@@ -152,7 +159,8 @@ class CometMetricSink:
         safe = {
             str(key): value
             for key, value in parameters.items()
-            if isinstance(value, (str, int, float, bool)) and not _SECRET_FIELD.search(str(key))
+            if isinstance(value, (str, int, float, bool))
+            and not _SECRET_FIELD.search(str(key))
         }
         if safe:
             self._experiment.log_parameters(safe)
@@ -217,11 +225,19 @@ class RunRecorder:
     schema_version = 1
 
     def __init__(
-        self, output_dir: str | Path, *, run_id: str, resolved_config: Mapping[str, Any],
-        policy: DetailedAuditPolicy, comet_enabled: bool = False,
-        project_name: str = "mas-cc", run_name: str | None = None,
-        checkpoint_enabled: bool = True, price_snapshot_hash: str | None = None,
-        metrics: Sequence[Metric] = (), to_round_view: Callable[[Any], Any] | None = None,
+        self,
+        output_dir: str | Path,
+        *,
+        run_id: str,
+        resolved_config: Mapping[str, Any],
+        policy: DetailedAuditPolicy,
+        comet_enabled: bool = False,
+        project_name: str = "mas-cc",
+        run_name: str | None = None,
+        checkpoint_enabled: bool = True,
+        price_snapshot_hash: str | None = None,
+        metrics: Sequence[Metric] = (),
+        to_round_view: Callable[[Any], Any] | None = None,
         comet_metric_export: Sequence[str] = (),
         binning: BinnedTrajectoryPolicy | None = None,
         retention_policy: RetentionPolicy | None = None,
@@ -237,7 +253,9 @@ class RunRecorder:
         self.checkpoint_enabled = checkpoint_enabled
         self.retention_policy = retention_policy or RetentionPolicy.for_profile("full")
         self.scientific_identity = scientific_identity
-        self.scientific_path = None if scientific_path is None else Path(scientific_path)
+        self.scientific_path = (
+            None if scientific_path is None else Path(scientific_path)
+        )
         if self.retention_policy.compact_scientific and (
             self.scientific_identity is None or self.scientific_path is None
         ):
@@ -264,7 +282,9 @@ class RunRecorder:
             )
             auxiliary_dir.mkdir(parents=True, exist_ok=True)
             self._round_trajectory_path = auxiliary_dir / "round_trajectory.jsonl"
-            self._micro_slot_trajectory_path = auxiliary_dir / "micro_slot_trajectory.jsonl"
+            self._micro_slot_trajectory_path = (
+                auxiliary_dir / "micro_slot_trajectory.jsonl"
+            )
             # A compact checkpoint is published only after the whole episode
             # succeeds.  If a scheduler wall kills the process first, the
             # episode is deliberately restarted from round zero; its partial
@@ -279,13 +299,19 @@ class RunRecorder:
                 partial_path.unlink(missing_ok=True)
         else:
             self._round_trajectory_path = self.output_dir / "round_trajectory.jsonl"
-            self._micro_slot_trajectory_path = self.output_dir / "micro_slot_trajectory.jsonl"
+            self._micro_slot_trajectory_path = (
+                self.output_dir / "micro_slot_trajectory.jsonl"
+            )
         self._detailed_created = False
         self._metric_rows: list[dict[str, Any]] = []
         self._checkpoint_store = AtomicCheckpointStore(self.output_dir / ".checkpoints")
-        self.comet = CometMetricSink(comet_enabled, project_name=project_name, run_name=run_name or run_id)
+        self.comet = CometMetricSink(
+            comet_enabled, project_name=project_name, run_name=run_name or run_id
+        )
         self._logger = logging.getLogger(f"mas_cc.run.{run_id}")
-        self._streaming_metrics = tuple(m for m in metrics if isinstance(m, StreamingMetric))
+        self._streaming_metrics = tuple(
+            m for m in metrics if isinstance(m, StreamingMetric)
+        )
         self._final_metrics = tuple(m for m in metrics if isinstance(m, FinalMetric))
         self._to_round_view = to_round_view
         self._comet_metric_export = frozenset(comet_metric_export)
@@ -294,68 +320,146 @@ class RunRecorder:
         self._final_metrics_path = self.output_dir / "metrics" / "final.csv"
         self._binning = binning
         self._success_rate_path = self.output_dir / "metrics" / "success_rate.csv"
-        self._production_probability_path = self.output_dir / "metrics" / "production_probability.csv"
+        self._production_probability_path = (
+            self.output_dir / "metrics" / "production_probability.csv"
+        )
         self._streaming_metrics_header_written = False
 
     def event(self, event_type: str, **payload: Any) -> None:
-        row = {"schema_version": self.schema_version, "timestamp": _now(), "run_id": self.run_id, "event_type": event_type, **payload}
+        row = {
+            "schema_version": self.schema_version,
+            "timestamp": _now(),
+            "run_id": self.run_id,
+            "event_type": event_type,
+            **payload,
+        }
         if self.retention_policy.verbose_episode_history:
             _jsonl(self._event_path, row)
             with self._log_path.open("a", encoding="utf-8") as stream:
-                stream.write(f"{row['timestamp']} {event_type} {json.dumps({k: v for k, v in payload.items() if k not in {'prompt', 'response'}}, sort_keys=True, default=str)}\n")
-        self._logger.info("%s %s", event_type, {k: v for k, v in payload.items() if k not in {"prompt", "response"}})
+                stream.write(
+                    f"{row['timestamp']} {event_type} {json.dumps({k: v for k, v in payload.items() if k not in {'prompt', 'response'}}, sort_keys=True, default=str)}\n"
+                )
+        self._logger.info(
+            "%s %s",
+            event_type,
+            {k: v for k, v in payload.items() if k not in {"prompt", "response"}},
+        )
 
     def record_attempt(
-        self, *, round_index: int, game_id: str, request: Any, prompt: Any,
-        response: Any | None, attempt: int, valid: bool, validation_error: str | None,
-        provider_error: Exception | None = None, budget_status: Mapping[str, Any] | None = None,
+        self,
+        *,
+        round_index: int,
+        game_id: str,
+        request: Any,
+        prompt: Any,
+        response: Any | None,
+        attempt: int,
+        valid: bool,
+        validation_error: str | None,
+        provider_error: Exception | None = None,
+        budget_status: Mapping[str, Any] | None = None,
         observation: Mapping[str, Any] | None = None,
     ) -> None:
         metadata = request.metadata
         common = {
-            "round_index": round_index, "interaction_id": str(metadata.get("interaction_id")),
-            "agent_id": str(metadata.get("agent_id")), "decision_stage": metadata.get("decision_stage"),
-            "attempt": attempt, "provider": None if response is None else response.provider,
+            "round_index": round_index,
+            "interaction_id": str(metadata.get("interaction_id")),
+            "agent_id": str(metadata.get("agent_id")),
+            "decision_stage": metadata.get("decision_stage"),
+            "attempt": attempt,
+            "provider": None if response is None else response.provider,
             "model": None if response is None else response.model,
-            "prompt_family": prompt.family, "prompt_version": prompt.version,
-            "prompt_definition_hash": prompt.definition_hash, "prompt_instance_hash": prompt.instance_hash,
-            "valid": valid, "validation_error": validation_error,
+            "prompt_family": prompt.family,
+            "prompt_version": prompt.version,
+            "prompt_definition_hash": prompt.definition_hash,
+            "prompt_instance_hash": prompt.instance_hash,
+            "valid": valid,
+            "validation_error": validation_error,
             "provider_error": None if provider_error is None else str(provider_error),
         }
         if response is not None:
             self._episode_usage["requests"] += 1
             self._episode_usage["input_tokens"] += int(response.usage.input_tokens or 0)
-            self._episode_usage["output_tokens"] += int(response.usage.output_tokens or 0)
+            self._episode_usage["output_tokens"] += int(
+                response.usage.output_tokens or 0
+            )
         if not self.retention_policy.verbose_episode_history:
             return
-        _jsonl(self._api_path, {"schema_version": self.schema_version, "run_id": self.run_id, **common})
+        _jsonl(
+            self._api_path,
+            {"schema_version": self.schema_version, "run_id": self.run_id, **common},
+        )
         usage = {} if response is None else response.usage.to_dict()
-        _jsonl(self._usage_path, {"schema_version": self.schema_version, "run_id": self.run_id, **common, "usage": usage, "price_snapshot_hash": self.price_snapshot_hash})
-        selection = self.selector.select(game_id=game_id, round_index=round_index, provider_error=provider_error is not None, invalid_response=not valid)
+        _jsonl(
+            self._usage_path,
+            {
+                "schema_version": self.schema_version,
+                "run_id": self.run_id,
+                **common,
+                "usage": usage,
+                "price_snapshot_hash": self.price_snapshot_hash,
+            },
+        )
+        selection = self.selector.select(
+            game_id=game_id,
+            round_index=round_index,
+            provider_error=provider_error is not None,
+            invalid_response=not valid,
+        )
         if selection.selected:
             self._detailed_created = True
-            _jsonl(self._audit_path, {
-                "schema_version": self.schema_version, "run_id": self.run_id, "selection_reason": selection.reason,
-                **common, "observation": None if observation is None else dict(observation),
-                "compiled_messages": prompt.messages_as_dicts(),
-                "response": None if response is None else response.to_dict(),
-            })
+            _jsonl(
+                self._audit_path,
+                {
+                    "schema_version": self.schema_version,
+                    "run_id": self.run_id,
+                    "selection_reason": selection.reason,
+                    **common,
+                    "observation": None if observation is None else dict(observation),
+                    "compiled_messages": prompt.messages_as_dicts(),
+                    "response": None if response is None else response.to_dict(),
+                },
+            )
             for block in prompt.blocks_as_dicts():
-                _jsonl(self._blocks_path, {
-                    "schema_version": self.schema_version, "run_id": self.run_id,
-                    "round_index": round_index, "agent_id": common["agent_id"],
-                    "prompt_definition_hash": prompt.definition_hash, "prompt_instance_hash": prompt.instance_hash,
-                    "selection_reason": selection.reason, "binding_state": "bound", **block,
-                })
-        self.event("provider_attempt", **common, detailed_audit=selection.selected, detailed_audit_reason=selection.reason)
+                _jsonl(
+                    self._blocks_path,
+                    {
+                        "schema_version": self.schema_version,
+                        "run_id": self.run_id,
+                        "round_index": round_index,
+                        "agent_id": common["agent_id"],
+                        "prompt_definition_hash": prompt.definition_hash,
+                        "prompt_instance_hash": prompt.instance_hash,
+                        "selection_reason": selection.reason,
+                        "binding_state": "bound",
+                        **block,
+                    },
+                )
+        self.event(
+            "provider_attempt",
+            **common,
+            detailed_audit=selection.selected,
+            detailed_audit_reason=selection.reason,
+        )
         if attempt > 1:
             self.event("retry", **common)
         if not valid:
-            self.event("invalid_response" if provider_error is None else "provider_error", **common)
+            self.event(
+                "invalid_response" if provider_error is None else "provider_error",
+                **common,
+            )
         if budget_status is not None:
             self.record_budget("reconciliation", budget_status)
 
-    def record_interaction(self, *, round_index: int, interaction: Any, budget_status: Mapping[str, Any], state: Mapping[str, Any], prompt_definitions: Mapping[str, str]) -> None:
+    def record_interaction(
+        self,
+        *,
+        round_index: int,
+        interaction: Any,
+        budget_status: Mapping[str, Any],
+        state: Mapping[str, Any],
+        prompt_definitions: Mapping[str, str],
+    ) -> None:
         metrics = {
             "round_index": round_index,
             "successful_interaction": int(
@@ -374,7 +478,9 @@ class RunRecorder:
             ),
         }
         self._metric_rows.append(metrics)
-        self.comet.log_metrics({k: float(v) for k, v in metrics.items() if k != "round_index"}, round_index)
+        self.comet.log_metrics(
+            {k: float(v) for k, v in metrics.items() if k != "round_index"}, round_index
+        )
         population_metrics, option_metrics = self._record_round_metrics(
             round_index, interaction.transition.next_state
         )
@@ -388,11 +494,24 @@ class RunRecorder:
                 option_metrics, sort_keys=False, ensure_ascii=False
             )
             self._compact_rows[round_index] = row
-        self.event("interaction_completed", interaction_id=str(interaction.interaction_id), **metrics)
+        self.event(
+            "interaction_completed",
+            interaction_id=str(interaction.interaction_id),
+            **metrics,
+        )
         self.event("heartbeat", completed_rounds=round_index, status="running")
         self.record_budget("interaction_checkpoint", budget_status)
         if self.checkpoint_enabled and self.retention_policy.verbose_episode_history:
-            self._checkpoint_store.write(Checkpoint(self.run_id, round_index, self.config_hash, state, budget_status, prompt_definitions))
+            self._checkpoint_store.write(
+                Checkpoint(
+                    self.run_id,
+                    round_index,
+                    self.config_hash,
+                    state,
+                    budget_status,
+                    prompt_definitions,
+                )
+            )
             self.event("checkpoint_written", completed_rounds=round_index)
 
     def record_trajectory(self, *, record: Any) -> None:
@@ -469,6 +588,34 @@ class RunRecorder:
             {"schema_version": self.schema_version, "run_id": self.run_id, **payload},
         )
 
+    def record_round_boundary(
+        self,
+        *,
+        round_index: int,
+        state: Mapping[str, Any],
+        budget_status: Mapping[str, Any],
+        prompt_definitions: Mapping[str, str],
+    ) -> None:
+        """Replace the micro-step checkpoint with the canonical round-end state."""
+
+        if self.checkpoint_enabled and self.retention_policy.verbose_episode_history:
+            completed = int(state.get("turn", round_index))
+            self._checkpoint_store.write(
+                Checkpoint(
+                    self.run_id,
+                    completed,
+                    self.config_hash,
+                    state,
+                    budget_status,
+                    prompt_definitions,
+                )
+            )
+            self.event(
+                "round_boundary_checkpoint_written",
+                round_index=round_index,
+                completed_rounds=completed,
+            )
+
     def _existing_streaming_header(self) -> list[str] | None:
         """The header of an already-written streaming.csv, or None if there isn't one."""
 
@@ -499,16 +646,24 @@ class RunRecorder:
                 # `key` means different things per scope, so it lands in a
                 # different column: agent ids identify a row's agent, option
                 # labels identify one curve within a single metric's family.
-                rows.append({
-                    "round_index": round_index, "episode_id": self.run_id,
-                    "agent_id": str(key) if metric.scope == "agent" else "",
-                    "series": str(key) if metric.scope == "option" else "",
-                    "metric_name": metric.name, "value": value,
-                })
+                rows.append(
+                    {
+                        "round_index": round_index,
+                        "episode_id": self.run_id,
+                        "agent_id": str(key) if metric.scope == "agent" else "",
+                        "series": str(key) if metric.scope == "option" else "",
+                        "metric_name": metric.name,
+                        "value": value,
+                    }
+                )
                 if metric.scope != "agent" and metric.name in self._comet_metric_export:
                     # Comet keys must be unique, so each option curve is exported
                     # under its own suffixed key while staying one metric locally.
-                    comet_key = metric.name if metric.scope == "population" else f"{metric.name}_{key}"
+                    comet_key = (
+                        metric.name
+                        if metric.scope == "population"
+                        else f"{metric.name}_{key}"
+                    )
                     comet_values[comet_key] = float(value)
                 if metric.scope == "population" and value is not None:
                     try:
@@ -517,7 +672,9 @@ class RunRecorder:
                         pass
                 elif metric.scope == "option" and value is not None:
                     try:
-                        option_values.setdefault(metric.name, {})[str(key)] = float(value)
+                        option_values.setdefault(metric.name, {})[str(key)] = float(
+                            value
+                        )
                     except (TypeError, ValueError):
                         pass
         if not rows:
@@ -542,9 +699,13 @@ class RunRecorder:
                 mode, write_header = "w", True
                 self._logger.warning(
                     "replacing %s: its header %s predates the current metrics schema %s",
-                    self._streaming_metrics_path, existing, list(STREAMING_METRIC_FIELDS),
+                    self._streaming_metrics_path,
+                    existing,
+                    list(STREAMING_METRIC_FIELDS),
                 )
-        with self._streaming_metrics_path.open(mode, newline="", encoding="utf-8") as stream:
+        with self._streaming_metrics_path.open(
+            mode, newline="", encoding="utf-8"
+        ) as stream:
             writer = csv.DictWriter(stream, fieldnames=STREAMING_METRIC_FIELDS)
             if write_header:
                 writer.writeheader()
@@ -573,7 +734,9 @@ class RunRecorder:
         ]
         self._final_metrics_path.parent.mkdir(parents=True, exist_ok=True)
         with self._final_metrics_path.open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=["episode_id", "metric_name", "value"])
+            writer = csv.DictWriter(
+                stream, fieldnames=["episode_id", "metric_name", "value"]
+            )
             writer.writeheader()
             writer.writerows(rows)
 
@@ -610,7 +773,11 @@ class RunRecorder:
         )
         for path, fields, rows in (
             (self._success_rate_path, SUCCESS_RATE_FIELDS, success_rows),
-            (self._production_probability_path, PRODUCTION_PROBABILITY_FIELDS, production_rows),
+            (
+                self._production_probability_path,
+                PRODUCTION_PROBABILITY_FIELDS,
+                production_rows,
+            ),
         ):
             if not rows:
                 continue
@@ -623,7 +790,16 @@ class RunRecorder:
     def record_budget(self, event: str, status: Mapping[str, Any]) -> None:
         if not self.retention_policy.verbose_episode_history:
             return
-        _jsonl(self._budget_path, {"schema_version": self.schema_version, "run_id": self.run_id, "event": event, "price_snapshot_hash": self.price_snapshot_hash, "budget": dict(status)})
+        _jsonl(
+            self._budget_path,
+            {
+                "schema_version": self.schema_version,
+                "run_id": self.run_id,
+                "event": event,
+                "price_snapshot_hash": self.price_snapshot_hash,
+                "budget": dict(status),
+            },
+        )
 
     def finalize(
         self,
@@ -670,7 +846,12 @@ class RunRecorder:
         self.record_budget("run_completed", budget_status)
         self.event("run_completed", status=status, audit=self.selector.summary())
         metrics_path = self.output_dir / "local_metrics.csv"
-        fields = ["round_index", "successful_interaction", "payoff", "provider_attempts"]
+        fields = [
+            "round_index",
+            "successful_interaction",
+            "payoff",
+            "provider_attempts",
+        ]
         with metrics_path.open("w", newline="", encoding="utf-8") as stream:
             writer = csv.DictWriter(stream, fieldnames=fields)
             writer.writeheader()
@@ -679,15 +860,33 @@ class RunRecorder:
         self._write_binned_metrics()
         checkpoint = self._checkpoint_store.load()
         manifest = {
-            "schema_version": 1, "run_id": self.run_id, "checkpoint_path": f".checkpoints/{self._checkpoint_store.filename}",
-            "completed_rounds": None if checkpoint is None else checkpoint.completed_rounds,
-            "resolved_config_hash": self.config_hash, "prompt_state_restored": False,
+            "schema_version": 1,
+            "run_id": self.run_id,
+            "checkpoint_path": f".checkpoints/{self._checkpoint_store.filename}",
+            "completed_rounds": None
+            if checkpoint is None
+            else checkpoint.completed_rounds,
+            "resolved_config_hash": self.config_hash,
+            "prompt_state_restored": False,
         }
-        (self.output_dir / "checkpoint_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        (self.output_dir / "checkpoint_manifest.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         comet = self.comet.close()
-        (self.output_dir / "comet_summary.json").write_text(json.dumps(comet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return {"audit": self.selector.summary(), "comet": comet, "checkpoint": manifest, "detailed_files_created": self._detailed_created}
+        (self.output_dir / "comet_summary.json").write_text(
+            json.dumps(comet, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return {
+            "audit": self.selector.summary(),
+            "comet": comet,
+            "checkpoint": manifest,
+            "detailed_files_created": self._detailed_created,
+        }
 
 
 def price_snapshot_hash(snapshot: Mapping[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        json.dumps(
+            snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()

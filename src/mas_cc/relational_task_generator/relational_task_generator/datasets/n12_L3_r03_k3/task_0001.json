@@ -1,0 +1,208 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0001",
+  "seed": 9173884889605768521,
+  "generation": {
+    "dataset_seed": 20260829,
+    "task_index": 1,
+    "population_size": 12,
+    "reasoning_depth": 3,
+    "support_redundancy": 3,
+    "distractors": 2,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Teni",
+        "coordinates": {
+          "x": 1,
+          "y": -2
+        }
+      },
+      {
+        "name": "Meno",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Seni",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Renu",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Vani",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Zavi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Teni",
+        "relation": "SOUTH",
+        "object": "Meno",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Meno",
+        "relation": "EAST",
+        "object": "Seni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Seni",
+        "relation": "SOUTH",
+        "object": "Renu",
+        "role": "supporting"
+      },
+      {
+        "id": "f4",
+        "subject": "Vani",
+        "relation": "SOUTHEAST",
+        "object": "Mira",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Mira",
+        "relation": "NORTH",
+        "object": "Zavi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Teni",
+    "reference": "Renu",
+    "reasoning_depth": 3,
+    "supporting_fact_ids": [
+      "f1",
+      "f2",
+      "f3"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTH"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f3",
+        "f5"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Teni relative to Renu?",
+    "facts": {
+      "f1": "Teni is south of Meno.",
+      "f2": "Meno is east of Seni.",
+      "f3": "Seni is south of Renu.",
+      "f4": "Vani is southeast of Mira.",
+      "f5": "Mira is north of Zavi."
+    },
+    "reasoning_chain": [
+      "Teni is south of Meno.",
+      "Meno is east of Seni.",
+      "Seni is south of Renu."
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+theoretical_reference: none
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_target_actuation_cmi
+  - round_target_information_fraction
+  - round_target_susceptibility
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_susceptible_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - episode_current
+  - cell_current
+  - effective_affinity
+  - kinetic_compliance
+resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 20260830}
+derived:
+  - round_target_susceptibility
+  - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
+  - factorial_contrasts
+state_local: [x]
+state_local_x_bins: 8
+rho_aggregated_descriptive: true
+episode_endpoints: {classifier: relational_persistence_truth_aligned_v1}
+
+plots:
+  strategic_chi_rho_b: {source: derived_observables, metric: susceptibility_occupancy_weighted, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_T_pi_rho_b: {source: primary_estimates, metric: round_target_actuation_cmi, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_eta_IR_rho_b: {source: derived_observables, metric: eta_ir, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_eta_th_signed_rho_b: {source: derived_observables, metric: eta_th_signed, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_late_target_rho_b: {source: episode_endpoint_summary, value: late_time_mean_controller_target_share, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_late_truth_rho_b: {source: episode_endpoint_summary, value: late_time_mean_truth_share, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_late_active_phi_rho_b: {source: episode_endpoint_summary, value: late_time_mean_active_phi, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_truth_takeover_rho_b: {source: episode_endpoint_summary, value: truth_final_takeover_fraction, filters: {controller_evidence_strategy: strategic}, x: intervention_budget, y: epistemic_persistence, facet: social_group_size, kind: heatmap, color_scale: independent}
+  strategic_q1_chi_x_b: &phase {source: state_local_phase_maps, metric: chi, filters: {controller_evidence_strategy: strategic, social_group_size: 1}, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, kind: heatmap, color_scale: independent, status_column: phase_status}
+  strategic_q1_T_pi_x_b: {<<: *phase, metric: T_pi}
+  strategic_q1_eta_IR_x_b: {<<: *phase, metric: eta_IR}
+  strategic_q1_occupancy_x_b: &occupancy {source: state_occupancy_binned, filters: {controller_evidence_strategy: strategic, social_group_size: 1}, value: n_observations, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, kind: heatmap, color_scale: independent, status_column: phase_status}
+  strategic_q2_chi_x_b: {<<: *phase, filters: {controller_evidence_strategy: strategic, social_group_size: 2}}
+  strategic_q2_T_pi_x_b: {<<: *phase, metric: T_pi, filters: {controller_evidence_strategy: strategic, social_group_size: 2}}
+  strategic_q2_eta_IR_x_b: {<<: *phase, metric: eta_IR, filters: {controller_evidence_strategy: strategic, social_group_size: 2}}
+  strategic_q2_occupancy_x_b: {<<: *occupancy, filters: {controller_evidence_strategy: strategic, social_group_size: 2}}
+  q_effect_chi_rho_b: {source: derived_observables, metric: delta_q_susceptibility_occupancy_weighted, x: intervention_budget, y: epistemic_persistence, kind: heatmap, color_scale: independent}
+  q_effect_T_pi_rho_b: {source: derived_observables, metric: delta_q_round_target_actuation_cmi, x: intervention_budget, y: epistemic_persistence, kind: heatmap, color_scale: independent}
+  q_effect_eta_IR_rho_b: {source: derived_observables, metric: delta_q_eta_ir, x: intervention_budget, y: epistemic_persistence, kind: heatmap, color_scale: independent}
+  q_effect_eta_th_signed_rho_b: {source: derived_observables, metric: delta_q_eta_th_signed, x: intervention_budget, y: epistemic_persistence, kind: heatmap, color_scale: independent}

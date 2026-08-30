@@ -54,17 +54,22 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     epistemic_framing,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
+    knowledge_observables,
     knowledge_strata,
     supporting_fact_coverage,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     CONTROL_SOURCE_ID,
     RelationalDecisionFailed,
+    apply_epistemic_persistence,
+    build_social_sources,
     run_relational_imitation_round_feedback_game,
     sample_controlled_positions,
 )
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.observability import DetailedAuditPolicy
+from mas_cc.observability.recorder import RunRecorder
 
 pytestmark = pytest.mark.skipif(
     not (DEFAULT_TASK_DATASET_DIR / "task_0001.json").exists(),
@@ -214,7 +219,9 @@ def _config(path=NO_CONTROL, *, rounds=1, q=1, initialization=None, population=N
         options["n_agents"] = population
     return replace(
         config,
-        game=replace(config.game, horizon=rounds, population_size=size, options=options),
+        game=replace(
+            config.game, horizon=rounds, population_size=size, options=options
+        ),
     )
 
 
@@ -229,6 +236,11 @@ def _run(config, *, control=None, ballots=None):
         )
     )
     return result, ballots
+
+
+def _with_persistence(config, value):
+    options = {**dict(config.game.options), "epistemic_persistence": value}
+    return replace(config, game=replace(config.game, options=options))
 
 
 def _social_block(prompt: str) -> list[str]:
@@ -254,7 +266,9 @@ def _rendered_sources(item):
 
     return [
         render_social_source(source)
-        for source in localize_sources(item.transition.event["social_sources"], _letters(item))
+        for source in localize_sources(
+            item.transition.event["social_sources"], _letters(item)
+        )
     ]
 
 
@@ -270,9 +284,25 @@ def test_initial_knowledge_matches_the_frozen_assignment_exactly():
     assert len(state.agents) == task.population_size == 24
     for agent in state.agents:
         assert agent.known_fact_ids == task.known_facts(str(agent.agent_id))
+        assert agent.active_fact_ids == agent.known_fact_ids
         assert agent.initial_fact_ids == agent.known_fact_ids
         # No agent starts holding a fact it was never assigned.
         assert set(agent.known_fact_ids) <= set(task.fact_order)
+
+
+def test_epistemic_persistence_defaults_to_the_legacy_value():
+    config = _config()
+
+    assert "epistemic_persistence" not in config.game.options
+    assert create_game(config.game).rules(config.game).epistemic_persistence == 1.0
+
+
+@pytest.mark.parametrize("value", [-0.01, 1.01, True, "0.9", float("nan")])
+def test_invalid_epistemic_persistence_is_refused(value):
+    config = _with_persistence(_config(), value)
+
+    with pytest.raises(ValueError, match="epistemic_persistence"):
+        create_game(config.game).rules(config.game)
 
 
 def test_the_population_union_holds_every_supporting_fact_at_t0():
@@ -364,6 +394,30 @@ def test_a_fixed_seed_replays_the_whole_trajectory():
     ]
 
 
+def test_explicit_rho_one_is_exactly_the_legacy_runtime_path(monkeypatch):
+    legacy = _config(CONTROLLED, rounds=2, q=2)
+    explicit = _with_persistence(legacy, 1.0)
+    legacy_ballots = _Ballots(share="first_known")
+    explicit_ballots = _Ballots(share="first_known")
+
+    legacy_result, _ = _run(legacy, control=_forced(legacy), ballots=legacy_ballots)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("rho=1 must bypass the persistence transition")
+
+    monkeypatch.setattr(
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.runtime."
+        "apply_epistemic_persistence",
+        forbidden,
+    )
+    explicit_result, _ = _run(
+        explicit, control=_forced(explicit), ballots=explicit_ballots
+    )
+
+    assert explicit_ballots.prompts == legacy_ballots.prompts
+    assert explicit_result.to_dict() == legacy_result.to_dict()
+
+
 def test_the_controlled_schedule_is_an_exact_budget_drawn_without_replacement():
     class _Rng:
         def sample(self, population, k):
@@ -416,22 +470,36 @@ def test_the_returned_vote_is_the_committed_action_and_the_only_vote_field():
 def test_a_vote_may_be_given_as_a_letter_or_as_the_relation_it_names():
     letters = {"A": "NORTHEAST", "B": "SOUTHWEST", "C": "NORTH"}
 
-    assert parse_relational_ballot(
-        '{"vote":"c","reason":"x","shared_fact_id":"none"}', LETTERS, letters
-    ).vote == "C"
-    assert parse_relational_ballot(
-        '{"vote":"Option B","reason":"x","shared_fact_id":"none"}', LETTERS, letters
-    ).vote == "B"
+    assert (
+        parse_relational_ballot(
+            '{"vote":"c","reason":"x","shared_fact_id":"none"}', LETTERS, letters
+        ).vote
+        == "C"
+    )
+    assert (
+        parse_relational_ballot(
+            '{"vote":"Option B","reason":"x","shared_fact_id":"none"}', LETTERS, letters
+        ).vote
+        == "B"
+    )
     # Spelled out, the relation resolves to whichever letter carried it here.
-    assert parse_relational_ballot(
-        '{"vote":"northeast","reason":"x","shared_fact_id":"none"}', LETTERS, letters
-    ).vote == "A"
+    assert (
+        parse_relational_ballot(
+            '{"vote":"northeast","reason":"x","shared_fact_id":"none"}',
+            LETTERS,
+            letters,
+        ).vote
+        == "A"
+    )
     # No substring guessing: a sentence is not a vote.
-    assert parse_relational_ballot(
-        '{"vote":"a bit north of B","reason":"x","shared_fact_id":"none"}',
-        LETTERS,
-        letters,
-    ).vote is None
+    assert (
+        parse_relational_ballot(
+            '{"vote":"a bit north of B","reason":"x","shared_fact_id":"none"}',
+            LETTERS,
+            letters,
+        ).vote
+        is None
+    )
 
 
 @pytest.mark.parametrize(
@@ -465,7 +533,10 @@ def test_a_vote_may_be_given_as_a_letter_or_as_the_relation_it_names():
 def test_the_contract_rejects_anything_that_is_not_one_complete_ballot(response, field):
     contract = RelationalBallotContract(
         allowed_values=LETTERS,
-        options={"fact_ids": ("f1", "f2", "f3"), "relations": ("EAST", "NORTH", "WEST")},
+        options={
+            "fact_ids": ("f1", "f2", "f3"),
+            "relations": ("EAST", "NORTH", "WEST"),
+        },
     )
     result = contract.validate(response)
 
@@ -486,9 +557,12 @@ def test_the_contract_accepts_a_fenced_ballot_with_or_without_evidence():
     assert contract.validate(
         '{"vote":"A","reason":"ok","shared_fact_id":"none"}'
     ).is_valid
-    assert parse_relational_ballot(
-        '{"vote":"A","reason":"ok","shared_fact_id":"NONE"}', LETTERS
-    ).shared_fact_id is None
+    assert (
+        parse_relational_ballot(
+            '{"vote":"A","reason":"ok","shared_fact_id":"NONE"}', LETTERS
+        ).shared_fact_id
+        is None
+    )
 
 
 # ---- evidence honesty (§18) --------------------------------------------
@@ -520,9 +594,7 @@ def test_the_validator_names_the_knowledge_set_when_it_rejects_a_citation():
     state = game.initialize(config.game, config.execution.seed)
     focal = next(agent for agent in state.agents if agent.known_fact_ids)
     request = game.ballot_request(state, focal.agent_id, (), config.game)
-    unknown = next(
-        fact for fact in state.fact_ids if fact not in focal.known_fact_ids
-    )
+    unknown = next(fact for fact in state.fact_ids if fact not in focal.known_fact_ids)
 
     good = game.parse_action(
         request,
@@ -562,9 +634,9 @@ def test_a_peer_exposed_fact_reaches_exactly_the_focal_agent_that_saw_it():
         }
         before = {
             str(agent.agent_id): set(agent.known_fact_ids)
-            for agent in create_game(config.game).initialize(
-                config.game, config.execution.seed
-            ).agents
+            for agent in create_game(config.game)
+            .initialize(config.game, config.execution.seed)
+            .agents
         }
         assert exposed <= after[focal]
         # Nobody else's knowledge moved at this event.
@@ -578,7 +650,9 @@ def test_a_peer_exposed_fact_reaches_exactly_the_focal_agent_that_saw_it():
 
 def test_knowledge_only_ever_grows_and_only_through_a_recorded_exposure():
     config = _config(rounds=3, q=2)
-    result, _ = _run(config, control=_AlwaysAdvocate(), ballots=_Ballots(share="first_known"))
+    result, _ = _run(
+        config, control=_AlwaysAdvocate(), ballots=_Ballots(share="first_known")
+    )
 
     initial = {
         str(agent.agent_id): set(agent.known_fact_ids)
@@ -618,6 +692,287 @@ def test_an_already_known_fact_is_an_exposure_but_not_an_acquisition():
     assert repeated > 0
 
 
+def test_a_first_acquisition_enters_historical_and_active_state():
+    config = _with_persistence(_config(rounds=1), 0.5)
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    focal = next(
+        agent
+        for agent in state.agents
+        if set(agent.known_fact_ids) != set(state.fact_ids)
+    )
+    fact_id = next(fact for fact in state.fact_ids if fact not in focal.known_fact_ids)
+    request = game.ballot_request(state, focal.agent_id, (), config.game)
+    letter = next(iter(request.observation.visible_state["option_letters"]))
+    action = game.parse_action(
+        request,
+        json.dumps({"vote": letter, "reason": "ok", "shared_fact_id": "none"}),
+    )
+    transition = game.apply_round_event_transition(
+        state,
+        focal=focal.agent_id,
+        action=action,
+        config=config.game,
+        social_sources=(
+            {
+                "source_type": "ordinary",
+                "source_id": "agent_999",
+                "shared_fact_id": fact_id,
+            },
+        ),
+    )
+
+    event = transition.event
+    updated = transition.next_state.relational_agent(focal.agent_id)
+    assert event["new_peer_fact_ids"] == [fact_id]
+    assert event["reactivated_peer_fact_ids"] == []
+    assert fact_id in updated.known_fact_ids
+    assert fact_id in updated.active_fact_ids
+
+
+def test_rho_zero_deactivates_every_fact_without_erasing_history():
+    config = _with_persistence(_config(rounds=1, q=1), 0.0)
+    initial = create_game(config.game).initialize(config.game, config.execution.seed)
+    result, _ = _run(config, ballots=_Ballots(share="none"))
+
+    assert [agent.known_fact_ids for agent in result.final_state.agents] == [
+        agent.known_fact_ids for agent in initial.agents
+    ]
+    assert all(agent.active_fact_ids == () for agent in result.final_state.agents)
+    event = result.rounds[0].event
+    assert event["persistence_deactivated_fact_count"] == sum(
+        len(agent.active_fact_ids) for agent in initial.agents
+    )
+    assert event["active_mean_supporting_fact_coverage_after"] == 0.0
+    assert event["historical_mean_supporting_fact_coverage_after"] > 0.0
+
+
+def test_rho_zero_removes_private_facts_from_the_next_round_prompt():
+    config = _with_persistence(_config(rounds=2, q=1), 0.0)
+    result, ballots = _run(config, ballots=_Ballots(share="first_known"))
+    first_second_round = config.game.population_size
+
+    assert len(result.rounds) == 2
+    assert NO_KNOWN_FACTS in ballots.prompts[first_second_round]
+    assert result.rounds[0].event["active_mean_supporting_fact_coverage_after"] == 0.0
+
+
+def test_rho_one_persistence_helper_returns_the_same_state_without_rng():
+    config = _config(rounds=1)
+    state = create_game(config.game).initialize(config.game, config.execution.seed)
+
+    same, deactivated = apply_epistemic_persistence(state, persistence=1.0, rng=None)
+
+    assert same is state
+    assert deactivated == ()
+
+
+def test_persistence_draws_once_per_active_pair_in_stable_order():
+    config = _with_persistence(_config(rounds=1), 0.5)
+    state = create_game(config.game).initialize(config.game, config.execution.seed)
+    ordered_pairs = [
+        (str(agent.agent_id), fact_id)
+        for agent in sorted(state.agents, key=lambda item: str(item.agent_id))
+        for fact_id in sorted(state.fact_ids)
+        if fact_id in set(agent.active_fact_ids)
+    ]
+
+    class _AlternatingRng:
+        def __init__(self):
+            self.calls = 0
+
+        def random(self):
+            self.calls += 1
+            return 0.0 if self.calls % 2 else 1.0
+
+    rng = _AlternatingRng()
+    _, deactivated = apply_epistemic_persistence(state, persistence=0.5, rng=rng)
+
+    assert rng.calls == len(ordered_pairs)
+    assert deactivated == tuple(ordered_pairs[1::2])
+
+
+def test_round_boundary_checkpoint_contains_post_persistence_state(tmp_path):
+    config = _with_persistence(_config(rounds=1, q=1), 0.0)
+    recorder = RunRecorder(
+        output_dir=tmp_path,
+        run_id="persistence-checkpoint",
+        resolved_config=config.to_dict(),
+        policy=DetailedAuditPolicy(),
+        checkpoint_enabled=True,
+        metrics=(),
+        comet_enabled=False,
+    )
+
+    class _Observer:
+        def event(self, *_args, **_kwargs):
+            return None
+
+        def record_attempt(self, **_kwargs):
+            return None
+
+        def record_interaction(self, **payload):
+            recorder.record_interaction(**payload, budget_status={"status": "ok"})
+
+        def record_trajectory(self, **payload):
+            recorder.record_trajectory(**payload)
+
+        def record_round_trajectory(self, **payload):
+            recorder.record_round_trajectory(**payload)
+
+        def record_round_boundary(self, **payload):
+            recorder.record_round_boundary(**payload, budget_status={"status": "ok"})
+
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _Ballots(share="none").provider(config.llm_provider),
+            observer=_Observer(),
+        )
+    )
+    checkpoint = json.loads(
+        (tmp_path / ".checkpoints" / "checkpoint.json").read_text(encoding="utf-8")
+    )
+
+    assert all(agent.active_fact_ids == () for agent in result.final_state.agents)
+    assert all(
+        agent["active_fact_ids"] == [] for agent in checkpoint["state"]["agents"]
+    )
+
+
+def test_an_inactive_known_fact_is_reactivated_not_acquired_again():
+    config = _with_persistence(_config(rounds=1), 0.5)
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    focal = next(agent for agent in state.agents if agent.known_fact_ids)
+    fact_id = focal.known_fact_ids[0]
+    agents = tuple(
+        replace(
+            agent,
+            attributes={
+                **dict(agent.attributes),
+                "active_fact_ids": []
+                if agent.agent_id == focal.agent_id
+                else list(agent.active_fact_ids),
+            },
+        )
+        for agent in state.agents
+    )
+    state = replace(state, agents=agents)
+    request = game.ballot_request(state, focal.agent_id, (), config.game)
+    letter = next(
+        key
+        for key, relation in request.observation.visible_state["option_letters"].items()
+        if relation == state.possible_answers[0]
+    )
+    action = game.parse_action(
+        request,
+        json.dumps({"vote": letter, "reason": "ok", "shared_fact_id": "none"}),
+    )
+    transition = game.apply_round_event_transition(
+        state,
+        focal=focal.agent_id,
+        action=action,
+        config=config.game,
+        social_sources=(
+            {
+                "source_type": "ordinary",
+                "source_id": "agent_999",
+                "shared_fact_id": fact_id,
+            },
+        ),
+    )
+
+    event = transition.event
+    assert event["reactivated_peer_fact_ids"] == [fact_id]
+    assert event["new_peer_fact_ids"] == []
+    updated = transition.next_state.relational_agent(focal.agent_id)
+    assert fact_id in updated.active_fact_ids
+    assert updated.known_fact_ids == focal.known_fact_ids
+
+
+def test_controller_exposure_reactivates_without_changing_controller_fact():
+    config = _with_persistence(_config(CONTROLLED, rounds=1), 0.5)
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    fact_id = "f2"
+    focal = next(agent for agent in state.agents if fact_id in agent.known_fact_ids)
+    agents = tuple(
+        replace(
+            agent,
+            attributes={
+                **dict(agent.attributes),
+                "active_fact_ids": (
+                    [fact for fact in agent.active_fact_ids if fact != fact_id]
+                    if agent.agent_id == focal.agent_id
+                    else list(agent.active_fact_ids)
+                ),
+            },
+        )
+        for agent in state.agents
+    )
+    state = replace(state, agents=agents)
+    request = game.ballot_request(state, focal.agent_id, (), config.game)
+    letter = next(iter(request.observation.visible_state["option_letters"]))
+    action = game.parse_action(
+        request,
+        json.dumps({"vote": letter, "reason": "ok", "shared_fact_id": "none"}),
+    )
+    transition = game.apply_round_event_transition(
+        state,
+        focal=focal.agent_id,
+        action=action,
+        config=config.game,
+        social_sources=(
+            {
+                "source_type": "control",
+                "source_id": CONTROL_SOURCE_ID,
+                "shared_fact_id": fact_id,
+            },
+        ),
+    )
+
+    event = transition.event
+    assert event["controller_fact_id"] == fact_id
+    assert event["reactivated_controller_fact_ids"] == [fact_id]
+    assert event["new_controller_fact_ids"] == []
+
+
+def test_an_inactive_peer_fact_cannot_reenter_the_social_channel():
+    config = _with_persistence(_config(rounds=1), 0.5)
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    peer = next(agent for agent in state.agents if agent.known_fact_ids)
+    published = peer.known_fact_ids[0]
+    inactive_peer = replace(
+        peer,
+        attributes={
+            **dict(peer.attributes),
+            "active_fact_ids": [],
+            "public_shared_fact_id": published,
+        },
+    )
+    state = replace(
+        state,
+        agents=tuple(
+            inactive_peer if agent.agent_id == peer.agent_id else agent
+            for agent in state.agents
+        ),
+    )
+
+    source = build_social_sources(
+        state,
+        (peer.agent_id,),
+        replaced_peer_slot=None,
+        controller_target=None,
+        population_size=len(state.agents),
+    )[0]
+
+    assert source["shared_fact_id"] is None
+    assert source["shared_fact_text"] is None
+
+
 def test_the_provenance_of_every_acquired_fact_is_recorded():
     config = _config(rounds=2, q=1)
     result, _ = _run(
@@ -637,7 +992,7 @@ def test_the_provenance_of_every_acquired_fact_is_recorded():
 # ---- the controller (§9-§12) -------------------------------------------
 
 
-@pytest.mark.parametrize("q", [1, 2])
+@pytest.mark.parametrize("q", [1, 2, 3])
 def test_control_replaces_one_peer_slot_and_never_adds_a_source(q):
     result, ballots = _run(_config(rounds=2, q=q), control=_AlwaysAdvocate())
 
@@ -662,14 +1017,14 @@ def test_control_replaces_one_peer_slot_and_never_adds_a_source(q):
 def test_at_q1_a_controlled_focal_sees_the_controller_instead_of_its_peer():
     result, _ = _run(_config(rounds=2, q=1), control=_AlwaysAdvocate())
 
-    controlled = [
-        event for event in _events(result) if event["controlled_slot"]
-    ]
+    controlled = [event for event in _events(result) if event["controlled_slot"]]
     assert controlled
     for event in controlled:
         assert event["effective_peer_ids"] == []
         assert event["replaced_peer_id"] == event["sampled_peer_ids"][0]
-        assert [source["source_type"] for source in event["social_sources"]] == ["control"]
+        assert [source["source_type"] for source in event["social_sources"]] == [
+            "control"
+        ]
 
 
 # ---- the occlusion placebo, `message_mode: silent` (Study 02) ----------
@@ -845,14 +1200,16 @@ def test_recommendation_only_transmits_no_fact_at_all():
     result, ballots = _run(config, control=_AlwaysAdvocate(target=CORRECT))
 
     assert control.message_mode == RECOMMENDATION_ONLY
-    assert control.resolve_fact_id(create_game(config.game).load_task(config.game)) is None
+    assert (
+        control.resolve_fact_id(create_game(config.game).load_task(config.game)) is None
+    )
     for event in _events(result):
         assert event["controller_fact_id"] is None
         assert event["new_controller_fact_ids"] == []
     for prompt in ballots.prompts:
-        assert EVIDENCE_HEADER not in prompt.split("CURRENT SOCIAL INFORMATION")[-1] or (
-            "CURRENT SOCIAL INFORMATION" not in prompt
-        )
+        assert EVIDENCE_HEADER not in prompt.split("CURRENT SOCIAL INFORMATION")[
+            -1
+        ] or ("CURRENT SOCIAL INFORMATION" not in prompt)
 
 
 def test_recommendation_plus_fact_injects_one_exact_existing_fact():
@@ -932,7 +1289,9 @@ def test_a_no_op_round_transmits_no_controller_evidence():
 def test_with_no_control_no_controller_evidence_ever_enters_any_knowledge_set():
     config = _config(NO_CONTROL, rounds=3, q=1)
     result, ballots = _run(
-        config, control=create_control(config.control), ballots=_Ballots(share="first_known")
+        config,
+        control=create_control(config.control),
+        ballots=_Ballots(share="first_known"),
     )
 
     assert config.control.mechanism == "none"
@@ -1034,7 +1393,10 @@ def test_a_fact_selector_resolves_deterministically_to_a_supporting_fact():
             "controller_fact_id": "f2",
             "controller_fact_selector": "supporting",
         },
-        {"message_mode": RECOMMENDATION_PLUS_FACT, "controller_fact_selector": "random"},
+        {
+            "message_mode": RECOMMENDATION_PLUS_FACT,
+            "controller_fact_selector": "random",
+        },
         {"intervention_budget": -1},
         {"evidence_mode": "shared_fact"},
     ],
@@ -1112,14 +1474,18 @@ def test_an_always_schedule_actuates_in_every_round_of_an_episode():
     for record in result.rounds:
         assert record.event["controller_action"] == ADVOCATE_TARGET
         assert record.event["controller_advocacy_probability"] == 1.0
-        assert record.event["controlled_position_count"] == (
-            config.control.options["intervention_budget"]
+        assert (
+            record.event["controlled_position_count"]
+            == (config.control.options["intervention_budget"])
         )
         # Sensing still happened and is still logged; only the decision ignores it.
         assert record.event["sensor_sample_size"] == options["sensor_sample_size"]
         assert len(record.event["sensor_agent_ids"]) == options["sensor_sample_size"]
         assert len(record.event["agent_ids"]) == config.game.population_size
-        assert len(record.event["initial_knowledge_class_by_agent"]) == config.game.population_size
+        assert (
+            len(record.event["initial_knowledge_class_by_agent"])
+            == config.game.population_size
+        )
 
 
 def test_an_unknown_advocacy_schedule_is_refused():
@@ -1322,12 +1688,14 @@ def test_round_boundaries_agree_with_the_microscopic_trajectory():
             event for event in events if event["round_index"] == record.round_index
         ]
         assert len(window) == n
-        assert record.event["population_state_before"] == window[0][
-            "population_state_before"
-        ]
-        assert record.event["population_state_after"] == window[-1][
-            "population_state_after"
-        ]
+        assert (
+            record.event["population_state_before"]
+            == window[0]["population_state_before"]
+        )
+        assert (
+            record.event["population_state_after"]
+            == window[-1]["population_state_after"]
+        )
         assert record.event["peer_fact_exposures"] == sum(
             event["peer_fact_exposures"] for event in window
         )
@@ -1340,9 +1708,117 @@ def test_round_boundaries_agree_with_the_microscopic_trajectory():
         assert record.event["new_controller_facts"] == sum(
             event["new_controller_facts"] for event in window
         )
-        assert record.event["mean_supporting_fact_coverage"] == window[-1][
-            "mean_supporting_fact_coverage"
+        assert (
+            record.event["active_mean_supporting_fact_coverage_after_interactions"]
+            == window[-1]["mean_supporting_fact_coverage"]
+        )
+
+
+def test_active_and_historical_round_states_are_continuous():
+    config = _with_persistence(_config(rounds=3, q=2), 0.5)
+    result, _ = _run(config, ballots=_Ballots(share="first_known"))
+
+    for previous, current in zip(result.rounds, result.rounds[1:]):
+        assert (
+            previous.event["active_mean_supporting_fact_coverage_after"]
+            == (current.event["active_mean_supporting_fact_coverage_before"])
+        )
+        assert (
+            previous.event["active_full_proof_agent_share_after"]
+            == (current.event["active_full_proof_agent_share_before"])
+        )
+        assert (
+            previous.event["historical_mean_supporting_fact_coverage_after"]
+            == (current.event["historical_mean_supporting_fact_coverage_before"])
+        )
+        assert (
+            previous.event["historical_full_proof_agent_share_after"]
+            == (current.event["historical_full_proof_agent_share_before"])
+        )
+
+
+def test_active_and_historical_metrics_are_distinct():
+    config = _with_persistence(_config(rounds=1), 0.5)
+    state = create_game(config.game).initialize(config.game, config.execution.seed)
+    supporting = list(state.supporting_fact_ids)
+    agents = tuple(
+        replace(
+            agent,
+            attributes={
+                **dict(agent.attributes),
+                "known_fact_ids": supporting,
+                "active_fact_ids": (
+                    supporting if index < len(state.agents) // 2 else []
+                ),
+            },
+        )
+        for index, agent in enumerate(state.agents)
+    )
+
+    historical = knowledge_observables(agents, supporting)
+    active = knowledge_observables(
+        agents, supporting, fact_ids_attribute="active_fact_ids"
+    )
+
+    assert historical["full_proof_agent_share"] == 1.0
+    assert active["full_proof_agent_share"] == 0.5
+    assert historical["mean_supporting_fact_coverage"] == 1.0
+    assert active["mean_supporting_fact_coverage"] == 0.5
+
+
+def test_active_metrics_treat_a_pre_extension_state_as_fully_active():
+    config = _config(rounds=1)
+    state = create_game(config.game).initialize(config.game, config.execution.seed)
+    legacy_agents = tuple(
+        replace(
+            agent,
+            attributes={
+                key: value
+                for key, value in dict(agent.attributes).items()
+                if key != "active_fact_ids"
+            },
+        )
+        for agent in state.agents
+    )
+
+    historical = knowledge_observables(legacy_agents, state.supporting_fact_ids)
+    active = knowledge_observables(
+        legacy_agents,
+        state.supporting_fact_ids,
+        fact_ids_attribute="active_fact_ids",
+    )
+
+    assert active == historical
+
+
+def test_persistence_rng_does_not_shift_existing_random_streams():
+    base = _config(CONTROLLED, rounds=2, q=2)
+    persistent, _ = _run(
+        _with_persistence(base, 0.0),
+        control=_forced(base),
+        ballots=_Ballots(share="none"),
+    )
+    legacy, _ = _run(
+        base,
+        control=_forced(base),
+        ballots=_Ballots(share="none"),
+    )
+
+    def stochastic_coordinates(result):
+        return [
+            (
+                event["focal_agent_id"],
+                event["sampled_peer_ids"],
+                event["sensor_agent_ids"],
+                event["controller_action"],
+                event["replaced_peer_slot"],
+                event["controlled_positions_hash_or_id"],
+                _letters(item),
+            )
+            for item, event in zip(result.interactions, _events(result), strict=True)
         ]
+
+    assert stochastic_coordinates(persistent) == stochastic_coordinates(legacy)
 
 
 def test_the_round_record_carries_every_declared_observable():
@@ -1413,11 +1889,11 @@ def test_knowledge_coverage_rises_as_evidence_circulates():
     config = _config(rounds=4, q=2)
     result, _ = _run(config, ballots=_Ballots(share="first_known"))
 
-    coverage = [record.event["mean_supporting_fact_coverage"] for record in result.rounds]
-    assert coverage == sorted(coverage)
-    assert coverage[-1] > result.rounds[0].event[
-        "mean_supporting_fact_coverage_before"
+    coverage = [
+        record.event["mean_supporting_fact_coverage"] for record in result.rounds
     ]
+    assert coverage == sorted(coverage)
+    assert coverage[-1] > result.rounds[0].event["mean_supporting_fact_coverage_before"]
     # The hidden-profile task starts with nobody holding the whole proof.
     assert result.rounds[0].event["full_proof_agent_share_before"] == 0.0
 
@@ -1472,7 +1948,10 @@ def test_a_second_prompt_version_is_refused():
 
 def test_the_wrong_prompt_family_is_refused_by_the_runtime():
     config = _config()
-    config = replace(config, prompt=replace(config.prompt, prompt_family="hidden_bench_public_ballot"))
+    config = replace(
+        config,
+        prompt=replace(config.prompt, prompt_family="hidden_bench_public_ballot"),
+    )
 
     with pytest.raises(ValueError, match="prompt_family"):
         _run(config)
@@ -1494,7 +1973,9 @@ def test_the_shipped_configs_declare_the_registered_game_and_control():
     assert no_control.control.mechanism == "none"
     assert controlled.control.mechanism == "relational_round_budgeted"
     assert create_game(controlled.game).spec.game_type == controlled.game.type
-    assert isinstance(create_control(controlled.control), RelationalRoundBudgetedControl)
+    assert isinstance(
+        create_control(controlled.control), RelationalRoundBudgetedControl
+    )
 
 
 def test_the_call_plan_prices_one_call_per_focal_update():
@@ -1566,7 +2047,9 @@ def test_the_letter_map_replays_and_is_stable_across_retries():
 
 def test_a_letter_never_reaches_the_persistent_or_socially_visible_state():
     config = _config(rounds=3, q=2)
-    result, _ = _run(config, control=_AlwaysAdvocate(), ballots=_Ballots(share="first_known"))
+    result, _ = _run(
+        config, control=_AlwaysAdvocate(), ballots=_Ballots(share="first_known")
+    )
 
     for item in result.interactions:
         event = item.transition.event
@@ -1630,9 +2113,10 @@ def test_scoring_and_the_controller_target_are_semantic():
         assert record.event["controller_target"] == task.correct_relation == CORRECT
         assert record.event["correct_answer"] == CORRECT
         # truth share is computed against the semantic answer.
-        share = sum(
-            1 for vote in record.event["population_state_after"] if vote == CORRECT
-        ) / record.event["N"]
+        share = (
+            sum(1 for vote in record.event["population_state_after"] if vote == CORRECT)
+            / record.event["N"]
+        )
         assert record.event["truth_vote_share"] == pytest.approx(share)
 
 
@@ -1675,13 +2159,16 @@ def test_a_peers_free_form_reason_never_reaches_another_agents_prompt():
 
     # The reasons were produced and stored...
     published = {
-        event["focal_agent_id"]: event["focal_reason_after"] for event in _events(result)
+        event["focal_agent_id"]: event["focal_reason_after"]
+        for event in _events(result)
     }
     assert published and set(published.values()) == {_ChattyBallots.LEAK}
 
     # ...and none of them was ever rendered into anybody's prompt.
     for prompt in ballots.prompts:
-        social = prompt.split("CURRENT SOCIAL INFORMATION", 1)[-1].split("\nDECISION\n")[0]
+        social = prompt.split("CURRENT SOCIAL INFORMATION", 1)[-1].split(
+            "\nDECISION\n"
+        )[0]
         assert _ChattyBallots.LEAK not in social
         assert "Reason:" not in social
 
@@ -1725,12 +2212,16 @@ def test_the_controller_gets_no_prose_channel_a_peer_does_not_have():
     task = create_game(config.game).load_task(config.game)
     result, ballots = _run(config, control=_forced(config), ballots=_ChattyBallots())
 
-    controlled = [item for item in result.interactions if item.transition.event["controlled_slot"]]
+    controlled = [
+        item for item in result.interactions if item.transition.event["controlled_slot"]
+    ]
     assert controlled
     for item in controlled:
         event = item.transition.event
         source = next(
-            entry for entry in event["social_sources"] if entry["source_type"] == "control"
+            entry
+            for entry in event["social_sources"]
+            if entry["source_type"] == "control"
         )
         # Its recommendation is recorded, and its rendering is vote + evidence.
         assert source["reason"] == render_control_reason(CORRECT)
@@ -1753,12 +2244,16 @@ def test_recommendation_only_renders_a_bare_vote_with_no_evidence_line():
     config = replace(config, control=replace(config.control, options=options))
     result, ballots = _run(config, control=_forced(config))
 
-    controlled = [item for item in result.interactions if item.transition.event["controlled_slot"]]
+    controlled = [
+        item for item in result.interactions if item.transition.event["controlled_slot"]
+    ]
     assert controlled
     for item in controlled:
         event = item.transition.event
         source = next(
-            entry for entry in event["social_sources"] if entry["source_type"] == "control"
+            entry
+            for entry in event["social_sources"]
+            if entry["source_type"] == "control"
         )
         assert source["shared_fact_id"] is None
         letter = {relation: key for key, relation in _letters(item).items()}[CORRECT]
@@ -1781,11 +2276,14 @@ def test_the_reason_is_still_written_to_the_trajectory_for_analysis():
         assert item.decisions[0].action.metadata["reason"] == parsed["reason"]
         assert event["focal_reason_after"] == parsed["reason"]
         focal = event["focal_agent_id"]
-        assert next(
-            agent.public_reason
-            for agent in item.transition.next_state.agents
-            if str(agent.agent_id) == focal
-        ) == parsed["reason"]
+        assert (
+            next(
+                agent.public_reason
+                for agent in item.transition.next_state.agents
+                if str(agent.agent_id) == focal
+            )
+            == parsed["reason"]
+        )
 
     # And it survives into the serialized episode record. Not every agent is
     # drawn as focal in a short run, so the assertion is over those that spoke.
@@ -1884,8 +2382,12 @@ def test_social_distrust_false_swaps_in_the_neutral_cooperative_baseline():
 
 
 def test_the_two_environments_are_fixed_blocks_with_different_definitions():
-    true_prompt = relational_public_ballot_prompt(fact_ids=("f1",), social_distrust=True)
-    false_prompt = relational_public_ballot_prompt(fact_ids=("f1",), social_distrust=False)
+    true_prompt = relational_public_ballot_prompt(
+        fact_ids=("f1",), social_distrust=True
+    )
+    false_prompt = relational_public_ballot_prompt(
+        fact_ids=("f1",), social_distrust=False
+    )
 
     assert social_environment(True) == SOCIAL_ENVIRONMENT_DISTRUST
     assert social_environment(False) == SOCIAL_ENVIRONMENT_NEUTRAL
@@ -1902,10 +2404,12 @@ def test_the_two_environments_are_fixed_blocks_with_different_definitions():
 
 
 def test_social_distrust_changes_nothing_but_the_environment_block():
-    trusting, _ = _run(_distrust(_config(rounds=2, q=1), False),
-                       ballots=_Ballots(share="first_known"))
-    wary, _ = _run(_distrust(_config(rounds=2, q=1), True),
-                   ballots=_Ballots(share="first_known"))
+    trusting, _ = _run(
+        _distrust(_config(rounds=2, q=1), False), ballots=_Ballots(share="first_known")
+    )
+    wary, _ = _run(
+        _distrust(_config(rounds=2, q=1), True), ballots=_Ballots(share="first_known")
+    )
 
     # Same schedule, same citations, same knowledge trajectory.
     assert [event["focal_agent_id"] for event in _events(trusting)] == [
@@ -1937,7 +2441,10 @@ def _prompt_class(config, value):
 @pytest.mark.parametrize("prompt_class", ("naive", "vigilant"))
 def test_all_epistemic_prompt_classes_resolve_and_run(prompt_class):
     config = _prompt_class(_config(rounds=1), prompt_class)
-    assert create_game(config.game).rules(config.game).receiver_epistemic_disposition == prompt_class
+    assert (
+        create_game(config.game).rules(config.game).receiver_epistemic_disposition
+        == prompt_class
+    )
     result, ballots = _run(config)
     assert result.interactions
     assert all(epistemic_framing(prompt_class) in text for text in ballots.prompts)
@@ -1945,7 +2452,9 @@ def test_all_epistemic_prompt_classes_resolve_and_run(prompt_class):
 
 def test_unknown_epistemic_prompt_class_is_refused():
     config = _prompt_class(_config(rounds=1), "skeptical_super_agent")
-    with pytest.raises(ValueError, match="receiver_epistemic_disposition must be one of"):
+    with pytest.raises(
+        ValueError, match="receiver_epistemic_disposition must be one of"
+    ):
         create_game(config.game).rules(config.game)
 
 
@@ -1968,7 +2477,9 @@ def test_epistemic_classes_change_only_the_fixed_framing_block():
     assert baseline.block("social_environment").value == SOCIAL_ENVIRONMENT_VIGILANT
     for prompt in prompts.values():
         assert prompt.definition_hash != ""
-        assert [block.name for block in prompt.blocks] == [block.name for block in baseline.blocks]
+        assert [block.name for block in prompt.blocks] == [
+            block.name for block in baseline.blocks
+        ]
         for block in prompt.blocks:
             if block.name != "social_environment":
                 assert block == baseline.block(block.name)
@@ -1977,7 +2488,10 @@ def test_epistemic_classes_change_only_the_fixed_framing_block():
 
 def test_epistemic_class_content_has_the_intended_boundaries():
     naive = epistemic_framing("naive").lower()
-    assert all(term not in naive for term in ("different facts", "objectives", "minority", "majority"))
+    assert all(
+        term not in naive
+        for term in ("different facts", "objectives", "minority", "majority")
+    )
 
     vigilant = epistemic_framing("vigilant").lower()
     assert "objectives that differ" in vigilant
@@ -2013,8 +2527,12 @@ def test_the_contract_rejects_a_fact_the_agent_does_not_hold():
         options={"fact_ids": ("f2",), "relations": ("NORTH",)},
     )
 
-    assert contract.validate('{"vote":"A","reason":"ok","shared_fact_id":"f2"}').is_valid
-    assert contract.validate('{"vote":"A","reason":"ok","shared_fact_id":"none"}').is_valid
+    assert contract.validate(
+        '{"vote":"A","reason":"ok","shared_fact_id":"f2"}'
+    ).is_valid
+    assert contract.validate(
+        '{"vote":"A","reason":"ok","shared_fact_id":"none"}'
+    ).is_valid
     # f1 exists in the task but not in this agent's knowledge set.
     rejected = contract.validate('{"vote":"A","reason":"ok","shared_fact_id":"f1"}')
     assert not rejected.is_valid
@@ -2044,7 +2562,9 @@ def test_an_agent_that_knows_nothing_may_cite_nothing():
     )
 
     assert '"shared_fact_id": "<none>"' in contract.instruction()
-    assert contract.validate('{"vote":"A","reason":"ok","shared_fact_id":"none"}').is_valid
+    assert contract.validate(
+        '{"vote":"A","reason":"ok","shared_fact_id":"none"}'
+    ).is_valid
     assert not contract.validate(
         '{"vote":"A","reason":"ok","shared_fact_id":"f1"}'
     ).is_valid
@@ -2097,8 +2617,9 @@ def test_the_prompt_tells_the_agent_its_reason_is_not_shown_to_others():
 
     assert ballots.prompts
     for prompt in ballots.prompts:
-        assert "Your reason is your own record: it is\nnot shown to anyone." in prompt or (
-            "Your reason is your own record: it is not shown\nto anyone." in prompt
+        assert (
+            "Your reason is your own record: it is\nnot shown to anyone." in prompt
+            or ("Your reason is your own record: it is not shown\nto anyone." in prompt)
         )
         assert (
             "Sharing a fact is the only way to pass information to other participants."
@@ -2148,9 +2669,7 @@ def test_every_round_record_carries_the_whole_compact_summary():
 
 
 def test_the_knowledge_strata_partition_the_population():
-    result, _ = _run(
-        _config(rounds=3, q=2), ballots=_Ballots(share="first_known")
-    )
+    result, _ = _run(_config(rounds=3, q=2), ballots=_Ballots(share="first_known"))
 
     for record in result.rounds:
         event = record.event
@@ -2191,12 +2710,15 @@ def test_the_summary_agrees_with_the_final_population_state():
     )
     # reach, per supporting fact in sorted order
     assert event["supporting_fact_reach"] == [
-        sum(1 for a in agents if fact in a.known_fact_ids) for fact in sorted(supporting)
+        sum(1 for a in agents if fact in a.known_fact_ids)
+        for fact in sorted(supporting)
     ]
     # the k-strata, both families
     for k in range(len(SUPPORTING) + 1):
         stratum = [a for a in agents if len(set(a.known_fact_ids) & supporting) == k]
-        assert event[f"knowledge_share_k{k}"] == pytest.approx(len(stratum) / len(agents))
+        assert event[f"knowledge_share_k{k}"] == pytest.approx(
+            len(stratum) / len(agents)
+        )
         expected = (
             sum(1 for a in stratum if a.committed_action == correct) / len(stratum)
             if stratum
@@ -2210,7 +2732,7 @@ def test_the_summary_agrees_with_the_final_population_state():
 
 
 def test_an_empty_stratum_reports_none_rather_than_zero():
-    """"Nobody is here" must stay separable from "everybody here is wrong"."""
+    """ "Nobody is here" must stay separable from "everybody here is wrong"."""
 
     config = _config(rounds=1, q=1)
     state = create_game(config.game).initialize(config.game, config.execution.seed)
@@ -2231,13 +2753,17 @@ def test_vote_entropy_is_the_round_entropy_and_matches_the_micro_row():
     for record in result.rounds:
         window = [e for e in events if e["round_index"] == record.round_index]
         assert record.event["vote_entropy"] == pytest.approx(window[-1]["H_vote"])
-        assert record.event["vote_entropy_before"] == pytest.approx(window[0]["H_vote_before"])
+        assert record.event["vote_entropy_before"] == pytest.approx(
+            window[0]["H_vote_before"]
+        )
         assert 0.0 <= record.event["vote_entropy"] <= 1.0
 
 
 def test_the_controlled_adoption_rate_counts_only_off_target_controlled_updates():
     config = _config(CONTROLLED, rounds=3, q=1)
-    result, _ = _run(config, control=_forced(config), ballots=_Ballots(share="first_known"))
+    result, _ = _run(
+        config, control=_forced(config), ballots=_Ballots(share="first_known")
+    )
     events = _events(result)
 
     seen_rate = False
@@ -2245,7 +2771,8 @@ def test_the_controlled_adoption_rate_counts_only_off_target_controlled_updates(
         event = record.event
         target = event["controller_target"]
         window = [
-            e for e in events
+            e
+            for e in events
             if e["round_index"] == record.round_index and e["controlled_slot"]
         ]
         assert event["controlled_update_count"] == len(window)
@@ -2303,7 +2830,11 @@ def test_the_overnight_configs_use_the_compact_profile_and_the_full_ones_do_not(
     )
     for arm in arms:
         overnight = load_run_config_or_grid(
-            str(root / "overnight" / f"relational_population_study01_{arm}_overnight.yaml"),
+            str(
+                root
+                / "overnight"
+                / f"relational_population_study01_{arm}_overnight.yaml"
+            ),
             environment=env,
         )
         full = load_run_config_or_grid(
@@ -2361,7 +2892,9 @@ def test_the_new_game_is_registered_without_disturbing_the_existing_ones():
     assert prompts.get("hidden_bench_public_ballot", 1).family == (
         "hidden_bench_public_ballot"
     )
-    assert prompts.get("relational_public_ballot", 1).family == "relational_public_ballot"
+    assert (
+        prompts.get("relational_public_ballot", 1).family == "relational_public_ballot"
+    )
 
 
 def test_the_relational_prompt_family_is_distinct_from_the_hidden_bench_one():

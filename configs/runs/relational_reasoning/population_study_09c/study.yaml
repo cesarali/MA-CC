@@ -1,0 +1,24 @@
+study:
+  name: relational-population-study-09c
+
+configs:
+  - study09c_task0002_false_persistence.yaml
+
+preflight:
+  contract: relational_persistence_exploratory_v1
+
+execution:
+  mode: auto
+  target_rpm: 900
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 12
+  cpus_per_task: 8
+  memory: 8G
+  time_limit: "03:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_09c
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+
+analysis:
+  recipe: analysis.yaml

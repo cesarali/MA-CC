@@ -1,0 +1,139 @@
+# Study 09c is empirical. Finite persistence has no matched closed-form theory.
+theoretical_reference: none
+
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_target_actuation_cmi
+  - round_target_information_fraction
+  - round_target_susceptibility
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_susceptible_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - episode_current
+  - cell_current
+  - effective_affinity
+  - kinetic_compliance
+
+# One episode per cell makes uncertainty intervals descriptive only. Keep the
+# exploratory pass cheap and retain support diagnostics beside every estimate.
+resampling:
+  bootstrap_resamples: 0
+  null_permutations: 0
+  confidence: 0.95
+  seed: 20260829
+
+# These are empirical calculations from observed trajectories. No rho=1 theory
+# curve is used as a matched reference.
+derived:
+  - round_target_susceptibility
+  - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
+
+state_local: [x, x_phi, x_kappa]
+
+episode_endpoints:
+  classifier: relational_persistence_exploratory_v1
+
+plots:
+  false_share_trajectory:
+    source: rounds
+    value: controller_target_share
+    x: round_index
+    series: intervention_budget
+    facet: epistemic_persistence
+    kind: line
+  active_phi_trajectory:
+    source: rounds
+    value: active_full_proof_agent_share_after
+    x: round_index
+    series: intervention_budget
+    facet: epistemic_persistence
+    kind: line
+  truth_share_trajectory:
+    source: rounds
+    value: truth_vote_share
+    x: round_index
+    series: intervention_budget
+    facet: epistemic_persistence
+    kind: line
+
+  chi_by_budget:
+    source: derived_observables
+    metric: susceptibility_occupancy_weighted
+    x: intervention_budget
+    series: epistemic_persistence
+    kind: line
+  eta_if_by_budget:
+    source: primary_estimates
+    metric: round_target_information_fraction
+    x: intervention_budget
+    series: epistemic_persistence
+    kind: line
+  eta_th_by_budget:
+    source: derived_observables
+    metric: eta_th
+    x: intervention_budget
+    series: epistemic_persistence
+    kind: line
+
+  chi_heatmap:
+    source: derived_observables
+    metric: susceptibility_occupancy_weighted
+    x: intervention_budget
+    y: epistemic_persistence
+    kind: heatmap
+  eta_if_heatmap:
+    source: primary_estimates
+    metric: round_target_information_fraction
+    x: intervention_budget
+    y: epistemic_persistence
+    kind: heatmap
+  eta_th_heatmap:
+    source: derived_observables
+    metric: eta_th
+    x: intervention_budget
+    y: epistemic_persistence
+    kind: heatmap
+
+  late_time_false_share_by_budget:
+    source: episode_endpoint_summary
+    value: late_time_mean_false_target_share
+    x: actuation_fraction
+    series: epistemic_persistence
+    kind: line
+  late_time_active_phi_by_budget:
+    source: episode_endpoint_summary
+    value: late_time_mean_active_phi
+    x: actuation_fraction
+    series: epistemic_persistence
+    kind: line
+  late_time_false_share_heatmap:
+    source: episode_endpoint_summary
+    value: late_time_mean_false_target_share
+    x: actuation_fraction
+    y: epistemic_persistence
+    kind: heatmap
+  late_time_active_phi_heatmap:
+    source: episode_endpoint_summary
+    value: late_time_mean_active_phi
+    x: actuation_fraction
+    y: epistemic_persistence
+    kind: heatmap

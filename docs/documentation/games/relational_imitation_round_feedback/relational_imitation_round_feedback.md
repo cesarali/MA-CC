@@ -31,18 +31,26 @@ The authoritative implementations are:
 
 The game asks whether a population of LLM agents can solve a spatial reasoning
 problem when the facts needed for the answer are distributed among them. Each
-agent has two separate state variables:
+agent has three separate state variables:
 
 ```text
 X_i(t) = the relation currently voted for
-K_i(t) = the exact set of fact IDs currently known by the agent
+H_i(t) = every fact ID the agent has ever legitimately received
+K_i(t) = the fact IDs currently available to the agent's reasoning
 ```
 
 Agents repeatedly see a small social sample and update one at a time. A ballot
 contains a vote, a private recorded reason, and at most one explicitly shared
 fact. The reason is never shown to another agent. Consequently,
-`shared_fact_id` is the only inter-agent evidence channel and changes to
-`K_i(t)` are exactly auditable.
+`shared_fact_id` is the only inter-agent evidence channel. New facts grow both
+sets. A repeated valid exposure can reactivate a fact in `K_i(t)` without
+changing historical `H_i(t)`.
+
+At the end of each population round, every active fact independently remains
+active with probability `game.options.epistemic_persistence`. The default is
+`1.0`, which preserves the original dynamics and consumes no persistence
+random numbers. The frozen task truth and historical fact provenance never
+change when an active fact is lost.
 
 Once per population round, a controller:
 
@@ -94,6 +102,7 @@ Parameters held fixed are:
 | message | `recommendation_only` | controller transmits a vote and no fact |
 | initialization | `local_vote` | one initial LLM decision from private facts |
 | stop on consensus | false | all episodes retain ten round observations |
+| epistemic persistence | 1.0 | probability that each active fact remains active after a round |
 
 The target is `EAST` for task 0001 and `SOUTH` for task 0002. The correct
 answers are respectively `WEST` and `SOUTHWEST`. Option index 2 is not a
@@ -188,7 +197,7 @@ consume its frozen files directly.
 ### Initialization
 
 The loader validates the task schema and population size, then initializes
-each `K_i(0)` exactly from the task's `agents` mapping. Under `local_vote`, all
+each `H_i(0) = K_i(0)` exactly from the task's `agents` mapping. Under `local_vote`, all
 24 agents independently receive a prompt containing only their initial facts
 and make one ballot. The returned display letter is immediately mapped back to
 a semantic relation; persistent state never stores `A`, `B`, or `C`.
@@ -298,7 +307,7 @@ option leads. `H_vote` is normalized to `[0,1]`, with 0 at consensus and 1 at
 the uniform distribution. `delta_*` fields are after minus before for one
 micro update or one round, depending on the record.
 
-For supporting-fact set `S` and agent knowledge `K_i`:
+For supporting-fact set `S`, the main observables use active knowledge `K_i`:
 
 ```text
 coverage_i = |K_i intersect S| / |S|
@@ -309,8 +318,10 @@ E_k[j]     = number of agents knowing exactly j supporting facts
 ```
 
 Other knowledge fields are `supporting_fact_reach` (holder count for each
-supporting fact), `mean_known_fact_count`, exposure counts, and counts of facts
-that were newly acquired rather than already known.
+supporting fact) and `mean_known_fact_count`; these retain their historical
+meaning based on `H_i`. Explicit `active_*` and `historical_*` fields separate
+current reasoning state from facts ever received. Exposure counts distinguish
+new acquisition, reactivation, and persistence deactivation.
 
 The registered streaming metrics are:
 

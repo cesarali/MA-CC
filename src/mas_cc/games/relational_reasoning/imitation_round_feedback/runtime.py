@@ -36,7 +36,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from dataclasses import dataclass
+import random
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
 from mas_cc.config import RunConfig
@@ -50,7 +51,11 @@ from mas_cc.core import Seed
 from mas_cc.games.protocols import AgentState, DecisionRequest, Game, GameState
 from mas_cc.llm_runtime.prompts import CompiledPrompt, RegexTokenCounter, TokenCounter
 from mas_cc.llm_runtime.providers import LLMProvider
-from mas_cc.runtime import DecisionLoopExhausted, ValidationAttempt, run_validated_decision
+from mas_cc.runtime import (
+    DecisionLoopExhausted,
+    ValidationAttempt,
+    run_validated_decision,
+)
 
 from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation.metrics import population_observables
@@ -59,9 +64,12 @@ from .game import RelationalImitationRoundFeedbackGame
 from .metrics import knowledge_observables, knowledge_strata
 from .prompts import PROMPT_FAMILY, agent_label, control_label, render_control_reason
 from .state import (
+    ACTIVE_FACT_IDS,
     FOCAL_UPDATE,
+    RelationalAgentState,
     RelationalGameState,
     RelationalRoundRecord,
+    reasoning_fact_ids,
 )
 
 PROMPT_FAMILIES = (PROMPT_FAMILY,)
@@ -341,7 +349,9 @@ def build_social_sources(
             if not controller_transmits:
                 continue
             if controller_target is None:
-                raise ValueError("a controlled social slot requires a controller target")
+                raise ValueError(
+                    "a controlled social slot requires a controller target"
+                )
             sources.append(
                 {
                     "slot": slot,
@@ -361,6 +371,8 @@ def build_social_sources(
             continue
         agent = state.relational_agent(peer)
         exposed = agent.public_shared_fact_id
+        if exposed not in set(reasoning_fact_ids(agent, state.epistemic_persistence)):
+            exposed = None
         sources.append(
             {
                 "slot": slot,
@@ -376,6 +388,61 @@ def build_social_sources(
             }
         )
     return tuple(sources)
+
+
+def apply_epistemic_persistence(
+    state: RelationalGameState,
+    *,
+    persistence: float,
+    rng: random.Random | None,
+) -> tuple[RelationalGameState, tuple[tuple[str, str], ...]]:
+    """Deactivate active facts independently at one population-round boundary.
+
+    The returned pairs are ``(agent_id, fact_id)`` in stable order.  Historical
+    knowledge and every non-epistemic part of the state are left untouched.
+    """
+
+    if persistence == 1.0:
+        if rng is not None:
+            raise ValueError("rho=1 persistence must not receive or consume an RNG")
+        for agent in state.agents:
+            if isinstance(agent, RelationalAgentState):
+                reasoning_fact_ids(agent, persistence)
+        return state, ()
+    if not 0.0 <= persistence <= 1.0:
+        raise ValueError("epistemic persistence must be between 0.0 and 1.0")
+    if rng is None:
+        raise ValueError("finite epistemic persistence requires its dedicated RNG")
+
+    deactivated: list[tuple[str, str]] = []
+    replacements: dict[str, RelationalAgentState] = {}
+    fact_order = tuple(sorted(state.fact_ids))
+    for agent in sorted(state.agents, key=lambda item: str(item.agent_id)):
+        if not isinstance(agent, RelationalAgentState):
+            raise TypeError("relational state contains a non-relational agent")
+        active_before = set(agent.active_fact_ids)
+        survivors: set[str] = set()
+        for fact_id in fact_order:
+            if fact_id not in active_before:
+                continue
+            if rng.random() < persistence:
+                survivors.add(fact_id)
+            else:
+                deactivated.append((str(agent.agent_id), fact_id))
+        active_after = [fact_id for fact_id in state.fact_ids if fact_id in survivors]
+        replacements[str(agent.agent_id)] = replace(
+            agent,
+            attributes={
+                **dict(agent.attributes),
+                ACTIVE_FACT_IDS: active_after,
+            },
+        )
+
+    next_state = replace(
+        state,
+        agents=tuple(replacements[str(agent.agent_id)] for agent in state.agents),
+    )
+    return next_state, tuple(deactivated)
 
 
 def sample_controlled_positions(
@@ -419,13 +486,19 @@ async def run_relational_imitation_round_feedback_game(
     root = Seed(config.execution.seed)
     participant_rng = root.derive("relational-focal-and-peer-selection").create_random()
     sensor_rng = root.derive("relational-controller-sensor-policy").create_random()
-    replacement_rng = root.derive("relational-controller-slot-replacement").create_random()
+    replacement_rng = root.derive(
+        "relational-controller-slot-replacement"
+    ).create_random()
 
-    resolved_control = None if control is None or isinstance(control, NoneControl) else control
+    resolved_control = (
+        None if control is None or isinstance(control, NoneControl) else control
+    )
     sensor_sample_size = getattr(resolved_control, "sensor_sample_size", None)
     intervention_budget = int(getattr(resolved_control, "intervention_budget", 0))
     if sensor_sample_size is not None and int(sensor_sample_size) > rules.n_agents:
-        raise ValueError("controller sensor_sample_size cannot exceed the population size")
+        raise ValueError(
+            "controller sensor_sample_size cannot exceed the population size"
+        )
     if not 0 <= intervention_budget <= rules.n_agents:
         raise ValueError("controller intervention_budget must be between 0 and N")
 
@@ -441,7 +514,9 @@ async def run_relational_imitation_round_feedback_game(
     state = game.initialize(config.game, config.execution.seed)
     resolver = getattr(resolved_control, "resolve_fact_id", None)
     if resolver is not None:
-        controller_fact_id = resolver(game.load_task(config.game), config.execution.seed)
+        controller_fact_id = resolver(
+            game.load_task(config.game), config.execution.seed
+        )
 
     _notify(
         observer,
@@ -484,9 +559,19 @@ async def run_relational_imitation_round_feedback_game(
             break
         options = tuple(state.possible_answers)
         population_before = [str(agent.committed_action) for agent in state.agents]
-        knowledge_before = knowledge_observables(state.agents, state.supporting_fact_ids)
+        active_knowledge_before = knowledge_observables(
+            state.agents,
+            state.supporting_fact_ids,
+            fact_ids_attribute=ACTIVE_FACT_IDS,
+        )
+        historical_knowledge_before = knowledge_observables(
+            state.agents, state.supporting_fact_ids
+        )
         strata_before = knowledge_strata(
-            state.agents, state.supporting_fact_ids, state.correct_answer
+            state.agents,
+            state.supporting_fact_ids,
+            state.correct_answer,
+            fact_ids_attribute=ACTIVE_FACT_IDS,
         )
 
         round_signal: RoundControlSignal | None = None
@@ -496,8 +581,12 @@ async def run_relational_imitation_round_feedback_game(
                 state=_controller_view(state),
                 rng=sensor_rng,
             )
-            if round_signal is not None and not isinstance(round_signal, RoundControlSignal):
-                raise TypeError("Control.round_signal must return RoundControlSignal or None")
+            if round_signal is not None and not isinstance(
+                round_signal, RoundControlSignal
+            ):
+                raise TypeError(
+                    "Control.round_signal must return RoundControlSignal or None"
+                )
             if round_signal is None:
                 raise ValueError(
                     "the selected control does not implement round-level signaling"
@@ -511,7 +600,9 @@ async def run_relational_imitation_round_feedback_game(
         if analysis_target not in options:
             raise ValueError("controller target is outside the task option alphabet")
         probability = (
-            None if round_signal is None else round_signal.metadata.get("advocacy_probability")
+            None
+            if round_signal is None
+            else round_signal.metadata.get("advocacy_probability")
         )
         schedule_seed = int(root.derive(f"relational-schedule:{round_index}"))
         controlled_positions = (
@@ -525,11 +616,15 @@ async def run_relational_imitation_round_feedback_game(
         )
         controlled_set = frozenset(controlled_positions)
         schedule_hash = hashlib.sha256(
-            json.dumps(list(controlled_positions), separators=(",", ":")).encode("utf-8")
+            json.dumps(list(controlled_positions), separators=(",", ":")).encode(
+                "utf-8"
+            )
         ).hexdigest()
         # Evidence only ever reaches a focal agent through an actuated slot, so
         # a NO_OP round transmits nothing even under recommendation_plus_fact.
-        round_controller_fact = controller_fact_id if action == ADVOCATE_TARGET else None
+        round_controller_fact = (
+            controller_fact_id if action == ADVOCATE_TARGET else None
+        )
         before_obs = population_observables(
             population_before, options, state.correct_answer, analysis_target
         )
@@ -538,6 +633,8 @@ async def run_relational_imitation_round_feedback_game(
         controller_exposures = 0
         new_peer_facts = 0
         new_controller_facts = 0
+        reactivated_peer_facts = 0
+        reactivated_controller_facts = 0
         # Controlled updates where the focal was not already standing on the
         # controller's target, and how many of those moved onto it. Counted
         # online because the microscopic trajectory is not retained under the
@@ -550,10 +647,14 @@ async def run_relational_imitation_round_feedback_game(
             focal, sampled_peers = selected[0], tuple(selected[1:])
             controlled_slot = within_round_index in controlled_set
             replaced_peer_slot = (
-                replacement_rng.randrange(len(sampled_peers)) if controlled_slot else None
+                replacement_rng.randrange(len(sampled_peers))
+                if controlled_slot
+                else None
             )
             replaced_peer = (
-                None if replaced_peer_slot is None else sampled_peers[replaced_peer_slot]
+                None
+                if replaced_peer_slot is None
+                else sampled_peers[replaced_peer_slot]
             )
             effective_peers = tuple(
                 peer
@@ -591,13 +692,16 @@ async def run_relational_imitation_round_feedback_game(
                 # signal's own legacy text and the trajectory would claim words
                 # that were never put in front of anybody.
                 controlled_slot=controlled_slot and control_source is not None,
-                message=None if control_source is None else str(control_source["reason"]),
+                message=None
+                if control_source is None
+                else str(control_source["reason"]),
             )
             micro_index = state.turn + 1
             round_fields = {
                 "round_index": round_index,
                 "within_round_index": within_round_index,
-                "global_update_index": round_index * rules.n_agents + within_round_index,
+                "global_update_index": round_index * rules.n_agents
+                + within_round_index,
                 "round_controller_action": action,
                 "round_controller_target": target,
                 "round_controller_advocate_probability": probability,
@@ -627,6 +731,10 @@ async def run_relational_imitation_round_feedback_game(
             controller_exposures += int(event.get("controller_fact_exposures", 0))
             new_peer_facts += int(event.get("new_peer_facts", 0))
             new_controller_facts += int(event.get("new_controller_facts", 0))
+            reactivated_peer_facts += int(event.get("reactivated_peer_facts", 0))
+            reactivated_controller_facts += int(
+                event.get("reactivated_controller_facts", 0)
+            )
             if controlled_slot and target is not None:
                 if event.get("vote_before") != target:
                     controlled_off_target += 1
@@ -648,7 +756,9 @@ async def run_relational_imitation_round_feedback_game(
                 round_index=micro_index,
                 interaction=record,
                 state=transition.next_state.to_dict(),
-                prompt_definitions={update.request.stage: update.prompt_definition_hash},
+                prompt_definitions={
+                    update.request.stage: update.prompt_definition_hash
+                },
             )
             _notify(observer, "record_trajectory", record=record)
             _notify(
@@ -663,9 +773,41 @@ async def run_relational_imitation_round_feedback_game(
         after_obs = population_observables(
             population_after, options, state.correct_answer, analysis_target
         )
-        knowledge_after = knowledge_observables(state.agents, state.supporting_fact_ids)
+        active_knowledge_after_interactions = knowledge_observables(
+            state.agents,
+            state.supporting_fact_ids,
+            fact_ids_attribute=ACTIVE_FACT_IDS,
+        )
+        historical_knowledge_after = knowledge_observables(
+            state.agents, state.supporting_fact_ids
+        )
+
+        persistence_seed: int | None = None
+        deactivated: tuple[tuple[str, str], ...] = ()
+        if rules.epistemic_persistence != 1.0:
+            persistence_stream = root.derive(
+                f"relational-epistemic-persistence:{round_index}"
+            )
+            persistence_seed = int(persistence_stream)
+            state, deactivated = apply_epistemic_persistence(
+                state,
+                persistence=rules.epistemic_persistence,
+                rng=persistence_stream.create_random(),
+            )
+
+        active_knowledge_after = knowledge_observables(
+            state.agents,
+            state.supporting_fact_ids,
+            fact_ids_attribute=ACTIVE_FACT_IDS,
+        )
         strata_after = knowledge_strata(
-            state.agents, state.supporting_fact_ids, state.correct_answer
+            state.agents,
+            state.supporting_fact_ids,
+            state.correct_answer,
+            fact_ids_attribute=ACTIVE_FACT_IDS,
+        )
+        deactivated_supporting = sum(
+            1 for _, fact_id in deactivated if fact_id in set(state.supporting_fact_ids)
         )
         sensor = {} if round_signal is None else dict(round_signal.observation)
         raw_sensor_counts = sensor.get("sampled_opinion_counts", {})
@@ -710,16 +852,22 @@ async def run_relational_imitation_round_feedback_game(
             "controller_message_mode": message_mode,
             "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
             "controller_evidence_strategy": evidence_strategy,
+            "epistemic_persistence": rules.epistemic_persistence,
+            "epistemic_persistence_seed": persistence_seed,
             "epistemic_condition": (
-                None if evidence_strategy is None else
-                f"{rules.receiver_epistemic_disposition}_{evidence_strategy}"
+                None
+                if evidence_strategy is None
+                else f"{rules.receiver_epistemic_disposition}_{evidence_strategy}"
             ),
             "derived_epistemic_condition": (
-                None if evidence_strategy is None else
-                f"{rules.receiver_epistemic_disposition}_{evidence_strategy}"
+                None
+                if evidence_strategy is None
+                else f"{rules.receiver_epistemic_disposition}_{evidence_strategy}"
             ),
             "controller_target_semantics": (
-                None if resolved_control is None else str(getattr(resolved_control, "target", None))
+                None
+                if resolved_control is None
+                else str(getattr(resolved_control, "target", None))
             ),
             "controller_fact_id": round_controller_fact,
             "controller_episode_fact_id": controller_fact_id,
@@ -768,21 +916,81 @@ async def run_relational_imitation_round_feedback_game(
             "delta_H_vote": float(after_obs["H_vote"] - before_obs["H_vote"]),
             # --- knowledge (§17) --------------------------------------------
             "supporting_fact_ids": list(state.supporting_fact_ids),
-            "mean_supporting_fact_coverage_before": knowledge_before[
+            "mean_supporting_fact_coverage_before": active_knowledge_before[
                 "mean_supporting_fact_coverage"
             ],
-            "mean_supporting_fact_coverage": knowledge_after[
+            "mean_supporting_fact_coverage": active_knowledge_after[
                 "mean_supporting_fact_coverage"
             ],
-            "full_proof_agent_share_before": knowledge_before["full_proof_agent_share"],
-            "full_proof_agent_share": knowledge_after["full_proof_agent_share"],
-            "supporting_fact_reach_before": knowledge_before["supporting_fact_reach"],
-            "supporting_fact_reach": knowledge_after["supporting_fact_reach"],
-            "mean_known_fact_count": knowledge_after["mean_known_fact_count"],
+            "full_proof_agent_share_before": active_knowledge_before[
+                "full_proof_agent_share"
+            ],
+            "full_proof_agent_share": active_knowledge_after["full_proof_agent_share"],
+            "supporting_fact_reach_before": historical_knowledge_before[
+                "supporting_fact_reach"
+            ],
+            "supporting_fact_reach": historical_knowledge_after[
+                "supporting_fact_reach"
+            ],
+            "mean_known_fact_count": historical_knowledge_after[
+                "mean_known_fact_count"
+            ],
+            "active_mean_supporting_fact_coverage_before": active_knowledge_before[
+                "mean_supporting_fact_coverage"
+            ],
+            "active_mean_supporting_fact_coverage_after_interactions": (
+                active_knowledge_after_interactions["mean_supporting_fact_coverage"]
+            ),
+            "active_mean_supporting_fact_coverage_after": active_knowledge_after[
+                "mean_supporting_fact_coverage"
+            ],
+            "active_full_proof_agent_share_before": active_knowledge_before[
+                "full_proof_agent_share"
+            ],
+            "active_full_proof_agent_share_after_interactions": (
+                active_knowledge_after_interactions["full_proof_agent_share"]
+            ),
+            "active_full_proof_agent_share_after": active_knowledge_after[
+                "full_proof_agent_share"
+            ],
+            "active_supporting_fact_reach_before": active_knowledge_before[
+                "supporting_fact_reach"
+            ],
+            "active_supporting_fact_reach_after_interactions": (
+                active_knowledge_after_interactions["supporting_fact_reach"]
+            ),
+            "active_supporting_fact_reach_after": active_knowledge_after[
+                "supporting_fact_reach"
+            ],
+            "active_mean_fact_count_before": active_knowledge_before[
+                "mean_known_fact_count"
+            ],
+            "active_mean_fact_count_after_interactions": (
+                active_knowledge_after_interactions["mean_known_fact_count"]
+            ),
+            "active_mean_fact_count_after": active_knowledge_after[
+                "mean_known_fact_count"
+            ],
+            "historical_mean_supporting_fact_coverage_before": (
+                historical_knowledge_before["mean_supporting_fact_coverage"]
+            ),
+            "historical_mean_supporting_fact_coverage_after": (
+                historical_knowledge_after["mean_supporting_fact_coverage"]
+            ),
+            "historical_full_proof_agent_share_before": historical_knowledge_before[
+                "full_proof_agent_share"
+            ],
+            "historical_full_proof_agent_share_after": historical_knowledge_after[
+                "full_proof_agent_share"
+            ],
+            "persistence_deactivated_fact_count": len(deactivated),
+            "persistence_deactivated_supporting_fact_count": deactivated_supporting,
             "peer_fact_exposures": peer_exposures,
             "controller_fact_exposures": controller_exposures,
             "new_peer_facts": new_peer_facts,
             "new_controller_facts": new_controller_facts,
+            "reactivated_peer_fact_count": reactivated_peer_facts,
+            "reactivated_controller_fact_count": reactivated_controller_facts,
             # --- self-contained round summary (§ compact artifact profile) ---
             # These make round_trajectory.jsonl sufficient on its own: under
             # `results_only` the microscopic trajectory is not retained, so
@@ -808,7 +1016,9 @@ async def run_relational_imitation_round_feedback_game(
             # strata above. Counts, not shares, because this is a conditioning
             # state for discrete estimators - `share * N` would round-trip
             # through a float for no reason.
-            "knowledge_stratum_counts_before": strata_before["knowledge_stratum_counts"],
+            "knowledge_stratum_counts_before": strata_before[
+                "knowledge_stratum_counts"
+            ],
             "truth_counts_by_stratum_before": strata_before["truth_counts_by_stratum"],
             "reasoning_depth_L": len(state.supporting_fact_ids),
             # Controlled-update response. The rate is conditional on the focal
@@ -829,6 +1039,13 @@ async def run_relational_imitation_round_feedback_game(
         round_record = RelationalRoundRecord(round_index=round_index, event=round_event)
         round_records.append(round_record)
         _notify(observer, "record_round_trajectory", record=round_record)
+        _notify(
+            observer,
+            "record_round_boundary",
+            round_index=round_index,
+            state=state.to_dict(),
+            prompt_definitions={update.request.stage: update.prompt_definition_hash},
+        )
         _notify(observer, "event", "relational_round_feedback", **round_event)
 
     termination = state.termination_reason or "max_rounds_reached"
@@ -868,6 +1085,7 @@ __all__ = [
     "RelationalDecisionFailed",
     "RelationalGameResult",
     "RelationalInteractionRecord",
+    "apply_epistemic_persistence",
     "build_social_sources",
     "run_relational_imitation_round_feedback_game",
     "run_relational_imitation_round_feedback_game_sync",

@@ -13,4 +13,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 export MAS_CC_EXECUTION_SITE=potsdam
-python -m mas_cc.studies.array_worker "$1"
+readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+
+exec "$CONDA_EXE" run -n MA-CC --live-stream \
+  python -m mas_cc.studies.array_worker "$1"

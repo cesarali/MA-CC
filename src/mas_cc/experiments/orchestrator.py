@@ -50,7 +50,10 @@ from mas_cc.llm_runtime.providers import (
     create_llm_provider,
     resolve_budget_limits,
 )
-from mas_cc.llm_runtime.prompts import PromptMarkdownLogger, render_prompt_request_markdown
+from mas_cc.llm_runtime.prompts import (
+    PromptMarkdownLogger,
+    render_prompt_request_markdown,
+)
 from mas_cc.observability import DetailedAuditPolicy, RunRecorder
 from mas_cc.planning import (
     ExperimentPreflightEstimate,
@@ -84,7 +87,13 @@ from .configured_analysis import (
     run_configured_cell_analysis,
     validate_configured_analysis,
 )
-from .console import ExperimentProgress, format_banner, format_grid_banner, format_money, print_banner
+from .console import (
+    ExperimentProgress,
+    format_banner,
+    format_grid_banner,
+    format_money,
+    print_banner,
+)
 
 LOGGER = logging.getLogger("mas_cc.experiment")
 _TIMING_EPISODE: contextvars.ContextVar[tuple[str | None, str] | None] = (
@@ -208,26 +217,44 @@ def _write_timing_study(
             for item in cell_outcomes
             if item.queue_wait_seconds is not None and item.status != "skipped_resumed"
         ]
-        starts = [_parse_timestamp(item.started_at) for item in cell_outcomes if item.started_at]
-        finishes = [_parse_timestamp(item.finished_at) for item in cell_outcomes if item.finished_at]
-        wall = (max(finishes) - min(starts)).total_seconds() if starts and finishes else 0.0
-        completed = sum(item.status in {"completed", "skipped_resumed"} for item in cell_outcomes)
+        starts = [
+            _parse_timestamp(item.started_at)
+            for item in cell_outcomes
+            if item.started_at
+        ]
+        finishes = [
+            _parse_timestamp(item.finished_at)
+            for item in cell_outcomes
+            if item.finished_at
+        ]
+        wall = (
+            (max(finishes) - min(starts)).total_seconds()
+            if starts and finishes
+            else 0.0
+        )
+        completed = sum(
+            item.status in {"completed", "skipped_resumed"} for item in cell_outcomes
+        )
         failed = sum(item.status == "failed" for item in cell_outcomes)
         mean = sum(durations) / len(durations) if durations else 0.0
         mean_queue = sum(queue_waits) / len(queue_waits) if queue_waits else 0.0
         median = _percentile(durations, 0.5) or 0.0
         p95 = _percentile(durations, 0.95) or 0.0
         rate = completed / (wall / 60.0) if wall > 0 else 0.0
-        overrides = json.dumps(dict((cell_overrides or {}).get(cell_id, {})), sort_keys=True)
+        overrides = json.dumps(
+            dict((cell_overrides or {}).get(cell_id, {})), sort_keys=True
+        )
         lines.append(
             f"| `{cell_id}` | {len(cell_outcomes)} | {completed} | {failed} | {wall:.3f} | "
             f"{mean_queue:.3f} | {mean:.3f} | {median:.3f} | {p95:.3f} | {rate:.3f} | `{overrides}` |"
         )
-    lines.extend([
-        "",
-        "Episode duration is measured after an episode acquires an execution-parallelism slot and excludes queue wait time. Cell wall time spans the first episode start through the last episode finish.",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "Episode duration is measured after an episode acquires an execution-parallelism slot and excludes queue wait time. Cell wall time spans the first episode start through the last episode finish.",
+            "",
+        ]
+    )
     request_durations = [float(row["wall_seconds"]) for row in request_rows]
     provider_latencies = [
         float(row["provider_latency_seconds"])
@@ -237,41 +264,66 @@ def _write_timing_study(
     retries = sum(int(row.get("retries") or 0) for row in request_rows)
     errors = sum(bool(row.get("error_type")) for row in request_rows)
     rate_limits = sum(row.get("status_code") == 429 for row in request_rows)
-    rate_wall = (_parse_timestamp(run_finished_at) - _parse_timestamp(run_started_at)).total_seconds()
+    rate_wall = (
+        _parse_timestamp(run_finished_at) - _parse_timestamp(run_started_at)
+    ).total_seconds()
     usage = resource.getrusage(resource.RUSAGE_SELF)
-    lines.extend([
-        "## Operational summary",
-        "",
-        f"- Requests observed: `{len(request_rows)}`",
-        f"- Request throughput: `{(len(request_rows) / rate_wall if rate_wall > 0 else 0.0):.3f}` requests/second",
-        f"- Mean request wall time: `{(sum(request_durations) / len(request_durations) if request_durations else 0.0):.3f}` seconds",
-        f"- P50/P95 request wall time: `{(_percentile(request_durations, 0.5) or 0.0):.3f}` / `{(_percentile(request_durations, 0.95) or 0.0):.3f}` seconds",
-        f"- P50/P95 provider-reported latency: `{(_percentile(provider_latencies, 0.5) or 0.0):.3f}` / `{(_percentile(provider_latencies, 0.95) or 0.0):.3f}` seconds",
-        f"- Retries: `{retries}`; request errors: `{errors}`; HTTP 429 responses: `{rate_limits}`",
-        f"- Process user/system CPU: `{usage.ru_utime:.3f}` / `{usage.ru_stime:.3f}` seconds",
-        f"- Peak resident memory: `{int(usage.ru_maxrss)}` KiB",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Operational summary",
+            "",
+            f"- Requests observed: `{len(request_rows)}`",
+            f"- Request throughput: `{(len(request_rows) / rate_wall if rate_wall > 0 else 0.0):.3f}` requests/second",
+            f"- Mean request wall time: `{(sum(request_durations) / len(request_durations) if request_durations else 0.0):.3f}` seconds",
+            f"- P50/P95 request wall time: `{(_percentile(request_durations, 0.5) or 0.0):.3f}` / `{(_percentile(request_durations, 0.95) or 0.0):.3f}` seconds",
+            f"- P50/P95 provider-reported latency: `{(_percentile(provider_latencies, 0.5) or 0.0):.3f}` / `{(_percentile(provider_latencies, 0.95) or 0.0):.3f}` seconds",
+            f"- Retries: `{retries}`; request errors: `{errors}`; HTTP 429 responses: `{rate_limits}`",
+            f"- Process user/system CPU: `{usage.ru_utime:.3f}` / `{usage.ru_stime:.3f}` seconds",
+            f"- Peak resident memory: `{int(usage.ru_maxrss)}` KiB",
+            "",
+        ]
+    )
     _write(run_dir / "timing_study.md", "\n".join(lines))
 
     if profile != "timing_study":
         return
     fields = [
-        "cell_id", "episode_id", "seed", "status", "interactions", "queued_at",
-        "started_at", "finished_at", "queue_wait_seconds", "duration_seconds",
-        "termination_reason", "error_type", "error",
+        "cell_id",
+        "episode_id",
+        "seed",
+        "status",
+        "interactions",
+        "queued_at",
+        "started_at",
+        "finished_at",
+        "queue_wait_seconds",
+        "duration_seconds",
+        "termination_reason",
+        "error_type",
+        "error",
     ]
-    with (run_dir / "timing_study.csv").open("w", newline="", encoding="utf-8") as stream:
+    with (run_dir / "timing_study.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for outcome in outcomes:
             row = outcome.to_dict()
             writer.writerow({field: row.get(field) for field in fields})
     request_fields = [
-        "cell_id", "episode_id", "started_at", "finished_at", "wall_seconds",
-        "provider_latency_seconds", "retries", "status_code", "error_type",
+        "cell_id",
+        "episode_id",
+        "started_at",
+        "finished_at",
+        "wall_seconds",
+        "provider_latency_seconds",
+        "retries",
+        "status_code",
+        "error_type",
     ]
-    with (run_dir / "request_timing.csv").open("w", newline="", encoding="utf-8") as stream:
+    with (run_dir / "request_timing.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as stream:
         writer = csv.DictWriter(stream, fieldnames=request_fields)
         writer.writeheader()
         for row in request_rows:
@@ -358,7 +410,9 @@ def _record_results_only_hashes(run_dir: Path) -> None:
     _write_atomic(manifest_path, _json(manifest))
 
 
-def _wipe_run_dir_if_requested(run_dir: Path, *, wipe_and_recompute: bool, label: str) -> None:
+def _wipe_run_dir_if_requested(
+    run_dir: Path, *, wipe_and_recompute: bool, label: str
+) -> None:
     """Delete a stale run directory before it is recreated.
 
     ``storage.wipe_and_recompute`` overrides ``resume``: the point of wiping
@@ -367,7 +421,9 @@ def _wipe_run_dir_if_requested(run_dir: Path, *, wipe_and_recompute: bool, label
     """
 
     if wipe_and_recompute and run_dir.exists():
-        LOGGER.warning("storage.wipe_and_recompute=true: deleting %s (%s)", run_dir, label)
+        LOGGER.warning(
+            "storage.wipe_and_recompute=true: deleting %s (%s)", run_dir, label
+        )
         shutil.rmtree(run_dir)
 
 
@@ -408,24 +464,35 @@ def _money_limit(
     if amount is None:
         return None
     return MonetaryAmount(
-        amount=amount, unit=config.budget.accounting_unit,
-        unit_source="resolved budget configuration", provider=config.llm_provider.type,
-        model=config.llm_provider.model, source=description,
-        retrieved_at=quote.retrieved_at, version="resolved-config-v1",
+        amount=amount,
+        unit=config.budget.accounting_unit,
+        unit_source="resolved budget configuration",
+        provider=config.llm_provider.type,
+        model=config.llm_provider.model,
+        source=description,
+        retrieved_at=quote.retrieved_at,
+        version="resolved-config-v1",
     )
 
 
-def _budgets(config: RunConfig, quote: PricingQuote) -> tuple[BudgetLimits, BudgetLimits]:
+def _budgets(
+    config: RunConfig, quote: PricingQuote
+) -> tuple[BudgetLimits, BudgetLimits]:
     system = BudgetLimits(
         max_cost=_money_limit(
-            config.budget.system_max_cost_per_run, config, quote,
+            config.budget.system_max_cost_per_run,
+            config,
+            quote,
             "resolved system-wide per-run limit",
         ),
         allow_unbounded_paid_requests=config.budget.allow_unbounded_paid_requests,
     )
     run = BudgetLimits(
         max_cost=_money_limit(
-            config.budget.max_cost_per_run, config, quote, "resolved run-specific limit",
+            config.budget.max_cost_per_run,
+            config,
+            quote,
+            "resolved run-specific limit",
         ),
         max_requests=config.budget.max_provider_requests,
         max_input_tokens=config.budget.max_input_tokens,
@@ -502,7 +569,9 @@ class _LiveSpendWatcher:
         self._baseline: float | None = None
 
     async def _read_spend(self) -> float | None:
-        budget = await asyncio.to_thread(self._source.fetch_account_budget, unit=self._unit)
+        budget = await asyncio.to_thread(
+            self._source.fetch_account_budget, unit=self._unit
+        )
         if budget is None or budget.spent is None:
             return None
         if budget.spent.unit != self._unit:
@@ -510,7 +579,8 @@ class _LiveSpendWatcher:
             # confident wrong answer, so the watcher declines to compare at all.
             LOGGER.warning(
                 "live spend is reported in %r but the budget is in %r; not comparing",
-                budget.spent.unit, self._unit,
+                budget.spent.unit,
+                self._unit,
             )
             return None
         return budget.spent.amount
@@ -529,7 +599,9 @@ class _LiveSpendWatcher:
         if self._baseline is None:
             LOGGER.info("provider reports no account spend; live spend watching is off")
         else:
-            LOGGER.info("live spend baseline at launch: %.4f %s", self._baseline, self._unit)
+            LOGGER.info(
+                "live spend baseline at launch: %.4f %s", self._baseline, self._unit
+            )
 
     async def run(self) -> None:
         if self._baseline is None:
@@ -539,7 +611,9 @@ class _LiveSpendWatcher:
             try:
                 current = await self._read_spend()
             except Exception as exc:
-                LOGGER.warning("live spend poll failed (%s); retrying", type(exc).__name__)
+                LOGGER.warning(
+                    "live spend poll failed (%s); retrying", type(exc).__name__
+                )
                 continue
             if current is None:
                 continue
@@ -616,7 +690,9 @@ def _pricing_identity(quote: PricingQuote) -> str:
 def _steps_per_episode(plan: GameCallPlan) -> int:
     """Return the user-visible steps represented by one episode."""
 
-    return int(plan.metadata.get("interactions_per_episode", plan.interactions.expected))
+    return int(
+        plan.metadata.get("interactions_per_episode", plan.interactions.expected)
+    )
 
 
 def _provider_registry():
@@ -638,7 +714,10 @@ def _provider_registry():
 
 
 def _master_monitor(
-    config: RunConfig, run_id: str, total_episodes: int, layout: SweepLayout | None = None
+    config: RunConfig,
+    run_id: str,
+    total_episodes: int,
+    layout: SweepLayout | None = None,
 ) -> MasterMonitor:
     """Build the run's one sweep-level Comet experiment from `logging.comet`.
 
@@ -752,7 +831,9 @@ class _RoundTickingObserver:
             )
 
     def record_interaction(self, **payload: Any) -> None:
-        self.recorder.record_interaction(**payload, budget_status=self.guard.checkpoint_state())
+        self.recorder.record_interaction(
+            **payload, budget_status=self.guard.checkpoint_state()
+        )
         self.progress.round_tick(self.episode_label, payload.get("round_index"))
 
     def record_trajectory(self, **payload: Any) -> None:
@@ -760,6 +841,11 @@ class _RoundTickingObserver:
 
     def record_round_trajectory(self, **payload: Any) -> None:
         self.recorder.record_round_trajectory(**payload)
+
+    def record_round_boundary(self, **payload: Any) -> None:
+        self.recorder.record_round_boundary(
+            **payload, budget_status=self.guard.checkpoint_state()
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -780,9 +866,14 @@ class EpisodeOutcome:
 
     def to_dict(self) -> dict[str, Any]:
         value = {
-            "episode_id": self.episode_id, "seed": self.seed, "status": self.status,
-            "interactions": self.interactions, "termination_reason": self.termination_reason,
-            "error_type": self.error_type, "error": self.error, "cell_id": self.cell_id,
+            "episode_id": self.episode_id,
+            "seed": self.seed,
+            "status": self.status,
+            "interactions": self.interactions,
+            "termination_reason": self.termination_reason,
+            "error_type": self.error_type,
+            "error": self.error,
+            "cell_id": self.cell_id,
         }
         if self.started_at is not None:
             value.update(
@@ -797,12 +888,19 @@ class EpisodeOutcome:
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "EpisodeOutcome":
         return cls(
-            episode_id=str(value["episode_id"]), seed=int(value["seed"]), status=str(value["status"]),
-            interactions=value.get("interactions"), termination_reason=value.get("termination_reason"),
-            error_type=value.get("error_type"), error=value.get("error"), cell_id=value.get("cell_id"),
-            started_at=value.get("started_at"), finished_at=value.get("finished_at"),
+            episode_id=str(value["episode_id"]),
+            seed=int(value["seed"]),
+            status=str(value["status"]),
+            interactions=value.get("interactions"),
+            termination_reason=value.get("termination_reason"),
+            error_type=value.get("error_type"),
+            error=value.get("error"),
+            cell_id=value.get("cell_id"),
+            started_at=value.get("started_at"),
+            finished_at=value.get("finished_at"),
             duration_seconds=value.get("duration_seconds"),
-            queued_at=value.get("queued_at"), queue_wait_seconds=value.get("queue_wait_seconds"),
+            queued_at=value.get("queued_at"),
+            queue_wait_seconds=value.get("queue_wait_seconds"),
         )
 
 
@@ -829,11 +927,15 @@ class ExperimentResult:
 
     @property
     def skipped_resumed(self) -> int:
-        return sum(1 for outcome in self.outcomes if outcome.status == "skipped_resumed")
+        return sum(
+            1 for outcome in self.outcomes if outcome.status == "skipped_resumed"
+        )
 
     @property
     def skipped_aborted(self) -> int:
-        return sum(1 for outcome in self.outcomes if outcome.status == "skipped_aborted")
+        return sum(
+            1 for outcome in self.outcomes if outcome.status == "skipped_aborted"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -871,7 +973,9 @@ class _EpisodeTask:
     def scientific_path(self) -> Path | None:
         if self.scientific_identity is None:
             return None
-        return episode_shard_path(self.cell_dir or self.episode_dir.parent.parent.parent, self.episode_id)
+        return episode_shard_path(
+            self.cell_dir or self.episode_dir.parent.parent.parent, self.episode_id
+        )
 
     @property
     def manifest_path(self) -> Path:
@@ -891,7 +995,9 @@ class _CellPromptSampler:
     def _path(cell_dir: Path, episode_id: str) -> Path:
         return cell_dir / ".resume" / episode_id / "prompt_candidates.json.gz"
 
-    def capture(self, cell_dir: Path, episode_id: str, round_index: int, markdown: str) -> None:
+    def capture(
+        self, cell_dir: Path, episode_id: str, round_index: int, markdown: str
+    ) -> None:
         if self.count == 0:
             return
         path = self._path(cell_dir, episode_id)
@@ -967,7 +1073,9 @@ def _scientific_identity(
         pricing_snapshot_hash=price_hash,
         game_type=task.config.game.type,
         dynamics_mode=(
-            None if options.get("dynamics_mode") is None else str(options["dynamics_mode"])
+            None
+            if options.get("dynamics_mode") is None
+            else str(options["dynamics_mode"])
         ),
         control_mechanism=task.config.control.mechanism,
         task_id=None if options.get("task_id") is None else str(options["task_id"]),
@@ -979,7 +1087,12 @@ def _with_scientific_identity(
 ) -> _EpisodeTask:
     if not task.config.storage.retention_policy.compact_scientific:
         return task
-    return replace(task, scientific_identity=_scientific_identity(task, run_id=run_id, price_hash=price_hash))
+    return replace(
+        task,
+        scientific_identity=_scientific_identity(
+            task, run_id=run_id, price_hash=price_hash
+        ),
+    )
 
 
 def _partition_resume_tasks(
@@ -1029,7 +1142,9 @@ def _partition_resume_tasks(
                     "cell_id": task.cell_id,
                     "seed": task.seed,
                     "resolved_config_hash": canonical_hash(task.config.to_dict()),
-                    "prompt_definition_hashes_hash": prompt_definition_hash(task.config),
+                    "prompt_definition_hashes_hash": prompt_definition_hash(
+                        task.config
+                    ),
                     "pricing_snapshot_hash": price_hash,
                     "scientific_schema_version": SCIENTIFIC_SCHEMA_VERSION,
                 }
@@ -1040,7 +1155,9 @@ def _partition_resume_tasks(
                             f"{field} does not match"
                         )
                 resumed.append(
-                    replace(EpisodeOutcome.from_dict(manifest), status="skipped_resumed")
+                    replace(
+                        EpisodeOutcome.from_dict(manifest), status="skipped_resumed"
+                    )
                 )
                 continue
         scheduled.append(task)
@@ -1256,13 +1373,20 @@ async def _execute_episode(
             else episode_dir
         )
         recorder = RunRecorder(
-            recorder_dir, run_id=episode_label, resolved_config=episode_config.to_dict(),
+            recorder_dir,
+            run_id=episode_label,
+            resolved_config=episode_config.to_dict(),
             policy=policy,
             # Per-episode Comet experiments are not wired here: one mas_cc
             # experiment would otherwise fan out into N remote experiments.
-            comet_enabled=False, checkpoint_enabled=checkpoint_enabled,
-            price_snapshot_hash=price_hash, metrics=metrics, to_round_view=to_round_view,
-            binning=episode_config.metrics.binning_policy(episode_config.game.population_size),
+            comet_enabled=False,
+            checkpoint_enabled=checkpoint_enabled,
+            price_snapshot_hash=price_hash,
+            metrics=metrics,
+            to_round_view=to_round_view,
+            binning=episode_config.metrics.binning_policy(
+                episode_config.game.population_size
+            ),
             retention_policy=retention_policy,
             scientific_identity=scientific_identity,
             scientific_path=scientific_path,
@@ -1314,7 +1438,9 @@ async def _execute_episode(
     result = await run_game(game, episode_config, guarded_provider)
     progress.round_tick(episode_label, None, count=len(result.interactions))
     if retention_policy.compact_scientific:
-        recorder_dir = scientific_path.parent if scientific_path is not None else episode_dir
+        recorder_dir = (
+            scientific_path.parent if scientific_path is not None else episode_dir
+        )
         recorder = RunRecorder(
             recorder_dir,
             run_id=episode_label,
@@ -1375,14 +1501,18 @@ async def _run_episode_task(
     cell_analysis: _PerCellAnalysisReporter | None = None,
 ) -> EpisodeOutcome:
     manifest_path = task.manifest_path
-    label = task.episode_id if task.cell_id is None else f"{task.cell_id}/{task.episode_id}"
+    label = (
+        task.episode_id if task.cell_id is None else f"{task.cell_id}/{task.episode_id}"
+    )
 
     def _finished(outcome: EpisodeOutcome) -> None:
         """Local console bar and remote master monitor, always together."""
         progress.episode_done(label, outcome.status)
         if monitor is not None:
             monitor.episode_finished(
-                status=outcome.status, cell_id=task.cell_id, budget_status=guard.status(),
+                status=outcome.status,
+                cell_id=task.cell_id,
+                budget_status=guard.status(),
             )
 
     def _persist(outcome: EpisodeOutcome) -> None:
@@ -1417,15 +1547,22 @@ async def _run_episode_task(
                 await asyncio.to_thread(
                     _record_cell_hashes, task.cell_dir or task.episode_dir
                 )
-        except Exception as exc:  # aggregates are derived; a failure must not lose episodes
+        except (
+            Exception
+        ) as exc:  # aggregates are derived; a failure must not lose episodes
             LOGGER.error(
-                "aggregating cell %s failed: %s: %s", task.cell_id, type(exc).__name__, exc
+                "aggregating cell %s failed: %s: %s",
+                task.cell_id,
+                type(exc).__name__,
+                exc,
             )
 
     if resume and manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("status") == "completed":
-            outcome = replace(EpisodeOutcome.from_dict(manifest), status="skipped_resumed")
+            outcome = replace(
+                EpisodeOutcome.from_dict(manifest), status="skipped_resumed"
+            )
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
@@ -1457,8 +1594,12 @@ async def _run_episode_task(
         # record: these episodes never ran.
         if budget_abort.is_set():
             outcome = EpisodeOutcome(
-                task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id,
-                error_type="BudgetStop", error=guard.stop_reason or "runtime budget exhausted",
+                task.episode_id,
+                task.seed,
+                "skipped_aborted",
+                cell_id=task.cell_id,
+                error_type="BudgetStop",
+                error=guard.stop_reason or "runtime budget exhausted",
             )
             outcome = _timed(outcome)
             _persist(outcome)
@@ -1466,7 +1607,9 @@ async def _run_episode_task(
             await _maybe_close_cell()
             return outcome
         if fail_fast and abort.is_set():
-            outcome = EpisodeOutcome(task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id)
+            outcome = EpisodeOutcome(
+                task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id
+            )
             outcome = _timed(outcome)
             _persist(outcome)
             _finished(outcome)
@@ -1475,9 +1618,18 @@ async def _run_episode_task(
         timing_token = _TIMING_EPISODE.set((task.cell_id, task.episode_id))
         try:
             interactions, termination_reason = await _execute_episode(
-                game, task.config, guarded_provider, guard, task.episode_dir, label,
-                policy=policy, metrics=metrics, to_round_view=to_round_view,
-                price_hash=price_hash, checkpoint_enabled=checkpoint_enabled, progress=progress,
+                game,
+                task.config,
+                guarded_provider,
+                guard,
+                task.episode_dir,
+                label,
+                policy=policy,
+                metrics=metrics,
+                to_round_view=to_round_view,
+                price_hash=price_hash,
+                checkpoint_enabled=checkpoint_enabled,
+                progress=progress,
                 retention_policy=task.config.storage.retention_policy,
                 scientific_identity=task.scientific_identity,
                 scientific_path=task.scientific_path,
@@ -1486,8 +1638,12 @@ async def _run_episode_task(
                 prompt_episode_id=task.episode_id,
             )
             outcome = EpisodeOutcome(
-                task.episode_id, task.seed, "completed", interactions=interactions,
-                termination_reason=termination_reason, cell_id=task.cell_id,
+                task.episode_id,
+                task.seed,
+                "completed",
+                interactions=interactions,
+                termination_reason=termination_reason,
+                cell_id=task.cell_id,
             )
         except Exception as exc:
             if fail_fast:
@@ -1496,12 +1652,17 @@ async def _run_episode_task(
                 if not budget_abort.is_set():
                     LOGGER.error(
                         "budget stop at episode %s: %s - no further episodes will be started",
-                        label, exc,
+                        label,
+                        exc,
                     )
                 budget_abort.set()
             outcome = EpisodeOutcome(
-                task.episode_id, task.seed, "failed", error_type=type(exc).__name__,
-                error=str(exc), cell_id=task.cell_id,
+                task.episode_id,
+                task.seed,
+                "failed",
+                error_type=type(exc).__name__,
+                error=str(exc),
+                cell_id=task.cell_id,
             )
             LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
         finally:
@@ -1518,7 +1679,9 @@ async def _run_episode_task(
 async def _run_task_batch(
     tasks: list[_EpisodeTask], **kwargs: Any
 ) -> tuple[EpisodeOutcome, ...]:
-    return tuple(await asyncio.gather(*(_run_episode_task(task, **kwargs) for task in tasks)))
+    return tuple(
+        await asyncio.gather(*(_run_episode_task(task, **kwargs) for task in tasks))
+    )
 
 
 async def _prime_resumed_outcomes(
@@ -1599,19 +1762,31 @@ def _aggregate_quietly(aggregator: GridAggregator, cell_id: str | None) -> None:
         LOGGER.error("final aggregation failed: %s: %s", type(exc).__name__, exc)
 
 
-def _write_experiment_summary(run_dir: Path, config: RunConfig, result: ExperimentResult) -> None:
+def _write_experiment_summary(
+    run_dir: Path, config: RunConfig, result: ExperimentResult
+) -> None:
     compact = config.storage.retention_policy.compact_scientific
     if not compact:
         _write(run_dir / "experiment_summary.json", _json(result.to_dict()))
     fieldnames = [
-        "episode_id", "seed", "status", "interactions", "termination_reason",
-        "error_type", "error",
+        "episode_id",
+        "seed",
+        "status",
+        "interactions",
+        "termination_reason",
+        "error_type",
+        "error",
     ]
     if compact:
-        fieldnames.extend([
-            "queued_at", "started_at", "finished_at", "queue_wait_seconds",
-            "duration_seconds",
-        ])
+        fieldnames.extend(
+            [
+                "queued_at",
+                "started_at",
+                "finished_at",
+                "queue_wait_seconds",
+                "duration_seconds",
+            ]
+        )
     output_path = run_dir / ("run_summary.csv" if compact else "experiment_summary.csv")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
@@ -1622,9 +1797,13 @@ def _write_experiment_summary(run_dir: Path, config: RunConfig, result: Experime
             for outcome in result.outcomes
         )
     manifest = {
-        "schema_version": 1, "run_id": result.run_id, "experiment_name": result.experiment_name,
-        "game_type": result.game_type, "episode_count": result.episode_count,
-        "started_at": result.started_at, "finished_at": result.finished_at,
+        "schema_version": 1,
+        "run_id": result.run_id,
+        "experiment_name": result.experiment_name,
+        "game_type": result.game_type,
+        "episode_count": result.episode_count,
+        "started_at": result.started_at,
+        "finished_at": result.finished_at,
         "artifact_profile": config.storage.artifact_profile,
         "checkpoint_mode": config.storage.checkpoint_mode,
         "completed": result.completed + result.skipped_resumed,
@@ -1651,7 +1830,8 @@ async def run_experiment(
     validate_configured_analysis(config)
     override = (
         config.pricing.explicit_unknown_price_override
-        if explicit_override is None else explicit_override
+        if explicit_override is None
+        else explicit_override
     )
 
     game = create_game(config.game)
@@ -1660,11 +1840,15 @@ async def run_experiment(
     system_budget, run_budget = _budgets(config, quote)
 
     preflight = static_experiment_preflight(
-        plan, config.prompt, config.llm_provider,
+        plan,
+        config.prompt,
+        config.llm_provider,
         episode_count=config.execution.repetitions,
         concurrency=config.execution.parallelism,
         assumed_output_tokens=config.llm_provider.max_output_tokens,
-        pricing_quote=quote, system_budget=system_budget, run_budget=run_budget,
+        pricing_quote=quote,
+        system_budget=system_budget,
+        run_budget=run_budget,
         explicit_override=override,
         allow_stale_pricing=not config.pricing.require_fresh_at_launch,
     )
@@ -1678,11 +1862,16 @@ async def run_experiment(
     # revalidated before launch, never once per episode or per completion.
     runtime_quote = _quote(config) if config.pricing.mode == "live" else quote
     if _pricing_terms(runtime_quote) != _pricing_terms(quote):
-        raise ValueError("live pricing changed during immediate pre-launch revalidation")
+        raise ValueError(
+            "live pricing changed during immediate pre-launch revalidation"
+        )
 
     run_id = f"{config.experiment.name}-{config.execution.seed}"
     run_dir = results_run_dir(
-        output_dir, game=config.game.type, experiment=config.experiment.name, run_id=run_id
+        output_dir,
+        game=config.game.type,
+        experiment=config.experiment.name,
+        run_id=run_id,
     )
     _wipe_run_dir_if_requested(
         run_dir, wipe_and_recompute=config.storage.wipe_and_recompute, label=run_id
@@ -1690,21 +1879,36 @@ async def run_experiment(
     episodes_dir = run_dir / "data" / "episodes"
     episodes_dir.mkdir(parents=True, exist_ok=True)
 
-    budget_description = "unbounded" if run_budget.max_cost is None and system_budget.max_cost is None else (
-        format_money(run_budget.max_cost) if run_budget.max_cost is not None else format_money(system_budget.max_cost)
+    budget_description = (
+        "unbounded"
+        if run_budget.max_cost is None and system_budget.max_cost is None
+        else (
+            format_money(run_budget.max_cost)
+            if run_budget.max_cost is not None
+            else format_money(system_budget.max_cost)
+        )
     )
     scenarios = preflight.per_episode.prompt_scenarios
-    definition_hash = scenarios[0]["representative"]["definition_hash"] if scenarios else ""
+    definition_hash = (
+        scenarios[0]["representative"]["definition_hash"] if scenarios else ""
+    )
     print_banner(
         format_banner(
-            experiment_name=config.experiment.name, game_type=config.game.type,
-            game_version=game.spec.version, provider=config.llm_provider.type,
-            model=config.llm_provider.model, episode_count=config.execution.repetitions,
-            concurrency=config.execution.parallelism, prompt_family=config.prompt.prompt_family,
-            prompt_version=config.prompt.prompt_version, prompt_definition_hash=definition_hash,
+            experiment_name=config.experiment.name,
+            game_type=config.game.type,
+            game_version=game.spec.version,
+            provider=config.llm_provider.type,
+            model=config.llm_provider.model,
+            episode_count=config.execution.repetitions,
+            concurrency=config.execution.parallelism,
+            prompt_family=config.prompt.prompt_family,
+            prompt_version=config.prompt.prompt_version,
+            prompt_definition_hash=definition_hash,
             budget_description=budget_description,
             preflight_expected_cost=format_money(preflight.total_costs.expected),
-            preflight_conservative_cost=format_money(preflight.total_costs.conservative),
+            preflight_conservative_cost=format_money(
+                preflight.total_costs.conservative
+            ),
             preflight_status=preflight.launch_status,
         )
     )
@@ -1726,7 +1930,8 @@ async def run_experiment(
         episode_id = f"{run_id}-{index:04d}"
         seed = int(root_seed.derive(f"episode:{index}"))
         return _EpisodeTask(
-            episode_id=episode_id, seed=seed,
+            episode_id=episode_id,
+            seed=seed,
             config=replace(config, execution=replace(config.execution, seed=seed)),
             episode_dir=episodes_dir / episode_id,
             cell_dir=run_dir,
@@ -1745,23 +1950,32 @@ async def run_experiment(
     timing_provider = None
     watcher = None
     if scheduled_tasks:
-        provider = create_llm_provider(config.llm_provider, registry=_provider_registry())
+        provider = create_llm_provider(
+            config.llm_provider, registry=_provider_registry()
+        )
         guarded_provider = BudgetGuardedProvider(
-            provider, guard, runtime_quote.pricing,
-            input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
+            provider,
+            guard,
+            runtime_quote.pricing,
+            input_token_estimator=estimate_input_tokens,
+            input_token_multiplier=1.0,
         )
         if config.storage.retention_policy.detailed_timing:
             timing_provider = _TimingProvider(guarded_provider)
             guarded_provider = timing_provider
         watcher = _spend_watcher(config, guard, effective_budget)
     metrics, to_round_view = game_metrics(game)
-    policy = DetailedAuditPolicy.from_mapping(config.logging.options.get("detailed_prompt_audit"))
+    policy = DetailedAuditPolicy.from_mapping(
+        config.logging.options.get("detailed_prompt_audit")
+    )
     prompt_options = dict(config.logging.options.get("prompt_examples", {}) or {})
     prompt_sampler = (
         _CellPromptSampler(int(prompt_options.get("count", 0)))
         if prompt_options.get(
-            "scope", "cell" if config.storage.retention_policy.compact_scientific else "episode"
-        ) == "cell"
+            "scope",
+            "cell" if config.storage.retention_policy.compact_scientific else "episode",
+        )
+        == "cell"
         else None
     )
     finalizer = (
@@ -1809,12 +2023,23 @@ async def run_experiment(
             fresh_outcomes = await _with_spend_watch(
                 watcher,
                 _run_task_batch(
-                    scheduled_tasks, game=game, guarded_provider=guarded_provider, guard=guard,
-                    semaphore=semaphore, abort=abort, budget_abort=budget_abort,
+                    scheduled_tasks,
+                    game=game,
+                    guarded_provider=guarded_provider,
+                    guard=guard,
+                    semaphore=semaphore,
+                    abort=abort,
+                    budget_abort=budget_abort,
                     fail_fast=config.execution.fail_fast,
-                    resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
-                    price_hash=price_hash, checkpoint_enabled=config.storage.checkpoints,
-                    progress=progress, monitor=monitor, prompt_sampler=prompt_sampler,
+                    resume=resume,
+                    policy=policy,
+                    metrics=metrics,
+                    to_round_view=to_round_view,
+                    price_hash=price_hash,
+                    checkpoint_enabled=config.storage.checkpoints,
+                    progress=progress,
+                    monitor=monitor,
+                    prompt_sampler=prompt_sampler,
                     finalizer=finalizer,
                 ),
             )
@@ -1841,9 +2066,15 @@ async def run_experiment(
             _aggregate_quietly(aggregator, None)
 
         result = ExperimentResult(
-            run_id=run_id, experiment_name=config.experiment.name, game_type=config.game.type,
-            episode_count=config.execution.repetitions, output_dir=run_dir, outcomes=outcomes,
-            preflight=preflight, budget_status=guard.status(), started_at=started_at,
+            run_id=run_id,
+            experiment_name=config.experiment.name,
+            game_type=config.game.type,
+            episode_count=config.execution.repetitions,
+            output_dir=run_dir,
+            outcomes=outcomes,
+            preflight=preflight,
+            budget_status=guard.status(),
+            started_at=started_at,
             finished_at=_now(),
         )
         _write_experiment_summary(run_dir, config, result)
@@ -1852,19 +2083,28 @@ async def run_experiment(
         # in the returned result instead of masking them with a secondary
         # missing-file exception.
         if result.completed or result.skipped_resumed:
-            analysis_summary = run_configured_analysis(config, run_dir, monitor.analysis_sink)
+            analysis_summary = run_configured_analysis(
+                config, run_dir, monitor.analysis_sink
+            )
     finally:
         comet_summary = monitor.close()
         _write(
             run_dir
-            / ("comet_summary.json" if config.storage.retention_policy.compact_scientific else "comet_run_summary.json"),
+            / (
+                "comet_summary.json"
+                if config.storage.retention_policy.compact_scientific
+                else "comet_run_summary.json"
+            ),
             _json(comet_summary),
         )
 
     if config.storage.retention_policy.compact_scientific:
         _write_timing_study(
-            run_dir, outcomes, profile=config.storage.artifact_profile,
-            run_started_at=result.started_at, run_finished_at=result.finished_at,
+            run_dir,
+            outcomes,
+            profile=config.storage.artifact_profile,
+            run_started_at=result.started_at,
+            run_finished_at=result.finished_at,
             request_rows=() if timing_provider is None else timing_provider.rows,
         )
         _record_results_only_hashes(run_dir)
@@ -1903,9 +2143,7 @@ def _print_comet_destinations(
             lines.append(f"  Comet cell {cell.get('cell_id')}: {cell['url']}")
     if analysis and isinstance(analysis.get("comet"), Mapping):
         published = analysis["comet"]
-        detail = (
-            f"({published.get('metrics', 0)} metrics, {published.get('images', 0)} image(s))"
-        )
+        detail = f"({published.get('metrics', 0)} metrics, {published.get('images', 0)} image(s))"
         if published.get("published_to") == "master":
             lines.append(f"  Comet analysis: on master  {detail}")
         elif published.get("url"):
@@ -1934,11 +2172,15 @@ class GridCellResult:
 
     @property
     def skipped_resumed(self) -> int:
-        return sum(1 for outcome in self.outcomes if outcome.status == "skipped_resumed")
+        return sum(
+            1 for outcome in self.outcomes if outcome.status == "skipped_resumed"
+        )
 
     @property
     def skipped_aborted(self) -> int:
-        return sum(1 for outcome in self.outcomes if outcome.status == "skipped_aborted")
+        return sum(
+            1 for outcome in self.outcomes if outcome.status == "skipped_aborted"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -2017,7 +2259,14 @@ def _write_grid_summary(grid_dir: Path, grid: GridSpec, result: GridResult) -> N
     compact = grid.base.storage.retention_policy.compact_scientific
     if not compact:
         _write(grid_dir / "grid_summary.json", _json(result.to_dict()))
-    fieldnames = ["cell_id", "completed", "failed", "skipped_resumed", "skipped_aborted", "overrides"]
+    fieldnames = [
+        "cell_id",
+        "completed",
+        "failed",
+        "skipped_resumed",
+        "skipped_aborted",
+        "overrides",
+    ]
     output_path = grid_dir / "grid_summary.csv"
     with output_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
@@ -2025,15 +2274,24 @@ def _write_grid_summary(grid_dir: Path, grid: GridSpec, result: GridResult) -> N
         for cell in result.cells:
             writer.writerow(
                 {
-                    "cell_id": cell.cell_id, "completed": cell.completed, "failed": cell.failed,
-                    "skipped_resumed": cell.skipped_resumed, "skipped_aborted": cell.skipped_aborted,
-                    "overrides": json.dumps(dict(cell.overrides), sort_keys=True, default=str),
+                    "cell_id": cell.cell_id,
+                    "completed": cell.completed,
+                    "failed": cell.failed,
+                    "skipped_resumed": cell.skipped_resumed,
+                    "skipped_aborted": cell.skipped_aborted,
+                    "overrides": json.dumps(
+                        dict(cell.overrides), sort_keys=True, default=str
+                    ),
                 }
             )
     manifest = {
-        "schema_version": 1, "grid_id": result.grid_id, "run_id": result.run_id,
-        "experiment_name": result.experiment_name, "game_type": result.game_type,
-        "cell_count": len(result.cells), "started_at": result.started_at,
+        "schema_version": 1,
+        "grid_id": result.grid_id,
+        "run_id": result.run_id,
+        "experiment_name": result.experiment_name,
+        "game_type": result.game_type,
+        "cell_count": len(result.cells),
+        "started_at": result.started_at,
         "finished_at": result.finished_at,
         "artifact_profile": grid.base.storage.artifact_profile,
         "checkpoint_mode": grid.base.storage.checkpoint_mode,
@@ -2071,17 +2329,23 @@ async def run_experiment_grid(
 
     base = grid.base
     override = (
-        base.pricing.explicit_unknown_price_override if explicit_override is None else explicit_override
+        base.pricing.explicit_unknown_price_override
+        if explicit_override is None
+        else explicit_override
     )
     game = create_game(base.game)
     quote = _quote(base)
     system_budget, run_budget = _budgets(base, quote)
 
     preflight = static_grid_preflight(
-        grid, concurrency=base.execution.parallelism,
+        grid,
+        concurrency=base.execution.parallelism,
         assumed_output_tokens=base.llm_provider.max_output_tokens,
-        pricing_quote=quote, system_budget=system_budget, run_budget=run_budget,
-        explicit_override=override, allow_stale_pricing=not base.pricing.require_fresh_at_launch,
+        pricing_quote=quote,
+        system_budget=system_budget,
+        run_budget=run_budget,
+        explicit_override=override,
+        allow_stale_pricing=not base.pricing.require_fresh_at_launch,
     )
     if preflight.launch_status != "permitted":
         raise ValueError(
@@ -2090,7 +2354,9 @@ async def run_experiment_grid(
 
     runtime_quote = _quote(base) if base.pricing.mode == "live" else quote
     if _pricing_terms(runtime_quote) != _pricing_terms(quote):
-        raise ValueError("live pricing changed during immediate pre-launch revalidation")
+        raise ValueError(
+            "live pricing changed during immediate pre-launch revalidation"
+        )
 
     run_id = f"{base.experiment.name}-{base.execution.seed}"
     grid_dir = results_run_dir(
@@ -2104,13 +2370,19 @@ async def run_experiment_grid(
 
     print_banner(
         format_grid_banner(
-            experiment_name=base.experiment.name, game_type=base.game.type,
-            game_version=game.spec.version, provider=base.llm_provider.type,
-            model=base.llm_provider.model, cell_count=len(cells),
-            total_episode_count=preflight.total_episode_count, concurrency=base.execution.parallelism,
+            experiment_name=base.experiment.name,
+            game_type=base.game.type,
+            game_version=game.spec.version,
+            provider=base.llm_provider.type,
+            model=base.llm_provider.model,
+            cell_count=len(cells),
+            total_episode_count=preflight.total_episode_count,
+            concurrency=base.execution.parallelism,
             axes=tuple((axis.path, len(axis.values)) for axis in grid.axes),
             preflight_expected_cost=format_money(preflight.total_costs.expected),
-            preflight_conservative_cost=format_money(preflight.total_costs.conservative),
+            preflight_conservative_cost=format_money(
+                preflight.total_costs.conservative
+            ),
             preflight_status=preflight.launch_status,
         )
     )
@@ -2123,7 +2395,9 @@ async def run_experiment_grid(
     guard = RuntimeBudgetGuard(effective_budget, expectation=_expectation(preflight))
 
     metrics, to_round_view = game_metrics(game)
-    policy = DetailedAuditPolicy.from_mapping(base.logging.options.get("detailed_prompt_audit"))
+    policy = DetailedAuditPolicy.from_mapping(
+        base.logging.options.get("detailed_prompt_audit")
+    )
     price_hash = _pricing_identity(runtime_quote)
     _configure_durable_budget(
         base, grid_dir, guard, price_hash=price_hash, resume=resume
@@ -2153,9 +2427,14 @@ async def run_experiment_grid(
             episode_id = f"{cell.cell_id}-{index:04d}"
             all_tasks.append(
                 _EpisodeTask(
-                    episode_id=episode_id, seed=episode_seed,
-                    config=replace(cell.config, execution=replace(cell.config.execution, seed=episode_seed)),
-                    episode_dir=episodes_dir / episode_id, cell_id=cell.cell_id,
+                    episode_id=episode_id,
+                    seed=episode_seed,
+                    config=replace(
+                        cell.config,
+                        execution=replace(cell.config.execution, seed=episode_seed),
+                    ),
+                    episode_dir=episodes_dir / episode_id,
+                    cell_id=cell.cell_id,
                     cell_dir=cell_dir,
                 )
             )
@@ -2173,8 +2452,11 @@ async def run_experiment_grid(
     if scheduled_tasks:
         provider = create_llm_provider(base.llm_provider, registry=_provider_registry())
         guarded_provider = BudgetGuardedProvider(
-            provider, guard, runtime_quote.pricing,
-            input_token_estimator=estimate_input_tokens, input_token_multiplier=1.0,
+            provider,
+            guard,
+            runtime_quote.pricing,
+            input_token_estimator=estimate_input_tokens,
+            input_token_multiplier=1.0,
         )
         if base.storage.retention_policy.detailed_timing:
             timing_provider = _TimingProvider(guarded_provider)
@@ -2182,7 +2464,9 @@ async def run_experiment_grid(
         watcher = _spend_watcher(base, guard, effective_budget)
 
     progress = ExperimentProgress(
-        total_episodes=len(all_tasks), total_rounds=total_rounds, show=show_progress,
+        total_episodes=len(all_tasks),
+        total_rounds=total_rounds,
+        show=show_progress,
     )
     # One sweep experiment for the whole grid, plus one experiment per cell at
     # that cell's completion. Episode-level Comet stays off (see
@@ -2203,8 +2487,11 @@ async def run_experiment_grid(
     monitor.start(sweep_parameters(base, axes))
     print_banner(f"  Comet:         {monitor.describe()}")
     aggregator = GridAggregator(
-        grid_dir, base.aggregation, monitor=monitor,
-        ground_truth=aggregation_ground_truth(base, grid, game), seed=base.execution.seed,
+        grid_dir,
+        base.aggregation,
+        monitor=monitor,
+        ground_truth=aggregation_ground_truth(base, grid, game),
+        seed=base.execution.seed,
     )
     completion = _CellCompletion(
         {cell.cell_id: cell.config.execution.repetitions for cell in cells}
@@ -2213,8 +2500,10 @@ async def run_experiment_grid(
     prompt_sampler = (
         _CellPromptSampler(int(prompt_options.get("count", 0)))
         if prompt_options.get(
-            "scope", "cell" if base.storage.retention_policy.compact_scientific else "episode"
-        ) == "cell"
+            "scope",
+            "cell" if base.storage.retention_policy.compact_scientific else "episode",
+        )
+        == "cell"
         else None
     )
     finalizer = (
@@ -2247,13 +2536,26 @@ async def run_experiment_grid(
         fresh_outcomes = await _with_spend_watch(
             watcher,
             _run_task_batch(
-                scheduled_tasks, game=game, guarded_provider=guarded_provider, guard=guard,
-                semaphore=semaphore, abort=abort, budget_abort=budget_abort,
+                scheduled_tasks,
+                game=game,
+                guarded_provider=guarded_provider,
+                guard=guard,
+                semaphore=semaphore,
+                abort=abort,
+                budget_abort=budget_abort,
                 fail_fast=base.execution.fail_fast,
-                resume=resume, policy=policy, metrics=metrics, to_round_view=to_round_view,
-                price_hash=price_hash, checkpoint_enabled=base.storage.checkpoints, progress=progress,
-                monitor=monitor, aggregator=aggregator, completion=completion,
-                prompt_sampler=prompt_sampler, finalizer=finalizer,
+                resume=resume,
+                policy=policy,
+                metrics=metrics,
+                to_round_view=to_round_view,
+                price_hash=price_hash,
+                checkpoint_enabled=base.storage.checkpoints,
+                progress=progress,
+                monitor=monitor,
+                aggregator=aggregator,
+                completion=completion,
+                prompt_sampler=prompt_sampler,
+                finalizer=finalizer,
                 cell_analysis=cell_analysis,
             ),
         )
@@ -2287,7 +2589,11 @@ async def run_experiment_grid(
             LOGGER.warning("could not render the grid image (%s)", type(exc).__name__)
         _write(
             grid_dir
-            / ("comet_summary.json" if base.storage.retention_policy.compact_scientific else "comet_run_summary.json"),
+            / (
+                "comet_summary.json"
+                if base.storage.retention_policy.compact_scientific
+                else "comet_run_summary.json"
+            ),
             _json(monitor.close()),
         )
 
@@ -2295,13 +2601,21 @@ async def run_experiment_grid(
     for outcome in outcomes:
         by_cell[outcome.cell_id].append(outcome)
     cell_results = tuple(
-        GridCellResult(cell.cell_id, cell.overrides, tuple(by_cell[cell.cell_id])) for cell in cells
+        GridCellResult(cell.cell_id, cell.overrides, tuple(by_cell[cell.cell_id]))
+        for cell in cells
     )
 
     result = GridResult(
-        grid_id=grid.grid_id, run_id=run_id, experiment_name=base.experiment.name,
-        game_type=base.game.type, output_dir=grid_dir, cells=cell_results, preflight=preflight,
-        budget_status=guard.status(), started_at=started_at, finished_at=_now(),
+        grid_id=grid.grid_id,
+        run_id=run_id,
+        experiment_name=base.experiment.name,
+        game_type=base.game.type,
+        output_dir=grid_dir,
+        cells=cell_results,
+        preflight=preflight,
+        budget_status=guard.status(),
+        started_at=started_at,
+        finished_at=_now(),
     )
     _write_grid_summary(grid_dir, grid, result)
     for cell, cell_result in zip(cells, cell_results):
@@ -2315,14 +2629,20 @@ async def run_experiment_grid(
             cell_dir / "cell_summary.json",
             _json(
                 {
-                    "cell_id": cell_result.cell_id, "overrides": dict(cell_result.overrides),
-                    "completed": cell_result.completed, "failed": cell_result.failed,
+                    "cell_id": cell_result.cell_id,
+                    "overrides": dict(cell_result.overrides),
+                    "completed": cell_result.completed,
+                    "failed": cell_result.failed,
                     "skipped_resumed": cell_result.skipped_resumed,
                     "skipped_aborted": cell_result.skipped_aborted,
                     **(
                         {"failures": failures}
                         if base.storage.retention_policy.compact_scientific
-                        else {"outcomes": [outcome.to_dict() for outcome in cell_result.outcomes]}
+                        else {
+                            "outcomes": [
+                                outcome.to_dict() for outcome in cell_result.outcomes
+                            ]
+                        }
                     ),
                 }
             ),
@@ -2332,8 +2652,11 @@ async def run_experiment_grid(
     run_configured_analysis(base, grid_dir)
     if base.storage.retention_policy.compact_scientific:
         _write_timing_study(
-            grid_dir, outcomes, profile=base.storage.artifact_profile,
-            run_started_at=result.started_at, run_finished_at=result.finished_at,
+            grid_dir,
+            outcomes,
+            profile=base.storage.artifact_profile,
+            run_started_at=result.started_at,
+            run_finished_at=result.finished_at,
             cell_overrides={cell.cell_id: cell.overrides for cell in cells},
             request_rows=() if timing_provider is None else timing_provider.rows,
         )

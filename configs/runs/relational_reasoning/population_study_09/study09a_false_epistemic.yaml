@@ -1,0 +1,175 @@
+# Study 09a: epistemic conditions under false-target control.
+# The receiver disposition, evidence strategy, and target semantics remain
+# separate axes. Strategic evidence selects only true frozen-task facts.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 5
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    # Existing Study 08 semantics: index 2 is false for every selected task.
+    target: 2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 12
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: neutral
+
+execution:
+  seed: 20260828
+  repetitions: 10
+  parallelism: 8
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 700000
+  max_input_tokens: 4000000000
+  max_output_tokens: 500000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 1
+      scope: cell
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+  estimators: []
+
+metrics:
+  enabled: true
+  comet_export: []
+
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 25
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study09a-false-epistemic
+  description: >-
+    Study 09a four-condition epistemic design under false-target control at
+    N=24, q=1, q_c=12, b=12, theta=0.5, beta=4 over two matched worlds.
+  tags: [relational, population-study-09, study-09a, false-target, epistemic, N24, q1, qc12, beta4, results-only]
+  metadata:
+    study: population_study_09
+    phase: study09a_false_epistemic
+    design: epistemic_prompt_control_efficiency
+    controller_semantics: wrong
+    target_semantics: "false"
+    controller_target: 2
+    population_rounds: 10
+    social_group_size: 1
+    sensor_sample_size: 12
+    sensing_fraction: 0.5
+    beta: 4.0
+    worlds: 2
+    repetitions: 10
+    cells: 8
+    episodes: 80
+    nominal_provider_requests: 21120
+    expected_provider_requests: 22320
+    conservative_provider_requests: 42240
+    common_random_numbers_across_grid: true
+    crn_note: all epistemic, budget, and task cells share repetition-index streams; the truth block uses the same grid order and root seed
+    mandatory_message_mode: recommendation_plus_fact
+    evidence_semantics: true_facts_only
+    primary_analysis_family:
+      - round_target_susceptibility
+      - round_target_actuation_cmi
+      - eta_ir
+      - effective_affinity
+      - kinetic_compliance
+      - controlled_current
+      - target_sensing_information_nats
+      - eta_th
+      - round_memory_target_actuation_cmi
+
+grid:
+  # These independent axes produce the four required epistemic conditions.
+  # Axis order and values are identical in the paired truth block.
+  game.options.receiver_epistemic_disposition: [naive, vigilant]
+  control.options.controller_evidence_strategy: [neutral, strategic]
+  game.options.task_id: [task_0001, task_0002]

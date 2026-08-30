@@ -151,8 +151,10 @@ model-specific concurrency probe when available and keep large runs below the
 declared RPM target. Published RPM is a ceiling, not guaranteed throughput.
 Standardized workers also apply the shared adaptive provider coordinator from
 `execution.provider_load_control`. Keep it enabled for real remote-provider
-studies: start conservatively, bound it by planned request capacity and target
-RPM, and let local/global circuit breakers respond to 429/5xx bursts. Do not
+studies: start at the planned provider-safe concurrency ceiling, reduce quickly
+on retryable failures, and recover upward after stable service. Retryable calls
+must remain inside the same in-memory episode during bounded provider outages
+instead of sacrificing the episode after a few rapid attempts. Do not
 replace it with game-specific throttling or a study-specific job file.
 
 For an authorized real run, use:
@@ -197,9 +199,10 @@ renders plots, and packages the handoff.
 The standardized study analysis package contains canonical scientific data,
 compact estimator summaries, support diagnostics, plots, reports, validation,
 and provenance. Bootstrap/permutation draws and analysis caches are transient
-computational intermediates and are not retained. Parquet is authoritative;
-do not emit table-wide CSV mirrors or package source run trees and execution
-artifacts. Reaggregation recomputes from the canonical Parquet observations.
+computational intermediates and are not retained. CSV is the canonical table
+format for new analysis packages; Parquet remains supported as a legacy input
+only. Do not package source run trees or execution artifacts. Reaggregation
+recomputes from the retained canonical CSV observations (or legacy Parquet).
 
 ## Aggregate and extend analysis
 
@@ -216,7 +219,7 @@ For a new efficiency, phase diagram, or plot that existing raw records support:
 
 1. add a derived observable and/or analysis recipe entry;
 2. rerun `study aggregate`;
-3. recompute from the retained canonical Parquet observations;
+3. recompute from retained canonical CSV observations (or legacy Parquet);
 4. do not rerun LLM calls.
 
 Rerun LLM calls only when the requested result genuinely needs raw fields or

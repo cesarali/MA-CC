@@ -105,7 +105,7 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
     control = ProviderLoadControlConfig.from_mapping(
         policy.get("provider_load_control"),
         defaults={
-            "initial_concurrency": min(24, total_concurrency),
+            "initial_concurrency": total_concurrency,
             "minimum_concurrency": min(4, total_concurrency),
             "maximum_concurrency": total_concurrency,
             "target_rpm": target_rpm,

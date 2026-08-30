@@ -30,21 +30,25 @@ from .prompts import (
 from .runtime import (
     CONTROL_SOURCE_ID,
     RelationalGameResult,
+    apply_epistemic_persistence,
     build_social_sources,
     run_relational_imitation_round_feedback_game,
     run_relational_imitation_round_feedback_game_sync,
     sample_controlled_positions,
 )
 from .state import (
+    ACTIVE_FACT_IDS,
     GAME_TYPE,
     RelationalAgentState,
     RelationalGameState,
     RelationalRoundRecord,
     RelationalRules,
     RelationalTransition,
+    reasoning_fact_ids,
 )
 
 __all__ = [
+    "ACTIVE_FACT_IDS",
     "CONTROL_SOURCE_ID",
     "CONTROLLER_EVIDENCE_STRATEGIES",
     "EVIDENCE_NEUTRAL",
@@ -67,6 +71,7 @@ __all__ = [
     "RelationalRules",
     "RelationalTransition",
     "agent_label",
+    "apply_epistemic_persistence",
     "build_relational_ballot_prompt",
     "build_social_sources",
     "control_label",
@@ -77,6 +82,7 @@ __all__ = [
     "relational_public_ballot_prompt",
     "render_control_reason",
     "render_social_source",
+    "reasoning_fact_ids",
     "run_relational_imitation_round_feedback_game",
     "run_relational_imitation_round_feedback_game_sync",
     "sample_controlled_positions",

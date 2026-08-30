@@ -292,17 +292,18 @@ Successful or explicitly partial aggregation writes:
 
 ```text
 analysis/tables/
-    cells.parquet
-    episodes.parquet
-    rounds.parquet
-    micro_slots.parquet
-    primary_estimates.parquet
-    information_estimates.parquet
-    support_diagnostics.parquet
-    derived_observables.parquet
+    cells.csv
+    episodes.csv
+    rounds.csv
+    micro_slots.csv
+    primary_estimates.csv
+    information_estimates.csv
+    support_diagnostics.csv
+    derived_observables.csv
 ```
 
-Parquet is authoritative; redundant table CSV mirrors are not written.
+CSV is authoritative for new packages. Legacy Parquet remains readable for
+reaggregation, but new analysis does not emit Parquet by default.
 
 ### Cells
 
@@ -322,8 +323,8 @@ schema provenance are retained when available.
 Rich `round_trajectory.jsonl` records are preferred. When a supported
 round-feedback run retains only compact scientific transitions, those rows are
 adapted through `compact_row_to_imitation_event()` and the existing round
-adapter. Heterogeneous nested values are JSON-serialized only at the Parquet
-write boundary; estimator inputs retain their native structures in memory.
+adapter. Heterogeneous nested values are deterministically JSON-serialized at
+the CSV write boundary; estimator inputs retain native structures in memory.
 
 ### Micro-slots
 
@@ -404,11 +405,11 @@ bootstrap draws preserve cell allocation through stratification.
 
 These metrics are emitted only when requested and when eligible micro-slot
 records exist. Their exposure/transition counts and probabilities are added to
-`support_diagnostics.parquet`.
+`support_diagnostics.csv`.
 
 ## 11. Long-format outputs and support
 
-`primary_estimates.parquet` is the union of information estimates and requested
+`primary_estimates.csv` is the union of information estimates and requested
 auxiliary primary estimators. Its stable leading columns include:
 
 ```text
@@ -442,8 +443,8 @@ The information `analysis_hash` includes:
 - bootstrap/null/confidence/seed settings.
 
 No persistent estimator cache is retained. An unchanged second aggregation
-recomputes from `cells.parquet`, `episodes.parquet`, `rounds.parquet`, and
-`micro_slots.parquet`. In-memory or invocation-local temporary computation is
+recomputes from `cells.csv`, `episodes.csv`, `rounds.csv`, and `micro_slots.csv`
+(or their legacy Parquet equivalents). In-memory or invocation-local computation is
 allowed, but successful aggregation removes it. Analysis hashes and calculation
 settings remain recorded in `analysis_manifest.json`. If the original run trees
 are no longer present, `study aggregate` uses these retained canonical tables
@@ -535,7 +536,7 @@ Focused tests cover:
 - array-index resolution and out-of-range failure;
 - preflight of every config before one `sbatch` call;
 - real compact mock-provider run normalization;
-- all nine canonical/analysis Parquet products;
+- all canonical/analysis CSV products;
 - cache reuse on unchanged aggregation;
 - strict incomplete-study failure and explicit partial continuation;
 - effective-affinity and kinetic-compliance definitions.
@@ -610,13 +611,16 @@ round-information, and current-analysis paths pass.
 ## 16. Known limitations and recommended next work
 
 Standardized remote-provider studies install a shared adaptive coordinator
-from the generic array worker. The default starts at 24 cluster-wide HTTP
-attempts (or the lower planned ceiling), enforces target RPM, pauses an
+from the generic array worker. The default starts at the planned provider-safe
+HTTP-attempt ceiling, enforces target RPM, pauses an
 individually unhealthy worker, and opens a global breaker for widespread
-failures. Concurrency recovers additively after healthy intervals. Overrides
+failures. Concurrency recovers additively after healthy intervals. Retryable
+logical calls wait with capped exponential jitter for up to the configured
+outage window, preserving the current in-memory episode. Overrides
 belong in `study.yaml` under `execution.provider_load_control`; `mode: off` is
-reserved for deliberate diagnostics. Live state under
-`<study-root>/runtime/provider-control` is excluded from analysis packages.
+reserved for deliberate diagnostics. Each submission starts fresh under
+`<study-root>/runtime/provider-control/job-<job-id>`; this live state is
+excluded from analysis packages.
 
 1. **Scheduler environment is site-dependent.**
    `run_config_array.job` assumes `python` resolves to an environment containing

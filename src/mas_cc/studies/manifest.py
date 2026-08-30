@@ -10,6 +10,18 @@ import yaml
 
 
 _RESERVED = frozenset({"study.yaml", "analysis.yaml"})
+_PREFLIGHT_CONTRACTS = frozenset(
+    {
+        "relational_false_takeover_v1",
+        "relational_persistence_exploratory_v1",
+        "relational_persistence_refinement_v1",
+        "relational_persistence_truth_refinement_v1",
+        "relational_persistence_q1_l2_false_v1",
+        "relational_persistence_q1_l2_truth_v1",
+        "relational_persistence_high_statistics_false_v1",
+        "relational_persistence_high_statistics_truth_v1",
+    }
+)
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
@@ -30,6 +42,7 @@ class StudySpec:
     execution: Mapping[str, Any] = field(default_factory=dict)
     analysis_recipe: Path | None = None
     manifest_path: Path | None = None
+    preflight: Mapping[str, Any] = field(default_factory=dict)
 
 
 def discover_study(config_dir: str | Path) -> StudySpec:
@@ -74,7 +87,9 @@ def discover_study(config_dir: str | Path) -> StudySpec:
             try:
                 candidate.relative_to(root)
             except ValueError as exc:
-                raise ValueError(f"study config must stay within {root}: {item}") from exc
+                raise ValueError(
+                    f"study config must stay within {root}: {item}"
+                ) from exc
             paths.append(candidate)
 
     if not paths:
@@ -83,7 +98,9 @@ def discover_study(config_dir: str | Path) -> StudySpec:
         raise ValueError("study.yaml contains duplicate experiment configs")
     for path in paths:
         if path.name in _RESERVED:
-            raise ValueError(f"reserved orchestration YAML cannot be an experiment config: {path.name}")
+            raise ValueError(
+                f"reserved orchestration YAML cannot be an experiment config: {path.name}"
+            )
         if not path.is_file():
             raise ValueError(f"listed experiment config does not exist: {path}")
         if path.suffix.lower() not in {".yaml", ".yml"}:
@@ -114,19 +131,33 @@ def discover_study(config_dir: str | Path) -> StudySpec:
         try:
             recipe.relative_to(root)
         except ValueError as exc:
-            raise ValueError(f"analysis recipe must stay within {root}: {recipe_value}") from exc
+            raise ValueError(
+                f"analysis recipe must stay within {root}: {recipe_value}"
+            ) from exc
         if not recipe.is_file():
             raise ValueError(f"analysis recipe does not exist: {recipe}")
         try:
-            _mapping(yaml.safe_load(recipe.read_text(encoding="utf-8")), "analysis recipe")
+            _mapping(
+                yaml.safe_load(recipe.read_text(encoding="utf-8")), "analysis recipe"
+            )
         except yaml.YAMLError as exc:
             raise ValueError(f"invalid YAML in {recipe}: {exc}") from exc
     elif (root / "analysis.yaml").is_file():
         recipe = (root / "analysis.yaml").resolve()
         try:
-            _mapping(yaml.safe_load(recipe.read_text(encoding="utf-8")), "analysis recipe")
+            _mapping(
+                yaml.safe_load(recipe.read_text(encoding="utf-8")), "analysis recipe"
+            )
         except yaml.YAMLError as exc:
             raise ValueError(f"invalid YAML in {recipe}: {exc}") from exc
+
+    preflight = dict(_mapping(raw.get("preflight"), "preflight"))
+    contract = preflight.get("contract")
+    if contract is not None and contract not in _PREFLIGHT_CONTRACTS:
+        raise ValueError(
+            "unsupported study preflight.contract; expected one of "
+            + ", ".join(sorted(_PREFLIGHT_CONTRACTS))
+        )
 
     return StudySpec(
         name=name,
@@ -135,4 +166,5 @@ def discover_study(config_dir: str | Path) -> StudySpec:
         execution=execution,
         analysis_recipe=recipe,
         manifest_path=manifest_path if manifest_path.is_file() else None,
+        preflight=preflight,
     )

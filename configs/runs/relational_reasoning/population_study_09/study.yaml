@@ -1,0 +1,23 @@
+study:
+  name: relational-population-study-09a
+
+configs:
+  # Keep this order stable so truth/false blocks retain paired grid coordinates.
+  - study09a_false_epistemic.yaml
+  - study09a_truth_epistemic.yaml
+
+execution:
+  mode: auto
+  target_rpm: 200
+  assumed_latency_seconds: 3.0
+  max_active_nodes: 2
+  cpus_per_task: 8
+  memory: 8G
+  time_limit: "04:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_09a
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+
+analysis:
+  recipe: analysis.yaml

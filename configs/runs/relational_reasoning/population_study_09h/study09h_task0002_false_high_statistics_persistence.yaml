@@ -1,0 +1,145 @@
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 4.5}
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract: {type: relational_public_ballot, allowed_values: [A, B, C]}
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 12
+  horizon: 30
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n12_L3_r03_k3
+    task_id: task_0002
+    dynamics_mode: reasoning
+    rounds: 30
+    social_group_size: 1
+    epistemic_persistence: 0.80
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: naive
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization: {mode: local_vote}
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: NORTHWEST
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.75
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: strategic
+
+execution: {seed: 20260830, repetitions: 15, parallelism: 10, fail_fast: false}
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 3000000
+  max_input_tokens: 1300000000
+  max_output_tokens: 12000000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options: {comet_project: mas-cc, prompt_examples: {count: 1, scope: cell}}
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: results_only
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 1
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+
+experiment:
+  name: relational-study09h-task0002-false-high-statistics-persistence
+  description: >-
+    High-statistics L=3 false-target persistence family on frozen task 0002,
+    varying only q, rho, and controller budget with strategic true evidence.
+  tags: [relational, population-study-09h, high-statistics, persistence, false-target, N12, L3, r3]
+  metadata:
+    study: population_study_09h
+    design: high_statistics_epistemic_persistence
+    matched_counterpart: population_study_09i
+    eligible_reuse_source: population_study_09d
+    task_id: task_0002
+    ground_truth: NORTH
+    controller_target: NORTHWEST
+    controller_target_is_truth: false
+    target_semantics: "false"
+    receiver_epistemic_disposition: naive
+    evidence_semantics: real_frozen_task_fact_selected_by_existing_policy
+    message_mode: recommendation_plus_fact
+    population_size: 12
+    population_rounds: 30
+    reasoning_depth: 3
+    support_redundancy: 3
+    sensor_sample_size: 6
+    sensing_fraction: 0.5
+    beta: 4.0
+    theta: 0.75
+    advocacy_schedule: soft
+    repetitions: 15
+    cells: 24
+    episodes: 360
+    late_time_rounds_one_based: [21, 30]
+    common_random_numbers_across_grid: true
+    matched_revised_theory_applicable: false
+
+grid:
+  game.options.social_group_size: [1, 2]
+  game.options.epistemic_persistence: [0.80, 0.85]
+  control.options.intervention_budget: [3, 4, 6, 8, 9, 12]
