@@ -1,0 +1,107 @@
+# One production-path Study 09h episode, shortened to three rounds.
+
+llm_provider:
+  type: deepinfra
+  model: deepseek-ai/DeepSeek-V4-Flash-0731
+  credentials_env: DEEPINFRA_API_KEY
+  timeout_seconds: 180
+  max_retries: 8
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 10.0}
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract: {type: relational_public_ballot, allowed_values: [A, B, C]}
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 12
+  horizon: 3
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n12_L3_r03_k3
+    task_id: task_0002
+    dynamics_mode: reasoning
+    rounds: 3
+    social_group_size: 1
+    epistemic_persistence: 0.80
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: naive
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization: {mode: local_vote}
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: NORTHWEST
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.75
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: strategic
+
+execution: {seed: 20260830, repetitions: 1, parallelism: 1, fail_fast: true}
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 2.0
+  max_cost_per_run: 2.0
+  max_provider_requests: 100
+  max_input_tokens: 100000
+  max_output_tokens: 500000
+  allow_unbounded_paid_requests: false
+
+logging: {level: INFO, console: true, audit: true, comet: false}
+storage:
+  output_dir: /pscratch/sd/d/dfarough/MA-CC-results/smoke/deepinfra-deepseek-v4-flash-0731-study09h
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+observability:
+  schema_version: 1
+  comet: {sweep_experiment: false}
+
+experiment:
+  name: relational-study09h-deepinfra-deepseek-v4-flash-0731-one-episode-smoke
+  description: >-
+    One N12/L3 Study 09h false-target episode with the production provider,
+    prompt, controller, and retention path, shortened to three rounds.
+  tags: [relational, population-study-09h, deepinfra, deepseek-v4-flash-0731, smoke]
+  metadata:
+    source_scientific_design: population_study_09h
+    task_id: task_0002
+    ground_truth: NORTH
+    controller_target: NORTHWEST
+    controller_target_is_truth: false
+    target_semantics: "false"
+    llm_provider: deepinfra
+    llm_model: deepseek-ai/DeepSeek-V4-Flash-0731

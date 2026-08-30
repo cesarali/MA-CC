@@ -1,0 +1,41 @@
+study:
+  name: relational-population-study-09h-deepinfra-deepseek-v4-flash-0731
+
+configs:
+  - study09h_task0002_false_high_statistics_persistence_deepinfra_deepseek.yaml
+
+preflight:
+  contract: relational_persistence_high_statistics_false_v1
+
+execution:
+  mode: auto
+  # The authenticated DeepInfra account reports 200 concurrent requests and
+  # 1.1M TPM. At the conservative 10-second planning latency, 20 cell workers
+  # expose 200 episode/request slots while the smooth shared pacer enforces
+  # 1,200 RPM globally.
+  target_rpm: 1200
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 24
+  throttle: 20
+  cpus_per_task: 10
+  memory: 12G
+  time_limit: "04:00:00"
+  # Checked-in defaults remain Potsdam-safe. NERSC preparation rebinds only
+  # the external result boundary; scripts/nersc enforces interactive CPU QoS.
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_09h_deepinfra_deepseek_v4_flash_0731
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 100
+    minimum_concurrency: 32
+    maximum_concurrency: 200
+    target_rpm: 1200
+    local_failure_threshold: 2
+    global_failure_ratio: 0.05
+    increase_interval_seconds: 30
+    retry_max_elapsed_seconds: 300
+
+analysis:
+  recipe: analysis.yaml

@@ -88,6 +88,25 @@
     },
     {
       "provider_type": "deepinfra",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T20:41:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "DeepInfra's authenticated and public model metadata listed deepseek-ai/DeepSeek-V4-Flash-0731 on 2026-08-30.",
+        "The model page reports OpenAI chat, JSON, function calling, temperature, seed, and a 1,048,576-token context.",
+        "Live MA-CC probes on NERSC interactive CPU job 57753115 passed one chat request and a 64-request concurrent burst with system messages, temperature=0, max_tokens, seed, and json_object response format."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
       "model": "google/gemma-4-26B-A4B-it",
       "family": "gemma",
       "temperature": {

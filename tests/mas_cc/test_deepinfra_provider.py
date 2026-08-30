@@ -21,6 +21,7 @@ from mas_cc.llm_runtime.providers import (
 
 
 MODEL = "deepseek-ai/DeepSeek-V4-Flash"
+RELEASE_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
 GEMMA_MODEL = "google/gemma-4-E4B-it"
 SMOKE_CONFIG = (
     "configs/runs/relational_reasoning/"
@@ -33,6 +34,10 @@ GEMMA_SMOKE_CONFIG = (
 GEMMA_STUDY08_SMOKE_CONFIG = (
     "configs/runs/relational_reasoning/"
     "population_study_08_deepinfra_gemma_one_episode_smoke.yaml"
+)
+STUDY09H_RELEASE_SMOKE_CONFIG = (
+    "configs/runs/relational_reasoning/"
+    "population_study_09h_deepinfra_deepseek_one_episode_smoke.yaml"
 )
 
 
@@ -318,6 +323,25 @@ def test_deepseek_v4_flash_has_a_dated_deepinfra_profile_and_pricing():
     assert quote.pricing.limits.maximum_output_tokens == 65_536
 
 
+def test_deepseek_v4_flash_0731_has_live_verified_deepinfra_pricing():
+    profile = default_model_profile_registry().get("deepinfra", RELEASE_MODEL)
+    assert profile.provider_type == "deepinfra"
+    assert profile.model == RELEASE_MODEL
+    assert profile.family == "deepseek"
+    assert profile.supports_seed is True
+    assert profile.supports_system_messages is True
+    assert profile.max_output_tokens_field == "max_tokens"
+
+    quote = OfflinePricingSource().fetch("deepinfra", RELEASE_MODEL)
+    assert quote.status == "known"
+    assert quote.pricing is not None
+    assert quote.pricing.unit == "USD"
+    assert quote.pricing.ordinary_input_per_million == pytest.approx(0.08)
+    assert quote.pricing.cached_input_per_million == pytest.approx(0.016)
+    assert quote.pricing.output_per_million == pytest.approx(0.18)
+    assert quote.pricing.limits.maximum_input_tokens == 1_048_576
+
+
 def test_gemma_4_e4b_has_a_dated_deepinfra_profile_and_pricing():
     profile = default_model_profile_registry().get("deepinfra", GEMMA_MODEL)
     assert profile.provider_type == "deepinfra"
@@ -360,6 +384,24 @@ def test_deepinfra_relational_smoke_config_is_one_n6_r3_episode():
     assert plan.metadata["interactions_per_episode"] == 18
     assert plan.provider_requests.lower == 18
     assert plan.provider_requests.maximum == 36
+
+
+def test_deepinfra_study09h_release_smoke_is_one_n12_r3_episode():
+    config = load_run_config(STUDY09H_RELEASE_SMOKE_CONFIG, environment={})
+    assert config.llm_provider.type == "deepinfra"
+    assert config.llm_provider.model == RELEASE_MODEL
+    assert config.llm_provider.request_concurrency == 10
+    assert config.llm_provider.max_output_tokens == 4096
+    assert config.game.population_size == 12
+    assert config.game.options["task_id"] == "task_0002"
+    assert config.game.options["rounds"] == 3
+    assert config.execution.repetitions == 1
+    assert config.execution.parallelism == 1
+    assert config.storage.artifact_profile == "full"
+
+    plan = create_game(config.game).call_plan(config.game)
+    assert plan.provider_requests.lower == 48
+    assert plan.provider_requests.maximum == 96
 
 
 def test_deepinfra_gemma_relational_smoke_config_is_one_n6_r3_episode():

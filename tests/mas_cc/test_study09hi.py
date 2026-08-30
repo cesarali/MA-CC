@@ -12,13 +12,17 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     build_social_sources,
 )
 from mas_cc.studies.manifest import discover_study
+from mas_cc.studies.execution import build_cell_execution_entries, plan_cell_execution
 from mas_cc.studies.aggregation import (
     _factorial_contrasts,
     _render_plots,
     _rho_aggregated_descriptive_summary,
     _state_local_phase_tables,
 )
-from mas_cc.studies.preflight import validate_study_preflight_contract
+from mas_cc.studies.preflight import (
+    run_study_preflight,
+    validate_study_preflight_contract,
+)
 from mas_cc.studies.submission import build_submission_entries
 
 
@@ -82,6 +86,77 @@ def test_high_statistics_grid_has_no_additional_scientific_axes():
         assert config.control.options["threshold"] == 0.75
         assert config.control.options["controller_evidence_strategy"] == "strategic"
         assert config.execution.repetitions == 15
+
+
+def test_study09h_deepinfra_deepseek_preserves_design_and_caps_provider_load():
+    source_root = ROOT / "population_study_09h"
+    variant_root = ROOT / "population_study_09h_deepinfra_deepseek"
+    source = _source(
+        "population_study_09h",
+        "study09h_task0002_false_high_statistics_persistence.yaml",
+    )
+    variant = _source(
+        "population_study_09h_deepinfra_deepseek",
+        "study09h_task0002_false_high_statistics_persistence_deepinfra_deepseek.yaml",
+    )
+    spec = discover_study(variant_root)
+    report = validate_study_preflight_contract(spec)
+    entries = build_submission_entries(spec, "/tmp/study09h-deepinfra", git_commit="test")
+    shards = build_cell_execution_entries(spec, entries)
+    plan = plan_cell_execution(spec, len(shards))
+
+    assert report["status"] == "permitted"
+    assert report["total_cells"] == 24
+    assert report["total_episodes"] == 360
+    assert source.axes == variant.axes
+    for field in (
+        "prompt",
+        "game",
+        "control",
+        "execution",
+        "logging",
+        "storage",
+        "analysis",
+        "metrics",
+        "aggregation",
+        "observability",
+    ):
+        assert getattr(source.base, field) == getattr(variant.base, field)
+    assert variant.base.llm_provider.type == "deepinfra"
+    assert variant.base.llm_provider.model == "deepseek-ai/DeepSeek-V4-Flash-0731"
+    assert variant.base.llm_provider.credentials_env == "DEEPINFRA_API_KEY"
+    assert variant.base.llm_provider.request_concurrency == 10
+    assert variant.base.llm_provider.max_output_tokens == 4096
+    assert variant.base.pricing.mode == "offline"
+    assert variant.base.budget.accounting_unit == "USD"
+    assert len(shards) == 24
+    assert plan.array_throttle == 20
+    assert plan.total_episode_slots == 200
+    assert plan.total_request_concurrency == 200
+    assert plan.estimated_rpm == 1200
+    assert plan.provider_load_control["initial_concurrency"] == 100
+    assert plan.provider_load_control["maximum_concurrency"] == 200
+    assert plan.provider_load_control["target_rpm"] == 1200
+    assert plan.cpus_per_task == 10
+    assert plan.time_limit == "04:00:00"
+    assert (source_root / "analysis.yaml").read_bytes() == (
+        variant_root / "analysis.yaml"
+    ).read_bytes()
+    source_study = (variant_root / "study.yaml").read_text()
+    assert "partition: all" in source_study
+    assert "qos: normal" in source_study
+    assert "/pscratch/" not in source_study
+
+
+def test_high_statistics_study_preflight_renders_persistence_fact_audit(tmp_path):
+    result = run_study_preflight(
+        ROOT / "population_study_09h_deepinfra_deepseek", tmp_path
+    )
+
+    report = (result.output_dir / "report.md").read_text()
+    assert result.design["status"] == "permitted"
+    assert "true strategic fact `" in report
+    assert "fingerprint `" in report
 
 
 def test_truth_and_false_families_match_except_target_identity_and_provenance():

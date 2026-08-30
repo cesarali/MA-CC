@@ -707,7 +707,7 @@ def default_pricing_catalog() -> PricingCatalog:
     """Small dated catalog; unknown models deliberately remain unknown."""
 
     retrieved = "2026-08-02T00:00:00Z"
-    version = "2026-08-30-provider-economics-v7"
+    version = "2026-08-30-provider-economics-v8"
     common = {"retrieved_at": retrieved, "version": version}
     return PricingCatalog(
         version=version,
@@ -740,6 +740,15 @@ def default_pricing_catalog() -> PricingCatalog:
                     maximum_input_tokens=1_048_576,
                     maximum_output_tokens=65_536,
                 ),
+            ),
+            ModelPricing(
+                "deepinfra", "deepseek-ai/DeepSeek-V4-Flash-0731", 0.08, 0.18, "USD",
+                "DeepInfra authenticated/public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/deepseek-ai/DeepSeek-V4-Flash-0731",
+                retrieved_at="2026-08-30T20:39:00Z",
+                version="2026-08-30-deepinfra-v4-flash-0731-live-v1",
+                cached_input_per_million=0.016,
+                limits=ProviderLimits(maximum_input_tokens=1_048_576),
             ),
             ModelPricing(
                 "deepinfra", "google/gemma-4-26B-A4B-it", 0.07, 0.34, "USD",

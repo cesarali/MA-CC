@@ -874,10 +874,14 @@ def run_study_preflight(
         "",
     ]
     for task in design["tasks"]:
+        fact_id = task.get("strategic_fact_id", task.get("evidence_fact_id"))
+        fact_relation = task.get(
+            "strategic_fact_relation", task.get("evidence_fact_relation")
+        )
         lines.append(
             f"- `{task['task_id']}`: truth `{task['ground_truth']}`, false target "
-            f"`{task['controller_target']}`, true strategic fact `{task['strategic_fact_id']}` "
-            f"(`{task['strategic_fact_relation']}`), fingerprint `{task['fingerprint_sha256']}`"
+            f"`{task['controller_target']}`, true strategic fact `{fact_id}` "
+            f"(`{fact_relation}`), fingerprint `{task['fingerprint_sha256']}`"
         )
     (destination / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return StudyPreflightResult(spec.config_dir, destination, design, tuple(estimates))
