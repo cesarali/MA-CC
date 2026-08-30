@@ -24,7 +24,7 @@ reinterpret the Potsdam preflight in the source Study 09h directory.
 The authoritative generated static report is outside the repository at:
 
 ```text
-/pscratch/sd/d/dfarough/MA-CC-results/inspection/study09h-deepinfra-deepseek-v4-flash-0731-nersc-preflight-20260830T2045Z
+/pscratch/sd/d/dfarough/MA-CC-results/inspection/study09h-deepinfra-deepseek-v4-flash-0731-nersc-preflight-optimized-20260830T2110Z
 ```
 
 ## Provider and live smoke evidence
@@ -47,6 +47,12 @@ The authoritative generated static report is outside the repository at:
   usage was 23,578 input tokens and 3,582 output tokens (about $0.0025 at the
   pinned base rates). The smoke result is external to the checkout at
   `/pscratch/sd/d/dfarough/MA-CC-results/smoke/study09h-deepinfra-deepseek-v4-flash-0731-one-episode-20260830T2050Z`.
+- NERSC interactive CPU job `57753466`: the first production topology exposed
+  200 simultaneous episode records and sustained about 1,023 successful calls
+  in a sampled 60-second window with no provider failure. It was deliberately
+  stopped before any episode sealed because a 20-cell throttle would leave a
+  slow four-cell tail. Its result root remains as an audit artifact and is not
+  an input to the replacement production study.
 
 ## Calls, tokens, and cost
 
@@ -69,13 +75,14 @@ and token limits above every conservative estimate.
 
 - Preparation only: `mas-cc study prepare --execution-site nersc` writes the
   deterministic manifests beneath an external `/pscratch` study root.
-- Execution: 24 generic scientific-cell shards; planned throttle 20; 10
+- Execution: 24 generic scientific-cell shards; planned throttle 24; 10
   episode slots and 10 local request permits per active shard.
-- Effective planned ceiling: 200 simultaneous episodes/request attempts.
-  Shared provider control starts at 100, may recover to the authenticated 200
-  maximum, and smoothly paces all attempts to 1,200 RPM.
+- Local capacity is 240 simultaneous episodes/request attempts. Shared provider
+  control starts at 128, may recover to the authenticated 200 maximum, caps
+  actual in-flight requests at 200, and smoothly paces all attempts to 1,200
+  RPM.
 - Two Perlmutter CPU nodes are requested through the generic NERSC supervisor.
-  They accommodate all 20 workers at 10 physical CPUs and 12 GB each, exposing
+  They accommodate all 24 workers at 10 physical CPUs and 12 GB each, exposing
   the full 200-request provider ceiling; two additional nodes would add no
   provider throughput. The reduced node count also fits the live `m4539`
   balance of 14.6 node-hours (the rejected four-node/four-hour request alone

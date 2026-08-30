@@ -130,11 +130,12 @@ def test_study09h_deepinfra_deepseek_preserves_design_and_caps_provider_load():
     assert variant.base.pricing.mode == "offline"
     assert variant.base.budget.accounting_unit == "USD"
     assert len(shards) == 24
-    assert plan.array_throttle == 20
-    assert plan.total_episode_slots == 200
-    assert plan.total_request_concurrency == 200
+    assert plan.array_throttle == 24
+    assert plan.total_episode_slots == 240
+    assert plan.total_request_concurrency == 240
     assert plan.estimated_rpm == 1200
-    assert plan.provider_load_control["initial_concurrency"] == 100
+    assert plan.assumed_latency_seconds == 12.0
+    assert plan.provider_load_control["initial_concurrency"] == 128
     assert plan.provider_load_control["maximum_concurrency"] == 200
     assert plan.provider_load_control["target_rpm"] == 1200
     assert plan.cpus_per_task == 10

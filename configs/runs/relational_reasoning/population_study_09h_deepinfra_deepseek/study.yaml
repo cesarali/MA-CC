@@ -10,13 +10,16 @@ preflight:
 execution:
   mode: auto
   # The authenticated DeepInfra account reports 200 concurrent requests and
-  # 1.1M TPM. At the conservative 10-second planning latency, 20 cell workers
-  # expose 200 episode/request slots while the smooth shared pacer enforces
-  # 1,200 RPM globally.
+  # 1.1M TPM. All 24 scientific cells run concurrently across two NERSC nodes.
+  # Their 240 local episode/request slots feed a shared 200-request semaphore,
+  # while the smooth pacer enforces 1,200 RPM globally.
   target_rpm: 1200
-  assumed_latency_seconds: 10.0
+  # The first production sample had ~7 s median and ~22 s p95 latency. A
+  # conservative 12-second planning latency exposes all 24 cell workers; the
+  # independent shared controller still enforces the 1,200-RPM/200-request cap.
+  assumed_latency_seconds: 12.0
   max_active_nodes: 24
-  throttle: 20
+  throttle: 24
   cpus_per_task: 10
   memory: 12G
   time_limit: "04:00:00"
@@ -28,7 +31,7 @@ execution:
   require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
   provider_load_control:
     mode: shared_adaptive
-    initial_concurrency: 100
+    initial_concurrency: 128
     minimum_concurrency: 32
     maximum_concurrency: 200
     target_rpm: 1200
