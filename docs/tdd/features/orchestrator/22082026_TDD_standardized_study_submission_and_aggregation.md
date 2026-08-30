@@ -258,13 +258,16 @@ bound. Execution partitioning must not affect identities, observables, or phase
 diagrams.
 
 Remote-provider cell arrays use one study-wide adaptive request coordinator.
-The execution-only `execution.provider_load_control` policy defaults to a
-conservative 24 concurrent attempts, bounded by planned request capacity and
+The execution-only `execution.provider_load_control` policy starts at the
+planned provider-safe concurrency ceiling, bounded by request capacity and
 target RPM. Every HTTP attempt, including retries, obtains a leased permit via
-atomic state under `<study-root>/runtime/provider-control`. Workers have local
-cooldowns, while widespread failures reduce the shared limit and open a global
-circuit breaker. Sustained success restores capacity additively; expired
-leases recover capacity after process or node failure.
+atomic state under `<study-root>/runtime/provider-control/job-<job-id>`.
+Workers have local cooldowns, while widespread failures reduce the shared
+limit and open a global circuit breaker. Sustained success restores capacity
+additively; expired
+leases recover capacity after process or node failure. Retryable logical calls
+remain alive with capped exponential backoff for the configured outage window,
+so transient provider failures pause rather than terminate an in-memory episode.
 
 The coordinator belongs to the provider runtime below every game. It must not
 alter cell identities, episode seeds, or observables. Its live state is an
@@ -491,19 +494,19 @@ Produce:
 
 ```text
 analysis/tables/
-    cells.parquet
-    episodes.parquet
-    rounds.parquet
-    micro_slots.parquet
+    cells.csv
+    episodes.csv
+    rounds.csv
+    micro_slots.csv
 
-    primary_estimates.parquet
-    information_estimates.parquet
-    support_diagnostics.parquet
-    derived_observables.parquet
+    primary_estimates.csv
+    information_estimates.csv
+    support_diagnostics.csv
+    derived_observables.csv
 ```
 
-Parquet is authoritative. Standardized analysis does not emit redundant table
-CSV mirrors.
+CSV is authoritative for new analysis output. Readers retain support for
+legacy Parquet archives, but new aggregation does not emit Parquet by default.
 
 ### 12.1 `cells.parquet`
 
@@ -682,7 +685,7 @@ A new efficiency must not trigger a new CMI implementation.
 
 ## 15. Long-format estimator schema
 
-Suggested `primary_estimates.parquet`:
+Suggested `primary_estimates.csv`:
 
 ```text
 study_id
@@ -875,14 +878,14 @@ analysis/
     analysis_manifest.json
 
     tables/
-        cells.parquet
-        episodes.parquet
-        rounds.parquet
-        micro_slots.parquet
-        primary_estimates.parquet
-        information_estimates.parquet
-        support_diagnostics.parquet
-        derived_observables.parquet
+        cells.csv
+        episodes.csv
+        rounds.csv
+        micro_slots.csv
+        primary_estimates.csv
+        information_estimates.csv
+        support_diagnostics.csv
+        derived_observables.csv
 
     plots/
         <configured plots>

@@ -207,7 +207,9 @@ def pooled_occupancy(rows: Sequence[Any]) -> dict[int, float]:
     for row in eligible:
         counts[int(row.target_before)] += 1
     total = len(eligible)
-    return {} if not total else {n: count / total for n, count in sorted(counts.items())}
+    return (
+        {} if not total else {n: count / total for n, count in sorted(counts.items())}
+    )
 
 
 def round_occupancy(rows: Sequence[Any]) -> dict[int, dict[int, float]]:
@@ -514,9 +516,7 @@ def controlled_current(rows: Sequence[Any]) -> dict[str, Any]:
     }
     if N is None or not table:
         return blank
-    identified = {
-        state: item for state, item in table.items() if item["identified"]
-    }
+    identified = {state: item for state, item in table.items() if item["identified"]}
     if not identified:
         return blank
     per_round: dict[int, float] = {}
@@ -550,7 +550,11 @@ def controlled_current(rows: Sequence[Any]) -> dict[str, Any]:
 
 
 def eta_th_from_components(
-    *, h: float, current_horizon: float, sensing_horizon: float
+    *,
+    h: float,
+    current_horizon: float,
+    sensing_horizon: float,
+    tolerance: float = 1e-12,
 ) -> dict[str, Any]:
     """``h J_c / (h J_c + I_sens)`` over the horizon, as a ratio of sums.
 
@@ -564,25 +568,45 @@ def eta_th_from_components(
     ``[0,1]`` to hide that, and ``eta_th_valid`` is false.
     """
 
-    directed = float(h) * float(current_horizon)
-    expenditure = directed + float(sensing_horizon)
+    values = (float(h), float(current_horizon), float(sensing_horizon))
+    if not math.isfinite(values[0]):
+        reason = "missing_h" if math.isnan(values[0]) else "nonfinite_input"
+    elif not math.isfinite(values[1]):
+        reason = "missing_current" if math.isnan(values[1]) else "nonfinite_input"
+    elif not math.isfinite(values[2]):
+        reason = (
+            "missing_sensing_information"
+            if math.isnan(values[2])
+            else "nonfinite_input"
+        )
+    else:
+        reason = None
+    directed = values[0] * values[1]
+    expenditure = directed + values[2]
+    if reason is None and not math.isfinite(expenditure):
+        reason = "nonfinite_input"
+    if reason is None and abs(expenditure) <= tolerance:
+        reason = "zero_control_expenditure"
+    numeric_defined = reason is None
+    signed = directed / expenditure if numeric_defined else math.nan
     target_directed = bool(math.isfinite(directed) and directed >= 0.0)
-    valid = bool(
-        math.isfinite(expenditure)
+    bounded = bool(
+        numeric_defined
         and target_directed
-        and expenditure > 0.0
+        and expenditure > tolerance
+        and 0.0 <= signed <= 1.0
     )
     return {
         "affinity_weighted_current_nats": directed,
         "thermodynamic_control_expenditure_nats": expenditure,
-        "eta_th": (directed / expenditure) if valid else math.nan,
-        "eta_th_signed": (
-            directed / expenditure
-            if math.isfinite(expenditure) and expenditure != 0.0
-            else math.nan
-        ),
+        "eta_th": signed if bounded else math.nan,
+        "eta_th_signed": signed,
+        "eta_th_bounded": signed if bounded else math.nan,
+        "eta_th_numeric_defined": numeric_defined,
+        "eta_th_has_bounded_interpretation": bounded,
+        "eta_th_undefined_reason": reason,
         "eta_th_target_directed": target_directed,
-        "eta_th_valid": valid,
+        "eta_th_valid": bounded,
     }
 
 
@@ -604,6 +628,8 @@ _SCALARS = (
     "affinity_weighted_current_nats",
     "thermodynamic_control_expenditure_nats",
     "eta_th",
+    "eta_th_signed",
+    "eta_th_bounded",
 )
 """The values a confidence interval is formed for.  Every one is recomputed
 from scratch inside each bootstrap replicate."""
@@ -624,6 +650,14 @@ def point_estimate(
         current_horizon=current["controlled_current_horizon"],
         sensing_horizon=sensing["target_sensing_information_horizon_nats"],
     )
+    if not affinity["affinity_valid"]:
+        thermodynamics["eta_th_undefined_reason"] = (
+            "insufficient_support_for_h_calibration"
+        )
+    elif not current["controlled_current_valid"]:
+        thermodynamics["eta_th_undefined_reason"] = "missing_current"
+    elif not sensing["target_sensing_valid"]:
+        thermodynamics["eta_th_undefined_reason"] = "missing_sensing_information"
     return {
         **response,
         **information,
@@ -708,9 +742,7 @@ def single_affinity_analysis(
 # ---------------------------------------------------------------------------
 
 
-def theory_parameters(
-    rows: Sequence[Any], h: float, gamma: float
-) -> Any | None:
+def theory_parameters(rows: Sequence[Any], h: float, gamma: float) -> Any | None:
     """The one protocol tuple these rows share, closed with calibrated h, gamma.
 
     ``h`` and ``gamma`` are properties of the calibrated population response
@@ -797,15 +829,11 @@ def theory_comparison(
     )
     theory_T_pi = reference.occupancy_weighted_T_pi(pooled)
     theory_numerator = float(pooled @ reference.pinsker_bound)
-    theory_eta_ir = (
-        theory_numerator / theory_T_pi if theory_T_pi > 0.0 else math.nan
-    )
+    theory_eta_ir = theory_numerator / theory_T_pi if theory_T_pi > 0.0 else math.nan
     theory_eta_th, _, _ = thermodynamic_efficiency(
         h=parameters.h, J_c=theory_current, I_sens_nats=theory_sensing
     )
-    theory_chi = float(
-        pooled @ theory_susceptibility_curve(reference)
-    )
+    theory_chi = float(pooled @ theory_susceptibility_curve(reference))
 
     quantities = (
         (

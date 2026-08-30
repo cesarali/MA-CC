@@ -184,8 +184,24 @@ def _parameters(**overrides):
     [
         {},
         {"N": 6, "q_c": 3, "b": 2, "h": -0.8, "gamma": 0.3},
-        {"N": 10, "q_c": 10, "b": 1, "beta": 2.0, "theta": 0.25, "h": 3.0, "gamma": 0.9},
-        {"N": 12, "q_c": 2, "b": 12, "beta": 12.0, "theta": 0.75, "h": 0.0, "gamma": 1.0},
+        {
+            "N": 10,
+            "q_c": 10,
+            "b": 1,
+            "beta": 2.0,
+            "theta": 0.25,
+            "h": 3.0,
+            "gamma": 0.9,
+        },
+        {
+            "N": 12,
+            "q_c": 2,
+            "b": 12,
+            "beta": 12.0,
+            "theta": 0.75,
+            "h": 0.0,
+            "gamma": 1.0,
+        },
     ],
 )
 def test_theory_invariants_hold_on_a_parameter_grid(overrides):
@@ -197,9 +213,7 @@ def test_theory_invariants_hold_on_a_parameter_grid(overrides):
     assert np.allclose(reference.K.sum(axis=1), 1.0)
     assert np.allclose(reference.Q1.sum(axis=1), 1.0)
     assert np.allclose(reference.Q0, np.eye(N + 1))
-    assert np.allclose(
-        reference.Q1, np.linalg.matrix_power(reference.K, parameters.b)
-    )
+    assert np.allclose(reference.Q1, np.linalg.matrix_power(reference.K, parameters.b))
     # the closed form and the kernel must agree state by state
     assert np.allclose(
         theory.susceptibility_curve(parameters),
@@ -218,7 +232,15 @@ def test_theory_invariants_hold_on_a_parameter_grid(overrides):
     [
         {},
         {"N": 6, "q_c": 3, "b": 2, "h": -0.8, "gamma": 0.3},
-        {"N": 10, "q_c": 10, "b": 1, "beta": 2.0, "theta": 0.25, "h": 3.0, "gamma": 0.9},
+        {
+            "N": 10,
+            "q_c": 10,
+            "b": 1,
+            "beta": 2.0,
+            "theta": 0.25,
+            "h": 3.0,
+            "gamma": 0.9,
+        },
     ],
 )
 @pytest.mark.parametrize("x0", [0.1, 0.5, 0.9])
@@ -231,9 +253,7 @@ def test_one_cycle_closes_the_path_identity_and_bounds_eta_th(overrides, x0):
     # the decomposition and the directly computed path KL are the same number
     assert cycle.Sigma_direct_KL_nats == pytest.approx(cycle.Sigma_nats, abs=1e-9)
     assert cycle.Sigma_nats == pytest.approx(
-        cycle.delta_S_sys_nats
-        + parameters.h * cycle.J_c
-        + cycle.I_sens_nats,
+        cycle.delta_S_sys_nats + parameters.h * cycle.J_c + cycle.I_sens_nats,
         abs=1e-9,
     )
     assert cycle.C_th_nats == pytest.approx(
@@ -265,40 +285,41 @@ def test_reported_study_calibration_example():
     """The worked example in the revised report, to four significant figures."""
 
     calibration = theory.calibrate_affinity_compliance_from_counts(
-        plus_transitions=208, plus_eligible=572,
-        minus_transitions=4, minus_eligible=508,
+        plus_transitions=208,
+        plus_eligible=572,
+        minus_transitions=4,
+        minus_eligible=508,
     )
     assert calibration.h_eff == pytest.approx(3.83, abs=0.01)
     assert calibration.gamma_eff == pytest.approx(0.372, abs=0.001)
 
 
 def test_empirical_and_theory_calibration_agree_on_one_transition_table():
-    micro = (
-        [
-            {
-                "controlled_slot": True,
-                "round_controller_action": ADVOCATE,
-                "analysis_target": "opt0",
-                "focal_opinion_before": "opt1",
-                "focal_opinion_after": "opt0" if index < 208 else "opt1",
-            }
-            for index in range(572)
-        ]
-        + [
-            {
-                "controlled_slot": True,
-                "round_controller_action": ADVOCATE,
-                "analysis_target": "opt0",
-                "focal_opinion_before": "opt0",
-                "focal_opinion_after": "opt1" if index < 4 else "opt0",
-            }
-            for index in range(508)
-        ]
-    )
+    micro = [
+        {
+            "controlled_slot": True,
+            "round_controller_action": ADVOCATE,
+            "analysis_target": "opt0",
+            "focal_opinion_before": "opt1",
+            "focal_opinion_after": "opt0" if index < 208 else "opt1",
+        }
+        for index in range(572)
+    ] + [
+        {
+            "controlled_slot": True,
+            "round_controller_action": ADVOCATE,
+            "analysis_target": "opt0",
+            "focal_opinion_before": "opt0",
+            "focal_opinion_after": "opt1" if index < 4 else "opt0",
+        }
+        for index in range(508)
+    ]
     empirical = sa.affinity_compliance(micro)
     exact = theory.calibrate_affinity_compliance_from_counts(
-        plus_transitions=208, plus_eligible=572,
-        minus_transitions=4, minus_eligible=508,
+        plus_transitions=208,
+        plus_eligible=572,
+        minus_transitions=4,
+        minus_eligible=508,
     )
     assert empirical["affinity_valid"]
     assert empirical["effective_affinity"] == pytest.approx(exact.h_eff)
@@ -344,14 +365,24 @@ def test_susceptibility_is_a_fraction_response_and_magnetization_is_K_over_K_min
     ):
         rows.append(
             _round_event(
-                episode_id=f"ep{index}", round_index=0, action=ADVOCATE,
-                before=before, after=advocate_after, N=N, K=K,
+                episode_id=f"ep{index}",
+                round_index=0,
+                action=ADVOCATE,
+                before=before,
+                after=advocate_after,
+                N=N,
+                K=K,
             )
         )
         rows.append(
             _round_event(
-                episode_id=f"ep{index}", round_index=1, action=NO_OP,
-                before=before, after=no_op_after, N=N, K=K,
+                episode_id=f"ep{index}",
+                round_index=1,
+                action=NO_OP,
+                before=before,
+                after=no_op_after,
+                N=N,
+                K=K,
             )
         )
     table = sa.state_response_table(rows)
@@ -362,7 +393,8 @@ def test_susceptibility_is_a_fraction_response_and_magnetization_is_K_over_K_min
         rows,
         statistics=list(ROUND_SINGLE_AFFINITY_STATISTICS[:1])
         + ["round_target_signed_actuation"],
-        bootstrap_resamples=0, null_permutations=0,
+        bootstrap_resamples=0,
+        null_permutations=0,
     )
     by_metric = {row["statistic"]: row["estimate"] for row in estimates}
     chi_x = by_metric["round_target_susceptibility"]
@@ -389,8 +421,12 @@ def test_eta_ir_is_an_occupancy_ratio_of_sums_not_a_mean_of_ratios():
         for _ in range(copies):
             rows.append(
                 _round_event(
-                    episode_id=f"ep{index:04d}", round_index=0, action=action,
-                    before=before, after=after, N=N,
+                    episode_id=f"ep{index:04d}",
+                    round_index=0,
+                    action=action,
+                    before=before,
+                    after=after,
+                    N=N,
                 )
             )
             index += 1
@@ -447,9 +483,7 @@ def test_eta_ir_numerator_uses_fraction_units_so_magnetization_would_inflate_it(
 
 def test_eta_ir_never_exceeds_one_on_data_drawn_from_the_theory_kernel():
     parameters = _parameters(N=6, q_c=3, b=4)
-    rows, _ = simulate_single_affinity(
-        parameters, episodes=800, rounds=5, n0=2, seed=5
-    )
+    rows, _ = simulate_single_affinity(parameters, episodes=800, rounds=5, n0=2, seed=5)
     result = sa.eta_ir(rows)
     assert result["eta_ir_valid"]
     assert 0.0 <= result["eta_ir"] <= 1.0 + 1e-9
@@ -478,9 +512,7 @@ def test_empirical_state_susceptibility_converges_to_the_exact_chi():
 
 def test_target_sensing_information_matches_the_exact_channel_on_the_same_occupancy():
     parameters = _parameters(N=6, q_c=3, b=4)
-    rows, _ = simulate_single_affinity(
-        parameters, episodes=300, rounds=3, n0=2, seed=3
-    )
+    rows, _ = simulate_single_affinity(parameters, episodes=300, rounds=3, n0=2, seed=3)
     result = sa.target_sensing_information(rows)
     assert result["target_sensing_valid"]
 
@@ -500,9 +532,7 @@ def test_target_sensing_information_matches_the_exact_channel_on_the_same_occupa
 
 def test_horizon_sensing_is_a_sum_over_rounds_not_a_pooled_stationary_estimate():
     parameters = _parameters(N=6, q_c=3, b=4)
-    rows, _ = simulate_single_affinity(
-        parameters, episodes=300, rounds=4, n0=1, seed=9
-    )
+    rows, _ = simulate_single_affinity(parameters, episodes=300, rounds=4, n0=1, seed=9)
     result = sa.target_sensing_information(rows)
     assert result["target_sensing_information_rounds"] == 4
 
@@ -527,7 +557,8 @@ def test_direct_counting_target_sensing_mi_is_a_separate_named_statistic():
     estimates, _ = round_information_analysis(
         rows,
         statistics=["round_target_sensing_mi"],
-        bootstrap_resamples=0, null_permutations=0,
+        bootstrap_resamples=0,
+        null_permutations=0,
     )
     row = estimates[0]
     assert row["statistic"] == "round_target_sensing_mi"
@@ -555,8 +586,12 @@ def test_controlled_current_is_N_sum_p_a_chi():
         for _ in range(copies):
             rows.append(
                 _round_event(
-                    episode_id=f"ep{index:04d}", round_index=0, action=action,
-                    before=before, after=after, N=N,
+                    episode_id=f"ep{index:04d}",
+                    round_index=0,
+                    action=action,
+                    before=before,
+                    after=after,
+                    N=N,
                 )
             )
             index += 1
@@ -592,8 +627,12 @@ def test_controlled_current_does_not_factor_the_expectation():
         for _ in range(copies):
             rows.append(
                 _round_event(
-                    episode_id=f"ep{index:04d}", round_index=0, action=action,
-                    before=before, after=after, N=N,
+                    episode_id=f"ep{index:04d}",
+                    round_index=0,
+                    action=action,
+                    before=before,
+                    after=after,
+                    N=N,
                 )
             )
             index += 1
@@ -726,6 +765,28 @@ def test_eta_th_is_a_ratio_of_accumulated_terms_and_flags_invalid_cases():
     assert against["eta_th_valid"] is False
     assert math.isnan(against["eta_th"])
     assert against["eta_th_signed"] == pytest.approx(-6.0 / -5.0)
+    assert math.isnan(against["eta_th_bounded"])
+    assert against["eta_th_numeric_defined"] is True
+    assert against["eta_th_has_bounded_interpretation"] is False
+    assert against["eta_th_undefined_reason"] is None
+
+
+def test_eta_th_near_zero_expenditure_has_explicit_reason():
+    estimate = sa.eta_th_from_components(
+        h=2.0, current_horizon=-0.5, sensing_horizon=1.0
+    )
+    assert estimate["eta_th_numeric_defined"] is False
+    assert estimate["eta_th_undefined_reason"] == "zero_control_expenditure"
+    assert math.isnan(estimate["eta_th_signed"])
+
+
+def test_eta_th_missing_h_has_explicit_reason():
+    estimate = sa.eta_th_from_components(
+        h=math.nan, current_horizon=2.0, sensing_horizon=1.0
+    )
+    assert estimate["eta_th_numeric_defined"] is False
+    assert estimate["eta_th_undefined_reason"] == "missing_h"
+    assert math.isnan(estimate["eta_th_signed"])
 
 
 def test_eta_th_is_undefined_without_an_identified_affinity():
@@ -811,8 +872,7 @@ def test_theory_comparison_puts_all_six_quantities_side_by_side():
     assert by_quantity["T_pi"]["units"] == "bits"
     assert by_quantity["I_sens"]["units"] == "nats_per_horizon"
     assert all(
-        row["reference"] == "single_affinity_revised"
-        for row in comparison["rows"]
+        row["reference"] == "single_affinity_revised" for row in comparison["rows"]
     )
 
     # data drawn from the kernel itself must land close to the exact reference
@@ -834,9 +894,7 @@ def test_theory_comparison_puts_all_six_quantities_side_by_side():
 
 def test_theory_comparison_refuses_rather_than_inventing_a_reference():
     parameters = _parameters(N=6, q_c=3, b=4)
-    rows, _ = simulate_single_affinity(
-        parameters, episodes=50, rounds=2, n0=2, seed=53
-    )
+    rows, _ = simulate_single_affinity(parameters, episodes=50, rounds=2, n0=2, seed=53)
     # no controlled micro-slots -> no identified h -> no theory column
     refusal = sa.theory_comparison(rows, ())
     assert refusal["available"] is False
@@ -860,7 +918,8 @@ def test_the_derived_chi_summary_equals_the_primary_state_matched_estimator():
     estimates, _ = round_information_analysis(
         rows,
         statistics=["round_target_susceptibility"],
-        bootstrap_resamples=0, null_permutations=0,
+        bootstrap_resamples=0,
+        null_permutations=0,
     )
     primary = estimates[0]["estimate"]
     derived = sa.susceptibility_summary(rows)["susceptibility_occupancy_weighted"]

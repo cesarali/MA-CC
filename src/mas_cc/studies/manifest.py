@@ -11,7 +11,14 @@ import yaml
 
 _RESERVED = frozenset({"study.yaml", "analysis.yaml"})
 _PREFLIGHT_CONTRACTS = frozenset(
-    {"relational_false_takeover_v1", "relational_persistence_exploratory_v1"}
+    {
+        "relational_false_takeover_v1",
+        "relational_persistence_exploratory_v1",
+        "relational_persistence_refinement_v1",
+        "relational_persistence_truth_refinement_v1",
+        "relational_persistence_q1_l2_false_v1",
+        "relational_persistence_q1_l2_truth_v1",
+    }
 )
 
 

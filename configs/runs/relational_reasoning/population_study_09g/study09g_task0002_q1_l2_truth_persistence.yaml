@@ -1,0 +1,123 @@
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 0.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 4.5}
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract: {type: relational_public_ballot, allowed_values: [A, B, C]}
+game:
+  type: relational_imitation_round_feedback
+  population_size: 12
+  horizon: 30
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n12_L2_k3
+    task_id: task_0002
+    dynamics_mode: reasoning
+    rounds: 30
+    social_group_size: 1
+    epistemic_persistence: 0.8
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: naive
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization: {mode: local_vote}
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: NORTHEAST
+    sensor_sample_size: 6
+    policy: soft_target
+    threshold: 0.75
+    beta: 4.0
+    intervention_budget: 6
+    advocacy_schedule: soft
+    message_mode: recommendation_plus_fact
+    controller_evidence_strategy: strategic
+execution: {seed: 20260830, repetitions: 10, parallelism: 10, fail_fast: false}
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 300.0
+  max_cost_per_run: 300.0
+  max_provider_requests: 200000
+  max_input_tokens: 800000000
+  max_output_tokens: 800000000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: true
+  options: {comet_project: mas-cc, prompt_examples: {count: 1, scope: cell}}
+storage: {output_dir: results, format: jsonl, artifact_profile: results_only, checkpoint_mode: episode, overwrite: false}
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+aggregation:
+  schema_version: 1
+  forward_fill: absorbing
+  relabel_by_winner: false
+  percentiles: [10, 50, 90]
+  rolling_window: 1
+  cell_metrics: [m_ctrl, m_truth, m_order, dominant_action_share]
+  sweep_metrics: []
+  horizons: [1]
+  null_permutations: 0
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 1
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+experiment:
+  name: relational-study09g-task0002-q1-l2-truth-persistence
+  description: Matched q=1, L=2 truth-aligned persistence reference for Study 09e.
+  tags: [relational, population-study-09g, q1, L2, persistence, truth-aligned]
+  metadata:
+    study: population_study_09g
+    matched_source: population_study_09e
+    task_id: task_0002
+    ground_truth: NORTHEAST
+    controller_target: NORTHEAST
+    controller_target_is_truth: true
+    target_semantics: truth
+    receiver_epistemic_disposition: naive
+    controller_evidence_strategy: strategic
+    message_mode: recommendation_plus_fact
+    population_size: 12
+    population_rounds: 30
+    reasoning_depth: 2
+    support_redundancy: 4
+    social_group_size: 1
+    sensor_sample_size: 6
+    beta: 4.0
+    theta: 0.75
+    advocacy_schedule: soft
+    repetitions: 10
+    cells: 24
+    episodes: 240
+    late_time_rounds_one_based: [21, 30]
+    common_random_numbers_across_grid: true
+grid:
+  game.options.epistemic_persistence: [0.70, 0.75, 0.80, 0.85, 0.90, 1.0]
+  control.options.intervention_budget: [3, 6, 9, 12]

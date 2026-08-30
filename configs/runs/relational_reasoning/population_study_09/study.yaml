@@ -8,9 +8,9 @@ configs:
 
 execution:
   mode: auto
-  target_rpm: 900
-  assumed_latency_seconds: 10.0
-  max_active_nodes: 18
+  target_rpm: 200
+  assumed_latency_seconds: 3.0
+  max_active_nodes: 2
   cpus_per_task: 8
   memory: 8G
   time_limit: "04:00:00"
