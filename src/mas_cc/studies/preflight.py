@@ -18,6 +18,10 @@ from .manifest import StudySpec, discover_study
 
 FALSE_TAKEOVER_CONTRACT = "relational_false_takeover_v1"
 PERSISTENCE_EXPLORATORY_CONTRACT = "relational_persistence_exploratory_v1"
+PERSISTENCE_REFINEMENT_CONTRACT = "relational_persistence_refinement_v1"
+PERSISTENCE_TRUTH_REFINEMENT_CONTRACT = "relational_persistence_truth_refinement_v1"
+PERSISTENCE_Q1_L2_FALSE_CONTRACT = "relational_persistence_q1_l2_false_v1"
+PERSISTENCE_Q1_L2_TRUTH_CONTRACT = "relational_persistence_q1_l2_truth_v1"
 
 
 def _repo_root(path: Path) -> Path:
@@ -49,8 +53,20 @@ def _require(condition: bool, message: str, errors: list[str]) -> None:
         errors.append(message)
 
 
-def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any]:
-    """Validate Study 09c's exact 12-cell finite-persistence design."""
+def _validate_persistence_contract(
+    spec: StudySpec,
+    *,
+    contract: str,
+    rho_values: list[float],
+    repetitions_value: int,
+    target_is_truth: bool = False,
+    q_value: int = 2,
+    depth_value: int = 3,
+    redundancy_value: int = 3,
+    expected_truth: str = "NORTH",
+    expected_target: str | None = None,
+) -> dict[str, Any]:
+    """Validate an exact finite-persistence study design."""
 
     errors: list[str] = []
     _require(len(spec.configs) == 1, "study must list exactly one config", errors)
@@ -67,10 +83,10 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
     _require(
         axes
         == [
-            ("game.options.epistemic_persistence", [0.6, 0.8, 0.9]),
+            ("game.options.epistemic_persistence", rho_values),
             ("control.options.intervention_budget", [3, 6, 9, 12]),
         ],
-        f"grid axes must be rho=[0.6, 0.8, 0.9] then b=[3, 6, 9, 12], got {axes}",
+        f"grid axes must be rho={rho_values} then b=[3, 6, 9, 12], got {axes}",
         errors,
     )
 
@@ -141,7 +157,9 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
         targets.add(target)
         truths.add(task.correct_relation)
         _require(
-            target != task.correct_relation, "controller target must be false", errors
+            (target == task.correct_relation) is target_is_truth,
+            "controller target truth alignment is incorrect",
+            errors,
         )
         _require(
             fact_id in task.facts,
@@ -149,8 +167,8 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
             errors,
         )
         _require(
-            len(task.supporting_fact_ids) == 3,
-            "task supporting-fact depth must equal 3",
+            len(task.supporting_fact_ids) == depth_value,
+            f"task supporting-fact depth must equal {depth_value}",
             errors,
         )
         _require(
@@ -159,10 +177,10 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
                     fact_id_value in task.known_facts(agent_id)
                     for agent_id in task.agent_ids
                 )
-                == 3
+                == redundancy_value
                 for fact_id_value in task.supporting_fact_ids
             ),
-            "every supporting fact must have redundancy 3",
+            f"every supporting fact must have redundancy {redundancy_value}",
             errors,
         )
         metadata = config.experiment.metadata
@@ -177,8 +195,8 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
             errors,
         )
         _require(
-            metadata.get("controller_target_is_truth") is False,
-            "metadata must mark target false",
+            metadata.get("controller_target_is_truth") is target_is_truth,
+            "metadata target truth alignment is incorrect",
             errors,
         )
         task_audit = {
@@ -186,7 +204,7 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
             "fingerprint_sha256": _task_fingerprint(Path(task.source_path)),
             "ground_truth": task.correct_relation,
             "controller_target": target,
-            "controller_target_is_truth": False,
+            "controller_target_is_truth": target_is_truth,
             "strategic_fact_id": fact_id,
             "strategic_fact_relation": task.fact(fact_id).relation,
             "strategic_fact_text": task.fact_text(fact_id),
@@ -198,16 +216,24 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
         errors,
     )
     _require(rounds == {30}, f"rounds must be [30], got {sorted(rounds)}", errors)
-    _require(q_values == {2}, f"q values must be [2], got {sorted(q_values)}", errors)
-    _require(depths == {3}, f"L values must be [3], got {sorted(depths)}", errors)
     _require(
-        redundancies == {3},
-        f"support redundancy must be [3], got {sorted(redundancies)}",
+        q_values == {q_value},
+        f"q values must be [{q_value}], got {sorted(q_values)}",
+        errors,
+    )
+    _require(
+        depths == {depth_value},
+        f"L values must be [{depth_value}], got {sorted(depths)}",
+        errors,
+    )
+    _require(
+        redundancies == {redundancy_value},
+        f"support redundancy must be [{redundancy_value}], got {sorted(redundancies)}",
         errors,
     )
     _require(sensors == {6}, f"sensor size must be [6], got {sorted(sensors)}", errors)
     _require(
-        persistence == {0.6, 0.8, 0.9},
+        persistence == set(rho_values),
         f"rho values are incorrect: {sorted(persistence)}",
         errors,
     )
@@ -219,10 +245,17 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
         f"task must be task_0002 only, got {sorted(tasks)}",
         errors,
     )
-    _require(truths == {"NORTH"}, f"truth must be NORTH, got {sorted(truths)}", errors)
     _require(
-        targets == {"NORTHWEST"},
-        f"false target must be NORTHWEST, got {sorted(targets)}",
+        truths == {expected_truth},
+        f"truth must be {expected_truth}, got {sorted(truths)}",
+        errors,
+    )
+    target_value = expected_target or (
+        expected_truth if target_is_truth else "NORTHWEST"
+    )
+    _require(
+        targets == {target_value},
+        f"controller target is incorrect: {sorted(targets)}",
         errors,
     )
     _require(
@@ -248,25 +281,31 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
         thresholds == {0.75}, f"theta must be [0.75], got {sorted(thresholds)}", errors
     )
     _require(
-        repetitions == {1},
-        f"repetitions must be [1], got {sorted(repetitions)}",
+        repetitions == {repetitions_value},
+        f"repetitions must be [{repetitions_value}], got {sorted(repetitions)}",
         errors,
     )
     _require(
-        len(cells) == 12, f"resolved cells must total 12, got {len(cells)}", errors
+        len(cells) == len(rho_values) * 4,
+        f"resolved cells must total {len(rho_values) * 4}, got {len(cells)}",
+        errors,
     )
     _require(
-        len(resolved_cells) == 12,
-        f"rho/b cells must be unique and total 12, got {len(resolved_cells)}",
+        len(resolved_cells) == len(rho_values) * 4,
+        f"rho/b cells must be unique and total {len(rho_values) * 4}, "
+        f"got {len(resolved_cells)}",
         errors,
     )
     total_episodes = sum(config.execution.repetitions for config in cells)
     _require(
-        total_episodes == 12, f"total episodes must be 12, got {total_episodes}", errors
+        total_episodes == len(rho_values) * 4 * repetitions_value,
+        f"total episodes must be {len(rho_values) * 4 * repetitions_value}, "
+        f"got {total_episodes}",
+        errors,
     )
 
     report = {
-        "contract": PERSISTENCE_EXPLORATORY_CONTRACT,
+        "contract": contract,
         "status": "failed" if errors else "permitted",
         "population_size": sorted(populations),
         "rounds": sorted(rounds),
@@ -276,7 +315,9 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
         "sensor_size": sorted(sensors),
         "rho_values": sorted(persistence),
         "b_values": sorted(budgets),
-        "target_semantics": ["false only"] if targets else [],
+        "target_semantics": ["truth only" if target_is_truth else "false only"]
+        if targets
+        else [],
         "receiver_dispositions": sorted(dispositions),
         "evidence_strategies": sorted(strategies),
         "message_modes": sorted(modes),
@@ -298,6 +339,65 @@ def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any
     return report
 
 
+def _validate_persistence_exploratory_contract(spec: StudySpec) -> dict[str, Any]:
+    """Validate Study 09c's exact 12-cell finite-persistence design."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=PERSISTENCE_EXPLORATORY_CONTRACT,
+        rho_values=[0.6, 0.8, 0.9],
+        repetitions_value=1,
+    )
+
+
+def _validate_persistence_refinement_contract(spec: StudySpec) -> dict[str, Any]:
+    """Validate Study 09d's exact 20-cell, 200-episode refinement design."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=PERSISTENCE_REFINEMENT_CONTRACT,
+        rho_values=[0.7, 0.75, 0.8, 0.85, 0.9],
+        repetitions_value=10,
+    )
+
+
+def _validate_persistence_truth_refinement_contract(
+    spec: StudySpec,
+) -> dict[str, Any]:
+    """Validate Study 09e's matched truth-aligned refinement design."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=PERSISTENCE_TRUTH_REFINEMENT_CONTRACT,
+        rho_values=[0.7, 0.75, 0.8, 0.85, 0.9],
+        repetitions_value=10,
+        target_is_truth=True,
+    )
+
+
+def _validate_persistence_q1_l2_contract(
+    spec: StudySpec, *, truth_aligned: bool
+) -> dict[str, Any]:
+    """Validate the matched q=1, L=2 persistence reference design."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=(
+            PERSISTENCE_Q1_L2_TRUTH_CONTRACT
+            if truth_aligned
+            else PERSISTENCE_Q1_L2_FALSE_CONTRACT
+        ),
+        rho_values=[0.7, 0.75, 0.8, 0.85, 0.9, 1.0],
+        repetitions_value=10,
+        target_is_truth=truth_aligned,
+        q_value=1,
+        depth_value=2,
+        redundancy_value=4,
+        expected_truth="NORTHEAST",
+        expected_target="NORTHEAST" if truth_aligned else "NORTH",
+    )
+
+
 def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
     """Validate the optional cross-config contract without invoking an LLM."""
 
@@ -306,6 +406,14 @@ def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
         return {"contract": None, "status": "not_requested"}
     if contract == PERSISTENCE_EXPLORATORY_CONTRACT:
         return _validate_persistence_exploratory_contract(spec)
+    if contract == PERSISTENCE_REFINEMENT_CONTRACT:
+        return _validate_persistence_refinement_contract(spec)
+    if contract == PERSISTENCE_TRUTH_REFINEMENT_CONTRACT:
+        return _validate_persistence_truth_refinement_contract(spec)
+    if contract == PERSISTENCE_Q1_L2_FALSE_CONTRACT:
+        return _validate_persistence_q1_l2_contract(spec, truth_aligned=False)
+    if contract == PERSISTENCE_Q1_L2_TRUTH_CONTRACT:
+        return _validate_persistence_q1_l2_contract(spec, truth_aligned=True)
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 

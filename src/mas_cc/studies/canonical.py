@@ -193,6 +193,11 @@ def _rich_rows(study_id: str, cell: DiscoveredCell, filename: str, source_label:
                     **event,
                     **provenance,
                     "episode_id": episode_id,
+                    # Full-profile event payloads can carry a game-local task
+                    # identity here while the enclosing artifact directory
+                    # carries the orchestrator's canonical episode identity.
+                    # Selection reconciles the two against completed manifests.
+                    "_storage_episode_id": str(path.parent.name),
                     "round_index": round_index,
                     "micro_slot_index": slot_index,
                     "record_source": source_label,
@@ -219,6 +224,54 @@ def _compact_round_rows(study_id: str, cell: DiscoveredCell, frame: pd.DataFrame
     return result
 
 
+def _completed_unique_records(
+    rows: list[dict[str, Any]],
+    episodes: list[dict[str, Any]],
+    *,
+    coordinate_columns: tuple[str, ...],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Select the final canonical trajectory of every completed episode.
+
+    Failed attempts can leave trajectory prefixes behind, and safe retry appends
+    the replacement attempt to the same JSONL file.  Episode manifests/compact
+    scientific rows are the completion authority.  Keeping the last occurrence
+    of each physical coordinate therefore selects the completed retry while
+    preventing failed prefixes and duplicate coordinates from entering any
+    estimator.
+    """
+
+    completed = {
+        str(row["episode_id"])
+        for row in episodes
+        if row.get("status") in {"completed", "skipped_resumed"}
+    }
+    eligible = []
+    for original in rows:
+        row = dict(original)
+        event_episode_id = str(row.get("episode_id"))
+        storage_episode_id = str(row.pop("_storage_episode_id", ""))
+        if event_episode_id in completed:
+            row["episode_id"] = event_episode_id
+        elif storage_episode_id in completed:
+            row["episode_id"] = storage_episode_id
+        else:
+            continue
+        eligible.append(row)
+    latest: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in eligible:
+        key = (str(row.get("episode_id")),) + tuple(
+            row.get(column) for column in coordinate_columns
+        )
+        latest[key] = row
+    retained = list(latest.values())
+    return retained, {
+        "input_records": len(rows),
+        "excluded_incomplete_records": len(rows) - len(eligible),
+        "superseded_retry_records": len(eligible) - len(retained),
+        "retained_records": len(retained),
+    }
+
+
 def build_canonical_tables(
     study_id: str, cells: tuple[DiscoveredCell, ...]
 ) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
@@ -227,6 +280,20 @@ def build_canonical_tables(
     round_rows: list[dict[str, Any]] = []
     micro_rows: list[dict[str, Any]] = []
     frames: dict[str, pd.DataFrame] = {}
+    record_selection = {
+        "rounds": {
+            "input_records": 0,
+            "excluded_incomplete_records": 0,
+            "superseded_retry_records": 0,
+            "retained_records": 0,
+        },
+        "micro_slots": {
+            "input_records": 0,
+            "excluded_incomplete_records": 0,
+            "superseded_retry_records": 0,
+            "retained_records": 0,
+        },
+    }
     for cell in cells:
         frame = _scientific_frame(cell)
         frames[cell.cell_key] = frame
@@ -258,7 +325,14 @@ def build_canonical_tables(
             }
         )
         rich_rounds = _rich_rows(study_id, cell, "round_trajectory.jsonl", "round_trajectory.jsonl")
-        round_rows.extend(rich_rounds or _compact_round_rows(study_id, cell, frame))
+        selected_rounds, round_selection = _completed_unique_records(
+            rich_rounds or _compact_round_rows(study_id, cell, frame),
+            episodes,
+            coordinate_columns=("round_index",),
+        )
+        round_rows.extend(selected_rounds)
+        for key, value in round_selection.items():
+            record_selection["rounds"][key] += value
         # Micro-slot records live in different files per artifact profile:
         # `results_only` compaction writes a dedicated `micro_slot_trajectory`,
         # while the `full` profile leaves them interleaved in the generic
@@ -267,7 +341,7 @@ def build_canonical_tables(
         # merely files them elsewhere must not make those quantities vanish.
         # The generic file is filtered to genuine slot events by
         # `within_round_index`, the same marker the game analyzers use.
-        micro_rows.extend(
+        discovered_micro_rows = (
             _rich_rows(
                 study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl"
             )
@@ -277,6 +351,14 @@ def build_canonical_tables(
                 if row.get("within_round_index") is not None
             ]
         )
+        selected_micro_rows, micro_selection = _completed_unique_records(
+            discovered_micro_rows,
+            episodes,
+            coordinate_columns=("round_index", "micro_slot_index"),
+        )
+        micro_rows.extend(selected_micro_rows)
+        for key, value in micro_selection.items():
+            record_selection["micro_slots"][key] += value
 
     tables = {
         "cells": _frame(cell_rows, TABLE_SCHEMAS["cells"]),
@@ -284,7 +366,10 @@ def build_canonical_tables(
         "rounds": _frame(round_rows, TABLE_SCHEMAS["rounds"]),
         "micro_slots": _frame(micro_rows, TABLE_SCHEMAS["micro_slots"]),
     }
-    return tables, {"scientific_frames": frames}
+    return tables, {
+        "scientific_frames": frames,
+        "record_selection": record_selection,
+    }
 
 
 def _frame(rows: list[dict[str, Any]], columns: tuple[str, ...]) -> pd.DataFrame:

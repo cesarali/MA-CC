@@ -494,19 +494,19 @@ Produce:
 
 ```text
 analysis/tables/
-    cells.parquet
-    episodes.parquet
-    rounds.parquet
-    micro_slots.parquet
+    cells.csv
+    episodes.csv
+    rounds.csv
+    micro_slots.csv
 
-    primary_estimates.parquet
-    information_estimates.parquet
-    support_diagnostics.parquet
-    derived_observables.parquet
+    primary_estimates.csv
+    information_estimates.csv
+    support_diagnostics.csv
+    derived_observables.csv
 ```
 
-Parquet is authoritative. Standardized analysis does not emit redundant table
-CSV mirrors.
+CSV is authoritative for new analysis output. Readers retain support for
+legacy Parquet archives, but new aggregation does not emit Parquet by default.
 
 ### 12.1 `cells.parquet`
 
@@ -685,7 +685,7 @@ A new efficiency must not trigger a new CMI implementation.
 
 ## 15. Long-format estimator schema
 
-Suggested `primary_estimates.parquet`:
+Suggested `primary_estimates.csv`:
 
 ```text
 study_id
@@ -878,14 +878,14 @@ analysis/
     analysis_manifest.json
 
     tables/
-        cells.parquet
-        episodes.parquet
-        rounds.parquet
-        micro_slots.parquet
-        primary_estimates.parquet
-        information_estimates.parquet
-        support_diagnostics.parquet
-        derived_observables.parquet
+        cells.csv
+        episodes.csv
+        rounds.csv
+        micro_slots.csv
+        primary_estimates.csv
+        information_estimates.csv
+        support_diagnostics.csv
+        derived_observables.csv
 
     plots/
         <configured plots>

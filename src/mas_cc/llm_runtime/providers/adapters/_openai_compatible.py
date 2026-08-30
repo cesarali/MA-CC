@@ -18,8 +18,10 @@ from ..errors import ProviderError
 from ..capabilities import ProviderCapabilities
 from ..requests import CompletionRequest
 from ..responses import CompletionResponse, ProviderUsage
-from ..load_control import SharedProviderCoordinator
-
+from ..load_control import (
+    ProviderCoordinationUnavailable,
+    SharedProviderCoordinator,
+)
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
 LOGGER = logging.getLogger(__name__)
@@ -94,7 +96,9 @@ class OpenAICompatibleProvider:
         self._max_retries = config.max_retries
         self._concurrency = config.request_concurrency
         self._discover_endpoint = discover_endpoint
-        self._chat_url: str | None = None if discover_endpoint else f"{self._base_url}/chat/completions"
+        self._chat_url: str | None = (
+            None if discover_endpoint else f"{self._base_url}/chat/completions"
+        )
         self._available_models: tuple[str, ...] | None = None
         self._endpoint_lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(self._concurrency)
@@ -118,15 +122,27 @@ class OpenAICompatibleProvider:
 
     async def _coordinated_get(self, url: str, **kwargs: Any) -> Any:
         lease = None
+        heartbeat = None
         started = time.perf_counter()
+        deadline = (
+            time.monotonic()
+            + self._request_coordinator.config.retry_max_elapsed_seconds
+            if self._request_coordinator is not None
+            else None
+        )
         try:
             if self._request_coordinator is not None:
-                lease = await self._request_coordinator.acquire()
+                lease = await self._acquire_attempt(deadline)
+                heartbeat = asyncio.create_task(self._heartbeat(lease, deadline))
             response = await asyncio.to_thread(self._get_session().get, url, **kwargs)
             if lease is not None:
+                await self._stop_heartbeat(heartbeat)
+                heartbeat = None
                 retryable = self._is_retryable(response.status_code)
                 await self._release_attempt(
-                    lease, success=not retryable, retryable=retryable,
+                    lease,
+                    success=not retryable,
+                    retryable=retryable,
                     status_code=response.status_code,
                     latency_seconds=time.perf_counter() - started,
                 )
@@ -134,9 +150,26 @@ class OpenAICompatibleProvider:
             return response
         except Exception:
             if lease is not None:
+                await self._stop_heartbeat(heartbeat)
                 await self._release_attempt(
-                    lease, success=False, retryable=True, status_code=None,
+                    lease,
+                    success=False,
+                    retryable=True,
+                    status_code=None,
                     latency_seconds=time.perf_counter() - started,
+                )
+            raise
+        except BaseException:
+            await self._stop_heartbeat(heartbeat)
+            if lease is not None:
+                await asyncio.shield(
+                    self._release_attempt(
+                        lease,
+                        success=False,
+                        retryable=True,
+                        status_code=None,
+                        latency_seconds=time.perf_counter() - started,
+                    )
                 )
             raise
 
@@ -149,9 +182,66 @@ class OpenAICompatibleProvider:
             await self._request_coordinator.release(lease, **outcome)
         except Exception as exc:
             LOGGER.warning(
-                "provider load-control release failed; the lease will expire: %s",
+                "provider load-control release failed operation=release root=%s "
+                "node=%s worker=%s lease=%s attempts=%s: %s: %s",
+                getattr(self._request_coordinator, "root", "unknown"),
+                getattr(self._request_coordinator, "node_id", "unknown"),
+                getattr(self._request_coordinator, "worker_id", "unknown"),
+                str(getattr(lease, "token", "unknown"))[:8],
+                getattr(
+                    getattr(self._request_coordinator, "config", None),
+                    "transaction_retry_attempts",
+                    "unknown",
+                ),
                 type(exc).__name__,
+                exc,
+                exc_info=True,
             )
+
+    async def _acquire_attempt(self, deadline: float | None = None) -> Any:
+        assert self._request_coordinator is not None
+        if isinstance(self._request_coordinator, SharedProviderCoordinator):
+            return await self._request_coordinator.acquire(deadline=deadline)
+        return await self._request_coordinator.acquire()
+
+    async def _heartbeat(self, lease: Any, deadline: float) -> None:
+        coordinator = self._request_coordinator
+        if coordinator is None or not hasattr(coordinator, "renew"):
+            return
+        interval = coordinator.config.heartbeat_seconds
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                renewed = await coordinator.renew(lease, deadline=deadline)
+                if not renewed:
+                    LOGGER.error(
+                        "provider load-control lease disappeared during HTTP attempt lease=%s",
+                        lease.token[:8],
+                    )
+                    return
+            except Exception as exc:
+                LOGGER.warning(
+                    "provider load-control heartbeat failed operation=renew root=%s node=%s worker=%s lease=%s: %s: %s",
+                    coordinator.root,
+                    coordinator.node_id,
+                    coordinator.worker_id,
+                    lease.token[:8],
+                    type(exc).__name__,
+                    exc,
+                    exc_info=True,
+                )
+                if time.monotonic() >= deadline:
+                    return
+
+    @staticmethod
+    async def _stop_heartbeat(task: asyncio.Task[Any] | None) -> None:
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     async def discover_models(self) -> tuple[str, ...]:
         """Return advertised model ids while sharing normal endpoint discovery."""
@@ -266,15 +356,25 @@ class OpenAICompatibleProvider:
             "Content-Type": "application/json",
         }
         started = time.perf_counter()
+        deadline = (
+            time.monotonic()
+            + self._request_coordinator.config.retry_max_elapsed_seconds
+            if self._request_coordinator is not None
+            else None
+        )
         async with self._semaphore:
             retry = 0
             while True:
                 response = None
                 lease = None
+                heartbeat = None
                 attempt_started = time.perf_counter()
                 try:
                     if self._request_coordinator is not None:
-                        lease = await self._request_coordinator.acquire()
+                        lease = await self._acquire_attempt(deadline)
+                        heartbeat = asyncio.create_task(
+                            self._heartbeat(lease, deadline)
+                        )
                     response = await asyncio.to_thread(
                         self._get_session().post,
                         self._chat_url,
@@ -286,8 +386,12 @@ class OpenAICompatibleProvider:
                         retry, started
                     ):
                         if lease is not None:
+                            await self._stop_heartbeat(heartbeat)
+                            heartbeat = None
                             await self._release_attempt(
-                                lease, success=False, retryable=True,
+                                lease,
+                                success=False,
+                                retryable=True,
                                 status_code=response.status_code,
                                 latency_seconds=time.perf_counter() - attempt_started,
                             )
@@ -305,8 +409,12 @@ class OpenAICompatibleProvider:
                         )
                         raise TypeError("message content is not a string")
                     if lease is not None:
+                        await self._stop_heartbeat(heartbeat)
+                        heartbeat = None
                         await self._release_attempt(
-                            lease, success=True, retryable=False,
+                            lease,
+                            success=True,
+                            retryable=False,
                             status_code=response.status_code,
                             latency_seconds=time.perf_counter() - attempt_started,
                         )
@@ -330,9 +438,13 @@ class OpenAICompatibleProvider:
                     # the exhausted reasoning budget above, which must not be
                     # retried into three identical paid failures.
                     if lease is not None:
+                        await self._stop_heartbeat(heartbeat)
+                        heartbeat = None
                         status = getattr(response, "status_code", None)
                         await self._release_attempt(
-                            lease, success=False, retryable=self._is_retryable(status),
+                            lease,
+                            success=False,
+                            retryable=self._is_retryable(status),
                             status_code=status,
                             latency_seconds=time.perf_counter() - attempt_started,
                         )
@@ -344,8 +456,12 @@ class OpenAICompatibleProvider:
                     # transient upstream fault it is and spend the configured
                     # bounded retries before failing the logical request.
                     if lease is not None:
+                        await self._stop_heartbeat(heartbeat)
+                        heartbeat = None
                         await self._release_attempt(
-                            lease, success=False, retryable=True,
+                            lease,
+                            success=False,
+                            retryable=True,
                             status_code=getattr(response, "status_code", None),
                             latency_seconds=time.perf_counter() - attempt_started,
                         )
@@ -364,8 +480,12 @@ class OpenAICompatibleProvider:
                 except Exception as exc:
                     status = getattr(response, "status_code", None)
                     if lease is not None:
+                        await self._stop_heartbeat(heartbeat)
+                        heartbeat = None
                         await self._release_attempt(
-                            lease, success=False, retryable=self._is_retryable(status),
+                            lease,
+                            success=False,
+                            retryable=self._is_retryable(status),
                             status_code=status,
                             latency_seconds=time.perf_counter() - attempt_started,
                         )
@@ -382,9 +502,30 @@ class OpenAICompatibleProvider:
                         await asyncio.sleep(self._retry_delay(response, retry))
                         retry += 1
                         continue
+                    if isinstance(exc, ProviderCoordinationUnavailable):
+                        raise ProviderError(
+                            f"The {self.name} request could not obtain reliable shared coordination before its deadline.",
+                            provider=self.name,
+                            code="provider_coordination_unavailable",
+                            retryable=True,
+                        ) from exc
                     raise self._normalize_transport_error(
                         exc, operation="completion", status_code=status
                     ) from exc
+                except BaseException:
+                    # Cancellation must stop renewal and relinquish capacity too.
+                    await self._stop_heartbeat(heartbeat)
+                    if lease is not None:
+                        await asyncio.shield(
+                            self._release_attempt(
+                                lease,
+                                success=False,
+                                retryable=True,
+                                status_code=None,
+                                latency_seconds=time.perf_counter() - attempt_started,
+                            )
+                        )
+                    raise
         raise AssertionError("unreachable")
 
     @staticmethod

@@ -11,6 +11,8 @@ import pandas as pd
 
 CLASSIFIER = "relational_false_takeover_v1"
 PERSISTENCE_CLASSIFIER = "relational_persistence_exploratory_v1"
+PERSISTENCE_REFINEMENT_CLASSIFIER = "relational_persistence_refinement_v1"
+PERSISTENCE_TRUTH_CLASSIFIER = "relational_persistence_truth_aligned_v1"
 
 
 def _counts(event: Mapping[str, Any], suffix: str) -> dict[str, int]:
@@ -183,9 +185,13 @@ def _truth_conditionals(event: Mapping[str, Any]) -> tuple[float | None, float |
 
 
 def relational_persistence_tables(
-    rounds: Sequence[Any], cells: pd.DataFrame
+    rounds: Sequence[Any],
+    cells: pd.DataFrame,
+    *,
+    classifier: str = PERSISTENCE_CLASSIFIER,
+    allow_truth_target: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Build Study 09c episode and ``(rho,b)`` late-time summaries.
+    """Build finite-persistence episode and ``(rho,b)`` late-time summaries.
 
     Rounds 21--30 mean zero-based round indices 20--29. These values are
     described as late-time, never stationary.
@@ -211,13 +217,30 @@ def relational_persistence_tables(
             first.event.get("controller_target") or first.event["analysis_target"]
         )
         truth = str(first.event["correct_answer"])
-        if target == truth:
+        if target == truth and not allow_truth_target:
             raise ValueError(f"persistence endpoint received truth target in {cell_id}")
+        if target != truth and allow_truth_target:
+            raise ValueError(
+                f"truth-aligned persistence endpoint received false target in {cell_id}"
+            )
         initial_counts = _counts(first.event, "before")
         population = sum(initial_counts.values())
         false_trajectory = [initial_counts[target] / population] + [
             _counts(row.event, "after")[target] / population for row in ordered
         ]
+        final_counts = _counts(last.event, "after")
+        final_winner, final_is_tie, final_tied = _winner(final_counts)
+        late_false = _mean_field(late, "controller_target_share")
+        false_final_takeover = final_winner == target
+        false_ever_majority = max(false_trajectory) > 0.5
+        if false_final_takeover:
+            outcome = "FALSE_FINAL_TAKEOVER"
+        elif late_false > 0.5:
+            outcome = "FALSE_LATE_DOMINANT"
+        elif false_ever_majority:
+            outcome = "TRANSIENT_FALSE_MAJORITY"
+        else:
+            outcome = "NO_FALSE_MAJORITY"
         truth_full, truth_not_full = _truth_conditionals(last.event)
         late_truth_full = [
             pair[0]
@@ -251,9 +274,7 @@ def relational_persistence_tables(
                 "initial_false_target_share": false_trajectory[0],
                 "maximum_false_target_share": max(false_trajectory),
                 "final_false_target_share": false_trajectory[-1],
-                "late_time_mean_false_target_share": _mean_field(
-                    late, "controller_target_share"
-                ),
+                "late_time_mean_false_target_share": late_false,
                 "final_truth_share": float(last.event["truth_vote_share"]),
                 "late_time_mean_truth_share": _mean_field(late, "truth_vote_share"),
                 "final_active_phi": float(
@@ -282,6 +303,10 @@ def relational_persistence_tables(
                 ),
                 "advocate_rounds": sum(
                     row.event.get("controller_action") == "ADVOCATE_Z"
+                    for row in ordered
+                ),
+                "no_op_rounds": sum(
+                    row.event.get("controller_action") == "NO_OP"
                     for row in ordered
                 ),
                 "controlled_microscopic_updates": sum(
@@ -315,12 +340,18 @@ def relational_persistence_tables(
                     else sum(late_truth_not_full) / len(late_truth_not_full)
                 ),
                 "false_target_conditional_on_active_proof_available": False,
+                "false_target_is_final_winner": false_final_takeover,
+                "false_target_ever_majority": false_ever_majority,
+                "final_winner_semantic": final_winner,
+                "final_is_tie": final_is_tie,
+                "final_tied_semantics": final_tied,
+                "outcome_classification": outcome,
                 "late_time_round_start_one_based": 21,
                 "late_time_round_end_one_based": 30,
                 "late_time_label": "late-time",
                 "descriptive_only": True,
                 "matched_revised_theory_applicable": False,
-                "classification_version": PERSISTENCE_CLASSIFIER,
+                "classification_version": classifier,
             }
         )
     episodes = pd.DataFrame(rows)
@@ -339,20 +370,117 @@ def relational_persistence_tables(
     ]
     totals = [
         "advocate_rounds",
+        "no_op_rounds",
         "controlled_microscopic_updates",
         "fact_acquisitions",
         "fact_reactivations",
         "fact_deactivations",
     ]
-    summary = episodes.groupby(
-        ["epistemic_persistence", "intervention_budget", "actuation_fraction"],
-        as_index=False,
-    )[numeric + totals].mean(numeric_only=True)
-    summary.insert(3, "episodes", 1)
+    group_columns = [
+        "epistemic_persistence",
+        "intervention_budget",
+        "actuation_fraction",
+    ]
+    summary = episodes.groupby(group_columns, as_index=False)[numeric + totals].mean(
+        numeric_only=True
+    )
+    counts = episodes.groupby(group_columns, as_index=False).agg(
+        episodes=("episode_id", "count"),
+        false_final_takeover_count=("false_target_is_final_winner", "sum"),
+        false_late_dominant_count=(
+            "outcome_classification",
+            lambda values: sum(value == "FALSE_LATE_DOMINANT" for value in values),
+        ),
+        any_false_majority_count=("false_target_ever_majority", "sum"),
+        final_tie_count=("final_is_tie", "sum"),
+    )
+    summary = summary.merge(counts, on=group_columns, how="left")
+    summary["false_final_takeover_fraction"] = (
+        summary["false_final_takeover_count"] / summary["episodes"]
+    )
+    summary["false_late_dominant_fraction"] = (
+        summary["false_late_dominant_count"] / summary["episodes"]
+    )
+    summary["any_false_majority_fraction"] = (
+        summary["any_false_majority_count"] / summary["episodes"]
+    )
+    requested = [
+        "late_time_mean_false_target_share",
+        "late_time_mean_truth_share",
+        "late_time_mean_active_phi",
+        "late_time_mean_active_kappa",
+    ]
+    grouped = episodes.groupby(group_columns)
+    for column in requested:
+        stats = grouped[column].agg(
+            mean="mean",
+            median="median",
+            std="std",
+            minimum="min",
+            maximum="max",
+        ).reset_index()
+        quartiles = grouped[column].quantile([0.25, 0.75]).unstack()
+        quartiles["iqr"] = quartiles[0.75] - quartiles[0.25]
+        stats = stats.merge(quartiles[["iqr"]].reset_index(), on=group_columns)
+        stem = column.removeprefix("late_time_mean_")
+        stats = stats.rename(
+            columns={
+                name: f"{stem}_{name}"
+                for name in [
+                    "mean",
+                    "median",
+                    "std",
+                    "iqr",
+                    "minimum",
+                    "maximum",
+                ]
+            }
+        )
+        summary = summary.merge(stats, on=group_columns, how="left")
     summary["late_time_label"] = "late-time"
     summary["descriptive_only"] = True
     summary["matched_revised_theory_applicable"] = False
     return episodes, summary
+
+
+def relational_persistence_refinement_tables(
+    rounds: Sequence[Any], cells: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build Study 09d's repeated persistence-refinement summaries."""
+
+    return relational_persistence_tables(
+        rounds, cells, classifier=PERSISTENCE_REFINEMENT_CLASSIFIER
+    )
+
+
+def relational_persistence_truth_tables(
+    rounds: Sequence[Any], cells: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build matched truth-aligned late-time persistence summaries."""
+
+    episodes, summary = relational_persistence_tables(
+        rounds,
+        cells,
+        classifier=PERSISTENCE_TRUTH_CLASSIFIER,
+        allow_truth_target=True,
+    )
+
+    def aligned_names(frame: pd.DataFrame) -> pd.DataFrame:
+        renamed = frame.rename(
+            columns={
+                column: column.replace("false_target", "controller_target").replace(
+                    "false_", "truth_"
+                )
+                for column in frame.columns
+            }
+        )
+        if "outcome_classification" in renamed:
+            renamed["outcome_classification"] = renamed[
+                "outcome_classification"
+            ].astype(str).str.replace("FALSE", "TRUTH", regex=False)
+        return renamed
+
+    return aligned_names(episodes), aligned_names(summary)
 
 
 def _markdown_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> list[str]:

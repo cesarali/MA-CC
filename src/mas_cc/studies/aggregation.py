@@ -21,11 +21,16 @@ import yaml
 from mas_cc.storage import canonical_hash, file_sha256
 from mas_cc.storage.scientific import compact_row_to_imitation_event
 
-from .canonical import build_canonical_tables, parquet_safe
+from .canonical import build_canonical_tables
 from .discovery import DiscoveredRun, discover_cells, discover_runs
 from .submission import read_submission_manifest
+from .table_io import (
+    CANONICAL_TABLE_FORMAT,
+    read_scientific_table,
+    retained_table_path,
+    write_scientific_table,
+)
 from .validation import validate_study, validation_markdown
-
 
 ESTIMATOR_ALIASES = {
     "round_target_actuation_cmi_memory": "round_memory_target_actuation_cmi",
@@ -784,9 +789,7 @@ def _affinity_primary(
         status = (
             "unsupported"
             if not summary["n_plus"] or not summary["n_minus"]
-            else "limited"
-            if int(summary["n_episodes"]) < 10
-            else "adequate"
+            else "limited" if int(summary["n_episodes"]) < 10 else "adequate"
         )
         for metric in sorted(names):
             primary.append(
@@ -796,9 +799,11 @@ def _affinity_primary(
                     "cell_id": cell_id,
                     "metric": metric,
                     "estimator_version": "study05-effective-affinity-v1",
-                    "estimator_variant": "raw_transition_rate_ratio"
-                    if metric == "effective_affinity"
-                    else "raw_transition_activity",
+                    "estimator_variant": (
+                        "raw_transition_rate_ratio"
+                        if metric == "effective_affinity"
+                        else "raw_transition_activity"
+                    ),
                     "grouping_json": json.dumps({"cell_id": cell_id}, sort_keys=True),
                     "conditioning_json": json.dumps(
                         {"controlled_slot": True, "round_action": "ADVOCATE_TARGET"},
@@ -816,9 +821,9 @@ def _affinity_primary(
                     "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                     "n_observations": summary["n_observations"],
                     "n_episodes": summary["n_episodes"],
-                    "units": "nats"
-                    if metric == "effective_affinity"
-                    else "probability",
+                    "units": (
+                        "nats" if metric == "effective_affinity" else "probability"
+                    ),
                     "support_status": status,
                     "p_plus": summary["p_plus"],
                     "p_minus": summary["p_minus"],
@@ -911,9 +916,11 @@ def _ingest_existing_information(
             item["analysis_hash"] = analysis_hash
             support.append(item)
     return (
-        pd.concat(estimates, ignore_index=True)
-        if estimates
-        else pd.DataFrame(columns=PRIMARY_COLUMNS),
+        (
+            pd.concat(estimates, ignore_index=True)
+            if estimates
+            else pd.DataFrame(columns=PRIMARY_COLUMNS)
+        ),
         pd.concat(support, ignore_index=True) if support else pd.DataFrame(),
     )
 
@@ -1059,6 +1066,8 @@ def _eta_ir_state_local(
                     sort_keys=True,
                 ),
                 "support_status": str(item["support_status_cmi"]),
+                "n_observations": len(controlled),
+                "n_episodes": len({str(event.episode_id) for event in controlled}),
                 "analysis_hash": analysis_hash,
                 **grouping,
             }
@@ -1204,6 +1213,8 @@ _SINGLE_AFFINITY_UNITS: Mapping[str, str] = {
     "affinity_weighted_current_nats": "nats_per_horizon",
     "thermodynamic_control_expenditure_nats": "nats_per_horizon",
     "eta_th": "dimensionless",
+    "eta_th_signed": "dimensionless",
+    "eta_th_bounded": "dimensionless",
 }
 """Every emitted quantity's units, in one table, so a bits/nats mix-up has to
 be made here in the open rather than inferred from a column name."""
@@ -1220,6 +1231,13 @@ _SINGLE_AFFINITY_AUDIT = (
     "eta_th_identified_occupancy_mass",
     "eta_th_target_directed",
     "eta_th_valid",
+    "eta_th_signed",
+    "eta_th_bounded",
+    "eta_th_numeric_defined",
+    "eta_th_has_bounded_interpretation",
+    "eta_th_undefined_reason",
+    "eta_th_signed_ci_low",
+    "eta_th_signed_ci_high",
     "target_sensing_valid",
     "affinity_valid",
     "effective_affinity",
@@ -1231,6 +1249,11 @@ _SINGLE_AFFINITY_AUDIT = (
     "minus_transitions",
     "minus_eligible",
     "controlled_current_rounds",
+    "controlled_current",
+    "controlled_current_horizon",
+    "affinity_weighted_current_nats",
+    "target_sensing_information_horizon_nats",
+    "thermodynamic_control_expenditure_nats",
     "target_sensing_information_rounds",
     "n_rounds",
     "n_episodes",
@@ -1304,7 +1327,9 @@ def _single_affinity_support(metric: str, bundle: Mapping[str, Any]) -> str:
 
     if metric.startswith("eta_ir") and not flag("eta_ir_valid"):
         return "unsupported"
-    if metric == "eta_th" and not flag("eta_th_valid"):
+    if metric == "eta_th_bounded" and not flag("eta_th_has_bounded_interpretation"):
+        return "unsupported"
+    if metric in {"eta_th", "eta_th_signed"} and not flag("eta_th_numeric_defined"):
         return "unsupported"
     if metric in {
         "affinity_weighted_current_nats",
@@ -1432,6 +1457,14 @@ def _build_eta_th(study_id, bundles, source_run_ids, analysis_hash):
             "affinity_weighted_current_nats",
             "thermodynamic_control_expenditure_nats",
         ),
+        "eta_th_signed": (
+            "affinity_weighted_current_nats",
+            "thermodynamic_control_expenditure_nats",
+        ),
+        "eta_th_bounded": (
+            "affinity_weighted_current_nats",
+            "thermodynamic_control_expenditure_nats",
+        ),
     }
     return _single_affinity_rows(
         study_id,
@@ -1441,6 +1474,111 @@ def _build_eta_th(study_id, bundles, source_run_ids, analysis_hash):
         dependencies,
         analysis_hash,
     )
+
+
+def _thermodynamic_efficiency_diagnostics(
+    study_id: str,
+    bundles: Mapping[str, Mapping[str, Any]],
+    source_run_ids: Mapping[str, str],
+) -> pd.DataFrame:
+    """One complete, explainable thermodynamic record per scientific cell."""
+
+    rows = []
+    support_fields = (
+        "affinity_valid",
+        "controlled_current_valid",
+        "target_sensing_valid",
+        "eta_th_identified_occupancy_mass",
+        "plus_transitions",
+        "plus_eligible",
+        "minus_transitions",
+        "minus_eligible",
+        "p_plus",
+        "p_minus",
+        "n_rounds",
+        "n_episodes",
+        "n_micro_slots",
+    )
+    for cell_id, bundle in sorted(bundles.items()):
+        config_id = cell_id.split("/", 1)[0]
+        rows.append(
+            {
+                "study_id": study_id,
+                "config_id": config_id,
+                "source_run_id": source_run_ids.get(config_id, config_id),
+                "cell_id": cell_id,
+                "h": bundle.get("effective_affinity"),
+                "controlled_current": bundle.get("controlled_current_horizon"),
+                "affinity_weighted_current_nats": bundle.get(
+                    "affinity_weighted_current_nats"
+                ),
+                "target_sensing_information_horizon_nats": bundle.get(
+                    "target_sensing_information_horizon_nats"
+                ),
+                "thermodynamic_control_expenditure_nats": bundle.get(
+                    "thermodynamic_control_expenditure_nats"
+                ),
+                "eta_th_signed": bundle.get("eta_th_signed"),
+                "eta_th_bounded": bundle.get("eta_th_bounded"),
+                "eta_th_has_bounded_interpretation": bundle.get(
+                    "eta_th_has_bounded_interpretation"
+                ),
+                "eta_th_numeric_defined": bundle.get("eta_th_numeric_defined"),
+                "eta_th_undefined_reason": bundle.get("eta_th_undefined_reason"),
+                "bootstrap_ci_low": bundle.get("eta_th_signed_ci_low"),
+                "bootstrap_ci_high": bundle.get("eta_th_signed_ci_high"),
+                **{field: bundle.get(field) for field in support_fields},
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _thermodynamic_diagnostics_from_derived(derived: pd.DataFrame) -> pd.DataFrame:
+    rows = derived[
+        derived.get("metric", pd.Series(dtype=str)) == "eta_th_signed"
+    ].copy()
+    if rows.empty:
+        return pd.DataFrame()
+    rows["config_id"] = rows["cell_id"].astype(str).str.split("/", n=1).str[0]
+    rows["h"] = rows["effective_affinity"]
+    rows["controlled_current"] = rows["controlled_current_horizon"]
+    rows["bootstrap_ci_low"] = rows["eta_th_signed_ci_low"]
+    rows["bootstrap_ci_high"] = rows["eta_th_signed_ci_high"]
+    columns = [
+        "study_id",
+        "config_id",
+        "source_run_id",
+        "cell_id",
+        "epistemic_persistence",
+        "intervention_budget",
+        "h",
+        "controlled_current",
+        "affinity_weighted_current_nats",
+        "target_sensing_information_horizon_nats",
+        "thermodynamic_control_expenditure_nats",
+        "eta_th_signed",
+        "eta_th_bounded",
+        "eta_th_has_bounded_interpretation",
+        "eta_th_numeric_defined",
+        "eta_th_undefined_reason",
+        "bootstrap_ci_low",
+        "bootstrap_ci_high",
+        "support_status",
+        "affinity_valid",
+        "controlled_current_valid",
+        "target_sensing_valid",
+        "eta_th_identified_occupancy_mass",
+        "plus_transitions",
+        "plus_eligible",
+        "minus_transitions",
+        "minus_eligible",
+        "p_plus",
+        "p_minus",
+        "n_rounds",
+        "n_episodes",
+        "n_micro_slots",
+    ]
+    return rows.reindex(columns=columns)
 
 
 def _derived(
@@ -1748,14 +1886,27 @@ def _render_plots(
                     else group.groupby(series, dropna=False)
                 )
                 for series_label, line_group in line_groups:
-                    values = (
-                        line_group.groupby(x, dropna=False)["estimate"]
-                        .mean()
-                        .sort_index()
-                    )
-                    axis.plot(
-                        values.index, values.values, marker="o", label=str(series_label)
-                    )
+                    grouped_values = line_group.groupby(x, dropna=False)["estimate"]
+                    values = grouped_values.mean().sort_index()
+                    if bool(spec.get("show_variability", False)):
+                        deviations = (
+                            grouped_values.std().reindex(values.index).fillna(0)
+                        )
+                        axis.errorbar(
+                            values.index,
+                            values.values,
+                            yerr=deviations.values,
+                            marker="o",
+                            capsize=3,
+                            label=str(series_label),
+                        )
+                    else:
+                        axis.plot(
+                            values.index,
+                            values.values,
+                            marker="o",
+                            label=str(series_label),
+                        )
                 if series in group:
                     axis.legend()
                 axis.set_xlabel(x)
@@ -2005,7 +2156,6 @@ def _package(analysis_dir: Path, study_id: str) -> Path:
                 "cache" in relative.parts
                 or path.suffix in {".pickle", ".tmp"}
                 or path.name == "information_nulls.parquet"
-                or (path.suffix == ".csv" and "provenance" not in relative.parts)
                 or path.name.endswith(":Zone.Identifier")
             ):
                 continue
@@ -2089,16 +2239,15 @@ def aggregate_study(
     runs = discover_runs(entries)
     cells = discover_cells(runs)
     retained_paths = {
-        name: analysis_dir / "tables" / f"{name}.parquet"
+        name: retained_table_path(analysis_dir / "tables", name)
         for name in ("cells", "episodes", "rounds", "micro_slots")
     }
     if cells:
-        canonical, _ = build_canonical_tables(study_id, cells)
+        canonical, canonical_metadata = build_canonical_tables(study_id, cells)
         validation = validate_study(entries, runs, cells, canonical)
-    elif all(path.is_file() for path in retained_paths.values()):
+    elif all(path is not None for path in retained_paths.values()):
         canonical = {
-            name: pd.read_parquet(path, engine="pyarrow")
-            for name, path in retained_paths.items()
+            name: read_scientific_table(path) for name, path in retained_paths.items()
         }
         prior_validation_path = analysis_dir / "validation.json"
         if not prior_validation_path.is_file():
@@ -2115,8 +2264,26 @@ def aggregate_study(
             "source run trees unavailable; reaggregated from retained canonical tables"
         )
     else:
-        canonical, _ = build_canonical_tables(study_id, cells)
+        canonical, canonical_metadata = build_canonical_tables(study_id, cells)
         validation = validate_study(entries, runs, cells, canonical)
+    if cells:
+        selection = canonical_metadata.get("record_selection", {})
+        excluded = sum(
+            int(item.get("excluded_incomplete_records", 0))
+            for item in selection.values()
+        )
+        superseded = sum(
+            int(item.get("superseded_retry_records", 0)) for item in selection.values()
+        )
+        validation["canonical_record_selection"] = selection
+        if excluded:
+            validation.setdefault("warnings", []).append(
+                f"excluded {excluded} trajectory records from incomplete episodes"
+            )
+        if superseded:
+            validation.setdefault("warnings", []).append(
+                f"excluded {superseded} superseded trajectory records from safe retries"
+            )
     _reset_analysis_handoff(analysis_dir, study_id)
     tables_dir = analysis_dir / "tables"
     tables_dir.mkdir(parents=True, exist_ok=True)
@@ -2135,9 +2302,7 @@ def aggregate_study(
         )
 
     for name, frame in canonical.items():
-        parquet_safe(frame).to_parquet(
-            tables_dir / f"{name}.parquet", index=False, engine="pyarrow"
-        )
+        write_scientific_table(tables_dir, name, frame)
 
     input_identity = retained_input_identity or _scientific_identity(
         entries, cells, canonical
@@ -2176,6 +2341,8 @@ def aggregate_study(
         if classifier not in {
             "relational_false_takeover_v1",
             "relational_persistence_exploratory_v1",
+            "relational_persistence_refinement_v1",
+            "relational_persistence_truth_aligned_v1",
         }:
             raise ValueError("unsupported episode endpoint classifier")
         if classifier == "relational_false_takeover_v1":
@@ -2184,19 +2351,27 @@ def aggregate_study(
             episode_endpoints, episode_endpoint_summary = (
                 relational_false_takeover_tables(events, canonical["cells"])
             )
-        else:
+        elif classifier == "relational_persistence_exploratory_v1":
             from .episode_endpoints import relational_persistence_tables
 
             episode_endpoints, episode_endpoint_summary = relational_persistence_tables(
                 events, canonical["cells"]
             )
-        parquet_safe(episode_endpoints).to_parquet(
-            tables_dir / "episode_endpoints.parquet", index=False, engine="pyarrow"
-        )
-        parquet_safe(episode_endpoint_summary).to_parquet(
-            tables_dir / "episode_endpoint_summary.parquet",
-            index=False,
-            engine="pyarrow",
+        elif classifier == "relational_persistence_refinement_v1":
+            from .episode_endpoints import relational_persistence_refinement_tables
+
+            episode_endpoints, episode_endpoint_summary = (
+                relational_persistence_refinement_tables(events, canonical["cells"])
+            )
+        else:
+            from .episode_endpoints import relational_persistence_truth_tables
+
+            episode_endpoints, episode_endpoint_summary = (
+                relational_persistence_truth_tables(events, canonical["cells"])
+            )
+        write_scientific_table(tables_dir, "episode_endpoints", episode_endpoints)
+        write_scientific_table(
+            tables_dir, "episode_endpoint_summary", episode_endpoint_summary
         )
     source_run_ids = {
         str(row["cell_id"]).split("/", 1)[0]: str(row["source_run_id"])
@@ -2277,6 +2452,10 @@ def aggregate_study(
         if primary_frames
         else pd.DataFrame(columns=PRIMARY_COLUMNS)
     )
+    if {"target_count_before", "population_size"}.issubset(primary.columns):
+        primary["target_fraction_before"] = pd.to_numeric(
+            primary["target_count_before"], errors="coerce"
+        ) / pd.to_numeric(primary["population_size"], errors="coerce")
     if not affinity_support.empty:
         support = pd.concat(
             [support, _attach_coordinates(affinity_support, canonical["cells"])],
@@ -2306,6 +2485,13 @@ def aggregate_study(
         theoretical_reference=str(theoretical_reference),
     )
     derived = _attach_coordinates(derived, canonical["cells"])
+    if {
+        "target_count_before",
+        "population_size",
+    }.issubset(derived.columns):
+        derived["target_fraction_before"] = pd.to_numeric(
+            derived["target_count_before"], errors="coerce"
+        ) / pd.to_numeric(derived["population_size"], errors="coerce")
     contrasts = _factorial_contrasts(primary, derived, derived_raw, derived_hash)
     if not contrasts.empty:
         derived = pd.concat([derived, contrasts], ignore_index=True, sort=False)
@@ -2316,14 +2502,38 @@ def aggregate_study(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    if {
+        "cell_id",
+        "episode_id",
+        "target_count_before",
+    }.issubset(canonical["rounds"].columns):
+        observed = canonical["rounds"].dropna(subset=["target_count_before"]).copy()
+        state_occupancy = (
+            observed.groupby(
+                ["cell_id", "target_count_before"], dropna=False, as_index=False
+            )
+            .agg(
+                n_observations=("episode_id", "size"),
+                n_episodes=("episode_id", "nunique"),
+            )
+        )
+        state_occupancy = _attach_coordinates(
+            state_occupancy, canonical["cells"]
+        )
+        if "population_size" in state_occupancy:
+            state_occupancy["target_fraction_before"] = pd.to_numeric(
+                state_occupancy["target_count_before"], errors="coerce"
+            ) / pd.to_numeric(state_occupancy["population_size"], errors="coerce")
+        outputs["state_occupancy"] = state_occupancy
+    thermodynamic_diagnostics = _thermodynamic_diagnostics_from_derived(derived)
+    if not thermodynamic_diagnostics.empty:
+        outputs["thermodynamic_efficiency_diagnostics"] = thermodynamic_diagnostics
     if theoretical_reference == "single_affinity_revised":
         outputs["single_affinity_theory_comparison"] = _attach_coordinates(
             theory_comparison, canonical["cells"]
         )
     for name, frame in outputs.items():
-        parquet_safe(frame).to_parquet(
-            tables_dir / f"{name}.parquet", index=False, engine="pyarrow"
-        )
+        write_scientific_table(tables_dir, name, frame)
 
     plot_tables = {
         **canonical,
@@ -2384,6 +2594,37 @@ def aggregate_study(
         ),
         encoding="utf-8",
     )
+    state_occupancy = outputs.get("state_occupancy", pd.DataFrame())
+    if not state_occupancy.empty:
+        state_lines = [
+            "# Empirical state-space support",
+            "",
+            "`state_occupancy.csv` is counted directly from retained round records before estimator support filtering.",
+            "Absent target-count states are genuinely unvisited in the retained trajectories; they are not interpolated.",
+            "A visited state may still be absent from a state-local estimator when it lacks both controller-action values or fails another estimator support requirement.",
+            "This distinction is separate from missing structural `(rho,b)` cells, which strict validation rejects.",
+            "",
+            "| cell_id | rho | b | target_count_before | target_fraction_before | n_observations | n_episodes |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+        ordered_state = state_occupancy.sort_values(
+            ["cell_id", "target_count_before"]
+        )
+        for row in ordered_state.to_dict(orient="records"):
+            state_lines.append(
+                "| {cell} | {rho} | {budget} | {count} | {fraction:.6g} | {observations} | {episodes} |".format(
+                    cell=row.get("cell_id", ""),
+                    rho=row.get("epistemic_persistence", ""),
+                    budget=row.get("intervention_budget", ""),
+                    count=row.get("target_count_before", ""),
+                    fraction=float(row.get("target_fraction_before", math.nan)),
+                    observations=int(row.get("n_observations", 0)),
+                    episodes=int(row.get("n_episodes", 0)),
+                )
+            )
+        (reports / "state_space_support.md").write_text(
+            "\n".join(state_lines) + "\n", encoding="utf-8"
+        )
     if (
         not episode_endpoints.empty
         and str((endpoint_recipe or {}).get("classifier", ""))
@@ -2402,6 +2643,12 @@ def aggregate_study(
     submission_metadata = root / "submission.json"
     if submission_metadata.is_file():
         shutil.copy2(submission_metadata, provenance_dir / "submission.json")
+    for recovery in sorted(root.glob("recovery_submission_*.json")):
+        shutil.copy2(recovery, provenance_dir / recovery.name)
+    for recovery_manifest in sorted(root.glob("execution_manifest_recovery_*.csv")):
+        shutil.copy2(
+            recovery_manifest, provenance_dir / recovery_manifest.name
+        )
     for entry in entries:
         source_config = Path(entry.config_path)
         if source_config.is_file():
@@ -2412,7 +2659,7 @@ def aggregate_study(
     if recipe_path is not None:
         shutil.copy2(recipe_path, analysis_dir / "analysis_recipe.yaml")
     analysis_manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "study_id": study_id,
         "status": "complete" if validation["complete"] else "incomplete",
         "created_at": _now(),
@@ -2426,15 +2673,16 @@ def aggregate_study(
         "requested_statistics": list(statistics),
         "resampling": settings,
         "retention_contract": {
-            "canonical_parquet": True,
+            "canonical_table_format": CANONICAL_TABLE_FORMAT,
+            "csv_tables": True,
+            "parquet_tables": False,
             "compact_estimator_summaries": True,
             "persistent_analysis_cache": False,
             "individual_null_draws": False,
             "individual_bootstrap_draws": False,
-            "csv_table_mirrors": False,
         },
         "plots": plots,
-        "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
+        "tables": sorted(path.name for path in tables_dir.glob("*.csv")),
         "derived_semantics": _derived_semantics(derived),
     }
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)

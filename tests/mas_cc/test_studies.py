@@ -33,6 +33,7 @@ from mas_cc.studies.execution import (
 )
 from mas_cc.studies.cell_worker import main as cell_worker_main
 from mas_cc.studies.canonical import _coordinates
+from mas_cc.studies.table_io import read_scientific_table, write_scientific_table
 from mas_cc.studies.submission import (
     array_task_command,
     build_submission_entries,
@@ -43,7 +44,9 @@ from mas_cc.studies.submission import (
 
 
 def _standalone_config(path: Path, *, name: str = "study-smoke") -> Path:
-    config = load_run_config("configs/runs/old/toy_game_smoke_test.yaml", environment={})
+    config = load_run_config(
+        "configs/runs/old/toy_game_smoke_test.yaml", environment={}
+    )
     config = replace(
         config,
         experiment=replace(config.experiment, name=name),
@@ -107,7 +110,11 @@ def test_submission_manifest_and_array_mapping_are_deterministic(tmp_path):
     selected = resolve_array_entry(manifest, 1)
     command = array_task_command(selected)
     assert command[-5:] == (
-        "--config", str(second.resolve()), "--output-dir", selected.output_dir, "--no-progress"
+        "--config",
+        str(second.resolve()),
+        "--output-dir",
+        selected.output_dir,
+        "--no-progress",
     )
     with pytest.raises(ValueError, match="outside"):
         resolve_array_entry(manifest, 2)
@@ -126,7 +133,9 @@ def test_submit_preflights_every_config_and_calls_sbatch_once(tmp_path, monkeypa
         Path(output).mkdir(parents=True)
         return SimpleNamespace(launch_status="permitted")
 
-    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    monkeypatch.setattr(
+        "mas_cc.cli.experiment.run_experiment_preflight", fake_preflight
+    )
     calls = []
 
     def fake_run(command, **kwargs):
@@ -159,20 +168,23 @@ def test_potsdam_study_launchers_pin_dedicated_conda_environment():
     for launcher in launchers:
         script = launcher.read_text(encoding="utf-8")
         assert f"readonly CONDA_EXE={expected_conda}" in script
-        assert 'run -n MA-CC --live-stream' in script
+        assert "run -n MA-CC --live-stream" in script
         assert "\npython -m mas_cc.studies." not in script
 
 
 def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
-    spec = discover_study(
-        "configs/runs/relational_reasoning/population_study_06"
+    spec = discover_study("configs/runs/relational_reasoning/population_study_06")
+    submissions = build_submission_entries(
+        spec, "results/test-study06", git_commit="test"
     )
-    submissions = build_submission_entries(spec, "results/test-study06", git_commit="test")
     shards = build_cell_execution_entries(spec, submissions)
     plan = plan_cell_execution(spec, len(shards))
 
     assert len(shards) == 156
-    assert [(row.config_index, row.cell_index) for row in shards[:2]] == [(0, 0), (0, 1)]
+    assert [(row.config_index, row.cell_index) for row in shards[:2]] == [
+        (0, 0),
+        (0, 1),
+    ]
     assert shards[120].config_index == 1
     assert shards[120].cell_index == 0
     assert plan.array_throttle == 18
@@ -217,11 +229,19 @@ def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
         ("control.options.threshold", [0.2, 0.35, 0.5, 0.65, 0.8]),
     ]
     assert {cell.config.control.options["target"] for cell in fine.cells} == {2}
-    assert {cell.config.control.options["target"] for cell in truth.cells} == {"correct"}
-    assert {cell.config.execution.seed for cell in fine.cells + truth.cells} == {20260822}
-    assert {cell.config.execution.repetitions for cell in fine.cells + truth.cells} == {10}
+    assert {cell.config.control.options["target"] for cell in truth.cells} == {
+        "correct"
+    }
+    assert {cell.config.execution.seed for cell in fine.cells + truth.cells} == {
+        20260822
+    }
+    assert {cell.config.execution.repetitions for cell in fine.cells + truth.cells} == {
+        10
+    }
     study06_analysis = yaml.safe_load(
-        Path("configs/runs/relational_reasoning/population_study_06/analysis.yaml").read_text()
+        Path(
+            "configs/runs/relational_reasoning/population_study_06/analysis.yaml"
+        ).read_text()
     )
     study07_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
     for key in ("estimators", "resampling", "derived"):
@@ -252,16 +272,23 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
     assert [entry.expected_episode_count for entry in submissions] == [960, 960]
     assert len(shards) == 192
     assert {cell.config.control.options["target"] for cell in wrong.cells} == {2}
-    assert {cell.config.control.options["target"] for cell in truth.cells} == {"correct"}
-    assert {cell.config.control.options["message_mode"] for cell in wrong.cells + truth.cells} == {
-        "recommendation_plus_fact"
+    assert {cell.config.control.options["target"] for cell in truth.cells} == {
+        "correct"
     }
+    assert {
+        cell.config.control.options["message_mode"]
+        for cell in wrong.cells + truth.cells
+    } == {"recommendation_plus_fact"}
     assert {
         cell.config.experiment.metadata["common_random_numbers_across_grid"]
         for cell in wrong.cells + truth.cells
     } == {True}
-    assert {cell.config.execution.seed for cell in wrong.cells + truth.cells} == {20260822}
-    assert {cell.config.execution.repetitions for cell in wrong.cells + truth.cells} == {10}
+    assert {cell.config.execution.seed for cell in wrong.cells + truth.cells} == {
+        20260822
+    }
+    assert {
+        cell.config.execution.repetitions for cell in wrong.cells + truth.cells
+    } == {10}
     assert plan.array_throttle == 18
     assert plan.total_request_concurrency == 144
     assert plan.estimated_rpm == 864
@@ -269,7 +296,9 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
     assert plan.time_limit == "04:00:00"
 
     study06_analysis = yaml.safe_load(
-        Path("configs/runs/relational_reasoning/population_study_06/analysis.yaml").read_text()
+        Path(
+            "configs/runs/relational_reasoning/population_study_06/analysis.yaml"
+        ).read_text()
     )
     study08_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
     assert study08_analysis["resampling"] == study06_analysis["resampling"]
@@ -328,7 +357,9 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
         Path(output).mkdir(parents=True)
         return SimpleNamespace(launch_status="permitted")
 
-    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    monkeypatch.setattr(
+        "mas_cc.cli.experiment.run_experiment_preflight", fake_preflight
+    )
     calls = []
 
     def fake_run(command, **kwargs):
@@ -336,7 +367,9 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
         return subprocess.CompletedProcess(command, 0, "Submitted batch job 4243\n", "")
 
     result = submit_study(tmp_path, tmp_path / "results", run=fake_run)
-    execution_rows = read_execution_manifest(result.study_dir / "execution_manifest.csv")
+    execution_rows = read_execution_manifest(
+        result.study_dir / "execution_manifest.csv"
+    )
     assert len(execution_rows) == 2
     assert result.execution_plan["mode"] == "cell_array"
     assert "--cpus-per-task=8" in calls[0]
@@ -367,7 +400,9 @@ def test_required_results_root_rejects_home_repository_destination(tmp_path):
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="must be stored under"):
-        submit_study(tmp_path, tmp_path / "home-results", run=lambda *args, **kwargs: None)
+        submit_study(
+            tmp_path, tmp_path / "home-results", run=lambda *args, **kwargs: None
+        )
 
 
 def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
@@ -422,11 +457,11 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert cell_worker_main([str(execution_manifest), "1"]) == 0
     summary = aggregate_study(study_dir)
     assert summary["complete"] is True
-    cells = pd.read_parquet(study_dir / "analysis" / "tables" / "cells.parquet")
+    cells = pd.read_csv(study_dir / "analysis" / "tables" / "cells.csv")
     assert len(cells) == 2
     assert set(cells["source_cell_id"]) == {"cell-0000", "cell-0001"}
     analysis = study_dir / "analysis"
-    information = pd.read_parquet(analysis / "tables" / "information_estimates.parquet")
+    information = pd.read_csv(analysis / "tables" / "information_estimates.csv")
     assert set(information["null_permutations"]) == {1}
     assert set(information["bootstrap_resamples"]) == {1}
     assert information["null_type"].notna().all()
@@ -437,21 +472,21 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert not (analysis / "cache").exists()
     assert not (analysis / "cell_cache").exists()
     assert not list(analysis.rglob("*.pickle"))
-    assert not list((analysis / "tables").glob("*.csv"))
+    assert not list((analysis / "tables").glob("*.parquet"))
     with zipfile.ZipFile(summary["archive"]) as archive:
         names = set(archive.namelist())
     assert {
         "analysis_manifest.json",
         "validation.json",
         "validation.md",
-        "tables/cells.parquet",
-        "tables/episodes.parquet",
-        "tables/rounds.parquet",
-        "tables/micro_slots.parquet",
-        "tables/primary_estimates.parquet",
-        "tables/information_estimates.parquet",
-        "tables/support_diagnostics.parquet",
-        "tables/derived_observables.parquet",
+        "tables/cells.csv",
+        "tables/episodes.csv",
+        "tables/rounds.csv",
+        "tables/micro_slots.csv",
+        "tables/primary_estimates.csv",
+        "tables/information_estimates.csv",
+        "tables/support_diagnostics.csv",
+        "tables/derived_observables.csv",
         "reports/summary.md",
         "reports/methods.md",
         "provenance/study_manifest.json",
@@ -459,7 +494,9 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     } <= names
     assert not any("cache/" in name or name.endswith(".pickle") for name in names)
     assert not any(name.endswith("information_nulls.parquet") for name in names)
-    assert not any(name.startswith("tables/") and name.endswith(".csv") for name in names)
+    assert not any(
+        name.startswith("tables/") and name.endswith(".parquet") for name in names
+    )
 
     manifest = json.loads((analysis / "analysis_manifest.json").read_text())
     assert manifest["resampling"] == {
@@ -471,12 +508,15 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert manifest["retention_contract"]["persistent_analysis_cache"] is False
     assert manifest["retention_contract"]["individual_null_draws"] is False
     assert manifest["retention_contract"]["individual_bootstrap_draws"] is False
+    assert manifest["retention_contract"]["canonical_table_format"] == "csv"
+    assert manifest["retention_contract"]["csv_tables"] is True
+    assert manifest["retention_contract"]["parquet_tables"] is False
 
     before = information.sort_values(["cell_id", "metric"]).reset_index(drop=True)
     for entry in submissions:
         shutil.rmtree(entry.output_dir)
     aggregate_study(study_dir)
-    after = pd.read_parquet(analysis / "tables" / "information_estimates.parquet")
+    after = pd.read_csv(analysis / "tables" / "information_estimates.csv")
     after = after.sort_values(["cell_id", "metric"]).reset_index(drop=True)
     pd.testing.assert_frame_equal(before, after)
 
@@ -503,25 +543,27 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
     second = aggregate_study(study_dir)
     assert first["complete"] is True
     expected = {
-        "cells.parquet", "episodes.parquet", "rounds.parquet", "micro_slots.parquet",
-        "primary_estimates.parquet", "information_estimates.parquet",
-        "support_diagnostics.parquet",
-        "derived_observables.parquet",
+        "cells.csv",
+        "episodes.csv",
+        "rounds.csv",
+        "micro_slots.csv",
+        "primary_estimates.csv",
+        "information_estimates.csv",
+        "support_diagnostics.csv",
+        "derived_observables.csv",
     }
     tables = study_dir / "analysis" / "tables"
-    assert expected <= {path.name for path in tables.glob("*.parquet")}
-    cell_table = pd.read_parquet(tables / "cells.parquet")
+    assert expected <= {path.name for path in tables.glob("*.csv")}
+    assert not list(tables.glob("*.parquet"))
+    cell_table = pd.read_csv(tables / "cells.csv")
     assert len(cell_table) == 1
     assert cell_table.iloc[0]["cell_id"] == "config-0000/run"
-    assert len(pd.read_parquet(tables / "episodes.parquet")) == 1
-    assert set(pd.read_parquet(tables / "rounds.parquet")["cell_id"]) == {
-        "config-0000/run"
-    }
+    assert len(pd.read_csv(tables / "episodes.csv")) == 1
+    assert set(pd.read_csv(tables / "rounds.csv")["cell_id"]) == {"config-0000/run"}
     assert Path(first["archive"]).is_file()
     assert Path(second["archive"]).is_file()
     assert not (study_dir / "analysis" / "cache").exists()
     assert not list((study_dir / "analysis").rglob("*.pickle"))
-    assert not list(tables.glob("*.csv"))
 
     write_submission_manifest(
         study_dir / "submission_manifest.csv",
@@ -534,6 +576,61 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
     validation = json.loads((study_dir / "analysis" / "validation.json").read_text())
     assert validation["allow_incomplete"] is True
     assert validation["valid"] is False
+
+
+def test_scientific_table_csv_round_trip_and_legacy_parquet_read(tmp_path):
+    frame = pd.DataFrame(
+        {
+            "cell_id": ["cell-1", "cell-2"],
+            "target_count_before": [1, 2],
+            "estimate": [0.125, math.nan],
+            "supported": [True, False],
+            "nested": [{"rho": 0.7, "states": [1, 2]}, None],
+        }
+    )
+    csv_path = write_scientific_table(tmp_path, "fidelity", frame)
+    restored = pd.read_csv(csv_path)
+    assert list(restored.columns) == list(frame.columns)
+    assert restored.loc[0, "estimate"] == pytest.approx(0.125)
+    assert math.isnan(restored.loc[1, "estimate"])
+    assert json.loads(restored.loc[0, "nested"]) == {"rho": 0.7, "states": [1, 2]}
+
+    legacy = tmp_path / "legacy.parquet"
+    frame.to_parquet(legacy, index=False, engine="pyarrow")
+    pd.testing.assert_frame_equal(read_scientific_table(legacy), frame)
+
+
+def test_canonical_record_selection_excludes_incomplete_and_retry_prefixes():
+    from mas_cc.studies.canonical import _completed_unique_records
+
+    episodes = [
+        {"episode_id": "complete", "status": "completed"},
+        {"episode_id": "failed", "status": "failed"},
+    ]
+    rows = [
+        {"episode_id": "complete", "round_index": 0, "value": "old"},
+        {"episode_id": "complete", "round_index": 1, "value": "old"},
+        {"episode_id": "failed", "round_index": 0, "value": "partial"},
+        {"episode_id": "complete", "round_index": 0, "value": "retry"},
+        {"episode_id": "complete", "round_index": 1, "value": "retry"},
+        {"episode_id": "complete", "round_index": 2, "value": "retry"},
+    ]
+
+    selected, diagnostics = _completed_unique_records(
+        rows, episodes, coordinate_columns=("round_index",)
+    )
+
+    assert [(row["round_index"], row["value"]) for row in selected] == [
+        (0, "retry"),
+        (1, "retry"),
+        (2, "retry"),
+    ]
+    assert diagnostics == {
+        "input_records": 6,
+        "excluded_incomplete_records": 1,
+        "superseded_retry_records": 2,
+        "retained_records": 3,
+    }
 
 
 def test_effective_affinity_reuses_transition_rate_definition():
@@ -777,8 +874,21 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
     aggregate_study(study_dir)
 
     tables = study_dir / "analysis" / "tables"
-    primary = pd.read_parquet(tables / "primary_estimates.parquet")
-    derived = pd.read_parquet(tables / "derived_observables.parquet")
+    primary = pd.read_csv(tables / "primary_estimates.csv")
+    derived = pd.read_csv(tables / "derived_observables.csv")
+    diagnostics = pd.read_csv(tables / "thermodynamic_efficiency_diagnostics.csv")
+    assert len(diagnostics) == 2
+    assert diagnostics["cell_id"].nunique() == 2
+    assert {
+        "h",
+        "controlled_current",
+        "eta_th_signed",
+        "eta_th_bounded",
+        "eta_th_numeric_defined",
+        "eta_th_undefined_reason",
+        "bootstrap_ci_low",
+        "bootstrap_ci_high",
+    } <= set(diagnostics.columns)
 
     # --- response ---------------------------------------------------------
     chi = primary[primary["metric"] == "round_target_susceptibility"]
@@ -805,6 +915,8 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
         "affinity_weighted_current_nats",
         "thermodynamic_control_expenditure_nats",
         "eta_th",
+        "eta_th_signed",
+        "eta_th_bounded",
     }
     assert expected <= set(derived["metric"])
 
@@ -842,9 +954,7 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
 
 
 def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path):
-    study_root = Path(
-        "configs/runs/relational_reasoning/population_study_06"
-    )
+    study_root = Path("configs/runs/relational_reasoning/population_study_06")
     study = discover_study(study_root)
     assert [path.name for path in study.configs] == [
         "study06_main_b_theta.yaml",
@@ -855,7 +965,9 @@ def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path)
         "POTSDAM_API_KEY": "unused-smoke-value",
         "BASE_POTSDAM_LLM_URL": "https://unused.invalid",
     }
-    specs = [load_run_config_or_grid(path, environment=environment) for path in study.configs]
+    specs = [
+        load_run_config_or_grid(path, environment=environment) for path in study.configs
+    ]
     assert all(isinstance(spec, GridSpec) for spec in specs)
     assert all(spec.base.storage.artifact_profile == "results_only" for spec in specs)
 
@@ -874,9 +986,7 @@ def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path)
                 "response": '{"vote":"C","reason":"smoke","shared_fact_id":"none"}'
             },
         ),
-        execution=replace(
-            main.execution, repetitions=1, parallelism=1, fail_fast=True
-        ),
+        execution=replace(main.execution, repetitions=1, parallelism=1, fail_fast=True),
         logging=replace(main.logging, console=False, audit=False, comet=False),
         pricing=replace(
             main.pricing,
@@ -890,7 +1000,9 @@ def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path)
         mock, tmp_path / "study06-retention", resume=False, show_progress=False
     )
 
-    round_paths = sorted((tmp_path / "study06-retention").rglob("round_trajectory.jsonl"))
+    round_paths = sorted(
+        (tmp_path / "study06-retention").rglob("round_trajectory.jsonl")
+    )
     micro_paths = sorted(
         (tmp_path / "study06-retention").rglob("micro_slot_trajectory.jsonl")
     )
