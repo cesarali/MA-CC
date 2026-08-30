@@ -10,7 +10,8 @@ usage() {
 usage: run_study.sh --account PROJECT --nodes 1-4
                     (--config-dir DIR --results-dir DIR | --study-dir DIR)
                     [--time HH:MM:SS] [--throttle N]
-                    [--immediate SECONDS] [--dry-run]
+                    [--immediate SECONDS] [--allow-shorter-than-plan]
+                    [--dry-run]
 
 --config-dir prepares the study before allocating. --study-dir resumes an
 already prepared study. The QoS is fixed to interactive; batch submission is disabled.
@@ -26,6 +27,7 @@ walltime=""
 throttle=""
 immediate=600
 dry_run=false
+allow_shorter_than_plan=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,6 +39,7 @@ while [[ $# -gt 0 ]]; do
     --time) [[ $# -ge 2 ]] || nersc_die "--time requires a value"; walltime="$2"; shift 2 ;;
     --throttle) [[ $# -ge 2 ]] || nersc_die "--throttle requires a value"; throttle="$2"; shift 2 ;;
     --immediate) [[ $# -ge 2 ]] || nersc_die "--immediate requires a value"; immediate="$2"; shift 2 ;;
+    --allow-shorter-than-plan) allow_shorter_than_plan=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     --qos|--qos=*|-q) nersc_die "QoS is fixed to interactive and cannot be overridden" ;;
     --help|-h) usage; exit 0 ;;
@@ -106,8 +109,11 @@ IFS=$'\t' read -r manifest worker_kind total_workers physical_cpus planned_time 
 nersc_validate_walltime "${walltime}"
 planned_seconds="$(nersc_walltime_seconds "${planned_time}")"
 requested_seconds="$(nersc_walltime_seconds "${walltime}")"
-(( requested_seconds >= planned_seconds )) || \
-  nersc_die "requested wall time ${walltime} is shorter than planned shard time ${planned_time}"
+if (( requested_seconds < planned_seconds )); then
+  [[ "${allow_shorter_than_plan}" == true ]] || \
+    nersc_die "requested wall time ${walltime} is shorter than planned shard time ${planned_time}"
+  echo "[nersc] resumable allocation time ${walltime} is shorter than planned shard time ${planned_time}" >&2
+fi
 
 echo "[nersc] study=${study_dir}"
 echo "[nersc] shards=${shard_count} workers=${total_workers} nodes=${nodes} physical_cpus_per_worker=${physical_cpus}"

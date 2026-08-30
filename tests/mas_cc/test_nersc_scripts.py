@@ -427,6 +427,8 @@ def test_detached_supervisor_dry_run_is_idempotent_and_interactive_only(tmp_path
         "1",
         "--study-dir",
         study,
+        "--time",
+        "02:00:00",
         "--aggregate",
         "--ensure",
         "--dry-run",
@@ -435,6 +437,7 @@ def test_detached_supervisor_dry_run_is_idempotent_and_interactive_only(tmp_path
     assert completed.returncode == 0, completed.stderr
     assert "nohup setsid" in completed.stdout
     assert "run_study_until_complete.sh" in completed.stdout
+    assert "--time 02:00:00" in completed.stdout
     assert "--aggregate" in completed.stdout
     assert "regular" not in completed.stdout
     assert "sbatch" not in completed.stdout
@@ -464,6 +467,8 @@ def test_rollover_rechecks_progress_and_requests_fresh_allocation(tmp_path):
         "1",
         "--study-dir",
         study,
+        "--time",
+        "02:00:00",
         "--retry-delay",
         "0",
         env=environment,
@@ -474,6 +479,36 @@ def test_rollover_rechecks_progress_and_requests_fresh_allocation(tmp_path):
     assert "allocation=1 exit=124 cells=1/2" in completed.stdout
     assert "requesting interactive CPU allocation 2" in completed.stdout
     assert "all 2 cell seals are complete" in completed.stdout
+
+
+def test_direct_study_launcher_requires_explicit_opt_in_for_shorter_walltime(tmp_path):
+    if os.environ.get("NERSC_HOST") != "perlmutter":
+        pytest.skip("NERSC module and Conda environment are only available on Perlmutter")
+    study = tmp_path / "study"
+    _write_prepared_study(study, shard_count=1)
+    environment = os.environ.copy()
+    environment["NERSC_RESULTS_ROOT"] = str(tmp_path)
+    command = (
+        NERSC / "run_study.sh",
+        "--account",
+        "m1234",
+        "--nodes",
+        "1",
+        "--study-dir",
+        study,
+        "--time",
+        "02:00:00",
+        "--dry-run",
+    )
+
+    rejected = _run(*command, env=environment)
+    assert rejected.returncode == 2
+    assert "shorter than planned shard time" in rejected.stderr
+
+    allowed = _run(*command, "--allow-shorter-than-plan", env=environment)
+    assert allowed.returncode == 0, allowed.stderr
+    assert "--time=02:00:00" in allowed.stdout
+    assert "resumable allocation time 02:00:00" in allowed.stderr
 
 
 def test_detached_supervisor_survives_launcher_exit_and_ensure_is_idempotent(tmp_path):

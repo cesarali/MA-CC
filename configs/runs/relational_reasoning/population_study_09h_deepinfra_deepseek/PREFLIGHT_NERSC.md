@@ -74,16 +74,21 @@ and token limits above every conservative estimate.
 - Effective planned ceiling: 200 simultaneous episodes/request attempts.
   Shared provider control starts at 100, may recover to the authenticated 200
   maximum, and smoothly paces all attempts to 1,200 RPM.
-- Four Perlmutter CPU nodes are requested through the generic NERSC supervisor.
-  The plan runs 20 workers at 10 physical CPUs and 12 GB each; the provider,
-  not the 512 allocated physical cores, is the binding limit.
+- Two Perlmutter CPU nodes are requested through the generic NERSC supervisor.
+  They accommodate all 20 workers at 10 physical CPUs and 12 GB each, exposing
+  the full 200-request provider ceiling; two additional nodes would add no
+  provider throughput. The reduced node count also fits the live `m4539`
+  balance of 14.6 node-hours (the rejected four-node/four-hour request alone
+  would reserve 16 node-hours and sent no provider requests).
 - Nominal call time at 1,200 RPM is 1.86 hours; expected call time is 1.96
   hours; the all-retry conservative bound is 3.72 hours before overhead and
   outages. These are service-rate projections, not wall-time guarantees.
 - Every allocation explicitly uses `--qos=interactive --constraint=cpu` and a
-  four-hour wall. The detached supervisor reuses the same manifests and result
+  two-hour wall. The detached supervisor reuses the same manifests and result
   root after a clean timeout, stops on scientific failures, and performs strict
   aggregation in an interactive CPU allocation only after all 24 cells seal.
+  Two nodes x two hours allows three study allocations plus a one-node,
+  two-hour aggregation allocation within the audited balance if required.
 
 No study-specific SLURM job or NERSC launcher is introduced. Source scheduler
 fields remain Potsdam-safe; NERSC result rebinding and scheduler enforcement

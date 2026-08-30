@@ -9,10 +9,11 @@ usage() {
   cat <<'EOF'
 usage: run_study_until_complete.sh --account PROJECT --nodes 1-4 --study-dir DIR
                                    [--wait-for-job JOB_ID] [--immediate SECONDS]
-                                   [--retry-delay SECONDS] [--aggregate]
+                                   [--retry-delay SECONDS] [--time HH:MM:SS]
+                                   [--aggregate]
 
 The supervisor requests only qos=interactive CPU allocations. It resumes after
-each four-hour rollover, stops on a recorded scientific failure, and optionally
+each allocation wall, stops on a recorded scientific failure, and optionally
 retries strict aggregation allocations until its manifest and ZIP are complete.
 EOF
 }
@@ -23,6 +24,7 @@ study_dir=""
 wait_for_job=""
 immediate=600
 retry_delay=30
+walltime="04:00:00"
 aggregate=false
 ready_file=""
 
@@ -34,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --wait-for-job) [[ $# -ge 2 ]] || nersc_die "--wait-for-job requires a value"; wait_for_job="$2"; shift 2 ;;
     --immediate) [[ $# -ge 2 ]] || nersc_die "--immediate requires a value"; immediate="$2"; shift 2 ;;
     --retry-delay) [[ $# -ge 2 ]] || nersc_die "--retry-delay requires a value"; retry_delay="$2"; shift 2 ;;
+    --time) [[ $# -ge 2 ]] || nersc_die "--time requires a value"; walltime="$2"; shift 2 ;;
     --aggregate) aggregate=true; shift ;;
     --ready-file) [[ $# -ge 2 ]] || nersc_die "--ready-file requires a value"; ready_file="$2"; shift 2 ;;
     --qos|--qos=*|-q) nersc_die "QoS is fixed to interactive and cannot be overridden" ;;
@@ -48,6 +51,7 @@ done
 nersc_validate_account "${account}"
 nersc_validate_nodes "${nodes}"
 nersc_validate_immediate "${immediate}"
+nersc_validate_walltime "${walltime}"
 [[ "${retry_delay}" =~ ^[0-9]+$ ]] || nersc_die "--retry-delay must be a non-negative integer"
 if [[ -n "${wait_for_job}" && ! "${wait_for_job}" =~ ^[0-9]+$ ]]; then
   nersc_die "--wait-for-job must be a numeric SLURM job id"
@@ -106,7 +110,8 @@ while true; do
   "${NERSC_SCRIPT_DIR}/run_study.sh" \
     --account "${account}" \
     --nodes "${nodes}" \
-    --time 04:00:00 \
+    --time "${walltime}" \
+    --allow-shorter-than-plan \
     --immediate "${immediate}" \
     --study-dir "${study_dir}"
   allocation_status=$?
@@ -143,7 +148,7 @@ if [[ "${aggregate}" == true ]]; then
     set +e
     "${NERSC_SCRIPT_DIR}/run_command.sh" \
       --account "${account}" \
-      --time 04:00:00 \
+      --time "${walltime}" \
       --immediate "${immediate}" \
       -- "${NERSC_SCRIPT_DIR}/aggregate_study.sh" --study-dir "${study_dir}"
     aggregation_exit=$?

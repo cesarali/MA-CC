@@ -100,6 +100,7 @@ rollover supervisor. This is the normal production entry point:
 scripts/nersc/start_study_supervisor.sh \
   --account m4539 \
   --nodes 4 \
+  --time 04:00:00 \
   --study-dir /pscratch/sd/d/dfarough/MA-CC-results/studies/<study-root> \
   --aggregate
 ```
@@ -119,9 +120,9 @@ Use `--ensure` to make repeated starts idempotent. Add
 `--wait-for-job <current-interactive-job-id>` when adopting an allocation that
 was launched separately; the supervisor owns its lock while it waits.
 
-After each allocation exits, including a four-hour timeout, the supervisor
+After each allocation exits, including a walltime timeout, the supervisor
 rechecks cell seals and episode resume manifests. If the study is clean but
-incomplete, it requests another fresh four-hour allocation and passes the same
+incomplete, it requests another fresh interactive allocation and passes the same
 prepared manifest, output root, cell identities, and seeds to the unchanged
 worker. Completed episodes are validated and skipped by the existing resume
 layer. Scientific failures stop the loop; scheduler timeout alone does not.
@@ -129,6 +130,14 @@ Once every cell has a completed seal, `--aggregate` runs strict aggregation in
 its own interactive CPU allocation. If that allocation is unavailable or is
 interrupted before the final manifest and ZIP exist, aggregation resumes in a
 fresh allocation. A recorded strict-validation failure stops the loop.
+
+`--time` may be set below the prepared shard time when the project balance or
+an intentional rollover drill requires shorter allocations. The override is
+enabled automatically through the resumable supervisor path: it keeps the same
+episode checkpoints and uses the selected interactive walltime for both study
+allocations and the later one-node aggregation allocation. Direct
+`run_study.sh` calls still reject a walltime shorter than the prepared plan
+unless their caller explicitly opts into resumable behavior.
 
 The supervisor contains no fallback to regular QoS and rejects any QoS
 override. Its study lock prevents two rollover loops from allocating for the

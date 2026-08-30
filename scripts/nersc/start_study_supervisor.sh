@@ -9,7 +9,8 @@ usage() {
   cat <<'EOF'
 usage: start_study_supervisor.sh --account PROJECT --nodes 1-4 --study-dir DIR
                                  [--wait-for-job JOB_ID] [--immediate SECONDS]
-                                 [--retry-delay SECONDS] [--aggregate]
+                                 [--retry-delay SECONDS] [--time HH:MM:SS]
+                                 [--aggregate]
                                  [--ensure] [--dry-run]
 
 Starts run_study_until_complete.sh under nohup+setsid. --ensure is idempotent:
@@ -25,6 +26,7 @@ study_dir=""
 wait_for_job=""
 immediate=600
 retry_delay=30
+walltime="04:00:00"
 aggregate=false
 ensure=false
 dry_run=false
@@ -37,6 +39,7 @@ while [[ $# -gt 0 ]]; do
     --wait-for-job) [[ $# -ge 2 ]] || nersc_die "--wait-for-job requires a value"; wait_for_job="$2"; shift 2 ;;
     --immediate) [[ $# -ge 2 ]] || nersc_die "--immediate requires a value"; immediate="$2"; shift 2 ;;
     --retry-delay) [[ $# -ge 2 ]] || nersc_die "--retry-delay requires a value"; retry_delay="$2"; shift 2 ;;
+    --time) [[ $# -ge 2 ]] || nersc_die "--time requires a value"; walltime="$2"; shift 2 ;;
     --aggregate) aggregate=true; shift ;;
     --ensure) ensure=true; shift ;;
     --dry-run) dry_run=true; shift ;;
@@ -52,6 +55,7 @@ done
 nersc_validate_account "${account}"
 nersc_validate_nodes "${nodes}"
 nersc_validate_immediate "${immediate}"
+nersc_validate_walltime "${walltime}"
 [[ "${retry_delay}" =~ ^[0-9]+$ ]] || nersc_die "--retry-delay must be a non-negative integer"
 if [[ -n "${wait_for_job}" && ! "${wait_for_job}" =~ ^[0-9]+$ ]]; then
   nersc_die "--wait-for-job must be a numeric SLURM job id"
@@ -118,6 +122,7 @@ supervisor=(
   --study-dir "${study_dir}"
   --immediate "${immediate}"
   --retry-delay "${retry_delay}"
+  --time "${walltime}"
   --ready-file "${ready_file}"
 )
 if [[ -n "${wait_for_job}" ]]; then
