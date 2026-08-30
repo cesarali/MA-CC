@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.storage import canonical_hash, file_sha256
 from mas_cc.storage.scientific import compact_row_to_imitation_event
 
@@ -547,6 +548,17 @@ def _state_local_primary(
         )
     if not requested:
         return pd.DataFrame(columns=PRIMARY_COLUMNS)
+    raw_x_bins = recipe.get("state_local_x_bins")
+    if raw_x_bins is None:
+        x_bins = None
+    elif (
+        isinstance(raw_x_bins, bool)
+        or not isinstance(raw_x_bins, int)
+        or raw_x_bins < 1
+    ):
+        raise ValueError("analysis state_local_x_bins must be a positive integer")
+    else:
+        x_bins = int(raw_x_bins)
     from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
         round_information_analysis,
     )
@@ -572,17 +584,17 @@ def _state_local_primary(
                 value = None if extra is None else event.event.get(extra)
                 if x is None or (extra is not None and value is None):
                     continue
-                slices.setdefault((x,) if extra is None else (x, value), []).append(
-                    event
-                )
+                if resolution == "x" and x_bins is not None:
+                    population = int(event.event.get("N") or sum(event.N_k))
+                    fraction = float(x) / population
+                    bin_index = min(int(fraction * x_bins), x_bins - 1)
+                    slice_key = (bin_index,)
+                else:
+                    slice_key = (x,) if extra is None else (x, value)
+                slices.setdefault(slice_key, []).append(event)
             for slice_values, sample in sorted(
                 slices.items(), key=lambda item: str(item[0])
             ):
-                if (
-                    len({str(event.U_k) for event in sample if event.U_k is not None})
-                    < 2
-                ):
-                    continue
                 estimates, _ = round_information_analysis(
                     sample,
                     statistics=statistics,
@@ -591,12 +603,21 @@ def _state_local_primary(
                     confidence=0.95,
                     seed=1,
                 )
-                grouping = {
-                    "cell_id": cell_id,
-                    "resolution": resolution,
-                    "target_count_before": slice_values[0],
-                }
-                if extra is not None:
+                grouping = {"cell_id": cell_id, "resolution": resolution}
+                if resolution == "x" and x_bins is not None:
+                    bin_index = int(slice_values[0])
+                    grouping.update(
+                        {
+                            "target_fraction_bin_index": bin_index,
+                            "target_fraction_bin_lower": bin_index / x_bins,
+                            "target_fraction_bin_upper": (bin_index + 1) / x_bins,
+                            "target_fraction_bin_center": (bin_index + 0.5) / x_bins,
+                            "target_fraction_bin_count": x_bins,
+                        }
+                    )
+                else:
+                    grouping["target_count_before"] = slice_values[0]
+                if extra is not None and not (resolution == "x" and x_bins is not None):
                     grouping[extra] = slice_values[1]
                 for item in estimates:
                     rows.append(
@@ -789,7 +810,9 @@ def _affinity_primary(
         status = (
             "unsupported"
             if not summary["n_plus"] or not summary["n_minus"]
-            else "limited" if int(summary["n_episodes"]) < 10 else "adequate"
+            else "limited"
+            if int(summary["n_episodes"]) < 10
+            else "adequate"
         )
         for metric in sorted(names):
             primary.append(
@@ -1019,6 +1042,21 @@ def _eta_ir_state_local(
                 for event in group
                 if event.event.get("target_count_before")
                 == grouping["target_count_before"]
+            ]
+        if "target_fraction_bin_index" in grouping:
+            bins = int(grouping["target_fraction_bin_count"])
+            selected_bin = int(grouping["target_fraction_bin_index"])
+            group = [
+                event
+                for event in group
+                if min(
+                    int(
+                        (float(event.event.get("target_count_before")) / sum(event.N_k))
+                        * bins
+                    ),
+                    bins - 1,
+                )
+                == selected_bin
             ]
         for key in ("conditioning_phi_bin", "conditioning_kappa_bin"):
             if key in grouping:
@@ -1549,6 +1587,9 @@ def _thermodynamic_diagnostics_from_derived(derived: pd.DataFrame) -> pd.DataFra
         "config_id",
         "source_run_id",
         "cell_id",
+        "social_group_size",
+        "controller_evidence_strategy",
+        "target_semantics",
         "epistemic_persistence",
         "intervention_budget",
         "h",
@@ -1660,6 +1701,265 @@ def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFram
     )
 
 
+def _expected_cell_coordinates(entries: Sequence[Any]) -> list[dict[str, Any]]:
+    """Resolve the declared structural grid, including cells not yet run."""
+
+    rows: list[dict[str, Any]] = []
+    for entry in entries:
+        source = load_run_config_or_grid(entry.config_path)
+        cells = source.cells if isinstance(source, GridSpec) else ()
+        if not cells:
+            continue
+        for cell in cells:
+            config = cell.config
+            record = {
+                "cell_id": f"config-{entry.array_index:04d}/{cell.cell_id}",
+                **dict(cell.overrides),
+            }
+            for path, value in cell.overrides.items():
+                leaf = str(path).rsplit(".", 1)[-1]
+                if leaf not in record:
+                    record[leaf] = value
+            record.update(
+                {
+                    "population_size": config.game.population_size,
+                    "social_group_size": config.game.options.get("social_group_size"),
+                    "epistemic_persistence": config.game.options.get(
+                        "epistemic_persistence"
+                    ),
+                    "receiver_epistemic_disposition": config.game.options.get(
+                        "receiver_epistemic_disposition"
+                    ),
+                    "controller_evidence_strategy": config.control.options.get(
+                        "controller_evidence_strategy"
+                    ),
+                    "intervention_budget": config.control.options.get(
+                        "intervention_budget"
+                    ),
+                    "target_semantics": config.experiment.metadata.get(
+                        "target_semantics"
+                    ),
+                }
+            )
+            rows.append(record)
+    return rows
+
+
+def _state_local_phase_tables(
+    entries: Sequence[Any],
+    cells: pd.DataFrame,
+    primary: pd.DataFrame,
+    derived: pd.DataFrame,
+    events: Sequence[Any],
+    *,
+    bins: int | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Complete binned phase grids with explicit absence/support semantics."""
+
+    if bins is None:
+        return pd.DataFrame(), pd.DataFrame()
+    expected = _expected_cell_coordinates(entries)
+    found = set(cells.get("cell_id", pd.Series(dtype=str)).astype(str))
+    occupancy_counts: dict[tuple[str, int], int] = {}
+    occupancy_episodes: dict[tuple[str, int], set[str]] = {}
+    for event in events:
+        population = int(event.event.get("N") or sum(event.N_k))
+        fraction = float(event.event["target_count_before"]) / population
+        bin_index = min(int(fraction * bins), bins - 1)
+        key = (str(event.cell_id), bin_index)
+        occupancy_counts[key] = occupancy_counts.get(key, 0) + 1
+        occupancy_episodes.setdefault(key, set()).add(str(event.episode_id))
+
+    estimates = pd.concat([primary, derived], ignore_index=True, sort=False)
+    estimate_lookup: dict[tuple[str, int, str], Mapping[str, Any]] = {}
+    if not estimates.empty and "target_fraction_bin_index" in estimates:
+        selected = estimates.dropna(subset=["target_fraction_bin_index"])
+        for row in selected.to_dict(orient="records"):
+            estimate_lookup[
+                (
+                    str(row.get("cell_id")),
+                    int(row["target_fraction_bin_index"]),
+                    str(row.get("metric")),
+                )
+            ] = row
+
+    occupancy_rows: list[dict[str, Any]] = []
+    phase_rows: list[dict[str, Any]] = []
+    metrics = {
+        "chi": "round_target_susceptibility",
+        "T_pi": "round_target_actuation_cmi",
+        "eta_IR": "eta_ir_state_local",
+    }
+    for coordinate in expected:
+        cell_id = str(coordinate["cell_id"])
+        structural_present = cell_id in found
+        for bin_index in range(bins):
+            key = (cell_id, bin_index)
+            n_observations = occupancy_counts.get(key, 0)
+            common = {
+                **coordinate,
+                "target_fraction_bin_index": bin_index,
+                "target_fraction_bin_lower": bin_index / bins,
+                "target_fraction_bin_upper": (bin_index + 1) / bins,
+                "target_fraction_bin_center": (bin_index + 0.5) / bins,
+                "target_fraction_bin_count": bins,
+                "n_observations": n_observations,
+                "n_episodes": len(occupancy_episodes.get(key, set())),
+            }
+            occupancy_status = (
+                "structural_cell_not_run"
+                if not structural_present
+                else "state_not_visited"
+                if n_observations == 0
+                else "visited"
+            )
+            occupancy_rows.append(
+                {**common, "phase_status": occupancy_status, "estimate": n_observations}
+            )
+            for label, source_metric in metrics.items():
+                estimate = estimate_lookup.get((cell_id, bin_index, source_metric))
+                if not structural_present:
+                    status = "structural_cell_not_run"
+                elif n_observations == 0:
+                    status = "state_not_visited"
+                elif estimate is None:
+                    status = "insufficient_estimator_support"
+                else:
+                    raw_status = str(estimate.get("support_status", "unsupported"))
+                    try:
+                        finite = math.isfinite(float(estimate.get("estimate")))
+                    except (TypeError, ValueError):
+                        finite = False
+                    status = (
+                        raw_status
+                        if raw_status in {"adequate", "limited"} and finite
+                        else "insufficient_estimator_support"
+                    )
+                phase_rows.append(
+                    {
+                        **common,
+                        "metric": label,
+                        "source_metric": source_metric,
+                        "estimate": (
+                            math.nan if estimate is None else estimate.get("estimate")
+                        ),
+                        "units": None if estimate is None else estimate.get("units"),
+                        "source_support_status": (
+                            None if estimate is None else estimate.get("support_status")
+                        ),
+                        "phase_status": status,
+                    }
+                )
+    return pd.DataFrame(phase_rows), pd.DataFrame(occupancy_rows)
+
+
+def _rho_aggregated_descriptive_summary(
+    primary: pd.DataFrame,
+    derived: pd.DataFrame,
+    endpoints: pd.DataFrame,
+) -> pd.DataFrame:
+    """Clearly labelled descriptive marginals; never an estimator super-pool."""
+
+    group_columns = [
+        "social_group_size",
+        "controller_evidence_strategy",
+        "target_semantics",
+        "intervention_budget",
+    ]
+    rows: list[dict[str, Any]] = []
+    estimator_specs = (
+        (derived, "susceptibility_occupancy_weighted", "chi"),
+        (primary, "round_target_actuation_cmi", "T_pi"),
+        (derived, "eta_ir", "eta_IR"),
+        (derived, "eta_th_signed", "eta_th_signed"),
+    )
+    for frame, source_metric, label in estimator_specs:
+        if frame.empty or not set(group_columns + ["metric", "estimate"]).issubset(
+            frame.columns
+        ):
+            continue
+        selected = frame[frame["metric"].astype(str) == source_metric].copy()
+        if "resolution" in selected:
+            selected = selected[selected["resolution"].isna()]
+        selected["estimate"] = pd.to_numeric(selected["estimate"], errors="coerce")
+        selected = selected[np.isfinite(selected["estimate"])]
+        for coordinates, group in selected.groupby(group_columns, dropna=False):
+            values = group["estimate"]
+            rows.append(
+                {
+                    **dict(zip(group_columns, coordinates, strict=True)),
+                    "metric": label,
+                    "source_metric": source_metric,
+                    "estimate": float(values.mean()),
+                    "std_across_rho_cells": float(values.std(ddof=1)),
+                    "minimum_across_rho_cells": float(values.min()),
+                    "maximum_across_rho_cells": float(values.max()),
+                    "n_rho": int(group["epistemic_persistence"].nunique()),
+                    "rho_values_json": json.dumps(
+                        sorted(
+                            {
+                                float(value)
+                                for value in group["epistemic_persistence"].dropna()
+                            }
+                        )
+                    ),
+                    "n_cells": int(group["cell_id"].nunique()),
+                    "n_episodes": pd.to_numeric(
+                        group.get("n_episodes", pd.Series(dtype=float)),
+                        errors="coerce",
+                    ).sum(min_count=1),
+                    "aggregation_scope": "rho_aggregated_descriptive",
+                    "descriptive_only": True,
+                }
+            )
+
+    endpoint_specs = {
+        "late_target_share": (
+            "late_time_mean_controller_target_share"
+            if "late_time_mean_controller_target_share" in endpoints
+            else "late_time_mean_false_target_share"
+        ),
+        "late_truth_share": "late_time_mean_truth_share",
+        "late_active_phi": "late_time_mean_active_phi",
+    }
+    if not endpoints.empty and set(group_columns).issubset(endpoints.columns):
+        for label, column in endpoint_specs.items():
+            if column not in endpoints:
+                continue
+            prepared = endpoints.copy()
+            prepared[column] = pd.to_numeric(prepared[column], errors="coerce")
+            prepared = prepared[np.isfinite(prepared[column])]
+            for coordinates, group in prepared.groupby(group_columns, dropna=False):
+                values = group[column]
+                rows.append(
+                    {
+                        **dict(zip(group_columns, coordinates, strict=True)),
+                        "metric": label,
+                        "source_metric": column,
+                        "estimate": float(values.mean()),
+                        "std_across_rho_cells": float(values.std(ddof=1)),
+                        "minimum_across_rho_cells": float(values.min()),
+                        "maximum_across_rho_cells": float(values.max()),
+                        "n_rho": int(group["epistemic_persistence"].nunique()),
+                        "rho_values_json": json.dumps(
+                            sorted(
+                                {
+                                    float(value)
+                                    for value in group[
+                                        "epistemic_persistence"
+                                    ].dropna()
+                                }
+                            )
+                        ),
+                        "n_cells": int(group["cell_id"].nunique()),
+                        "n_episodes": int(group["episode_id"].nunique()),
+                        "aggregation_scope": "rho_aggregated_descriptive",
+                        "descriptive_only": True,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
 def _factorial_contrasts(
     primary: pd.DataFrame,
     derived: pd.DataFrame,
@@ -1691,19 +1991,35 @@ def _factorial_contrasts(
                 "round_target_actuation_cmi",
                 "round_target_signed_actuation",
                 "round_target_susceptibility",
+                "susceptibility_occupancy_weighted",
                 "eta_ir",
-                "eta_ir_state_local",
                 "eta_th",
+                "eta_th_signed",
                 "controlled_current",
                 "target_sensing_information_nats",
             }
         )
     ].copy()
     keys = ["metric", "intervention_budget", "task_id"]
+    if (
+        "epistemic_persistence" in source
+        and source["epistemic_persistence"].notna().any()
+    ):
+        keys.append("epistemic_persistence")
     rows: list[dict[str, Any]] = []
 
     def differences(frame, axis, low, high, kind, extra):
-        index = [*keys, *extra]
+        index = [
+            *keys,
+            *[
+                column
+                for column in extra
+                if column in frame
+                and frame[column].notna().any()
+                and column not in keys
+                and column != axis
+            ],
+        ]
         pivot = frame.pivot_table(
             index=index, columns=axis, values="estimate", aggfunc="mean"
         )
@@ -1746,7 +2062,11 @@ def _factorial_contrasts(
         "naive",
         "vigilant",
         "vigilance",
-        ["controller_evidence_strategy", "target_semantics"],
+        [
+            "controller_evidence_strategy",
+            "target_semantics",
+            "social_group_size",
+        ],
     )
     differences(
         source,
@@ -1754,7 +2074,23 @@ def _factorial_contrasts(
         "neutral",
         "strategic",
         "evidence_strategy",
-        ["receiver_epistemic_disposition", "target_semantics"],
+        [
+            "receiver_epistemic_disposition",
+            "target_semantics",
+            "social_group_size",
+        ],
+    )
+    differences(
+        source,
+        "social_group_size",
+        1,
+        2,
+        "q",
+        [
+            "receiver_epistemic_disposition",
+            "controller_evidence_strategy",
+            "target_semantics",
+        ],
     )
     differences(
         source,
@@ -1762,7 +2098,11 @@ def _factorial_contrasts(
         "false",
         "truth",
         "truth_false",
-        ["receiver_epistemic_disposition", "controller_evidence_strategy"],
+        [
+            "receiver_epistemic_disposition",
+            "controller_evidence_strategy",
+            "social_group_size",
+        ],
     )
     return pd.DataFrame(rows)
 
@@ -1819,6 +2159,7 @@ def _render_plots(
     if not isinstance(raw, Mapping):
         raise ValueError("analysis plots must be a list or mapping")
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch, Rectangle
 
     paths: list[str] = []
     for name, spec in raw.items():
@@ -1916,13 +2257,57 @@ def _render_plots(
             pivot = group.pivot_table(
                 index=y, columns=x, values="estimate", aggfunc="mean"
             )
+            y_values = sorted(group[y].dropna().unique())
+            x_values = sorted(group[x].dropna().unique())
+            pivot = pivot.reindex(index=y_values, columns=x_values)
+            if str(spec.get("color_scale", "shared")) == "independent":
+                group_finite = pd.to_numeric(group["estimate"], errors="coerce")
+                group_finite = group_finite[np.isfinite(group_finite)]
+                panel_vmin = float(group_finite.min()) if len(group_finite) else None
+                panel_vmax = float(group_finite.max()) if len(group_finite) else None
+            else:
+                panel_vmin, panel_vmax = shared_vmin, shared_vmax
             image = axis.imshow(
                 pivot.to_numpy(dtype=float),
                 aspect="auto",
                 origin="lower",
-                vmin=shared_vmin,
-                vmax=shared_vmax,
+                vmin=panel_vmin,
+                vmax=panel_vmax,
             )
+            status_column = str(spec.get("status_column", ""))
+            if status_column and status_column in group:
+                status = group.pivot_table(
+                    index=y, columns=x, values=status_column, aggfunc="first"
+                ).reindex(index=y_values, columns=x_values)
+                colors = {
+                    "structural_cell_not_run": "#4d4d4d",
+                    "state_not_visited": "#d9d9d9",
+                    "insufficient_estimator_support": "#f4a261",
+                }
+                for row_index in range(len(status.index)):
+                    for column_index in range(len(status.columns)):
+                        value = status.iat[row_index, column_index]
+                        if value in colors:
+                            axis.add_patch(
+                                Rectangle(
+                                    (column_index - 0.5, row_index - 0.5),
+                                    1,
+                                    1,
+                                    facecolor=colors[value],
+                                    edgecolor="white",
+                                    linewidth=0.4,
+                                    zorder=3,
+                                )
+                            )
+                axis.legend(
+                    handles=[
+                        Patch(facecolor=color, label=label.replace("_", " "))
+                        for label, color in colors.items()
+                    ],
+                    loc="upper left",
+                    bbox_to_anchor=(1.02, 0),
+                    fontsize=7,
+                )
             axis.set_xticks(
                 range(len(pivot.columns)),
                 labels=[str(value) for value in pivot.columns],
@@ -2502,24 +2887,39 @@ def aggregate_study(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    raw_state_bins = recipe.get("state_local_x_bins")
+    state_bins = int(raw_state_bins) if raw_state_bins is not None else None
+    phase_maps, binned_occupancy = _state_local_phase_tables(
+        entries,
+        canonical["cells"],
+        primary,
+        derived,
+        events,
+        bins=state_bins,
+    )
+    if not phase_maps.empty:
+        outputs["state_local_phase_maps"] = phase_maps
+    if not binned_occupancy.empty:
+        outputs["state_occupancy_binned"] = binned_occupancy
+    if bool(recipe.get("rho_aggregated_descriptive", False)):
+        rho_summary = _rho_aggregated_descriptive_summary(
+            primary, derived, episode_endpoints
+        )
+        if not rho_summary.empty:
+            outputs["rho_aggregated_descriptive_summary"] = rho_summary
     if {
         "cell_id",
         "episode_id",
         "target_count_before",
     }.issubset(canonical["rounds"].columns):
         observed = canonical["rounds"].dropna(subset=["target_count_before"]).copy()
-        state_occupancy = (
-            observed.groupby(
-                ["cell_id", "target_count_before"], dropna=False, as_index=False
-            )
-            .agg(
-                n_observations=("episode_id", "size"),
-                n_episodes=("episode_id", "nunique"),
-            )
+        state_occupancy = observed.groupby(
+            ["cell_id", "target_count_before"], dropna=False, as_index=False
+        ).agg(
+            n_observations=("episode_id", "size"),
+            n_episodes=("episode_id", "nunique"),
         )
-        state_occupancy = _attach_coordinates(
-            state_occupancy, canonical["cells"]
-        )
+        state_occupancy = _attach_coordinates(state_occupancy, canonical["cells"])
         if "population_size" in state_occupancy:
             state_occupancy["target_fraction_before"] = pd.to_numeric(
                 state_occupancy["target_count_before"], errors="coerce"
@@ -2607,9 +3007,7 @@ def aggregate_study(
             "| cell_id | rho | b | target_count_before | target_fraction_before | n_observations | n_episodes |",
             "|---|---:|---:|---:|---:|---:|---:|",
         ]
-        ordered_state = state_occupancy.sort_values(
-            ["cell_id", "target_count_before"]
-        )
+        ordered_state = state_occupancy.sort_values(["cell_id", "target_count_before"])
         for row in ordered_state.to_dict(orient="records"):
             state_lines.append(
                 "| {cell} | {rho} | {budget} | {count} | {fraction:.6g} | {observations} | {episodes} |".format(
@@ -2646,9 +3044,7 @@ def aggregate_study(
     for recovery in sorted(root.glob("recovery_submission_*.json")):
         shutil.copy2(recovery, provenance_dir / recovery.name)
     for recovery_manifest in sorted(root.glob("execution_manifest_recovery_*.csv")):
-        shutil.copy2(
-            recovery_manifest, provenance_dir / recovery_manifest.name
-        )
+        shutil.copy2(recovery_manifest, provenance_dir / recovery_manifest.name)
     for entry in entries:
         source_config = Path(entry.config_path)
         if source_config.is_file():

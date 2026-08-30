@@ -18,6 +18,8 @@ _PREFLIGHT_CONTRACTS = frozenset(
         "relational_persistence_truth_refinement_v1",
         "relational_persistence_q1_l2_false_v1",
         "relational_persistence_q1_l2_truth_v1",
+        "relational_persistence_high_statistics_false_v1",
+        "relational_persistence_high_statistics_truth_v1",
     }
 )
 

@@ -15,24 +15,61 @@ from .discovery import DiscoveredCell
 
 TABLE_SCHEMAS: Mapping[str, tuple[str, ...]] = {
     "cells": (
-        "study_id", "source_config_index", "source_run_id", "source_run_path",
-        "cell_id", "source_cell_id", "config_hash", "resolved_config_hash",
+        "study_id",
+        "source_config_index",
+        "source_run_id",
+        "source_run_path",
+        "cell_id",
+        "source_cell_id",
+        "config_hash",
+        "resolved_config_hash",
         "recorded_resolved_config_hash",
-        "task_id", "expected_episodes", "completed_episodes", "failed_episodes", "sealed",
+        "task_id",
+        "expected_episodes",
+        "completed_episodes",
+        "failed_episodes",
+        "sealed",
     ),
     "episodes": (
-        "study_id", "source_config_index", "source_run_id", "source_run_path",
-        "cell_id", "source_cell_id", "episode_id", "episode_seed", "status",
-        "interaction_count", "usage_requests", "usage_input_tokens", "usage_output_tokens",
-        "started_at", "finished_at", "termination_reason", "scientific_schema_version",
+        "study_id",
+        "source_config_index",
+        "source_run_id",
+        "source_run_path",
+        "cell_id",
+        "source_cell_id",
+        "episode_id",
+        "episode_seed",
+        "status",
+        "interaction_count",
+        "usage_requests",
+        "usage_input_tokens",
+        "usage_output_tokens",
+        "started_at",
+        "finished_at",
+        "termination_reason",
+        "scientific_schema_version",
     ),
     "rounds": (
-        "study_id", "source_config_index", "source_run_id", "source_run_path",
-        "cell_id", "source_cell_id", "episode_id", "round_index", "record_source",
+        "study_id",
+        "source_config_index",
+        "source_run_id",
+        "source_run_path",
+        "cell_id",
+        "source_cell_id",
+        "episode_id",
+        "round_index",
+        "record_source",
     ),
     "micro_slots": (
-        "study_id", "source_config_index", "source_run_id", "source_run_path",
-        "cell_id", "source_cell_id", "episode_id", "round_index", "micro_slot_index",
+        "study_id",
+        "source_config_index",
+        "source_run_id",
+        "source_run_path",
+        "cell_id",
+        "source_cell_id",
+        "episode_id",
+        "round_index",
+        "micro_slot_index",
         "record_source",
     ),
 }
@@ -58,12 +95,19 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
     for dotted, label in (
         ("game.options.task_id", "task_id"),
         ("game.population_size", "population_size"),
+        ("game.options.social_group_size", "social_group_size"),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
         ("control.options.threshold", "threshold"),
-        ("game.options.receiver_epistemic_disposition", "receiver_epistemic_disposition"),
-        ("control.options.controller_evidence_strategy", "controller_evidence_strategy"),
+        (
+            "game.options.receiver_epistemic_disposition",
+            "receiver_epistemic_disposition",
+        ),
+        (
+            "control.options.controller_evidence_strategy",
+            "controller_evidence_strategy",
+        ),
         ("control.options.message_mode", "message_mode"),
         ("control.options.target", "controller_target_semantics"),
         ("experiment.metadata.controller_semantics", "controller_semantics"),
@@ -82,7 +126,10 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         legacy = _nested(cell.resolved_config, "game.options.social_distrust")
         if isinstance(legacy, bool):
             result["receiver_epistemic_disposition"] = "vigilant" if legacy else "naive"
-        elif _nested(cell.resolved_config, "game.type") == "relational_imitation_round_feedback":
+        elif (
+            _nested(cell.resolved_config, "game.type")
+            == "relational_imitation_round_feedback"
+        ):
             result["receiver_epistemic_disposition"] = "vigilant"
     if result.get("receiver_epistemic_disposition") and result.get(
         "controller_evidence_strategy"
@@ -107,7 +154,9 @@ def _scientific_frame(cell: DiscoveredCell) -> pd.DataFrame:
     shards = sorted(cell.path.glob(".resume/*/scientific_events.parquet"))
     if not shards:
         return pd.DataFrame()
-    return pd.concat([pd.read_parquet(path, engine="pyarrow") for path in shards], ignore_index=True)
+    return pd.concat(
+        [pd.read_parquet(path, engine="pyarrow") for path in shards], ignore_index=True
+    )
 
 
 def _provenance(study_id: str, cell: DiscoveredCell) -> dict[str, Any]:
@@ -121,7 +170,9 @@ def _provenance(study_id: str, cell: DiscoveredCell) -> dict[str, Any]:
     }
 
 
-def _episode_rows(study_id: str, cell: DiscoveredCell, frame: pd.DataFrame) -> list[dict[str, Any]]:
+def _episode_rows(
+    study_id: str, cell: DiscoveredCell, frame: pd.DataFrame
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     provenance = _provenance(study_id, cell)
     if not frame.empty and "episode_id" in frame:
@@ -133,7 +184,9 @@ def _episode_rows(study_id: str, cell: DiscoveredCell, frame: pd.DataFrame) -> l
                     "episode_id": str(episode_id),
                     "episode_seed": first.get("episode_seed"),
                     "status": str(first.get("status", "completed")),
-                    "interaction_count": int(first.get("interaction_count", len(group))),
+                    "interaction_count": int(
+                        first.get("interaction_count", len(group))
+                    ),
                     "usage_requests": first.get("usage_requests"),
                     "usage_input_tokens": first.get("usage_input_tokens"),
                     "usage_output_tokens": first.get("usage_output_tokens"),
@@ -168,19 +221,25 @@ def _episode_rows(study_id: str, cell: DiscoveredCell, frame: pd.DataFrame) -> l
 
 
 def _jsonl(path: Path) -> Iterable[Mapping[str, Any]]:
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid JSON in {path} line {number}") from exc
-        event = payload.get("event", payload) if isinstance(payload, Mapping) else payload
+        event = (
+            payload.get("event", payload) if isinstance(payload, Mapping) else payload
+        )
         if isinstance(event, Mapping):
             yield {**dict(payload), **dict(event)}
 
 
-def _rich_rows(study_id: str, cell: DiscoveredCell, filename: str, source_label: str) -> list[dict[str, Any]]:
+def _rich_rows(
+    study_id: str, cell: DiscoveredCell, filename: str, source_label: str
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     provenance = _provenance(study_id, cell)
     for path in sorted(cell.path.rglob(filename)):
@@ -206,7 +265,9 @@ def _rich_rows(study_id: str, cell: DiscoveredCell, filename: str, source_label:
     return rows
 
 
-def _compact_round_rows(study_id: str, cell: DiscoveredCell, frame: pd.DataFrame) -> list[dict[str, Any]]:
+def _compact_round_rows(
+    study_id: str, cell: DiscoveredCell, frame: pd.DataFrame
+) -> list[dict[str, Any]]:
     if frame.empty:
         return []
     provenance = _provenance(study_id, cell)
@@ -303,8 +364,13 @@ def build_canonical_tables(
         seal: Mapping[str, Any] = {}
         if seal_path.is_file():
             seal = json.loads(seal_path.read_text(encoding="utf-8"))
-        completed = sum(row["status"] in {"completed", "skipped_resumed"} for row in episodes)
-        failed = sum(row["status"] in {"failed", "skipped_aborted", "aborted"} for row in episodes)
+        completed = sum(
+            row["status"] in {"completed", "skipped_resumed"} for row in episodes
+        )
+        failed = sum(
+            row["status"] in {"failed", "skipped_aborted", "aborted"}
+            for row in episodes
+        )
         coords = _coordinates(cell)
         cell_rows.append(
             {
@@ -314,7 +380,14 @@ def build_canonical_tables(
                 "recorded_resolved_config_hash": (
                     None
                     if frame.empty or "resolved_config_hash" not in frame
-                    else json.dumps(sorted({str(value) for value in frame["resolved_config_hash"].dropna()}))
+                    else json.dumps(
+                        sorted(
+                            {
+                                str(value)
+                                for value in frame["resolved_config_hash"].dropna()
+                            }
+                        )
+                    )
                 ),
                 "task_id": coords.get("task_id"),
                 **coords,
@@ -324,7 +397,9 @@ def build_canonical_tables(
                 "sealed": seal.get("status") == "completed",
             }
         )
-        rich_rounds = _rich_rows(study_id, cell, "round_trajectory.jsonl", "round_trajectory.jsonl")
+        rich_rounds = _rich_rows(
+            study_id, cell, "round_trajectory.jsonl", "round_trajectory.jsonl"
+        )
         selected_rounds, round_selection = _completed_unique_records(
             rich_rounds or _compact_round_rows(study_id, cell, frame),
             episodes,
@@ -341,16 +416,15 @@ def build_canonical_tables(
         # merely files them elsewhere must not make those quantities vanish.
         # The generic file is filtered to genuine slot events by
         # `within_round_index`, the same marker the game analyzers use.
-        discovered_micro_rows = (
-            _rich_rows(
-                study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl"
+        discovered_micro_rows = _rich_rows(
+            study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl"
+        ) or [
+            row
+            for row in _rich_rows(
+                study_id, cell, "trajectory.jsonl", "trajectory.jsonl"
             )
-            or [
-                row
-                for row in _rich_rows(study_id, cell, "trajectory.jsonl", "trajectory.jsonl")
-                if row.get("within_round_index") is not None
-            ]
-        )
+            if row.get("within_round_index") is not None
+        ]
         selected_micro_rows, micro_selection = _completed_unique_records(
             discovered_micro_rows,
             episodes,
@@ -389,7 +463,9 @@ def parquet_safe(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
     for column in result.columns:
         values = result[column]
-        if values.map(lambda value: isinstance(value, (Mapping, list, tuple, set))).any():
+        if values.map(
+            lambda value: isinstance(value, (Mapping, list, tuple, set))
+        ).any():
             result[column] = values.map(
                 lambda value: json.dumps(value, sort_keys=True, default=str)
                 if isinstance(value, (Mapping, list, tuple, set))

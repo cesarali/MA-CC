@@ -22,6 +22,12 @@ PERSISTENCE_REFINEMENT_CONTRACT = "relational_persistence_refinement_v1"
 PERSISTENCE_TRUTH_REFINEMENT_CONTRACT = "relational_persistence_truth_refinement_v1"
 PERSISTENCE_Q1_L2_FALSE_CONTRACT = "relational_persistence_q1_l2_false_v1"
 PERSISTENCE_Q1_L2_TRUTH_CONTRACT = "relational_persistence_q1_l2_truth_v1"
+PERSISTENCE_HIGH_STATISTICS_FALSE_CONTRACT = (
+    "relational_persistence_high_statistics_false_v1"
+)
+PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT = (
+    "relational_persistence_high_statistics_truth_v1"
+)
 
 
 def _repo_root(path: Path) -> Path:
@@ -60,7 +66,9 @@ def _validate_persistence_contract(
     rho_values: list[float],
     repetitions_value: int,
     target_is_truth: bool = False,
-    q_value: int = 2,
+    q_values_expected: list[int] | None = None,
+    evidence_strategies_expected: list[str] | None = None,
+    budget_values: list[int] | None = None,
     depth_value: int = 3,
     redundancy_value: int = 3,
     expected_truth: str = "NORTH",
@@ -69,6 +77,13 @@ def _validate_persistence_contract(
     """Validate an exact finite-persistence study design."""
 
     errors: list[str] = []
+    expected_q = [2] if q_values_expected is None else q_values_expected
+    expected_strategies = (
+        ["strategic"]
+        if evidence_strategies_expected is None
+        else evidence_strategies_expected
+    )
+    expected_budgets = [3, 6, 9, 12] if budget_values is None else budget_values
     _require(len(spec.configs) == 1, "study must list exactly one config", errors)
     cells: list[Any] = []
     axes: list[tuple[str, list[Any]]] = []
@@ -80,13 +95,29 @@ def _validate_persistence_contract(
         if isinstance(source, GridSpec):
             axes = [(axis.path, list(axis.values)) for axis in source.axes]
             cells = [cell.config for cell in source.cells]
-    _require(
-        axes
-        == [
+    expected_axes = []
+    if len(expected_q) > 1:
+        expected_axes.append(("game.options.social_group_size", expected_q))
+    if len(expected_strategies) > 1:
+        expected_axes.append(
+            (
+                "control.options.controller_evidence_strategy",
+                expected_strategies,
+            )
+        )
+    expected_axes.extend(
+        [
             ("game.options.epistemic_persistence", rho_values),
-            ("control.options.intervention_budget", [3, 6, 9, 12]),
-        ],
-        f"grid axes must be rho={rho_values} then b=[3, 6, 9, 12], got {axes}",
+            ("control.options.intervention_budget", expected_budgets),
+        ]
+    )
+    _require(
+        axes == expected_axes,
+        (
+            f"grid axes must be rho={rho_values} then b={expected_budgets}, got {axes}"
+            if len(expected_q) == 1 and len(expected_strategies) == 1
+            else f"grid axes must be {expected_axes}, got {axes}"
+        ),
         errors,
     )
 
@@ -108,8 +139,8 @@ def _validate_persistence_contract(
     betas: set[float] = set()
     thresholds: set[float] = set()
     repetitions: set[int] = set()
-    resolved_cells: set[tuple[float, int]] = set()
-    task_audit: dict[str, Any] = {}
+    resolved_cells: set[tuple[int, str, float, int]] = set()
+    task_audit: dict[str, dict[str, Any]] = {}
 
     for config in cells:
         game = config.game
@@ -133,11 +164,13 @@ def _validate_persistence_contract(
         rho = float(options.get("epistemic_persistence", -1.0))
         budgets.add(budget)
         persistence.add(rho)
-        resolved_cells.add((rho, budget))
+        q = int(options.get("social_group_size", -1))
+        strategy = str(control_options.get("controller_evidence_strategy"))
+        resolved_cells.add((q, strategy, rho, budget))
         task_id = str(options.get("task_id"))
         tasks.add(task_id)
         dispositions.add(str(options.get("receiver_epistemic_disposition")))
-        strategies.add(str(control_options.get("controller_evidence_strategy")))
+        strategies.add(strategy)
         modes.add(str(control_options.get("message_mode")))
         schedules.add(str(control_options.get("advocacy_schedule")))
         betas.add(float(control_options.get("beta")))
@@ -199,15 +232,16 @@ def _validate_persistence_contract(
             "metadata target truth alignment is incorrect",
             errors,
         )
-        task_audit = {
+        task_audit[strategy] = {
             "task_id": task_id,
             "fingerprint_sha256": _task_fingerprint(Path(task.source_path)),
             "ground_truth": task.correct_relation,
             "controller_target": target,
             "controller_target_is_truth": target_is_truth,
-            "strategic_fact_id": fact_id,
-            "strategic_fact_relation": task.fact(fact_id).relation,
-            "strategic_fact_text": task.fact_text(fact_id),
+            "controller_evidence_strategy": strategy,
+            "evidence_fact_id": fact_id,
+            "evidence_fact_relation": task.fact(fact_id).relation,
+            "evidence_fact_text": task.fact_text(fact_id),
         }
 
     _require(
@@ -217,8 +251,8 @@ def _validate_persistence_contract(
     )
     _require(rounds == {30}, f"rounds must be [30], got {sorted(rounds)}", errors)
     _require(
-        q_values == {q_value},
-        f"q values must be [{q_value}], got {sorted(q_values)}",
+        q_values == set(expected_q),
+        f"q values must be {expected_q}, got {sorted(q_values)}",
         errors,
     )
     _require(
@@ -238,7 +272,9 @@ def _validate_persistence_contract(
         errors,
     )
     _require(
-        budgets == {3, 6, 9, 12}, f"b values are incorrect: {sorted(budgets)}", errors
+        budgets == set(expected_budgets),
+        f"b values are incorrect: {sorted(budgets)}",
+        errors,
     )
     _require(
         tasks == {"task_0002"},
@@ -264,8 +300,8 @@ def _validate_persistence_contract(
         errors,
     )
     _require(
-        strategies == {"strategic"},
-        f"evidence must be strategic, got {sorted(strategies)}",
+        strategies == set(expected_strategies),
+        f"evidence strategies must be {expected_strategies}, got {sorted(strategies)}",
         errors,
     )
     _require(
@@ -286,20 +322,37 @@ def _validate_persistence_contract(
         errors,
     )
     _require(
-        len(cells) == len(rho_values) * 4,
-        f"resolved cells must total {len(rho_values) * 4}, got {len(cells)}",
+        len(cells)
+        == len(expected_q)
+        * len(expected_strategies)
+        * len(rho_values)
+        * len(expected_budgets),
+        "resolved cells must total "
+        f"{len(expected_q) * len(expected_strategies) * len(rho_values) * len(expected_budgets)}, "
+        f"got {len(cells)}",
         errors,
     )
     _require(
-        len(resolved_cells) == len(rho_values) * 4,
-        f"rho/b cells must be unique and total {len(rho_values) * 4}, "
+        len(resolved_cells)
+        == len(expected_q)
+        * len(expected_strategies)
+        * len(rho_values)
+        * len(expected_budgets),
+        "q/evidence/rho/b cells must be unique and total "
+        f"{len(expected_q) * len(expected_strategies) * len(rho_values) * len(expected_budgets)}, "
         f"got {len(resolved_cells)}",
         errors,
     )
     total_episodes = sum(config.execution.repetitions for config in cells)
     _require(
-        total_episodes == len(rho_values) * 4 * repetitions_value,
-        f"total episodes must be {len(rho_values) * 4 * repetitions_value}, "
+        total_episodes
+        == len(expected_q)
+        * len(expected_strategies)
+        * len(rho_values)
+        * len(expected_budgets)
+        * repetitions_value,
+        "total episodes must be "
+        f"{len(expected_q) * len(expected_strategies) * len(rho_values) * len(expected_budgets) * repetitions_value}, "
         f"got {total_episodes}",
         errors,
     )
@@ -331,7 +384,7 @@ def _validate_persistence_contract(
         "total_cells": len(cells),
         "total_episodes": total_episodes,
         "matched_revised_theory_applicable": False,
-        "tasks": [task_audit] if task_audit else [],
+        "tasks": [task_audit[key] for key in sorted(task_audit)],
         "errors": errors,
     }
     if errors:
@@ -390,11 +443,32 @@ def _validate_persistence_q1_l2_contract(
         rho_values=[0.7, 0.75, 0.8, 0.85, 0.9, 1.0],
         repetitions_value=10,
         target_is_truth=truth_aligned,
-        q_value=1,
+        q_values_expected=[1],
         depth_value=2,
         redundancy_value=4,
         expected_truth="NORTHEAST",
         expected_target="NORTHEAST" if truth_aligned else "NORTH",
+    )
+
+
+def _validate_persistence_high_statistics_contract(
+    spec: StudySpec, *, truth_aligned: bool
+) -> dict[str, Any]:
+    """Validate the focused 24-cell, 360-episode L=3 persistence family."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=(
+            PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT
+            if truth_aligned
+            else PERSISTENCE_HIGH_STATISTICS_FALSE_CONTRACT
+        ),
+        rho_values=[0.8, 0.85],
+        repetitions_value=15,
+        target_is_truth=truth_aligned,
+        q_values_expected=[1, 2],
+        evidence_strategies_expected=["strategic"],
+        budget_values=[3, 4, 6, 8, 9, 12],
     )
 
 
@@ -414,6 +488,10 @@ def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
         return _validate_persistence_q1_l2_contract(spec, truth_aligned=False)
     if contract == PERSISTENCE_Q1_L2_TRUTH_CONTRACT:
         return _validate_persistence_q1_l2_contract(spec, truth_aligned=True)
+    if contract == PERSISTENCE_HIGH_STATISTICS_FALSE_CONTRACT:
+        return _validate_persistence_high_statistics_contract(spec, truth_aligned=False)
+    if contract == PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT:
+        return _validate_persistence_high_statistics_contract(spec, truth_aligned=True)
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 

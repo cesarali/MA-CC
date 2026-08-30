@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -259,6 +259,20 @@ def relational_persistence_tables(
         budget = int(
             first.event.get("intervention_budget", coord.get("intervention_budget"))
         )
+        q = int(
+            first.event.get("social_group_size", coord.get("social_group_size", -1))
+        )
+        evidence_strategy = str(
+            first.event.get("controller_evidence_strategy")
+            or coord.get("controller_evidence_strategy")
+        )
+        receiver_disposition = str(
+            first.event.get("receiver_epistemic_disposition")
+            or coord.get("receiver_epistemic_disposition")
+        )
+        target_semantics = str(
+            coord.get("target_semantics", "truth" if allow_truth_target else "false")
+        )
         rows.append(
             {
                 "study_id": first.event.get("study_id", coord.get("study_id")),
@@ -268,6 +282,10 @@ def relational_persistence_tables(
                 "epistemic_persistence": rho,
                 "intervention_budget": budget,
                 "actuation_fraction": budget / population,
+                "social_group_size": q,
+                "controller_evidence_strategy": evidence_strategy,
+                "receiver_epistemic_disposition": receiver_disposition,
+                "target_semantics": target_semantics,
                 "ground_truth": truth,
                 "controller_target": target,
                 "controller_target_is_truth": False,
@@ -306,8 +324,7 @@ def relational_persistence_tables(
                     for row in ordered
                 ),
                 "no_op_rounds": sum(
-                    row.event.get("controller_action") == "NO_OP"
-                    for row in ordered
+                    row.event.get("controller_action") == "NO_OP" for row in ordered
                 ),
                 "controlled_microscopic_updates": sum(
                     int(row.event.get("controlled_position_count", 0))
@@ -377,6 +394,10 @@ def relational_persistence_tables(
         "fact_deactivations",
     ]
     group_columns = [
+        "social_group_size",
+        "controller_evidence_strategy",
+        "receiver_epistemic_disposition",
+        "target_semantics",
         "epistemic_persistence",
         "intervention_budget",
         "actuation_fraction",
@@ -412,13 +433,17 @@ def relational_persistence_tables(
     ]
     grouped = episodes.groupby(group_columns)
     for column in requested:
-        stats = grouped[column].agg(
-            mean="mean",
-            median="median",
-            std="std",
-            minimum="min",
-            maximum="max",
-        ).reset_index()
+        stats = (
+            grouped[column]
+            .agg(
+                mean="mean",
+                median="median",
+                std="std",
+                minimum="min",
+                maximum="max",
+            )
+            .reset_index()
+        )
         quartiles = grouped[column].quantile([0.25, 0.75]).unstack()
         quartiles["iqr"] = quartiles[0.75] - quartiles[0.25]
         stats = stats.merge(quartiles[["iqr"]].reset_index(), on=group_columns)
@@ -475,9 +500,11 @@ def relational_persistence_truth_tables(
             }
         )
         if "outcome_classification" in renamed:
-            renamed["outcome_classification"] = renamed[
-                "outcome_classification"
-            ].astype(str).str.replace("FALSE", "TRUTH", regex=False)
+            renamed["outcome_classification"] = (
+                renamed["outcome_classification"]
+                .astype(str)
+                .str.replace("FALSE", "TRUTH", regex=False)
+            )
         return renamed
 
     return aligned_names(episodes), aligned_names(summary)
