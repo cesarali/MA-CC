@@ -341,7 +341,9 @@ def _cell_id_for(path: Path) -> str:
 
 def read_round_records(root: str | Path) -> list[RoundEvent]:
     source = Path(root)
-    paths = [source] if source.is_file() else sorted(source.rglob("round_trajectory.jsonl"))
+    paths = (
+        [source] if source.is_file() else sorted(source.rglob("round_trajectory.jsonl"))
+    )
     if not paths:
         raise FileNotFoundError(f"no round_trajectory.jsonl files under {source}")
     rows: list[RoundEvent] = []
@@ -355,7 +357,9 @@ def read_round_records(root: str | Path) -> list[RoundEvent]:
                 continue
             rows.append(adapt_round_record(payload, cell_id=cell_id))
     if not rows:
-        raise ValueError(f"round trajectory files under {source} contain no round records")
+        raise ValueError(
+            f"round trajectory files under {source} contain no round records"
+        )
     return rows
 
 
@@ -459,7 +463,9 @@ def round_overlap_diagnostics(
     ]
     events_in_dual = sum(sum(counter.values()) for counter in dual)
     singleton_events = sum(
-        sum(counter.values()) for counter in grouped.values() if sum(counter.values()) == 1
+        sum(counter.values())
+        for counter in grouped.values()
+        if sum(counter.values()) == 1
     )
     return {
         "round_dual_action_state_fraction": (
@@ -498,9 +504,7 @@ def _signed_response(
         if not advocated or not no_op:
             continue
         size = len(advocated) + len(no_op)
-        weighted += size * (
-            sum(advocated) / len(advocated) - sum(no_op) / len(no_op)
-        )
+        weighted += size * (sum(advocated) / len(advocated) - sum(no_op) / len(no_op))
         weight += size
     return math.nan if weight == 0 else weighted / weight
 
@@ -520,7 +524,11 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             _estimate_for("round_population_actuation_cmi", controlled),
             MAIN_ESTIMATOR_VARIANT,
         )
-        return math.nan if not math.isfinite(denominator) or denominator <= 1e-12 else numerator / denominator
+        return (
+            math.nan
+            if not math.isfinite(denominator) or denominator <= 1e-12
+            else numerator / denominator
+        )
     if name == "round_target_information_fraction":
         denominator = conditional_action_entropy_bits(
             actions, [row.target_before for row in controlled]
@@ -529,7 +537,11 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             _estimate_for("round_target_actuation_cmi", controlled),
             MAIN_ESTIMATOR_VARIANT,
         )
-        return math.nan if not math.isfinite(denominator) or denominator <= 1e-12 else numerator / denominator
+        return (
+            math.nan
+            if not math.isfinite(denominator) or denominator <= 1e-12
+            else numerator / denominator
+        )
     if name in {
         "round_dual_action_state_fraction",
         "round_dual_action_event_fraction",
@@ -589,15 +601,22 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             delta=lambda row: float(row.event["delta_p_ctrl"]),
         )
     errors = [
-        float(row.event["sensor_target_share"])
-        - row.target_before / sum(row.N_k)
+        float(row.event["sensor_target_share"]) - row.target_before / sum(row.N_k)
         for row in controlled
         if row.event.get("sensor_target_share") is not None
     ]
     if name == "round_sensor_mae":
-        return math.nan if not errors else sum(abs(value) for value in errors) / len(errors)
+        return (
+            math.nan
+            if not errors
+            else sum(abs(value) for value in errors) / len(errors)
+        )
     if name == "round_sensor_mse":
-        return math.nan if not errors else sum(value * value for value in errors) / len(errors)
+        return (
+            math.nan
+            if not errors
+            else sum(value * value for value in errors) / len(errors)
+        )
     raise ValueError(f"unknown round diagnostic {name!r}")
 
 
@@ -631,7 +650,9 @@ def bootstrap_episode_rows(
     return tuple(draws)
 
 
-def _policy_resample(rows: Sequence[RoundEvent], rng: np.random.Generator) -> list[RoundEvent]:
+def _policy_resample(
+    rows: Sequence[RoundEvent], rng: np.random.Generator
+) -> list[RoundEvent]:
     result = []
     for row in rows:
         if row.p_k is None:
@@ -657,7 +678,9 @@ def policy_resampling_null(
     values = []
     for index in range(permutations):
         perturbed = _policy_resample(rows, np.random.default_rng(seed + index))
-        values.append(float(getattr(_estimate_for(name, perturbed), MAIN_ESTIMATOR_VARIANT)))
+        values.append(
+            float(getattr(_estimate_for(name, perturbed), MAIN_ESTIMATOR_VARIANT))
+        )
     return tuple(values)
 
 
@@ -673,7 +696,9 @@ def _support(
         "n_rounds": len(rows),
         "unique_population_states": len(counts),
         "unique_sensor_states": len({row.Y_k for row in rows if row.Y_k is not None}),
-        "number_of_actions_observed": len({row.U_k for row in rows if row.U_k is not None}),
+        "number_of_actions_observed": len(
+            {row.U_k for row in rows if row.U_k is not None}
+        ),
         "min_rounds_per_population_state": min(counts.values()) if counts else 0,
         "median_rounds_per_population_state": (
             math.nan if not counts else float(np.median(list(counts.values())))
@@ -775,7 +800,9 @@ def round_information_analysis(
                 else "sensor_target_count"
             )
             for permutation in range(null_permutations):
-                rng = np.random.default_rng(seed + 100_000 * (name_index + 1) + permutation)
+                rng = np.random.default_rng(
+                    seed + 100_000 * (name_index + 1) + permutation
+                )
                 sensors = [
                     row.Y_k if name == "round_sensing_mi" else row.sensor_target_count
                     for row in eligible
@@ -786,7 +813,9 @@ def round_information_analysis(
                     for row, index in zip(eligible, order, strict=True)
                 ]
                 permuted_values.append(
-                    float(getattr(_estimate_for(name, shuffled), MAIN_ESTIMATOR_VARIANT))
+                    float(
+                        getattr(_estimate_for(name, shuffled), MAIN_ESTIMATOR_VARIANT)
+                    )
                 )
             null_values = tuple(permuted_values)
             null_type = "sensor_permutation"
@@ -808,7 +837,7 @@ def round_information_analysis(
         # not condition keep the historical population-vector support.
         support = (
             _support(eligible, state=ROUND_CONDITIONING_STATE[source])
-            if source in ROUND_MEMORY_STATISTICS
+            if source in ROUND_CONDITIONING_STATE
             else _support(eligible)
         )
         entropy_ceiling = math.nan
@@ -870,7 +899,10 @@ def _micro_signed(rows: Sequence[Mapping[str, Any]]) -> float:
         lambda: {True: [], False: []}
     )
     for row in rows:
-        state = tuple(int(row["occupation_counts_before"][option]) for option in row["possible_answers"])
+        state = tuple(
+            int(row["occupation_counts_before"][option])
+            for option in row["possible_answers"]
+        )
         grouped[state][bool(row["controlled_slot"])].append(float(row["delta_m_ctrl"]))
     weighted = 0.0
     weight = 0
@@ -912,8 +944,7 @@ def _resample_micro_slots(
     for group in groups.values():
         budget = int(group[0]["intervention_budget"])
         selected = {
-            int(index)
-            for index in rng.choice(len(group), size=budget, replace=False)
+            int(index) for index in rng.choice(len(group), size=budget, replace=False)
         }
         result.extend(
             {**dict(row), "controlled_slot": index in selected}
@@ -976,7 +1007,9 @@ def _episode_current_rows(
 ) -> list[dict[str, Any]]:
     micro_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for row in micro:
-        micro_groups[(str(row.get("cell_id", "run")), str(row["episode_id"]))].append(row)
+        micro_groups[(str(row.get("cell_id", "run")), str(row["episode_id"]))].append(
+            row
+        )
     result = []
     for (cell_id, episode_id), group in _grouped(
         rounds, key=lambda row: (row.cell_id, row.episode_id)
@@ -984,7 +1017,9 @@ def _episode_current_rows(
         ordered = sorted(group, key=lambda row: row.round_index)
         micro_rows = micro_groups.get((str(cell_id), str(episode_id)), [])
         if micro_rows:
-            increments = [int(row.get("truth_current_increment", 0)) for row in micro_rows]
+            increments = [
+                int(row.get("truth_current_increment", 0)) for row in micro_rows
+            ]
             truth_current = sum(increments)
             truth_activity: int | None = sum(abs(value) for value in increments)
         else:
@@ -1087,9 +1122,18 @@ def _cell_summaries(
                     else float(np.var(activities, ddof=1))
                 ),
                 "final_m_truth_mean": float(
-                    np.mean([row.event["m_truth_after"] for row in group if row.round_index == max(
-                        item.round_index for item in group if item.episode_id == row.episode_id
-                    )])
+                    np.mean(
+                        [
+                            row.event["m_truth_after"]
+                            for row in group
+                            if row.round_index
+                            == max(
+                                item.round_index
+                                for item in group
+                                if item.episode_id == row.episode_id
+                            )
+                        ]
+                    )
                 ),
             }
         )
@@ -1167,7 +1211,9 @@ def round_analysis_comet_metrics(
                 continue
             if not math.isfinite(float(value)):
                 continue
-            metrics[_comet_metric_name(row.get("cell_id"), statistic, field)] = float(value)
+            metrics[_comet_metric_name(row.get("cell_id"), statistic, field)] = float(
+                value
+            )
         bound = row.get("entropy_bound_satisfied")
         if isinstance(bound, bool):
             metrics[
@@ -1273,10 +1319,18 @@ def analyze_hidden_bench_imitation_round_feedback(
                 "cell_id": cell_id,
                 "episodes": len({row.episode_id for row in group}),
                 "rounds": len(group),
-                "mean_delta_m_ctrl": float(np.mean([row.event["delta_m_ctrl"] for row in group])),
-                "mean_delta_m_truth": float(np.mean([row.event["delta_m_truth"] for row in group])),
-                "mean_delta_m_order": float(np.mean([row.event["delta_m_order"] for row in group])),
-                "mean_delta_H_vote": float(np.mean([row.event["delta_H_vote"] for row in group])),
+                "mean_delta_m_ctrl": float(
+                    np.mean([row.event["delta_m_ctrl"] for row in group])
+                ),
+                "mean_delta_m_truth": float(
+                    np.mean([row.event["delta_m_truth"] for row in group])
+                ),
+                "mean_delta_m_order": float(
+                    np.mean([row.event["delta_m_order"] for row in group])
+                ),
+                "mean_delta_H_vote": float(
+                    np.mean([row.event["delta_H_vote"] for row in group])
+                ),
             }
         )
 
@@ -1293,12 +1347,20 @@ def analyze_hidden_bench_imitation_round_feedback(
         seed=seed,
     )
 
-    pd.DataFrame(estimates).to_csv(destination / "round_information_estimates.csv", index=False)
+    pd.DataFrame(estimates).to_csv(
+        destination / "round_information_estimates.csv", index=False
+    )
     _write_markdown(estimates, destination / "round_information_estimates.md")
     pd.DataFrame(nulls).to_csv(destination / "round_information_nulls.csv", index=False)
-    pd.DataFrame(support).to_csv(destination / "round_support_diagnostics.csv", index=False)
-    pd.DataFrame(behavioral).to_csv(destination / "round_behavioral_summary.csv", index=False)
-    pd.DataFrame(micro_rows).to_csv(destination / "micro_slot_diagnostics.csv", index=False)
+    pd.DataFrame(support).to_csv(
+        destination / "round_support_diagnostics.csv", index=False
+    )
+    pd.DataFrame(behavioral).to_csv(
+        destination / "round_behavioral_summary.csv", index=False
+    )
+    pd.DataFrame(micro_rows).to_csv(
+        destination / "micro_slot_diagnostics.csv", index=False
+    )
     pd.DataFrame(episode_rows).to_csv(destination / "episode_currents.csv", index=False)
     pd.DataFrame(cell_rows).to_csv(destination / "cell_summaries.csv", index=False)
     summary = {
@@ -1306,7 +1368,9 @@ def analyze_hidden_bench_imitation_round_feedback(
         "n_episodes": len({(row.cell_id, row.episode_id) for row in rounds}),
         "n_rounds": len(rounds),
         "n_micro_events": len(micro),
-        "statistics": list(ROUND_ANALYSIS_STATISTICS if statistics is None else statistics),
+        "statistics": list(
+            ROUND_ANALYSIS_STATISTICS if statistics is None else statistics
+        ),
         "bootstrap_unit": "episode",
         "bootstrap_resamples": bootstrap_resamples,
         "null_permutations": null_permutations,

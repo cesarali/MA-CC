@@ -28,6 +28,12 @@ PERSISTENCE_HIGH_STATISTICS_FALSE_CONTRACT = (
 PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT = (
     "relational_persistence_high_statistics_truth_v1"
 )
+PERSISTENCE_LARGE_POPULATION_FALSE_CONTRACT = (
+    "relational_persistence_large_population_false_v1"
+)
+PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT = (
+    "relational_persistence_large_population_truth_v1"
+)
 
 
 def _repo_root(path: Path) -> Path:
@@ -73,6 +79,10 @@ def _validate_persistence_contract(
     redundancy_value: int = 3,
     expected_truth: str = "NORTH",
     expected_target: str | None = None,
+    population_value: int = 12,
+    sensor_value: int = 6,
+    receiver_disposition: str = "naive",
+    initialization_mode: str = "local_vote",
 ) -> dict[str, Any]:
     """Validate an exact finite-persistence study design."""
 
@@ -139,6 +149,7 @@ def _validate_persistence_contract(
     betas: set[float] = set()
     thresholds: set[float] = set()
     repetitions: set[int] = set()
+    initialization_modes: set[str] = set()
     resolved_cells: set[tuple[int, str, float, int]] = set()
     task_audit: dict[str, dict[str, Any]] = {}
 
@@ -176,8 +187,12 @@ def _validate_persistence_contract(
         betas.add(float(control_options.get("beta")))
         thresholds.add(float(control_options.get("threshold")))
         repetitions.add(int(config.execution.repetitions))
+        initialization = options.get("initialization", {})
+        initialization_modes.add(str(initialization.get("mode")))
         try:
-            task = load_relational_task(dataset, task_id, population_size=12)
+            task = load_relational_task(
+                dataset, task_id, population_size=population_value
+            )
             raw_task = json.loads(Path(task.source_path).read_text(encoding="utf-8"))
             controller = create_control(config.control)
             target = controller.resolved_target_for_task(task, config.execution.seed)
@@ -245,8 +260,8 @@ def _validate_persistence_contract(
         }
 
     _require(
-        populations == {12},
-        f"population size must be [12], got {sorted(populations)}",
+        populations == {population_value},
+        f"population size must be [{population_value}], got {sorted(populations)}",
         errors,
     )
     _require(rounds == {30}, f"rounds must be [30], got {sorted(rounds)}", errors)
@@ -265,7 +280,11 @@ def _validate_persistence_contract(
         f"support redundancy must be [{redundancy_value}], got {sorted(redundancies)}",
         errors,
     )
-    _require(sensors == {6}, f"sensor size must be [6], got {sorted(sensors)}", errors)
+    _require(
+        sensors == {sensor_value},
+        f"sensor size must be [{sensor_value}], got {sorted(sensors)}",
+        errors,
+    )
     _require(
         persistence == set(rho_values),
         f"rho values are incorrect: {sorted(persistence)}",
@@ -295,8 +314,13 @@ def _validate_persistence_contract(
         errors,
     )
     _require(
-        dispositions == {"naive"},
-        f"receiver must be naive, got {sorted(dispositions)}",
+        dispositions == {receiver_disposition},
+        f"receiver must be {receiver_disposition}, got {sorted(dispositions)}",
+        errors,
+    )
+    _require(
+        initialization_modes == {initialization_mode},
+        f"initialization mode must be {initialization_mode}, got {sorted(initialization_modes)}",
         errors,
     )
     _require(
@@ -379,6 +403,7 @@ def _validate_persistence_contract(
         "schedule": sorted(schedules),
         "number_of_frozen_tasks": len(tasks),
         "repetitions": sorted(repetitions),
+        "initialization_modes": sorted(initialization_modes),
         "structural_regimes": len(resolved_cells),
         "resolved_regimes": [list(value) for value in sorted(resolved_cells)],
         "total_cells": len(cells),
@@ -472,6 +497,35 @@ def _validate_persistence_high_statistics_contract(
     )
 
 
+def _validate_persistence_large_population_contract(
+    spec: StudySpec, *, truth_aligned: bool
+) -> dict[str, Any]:
+    """Validate the focused N=24, q=1, L=2 paired persistence successor."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=(
+            PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT
+            if truth_aligned
+            else PERSISTENCE_LARGE_POPULATION_FALSE_CONTRACT
+        ),
+        rho_values=[0.75, 0.85, 1.0],
+        repetitions_value=20,
+        target_is_truth=truth_aligned,
+        q_values_expected=[1],
+        evidence_strategies_expected=["strategic"],
+        budget_values=[6, 8, 12, 16, 18, 24],
+        depth_value=2,
+        redundancy_value=6,
+        expected_truth="SOUTHWEST",
+        expected_target="SOUTHWEST" if truth_aligned else "SOUTH",
+        population_value=24,
+        sensor_value=12,
+        receiver_disposition="vigilant",
+        initialization_mode="paired_local_vote",
+    )
+
+
 def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
     """Validate the optional cross-config contract without invoking an LLM."""
 
@@ -492,6 +546,12 @@ def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
         return _validate_persistence_high_statistics_contract(spec, truth_aligned=False)
     if contract == PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT:
         return _validate_persistence_high_statistics_contract(spec, truth_aligned=True)
+    if contract == PERSISTENCE_LARGE_POPULATION_FALSE_CONTRACT:
+        return _validate_persistence_large_population_contract(
+            spec, truth_aligned=False
+        )
+    if contract == PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT:
+        return _validate_persistence_large_population_contract(spec, truth_aligned=True)
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 
@@ -875,9 +935,11 @@ def run_study_preflight(
     ]
     for task in design["tasks"]:
         lines.append(
-            f"- `{task['task_id']}`: truth `{task['ground_truth']}`, false target "
-            f"`{task['controller_target']}`, true strategic fact `{task['strategic_fact_id']}` "
-            f"(`{task['strategic_fact_relation']}`), fingerprint `{task['fingerprint_sha256']}`"
+            f"- `{task['task_id']}`: truth `{task['ground_truth']}`, controller target "
+            f"`{task['controller_target']}`, true strategic fact "
+            f"`{task.get('strategic_fact_id', task.get('evidence_fact_id'))}` "
+            f"(`{task.get('strategic_fact_relation', task.get('evidence_fact_relation'))}`), "
+            f"fingerprint `{task['fingerprint_sha256']}`"
         )
     (destination / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return StudyPreflightResult(spec.config_dir, destination, design, tuple(estimates))

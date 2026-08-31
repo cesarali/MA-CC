@@ -207,6 +207,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     study_preflight.add_argument("--config-dir", type=Path, required=True)
     study_preflight.add_argument("--output-dir", type=Path, required=True)
+    study_initialize = study_commands.add_parser(
+        "initialize",
+        help="generate one shared relational local-vote state per repetition",
+    )
+    study_initialize.add_argument(
+        "--config-dir", type=Path, action="append", required=True
+    )
+    study_initialize.add_argument("--output-dir", type=Path, required=True)
     study_submit = study_commands.add_parser(
         "submit", help="preflight every config and submit one SLURM config array"
     )
@@ -716,6 +724,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{design['provider_calls']['lower']} nominal provider calls"
         )
         print(f"  Report: {result.output_dir / 'report.md'}")
+        return 0
+    if args.command == "study" and args.study_command == "initialize":
+        from mas_cc.studies.initialization import materialize_study_initializations
+
+        try:
+            plan = materialize_study_initializations(args.config_dir, args.output_dir)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Materialized {len(plan)} paired initialization artifacts")
+        print(f"  Output: {args.output_dir.resolve()}")
         return 0
     if args.command == "study" and args.study_command == "submit":
         from mas_cc.studies import submit_study

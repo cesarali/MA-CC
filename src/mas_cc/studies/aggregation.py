@@ -31,7 +31,11 @@ from .table_io import (
     retained_table_path,
     write_scientific_table,
 )
-from .validation import validate_study, validation_markdown
+from .validation import (
+    paired_initialization_diagnostics,
+    validate_study,
+    validation_markdown,
+)
 
 ESTIMATOR_ALIASES = {
     "round_target_actuation_cmi_memory": "round_memory_target_actuation_cmi",
@@ -60,6 +64,8 @@ PRIMARY_COLUMNS = (
     "bootstrap_resamples",
     "n_observations",
     "n_episodes",
+    "action_entropy_ceiling_bits",
+    "dual_action_support_fraction",
     "units",
     "support_status",
     "p_plus",
@@ -472,6 +478,12 @@ def _information_tables(
                     "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                     "n_observations": item.get("n_rounds"),
                     "n_episodes": item.get("n_episodes"),
+                    "action_entropy_ceiling_bits": item.get(
+                        "conditional_action_entropy_bits"
+                    ),
+                    "dual_action_support_fraction": item.get(
+                        "round_dual_action_state_fraction"
+                    ),
                     "units": item.get("units"),
                     "support_status": _support_status(item),
                     "analysis_hash": analysis_hash,
@@ -569,6 +581,7 @@ def _state_local_primary(
     rows: list[dict[str, Any]] = []
     statistics = (
         "round_target_actuation_cmi",
+        "round_target_information_fraction",
         "round_target_signed_actuation",
         # The canonical chi. `round_target_signed_actuation` stays beside it as
         # the legacy magnetization diagnostic; the two differ by K/(K-1) and
@@ -648,6 +661,12 @@ def _state_local_primary(
                             "bootstrap_resamples": 0,
                             "n_observations": item.get("n_rounds"),
                             "n_episodes": item.get("n_episodes"),
+                            "action_entropy_ceiling_bits": item.get(
+                                "conditional_action_entropy_bits"
+                            ),
+                            "dual_action_support_fraction": item.get(
+                                "round_dual_action_state_fraction"
+                            ),
                             "units": item.get("units"),
                             "support_status": _support_status(item),
                             "analysis_hash": analysis_hash,
@@ -1788,6 +1807,7 @@ def _state_local_phase_tables(
     metrics = {
         "chi": "round_target_susceptibility",
         "T_pi": "round_target_actuation_cmi",
+        "eta_IF": "round_target_information_fraction",
         "eta_IR": "eta_ir_state_local",
     }
     for coordinate in expected:
@@ -1851,6 +1871,159 @@ def _state_local_phase_tables(
                     }
                 )
     return pd.DataFrame(phase_rows), pd.DataFrame(occupancy_rows)
+
+
+def _phi_conditioning_comparison(primary: pd.DataFrame) -> pd.DataFrame:
+    """Cellwise raw/null-adjusted comparison of T_pi and T_pi_phi."""
+
+    if primary.empty:
+        return pd.DataFrame()
+    wanted = primary[
+        primary["metric"].isin(
+            {"round_target_actuation_cmi", "round_phi_target_actuation_cmi"}
+        )
+    ].copy()
+    if wanted.empty:
+        return pd.DataFrame()
+    keys = ["study_id", "source_run_id", "cell_id"]
+    rows: list[dict[str, Any]] = []
+    for coordinates, group in wanted.groupby(keys, dropna=False):
+        by_metric = {str(row["metric"]): row for row in group.to_dict(orient="records")}
+        base = by_metric.get("round_target_actuation_cmi")
+        conditioned = by_metric.get("round_phi_target_actuation_cmi")
+        if base is None or conditioned is None:
+            continue
+
+        def finite_or_nan(value: Any) -> float:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return math.nan
+            return number if math.isfinite(number) else math.nan
+
+        t_pi = finite_or_nan(base.get("estimate"))
+        t_phi = finite_or_nan(conditioned.get("estimate"))
+        null_pi = finite_or_nan(base.get("null_mean"))
+        null_phi = finite_or_nan(conditioned.get("null_mean"))
+        rows.append(
+            {
+                **dict(zip(keys, coordinates, strict=True)),
+                "T_pi": t_pi,
+                "T_pi_phi": t_phi,
+                "Delta_T_phi": t_phi - t_pi,
+                "T_pi_null_mean": null_pi,
+                "T_pi_phi_null_mean": null_phi,
+                "T_pi_null_adjusted": t_pi - null_pi,
+                "T_pi_phi_null_adjusted": t_phi - null_phi,
+                "T_pi_ci_low": base.get("ci_low"),
+                "T_pi_ci_high": base.get("ci_high"),
+                "T_pi_phi_ci_low": conditioned.get("ci_low"),
+                "T_pi_phi_ci_high": conditioned.get("ci_high"),
+                "T_pi_action_entropy_ceiling_bits": base.get(
+                    "action_entropy_ceiling_bits"
+                ),
+                "T_pi_phi_action_entropy_ceiling_bits": conditioned.get(
+                    "action_entropy_ceiling_bits"
+                ),
+                "T_pi_dual_action_support_fraction": base.get(
+                    "dual_action_support_fraction"
+                ),
+                "T_pi_phi_dual_action_support_fraction": conditioned.get(
+                    "dual_action_support_fraction"
+                ),
+                "T_pi_support_status": base.get("support_status"),
+                "T_pi_phi_support_status": conditioned.get("support_status"),
+                "T_pi_n_observations": base.get("n_observations"),
+                "T_pi_phi_n_observations": conditioned.get("n_observations"),
+                "descriptive_caution": (
+                    "Raw conditioned CMI can rise with finite-sample null bias; "
+                    "compare the separate null-adjusted values."
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _rho_aggregated_state_local_maps(
+    phase: pd.DataFrame, occupancy: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Observation-weighted descriptive maps over rho, never pooled estimators."""
+
+    if phase.empty or occupancy.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    keys = [
+        column
+        for column in (
+            "social_group_size",
+            "controller_evidence_strategy",
+            "receiver_epistemic_disposition",
+            "target_semantics",
+            "intervention_budget",
+            "target_fraction_bin_index",
+            "target_fraction_bin_lower",
+            "target_fraction_bin_upper",
+            "target_fraction_bin_center",
+            "target_fraction_bin_count",
+        )
+        if column in phase.columns
+    ]
+    map_rows: list[dict[str, Any]] = []
+    for coordinates, group in phase.groupby([*keys, "metric"], dropna=False):
+        valid = group[
+            group["phase_status"].isin(["adequate", "limited"])
+            & pd.to_numeric(group["estimate"], errors="coerce").notna()
+        ].copy()
+        weights = pd.to_numeric(valid.get("n_observations"), errors="coerce")
+        values = pd.to_numeric(valid.get("estimate"), errors="coerce")
+        estimate = (
+            math.nan
+            if valid.empty or weights.sum() <= 0
+            else float(np.average(values, weights=weights))
+        )
+        status = (
+            "state_not_visited"
+            if int(pd.to_numeric(group["n_observations"], errors="coerce").sum()) == 0
+            else "insufficient_estimator_support"
+            if valid.empty
+            else "limited"
+            if (valid["phase_status"] == "limited").any()
+            else "adequate"
+        )
+        coordinate_values = coordinates[:-1]
+        map_rows.append(
+            {
+                **dict(zip(keys, coordinate_values, strict=True)),
+                "metric": coordinates[-1],
+                "estimate": estimate,
+                "n_observations": int(weights.sum()) if not valid.empty else 0,
+                "n_rho": int(group["epistemic_persistence"].nunique()),
+                "rho_values_json": json.dumps(
+                    sorted(
+                        float(value)
+                        for value in group["epistemic_persistence"].dropna().unique()
+                    )
+                ),
+                "phase_status": status,
+                "aggregation_scope": "rho-aggregated descriptive state-local summaries",
+                "aggregation_weight": "n_observations",
+                "descriptive_only": True,
+            }
+        )
+    occupancy_rows = occupancy.groupby(keys, dropna=False, as_index=False).agg(
+        n_observations=("n_observations", "sum"),
+        n_episodes=("n_episodes", "sum"),
+        n_rho=("epistemic_persistence", "nunique"),
+    )
+    occupancy_rows["estimate"] = occupancy_rows["n_observations"]
+    occupancy_rows["phase_status"] = np.where(
+        occupancy_rows["n_observations"] > 0, "visited", "state_not_visited"
+    )
+    occupancy_rows["aggregation_scope"] = (
+        "rho-aggregated descriptive state-local summaries"
+    )
+    occupancy_rows["aggregation_weight"] = "n_observations"
+    occupancy_rows["descriptive_only"] = True
+    return pd.DataFrame(map_rows), occupancy_rows
 
 
 def _rho_aggregated_descriptive_summary(
@@ -1945,9 +2118,7 @@ def _rho_aggregated_descriptive_summary(
                             sorted(
                                 {
                                     float(value)
-                                    for value in group[
-                                        "epistemic_persistence"
-                                    ].dropna()
+                                    for value in group["epistemic_persistence"].dropna()
                                 }
                             )
                         ),
@@ -2887,6 +3058,18 @@ def aggregate_study(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    phi_comparison = _phi_conditioning_comparison(primary)
+    if not phi_comparison.empty:
+        outputs["phi_conditioning_comparison"] = _attach_coordinates(
+            phi_comparison, canonical["cells"]
+        )
+    initialization_summary, initialization_audit, _ = paired_initialization_diagnostics(
+        canonical
+    )
+    if not initialization_summary.empty:
+        outputs["initialization_diagnostics"] = initialization_summary
+    if not initialization_audit.empty:
+        outputs["matched_initialization_audit"] = initialization_audit
     raw_state_bins = recipe.get("state_local_x_bins")
     state_bins = int(raw_state_bins) if raw_state_bins is not None else None
     phase_maps, binned_occupancy = _state_local_phase_tables(
@@ -2901,6 +3084,14 @@ def aggregate_study(
         outputs["state_local_phase_maps"] = phase_maps
     if not binned_occupancy.empty:
         outputs["state_occupancy_binned"] = binned_occupancy
+    if bool(recipe.get("rho_aggregated_descriptive", False)):
+        rho_phase, rho_occupancy = _rho_aggregated_state_local_maps(
+            phase_maps, binned_occupancy
+        )
+        if not rho_phase.empty:
+            outputs["rho_aggregated_state_local_maps"] = rho_phase
+        if not rho_occupancy.empty:
+            outputs["rho_aggregated_state_occupancy"] = rho_occupancy
     if bool(recipe.get("rho_aggregated_descriptive", False)):
         rho_summary = _rho_aggregated_descriptive_summary(
             primary, derived, episode_endpoints

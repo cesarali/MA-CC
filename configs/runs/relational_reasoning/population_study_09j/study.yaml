@@ -1,0 +1,26 @@
+study: {name: relational-population-study-09j}
+# Generate and approve the shared 20-artifact initialization bundle first.
+# Do not submit this study until the paired initialization audit is complete.
+configs: [study09j_task0002_n24_q1_l2_false_persistence.yaml]
+preflight: {contract: relational_persistence_large_population_false_v1}
+execution:
+  mode: auto
+  target_rpm: 500
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 2
+  throttle: 2
+  cpus_per_task: 10
+  memory: 12G
+  time_limit: "20:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_09j
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 20
+    minimum_concurrency: 4
+    maximum_concurrency: 20
+    target_rpm: 500
+    retry_max_elapsed_seconds: 300
+analysis: {recipe: analysis.yaml}

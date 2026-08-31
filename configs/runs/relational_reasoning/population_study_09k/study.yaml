@@ -1,0 +1,25 @@
+study: {name: relational-population-study-09k}
+# Reuse the exact Study 09j initialization bundle. Submit sequentially with 09j.
+configs: [study09k_task0002_n24_q1_l2_truth_persistence.yaml]
+preflight: {contract: relational_persistence_large_population_truth_v1}
+execution:
+  mode: auto
+  target_rpm: 500
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 2
+  throttle: 2
+  cpus_per_task: 10
+  memory: 12G
+  time_limit: "20:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_09k
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 20
+    minimum_concurrency: 4
+    maximum_concurrency: 20
+    target_rpm: 500
+    retry_max_elapsed_seconds: 300
+analysis: {recipe: analysis.yaml}
