@@ -56,11 +56,18 @@ from mas_cc.runtime import (
     ValidationAttempt,
     run_validated_decision,
 )
+from mas_cc.storage import canonical_hash
 
 from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation.metrics import population_observables
 from .controller import RECOMMENDATION_ONLY, SILENT
 from .game import RelationalImitationRoundFeedbackGame
+from .initialization import (
+    initialization_artifact_path,
+    paired_initialization_required,
+    physical_initial_state_projection,
+    read_initialization_artifact,
+)
 from .metrics import knowledge_observables, knowledge_strata
 from .prompts import PROMPT_FAMILY, agent_label, control_label, render_control_reason
 from .state import (
@@ -528,7 +535,20 @@ async def run_relational_imitation_round_feedback_game(
     )
 
     initial_decisions: tuple[RelationalDecision, ...] = ()
-    if not state.initial_votes:
+    initialization_artifact_hash: str | None = None
+    initialization_repetition: int | None = None
+    initialization_source = "provider_free"
+    if not state.initial_votes and paired_initialization_required(config):
+        artifact, _, state = read_initialization_artifact(
+            initialization_artifact_path(config, config.execution.seed),
+            game,
+            config,
+            config.execution.seed,
+        )
+        initialization_artifact_hash = str(artifact["artifact_hash"])
+        initialization_repetition = int(artifact["repetition_index"])
+        initialization_source = "paired_artifact"
+    elif not state.initial_votes:
         requests = game.initial_vote_requests(state, config.game)
         initial_decisions = tuple(
             await asyncio.gather(
@@ -543,13 +563,20 @@ async def run_relational_imitation_round_feedback_game(
         state = game.apply_initial_votes(
             state, tuple(decision.action for decision in initial_decisions)
         )
+        initialization_source = "provider_local_vote"
     initial_state = state
+    physical_initial_state_hash = canonical_hash(
+        physical_initial_state_projection(initial_state)
+    )
     _notify(
         observer,
         "event",
         "relational_round_feedback_initialized",
         initial_votes=list(state.initial_votes),
         provider_decisions=len(initial_decisions),
+        initialization_source=initialization_source,
+        initialization_artifact_hash=initialization_artifact_hash,
+        physical_initial_state_hash=physical_initial_state_hash,
     )
 
     interactions: list[RelationalInteractionRecord] = []
@@ -888,6 +915,18 @@ async def run_relational_imitation_round_feedback_game(
             "population_state_before": population_before,
             "population_state_after": population_after,
             "agent_ids": [str(agent.agent_id) for agent in state.agents],
+            "initial_vote_vector": list(initial_state.initial_votes),
+            "initial_active_fact_ids_by_agent": [
+                list(agent.active_fact_ids) for agent in initial_state.agents
+            ],
+            "initial_known_fact_ids_by_agent": [
+                list(agent.known_fact_ids) for agent in initial_state.agents
+            ],
+            "initial_task_id": str(initial_state.task["task_id"]),
+            "initialization_source": initialization_source,
+            "initialization_repetition": initialization_repetition,
+            "initialization_artifact_hash": initialization_artifact_hash,
+            "physical_initial_state_hash": physical_initial_state_hash,
             "initial_knowledge_class_by_agent": [
                 len(set(agent.initial_fact_ids) & set(state.supporting_fact_ids))
                 for agent in state.agents

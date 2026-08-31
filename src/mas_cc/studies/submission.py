@@ -230,6 +230,47 @@ def _study_manifest(
     }
 
 
+def _validate_required_initializations(spec: StudySpec) -> None:
+    """Paired dynamics may start only after every shared state is sealed."""
+
+    from mas_cc.games import create_game
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization import (
+        initialization_artifact_path,
+        paired_initialization_required,
+        read_initialization_artifact,
+    )
+    from mas_cc.studies.initialization import build_initialization_plan
+
+    paired_configs = []
+    for path in spec.configs:
+        source = load_run_config_or_grid(path)
+        base = source.base if isinstance(source, GridSpec) else source
+        if paired_initialization_required(base):
+            paired_configs.append((path, base))
+    if not paired_configs:
+        return
+    plans = build_initialization_plan(
+        [path for path, _ in paired_configs],
+        initialization_artifact_path(
+            paired_configs[0][1], paired_configs[0][1].execution.seed
+        ).parent,
+    )
+    for _, config in paired_configs:
+        game = create_game(config.game)
+        for plan in plans:
+            episode_config = replace(
+                config,
+                execution=replace(config.execution, seed=plan.episode_seed),
+            )
+            path = initialization_artifact_path(episode_config, plan.episode_seed)
+            if not path.is_file():
+                raise ValueError(
+                    "paired initialization is incomplete; missing artifact "
+                    f"for repetition {plan.repetition_index}: {path}"
+                )
+            read_initialization_artifact(path, game, episode_config, plan.episode_seed)
+
+
 def submit_study(
     config_dir: str | Path,
     results_dir: str | Path | None = None,
@@ -246,6 +287,7 @@ def submit_study(
     from .preflight import validate_study_preflight_contract
 
     validate_study_preflight_contract(spec)
+    _validate_required_initializations(spec)
     runner = subprocess.run if run is None else run
     configured_results = spec.execution.get("results_root")
     study_dir = (

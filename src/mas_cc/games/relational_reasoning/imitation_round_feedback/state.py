@@ -55,7 +55,12 @@ IMPLEMENTED_DYNAMICS_MODES = ("reasoning",)
 for this game would have to decide what a *fact* does to a q-voter jump, and
 inventing that silently would produce numbers nobody could interpret."""
 
-INITIALIZATION_MODES = ("local_vote", "uniform_random", "explicit")
+INITIALIZATION_MODES = (
+    "local_vote",
+    "paired_local_vote",
+    "uniform_random",
+    "explicit",
+)
 
 PEER_SOURCE = "peer"
 CONTROLLER_SOURCE = "controller"

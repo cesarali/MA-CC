@@ -178,7 +178,7 @@ class RelationalImitationRoundFeedbackGame(Game):
         options = task.semantic_answers
         if rules.initial_votes is not None:
             votes = rules.initial_votes
-        elif rules.initialization_mode == "local_vote":
+        elif rules.initialization_mode in {"local_vote", "paired_local_vote"}:
             return None
         else:
             distribution = rules.initial_distribution or {
@@ -961,7 +961,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                     maximum_prompt=initial,
                     prompt_scenarios=(initial,),
                     assumptions=(
-                        f"Initialization contributes {initialization_calls} request(s).",
+                        f"Initialization contributes {initialization_calls} request(s) "
+                        "inside this episode; paired_local_vote artifacts are "
+                        "materialized once per repetition outside dynamics cells.",
                     ),
                 ),
                 DecisionStagePlan(
