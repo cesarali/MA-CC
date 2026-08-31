@@ -5,12 +5,12 @@ configs: [study09j_task0002_n24_q1_l2_false_persistence.yaml]
 preflight: {contract: relational_persistence_large_population_false_v1}
 execution:
   mode: auto
-  target_rpm: 500
+  target_rpm: 600
   assumed_latency_seconds: 4.5
-  max_active_nodes: 2
-  throttle: 2
+  max_active_nodes: 4
+  throttle: 4
   cpus_per_task: 10
-  memory: 12G
+  memory: 24G
   time_limit: "20:00:00"
   partition: all
   qos: normal
@@ -18,9 +18,9 @@ execution:
   require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
   provider_load_control:
     mode: shared_adaptive
-    initial_concurrency: 20
+    initial_concurrency: 40
     minimum_concurrency: 4
-    maximum_concurrency: 20
-    target_rpm: 500
+    maximum_concurrency: 40
+    target_rpm: 600
     retry_max_elapsed_seconds: 300
 analysis: {recipe: analysis.yaml}

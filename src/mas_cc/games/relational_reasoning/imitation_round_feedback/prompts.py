@@ -820,6 +820,21 @@ class RelationalBallotContract(ResponseContract):
             )
         return ValidationResult.success()
 
+    def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
+        issue = issues[0]
+        if issue.field == "response.shared_fact_id":
+            allowed = ", ".join(
+                f'"{value}"' for value in (*self.fact_ids, NO_FACT)
+            )
+            return (
+                "Your previous response was invalid:\n"
+                "shared_fact_id must be a bare fact identifier.\n\n"
+                "Return the complete JSON object again. shared_fact_id must be exactly one of:\n"
+                f"{allowed}\n\n"
+                "Do not include a label, fact text, punctuation, or explanation in that field."
+            )
+        return super().repair_guidance(issues)
+
 
 @dataclass(frozen=True, slots=True)
 class ParsedBallot:

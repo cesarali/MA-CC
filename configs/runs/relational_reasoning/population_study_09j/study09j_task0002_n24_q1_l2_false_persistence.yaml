@@ -30,7 +30,7 @@ game:
     prompt_version: 1
     receiver_epistemic_disposition: vigilant
     stop_on_consensus: false
-    invalid_response_retries: 1
+    invalid_response_retries: 3
     expected_validation_failure_rate: 0.05
     initialization:
       mode: paired_local_vote
@@ -59,9 +59,9 @@ budget:
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 600.0
   max_cost_per_run: 600.0
-  max_provider_requests: 600000
+  max_provider_requests: 1050000
   max_input_tokens: 1600000000
-  max_output_tokens: 3000000000
+  max_output_tokens: 4300000000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO

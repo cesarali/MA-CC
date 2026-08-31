@@ -228,6 +228,7 @@ async def _execute_decision(
             attempt=attempt.attempt,
             valid=attempt.valid,
             validation_error=attempt.validation_error,
+            validation_issues=attempt.validation_issues,
             provider_error=(
                 RuntimeError(attempt.provider_error) if attempt.provider_error else None
             ),

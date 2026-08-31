@@ -188,6 +188,42 @@ def test_rolling_rpm_gate_counts_dispatches_including_released_attempts(tmp_path
     assert coordinator._try_acquire()[0] is not None
 
 
+def test_denied_acquire_does_not_rewrite_shared_state(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path, _config(initial_concurrency=1, maximum_concurrency=1)
+    )
+    lease = asyncio.run(coordinator.acquire())
+    before = coordinator._state_path.read_bytes()
+    before_mtime = coordinator._state_path.stat().st_mtime_ns
+
+    assert coordinator._try_acquire()[0] is None
+
+    assert coordinator._state_path.read_bytes() == before
+    assert coordinator._state_path.stat().st_mtime_ns == before_mtime
+    asyncio.run(
+        coordinator.release(
+            lease, success=True, retryable=False, status_code=200, latency_seconds=0.1
+        )
+    )
+
+
+def test_abandoned_queue_ticket_is_safely_recovered(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path, _config(lease_seconds=2, heartbeat_seconds=0.5)
+    )
+    abandoned = coordinator._lock_path / "abandoned"
+    abandoned.touch()
+    old = time.time() - 60
+    import os
+
+    os.utime(abandoned, (old, old))
+
+    lease = asyncio.run(coordinator.acquire())
+
+    assert lease.token in coordinator.snapshot()["leases"]
+    assert not abandoned.exists()
+
+
 def test_invalid_policy_is_rejected():
     with pytest.raises(ValueError, match="minimum <= initial <= maximum"):
         ProviderLoadControlConfig.from_mapping(

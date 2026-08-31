@@ -86,18 +86,20 @@ actual generations. The current live provider metadata reports zero
 `proxy_accounting_unit`; this is not a currency quote.
 
 Static serial-equivalent runtime is 81,864 seconds (22.74 hours) per target.
-At the declared 500 requests/minute target, expected dynamics call time is
-about 9.10 hours per target before queueing, retries, and adaptive pauses. At
-the latency-plan ceiling of 266.7 requests/minute, it is about 17.06 hours.
+At the declared 600 requests/minute ceiling, expected dynamics call time is
+about 7.58 hours before queueing, retries, and adaptive pauses. At the
+latency-planned 533.3 requests/minute for 40 concurrent requests, it is about
+8.53 hours.
 
 ## Proposed SLURM shape
 
 - 18 scientific-cell shards using generic `run_study_cell_array.job`
-- Array `0-17%2`; no study-specific job file
-- 10 CPUs, 12 GB, 20 hours per shard
+- Array `0-17%4`; no study-specific job file
+- 10 CPUs, 24 GB, 20 hours per shard
 - 10 episode slots and 10 request permits per shard
-- At most 20 episode slots / requests across two active shards
-- Shared adaptive provider controller, target 500 RPM
+- At most 40 episode slots / requests across four active shards
+- Shared adaptive provider controller, target 600 RPM; it may reduce the
+  concurrency immediately when retryable provider failures appear
 - Submit 09j and 09k sequentially unless provider capacity is recalculated
 
 The initialization bundle is a separate prerequisite with 20 artifacts. It
