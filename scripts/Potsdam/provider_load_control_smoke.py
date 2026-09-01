@@ -24,20 +24,30 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--hold-seconds", type=float, default=0.03)
     parser.add_argument("--deadline-seconds", type=float, default=120.0)
+    parser.add_argument("--lease-seconds", type=float, default=30.0)
+    parser.add_argument("--lock-stale-seconds", type=float, default=30.0)
+    parser.add_argument("--crash-inside-lock", action="store_true")
     return parser.parse_args()
 
 
-async def _run(args: argparse.Namespace) -> dict[str, object]:
-    rank = os.environ.get("SLURM_PROCID", str(os.getpid()))
-    config = ProviderLoadControlConfig.from_mapping(
+def _config(args: argparse.Namespace) -> ProviderLoadControlConfig:
+    return ProviderLoadControlConfig.from_mapping(
         {
             "initial_concurrency": args.limit,
             "minimum_concurrency": args.limit,
             "maximum_concurrency": args.limit,
             "target_rpm": 100_000,
             "polling_seconds": 0.01,
+            "lease_seconds": args.lease_seconds,
+            "heartbeat_seconds": min(1.0, args.lease_seconds / 4),
+            "lock_stale_seconds": args.lock_stale_seconds,
         }
     )
+
+
+async def _run(args: argparse.Namespace) -> dict[str, object]:
+    rank = os.environ.get("SLURM_PROCID", str(os.getpid()))
+    config = _config(args)
     coordinators = [
         SharedProviderCoordinator(
             args.root,
@@ -90,6 +100,11 @@ async def _run(args: argparse.Namespace) -> dict[str, object]:
 def main() -> None:
     args = _arguments()
     args.root.mkdir(parents=True, exist_ok=True)
+    if args.crash_inside_lock:
+        coordinator = SharedProviderCoordinator(args.root, _config(args))
+        with coordinator._exclusive_lock():
+            print("crashing while holding coordinator owner lock", flush=True)
+            os._exit(0)
     result = asyncio.run(_run(args))
     destination = args.root / f"result-{result['rank']}.json"
     destination.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")

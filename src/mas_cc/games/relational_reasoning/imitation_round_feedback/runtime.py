@@ -582,6 +582,13 @@ async def run_relational_imitation_round_feedback_game(
 
     interactions: list[RelationalInteractionRecord] = []
     round_records: list[RelationalRoundRecord] = []
+    retain_result_history = bool(
+        getattr(observer, "retain_result_history", True)
+    )
+    logical_decisions = len(initial_decisions)
+    validation_attempts = sum(
+        decision.validation_attempts for decision in initial_decisions
+    )
     for round_index in range(rules.rounds):
         if state.terminated:
             break
@@ -702,6 +709,8 @@ async def run_relational_imitation_round_feedback_game(
             update = await _execute_decision(
                 game, request, state, config, provider, counter, root, observer
             )
+            logical_decisions += 1
+            validation_attempts += update.validation_attempts
             focal_action = update.action
 
             control_source = next(
@@ -777,7 +786,8 @@ async def run_relational_imitation_round_feedback_game(
                 decisions=(update,),
                 transition=transition,
             )
-            interactions.append(record)
+            if retain_result_history:
+                interactions.append(record)
             _notify(
                 observer,
                 "record_interaction",
@@ -1089,10 +1099,6 @@ async def run_relational_imitation_round_feedback_game(
         _notify(observer, "event", "relational_round_feedback", **round_event)
 
     termination = state.termination_reason or "max_rounds_reached"
-    every = (
-        *initial_decisions,
-        *(decision for item in interactions for decision in item.decisions),
-    )
     _notify(
         observer,
         "event",
@@ -1107,8 +1113,8 @@ async def run_relational_imitation_round_feedback_game(
         interactions=tuple(interactions),
         rounds=tuple(round_records),
         termination_reason=termination,
-        logical_decisions=len(every),
-        validation_attempts=sum(decision.validation_attempts for decision in every),
+        logical_decisions=logical_decisions,
+        validation_attempts=validation_attempts,
     )
 
 

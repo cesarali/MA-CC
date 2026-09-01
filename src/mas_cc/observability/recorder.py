@@ -692,7 +692,12 @@ class RunRecorder:
         if not self._streaming_metrics or self._to_round_view is None:
             return {}, {}
         view = self._to_round_view(game_state)
-        self._round_views.append(view)
+        # Compact scientific runs persist their canonical trajectory as it is
+        # produced. Retain views only when a final metric actually consumes the
+        # whole sequence; otherwise a view's cumulative state history makes
+        # memory grow quadratically with episode length.
+        if self._final_metrics or not self.retention_policy.compact_scientific:
+            self._round_views.append(view)
         rows: list[dict[str, Any]] = []
         comet_values: dict[str, float] = {}
         population_values: dict[str, float] = {}
