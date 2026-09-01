@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0014",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 231,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Amelia, David, Vanessa) must be allocated between Operating mission control and Astronautical work. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Amelia",
+    "David",
+    "Vanessa"
+  ],
+  "tasks": [
+    "Operating mission control",
+    "Astronautical work"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Operating mission control: David, Astronautical work: Amelia and Vanessa",
+      "assignment": {
+        "Operating mission control": [
+          "David"
+        ],
+        "Astronautical work": [
+          "Amelia",
+          "Vanessa"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Operating mission control: Amelia, Astronautical work: David and Vanessa",
+      "assignment": {
+        "Operating mission control": [
+          "Amelia"
+        ],
+        "Astronautical work": [
+          "David",
+          "Vanessa"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Operating mission control: Vanessa, Astronautical work: Amelia and David",
+      "assignment": {
+        "Operating mission control": [
+          "Vanessa"
+        ],
+        "Astronautical work": [
+          "Amelia",
+          "David"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Amelia can stay calm under pressure.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Amelia has been the lead on multiple successful missions from the control room.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Vanessa joked about Amelia's serious error in a previous mission, causing a rift in their relationship.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Amelia is straightforward and does not appreciate Vanessa's sarcastic humor.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "David once took a ride in a zero-gravity simulator and became nauseous.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "David was always terrified of heights and still is.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "However, Amelia expressed having reservations about leaving her family behind for extended periods of time.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Amelia has passed base level physical and mental endurance tests necessary for space travel.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Amelia feels undermined and disrespected by David’s behavior.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "David openly criticizes Amelia's decision making in meetings.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Vanessa has a doctorate degree in astrobiology and is immensely passionate about space exploration.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Vanessa showcased tremendous physical resilience during training, even outperforming seasoned astronauts.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "David appreciates Vanessa's knowledge in astrobiology and frequently asks her for advice.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "During team building exercises, David and Vanessa outperformed the rest of the candidates while paired together.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Vanessa has proven her strategic thinking during multiple simulated mission control exercises.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Vanessa has a knack for dealing with technical troubleshooting.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "However, David has struggled with high-stress situations on previous simulation runs.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "David has experience coding for backup systems.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e04_00",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e02_00",
+        "e07_00",
+        "e08_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_00",
+        "e02_00",
+        "e07_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e03_01",
+        "e04_00",
+        "e04_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e08_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e03_00",
+        "e05_01",
+        "e07_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e00_01",
+        "e01_00",
+        "e07_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e05_00"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e05_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e07_00"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e02_01",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e01_00",
+        "e05_01",
+        "e06_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e07_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e01_01",
+        "e06_00",
+        "e08_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e05_00",
+        "e07_01",
+        "e08_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e03_01",
+        "e06_00",
+        "e06_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e01_01",
+        "e05_01",
+        "e06_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e00_00",
+        "e00_01",
+        "e01_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e03_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e00_01",
+        "e03_00",
+        "e06_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e05_01",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e03_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Amelia is good at operating mission control.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Amelia:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Amelia and Vanessa work badly together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Amelia:Vanessa",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "David is bad at astronautical work.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:David:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Amelia is okay at astronautical work.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Amelia:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Amelia and David work badly together.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "coop:Amelia:David",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Vanessa is good at astronautical work.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Vanessa:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "David and Vanessa work well together.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "coop:David:Vanessa",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Vanessa is good at operating mission control.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Vanessa:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "David is okay at operating mission control.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:David:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Operating mission control",
+      "Astronautical work"
+    ],
+    "people": [
+      "Amelia",
+      "David",
+      "Vanessa"
+    ],
+    "matrix": {
+      "Amelia": {
+        "skills": [
+          3,
+          2
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "David": {
+        "skills": [
+          2,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Vanessa": {
+        "skills": [
+          3,
+          3
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Amelia"
+      ],
+      [
+        "David",
+        "Vanessa"
+      ]
+    ],
+    "choice_scores": [
+      8,
+      10,
+      7
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "7cbce203f418745976ef4ff11a7674d38a950c94357fb71fb6ae738a67e33298"
+}

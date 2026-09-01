@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0003",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 202,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (James, Lisa, Antonio) must be allocated between Car Design and Market Research. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "James",
+    "Lisa",
+    "Antonio"
+  ],
+  "tasks": [
+    "Car Design",
+    "Market Research"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Car Design: Antonio, Market Research: James and Lisa",
+      "assignment": {
+        "Car Design": [
+          "Antonio"
+        ],
+        "Market Research": [
+          "James",
+          "Lisa"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Car Design: Lisa, Market Research: Antonio and James",
+      "assignment": {
+        "Car Design": [
+          "Lisa"
+        ],
+        "Market Research": [
+          "Antonio",
+          "James"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Car Design: James, Market Research: Antonio and Lisa",
+      "assignment": {
+        "Car Design": [
+          "James"
+        ],
+        "Market Research": [
+          "Antonio",
+          "Lisa"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_2",
+  "correct_option_index": 2,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Antonio tried to sketch some car models but failed to create an aesthetically pleasing design.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Antonio has a degree in mechanical engineering, not in design.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Antonio has shown a pattern of making errors on data interpretation tasks.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Antonio made a mistake in his last market analysis by misunderstanding demographic data.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Lisa's previous sketch has been the most voted for in a recent internal contest.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Lisa has a degree in car design from a reputable university.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Antonio respects Lisa's creative inputs while improving the car's functionality.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Lisa learnt from Antonio how to implement her designs technically.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "James studied mechanical engineering, not business or marketing.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "James misinterpreted data on consumer preferences in a recent report.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Lisa has admitted to finding the task of market research dull and tiresome.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Lisa was unable to derive key insights from a customer survey.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Lisa found James's engineering recommendations impractical for her designs.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "James and Lisa had a disagreement over the aesthetic aspects of a car model last week.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "James holds a graduate degree in automotive design.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "James won an award for his design of a concept car last year.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "James criticized Antonio's understanding of car aesthetics openly in a staff meeting.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Antonio dismissed James' suggestions during a design meeting.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e04_01",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e08_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e02_01",
+        "e04_01",
+        "e06_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e04_00",
+        "e07_00",
+        "e08_00"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e01_01",
+        "e02_00",
+        "e07_00"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e04_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e03_01",
+        "e05_00",
+        "e05_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e00_00",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e00_00",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e00_01",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e01_00",
+        "e04_01",
+        "e05_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e03_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e04_00",
+        "e05_00",
+        "e07_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e00_00",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e02_00",
+        "e02_01",
+        "e06_01"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_01",
+        "e01_00",
+        "e03_00"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e03_00",
+        "e03_01",
+        "e05_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e01_01",
+        "e03_01",
+        "e07_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e00_00",
+        "e02_01",
+        "e06_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e02_00",
+        "e03_00",
+        "e08_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_01",
+        "e05_00",
+        "e07_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_01",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e04_00",
+        "e05_01",
+        "e06_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e03_01",
+        "e05_01",
+        "e06_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Antonio is bad at car design.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Antonio:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Antonio is bad at market research.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Antonio:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Lisa is good at car design.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Lisa:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Lisa and Antonio work well together.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "coop:Lisa:Antonio",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "James is bad at market research.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:James:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Lisa is bad at market research.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Lisa:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "James and Lisa work badly together.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "coop:James:Lisa",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "James is good at car design.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:James:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "James and Antonio work badly together.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "coop:James:Antonio",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Car Design",
+      "Market Research"
+    ],
+    "people": [
+      "James",
+      "Lisa",
+      "Antonio"
+    ],
+    "matrix": {
+      "James": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Lisa": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Antonio": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "James"
+      ],
+      [
+        "Antonio",
+        "Lisa"
+      ]
+    ],
+    "choice_scores": [
+      4,
+      6,
+      8
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "c25ec96df5cd9cfe5b336cb5af7a1e2300b6769a01ba1ffcb4e7417b7d0dba69"
+}

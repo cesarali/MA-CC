@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0017",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 206,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Melinda, Robert, Laura) must be allocated between Managing the restaurant and Delivery of food. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Melinda",
+    "Robert",
+    "Laura"
+  ],
+  "tasks": [
+    "Managing the restaurant",
+    "Delivery of food"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Managing the restaurant: Robert, Delivery of food: Laura and Melinda",
+      "assignment": {
+        "Managing the restaurant": [
+          "Robert"
+        ],
+        "Delivery of food": [
+          "Laura",
+          "Melinda"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Managing the restaurant: Laura, Delivery of food: Melinda and Robert",
+      "assignment": {
+        "Managing the restaurant": [
+          "Laura"
+        ],
+        "Delivery of food": [
+          "Melinda",
+          "Robert"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Managing the restaurant: Melinda, Delivery of food: Laura and Robert",
+      "assignment": {
+        "Managing the restaurant": [
+          "Melinda"
+        ],
+        "Delivery of food": [
+          "Laura",
+          "Robert"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_2",
+  "correct_option_index": 2,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "They often bicker when they are assigned to work together.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Robert and Laura have opposing views about how dishes should be delivered.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "There have been multiple customer complaints about late delivery when Robert was the one delivering.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Robert has trouble reading maps and frequently gets lost.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Laura also lacks knowledge on the city's street layout, often relying on GPS for routes.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Laura has a driving record with several minor accidents and traffic violations.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Melinda has a degree in business administration focusing on hospitality and restaurant management.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Melinda has previously managed a highly successful food truck business for 5 years.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Robert felt undermined by Melinda and held a grudge against her since then.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Melinda once had to step in and correct a significant mistake in a food order that Robert made.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Melinda believes Laura does not take her responsibilities seriously enough and lacks focus.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Laura finds Melinda's high-energy and fast-paced style of management too stressful to handle.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Several past projects under Robert's direction have gone over budget and failed to meet timeline goals.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Robert lacks leadership and is indecisive under pressure.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Laura has trouble accepting and addressing feedback from her team members.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Laura struggles with multi-tasking and easily gets overwhelmed during peak hours.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Melinda gets quite stressed when she has to rush, which is often the case with delivery roles.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Melinda is a perfectionist who insists on quality presentation and spends a lot of time perfecting each delivery.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e00_00",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e00_00",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_00",
+        "e00_01",
+        "e01_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e01_01",
+        "e04_00",
+        "e05_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e03_00",
+        "e04_00",
+        "e05_00"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_01",
+        "e03_01",
+        "e05_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e07_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e01_00",
+        "e06_01",
+        "e07_00"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e05_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e03_00",
+        "e04_01",
+        "e08_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_01",
+        "e06_00",
+        "e08_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e07_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e00_00",
+        "e05_01",
+        "e08_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e04_01",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e02_00",
+        "e03_00",
+        "e06_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e02_00",
+        "e03_01",
+        "e07_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e02_00",
+        "e02_01",
+        "e03_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e02_01",
+        "e05_01",
+        "e07_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e01_01",
+        "e04_01",
+        "e06_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e07_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e05_00",
+        "e06_01",
+        "e07_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e06_00",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e00_01",
+        "e05_00",
+        "e07_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Robert and Laura work badly together.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "coop:Robert:Laura",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Robert is bad at delivery of food.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Robert:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Laura is bad at delivery of food.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Laura:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Melinda is good at managing the restaurant.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Melinda:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Melinda and Robert work badly together.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "coop:Melinda:Robert",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Melinda and Laura work badly together.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "coop:Melinda:Laura",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Robert is bad at managing the restaurant.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Robert:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Laura is bad at managing the restaurant.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Laura:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Melinda is bad at delivery of food.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Melinda:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Managing the restaurant",
+      "Delivery of food"
+    ],
+    "people": [
+      "Melinda",
+      "Robert",
+      "Laura"
+    ],
+    "matrix": {
+      "Melinda": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Robert": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          1
+        ]
+      },
+      "Laura": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          1,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Melinda"
+      ],
+      [
+        "Laura",
+        "Robert"
+      ]
+    ],
+    "choice_scores": [
+      4,
+      4,
+      6
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "df762abe4e306763abb0dff3813b117d0110375eeff3ec596738040bb3f7dec7"
+}

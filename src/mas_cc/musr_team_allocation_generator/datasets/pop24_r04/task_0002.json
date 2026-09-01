@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0002",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 80,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Alice, Jake, Olivia) must be allocated between Coding and Testing. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Alice",
+    "Jake",
+    "Olivia"
+  ],
+  "tasks": [
+    "Coding",
+    "Testing"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Coding: Jake, Testing: Alice and Olivia",
+      "assignment": {
+        "Coding": [
+          "Jake"
+        ],
+        "Testing": [
+          "Alice",
+          "Olivia"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Coding: Alice, Testing: Jake and Olivia",
+      "assignment": {
+        "Coding": [
+          "Alice"
+        ],
+        "Testing": [
+          "Jake",
+          "Olivia"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Coding: Olivia, Testing: Alice and Jake",
+      "assignment": {
+        "Coding": [
+          "Olivia"
+        ],
+        "Testing": [
+          "Alice",
+          "Jake"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Olivia has a previous experience in a software support role where she had to spot issues with software.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Olivia has moderately high attention to detail which she reveals by always noticing small changes around the office.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Jake and Olivia have successfully completed a handful of minor projects in record time.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Jake and Olivia often pair up to solve problems during brainstorming sessions.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Jake has high patience levels and enjoys solving puzzles, as seen from his love for Sudoku puzzles.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Jake has a prior experience in debugging complex codes as a freelancer.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Alice has admitted to disliking tasks that require meticulous attention to detail - she prefers to work on big picture projects.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Alice gets quickly frustrated while problem-solving, often opting to give up if she does not find a solution immediately.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Olivia has on several occasions admitted her dislike for the precision needed in coding.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Olivia struggles with understanding complex algorithms and logic, as reported by her peers.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Jake and Alice often spend their breaks together, suggesting a positive social relationship.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Alice often brings up Jake's ideas during team sessions, indicating a mutual respect.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Jake finds it stressful to come up with solutions and struggles to turn his ideas into functioning code, leading to dismal project outcomes.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Jake constantly mixes up the syntax in the programming languages, often requesting to refer to his notes.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "When asked to work together, the final result tends to be subpar as compared to when they optimize their individual strengths.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Alice and Olivia rarely engage in conversation with each other during group discussions.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Alice, though not exceptional, is able to produce code meeting the required functionality within reasonable timeframes.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Alice has experience in various programming languages due to her computer science degree.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e05_00"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e06_00",
+        "e07_01",
+        "e08_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_01",
+        "e07_00",
+        "e08_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e03_00",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e06_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e05_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e00_00",
+        "e04_00",
+        "e08_00"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e03_00",
+        "e03_01",
+        "e05_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e02_00",
+        "e04_01",
+        "e06_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e06_00",
+        "e07_01",
+        "e08_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_01",
+        "e01_00",
+        "e07_00"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e01_00",
+        "e05_01",
+        "e06_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e04_00",
+        "e05_01",
+        "e08_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e01_01",
+        "e02_01",
+        "e07_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e00_01",
+        "e03_00",
+        "e03_01"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e02_00",
+        "e04_01",
+        "e07_00"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e03_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e03_01",
+        "e05_00",
+        "e08_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e02_01",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e02_00",
+        "e07_00",
+        "e08_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e04_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e00_01",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e05_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e06_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Olivia is okay at testing.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Olivia:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Jake and Olivia work well together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Jake:Olivia",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Jake is good at testing.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Jake:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Alice is bad at testing.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Alice:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Olivia is bad at coding.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Olivia:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Alice and Jake work well together.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "coop:Alice:Jake",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Jake is bad at coding.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Jake:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Alice and Olivia work badly together.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "coop:Alice:Olivia",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Alice is okay at coding.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Alice:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Coding",
+      "Testing"
+    ],
+    "people": [
+      "Alice",
+      "Jake",
+      "Olivia"
+    ],
+    "matrix": {
+      "Alice": {
+        "skills": [
+          2,
+          1
+        ],
+        "cooperation": [
+          0,
+          3,
+          1
+        ]
+      },
+      "Jake": {
+        "skills": [
+          1,
+          3
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Olivia": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Alice"
+      ],
+      [
+        "Jake",
+        "Olivia"
+      ]
+    ],
+    "choice_scores": [
+      5,
+      10,
+      8
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "6071724fe69dfa806d551e58bcaee9316f6cb94eb3dbad0a18f632c9be357808"
+}

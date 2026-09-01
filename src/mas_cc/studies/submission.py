@@ -77,6 +77,9 @@ class SubmissionEntry:
     expected_episode_count: int
     execution_seed: int
     git_commit: str
+    source_extension_index: int = 0
+    source_submission_attempt: int = 0
+    scientific_cell_key: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +155,10 @@ def write_submission_manifest(
             stream, fieldnames=SUBMISSION_COLUMNS, lineterminator="\n"
         )
         writer.writeheader()
-        writer.writerows(asdict(entry) for entry in entries)
+        writer.writerows(
+            {column: getattr(entry, column) for column in SUBMISSION_COLUMNS}
+            for entry in entries
+        )
     return destination
 
 
@@ -337,6 +343,11 @@ def submit_study(
         json.dumps(_study_manifest(spec, entries), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    # New studies are born as extension zero. Root-level manifests remain as
+    # compatibility projections for existing readers and tools.
+    from .extension import index_existing_study
+
+    index_existing_study(study_dir)
 
     mode = str(spec.execution.get("mode", "config_array"))
     execution_plan: Mapping[str, Any] | None = None

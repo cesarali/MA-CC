@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0018",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 118,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Alex, Sam, Taylor) must be allocated between Fire extinguishing and Victim rescue. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Alex",
+    "Sam",
+    "Taylor"
+  ],
+  "tasks": [
+    "Fire extinguishing",
+    "Victim rescue"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Fire extinguishing: Sam, Victim rescue: Alex and Taylor",
+      "assignment": {
+        "Fire extinguishing": [
+          "Sam"
+        ],
+        "Victim rescue": [
+          "Alex",
+          "Taylor"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Fire extinguishing: Taylor, Victim rescue: Alex and Sam",
+      "assignment": {
+        "Fire extinguishing": [
+          "Taylor"
+        ],
+        "Victim rescue": [
+          "Alex",
+          "Sam"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Fire extinguishing: Alex, Victim rescue: Sam and Taylor",
+      "assignment": {
+        "Fire extinguishing": [
+          "Alex"
+        ],
+        "Victim rescue": [
+          "Sam",
+          "Taylor"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_2",
+  "correct_option_index": 2,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Taylor's fear of fire has grown significantly after witnessing a major fire incident in his neighborhood.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Taylor used to work in an office environment, having never been exposed to intense fires before.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Taylor accused Alex of not properly coordinating their actions in that same operation.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Alex blamed Taylor for a failed rescue operation they were on together.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Alex has failed his victim first-aid certification test multiple times.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Alex easily gets nervous in stressful situations.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Sam excelled in his first-aid certification test, getting a distinction.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Sam has worked as a lifeguard for five years, saving several swimmers from drowning.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Sam was visibly scared during practice sessions with controlled fires.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Sam was only certified to work as a lifeguard, a position that required minimal fire handling.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Alex has stated he cannot trust Sam because he doesn't follow orders.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Sam often ignores Alex's instructions.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Taylor didn't try to calm down or help the injured when he witnessed the fire in his neighbourhood.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Taylor freezes whenever he has to deal with victims screaming in pain and horror.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Taylor deeply respects Sam's abilities and always listens to Sam's suggestions.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Sam often covers for Taylor, doing Taylor's share of the stress-inducing work.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Alex's hands shake when he tries to hold the fire hose during trainings.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Alex has always been afraid of heat and used to avoid camping trips to avoid being around fire.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e04_01",
+        "e07_01",
+        "e08_00"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e00_00",
+        "e03_00",
+        "e04_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e04_01",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e00_00",
+        "e01_00",
+        "e02_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e03_00",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_01",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e02_00",
+        "e05_01",
+        "e07_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e08_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e04_00",
+        "e07_00",
+        "e08_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e07_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_00",
+        "e02_00",
+        "e04_00"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e05_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e02_01",
+        "e07_01",
+        "e08_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e02_01",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e05_00",
+        "e05_01",
+        "e07_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_01",
+        "e01_00",
+        "e04_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e06_01",
+        "e07_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e03_00",
+        "e05_00",
+        "e08_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e01_01",
+        "e05_01",
+        "e08_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e02_01",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_01",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e06_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e03_01",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e01_00",
+        "e03_00",
+        "e08_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Taylor is bad at fire extinguishing.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Taylor:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Alex and Taylor work badly together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Alex:Taylor",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Alex is bad at victim rescue.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Alex:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Sam is good at victim rescue.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Sam:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Sam is bad at fire extinguishing.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Sam:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Alex and Sam work badly together.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "coop:Alex:Sam",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Taylor is bad at victim rescue.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Taylor:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Sam and Taylor work well together.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "coop:Sam:Taylor",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Alex is bad at fire extinguishing.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Alex:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Fire extinguishing",
+      "Victim rescue"
+    ],
+    "people": [
+      "Alex",
+      "Sam",
+      "Taylor"
+    ],
+    "matrix": {
+      "Alex": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Sam": {
+        "skills": [
+          1,
+          3
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Taylor": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Alex"
+      ],
+      [
+        "Sam",
+        "Taylor"
+      ]
+    ],
+    "choice_scores": [
+      4,
+      6,
+      8
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "bfecf1498c141532d7518c0d9f6dc32f84940766eff396266797bda9dc124305"
+}

@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0011",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 128,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Mark, Hannah, Tina) must be allocated between Customer Service and Display Arrangement. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Mark",
+    "Hannah",
+    "Tina"
+  ],
+  "tasks": [
+    "Customer Service",
+    "Display Arrangement"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Customer Service: Mark, Display Arrangement: Hannah and Tina",
+      "assignment": {
+        "Customer Service": [
+          "Mark"
+        ],
+        "Display Arrangement": [
+          "Hannah",
+          "Tina"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Customer Service: Tina, Display Arrangement: Hannah and Mark",
+      "assignment": {
+        "Customer Service": [
+          "Tina"
+        ],
+        "Display Arrangement": [
+          "Hannah",
+          "Mark"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Customer Service: Hannah, Display Arrangement: Mark and Tina",
+      "assignment": {
+        "Customer Service": [
+          "Hannah"
+        ],
+        "Display Arrangement": [
+          "Mark",
+          "Tina"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_0",
+  "correct_option_index": 0,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Hannah received negative feedback from customers about her reluctance to help with their queries.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Hannah has an introverted personality and often struggles to initiate conversations.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Hannah feels undermined by Mark's assertiveness and hence avoids cooperation.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Mark has a strong and dominant personality, often overruling Hannah's input in team decisions.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Tina has started to skip meetings to avoid Mark’s interruptions, reflecting their poor teamwork.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Mark consistently interrupts Tina during company meetings, showing a lack of respect for her views.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Tina still sometimes needs to ask others for help or suggestions when arranging complex displays.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Tina has worked part-time at a clothing store during college, where her duties included arranging clothes on racks.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Mark has a friendly, outgoing personality and is naturally fond of socializing with people.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "During team trainings, Mark spent extra time role-playing and practicing possible customer interactions.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Mark never bothers to read the display arrangement instructions thoroughly before starting.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Mark often places products on the wrong shelves, causing confusion for customers.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Tina often forgot to share important updates with Hannah, making them inefficient as a team.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Hannah has a quiet voice, which Tina constantly fails to hear during team discussions.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "There were some instances when Tina lost her temper with irate customers.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Tina gets easily overwhelmed with a high volume of customer queries and often gets flustered.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Hannah has explained that she has difficulty visualizing how display elements work together to create an appealing presentation.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Hannah often neglects to implement the display protocols set by the store management.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e07_00",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e01_01",
+        "e02_01",
+        "e05_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_01",
+        "e06_00",
+        "e08_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e01_01",
+        "e03_00",
+        "e05_00"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e04_00",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e00_00",
+        "e02_00",
+        "e03_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e08_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e01_00",
+        "e04_00",
+        "e04_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e02_01",
+        "e04_00",
+        "e07_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e01_01",
+        "e02_00",
+        "e06_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_00",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e07_00",
+        "e07_01",
+        "e08_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e00_01",
+        "e04_01",
+        "e05_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e00_01",
+        "e05_01",
+        "e08_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e03_01",
+        "e06_01",
+        "e08_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_01",
+        "e02_01",
+        "e03_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e01_00",
+        "e04_01",
+        "e06_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e02_01",
+        "e05_00",
+        "e05_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e01_00",
+        "e04_00",
+        "e06_00"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e02_00",
+        "e03_01",
+        "e06_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_00",
+        "e03_00",
+        "e08_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e05_00"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e03_00",
+        "e05_01",
+        "e07_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e01_01",
+        "e03_00",
+        "e07_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Hannah is bad at customer service.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Hannah:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Mark and Hannah work badly together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Mark:Hannah",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Mark and Tina work badly together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Mark:Tina",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Tina is okay at display arrangement.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Tina:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Mark is good at customer service.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Mark:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Mark is bad at display arrangement.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Mark:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Hannah and Tina work badly together.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "coop:Hannah:Tina",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Tina is bad at customer service.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Tina:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Hannah is bad at display arrangement.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Hannah:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Customer Service",
+      "Display Arrangement"
+    ],
+    "people": [
+      "Mark",
+      "Hannah",
+      "Tina"
+    ],
+    "matrix": {
+      "Mark": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Hannah": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          1
+        ]
+      },
+      "Tina": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          1,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Mark"
+      ],
+      [
+        "Hannah",
+        "Tina"
+      ]
+    ],
+    "choice_scores": [
+      7,
+      4,
+      5
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "4478d2440da26436cd84829dd06906951ea334fbaae9f26fadfb51b27aa912fd"
+}
