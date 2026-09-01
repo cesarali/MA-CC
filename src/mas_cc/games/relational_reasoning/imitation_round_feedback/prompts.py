@@ -61,6 +61,7 @@ from ...hidden_bench.vanilla.prompts import extract_json_object
 from ..data import NO_FACT
 
 PROMPT_FAMILY = "relational_public_ballot"
+BOARD_PROMPT_FAMILY = "relational_blackboard_ballot"
 PROMPT_VERSION = 1
 
 VOTE_VISIBILITIES = ("public", "hidden")
@@ -76,12 +77,26 @@ MAX_REASON_CHARACTERS = 600
 essay - which truncates at ``max_output_tokens`` and breaks the JSON anyway -
 not to police wording."""
 
+BOARD_MESSAGE_TYPES = (
+    "CLAIM",
+    "QUESTION",
+    "REQUEST",
+    "RESULT",
+    "REPLY",
+    "CORRECTION",
+)
+BOARD_REPLY_TYPES = ("REPLY", "CORRECTION")
+MAX_PUBLIC_MESSAGE_CHARACTERS = 1200
+
 RECEIVER_EPISTEMIC_DISPOSITIONS = ("naive", "vigilant")
 # Deprecated import compatibility. New configuration must use the factorized
 # receiver axis; these names remain only so historical prompt artifacts/tests
 # can still be inspected and reproduced.
 EPISTEMIC_PROMPT_CLASSES = (
-    "naive", "distributed_information", "strategic_uncertainty", "evidence_calibrated"
+    "naive",
+    "distributed_information",
+    "strategic_uncertainty",
+    "evidence_calibrated",
 )
 
 SOCIAL_ENVIRONMENT_DISTRUST = (
@@ -166,14 +181,20 @@ def resolve_epistemic_prompt_class(
     social_distrust: bool | None = None,
 ) -> str:
     """Deprecated prompt-only resolver for historical artifact replay."""
-    legacy = None if social_distrust is None else (
-        "strategic_uncertainty" if social_distrust else "distributed_information"
+    legacy = (
+        None
+        if social_distrust is None
+        else ("strategic_uncertainty" if social_distrust else "distributed_information")
     )
     selected = epistemic_prompt_class or legacy or "strategic_uncertainty"
     if selected not in EPISTEMIC_PROMPT_CLASSES:
-        raise ValueError(f"epistemic_prompt_class must be one of {list(EPISTEMIC_PROMPT_CLASSES)}")
+        raise ValueError(
+            f"epistemic_prompt_class must be one of {list(EPISTEMIC_PROMPT_CLASSES)}"
+        )
     if legacy is not None and selected != legacy:
-        raise ValueError("game.options.social_distrust contradicts game.options.epistemic_prompt_class")
+        raise ValueError(
+            "game.options.social_distrust contradicts game.options.epistemic_prompt_class"
+        )
     return selected
 
 
@@ -196,7 +217,12 @@ def social_environment(social_distrust: bool = True) -> str:
     from one at ``true``, instead of a silently different prompt.
     """
 
-    return SOCIAL_ENVIRONMENT_DISTRUST if social_distrust else SOCIAL_ENVIRONMENT_DISTRIBUTED
+    return (
+        SOCIAL_ENVIRONMENT_DISTRUST
+        if social_distrust
+        else SOCIAL_ENVIRONMENT_DISTRIBUTED
+    )
+
 
 DECISION_BASIS_INITIAL = (
     "Make your own decision, using the facts you currently know and nothing\n"
@@ -255,13 +281,41 @@ DECISION_INSTRUCTION = (
     "Sharing a fact is the only way to pass information to other participants. You\n"
     "may share exactly one of the facts you currently know by giving its identifier\n"
     "in `shared_fact_id`, so that the participants who see your position can use it\n"
-    "too. Use \"none\" if you prefer to share nothing.\n"
+    'too. Use "none" if you prefer to share nothing.\n'
     "\n"
     "You may share only a fact listed under YOUR CURRENT KNOWLEDGE, by its exact\n"
     "identifier. Do not invent facts, identifiers, or relationships that were not\n"
     "given to you.\n"
     "\n"
     "Keep your reason to at most three sentences."
+)
+
+BOARD_DECISION_BASIS = (
+    "Make your own decision using your private evidence, your current position,\n"
+    "and the temporary public-board messages shown below. You see only a small\n"
+    "sample of currently live messages. Evaluate them rather than automatically\n"
+    "following them. Later participants may read a public message you post. Your\n"
+    "private reason is recorded for analysis and is never posted."
+)
+
+BOARD_DECISION_BASIS_NONE_VISIBLE = (
+    "Make your own decision using your private evidence and current position.\n"
+    "No live public-board message is visible in this update. You may still post\n"
+    "one message for later participants. Your private reason is never posted."
+)
+
+BOARD_DECISION_INSTRUCTION = (
+    "DECISION\n\n"
+    "Vote for the option best supported by the information available to you.\n"
+    "Write a brief private reason. You may also post at most one public message,\n"
+    "or use null. Public message types are CLAIM, QUESTION, REQUEST, RESULT,\n"
+    "REPLY, and CORRECTION. REPLY and CORRECTION must name a visible message ID\n"
+    "in reply_to; other types must use null. Public prose may report reasoning,\n"
+    "ask questions, or correct a visible message.\n\n"
+    "If you expose one exact source fact, give its identifier in shared_fact_id.\n"
+    'You may cite only a fact listed under YOUR CURRENT KNOWLEDGE. Use "none"\n'
+    "when no exact fact is attached. If public_message is null, shared_fact_id\n"
+    'must be "none". Do not invent evidence or identifiers.'
 )
 
 NO_KNOWN_FACTS = (
@@ -351,6 +405,43 @@ def render_social_sources(
     )
 
 
+def render_board_message(
+    source: Mapping[str, Any], *, vote_visibility: str = "public"
+) -> str:
+    """Render public prose plus any authoritative structured evidence text."""
+
+    if vote_visibility not in VOTE_VISIBILITIES:
+        raise ValueError(f"vote_visibility must be one of {list(VOTE_VISIBILITIES)}")
+    lines = [
+        f"Message ID: {source['message_id']}",
+        str(source["label"]),
+        f"Type: {source['message_type']}",
+    ]
+    if vote_visibility == "public":
+        vote = source["vote"]
+        display = source.get("vote_display_text")
+        lines.append(
+            f"Current vote: {vote}"
+            if not display or display == vote
+            else f"Current vote: {vote} ({display})"
+        )
+    if source.get("reply_to"):
+        lines.append(f"Reply to: {source['reply_to']}")
+    lines.extend(("Public message:", str(source["text"])))
+    if source.get("shared_fact_text"):
+        lines.extend((EVIDENCE_HEADER, str(source["shared_fact_text"])))
+    return "\n".join(lines)
+
+
+def render_board_messages(
+    sources: Sequence[Mapping[str, Any]], *, vote_visibility: str = "public"
+) -> tuple[str, ...]:
+    return tuple(
+        render_board_message(source, vote_visibility=vote_visibility)
+        for source in sources
+    )
+
+
 # --------------------------------------------------------------------------
 # Blocks
 # --------------------------------------------------------------------------
@@ -358,7 +449,9 @@ def render_social_sources(
 
 def _text_issues(name: str, value: Any) -> tuple[ValidationIssue, ...]:
     if not isinstance(value, str) or not value.strip():
-        return (ValidationIssue(f"prompt.blocks.{name}.value", "must be non-empty text"),)
+        return (
+            ValidationIssue(f"prompt.blocks.{name}.value", "must be non-empty text"),
+        )
     return ()
 
 
@@ -440,7 +533,11 @@ class TaskBlock(PromptBlock[Mapping[str, Any]]):
                 ),
             )
         options = value["options"]
-        if isinstance(options, (str, bytes)) or not isinstance(options, Sequence) or not options:
+        if (
+            isinstance(options, (str, bytes))
+            or not isinstance(options, Sequence)
+            or not options
+        ):
             return (
                 ValidationIssue(
                     "prompt.blocks.task.value.options", "must be a non-empty sequence"
@@ -487,7 +584,8 @@ class KnownFactsBlock(PromptBlock[tuple[str, ...]]):
         if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
             return (
                 ValidationIssue(
-                    "prompt.blocks.known_facts.value", "must be a sequence of rendered facts"
+                    "prompt.blocks.known_facts.value",
+                    "must be a sequence of rendered facts",
                 ),
             )
         return ()
@@ -531,7 +629,9 @@ class CurrentPositionBlock(PromptBlock[Mapping[str, Any]]):
     def value_issues(self, value: Mapping[str, Any]) -> tuple[ValidationIssue, ...]:
         if not isinstance(value, Mapping) or "vote" not in value:
             return (
-                ValidationIssue("prompt.blocks.current_position.value", "must contain a vote"),
+                ValidationIssue(
+                    "prompt.blocks.current_position.value", "must contain a vote"
+                ),
             )
         return ()
 
@@ -555,7 +655,11 @@ class SocialInformationBlock(PromptBlock[tuple[str, ...]]):
     binding: str = field(init=False, default="dynamic")
 
     def value_issues(self, value: tuple[str, ...]) -> tuple[ValidationIssue, ...]:
-        if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or not value:
+        if (
+            isinstance(value, (str, bytes))
+            or not isinstance(value, Sequence)
+            or not value
+        ):
             return (
                 ValidationIssue(
                     "prompt.blocks.social_information.value",
@@ -579,9 +683,7 @@ PRESENTATION_LETTERS = "ABCDEFGH"
 decided per call, never globally - see ``shuffled_option_letters``."""
 
 
-def shuffled_option_letters(
-    answers: Sequence[str], rng: Any
-) -> dict[str, str]:
+def shuffled_option_letters(answers: Sequence[str], rng: Any) -> dict[str, str]:
     """A fresh ``letter -> relation`` map for one LLM call.
 
     The population state is semantic, so the letters are pure presentation and
@@ -596,7 +698,10 @@ def shuffled_option_letters(
             f"at most {len(PRESENTATION_LETTERS)} answer options are presentable"
         )
     rng.shuffle(relations)
-    return {PRESENTATION_LETTERS[index]: relation for index, relation in enumerate(relations)}
+    return {
+        PRESENTATION_LETTERS[index]: relation
+        for index, relation in enumerate(relations)
+    }
 
 
 def relation_to_letter(option_letters: Mapping[str, str]) -> dict[str, str]:
@@ -606,7 +711,9 @@ def relation_to_letter(option_letters: Mapping[str, str]) -> dict[str, str]:
 
 
 def localize_sources(
-    sources: Sequence[Mapping[str, Any]], option_letters: Mapping[str, str]
+    sources: Sequence[Mapping[str, Any]],
+    option_letters: Mapping[str, str],
+    answer_display_texts: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Restate each source's semantic vote in *this* call's letter space.
 
@@ -619,8 +726,17 @@ def localize_sources(
     localized = []
     for source in sources:
         vote = source.get("vote")
+        localized_vote = inverse.get(str(vote), vote) if vote else vote
         localized.append(
-            {**dict(source), "vote": inverse.get(str(vote), vote) if vote else vote}
+            {
+                **dict(source),
+                "vote": localized_vote,
+                "vote_display_text": (
+                    None
+                    if vote is None
+                    else (answer_display_texts or {}).get(str(vote), str(vote))
+                ),
+            }
         )
     return tuple(localized)
 
@@ -657,7 +773,10 @@ def normalize_relational_vote(value: Any, option_labels: Sequence[str]) -> str |
 def relation_vote_aliases(option_relations: Mapping[str, str]) -> dict[str, str]:
     """``{"NORTHEAST": "B", ...}`` - relation names accepted as votes."""
 
-    return {str(relation).upper(): str(label) for label, relation in option_relations.items()}
+    return {
+        str(relation).upper(): str(label)
+        for label, relation in option_relations.items()
+    }
 
 
 def resolve_vote(
@@ -792,9 +911,7 @@ class RelationalBallotContract(ResponseContract):
         raw = parsed.get("shared_fact_id")
         if raw is not None and not isinstance(raw, str):
             return ValidationResult.failure(
-                ValidationIssue(
-                    "response.shared_fact_id", "must be a string", raw
-                )
+                ValidationIssue("response.shared_fact_id", "must be a string", raw)
             )
         shared = normalize_shared_fact_id(raw)
         if shared is None:
@@ -823,9 +940,7 @@ class RelationalBallotContract(ResponseContract):
     def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
         issue = issues[0]
         if issue.field == "response.shared_fact_id":
-            allowed = ", ".join(
-                f'"{value}"' for value in (*self.fact_ids, NO_FACT)
-            )
+            allowed = ", ".join(f'"{value}"' for value in (*self.fact_ids, NO_FACT))
             return (
                 "Your previous response was invalid:\n"
                 "shared_fact_id must be a bare fact identifier.\n\n"
@@ -846,6 +961,8 @@ class ParsedBallot:
     raw_vote: Any
     raw_shared_fact_id: Any
     shared_fact_present: bool
+    public_message: Mapping[str, Any] | None = None
+    public_message_present: bool = False
 
 
 def parse_relational_ballot(
@@ -857,18 +974,134 @@ def parse_relational_ballot(
     raw_vote = parsed.get("vote") if parsed else None
     raw_reason = parsed.get("reason") if parsed else None
     raw_shared = parsed.get("shared_fact_id") if parsed else None
-    reason = raw_reason.strip() if isinstance(raw_reason, str) and raw_reason.strip() else None
+    reason = (
+        raw_reason.strip()
+        if isinstance(raw_reason, str) and raw_reason.strip()
+        else None
+    )
     aliases = relation_vote_aliases(option_relations or {})
     return ParsedBallot(
         vote=resolve_vote(raw_vote, tuple(option_labels), aliases),
         reason=reason,
         shared_fact_id=(
-            normalize_shared_fact_id(raw_shared) if isinstance(raw_shared, str) else None
+            normalize_shared_fact_id(raw_shared)
+            if isinstance(raw_shared, str)
+            else None
         ),
         raw_vote=raw_vote,
         raw_shared_fact_id=raw_shared,
         shared_fact_present=bool(parsed) and "shared_fact_id" in parsed,
+        public_message=(
+            dict(parsed["public_message"])
+            if parsed and isinstance(parsed.get("public_message"), Mapping)
+            else None
+        ),
+        public_message_present=bool(parsed) and "public_message" in parsed,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class BlackboardBallotContract(RelationalBallotContract):
+    """A vote and private reason plus zero or one typed public message."""
+
+    type: str = "relational_blackboard_ballot"
+
+    @property
+    def visible_message_ids(self) -> tuple[str, ...]:
+        return tuple(str(item) for item in self.options.get("visible_message_ids", ()))
+
+    def instruction(self) -> str:
+        options = " | ".join(self.allowed_values)
+        citable = " | ".join((*self.fact_ids, NO_FACT))
+        visible = " | ".join(self.visible_message_ids) or "none"
+        return (
+            f"{BOARD_DECISION_INSTRUCTION}\n\n"
+            f"Visible message IDs: {visible}\n\n"
+            "Return only valid JSON:\n\n"
+            "{\n"
+            f'  "vote": "<{options}>",\n'
+            '  "reason": "<brief private reason>",\n'
+            f'  "shared_fact_id": "<{citable}>",\n'
+            '  "public_message": null\n'
+            "}\n\n"
+            "Or replace null with:\n"
+            '{"type": "<CLAIM | QUESTION | REQUEST | RESULT | REPLY | CORRECTION>", '
+            '"text": "<public text>", "reply_to": null}'
+        )
+
+    def validate(self, response: str) -> ValidationResult:
+        base = RelationalBallotContract.validate(self, response)
+        if not base.valid:
+            return base
+        parsed = extract_json_object(response)
+        assert parsed is not None
+        if "public_message" not in parsed:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message",
+                    "must be present; use null to post nothing",
+                )
+            )
+        public = parsed.get("public_message")
+        shared = normalize_shared_fact_id(parsed.get("shared_fact_id"))
+        if public is None:
+            if shared is not None:
+                return ValidationResult.failure(
+                    ValidationIssue(
+                        "response.shared_fact_id",
+                        "must be none when public_message is null",
+                    )
+                )
+            return ValidationResult.success()
+        if not isinstance(public, Mapping):
+            return ValidationResult.failure(
+                ValidationIssue("response.public_message", "must be null or an object")
+            )
+        message_type = public.get("type")
+        if message_type not in BOARD_MESSAGE_TYPES:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.type",
+                    f"must be one of {list(BOARD_MESSAGE_TYPES)}",
+                    message_type,
+                )
+            )
+        text = public.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.text", "must be non-empty text"
+                )
+            )
+        if len(text.strip()) > MAX_PUBLIC_MESSAGE_CHARACTERS:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.text",
+                    f"must be at most {MAX_PUBLIC_MESSAGE_CHARACTERS} characters",
+                )
+            )
+        reply_to = public.get("reply_to")
+        if message_type in BOARD_REPLY_TYPES:
+            if (
+                not isinstance(reply_to, str)
+                or reply_to not in self.visible_message_ids
+            ):
+                return ValidationResult.failure(
+                    ValidationIssue(
+                        "response.public_message.reply_to",
+                        "must name a message visible in this update",
+                        reply_to,
+                    )
+                )
+        elif reply_to is not None:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.reply_to",
+                    "must be null unless type is REPLY or CORRECTION",
+                    reply_to,
+                )
+            )
+        return ValidationResult.success()
 
 
 # --------------------------------------------------------------------------
@@ -879,6 +1112,11 @@ def parse_relational_ballot(
 class RelationalBallotPrompt(FullPrompt):
     def concrete_prompt_type(self) -> str:
         return PROMPT_FAMILY
+
+
+class BlackboardBallotPrompt(FullPrompt):
+    def concrete_prompt_type(self) -> str:
+        return BOARD_PROMPT_FAMILY
 
 
 def relational_public_ballot_prompt(
@@ -904,10 +1142,13 @@ def relational_public_ballot_prompt(
             SocialEnvironmentBlock(
                 # Explicit legacy boolean replays its historical bytes. New
                 # configs omit it and use the factorized disposition text.
-                (SOCIAL_ENVIRONMENT_DISTRUST if social_distrust else
-                 SOCIAL_ENVIRONMENT_DISTRIBUTED)
-                if social_distrust is not None else
-                epistemic_framing(receiver_epistemic_disposition or "vigilant")
+                (
+                    SOCIAL_ENVIRONMENT_DISTRUST
+                    if social_distrust
+                    else SOCIAL_ENVIRONMENT_DISTRIBUTED
+                )
+                if social_distrust is not None
+                else epistemic_framing(receiver_epistemic_disposition or "vigilant")
             ),
             DecisionBasisBlock(),
             TaskBlock(),
@@ -920,6 +1161,49 @@ def relational_public_ballot_prompt(
             options={
                 "fact_ids": tuple(fact_ids),
                 "relations": tuple(relations),
+            },
+        ),
+    )
+
+
+def relational_blackboard_ballot_prompt(
+    possible_answers: Sequence[str] = ("A", "B", "C"),
+    *,
+    fact_ids: Sequence[str] = (),
+    relations: Sequence[str] = (),
+    visible_message_ids: Sequence[str] = (),
+    receiver_epistemic_disposition: str | None = None,
+    social_distrust: bool | None = None,
+) -> BlackboardBallotPrompt:
+    """Prompt family for finite-memory public-board updates."""
+
+    environment = (
+        (
+            SOCIAL_ENVIRONMENT_DISTRUST
+            if social_distrust
+            else SOCIAL_ENVIRONMENT_DISTRIBUTED
+        )
+        if social_distrust is not None
+        else epistemic_framing(receiver_epistemic_disposition or "vigilant")
+    )
+    return BlackboardBallotPrompt(
+        BOARD_PROMPT_FAMILY,
+        PROMPT_VERSION,
+        (
+            IdentityBlock(),
+            SocialEnvironmentBlock(environment),
+            DecisionBasisBlock(),
+            TaskBlock(),
+            KnownFactsBlock(),
+            CurrentPositionBlock(),
+            SocialInformationBlock(),
+        ),
+        BlackboardBallotContract(
+            allowed_values=tuple(possible_answers),
+            options={
+                "fact_ids": tuple(fact_ids),
+                "relations": tuple(relations),
+                "visible_message_ids": tuple(visible_message_ids),
             },
         ),
     )
@@ -938,6 +1222,7 @@ def build_relational_ballot_prompt(
     receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
     social_context: bool = False,
+    answer_display_texts: Mapping[str, str] | None = None,
 ) -> RelationalBallotPrompt:
     """Bind one focal update, or - with no sources and no vote - one local vote.
 
@@ -976,7 +1261,8 @@ def build_relational_ballot_prompt(
         task={
             "question": question,
             "options": tuple(
-                f"{letter}) {option_letters[letter]}" for letter in letters
+                f"{letter}) {(answer_display_texts or {}).get(option_letters[letter], option_letters[letter])}"
+                for letter in letters
             ),
         },
         known_facts=tuple(known_facts),
@@ -986,7 +1272,62 @@ def build_relational_ballot_prompt(
     if social_sources:
         prompt = prompt.bind(
             social_information=render_social_sources(
-                localize_sources(social_sources, option_letters),
+                localize_sources(social_sources, option_letters, answer_display_texts),
+                vote_visibility=vote_visibility,
+            )
+        )
+    return prompt  # type: ignore[return-value]
+
+
+def build_relational_blackboard_prompt(
+    *,
+    identity: str,
+    question: str,
+    option_letters: Mapping[str, str],
+    known_facts: Sequence[str],
+    fact_ids: Sequence[str],
+    current_vote: str | None,
+    board_messages: Sequence[Mapping[str, Any]] = (),
+    vote_visibility: str = "public",
+    receiver_epistemic_disposition: str | None = None,
+    social_distrust: bool | None = None,
+    social_context: bool = False,
+    answer_display_texts: Mapping[str, str] | None = None,
+) -> BlackboardBallotPrompt:
+    """Bind one board update while keeping the private reason out of public text."""
+
+    letters = tuple(option_letters)
+    prompt = relational_blackboard_ballot_prompt(
+        letters,
+        fact_ids=fact_ids,
+        relations=tuple(sorted(option_letters.values())),
+        visible_message_ids=tuple(str(item["message_id"]) for item in board_messages),
+        receiver_epistemic_disposition=receiver_epistemic_disposition,
+        social_distrust=social_distrust,
+    ).bind(
+        identity=identity,
+        decision_basis=(
+            BOARD_DECISION_BASIS
+            if board_messages
+            else BOARD_DECISION_BASIS_NONE_VISIBLE
+            if social_context
+            else DECISION_BASIS_INITIAL
+        ),
+        task={
+            "question": question,
+            "options": tuple(
+                f"{letter}) {(answer_display_texts or {}).get(option_letters[letter], option_letters[letter])}"
+                for letter in letters
+            ),
+        },
+        known_facts=tuple(known_facts),
+    )
+    if current_vote is not None:
+        prompt = prompt.bind(current_position={"vote": current_vote})
+    if board_messages:
+        prompt = prompt.bind(
+            social_information=render_board_messages(
+                localize_sources(board_messages, option_letters, answer_display_texts),
                 vote_visibility=vote_visibility,
             )
         )
@@ -994,6 +1335,11 @@ def build_relational_ballot_prompt(
 
 
 __all__ = [
+    "BOARD_PROMPT_FAMILY",
+    "BOARD_MESSAGE_TYPES",
+    "BOARD_REPLY_TYPES",
+    "BlackboardBallotContract",
+    "BlackboardBallotPrompt",
     "CONTROL_RECOMMENDATION",
     "DECISION_BASIS_INITIAL",
     "DECISION_BASIS_SOCIAL",
@@ -1021,6 +1367,7 @@ __all__ = [
     "PRESENTATION_LETTERS",
     "agent_label",
     "build_relational_ballot_prompt",
+    "build_relational_blackboard_prompt",
     "control_label",
     "epistemic_framing",
     "localize_sources",
@@ -1029,6 +1376,9 @@ __all__ = [
     "parse_relational_ballot",
     "relation_vote_aliases",
     "relational_public_ballot_prompt",
+    "relational_blackboard_ballot_prompt",
+    "render_board_message",
+    "render_board_messages",
     "render_control_reason",
     "render_own_fact",
     "render_social_source",

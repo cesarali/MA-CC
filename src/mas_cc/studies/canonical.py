@@ -114,8 +114,19 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             result[leaf] = result[paths[0]]
     for dotted, label in (
         ("game.options.task_id", "task_id"),
+        ("game.options.task_family", "task_family"),
         ("game.population_size", "population_size"),
         ("game.options.social_group_size", "social_group_size"),
+        ("game.options.social_mode", "social_mode"),
+        ("game.options.board.sampling", "board_sampling"),
+        (
+            "game.options.board.message_lifetime_rounds",
+            "message_lifetime_rounds",
+        ),
+        (
+            "game.options.board.exclude_self_authored",
+            "board_exclude_self_authored",
+        ),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
@@ -129,6 +140,10 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             "controller_evidence_strategy",
         ),
         ("control.options.message_mode", "message_mode"),
+        (
+            "control.options.controller_actuation_mode",
+            "controller_actuation_mode",
+        ),
         ("control.options.target", "controller_target_semantics"),
         ("experiment.metadata.controller_semantics", "controller_semantics"),
         ("experiment.metadata.target_semantics", "target_semantics"),
@@ -207,7 +222,9 @@ def _episode_rows(
                     "source_episode_id": str(episode_id),
                     "cell_key": cell.cell_key,
                     "repetition_index": _repetition_index(str(episode_id)),
-                    "episode_key": _episode_key(cell.cell_key, _repetition_index(str(episode_id))),
+                    "episode_key": _episode_key(
+                        cell.cell_key, _repetition_index(str(episode_id))
+                    ),
                     "episode_seed": first.get("episode_seed"),
                     "status": str(first.get("status", "completed")),
                     "interaction_count": int(
@@ -233,7 +250,9 @@ def _episode_rows(
                 "episode_id": str(payload.get("episode_id", path.parent.name)),
                 "source_episode_id": str(payload.get("episode_id", path.parent.name)),
                 "cell_key": cell.cell_key,
-                "repetition_index": _repetition_index(str(payload.get("episode_id", path.parent.name))),
+                "repetition_index": _repetition_index(
+                    str(payload.get("episode_id", path.parent.name))
+                ),
                 "episode_key": _episode_key(
                     cell.cell_key,
                     _repetition_index(str(payload.get("episode_id", path.parent.name))),

@@ -48,7 +48,11 @@ from mas_cc.config import ControlConfig
 from mas_cc.control import Control
 from mas_cc.llm_runtime.validation import ValidationIssue
 
-from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP, SoftTargetControl
+from ...hidden_bench.imitation.controller import (
+    ADVOCATE_TARGET,
+    NO_OP,
+    SoftTargetControl,
+)
 from ...hidden_bench.imitation_round_feedback.controller import (
     EVIDENCE_NONE,
     RoundSoftTargetBudgetedControl,
@@ -69,10 +73,19 @@ EVIDENCE_NEUTRAL = "neutral"
 EVIDENCE_STRATEGIC = "strategic"
 CONTROLLER_EVIDENCE_STRATEGIES = (EVIDENCE_NEUTRAL, EVIDENCE_STRATEGIC)
 
+DIRECT_RECOMMENDATION = "direct_recommendation"
+COORDINATION_REQUEST = "coordination_request"
+CONTROLLER_ACTUATION_MODES = (DIRECT_RECOMMENDATION, COORDINATION_REQUEST)
+
 _DIRECTION_VECTORS = {
-    "NORTH": (0, 1), "NORTHEAST": (1, 1), "EAST": (1, 0),
-    "SOUTHEAST": (1, -1), "SOUTH": (0, -1), "SOUTHWEST": (-1, -1),
-    "WEST": (-1, 0), "NORTHWEST": (-1, 1),
+    "NORTH": (0, 1),
+    "NORTHEAST": (1, 1),
+    "EAST": (1, 0),
+    "SOUTHEAST": (1, -1),
+    "SOUTH": (0, -1),
+    "SOUTHWEST": (-1, -1),
+    "WEST": (-1, 0),
+    "NORTHWEST": (-1, 1),
 }
 
 SCHEDULE_SOFT = "soft"
@@ -105,6 +118,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     controller_fact_selector: str | None = None
     controller_evidence_strategy: str | None = None
     advocacy_schedule: str = SCHEDULE_SOFT
+    controller_actuation_mode: str = DIRECT_RECOMMENDATION
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -145,20 +159,31 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     def resolved_target_for_task(self, task: RelationalTask, episode_seed: int) -> str:
         if isinstance(self.target, int):
             if self.target < 0 or self.target >= len(task.semantic_answers):
-                raise ValueError(f"controller target index {self.target} is outside task options")
+                raise ValueError(
+                    f"controller target index {self.target} is outside task options"
+                )
             return task.semantic_answers[self.target]
         if self.target == "correct":
             return task.correct_relation
         if self.target == "random_incorrect":
             from mas_cc.core import Seed
-            candidates = tuple(x for x in task.semantic_answers if x != task.correct_relation)
-            rng = Seed(episode_seed).derive(
-                f"hidden-bench-imitation-random-incorrect-target:{task.task_id}"
-            ).create_random()
+
+            candidates = tuple(
+                x for x in task.semantic_answers if x != task.correct_relation
+            )
+            rng = (
+                Seed(episode_seed)
+                .derive(
+                    f"hidden-bench-imitation-random-incorrect-target:{task.task_id}"
+                )
+                .create_random()
+            )
             return rng.choice(candidates)
         return str(self.target)
 
-    def resolve_fact_id(self, task: RelationalTask, episode_seed: int = 0) -> str | None:
+    def resolve_fact_id(
+        self, task: RelationalTask, episode_seed: int = 0
+    ) -> str | None:
         """The one fact this controller cites for the whole episode, or ``None``.
 
         Resolution is deterministic and validated against the frozen task, so a
@@ -214,6 +239,40 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             "control.options.controller_fact_id or control.options.controller_fact_selector"
         )
 
+    def coordination_request_text(
+        self,
+        target: str,
+        sampled_opinion_counts: Mapping[str, Any],
+        answer_display_texts: Mapping[str, str] | None = None,
+    ) -> str:
+        """Create an auditable request without inventing task evidence."""
+
+        rivals = {
+            str(option): int(count)
+            for option, count in sampled_opinion_counts.items()
+            if str(option) != target
+        }
+        rival: str | None = None
+        if rivals:
+            maximum = max(rivals.values())
+            strongest = sorted(
+                option for option, count in rivals.items() if count == maximum
+            )
+            if len(strongest) == 1:
+                rival = strongest[0]
+        target_text = (answer_display_texts or {}).get(target, target)
+        if rival is None:
+            return (
+                f"Please share evidence that bears on whether {target_text} is the "
+                "best allocation. Report evidence that supports or contradicts it."
+            )
+        rival_text = (answer_display_texts or {}).get(rival, rival)
+        return (
+            f"Please share evidence that helps distinguish {target_text} from "
+            f"{rival_text}. If you have evidence supporting or contradicting "
+            "either allocation, report it."
+        )
+
     @classmethod
     def _extra_from_options(
         cls, options: Mapping[str, Any], issues: list[ValidationIssue]
@@ -249,14 +308,17 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         if mode not in MESSAGE_MODES:
             issues.append(
                 ValidationIssue(
-                    "control.options.message_mode", f"must be one of {list(MESSAGE_MODES)}"
+                    "control.options.message_mode",
+                    f"must be one of {list(MESSAGE_MODES)}",
                 )
             )
             mode = RECOMMENDATION_ONLY
         values["message_mode"] = str(mode)
 
         fact_id = options.get("controller_fact_id")
-        if fact_id is not None and (not isinstance(fact_id, str) or not fact_id.strip()):
+        if fact_id is not None and (
+            not isinstance(fact_id, str) or not fact_id.strip()
+        ):
             issues.append(
                 ValidationIssue(
                     "control.options.controller_fact_id",
@@ -277,6 +339,17 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             schedule = SCHEDULE_SOFT
         values["advocacy_schedule"] = str(schedule)
 
+        actuation_mode = options.get("controller_actuation_mode", DIRECT_RECOMMENDATION)
+        if actuation_mode not in CONTROLLER_ACTUATION_MODES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_actuation_mode",
+                    f"must be one of {list(CONTROLLER_ACTUATION_MODES)}",
+                )
+            )
+            actuation_mode = DIRECT_RECOMMENDATION
+        values["controller_actuation_mode"] = str(actuation_mode)
+
         selector = options.get("controller_fact_selector")
         if selector is not None and selector not in FACT_SELECTORS:
             issues.append(
@@ -290,16 +363,23 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
 
         strategy = options.get("controller_evidence_strategy")
         if strategy is not None and strategy not in CONTROLLER_EVIDENCE_STRATEGIES:
-            issues.append(ValidationIssue(
-                "control.options.controller_evidence_strategy",
-                f"must be one of {list(CONTROLLER_EVIDENCE_STRATEGIES)}",
-            ))
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_evidence_strategy",
+                    f"must be one of {list(CONTROLLER_EVIDENCE_STRATEGIES)}",
+                )
+            )
             strategy = None
         values["controller_evidence_strategy"] = strategy
 
-        evidence_sources = sum(bool(value) for value in (
-            values["controller_fact_id"], values["controller_fact_selector"], strategy
-        ))
+        evidence_sources = sum(
+            bool(value)
+            for value in (
+                values["controller_fact_id"],
+                values["controller_fact_selector"],
+                strategy,
+            )
+        )
         if evidence_sources > 1:
             issues.append(
                 ValidationIssue(
@@ -310,7 +390,9 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 )
             )
         if mode == RECOMMENDATION_PLUS_FACT and not (
-            values["controller_fact_id"] or values["controller_fact_selector"] or strategy
+            values["controller_fact_id"]
+            or values["controller_fact_selector"]
+            or strategy
         ):
             issues.append(
                 ValidationIssue(
@@ -320,13 +402,23 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 )
             )
         if mode in FACTLESS_MESSAGE_MODES and (
-            values["controller_fact_id"] or values["controller_fact_selector"] or strategy
+            values["controller_fact_id"]
+            or values["controller_fact_selector"]
+            or strategy
         ):
             issues.append(
                 ValidationIssue(
                     "control.options.message_mode",
                     f"{mode!r} transmits no fact; remove "
                     "controller_fact_id/controller_fact_selector or switch mode",
+                )
+            )
+        if actuation_mode == COORDINATION_REQUEST and mode != RECOMMENDATION_ONLY:
+            issues.append(
+                ValidationIssue(
+                    "control.options.message_mode",
+                    "coordination_request requires recommendation_only because it "
+                    "never injects controller evidence",
                 )
             )
         return values
@@ -337,6 +429,9 @@ def create_relational_round_budgeted_control(config: ControlConfig) -> Control:
 
 
 __all__ = [
+    "CONTROLLER_ACTUATION_MODES",
+    "COORDINATION_REQUEST",
+    "DIRECT_RECOMMENDATION",
     "ADVOCACY_SCHEDULES",
     "FACTLESS_MESSAGE_MODES",
     "FACT_SELECTORS",

@@ -434,8 +434,13 @@ def mean_field_transfer_entropy(
         return math.nan
     a = float(advocacy)
     return (
-        a * (1.0 - a) / (2.0 * math.log(2.0))
-        * N * c * c * drifts["delta_f"] ** 2
+        a
+        * (1.0 - a)
+        / (2.0 * math.log(2.0))
+        * N
+        * c
+        * c
+        * drifts["delta_f"] ** 2
         / noise
     )
 
@@ -483,10 +488,9 @@ class ClassicalReference:
         definition of the controlled q-voter's closed loop.
         """
 
-        return (
-            (1.0 - self.advocacy)[:, None] * self.R0
-            + self.advocacy[:, None] * self.R1
-        )
+        return (1.0 - self.advocacy)[:, None] * self.R0 + self.advocacy[
+            :, None
+        ] * self.R1
 
     def occupancy_weighted_te(self, occupancy: Sequence[float]) -> float:
         """`sum_n P(n) T_qv(n)` - the local theory read over a given occupancy."""
@@ -609,10 +613,7 @@ def q1_current_closed_forms(
     if np.any(initial < 0.0) or not np.isclose(initial.sum(), 1.0, atol=1e-12):
         raise ValueError("initial_distribution must be a probability distribution")
     states = np.arange(N + 1, dtype=float)
-    response = float(
-        initial
-        @ ((N - states) * (1.0 - (1.0 - 1.0 / N) ** int(b)))
-    )
+    response = float(initial @ ((N - states) * (1.0 - (1.0 - 1.0 / N) ** int(b))))
     return {
         "q1_current_mean_noop_closed_form_theory": 0.0,
         "q1_current_mean_advocate_closed_form_theory": response,
@@ -665,6 +666,8 @@ def theory_parameters_from_record(record: Mapping[str, Any]) -> TheoryParameters
     skip.
     """
 
+    if record.get("social_mode", "peer") != "peer":
+        return None
     required = (
         record.get("N"),
         record.get("social_group_size"),
@@ -678,8 +681,12 @@ def theory_parameters_from_record(record: Mapping[str, Any]) -> TheoryParameters
     N, q, q_c, b, beta, theta = required
     try:
         return TheoryParameters(
-            N=int(N), q=int(q), q_c=int(q_c), b=int(b),
-            beta=float(beta), theta=float(theta),
+            N=int(N),
+            q=int(q),
+            q_c=int(q_c),
+            b=int(b),
+            beta=float(beta),
+            theta=float(theta),
         )
     except (ValueError, TypeError):
         return None

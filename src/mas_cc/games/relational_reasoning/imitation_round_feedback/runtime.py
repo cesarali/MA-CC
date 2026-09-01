@@ -37,6 +37,7 @@ import asyncio
 import hashlib
 import json
 import random
+from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
@@ -60,7 +61,12 @@ from mas_cc.storage import canonical_hash
 
 from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation.metrics import population_observables
-from .controller import RECOMMENDATION_ONLY, SILENT
+from .controller import (
+    COORDINATION_REQUEST,
+    DIRECT_RECOMMENDATION,
+    RECOMMENDATION_ONLY,
+    SILENT,
+)
 from .game import RelationalImitationRoundFeedbackGame
 from .initialization import (
     initialization_artifact_path,
@@ -69,17 +75,27 @@ from .initialization import (
     read_initialization_artifact,
 )
 from .metrics import knowledge_observables, knowledge_strata
-from .prompts import PROMPT_FAMILY, agent_label, control_label, render_control_reason
+from .prompts import (
+    BOARD_PROMPT_FAMILY,
+    PROMPT_FAMILY,
+    agent_label,
+    control_label,
+    render_control_reason,
+)
 from .state import (
     ACTIVE_FACT_IDS,
     FOCAL_UPDATE,
+    MESSAGE_REQUEST,
+    SOCIAL_MODE_BOARD,
+    SOCIAL_MODE_PEER,
+    BlackboardMessage,
     RelationalAgentState,
     RelationalGameState,
     RelationalRoundRecord,
     reasoning_fact_ids,
 )
 
-PROMPT_FAMILIES = (PROMPT_FAMILY,)
+PROMPT_FAMILIES = (PROMPT_FAMILY, BOARD_PROMPT_FAMILY)
 
 CONTROL_SOURCE_ID = "control-source"
 """The controller's stable identifier in the trajectory.  It is *not* what the
@@ -398,6 +414,111 @@ def build_social_sources(
     return tuple(sources)
 
 
+def _message_source(
+    state: RelationalGameState, message: BlackboardMessage, round_index: int
+) -> dict[str, Any]:
+    fact_id = message.shared_fact_id
+    return {
+        "message_id": message.message_id,
+        "source_id": message.author_id,
+        "source_type": (
+            "control" if message.author_kind == "controller" else "ordinary"
+        ),
+        "author_kind": message.author_kind,
+        "label": (
+            control_label(len(state.agents))
+            if message.author_kind == "controller"
+            else agent_label(message.author_id)
+        ),
+        "message_type": message.message_type,
+        "text": message.text,
+        "vote": message.vote,
+        "shared_fact_id": fact_id,
+        "shared_fact_text": None if fact_id is None else state.fact_text(fact_id),
+        "reply_to": message.reply_to,
+        "round_created": message.round_created,
+        "micro_step_created": message.micro_step_created,
+        "expires_after_round": message.expires_after_round,
+        "message_age_rounds": round_index - message.round_created,
+        "message_age_micro_steps": state.turn - message.micro_step_created,
+    }
+
+
+def _transient_recommendation_source(
+    state: RelationalGameState,
+    *,
+    target: str,
+    round_index: int,
+    within_round_index: int,
+    shared_fact_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "message_id": f"direct-r{round_index:04d}-u{within_round_index:04d}",
+        "source_id": CONTROL_SOURCE_ID,
+        "source_type": "control",
+        "author_kind": "controller",
+        "label": control_label(len(state.agents)),
+        "message_type": "CLAIM",
+        "text": render_control_reason(target),
+        "vote": target,
+        "shared_fact_id": shared_fact_id,
+        "shared_fact_text": (
+            None if shared_fact_id is None else state.fact_text(shared_fact_id)
+        ),
+        "reply_to": None,
+        "round_created": round_index,
+        "micro_step_created": state.turn,
+        "expires_after_round": round_index,
+        "message_age_rounds": 0,
+        "message_age_micro_steps": 0,
+        "transient": True,
+    }
+
+
+def _append_controller_request(
+    state: RelationalGameState,
+    *,
+    target: str,
+    text: str,
+    round_index: int,
+    lifetime_rounds: int,
+) -> tuple[RelationalGameState, BlackboardMessage]:
+    board = state.blackboard
+    message = BlackboardMessage(
+        message_id=f"m{len(board.messages) + 1:06d}",
+        author_id=CONTROL_SOURCE_ID,
+        message_type=MESSAGE_REQUEST,
+        text=text,
+        vote=target,
+        shared_fact_id=None,
+        reply_to=None,
+        round_created=round_index,
+        micro_step_created=state.turn,
+        expires_after_round=round_index + lifetime_rounds - 1,
+        author_kind="controller",
+    )
+    board = board.append(message)
+    return replace(
+        state, data={**dict(state.data), "blackboard": board.to_list()}
+    ), message
+
+
+def _descends_from_controller(
+    state: RelationalGameState, message: BlackboardMessage
+) -> bool:
+    parent = message.reply_to
+    visited: set[str] = set()
+    while parent is not None and parent not in visited:
+        visited.add(parent)
+        ancestor = state.blackboard.find(parent)
+        if ancestor is None:
+            return False
+        if ancestor.author_kind == "controller":
+            return True
+        parent = ancestor.reply_to
+    return False
+
+
 def apply_epistemic_persistence(
     state: RelationalGameState,
     *,
@@ -497,6 +618,7 @@ async def run_relational_imitation_round_feedback_game(
     replacement_rng = root.derive(
         "relational-controller-slot-replacement"
     ).create_random()
+    board_rng = root.derive("relational-blackboard-sampling").create_random()
 
     resolved_control = (
         None if control is None or isinstance(control, NoneControl) else control
@@ -518,6 +640,13 @@ async def run_relational_imitation_round_feedback_game(
     # `recommendation_only` does, instead of failing here.
     controller_fact_id: str | None = None
     message_mode = str(getattr(resolved_control, "message_mode", RECOMMENDATION_ONLY))
+    actuation_mode = str(
+        getattr(resolved_control, "controller_actuation_mode", DIRECT_RECOMMENDATION)
+    )
+    if rules.social_mode == SOCIAL_MODE_PEER and actuation_mode == COORDINATION_REQUEST:
+        raise ValueError(
+            "coordination_request requires game.options.social_mode: board"
+        )
     evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
     state = game.initialize(config.game, config.execution.seed)
     resolver = getattr(resolved_control, "resolve_fact_id", None)
@@ -591,15 +720,19 @@ async def run_relational_imitation_round_feedback_game(
             state.agents,
             state.supporting_fact_ids,
             fact_ids_attribute=ACTIVE_FACT_IDS,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
         historical_knowledge_before = knowledge_observables(
-            state.agents, state.supporting_fact_ids
+            state.agents,
+            state.supporting_fact_ids,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
         strata_before = knowledge_strata(
             state.agents,
             state.supporting_fact_ids,
             state.correct_answer,
             fact_ids_attribute=ACTIVE_FACT_IDS,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
 
         round_signal: RoundControlSignal | None = None
@@ -669,35 +802,107 @@ async def run_relational_imitation_round_feedback_game(
         # compact artifact profile.
         controlled_off_target = 0
         controlled_adoptions = 0
+        round_board_sizes: list[int] = []
+        round_created_message_ids: list[str] = []
+        round_controller_post_ids: list[str] = []
+        round_controller_readers: set[str] = set()
+        round_controller_exposure_count = 0
 
         for within_round_index in range(rules.n_agents):
-            selected = game.select_participants(state, config.game, participant_rng)
-            focal, sampled_peers = selected[0], tuple(selected[1:])
             controlled_slot = within_round_index in controlled_set
-            replaced_peer_slot = (
-                replacement_rng.randrange(len(sampled_peers))
-                if controlled_slot
-                else None
-            )
-            replaced_peer = (
-                None
-                if replaced_peer_slot is None
-                else sampled_peers[replaced_peer_slot]
-            )
-            effective_peers = tuple(
-                peer
-                for slot, peer in enumerate(sampled_peers)
-                if slot != replaced_peer_slot
-            )
-            social_sources = build_social_sources(
-                state,
-                sampled_peers,
-                replaced_peer_slot=replaced_peer_slot,
-                controller_target=target,
-                population_size=rules.n_agents,
-                controller_fact_id=round_controller_fact,
-                controller_transmits=message_mode != SILENT,
-            )
+            controller_post: BlackboardMessage | None = None
+            board_before = len(state.blackboard.live_messages(round_index))
+            if rules.social_mode == SOCIAL_MODE_PEER:
+                selected = game.select_participants(state, config.game, participant_rng)
+                focal, sampled_peers = selected[0], tuple(selected[1:])
+                replaced_peer_slot = (
+                    replacement_rng.randrange(len(sampled_peers))
+                    if controlled_slot
+                    else None
+                )
+                replaced_peer = (
+                    None
+                    if replaced_peer_slot is None
+                    else sampled_peers[replaced_peer_slot]
+                )
+                effective_peers = tuple(
+                    peer
+                    for slot, peer in enumerate(sampled_peers)
+                    if slot != replaced_peer_slot
+                )
+                social_sources = build_social_sources(
+                    state,
+                    sampled_peers,
+                    replaced_peer_slot=replaced_peer_slot,
+                    controller_target=target,
+                    population_size=rules.n_agents,
+                    controller_fact_id=round_controller_fact,
+                    controller_transmits=message_mode != SILENT,
+                )
+            else:
+                focal = participant_rng.choice(
+                    [agent.agent_id for agent in state.agents]
+                )
+                sampled_peers = ()
+                effective_peers = ()
+                replaced_peer = None
+                replaced_peer_slot = None
+                if (
+                    controlled_slot
+                    and actuation_mode == COORDINATION_REQUEST
+                    and target is not None
+                    and resolved_control is not None
+                ):
+                    request_text = getattr(
+                        resolved_control, "coordination_request_text"
+                    )(
+                        target,
+                        dict(round_signal.observation).get(
+                            "sampled_opinion_counts", {}
+                        ),
+                        state.answer_display_texts,
+                    )
+                    state, controller_post = _append_controller_request(
+                        state,
+                        target=target,
+                        text=request_text,
+                        round_index=round_index,
+                        lifetime_rounds=rules.board_message_lifetime_rounds,
+                    )
+                    round_controller_post_ids.append(controller_post.message_id)
+                    round_created_message_ids.append(controller_post.message_id)
+                ordinary_limit = rules.social_group_size
+                if controlled_slot and actuation_mode == DIRECT_RECOMMENDATION:
+                    ordinary_limit -= 1
+                sampled_messages = state.blackboard.sample_live(
+                    round_index,
+                    max(0, ordinary_limit),
+                    board_rng,
+                    exclude_author_id=(
+                        str(focal) if rules.board_exclude_self_authored else None
+                    ),
+                )
+                sources = [
+                    _message_source(state, message, round_index)
+                    for message in sampled_messages
+                ]
+                if (
+                    controlled_slot
+                    and actuation_mode == DIRECT_RECOMMENDATION
+                    and target is not None
+                    and message_mode != SILENT
+                ):
+                    sources.insert(
+                        0,
+                        _transient_recommendation_source(
+                            state,
+                            target=target,
+                            round_index=round_index,
+                            within_round_index=within_round_index,
+                            shared_fact_id=round_controller_fact,
+                        ),
+                    )
+                social_sources = tuple(sources)
             request = game.ballot_request(state, focal, social_sources, config.game)
             update = await _execute_decision(
                 game, request, state, config, provider, counter, root, observer
@@ -722,7 +927,7 @@ async def run_relational_imitation_round_feedback_game(
                 controlled_slot=controlled_slot and control_source is not None,
                 message=None
                 if control_source is None
-                else str(control_source["reason"]),
+                else str(control_source.get("reason", control_source.get("text"))),
             )
             micro_index = state.turn + 1
             round_fields = {
@@ -740,6 +945,56 @@ async def run_relational_imitation_round_feedback_game(
                 "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
                 "controller_evidence_strategy": evidence_strategy,
                 "controller_episode_fact_id": controller_fact_id,
+                "controller_actuation_mode": actuation_mode,
+            }
+            sampled_controller_ids = [
+                str(source["message_id"])
+                for source in social_sources
+                if source.get("author_kind") == "controller"
+            ]
+            if sampled_controller_ids:
+                round_controller_exposure_count += len(sampled_controller_ids)
+                round_controller_readers.add(str(focal))
+            board_fields = {
+                "sampled_message_ids": [
+                    source.get("message_id") for source in social_sources
+                ]
+                if rules.social_mode == SOCIAL_MODE_BOARD
+                else [],
+                "sampled_message_authors": [
+                    source.get("source_id") for source in social_sources
+                ]
+                if rules.social_mode == SOCIAL_MODE_BOARD
+                else [],
+                "sampled_message_types": [
+                    source.get("message_type") for source in social_sources
+                ]
+                if rules.social_mode == SOCIAL_MODE_BOARD
+                else [],
+                "sampled_message_ages": [
+                    {
+                        "micro_steps": source.get("message_age_micro_steps", 0),
+                        "rounds": source.get("message_age_rounds", 0),
+                    }
+                    for source in social_sources
+                ]
+                if rules.social_mode == SOCIAL_MODE_BOARD
+                else [],
+                "sampled_controller_message_ids": sampled_controller_ids,
+                "board_size_before": board_before,
+                "controller_message_posted": controller_post is not None,
+                "controller_message_id": (
+                    None if controller_post is None else controller_post.message_id
+                ),
+                "controller_message_directly_exposed": any(
+                    source.get("source_type") == "control" and source.get("transient")
+                    for source in social_sources
+                ),
+                "theory_status": (
+                    "reference_only"
+                    if rules.social_mode == SOCIAL_MODE_BOARD
+                    else "matched_reference"
+                ),
             }
             transition = game.apply_round_event_transition(
                 state,
@@ -753,8 +1008,16 @@ async def run_relational_imitation_round_feedback_game(
                 effective_peers=effective_peers,
                 replaced_peer=replaced_peer,
                 replaced_peer_slot=replaced_peer_slot,
+                board_fields=board_fields,
             )
             event = transition.event or {}
+            if event.get("new_message_id") is not None:
+                round_created_message_ids.append(str(event["new_message_id"]))
+            if rules.social_mode == SOCIAL_MODE_BOARD:
+                board_after = len(
+                    transition.next_state.blackboard.live_messages(round_index)
+                )
+                round_board_sizes.extend((board_before, board_after))
             peer_exposures += int(event.get("peer_fact_exposures", 0))
             controller_exposures += int(event.get("controller_fact_exposures", 0))
             new_peer_facts += int(event.get("new_peer_facts", 0))
@@ -805,9 +1068,12 @@ async def run_relational_imitation_round_feedback_game(
             state.agents,
             state.supporting_fact_ids,
             fact_ids_attribute=ACTIVE_FACT_IDS,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
         historical_knowledge_after = knowledge_observables(
-            state.agents, state.supporting_fact_ids
+            state.agents,
+            state.supporting_fact_ids,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
 
         persistence_seed: int | None = None
@@ -827,12 +1093,14 @@ async def run_relational_imitation_round_feedback_game(
             state.agents,
             state.supporting_fact_ids,
             fact_ids_attribute=ACTIVE_FACT_IDS,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
         strata_after = knowledge_strata(
             state.agents,
             state.supporting_fact_ids,
             state.correct_answer,
             fact_ids_attribute=ACTIVE_FACT_IDS,
+            supporting_fact_groups=state.task.get("supporting_fact_groups", {}),
         )
         deactivated_supporting = sum(
             1 for _, fact_id in deactivated if fact_id in set(state.supporting_fact_ids)
@@ -847,17 +1115,43 @@ async def run_relational_imitation_round_feedback_game(
         target_index = options.index(analysis_target)
         q_c = None if round_signal is None else int(sensor.get("sample_size", 0))
         sensor_target_share = None if not q_c else sensor_counts[target_index] / q_c
+        messages_created = tuple(
+            message
+            for message in state.blackboard.messages
+            if message.message_id in set(round_created_message_ids)
+        )
+        message_type_counts = dict(
+            Counter(message.message_type for message in messages_created)
+        )
+        direct_replies = sum(
+            1
+            for message in messages_created
+            if message.reply_to in set(round_controller_post_ids)
+        )
+        controller_descendants = sum(
+            1
+            for message in messages_created
+            if message.author_kind == "agent"
+            and _descends_from_controller(state, message)
+        )
+        _, expired_message_ids = state.blackboard.expire(round_index)
+        surviving_message_count = len(state.blackboard.live_messages(round_index + 1))
         round_event = {
             "episode_id": f"{state.task['task_id']}-{state.data['seed']}",
             "round_index": round_index,
             "seed": int(state.data["seed"]),
             "task_id": state.task["task_id"],
+            "task_family": state.task.get("task_family", rules.task_family),
             "task_seed": state.task["task_seed"],
             "reasoning_depth": state.task["reasoning_depth"],
             "K": len(options),
             "N": rules.n_agents,
             "dynamics_mode": rules.dynamics_mode,
             "social_group_size": rules.social_group_size,
+            "social_mode": rules.social_mode,
+            "board_sampling": rules.board_sampling,
+            "message_lifetime_rounds": rules.board_message_lifetime_rounds,
+            "board_exclude_self_authored": rules.board_exclude_self_authored,
             "sensor_sample_size": q_c,
             "intervention_budget": intervention_budget,
             "sensing_fraction": None if q_c is None else q_c / rules.n_agents,
@@ -878,6 +1172,7 @@ async def run_relational_imitation_round_feedback_game(
             "controller_advocate_probability": probability,
             "controller_advocacy_probability": probability,
             "controller_message_mode": message_mode,
+            "controller_actuation_mode": actuation_mode,
             "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
             "controller_evidence_strategy": evidence_strategy,
             "epistemic_persistence": rules.epistemic_persistence,
@@ -1031,6 +1326,40 @@ async def run_relational_imitation_round_feedback_game(
             "new_controller_facts": new_controller_facts,
             "reactivated_peer_fact_count": reactivated_peer_facts,
             "reactivated_controller_fact_count": reactivated_controller_facts,
+            # --- finite-memory public board -------------------------------
+            "board_messages_created": len(messages_created),
+            "board_messages_expired": len(expired_message_ids),
+            "expired_message_count": len(expired_message_ids),
+            "surviving_message_count": surviving_message_count,
+            "board_peak_size": max(round_board_sizes, default=0),
+            "board_mean_size": (
+                sum(round_board_sizes) / len(round_board_sizes)
+                if round_board_sizes
+                else 0.0
+            ),
+            "message_type_counts": message_type_counts,
+            "reply_count": message_type_counts.get("REPLY", 0),
+            "correction_count": message_type_counts.get("CORRECTION", 0),
+            "request_count": message_type_counts.get("REQUEST", 0),
+            "result_count": message_type_counts.get("RESULT", 0),
+            "controller_posts": len(round_controller_post_ids),
+            "controller_post_ids": list(round_controller_post_ids),
+            "controller_message_exposures": round_controller_exposure_count,
+            "controller_unique_readers": len(round_controller_readers),
+            "controller_direct_replies": direct_replies,
+            "controller_reply_descendants": controller_descendants,
+            "peer_evidence_exposures": peer_exposures,
+            "new_evidence_acquisitions": new_peer_facts + new_controller_facts,
+            "theory_status": (
+                "reference_only"
+                if rules.social_mode == SOCIAL_MODE_BOARD
+                else "matched_reference"
+            ),
+            "theory_skip_reason": (
+                "finite-memory q-message board is not contemporaneous q-peer sampling"
+                if rules.social_mode == SOCIAL_MODE_BOARD
+                else None
+            ),
             # --- self-contained round summary (§ compact artifact profile) ---
             # These make round_trajectory.jsonl sufficient on its own: under
             # `results_only` the microscopic trajectory is not retained, so
@@ -1060,7 +1389,7 @@ async def run_relational_imitation_round_feedback_game(
                 "knowledge_stratum_counts"
             ],
             "truth_counts_by_stratum_before": strata_before["truth_counts_by_stratum"],
-            "reasoning_depth_L": len(state.supporting_fact_ids),
+            "reasoning_depth_L": int(state.task["reasoning_depth"]),
             # Controlled-update response. The rate is conditional on the focal
             # not already standing on the target; both counts are kept so the
             # unconditional form can be recomputed.

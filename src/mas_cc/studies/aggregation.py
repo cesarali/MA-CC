@@ -2917,6 +2917,14 @@ def aggregate_study(
             "analysis theoretical_reference must be none for finite epistemic "
             "persistence"
         )
+    if theoretical_reference != "none" and any(
+        event.event.get("record_type") == "relational_imitation_round_feedback"
+        and event.event.get("social_mode", "peer") == "board"
+        for event in events
+    ):
+        raise ValueError(
+            "analysis theoretical_reference must be none for finite-memory board mode"
+        )
     endpoint_recipe = recipe.get("episode_endpoints")
     episode_endpoints = pd.DataFrame()
     episode_endpoint_summary = pd.DataFrame()

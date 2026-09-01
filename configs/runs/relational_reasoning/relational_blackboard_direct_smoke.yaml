@@ -1,0 +1,103 @@
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  temperature: 0.0
+  max_output_tokens: 256
+  options:
+    response: '{"vote":"C","reason":"private smoke reasoning","shared_fact_id":"none","public_message":{"type":"RESULT","text":"My current evidence favors this option.","reply_to":null}}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 2
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/examples
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 1
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: vigilant
+    initialization:
+      mode: uniform_random
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 6
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 4
+    advocacy_schedule: always
+    message_mode: recommendation_only
+    controller_actuation_mode: direct_recommendation
+
+execution:
+  seed: 20260901
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 10.0
+  max_cost_per_run: 10.0
+  max_provider_requests: 500
+  max_input_tokens: 1000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: true
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: true
+
+analysis:
+  enabled: false
+  options:
+    theoretical_reference: none
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    sweep_experiment: false
+
+experiment:
+  name: relational-blackboard-direct-smoke
+  description: Finite-memory board smoke run with transient direct recommendations.
+  tags: [relational, board, direct-recommendation, smoke]
