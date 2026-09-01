@@ -16,3 +16,8 @@ population state. That complete physical state—votes, reasons, exposed facts,
 active and historical facts, task, and agent/fact assignment—is persisted once
 and reused across all 18 `rho x b` cells and Study 09k. Persistence `rho` and
 budget `b` begin acting only after this shared state exists.
+
+The initial Study 09j execution is planned as a controlled 40-concurrency
+provider test: four cell shards with ten request permits each, a hard 600 RPM
+ceiling, and the shared adaptive coordinator enabled. The throttle may be
+lowered while the array is active; already-running shards finish normally.

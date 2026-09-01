@@ -135,9 +135,18 @@ the existing safe episode/cell recovery path.
 
 Keep the execution-only coordinator under the study result root, but make the
 storage protocol explicit and tested for the Potsdam shared filesystem.
-Continue using a stable lock file if verified reliable. Writes must remain
-atomic, durable enough for this coordination purpose, schema-versioned, and
-recoverable from a process dying before or after replace.
+The Potsdam contention probe demonstrated that advisory `fcntl` locking on the
+shared filesystem did not reliably exclude writers across compute nodes. The
+implemented backend therefore uses a shared filesystem ticket queue for fair
+cross-node ordering plus atomic directory creation for exclusive ownership.
+Within each worker process, a FIFO lock prevents coroutine starvation. State
+writes remain atomic, durable enough for this coordination purpose, and
+schema-versioned. Expired uniquely named queue tickets may be removed without
+deleting another worker's live ticket.
+
+Denied acquire polls and snapshots are read-only transactions. They must not
+replace and fsync the complete JSON state, because that behavior creates a
+write storm precisely when the coordinator is saturated.
 
 If a multi-node probe demonstrates that the filesystem cannot provide the
 required lock/visibility semantics, replace the JSON transaction backend with
@@ -250,4 +259,3 @@ validation or scientific game semantics to improve completion rate.
   estimator semantics;
 - adding study-specific scheduling code;
 - maximizing request volume before cross-node correctness is demonstrated.
-
