@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0001",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 36,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Alice, Bob, Charlie) must be allocated between Cleaning and Food service management. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Alice",
+    "Bob",
+    "Charlie"
+  ],
+  "tasks": [
+    "Cleaning",
+    "Food service management"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Cleaning: Charlie, Food service management: Alice and Bob",
+      "assignment": {
+        "Cleaning": [
+          "Charlie"
+        ],
+        "Food service management": [
+          "Alice",
+          "Bob"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Cleaning: Bob, Food service management: Alice and Charlie",
+      "assignment": {
+        "Cleaning": [
+          "Bob"
+        ],
+        "Food service management": [
+          "Alice",
+          "Charlie"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Cleaning: Alice, Food service management: Bob and Charlie",
+      "assignment": {
+        "Cleaning": [
+          "Alice"
+        ],
+        "Food service management": [
+          "Bob",
+          "Charlie"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_2",
+  "correct_option_index": 2,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Charlie often mixes up orders and has difficulty handling the rush during lunch hours.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Charlie was previously a janitor and has no experience in the food industry.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Bob sometimes forgets to restock salt and pepper shakers but doesn't mess up the orders.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Bob has been working in the food industry for a couple of years.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Charlie has appreciated Bob's knowledge about food ordering and handling.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Bob and Charlie have successfully co-managed the cafeteria during rush hours.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": ">Bob gets irritated by Alice because, she is frequently lost in thoughts, slowing down their work.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": ">Alice dislikes Bob because he reminds her of a bully from her childhood.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Charlie feels that Alice micromanages, which hinders his workflow.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Alice is often irritated by Charlie's lack of discipline in his work.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Alice used to be a house cleaner before she started working at the office.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Alice tirelessly ensures that every corner of the office is dust-free.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Charlie suffers from dust allergies, aggravating his condition during cleanup.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Charlie dislikes handling dirty items, leaving tasks incomplete.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Bob is scared of bugs and avoids cleaning areas where they might be present.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Bob can't handle strong cleaning agents due to his sensitive skin.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Alice has difficulty multitasking during rush on lunch hours.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Alice never paid attention in the culinary arts class during high school.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e00_01",
+        "e03_00",
+        "e04_00"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e05_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e08_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e00_00",
+        "e02_01",
+        "e07_00"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e00_00",
+        "e03_00",
+        "e03_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e02_00",
+        "e03_01",
+        "e08_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e03_00",
+        "e07_01",
+        "e08_00"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e01_01",
+        "e05_01",
+        "e07_00"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e00_01",
+        "e01_00",
+        "e06_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e02_00",
+        "e03_01",
+        "e08_00"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e08_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e04_01",
+        "e05_00",
+        "e08_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e05_01",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e01_01",
+        "e02_01",
+        "e06_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e00_01",
+        "e04_00",
+        "e04_01"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e05_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e08_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_00",
+        "e02_01",
+        "e07_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e05_00"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e04_01",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e07_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e05_00",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e03_01",
+        "e06_00",
+        "e06_01"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e00_00",
+        "e06_01",
+        "e07_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Charlie is bad at food service management.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Charlie:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Bob is okay at food service management.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Bob:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Bob and Charlie work okay together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Bob:Charlie",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Alice and Bob work badly together.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "coop:Alice:Bob",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Alice and Charlie work badly together.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "coop:Alice:Charlie",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Alice is okay at cleaning.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Alice:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Charlie is bad at cleaning.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Charlie:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Bob is bad at cleaning.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Bob:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Alice is bad at food service management.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Alice:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Cleaning",
+      "Food service management"
+    ],
+    "people": [
+      "Alice",
+      "Bob",
+      "Charlie"
+    ],
+    "matrix": {
+      "Alice": {
+        "skills": [
+          2,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Bob": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          0,
+          2
+        ]
+      },
+      "Charlie": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          2,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Alice"
+      ],
+      [
+        "Bob",
+        "Charlie"
+      ]
+    ],
+    "choice_scores": [
+      5,
+      4,
+      7
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "61609db78ec4a3e338f9bfaab5e12f943f284dda8fa440dc804d043759468457"
+}

@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0006",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 194,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Emily, Rachel, Michael) must be allocated between Character Development and Plot Progression. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Emily",
+    "Rachel",
+    "Michael"
+  ],
+  "tasks": [
+    "Character Development",
+    "Plot Progression"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Character Development: Michael, Plot Progression: Emily and Rachel",
+      "assignment": {
+        "Character Development": [
+          "Michael"
+        ],
+        "Plot Progression": [
+          "Emily",
+          "Rachel"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Character Development: Emily, Plot Progression: Michael and Rachel",
+      "assignment": {
+        "Character Development": [
+          "Emily"
+        ],
+        "Plot Progression": [
+          "Michael",
+          "Rachel"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Character Development: Rachel, Plot Progression: Emily and Michael",
+      "assignment": {
+        "Character Development": [
+          "Rachel"
+        ],
+        "Plot Progression": [
+          "Emily",
+          "Michael"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Michael is a team player who thrives on collaboration.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Emily is a perfectionist and prefers to work alone.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Rachel loves to dive into the complexities of characters in her favorite novels.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Rachel has a degree in psychology, providing her a deep understanding of motivations and behavior.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Rachel loves to determine how momentary events in a story tie into the bigger picture.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Rachel has won awards in screenwriting which requires plot structures.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Michael has expressed frustration in the past about understanding character emotions.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Michael is methodical and places high importance on structure and timeline.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Michael shows a keen interest in studying the plots of popular novels.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Michael has worked on creating timelines for previous projects.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Emily places a higher emphasis on perfection in character development rather than developing the story's plot.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Emily has a tendency to disregard the significance of consecutive events leading to a climax.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Emily gets upset when timelines she hasn't approved are used.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Rachel likes to create her own timelines for character development.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Emily would write character driven one-act plays in college and they were always well received.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Emily has a nuanced understanding of human emotions.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Michael is focused strictly on the structure and can dismiss creative inputs.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Rachel often has innovative, creative suggestions that deviate from the established structure.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e04_00",
+        "e05_01",
+        "e06_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e03_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e02_01",
+        "e03_01",
+        "e08_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e02_00",
+        "e02_01",
+        "e07_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e00_00",
+        "e02_01",
+        "e04_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e07_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e01_00",
+        "e05_01",
+        "e07_00"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e00_01",
+        "e03_01",
+        "e07_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e03_00",
+        "e04_00",
+        "e06_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e01_01",
+        "e06_01",
+        "e08_00"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e02_00",
+        "e05_01",
+        "e06_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e04_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e05_01",
+        "e07_00",
+        "e08_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e01_00",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e01_01",
+        "e04_01",
+        "e05_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_00",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e02_00",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_01",
+        "e04_00",
+        "e08_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e00_00",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e04_00",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e01_00",
+        "e03_01",
+        "e08_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_01",
+        "e02_01",
+        "e03_00"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e00_00",
+        "e03_00",
+        "e05_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e06_00",
+        "e07_00",
+        "e07_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Emily and Michael work badly together.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "coop:Emily:Michael",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Rachel is good at character development.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Rachel:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Rachel is good at plot progression.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Rachel:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Michael is bad at character development.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Michael:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Michael is okay at plot progression.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Michael:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Emily is bad at plot progression.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Emily:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Emily and Rachel work badly together.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "coop:Emily:Rachel",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Emily is good at character development.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Emily:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Rachel and Michael work badly together.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "coop:Rachel:Michael",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Character Development",
+      "Plot Progression"
+    ],
+    "people": [
+      "Emily",
+      "Rachel",
+      "Michael"
+    ],
+    "matrix": {
+      "Emily": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Rachel": {
+        "skills": [
+          3,
+          3
+        ],
+        "cooperation": [
+          1,
+          0,
+          1
+        ]
+      },
+      "Michael": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          1,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Emily"
+      ],
+      [
+        "Michael",
+        "Rachel"
+      ]
+    ],
+    "choice_scores": [
+      6,
+      9,
+      7
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "89d4c612fccbcf70fe3d636c40bf75fd625806354d400bdf97af516aad72123e"
+}

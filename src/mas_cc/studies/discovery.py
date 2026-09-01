@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
 
+from mas_cc.config import GridSpec, load_run_config_or_grid
+
+from .identity import protocol_fingerprint, scientific_cell_key
 from .submission import SubmissionEntry
 
 
@@ -36,7 +39,7 @@ class DiscoveredCell:
 
     @property
     def cell_key(self) -> str:
-        return f"{self.source_key}/{self.local_cell_id}"
+        return self.run.entry.scientific_cell_key or f"{self.source_key}/{self.local_cell_id}"
 
 
 def _json(path: Path) -> Mapping[str, Any]:
@@ -123,6 +126,18 @@ def discover_cells(runs: tuple[DiscoveredRun, ...]) -> tuple[DiscoveredCell, ...
             if not isinstance(overrides, Mapping):
                 raise ValueError(f"cell overrides must be a mapping: {override_path}")
             local_id = str(raw_overrides.get("cell_id", path.name if path != run.path else "run"))
+            scientific_key = run.entry.scientific_cell_key
+            if scientific_key == "AUTO":
+                source = load_run_config_or_grid(run.entry.config_path)
+                swept_paths = (
+                    tuple(axis.path for axis in source.axes)
+                    if isinstance(source, GridSpec)
+                    else ()
+                )
+                fingerprint = protocol_fingerprint(
+                    resolved, swept_paths=swept_paths
+                )
+                scientific_key = scientific_cell_key(fingerprint, overrides)
             identity = (run.entry.array_index, run.run_id, local_id)
             if identity in seen:
                 # A wrapper may contain both a copied run tree and a link to it.
@@ -131,7 +146,14 @@ def discover_cells(runs: tuple[DiscoveredRun, ...]) -> tuple[DiscoveredCell, ...
             seen.add(identity)
             cells.append(
                 DiscoveredCell(
-                    run=run,
+                    run=DiscoveredRun(
+                        entry=replace(run.entry, scientific_cell_key=scientific_key),
+                        path=run.path,
+                        manifest=run.manifest,
+                        run_id=run.run_id,
+                        game_type=run.game_type,
+                        resolved_config=run.resolved_config,
+                    ),
                     path=path.resolve(),
                     local_cell_id=local_id,
                     resolved_config=resolved,

@@ -9,6 +9,15 @@ The dynamics are the same two-clock structure as
 variable: alongside what each agent *votes*, the game tracks exactly what each
 agent *knows*, and it tracks every interaction that moved a piece of knowledge.
 
+The game has two social modes:
+
+* **peer mode** samples `q` current peer ballots. This is the legacy behavior.
+* **board mode** samples up to `q` live public messages from a finite-memory
+  blackboard. It never adds peer samples as a fallback.
+
+`q` always means the maximum number of social observations in one focal
+update. Only the observation type changes.
+
 ---
 
 ## 1. The relational task
@@ -138,6 +147,12 @@ no other code path writes to `K`.
 
 ### `shared_fact_id` is the only channel
 
+This statement applies to **peer mode**. In **board mode**, public message text
+is deliberately visible and can carry conclusions, questions, and summaries.
+There, `K_i` is an exact record of acquired source evidence, not a complete
+record of everything an agent may have learned from prose. A message with no
+`shared_fact_id` never creates a new exact evidence item.
+
 A ballot's `reason` is written, parsed, stored and available for analysis — but
 it is **never rendered into another agent's prompt**. If prose were shown to
 peers, an agent could pass a fact, or a conclusion drawn from one, while
@@ -221,6 +236,23 @@ Exactly one agent changes at each microscopic position. A round is `N`
 consecutive updates, so `game.horizon` counts rounds and the elementary-step
 horizon is `rounds × N`.
 
+### Board mode
+
+The board is append-only for provenance, but only unexpired messages can be
+sampled. Message types are `CLAIM`, `QUESTION`, `REQUEST`, `RESULT`, `REPLY`,
+and `CORRECTION`. `REPLY` and `CORRECTION` must point to a message that the
+focal agent actually saw. Each focal update may append at most one message, or
+none. The private `reason` is never copied into that public message.
+
+Sampling is uniform without replacement. It samples messages, not authors, so
+two different messages from one author may both be seen. Self-authored messages
+are excluded by default. If fewer than `q` messages are eligible, the agent sees
+only the available number. An empty board means no social input.
+
+`message_lifetime_rounds: 1` means a message created in round `r` remains
+readable for the rest of round `r` and is expired before sampling in round
+`r+1`. Longer values work in the same way.
+
 ---
 
 ## 6. The round-feedback controller
@@ -260,6 +292,20 @@ The controller is one persistent, ordinary-looking participant, labelled
 ---
 
 ## 7. Controller evidence
+
+In board mode, `control.options.controller_actuation_mode` separates two ways
+to deliver the unchanged round-level controller decision:
+
+* **`direct_recommendation`** replaces one of the `q` message slots with one
+  transient recommendation. It is guaranteed to be shown at each of the `b`
+  controlled positions and is never stored on the board.
+* **`coordination_request`** posts one deterministic `REQUEST` before normal
+  sampling at each of the `b` scheduled positions. It may be read immediately,
+  later, repeatedly, or not at all. It carries no fabricated evidence. Replies
+  and descendants remain reconstructable through `reply_to`.
+
+The controller still senses only `q_c` votes. Its board identity is rendered as
+an ordinary participant, never as an authority.
 
 `control.options.message_mode`:
 
@@ -343,7 +389,7 @@ injected fact spread further than a peer-shared one.
 
 ```yaml
 prompt:
-  prompt_family: relational_public_ballot
+  prompt_family: relational_blackboard_ballot
   prompt_version: 1
   response_contract:
     type: relational_public_ballot
@@ -359,9 +405,15 @@ game:
     dynamics_mode: reasoning
     rounds: 10
     social_group_size: 1     # q
+    social_mode: board       # peer preserves the legacy process
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
     vote_visibility: public
     prompt_version: 1
-    epistemic_prompt_class: strategic_uncertainty
+    receiver_epistemic_disposition: vigilant
     stop_on_consensus: false
     invalid_response_retries: 1
     expected_validation_failure_rate: 0.05
@@ -377,6 +429,7 @@ control:
     threshold: 0.5
     beta: 4.0
     intervention_budget: 4   # b
+    controller_actuation_mode: coordination_request
     advocacy_schedule: soft  # or: always (open loop)
     message_mode: recommendation_plus_fact
     controller_fact_id: f2   # or controller_fact_selector: supporting
@@ -388,6 +441,8 @@ control:
 | `game.options.task_id` | which task; omitted takes the first, which is only for smoke runs |
 | `game.options.rounds` | population rounds; the elementary horizon is `rounds × N` |
 | `game.options.social_group_size` | `q`, the number of visible social slots |
+| `game.options.social_mode` | `peer` for current peer ballots, or `board` for finite-memory public messages |
+| `game.options.board.message_lifetime_rounds` | how many round indices a message remains readable; `1` clears each round's messages at its boundary |
 | `game.options.dynamics_mode` | only `reasoning` is implemented; `classical` is refused explicitly |
 | `game.options.vote_visibility` | only `public` is implemented; `hidden` is reserved |
 | `game.options.epistemic_prompt_class` | `naive` \| `distributed_information` \| `strategic_uncertainty` (default) \| `evidence_calibrated`. This is a fixed prompt block and therefore changes the prompt definition hash. The deprecated `social_distrust` boolean remains accepted only as an unambiguous adapter (`true` → `strategic_uncertainty`, `false` → `distributed_information`); contradictory dual settings are refused. |
@@ -395,6 +450,7 @@ control:
 | `game.options.initialization.initial_distribution` | optional weights for `uniform_random` |
 | `game.options.stop_on_consensus` | checked only at round boundaries |
 | `control.options.intervention_budget` | `b`, controlled positions per advocating round |
+| `control.options.controller_actuation_mode` | `direct_recommendation` for guaranteed transient exposure, or `coordination_request` for persistent stochastic reach |
 | `control.options.message_mode` | `recommendation_only` \| `recommendation_plus_fact` |
 | `control.options.advocacy_schedule` | `soft` (default) closes the loop through the sensed target share; `always` advocates every round regardless. Open loop is what a controllability study wants — under `soft` the actuation a population gets is a function of its own state, confounding "did control move it" with "did it need moving". Sensing still runs and is still logged either way |
 | `control.options.controller_fact_id` / `controller_fact_selector` | the deterministic citation; exactly one, and only with `recommendation_plus_fact` |
@@ -424,6 +480,12 @@ new_peer_fact_ids  new_controller_fact_ids
 peer_fact_exposures  controller_fact_exposures
 focal_supporting_fact_coverage_before / _after
 m_truth  m_ctrl  m_order  H_vote  delta_*  truth_current_increment
+social_mode  q_requested  q_effective
+sampled_message_ids / authors / types / ages
+new_message_id / type / reply_to / shared_fact_id
+board_size_before / board_size_after
+controller_actuation_mode  controller_message_posted
+controller_message_id  controller_message_directly_exposed
 ```
 
 **Per round** (`round_trajectory.jsonl`):
@@ -440,6 +502,10 @@ new_peer_facts  new_controller_facts
 controller_action  controller_message_mode  controller_fact_id  controller_fact_text
 controlled_positions  controlled_positions_seed  controlled_positions_hash_or_id
 sensor_agent_ids  sensor_observed_opinions  sensor_count_vector  sensor_target_share
+board_messages_created / expired  board_peak_size / mean_size
+message_type_counts  reply_count  correction_count  request_count  result_count
+controller_posts  controller_message_exposures  controller_unique_readers
+controller_direct_replies  controller_reply_descendants
 ```
 
 Definitions:
@@ -459,6 +525,35 @@ supporting_fact_reach = per supporting fact, how many agents hold it
 ---
 
 ## 11. A worked example
+
+### Board example: `q = 1`, lifetime `1`
+
+```text
+Round starts: board empty.
+
+Update 1:
+Agent 4 sees no board message.
+Agent 4 votes B and posts QUESTION m1.
+
+Update 2:
+Agent 9 samples m1.
+Agent 9 votes C and posts REPLY m2 with evidence f2.
+
+Update 3:
+Agent 2 samples m2, acquires exact evidence f2, and changes vote.
+
+End of round:
+m1, m2, and all other lifetime-1 messages expire.
+```
+
+Under `coordination_request`, one scheduled position first posts a controller
+`REQUEST`. The focal then samples normally, so the new request is not guaranteed
+to be selected. A later agent may read it and post a `RESULT` or `REPLY`, which
+can influence still later readers. Under `direct_recommendation`, the same
+scheduled position instead sees one transient recommendation that never enters
+the board.
+
+### Peer example
 
 Task `task_0001`. `S = {f1, f2}`, answer `C` (`NORTH`).
 
@@ -527,6 +622,10 @@ stays separable from diffused information in every downstream analysis.
 ---
 
 ## 12. Current limitations
+
+* **Board mode has no exact q-voter theory.** Empirical vote, control, sensing,
+  and exact-evidence observables remain available, but configured theoretical
+  analysis must use `theoretical_reference: none`.
 
 * **`dynamics_mode: classical` is not implemented** and fails with an explicit
   message. A provider-free kernel would have to define what an exposed fact

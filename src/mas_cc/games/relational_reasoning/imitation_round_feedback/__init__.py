@@ -1,6 +1,9 @@
 """Relational reasoning imitation with one controller decision per round."""
 
 from .controller import (
+    CONTROLLER_ACTUATION_MODES,
+    COORDINATION_REQUEST,
+    DIRECT_RECOMMENDATION,
     CONTROLLER_EVIDENCE_STRATEGIES,
     EVIDENCE_NEUTRAL,
     EVIDENCE_STRATEGIC,
@@ -16,14 +19,19 @@ from .controller import (
 from .game import RelationalImitationRoundFeedbackGame
 from .metrics import knowledge_observables, supporting_fact_coverage
 from .prompts import (
+    BOARD_MESSAGE_TYPES,
+    BOARD_PROMPT_FAMILY,
     RECEIVER_EPISTEMIC_DISPOSITIONS,
     SOCIAL_ENVIRONMENT,
     epistemic_framing,
     agent_label,
     build_relational_ballot_prompt,
+    build_relational_blackboard_prompt,
     control_label,
     parse_relational_ballot,
     relational_public_ballot_prompt,
+    relational_blackboard_ballot_prompt,
+    render_board_message,
     render_control_reason,
     render_social_source,
 )
@@ -39,6 +47,10 @@ from .runtime import (
 from .state import (
     ACTIVE_FACT_IDS,
     GAME_TYPE,
+    SOCIAL_MODE_BOARD,
+    SOCIAL_MODE_PEER,
+    BlackboardMessage,
+    BlackboardState,
     RelationalAgentState,
     RelationalGameState,
     RelationalRoundRecord,
@@ -49,10 +61,17 @@ from .state import (
 
 __all__ = [
     "ACTIVE_FACT_IDS",
+    "BOARD_MESSAGE_TYPES",
+    "BOARD_PROMPT_FAMILY",
+    "BlackboardMessage",
+    "BlackboardState",
+    "CONTROLLER_ACTUATION_MODES",
+    "COORDINATION_REQUEST",
     "CONTROL_SOURCE_ID",
     "CONTROLLER_EVIDENCE_STRATEGIES",
     "EVIDENCE_NEUTRAL",
     "EVIDENCE_STRATEGIC",
+    "DIRECT_RECOMMENDATION",
     "RECEIVER_EPISTEMIC_DISPOSITIONS",
     "GAME_TYPE",
     "MESSAGE_MODES",
@@ -61,6 +80,8 @@ __all__ = [
     "SCHEDULE_ALWAYS",
     "SCHEDULE_NEVER",
     "SCHEDULE_SOFT",
+    "SOCIAL_MODE_BOARD",
+    "SOCIAL_MODE_PEER",
     "SOCIAL_ENVIRONMENT",
     "RelationalAgentState",
     "RelationalGameResult",
@@ -73,6 +94,7 @@ __all__ = [
     "agent_label",
     "apply_epistemic_persistence",
     "build_relational_ballot_prompt",
+    "build_relational_blackboard_prompt",
     "build_social_sources",
     "control_label",
     "create_relational_round_budgeted_control",
@@ -80,6 +102,8 @@ __all__ = [
     "knowledge_observables",
     "parse_relational_ballot",
     "relational_public_ballot_prompt",
+    "relational_blackboard_ballot_prompt",
+    "render_board_message",
     "render_control_reason",
     "render_social_source",
     "reasoning_fact_ids",

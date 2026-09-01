@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0020",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 61,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Michael, Madison, Alex) must be allocated between Handling Cases and Conducting Legal Research. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Michael",
+    "Madison",
+    "Alex"
+  ],
+  "tasks": [
+    "Handling Cases",
+    "Conducting Legal Research"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Handling Cases: Michael, Conducting Legal Research: Alex and Madison",
+      "assignment": {
+        "Handling Cases": [
+          "Michael"
+        ],
+        "Conducting Legal Research": [
+          "Alex",
+          "Madison"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Handling Cases: Madison, Conducting Legal Research: Alex and Michael",
+      "assignment": {
+        "Handling Cases": [
+          "Madison"
+        ],
+        "Conducting Legal Research": [
+          "Alex",
+          "Michael"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Handling Cases: Alex, Conducting Legal Research: Madison and Michael",
+      "assignment": {
+        "Handling Cases": [
+          "Alex"
+        ],
+        "Conducting Legal Research": [
+          "Madison",
+          "Michael"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_0",
+  "correct_option_index": 0,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Alex seems to get overwhelmed by the heavy workload.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Alex forgot to file important documents for a case in the past.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Alex often argues with Michael over case handling strategies.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Michael likes to work independently and dislikes teamwork.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Alex values Madison's skills in analyzing case laws and relishes their intellectual discussions, respecting her decisions and suggestions.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Madison and Alex have a successful history in working together on previous projects.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "It was a straightforward case, and Michael didn't have to exert much effort.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Michael successfully represented a client in a minor case.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Madison consistently demonstrates in-depth knowledge of law and ability to apply it effectively.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Madison has successfully defended major clients in high-profile cases.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "However, Michael spent a significant part of his time that was supposed to be dedicated for his case preparation on conducting the research.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Michael was able to find some useful precedents for a recent case he was working on.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Alex was caught asking basic questions about legal research to junior paralegals.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Alex often gets lost in the vast amount of legal resources and finds it hard to extract relevant information.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Michael finds Madison to be too demanding and prefers to take his own approach to cases.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Madison believes Michael does not value her input and often undermines her in discussions.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Madison's research has been highly praised by her supervisors for its detail and accuracy.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Madison often pulls relevant case law and precedent faster than even her senior associates.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e02_01",
+        "e04_00",
+        "e07_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e00_01",
+        "e03_00",
+        "e08_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e02_00",
+        "e04_01",
+        "e05_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e01_01",
+        "e03_00",
+        "e08_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e00_00",
+        "e02_01",
+        "e07_00"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_01",
+        "e02_00",
+        "e02_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e01_01",
+        "e07_01",
+        "e08_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e03_01",
+        "e04_01",
+        "e06_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e02_00",
+        "e06_01",
+        "e07_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e04_00",
+        "e05_01",
+        "e06_00"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e07_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_00",
+        "e06_01",
+        "e07_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e07_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e00_01",
+        "e05_01",
+        "e08_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e01_00",
+        "e05_01",
+        "e06_01"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e03_01",
+        "e04_00",
+        "e08_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e06_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e01_00",
+        "e03_01",
+        "e05_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e05_00",
+        "e05_01",
+        "e08_00"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e03_00",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_00",
+        "e00_01",
+        "e04_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_00",
+        "e03_01",
+        "e05_00"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e06_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e04_01",
+        "e06_00",
+        "e07_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Alex is bad at handling cases.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Alex:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Michael and Alex work badly together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Michael:Alex",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Madison and Alex work well together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Madison:Alex",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Michael is okay at handling cases.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Michael:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Madison is good at handling cases.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Madison:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Michael is okay at conducting legal research.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Michael:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Alex is bad at conducting legal research.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Alex:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Michael and Madison work badly together.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "coop:Michael:Madison",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Madison is good at conducting legal research.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Madison:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Handling Cases",
+      "Conducting Legal Research"
+    ],
+    "people": [
+      "Michael",
+      "Madison",
+      "Alex"
+    ],
+    "matrix": {
+      "Michael": {
+        "skills": [
+          2,
+          2
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Madison": {
+        "skills": [
+          3,
+          3
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Alex": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Michael"
+      ],
+      [
+        "Alex",
+        "Madison"
+      ]
+    ],
+    "choice_scores": [
+      9,
+      7,
+      7
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "4e9498bdd7da5aba9b87b4d5c67b372ff3f100bb7729ef596f50786950616650"
+}

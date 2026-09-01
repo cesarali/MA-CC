@@ -545,6 +545,8 @@ def matched_qvoter_parameters_for(
     caller reports the refusal.
     """
 
+    if any(row.event.get("social_mode", "peer") != "peer" for row in rows):
+        return None, "finite-memory board mode has no exact matched q-voter theory"
     found: dict[tuple[int, int, int, int, float, float], TheoryParameters] = {}
     for row in rows:
         parameters = theory_parameters_from_record(row.event)
@@ -1387,6 +1389,11 @@ def analyze_relational_imitation_round_feedback(
         )
 
     rounds = read_relational_round_records(run_dir, epistemic_bins=epistemic_bins)
+    board_mode = any(row.event.get("social_mode", "peer") == "board" for row in rounds)
+    if board_mode and theoretical_reference != "none":
+        raise ValueError(
+            "theoretical_reference must be 'none' for finite-memory board mode"
+        )
     finite_persistence = any(
         float(row.event.get("epistemic_persistence", 1.0)) < 1.0 for row in rounds
     )

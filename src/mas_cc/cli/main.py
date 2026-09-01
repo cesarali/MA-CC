@@ -234,6 +234,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="config-array job script (default: scripts/Potsdam/SLURM/run_config_array.job)",
     )
+    study_extend = study_commands.add_parser(
+        "extend", help="reuse compatible episodes and submit only missing target work"
+    )
+    study_extend.add_argument("--study-dir", type=Path, required=True)
+    study_extend.add_argument("--config-dir", type=Path, required=True)
+    study_extend.add_argument("--dry-run", action="store_true")
+    study_extend.add_argument("--throttle", type=int)
+    study_extend.add_argument("--job-script", type=Path)
+    study_index = study_commands.add_parser(
+        "index-existing", help="add lineage identity to an existing standardized study"
+    )
+    study_index.add_argument("--study-dir", type=Path, required=True)
+    study_index.add_argument("--dry-run", action="store_true")
     study_aggregate = study_commands.add_parser(
         "aggregate",
         help="validate, normalize, analyze, plot, report, and package a study",
@@ -783,6 +796,44 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{summary['archive']}"
         )
         return 0 if summary["complete"] else 1
+    if args.command == "study" and args.study_command == "index-existing":
+        from mas_cc.studies import index_existing_study
+
+        try:
+            result = index_existing_study(args.study_dir, dry_run=args.dry_run)
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        action = "Inspected" if args.dry_run else "Indexed"
+        print(f"{action} study lineage {result['study_lineage_id']}: {args.study_dir}")
+        return 0
+    if args.command == "study" and args.study_command == "extend":
+        from mas_cc.studies import extend_study
+
+        try:
+            result = extend_study(
+                args.study_dir,
+                args.config_dir,
+                dry_run=args.dry_run,
+                throttle=args.throttle,
+                job_script=args.job_script,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        report = result.plan.report()
+        action = "Extension dry run" if result.dry_run else "Extension planned"
+        print(
+            f"{action}: {report['target_cells']} cells, "
+            f"{report['target_episodes']} target episodes, "
+            f"{report['reused_episodes']} reused, "
+            f"{report['missing_episodes_to_execute']} missing"
+        )
+        if result.job_id is not None:
+            print(f"  Submitted as SLURM job {result.job_id}")
+        elif report["missing_episodes_to_execute"] == 0:
+            print("  Empty delta: no SLURM job submitted")
+        return 0
     if args.command == "synthetic":
         from .synthetic import (
             DEFAULT_EPSILON_GRID,

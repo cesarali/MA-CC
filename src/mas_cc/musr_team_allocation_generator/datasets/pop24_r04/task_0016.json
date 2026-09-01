@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0016",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 99,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Anna, Carlos, Mabel) must be allocated between Oversee Operations and Provide hospitality. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Anna",
+    "Carlos",
+    "Mabel"
+  ],
+  "tasks": [
+    "Oversee Operations",
+    "Provide hospitality"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Oversee Operations: Anna, Provide hospitality: Carlos and Mabel",
+      "assignment": {
+        "Oversee Operations": [
+          "Anna"
+        ],
+        "Provide hospitality": [
+          "Carlos",
+          "Mabel"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Oversee Operations: Mabel, Provide hospitality: Anna and Carlos",
+      "assignment": {
+        "Oversee Operations": [
+          "Mabel"
+        ],
+        "Provide hospitality": [
+          "Anna",
+          "Carlos"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Oversee Operations: Carlos, Provide hospitality: Anna and Mabel",
+      "assignment": {
+        "Oversee Operations": [
+          "Carlos"
+        ],
+        "Provide hospitality": [
+          "Anna",
+          "Mabel"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_0",
+  "correct_option_index": 0,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Mabel appreciated Carlos' attention to detail",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Carlos helped Mabel organize a philosophy club in college",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Mabel has a background in Business Administration",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Mabel headed the logistics team for a non-profit organization in the past",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Anna holds a grudge against Mabel for that incident.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Mabel criticized Anna's work in front of their team in a previous job.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Mabel has a degree in Culinary Arts.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Mabel ran a popular food blog for years.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Anna has not talked directly to Carlos ever since the incident.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Carlos once took credit for Anna's work in a team project.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Carlos implemented a new system at his father's firm which led to increased productivity.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Carlos was manager at his father's construction firm for two years.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Carlos chose to work back-house in the restaurant, avoiding any interaction with the customers.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Carlos huffed and rolled his eyes when asked to assist guests during his restaurant job.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Anna often finds excuses to avoid social events.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Anna declined an offer to work as a guest relations officer at her previous job.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Anna has a Masters degree in Hotel Management with a specialization in operations.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Anna spearheaded a crisis management team in her last job that successfully handled an emergency.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e00_01",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e01_00",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e04_00",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e05_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e01_01",
+        "e05_00",
+        "e07_00"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e05_00",
+        "e06_00",
+        "e06_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e04_00",
+        "e07_00",
+        "e08_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e00_01",
+        "e06_01",
+        "e07_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e02_00",
+        "e02_01",
+        "e05_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e07_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e03_01",
+        "e05_00",
+        "e06_00"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_00",
+        "e05_01",
+        "e06_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e06_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e08_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e07_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_01",
+        "e07_00",
+        "e08_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_01",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e00_00",
+        "e03_00",
+        "e04_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e03_01",
+        "e05_00",
+        "e05_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e08_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e04_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e03_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e02_01",
+        "e03_01",
+        "e06_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Carlos and Mabel work okay together.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "coop:Carlos:Mabel",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Mabel is okay at oversee operations.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Mabel:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Anna and Mabel work badly together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Anna:Mabel",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Mabel is okay at provide hospitality.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Mabel:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Anna and Carlos work badly together.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "coop:Anna:Carlos",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Carlos is okay at oversee operations.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Carlos:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Carlos is bad at provide hospitality.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Carlos:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Anna is bad at provide hospitality.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Anna:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Anna is good at oversee operations.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Anna:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Oversee Operations",
+      "Provide hospitality"
+    ],
+    "people": [
+      "Anna",
+      "Carlos",
+      "Mabel"
+    ],
+    "matrix": {
+      "Anna": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Carlos": {
+        "skills": [
+          2,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          2
+        ]
+      },
+      "Mabel": {
+        "skills": [
+          2,
+          2
+        ],
+        "cooperation": [
+          1,
+          2,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Anna"
+      ],
+      [
+        "Carlos",
+        "Mabel"
+      ]
+    ],
+    "choice_scores": [
+      8,
+      5,
+      6
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "94db37d43df3737a38ec2f5ec58be88365b519f1e289fe5e1a2442dbbc6f6172"
+}

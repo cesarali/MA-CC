@@ -451,7 +451,11 @@ class RunRecorder:
             self.record_budget("reconciliation", budget_status)
 
     def _record_malformed_response(
-        self, *, common: Mapping[str, Any], response: Any, request: Any,
+        self,
+        *,
+        common: Mapping[str, Any],
+        response: Any,
+        request: Any,
         issues: Sequence[Any],
     ) -> None:
         """Retain bounded field-level operational evidence, never full responses."""
@@ -459,52 +463,67 @@ class RunRecorder:
         self._malformed_path.parent.mkdir(parents=True, exist_ok=True)
         if self._malformed_rows >= self.malformed_response_row_cap:
             if self._malformed_rows == self.malformed_response_row_cap:
-                _jsonl(self._malformed_path, {
-                    "schema_version": 1, "timestamp": _now(), "run_id": self.run_id,
-                    "truncated": True, "row_cap": self.malformed_response_row_cap,
-                })
+                _jsonl(
+                    self._malformed_path,
+                    {
+                        "schema_version": 1,
+                        "timestamp": _now(),
+                        "run_id": self.run_id,
+                        "truncated": True,
+                        "row_cap": self.malformed_response_row_cap,
+                    },
+                )
             self._malformed_rows += 1
             return
         issue = issues[0]
         usage = response.usage
-        _jsonl(self._malformed_path, {
-            "schema_version": 1,
-            "timestamp": _now(),
-            "run_id": self.run_id,
-            "cell_id": (
-                None if self.scientific_identity is None
-                else self.scientific_identity.cell_id
-            ),
-            "episode_id": (
-                None if self.scientific_identity is None
-                else self.scientific_identity.episode_id
-            ),
-            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-            **common,
-            "validation_attempt": request.metadata.get("validation_attempt"),
-            "validation_repair": request.metadata.get("validation_repair", False),
-            "repair_schema_version": request.metadata.get("repair_schema_version"),
-            "effective_messages_hash": request.metadata.get("effective_messages_hash"),
-            "correction_message_hash": request.metadata.get("correction_message_hash"),
-            "validation_issue_path": getattr(issue, "field", None),
-            "validation_issue_category": (
-                "response_contract"
-                if str(getattr(issue, "field", "")).startswith("response")
-                else "game_action"
-            ),
-            "validation_issue_message": getattr(issue, "message", None),
-            "received_value": getattr(issue, "invalid_value", None),
-            "received_type": type(getattr(issue, "invalid_value", None)).__name__,
-            "finish_reason": response.finish_reason,
-            "input_tokens": usage.input_tokens,
-            "output_tokens": usage.output_tokens,
-            "repair_outcome": (
-                "correction_requested"
-                if int(request.metadata.get("validation_attempt", 1))
-                <= int(request.metadata.get("validation_retry_bound", 0))
-                else "exhausted"
-            ),
-        })
+        _jsonl(
+            self._malformed_path,
+            {
+                "schema_version": 1,
+                "timestamp": _now(),
+                "run_id": self.run_id,
+                "cell_id": (
+                    None
+                    if self.scientific_identity is None
+                    else self.scientific_identity.cell_id
+                ),
+                "episode_id": (
+                    None
+                    if self.scientific_identity is None
+                    else self.scientific_identity.episode_id
+                ),
+                "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+                **common,
+                "validation_attempt": request.metadata.get("validation_attempt"),
+                "validation_repair": request.metadata.get("validation_repair", False),
+                "repair_schema_version": request.metadata.get("repair_schema_version"),
+                "effective_messages_hash": request.metadata.get(
+                    "effective_messages_hash"
+                ),
+                "correction_message_hash": request.metadata.get(
+                    "correction_message_hash"
+                ),
+                "validation_issue_path": getattr(issue, "field", None),
+                "validation_issue_category": (
+                    "response_contract"
+                    if str(getattr(issue, "field", "")).startswith("response")
+                    else "game_action"
+                ),
+                "validation_issue_message": getattr(issue, "message", None),
+                "received_value": getattr(issue, "invalid_value", None),
+                "received_type": type(getattr(issue, "invalid_value", None)).__name__,
+                "finish_reason": response.finish_reason,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "repair_outcome": (
+                    "correction_requested"
+                    if int(request.metadata.get("validation_attempt", 1))
+                    <= int(request.metadata.get("validation_retry_bound", 0))
+                    else "exhausted"
+                ),
+            },
+        )
         self._malformed_rows += 1
 
     def record_interaction(
@@ -603,6 +622,27 @@ class RunRecorder:
                     "delta_m_truth",
                     "delta_m_order",
                     "truth_current_increment",
+                    "social_mode",
+                    "q_requested",
+                    "q_effective",
+                    "sampled_message_ids",
+                    "sampled_message_authors",
+                    "sampled_message_types",
+                    "sampled_message_ages",
+                    "sampled_controller_message_ids",
+                    "focal_posted_message",
+                    "new_message",
+                    "new_message_id",
+                    "new_message_type",
+                    "new_message_reply_to",
+                    "new_message_shared_fact_id",
+                    "board_size_before",
+                    "board_size_after",
+                    "controller_actuation_mode",
+                    "controller_message_posted",
+                    "controller_message_id",
+                    "controller_message_directly_exposed",
+                    "theory_status",
                 )
                 _jsonl(
                     self._micro_slot_trajectory_path,

@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0005",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 211,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Maria, Ryan, Helen) must be allocated between Cooking and Editing. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Maria",
+    "Ryan",
+    "Helen"
+  ],
+  "tasks": [
+    "Cooking",
+    "Editing"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Cooking: Ryan, Editing: Helen and Maria",
+      "assignment": {
+        "Cooking": [
+          "Ryan"
+        ],
+        "Editing": [
+          "Helen",
+          "Maria"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Cooking: Helen, Editing: Maria and Ryan",
+      "assignment": {
+        "Cooking": [
+          "Helen"
+        ],
+        "Editing": [
+          "Maria",
+          "Ryan"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Cooking: Maria, Editing: Helen and Ryan",
+      "assignment": {
+        "Cooking": [
+          "Maria"
+        ],
+        "Editing": [
+          "Helen",
+          "Ryan"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_2",
+  "correct_option_index": 2,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Ryan loses concentration when looking at screens for too long.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Ryan has always been a hands-on person.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Maria gets frustrated when she has to follow strict parameters or schedules.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Maria is a creative genius who loves to experiment freely.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Their collaboration resulted in an average outcome.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Ryan and Helen have collaborated on a project before.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "However, Helen sometimes misses the bigger picture and overall concept.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Helen tends to focus on smaller details and can be quite meticulous.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Maria has won several cooking competitions with her unique and flavourful dishes.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Maria has spent years working in the kitchen honing her culinary skills.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Helen loved cooking from a young age, often experimenting with various ingredients and techniques.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Helen attended culinary school and interned at a high-end restaurant.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Ryan often finds it hard to work with Maria's unpredictable work methods.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Maria cannot stand people who cannot follow her creative process.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Maria disregards Helen's methodical recipes and cooking techniques.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Helen has publicly criticised Maria's experimental approach in cooking.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Ryan confessed being uninterested in watching cooking shows or reading recipe books.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Ryan tends to forget common ingredients in recipes.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e00_00",
+        "e03_01",
+        "e04_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e07_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e03_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e04_00",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_00",
+        "e05_01",
+        "e06_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e08_00"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e00_00",
+        "e00_01",
+        "e02_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e03_01",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e01_01",
+        "e05_01",
+        "e08_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_00",
+        "e02_00",
+        "e08_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e01_01",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e02_01",
+        "e03_01",
+        "e04_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e01_01",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e02_01",
+        "e06_01",
+        "e07_00"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e03_00",
+        "e05_00",
+        "e07_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e01_00",
+        "e02_00",
+        "e05_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e03_01",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e03_00",
+        "e04_01",
+        "e07_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e01_01",
+        "e02_01",
+        "e08_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e05_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e00_01",
+        "e03_00",
+        "e06_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e00_01",
+        "e05_00",
+        "e06_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Ryan is bad at editing.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Ryan:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Maria is bad at editing.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Maria:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Ryan and Helen work okay together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Ryan:Helen",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Helen is okay at editing.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Helen:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Maria is good at cooking.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Maria:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Helen is good at cooking.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Helen:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Maria and Ryan work badly together.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "coop:Maria:Ryan",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Maria and Helen work badly together.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "coop:Maria:Helen",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Ryan is bad at cooking.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Ryan:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Cooking",
+      "Editing"
+    ],
+    "people": [
+      "Maria",
+      "Ryan",
+      "Helen"
+    ],
+    "matrix": {
+      "Maria": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Ryan": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          2
+        ]
+      },
+      "Helen": {
+        "skills": [
+          3,
+          2
+        ],
+        "cooperation": [
+          1,
+          2,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Maria"
+      ],
+      [
+        "Helen",
+        "Ryan"
+      ]
+    ],
+    "choice_scores": [
+      5,
+      6,
+      8
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "7faf5c9141d9f103a2e16dbee90c5e326dadc29e6f2956e500a44454a52e3f4f"
+}

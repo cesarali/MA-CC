@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0008",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 109,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Emily, Martin, Chloe) must be allocated between Diagnosing Patients and Managing Appointments and Records. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Emily",
+    "Martin",
+    "Chloe"
+  ],
+  "tasks": [
+    "Diagnosing Patients",
+    "Managing Appointments and Records"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Diagnosing Patients: Martin, Managing Appointments and Records: Chloe and Emily",
+      "assignment": {
+        "Diagnosing Patients": [
+          "Martin"
+        ],
+        "Managing Appointments and Records": [
+          "Chloe",
+          "Emily"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Diagnosing Patients: Emily, Managing Appointments and Records: Chloe and Martin",
+      "assignment": {
+        "Diagnosing Patients": [
+          "Emily"
+        ],
+        "Managing Appointments and Records": [
+          "Chloe",
+          "Martin"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Diagnosing Patients: Chloe, Managing Appointments and Records: Emily and Martin",
+      "assignment": {
+        "Diagnosing Patients": [
+          "Chloe"
+        ],
+        "Managing Appointments and Records": [
+          "Emily",
+          "Martin"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Martin prefers a more collaborative approach and doesn't respond well to criticism.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Emily often criticizes Martin's methods in front of other staff members.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "In the past, Martin has successfully diagnosed challenging cases in patients with rare diseases.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Martin has a medical degree and several years of experience in patient care.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Chloe ends up scheduling multiple patients at the same time due to Emily's forgetfulness.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Emily keeps forgetting to inform Chloe about her schedule changes.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "However, Chloe struggles with meeting all the deadlines and often works overtime to complete the work.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Chloe rarely makes an error in maintaining records and usually schedules appointments correctly.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Martin frequently helps Chloe when she struggles with her workload.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Martin has an in-depth understanding of the clinic's scheduling system.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Chloe not only has a nursing degree but has also taken several diagnostic courses.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Chloe often fills in for Martin when he's not available and has correctly diagnosed patients during these times.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Emily loses records and has trouble locating the ones she supposedly filed.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Emily often mixes up the appointment timings, causing confusion among the patients.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Emily has majored in medicine and has been a healthcare provider for nearly a decade.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Emily has been successful in identifying patient health issues in the past.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Chloe consistently thanks Martin for his help and praises his work in front of their peers.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Whenever Chloe has to work late, Martin offers to watch her children.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e03_01",
+        "e04_01",
+        "e08_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e03_00",
+        "e07_01",
+        "e08_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e01_00",
+        "e06_01",
+        "e07_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e03_00",
+        "e07_01",
+        "e08_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e03_00",
+        "e05_00",
+        "e08_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e00_00",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e00_01",
+        "e02_01",
+        "e06_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e00_01",
+        "e05_01",
+        "e07_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e08_00"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e03_00",
+        "e04_00",
+        "e05_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e01_01",
+        "e02_00",
+        "e03_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e07_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e03_01",
+        "e04_00",
+        "e05_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e02_01",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e01_00",
+        "e04_00",
+        "e07_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e03_01",
+        "e04_00",
+        "e04_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_00",
+        "e02_00",
+        "e02_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e02_00",
+        "e05_00",
+        "e06_00"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e05_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e00_01",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e01_01",
+        "e06_00",
+        "e08_01"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e01_01",
+        "e06_00",
+        "e07_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Emily and Martin work badly together.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "coop:Emily:Martin",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Martin is good at diagnosing patients.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Martin:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Emily and Chloe work badly together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Emily:Chloe",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Chloe is okay at managing appointments and records.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Chloe:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Martin is good at managing appointments and records.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Martin:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Chloe is good at diagnosing patients.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Chloe:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Emily is bad at managing appointments and records.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Emily:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Emily is good at diagnosing patients.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Emily:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Martin and Chloe work okay together.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "coop:Martin:Chloe",
+        "latent_value": 2,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Diagnosing Patients",
+      "Managing Appointments and Records"
+    ],
+    "people": [
+      "Emily",
+      "Martin",
+      "Chloe"
+    ],
+    "matrix": {
+      "Emily": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Martin": {
+        "skills": [
+          3,
+          3
+        ],
+        "cooperation": [
+          1,
+          0,
+          2
+        ]
+      },
+      "Chloe": {
+        "skills": [
+          3,
+          2
+        ],
+        "cooperation": [
+          1,
+          2,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Emily"
+      ],
+      [
+        "Chloe",
+        "Martin"
+      ]
+    ],
+    "choice_scores": [
+      7,
+      10,
+      8
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "6f2cabd30630bfd126810c9eb320a54a3cd8d40016082c29032a2b1f673427e2"
+}

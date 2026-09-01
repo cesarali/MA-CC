@@ -53,7 +53,9 @@ class GameRegistry:
             factory = getattr(importlib.import_module(module_name), attribute)
         game = factory()
         if not isinstance(game, Game):
-            raise TypeError(f"game factory for {name!r} returned an incompatible object")
+            raise TypeError(
+                f"game factory for {name!r} returned an incompatible object"
+            )
         if game.spec.game_type != name:
             raise ValueError(
                 f"game registry entry {name!r} produced spec {game.spec.game_type!r}"
@@ -147,6 +149,7 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
         hidden_bench_public_ballot_prompt,
     )
     from .relational_reasoning.imitation_round_feedback.prompts import (
+        relational_blackboard_ballot_prompt,
         relational_public_ballot_prompt,
     )
     from .naming_convention.prompts import naming_convention_prompt
@@ -187,6 +190,7 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     # ballot: the extra `shared_fact_id` is state, not decoration, so it needs a
     # family of its own rather than a rebinding of the HiddenBench one.
     registry.register(relational_public_ballot_prompt)
+    registry.register(relational_blackboard_ballot_prompt)
     return registry
 
 
@@ -222,7 +226,8 @@ def game_metrics(game: Game) -> tuple[tuple[Any, ...], Callable[[Any], Any] | No
     mismatched = [
         f"{metric.name} (requires {metric.requires_game_family!r})"
         for metric in metrics
-        if getattr(metric, "requires_game_family", None) not in (None, game.spec.game_family)
+        if getattr(metric, "requires_game_family", None)
+        not in (None, game.spec.game_family)
     ]
     if mismatched:
         raise ValueError(

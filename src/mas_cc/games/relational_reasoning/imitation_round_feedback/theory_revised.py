@@ -439,10 +439,7 @@ def binomial_ensemble(N: int, x0: float) -> np.ndarray:
     if N < 1 or not 0.0 <= x0 <= 1.0:
         raise ValueError("require N>=1 and x0 in [0,1]")
     p = np.asarray(
-        [
-            math.comb(N, n) * x0**n * (1.0 - x0) ** (N - n)
-            for n in range(N + 1)
-        ],
+        [math.comb(N, n) * x0**n * (1.0 - x0) ** (N - n) for n in range(N + 1)],
         dtype=float,
     )
     return p / p.sum()
@@ -675,10 +672,9 @@ class SingleAffinityReference:
     def closed_loop_kernel(self) -> np.ndarray:
         """Action-marginalized one-cycle kernel ``Q_pi`` row by row."""
 
-        return (
-            (1.0 - self.advocacy)[:, None] * self.Q0
-            + self.advocacy[:, None] * self.Q1
-        )
+        return (1.0 - self.advocacy)[:, None] * self.Q0 + self.advocacy[
+            :, None
+        ] * self.Q1
 
     def entropy_ceiling(self) -> np.ndarray:
         """Exact action-entropy ceiling ``h2(a_n)`` on ``T_pi(n)`` in bits."""
@@ -709,9 +705,7 @@ class SingleAffinityReference:
     def propagate(self, p_k: Sequence[float]) -> np.ndarray:
         """Exact one-cycle ensemble propagation under ``Q_pi``."""
 
-        p = _validate_probability_vector(
-            p_k, size=self.parameters.N + 1, name="p_k"
-        )
+        p = _validate_probability_vector(p_k, size=self.parameters.N + 1, name="p_k")
         result = p @ self.closed_loop_kernel
         # Clean tiny matrix-arithmetic residue while preserving normalization.
         result[np.abs(result) < 1e-16] = 0.0
@@ -735,9 +729,7 @@ class SingleAffinityReference:
     def current(self, p_k: Sequence[float]) -> float:
         """Exact mean controlled current ``J_c`` for occupancy ``p_k``."""
 
-        return mean_controlled_current(
-            p_k, self.advocacy, self.chi, self.parameters.N
-        )
+        return mean_controlled_current(p_k, self.advocacy, self.chi, self.parameters.N)
 
     def one_cycle(
         self,
@@ -749,9 +741,7 @@ class SingleAffinityReference:
     ) -> CycleThermodynamics:
         """Compute the complete exact one-cycle finite-time accounting."""
 
-        p = _validate_probability_vector(
-            p_k, size=self.parameters.N + 1, name="p_k"
-        )
+        p = _validate_probability_vector(p_k, size=self.parameters.N + 1, name="p_k")
         p_next = self.propagate(p)
         I_sens, p_Y = sensing_information_nats(p, self.S)
         J_c = self.current(p)
@@ -788,7 +778,9 @@ class SingleAffinityReference:
             raise ArithmeticError("non-storage expenditure identity failed")
 
         residual = (
-            Sigma_identity - Sigma_direct if check_kl and math.isfinite(Sigma_direct) else math.nan
+            Sigma_identity - Sigma_direct
+            if check_kl and math.isfinite(Sigma_direct)
+            else math.nan
         )
         return CycleThermodynamics(
             parameters=self.parameters,
@@ -809,7 +801,7 @@ class SingleAffinityReference:
 
 @lru_cache(maxsize=64)
 def _reference_for(
-    key: tuple[int, int, int, float, float, float, float]
+    key: tuple[int, int, int, float, float, float, float],
 ) -> SingleAffinityReference:
     parameters = TheoryParameters(*key)
     S = sensor_kernel(parameters.N, parameters.q_c)
@@ -987,7 +979,9 @@ def finite_horizon_current_moments_for_episodes(
     if kernel.ndim != 2 or kernel.shape[0] != kernel.shape[1]:
         raise ValueError("round_kernel must be square")
     if len(initial_counts) != len(horizons) or not initial_counts:
-        raise ValueError("initial_counts and horizons must be equally sized and non-empty")
+        raise ValueError(
+            "initial_counts and horizons must be equally sized and non-empty"
+        )
     state_count = kernel.shape[0]
     means: list[float] = []
     seconds: list[float] = []
@@ -1099,6 +1093,8 @@ def theory_parameters_from_record(
     layer.
     """
 
+    if record.get("social_mode", "peer") != "peer":
+        return None
     if record.get("social_group_size") is not None:
         try:
             if int(record["social_group_size"]) != 1:

@@ -2777,7 +2777,14 @@ def aggregate_study(
         raise ValueError(f"not a submitted MA-CC study directory: {root}")
     study_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     study_id = str(study_manifest["study_id"])
-    entries = read_submission_manifest(submission_path)
+    lineage_mode = (root / "study_lineage.json").is_file()
+    target_manifest = None
+    if lineage_mode:
+        from .extension import extension_aggregation_context
+
+        target_manifest, entries = extension_aggregation_context(root)
+    else:
+        entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
@@ -2800,7 +2807,14 @@ def aggregate_study(
     }
     if cells:
         canonical, canonical_metadata = build_canonical_tables(study_id, cells)
-        validation = validate_study(entries, runs, cells, canonical)
+        if target_manifest is not None:
+            from .extension import consolidate_extension_tables
+
+            canonical, validation = consolidate_extension_tables(
+                canonical, target_manifest
+            )
+        else:
+            validation = validate_study(entries, runs, cells, canonical)
     elif all(path is not None for path in retained_paths.values()):
         canonical = {
             name: read_scientific_table(path) for name, path in retained_paths.items()
@@ -2844,6 +2858,22 @@ def aggregate_study(
     tables_dir = analysis_dir / "tables"
     tables_dir.mkdir(parents=True, exist_ok=True)
 
+    if lineage_mode:
+        provenance = analysis_dir / "provenance"
+        provenance.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / "study_lineage.json", provenance / "study_lineage.json")
+        for path in sorted((root / "extensions").glob("extension-*/*.json")):
+            if path.name in {
+                "target_manifest.json",
+                "compatibility_report.json",
+                "state.json",
+                "migration.json",
+            }:
+                shutil.copy2(
+                    path,
+                    provenance / f"{path.parent.name}_{path.name}",
+                )
+
     validation["allow_incomplete"] = bool(allow_incomplete)
     if not validation["valid"] and allow_incomplete:
         validation["complete"] = False
@@ -2886,6 +2916,14 @@ def aggregate_study(
         raise ValueError(
             "analysis theoretical_reference must be none for finite epistemic "
             "persistence"
+        )
+    if theoretical_reference != "none" and any(
+        event.event.get("record_type") == "relational_imitation_round_feedback"
+        and event.event.get("social_mode", "peer") == "board"
+        for event in events
+    ):
+        raise ValueError(
+            "analysis theoretical_reference must be none for finite-memory board mode"
         )
     endpoint_recipe = recipe.get("episode_endpoints")
     episode_endpoints = pd.DataFrame()

@@ -756,6 +756,8 @@ def theory_parameters(rows: Sequence[Any], h: float, gamma: float) -> Any | None
         theory_parameters_from_record,
     )
 
+    if any(row.event.get("social_mode", "peer") != "peer" for row in rows):
+        return None
     if not math.isfinite(h) or not math.isfinite(gamma) or not 0.0 < gamma <= 1.0:
         return None
     found = {}

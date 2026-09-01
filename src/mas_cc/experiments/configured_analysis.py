@@ -146,6 +146,14 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
                 "analysis.options.theoretical_reference must be 'none' when "
                 "game.options.epistemic_persistence is below 1.0"
             )
+        if (
+            config.game.options.get("social_mode", "peer") == "board"
+            and theoretical_reference != "none"
+        ):
+            raise ValueError(
+                "analysis.options.theoretical_reference must be 'none' for "
+                "game.options.social_mode 'board'; q-voter theory assumes current peers"
+            )
         return {
             "bootstrap_resamples": _integer_option(
                 options, "bootstrap_resamples", 1000
