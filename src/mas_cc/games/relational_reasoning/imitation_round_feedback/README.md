@@ -299,10 +299,19 @@ to deliver the unchanged round-level controller decision:
 * **`direct_recommendation`** replaces one of the `q` message slots with one
   transient recommendation. It is guaranteed to be shown at each of the `b`
   controlled positions and is never stored on the board.
-* **`coordination_request`** posts one deterministic `REQUEST` before normal
+* **`coordination_request`** posts one deterministic `DIRECTIVE` before normal
   sampling at each of the `b` scheduled positions. It may be read immediately,
   later, repeatedly, or not at all. It carries no fabricated evidence. Replies
   and descendants remain reconstructable through `reply_to`.
+
+`control.options.controller_timing: dawn_only` freezes the blackboard variant
+into a night/dawn/day protocol. After sensing and sampling the same binary
+action, the runtime expires previous-day public memory, applies `K_active`
+persistence, and—only for `ADVOCATE_Z`—seeds exactly `b` factless DIRECTIVEs at
+dawn. All are present before the first ordinary update. The day then samples
+the live board normally, without controlled positions, slot replacement, or
+further coordinator posts. Omitting the option retains the historical
+`microscopic` timing for old configs and raw runs.
 
 The controller still senses only `q_c` votes. Its board identity is rendered as
 an ordinary participant, never as an authority.

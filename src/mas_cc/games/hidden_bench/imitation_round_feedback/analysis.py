@@ -126,6 +126,13 @@ count alone.  `round_sensing_mi` is the full K-option vector channel
 `I_sens` is the scalar one.  Reported in bits like every other direct-counting
 estimate here; the nats-valued thermodynamic `I_sens` is a derived quantity
 built from the exact sensor kernel, not from this count."""
+ROUND_SENSOR_POLICY_STATISTICS = ("round_sensor_action_mi",)
+"""The empirical policy channel ``I(Y_k; U_k)`` in bits.
+
+This uses the established direct-counting estimator. It is distinct from the
+sensor-fidelity channel ``I(N_k;Y_k)`` because it measures how much realized
+sensor variation survives the stochastic policy map.
+"""
 # Appended, not interleaved: `round_information_analysis` seeds each statistic's
 # bootstrap from `seed + name_index`, so inserting a name anywhere but the end
 # would silently move every later statistic's resampling stream.
@@ -135,6 +142,7 @@ ROUND_ANALYSIS_STATISTICS = (
     *ROUND_MEMORY_STATISTICS,
     *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS,
     *ROUND_SINGLE_AFFINITY_STATISTICS,
+    *ROUND_SENSOR_POLICY_STATISTICS,
 )
 ROUND_ACTUATION_STATISTICS = (
     *ROUND_INFORMATION_STATISTICS[1:],
@@ -145,7 +153,7 @@ ROUND_ACTUATION_STATISTICS = (
 _BITS_STATISTICS = (
     frozenset(ROUND_INFORMATION_STATISTICS)
     | frozenset(ROUND_MEMORY_STATISTICS)
-    | frozenset({"round_target_sensing_mi"})
+    | frozenset({"round_target_sensing_mi", "round_sensor_action_mi"})
 )
 _RESPONSE_UNITS: Mapping[str, str] = {
     # Read off `delta_p_ctrl`: a change in the TARGET FRACTION `n_Z/N`.
@@ -404,6 +412,11 @@ def _estimate_for(name: str, rows: Sequence[RoundEvent]) -> Estimate:
         return mutual_information(
             [row.target_before for row in rows],
             [row.sensor_target_count for row in rows],
+        )
+    if name == "round_sensor_action_mi":
+        return mutual_information(
+            [row.Y_k for row in rows],
+            [str(row.U_k) for row in rows],
         )
     outcome = _ROUND_OUTCOME.get(name)
     if outcome is None:
@@ -732,6 +745,12 @@ def round_information_analysis(
             eligible = [row for row in rows if row.Y_k is not None]
         elif name == "round_target_sensing_mi":
             eligible = [row for row in rows if row.sensor_target_count is not None]
+        elif name == "round_sensor_action_mi":
+            eligible = [
+                row
+                for row in rows
+                if row.Y_k is not None and row.U_k in {ADVOCATE_TARGET, NO_OP}
+            ]
         else:
             eligible = [row for row in rows if row.U_k in {ADVOCATE_TARGET, NO_OP}]
         # A statistic that needs a state or a delta the game does not record
@@ -792,11 +811,15 @@ def round_information_analysis(
                 seed=seed + 100_000 * (name_index + 1),
             )
             null_type = "policy_conditional_randomization"
-        elif name in {"round_sensing_mi", "round_target_sensing_mi"}:
+        elif name in {
+            "round_sensing_mi",
+            "round_target_sensing_mi",
+            "round_sensor_action_mi",
+        }:
             permuted_values = []
             key = (
                 "sensor_count_vector"
-                if name == "round_sensing_mi"
+                if name in {"round_sensing_mi", "round_sensor_action_mi"}
                 else "sensor_target_count"
             )
             for permutation in range(null_permutations):
@@ -804,7 +827,9 @@ def round_information_analysis(
                     seed + 100_000 * (name_index + 1) + permutation
                 )
                 sensors = [
-                    row.Y_k if name == "round_sensing_mi" else row.sensor_target_count
+                    row.Y_k
+                    if name in {"round_sensing_mi", "round_sensor_action_mi"}
+                    else row.sensor_target_count
                     for row in eligible
                 ]
                 order = rng.permutation(len(sensors))

@@ -7,6 +7,11 @@ ADVOCATE_Z}``, and an exact budget ``b`` of randomly placed controlled
 positions.  The controller senses **votes only** and never receives any agent's
 knowledge state.
 
+For ``coordination_request`` with ``controller_timing: dawn_only``, the same
+binary policy is retained but ``b`` means dawn board mass: the runtime posts
+``b`` factless DIRECTIVEs before any focal update and uses no position schedule.
+The default microscopic timing preserves historical configs and artifacts.
+
 What this subclass adds is *what the controller may say*.  Because a relational
 task's symbolic content is exact, the linguistic content of an intervention can
 be manipulated as a controlled variable:
@@ -77,6 +82,10 @@ DIRECT_RECOMMENDATION = "direct_recommendation"
 COORDINATION_REQUEST = "coordination_request"
 CONTROLLER_ACTUATION_MODES = (DIRECT_RECOMMENDATION, COORDINATION_REQUEST)
 
+TIMING_MICROSCOPIC = "microscopic"
+TIMING_DAWN_ONLY = "dawn_only"
+CONTROLLER_TIMINGS = (TIMING_MICROSCOPIC, TIMING_DAWN_ONLY)
+
 _DIRECTION_VECTORS = {
     "NORTH": (0, 1),
     "NORTHEAST": (1, 1),
@@ -119,6 +128,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     controller_evidence_strategy: str | None = None
     advocacy_schedule: str = SCHEDULE_SOFT
     controller_actuation_mode: str = DIRECT_RECOMMENDATION
+    controller_timing: str = TIMING_MICROSCOPIC
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -350,6 +360,25 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             actuation_mode = DIRECT_RECOMMENDATION
         values["controller_actuation_mode"] = str(actuation_mode)
 
+        timing = options.get("controller_timing", TIMING_MICROSCOPIC)
+        if timing not in CONTROLLER_TIMINGS:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_timing",
+                    f"must be one of {list(CONTROLLER_TIMINGS)}",
+                )
+            )
+            timing = TIMING_MICROSCOPIC
+        if timing == TIMING_DAWN_ONLY and actuation_mode != COORDINATION_REQUEST:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_timing",
+                    "dawn_only requires controller_actuation_mode "
+                    "'coordination_request'",
+                )
+            )
+        values["controller_timing"] = str(timing)
+
         selector = options.get("controller_fact_selector")
         if selector is not None and selector not in FACT_SELECTORS:
             issues.append(
@@ -430,6 +459,7 @@ def create_relational_round_budgeted_control(config: ControlConfig) -> Control:
 
 __all__ = [
     "CONTROLLER_ACTUATION_MODES",
+    "CONTROLLER_TIMINGS",
     "COORDINATION_REQUEST",
     "DIRECT_RECOMMENDATION",
     "ADVOCACY_SCHEDULES",
@@ -445,6 +475,8 @@ __all__ = [
     "SCHEDULE_ALWAYS",
     "SCHEDULE_NEVER",
     "SCHEDULE_SOFT",
+    "TIMING_DAWN_ONLY",
+    "TIMING_MICROSCOPIC",
     "SELECTOR_SUPPORTING",
     "RelationalRoundBudgetedControl",
     "create_relational_round_budgeted_control",

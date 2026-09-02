@@ -118,6 +118,20 @@ def test_deterministic_action_dependent_next_state_has_positive_cmi():
     assert _estimate(rows, "round_population_actuation_cmi") == pytest.approx(1.0)
 
 
+def test_sensor_action_mi_uses_the_existing_direct_counting_estimator():
+    rows = [
+        _row(
+            episode=f"e-{index // 10}",
+            index=index,
+            action=ADVOCATE_TARGET if index % 2 else NO_OP,
+            sensor=(2, 0, 0) if index % 2 else (0, 2, 0),
+        )
+        for index in range(100)
+    ]
+
+    assert _estimate(rows, "round_sensor_action_mi") == pytest.approx(1.0)
+
+
 def test_policy_resampling_null_collapses_synthetic_action_outcome_signal():
     rows = []
     for index in range(400):

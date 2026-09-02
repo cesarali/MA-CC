@@ -16,6 +16,8 @@ import yaml
 
 from mas_cc.config import RunConfig
 
+from .prompts import agent_label, control_label
+
 
 REQUIRED_OUTPUTS = (
     "config.yaml",
@@ -23,6 +25,9 @@ REQUIRED_OUTPUTS = (
     "episode.jsonl",
     "messages.jsonl",
     "controller_events.jsonl",
+    "round_control_events.jsonl",
+    "message_reads.jsonl",
+    "directive_lineage.jsonl",
     "evidence_transfers.jsonl",
     "persistence_events.jsonl",
     "agent_state_by_update.csv",
@@ -87,6 +92,21 @@ def _prompt_markdown(row: Mapping[str, Any], *, round_index: int, update: int) -
         observation.get("visible_state", {}) if isinstance(observation, Mapping) else {}
     )
     response = row.get("response") or {}
+    public_sources = []
+    for source in visible.get("social_sources", []):
+        public_sources.append(
+            {
+                "message_id": source.get("message_id"),
+                "author_public_id": source.get("label"),
+                "vote": source.get("vote"),
+                "type": source.get("message_type"),
+                "text": source.get("text"),
+                "shared_fact_id": source.get("shared_fact_id"),
+                "reply_to": source.get("reply_to"),
+                "created_round": source.get("round_created"),
+                "expires_round": source.get("expires_after_round"),
+            }
+        )
     lines = [
         f"# Round {round_index:02d}, update {update:03d}, {row.get('agent_id')}",
         "",
@@ -108,7 +128,7 @@ def _prompt_markdown(row: Mapping[str, Any], *, round_index: int, update: int) -
         "## VISIBLE BLACKBOARD MESSAGE",
         "",
         "```json",
-        json.dumps(visible.get("social_sources", []), indent=2, ensure_ascii=False),
+        json.dumps(public_sources, indent=2, ensure_ascii=False),
         "```",
         "",
         "## AVAILABLE PUBLIC ACTION TYPES",
@@ -243,14 +263,23 @@ def build_blackboard_pilot_artifacts(
     )
     _write_jsonl(root / "episode.jsonl", trajectory)
 
+    population_size = int(rounds[0]["N"])
     messages = [dict(message) for message in checkpoint["state"]["blackboard"]]
     for message in messages:
+        author_public_id = (
+            control_label(population_size)
+            if message.get("author_kind") == "controller"
+            else agent_label(message.get("author_id"))
+        )
         message.update(
             round=message.get("round_created"),
             author=message.get("author_id"),
             type=message.get("message_type"),
             created_at=message.get("micro_step_created"),
             expires_at=message.get("expires_after_round"),
+            author_public_id=author_public_id,
+            created_round=message.get("round_created"),
+            expires_round=message.get("expires_after_round"),
         )
     messages.sort(
         key=lambda item: (
@@ -259,6 +288,32 @@ def build_blackboard_pilot_artifacts(
         )
     )
     _write_jsonl(root / "messages.jsonl", messages)
+
+    message_read_rows = [
+        {
+            "round": event.get("round_index"),
+            "microscopic_update": event.get("within_round_index"),
+            "focal_agent_id": event.get("focal_agent_id"),
+            "sampled_message_ids": event.get("sampled_message_ids", []),
+            "sampled_message_authors": event.get("sampled_message_authors", []),
+            "sampled_message_types": event.get("sampled_message_types", []),
+            "sampled_controller_message_ids": event.get(
+                "sampled_controller_message_ids", []
+            ),
+            "eligible_live_messages": event.get("eligible_board_message_count", 0),
+            "eligible_live_directives": event.get("eligible_directive_count", 0),
+            "eligible_directive_share": event.get("eligible_directive_share", 0.0),
+        }
+        for event in trajectory
+    ]
+    _write_jsonl(root / "message_reads.jsonl", message_read_rows)
+
+    lineage_rows = [
+        dict(lineage)
+        for record in rounds
+        for lineage in record.get("directive_lineage_events", ())
+    ]
+    _write_jsonl(root / "directive_lineage.jsonl", lineage_rows)
 
     transfer_rows: list[dict[str, Any]] = []
     for event in trajectory:
@@ -293,7 +348,15 @@ def build_blackboard_pilot_artifacts(
     _write_jsonl(root / "evidence_transfers.jsonl", transfer_rows)
 
     persistence_rows = [
-        {"round": record["round_index"], **pair}
+        {
+            "round": record["round_index"],
+            "boundary": (
+                "night_before_day"
+                if record.get("controller_timing") == "dawn_only"
+                else "legacy_end_of_round"
+            ),
+            **pair,
+        }
         for record in rounds
         for pair in record.get("persistence_deactivated_pairs", ())
     ]
@@ -308,16 +371,27 @@ def build_blackboard_pilot_artifacts(
         controller_rows.append(
             {
                 "round": round_index,
+                "n_k": record.get("n_k"),
                 "Y": record.get("controller_sensor_Y"),
+                "Y_k": record.get("Y_k"),
+                "y_Z": record.get("Y_k"),
+                "q_c": record.get("sensor_sample_size"),
+                "beta": record.get("controller_beta"),
+                "theta": record.get("controller_threshold"),
                 "sensed_agent_ids": record.get("sensor_agent_ids", []),
                 "sensed_votes": record.get("sensor_observed_opinions", []),
                 "probability_U1_given_Y": record.get(
                     "controller_probability_U1_given_Y"
                 ),
+                "P_U1_given_Y": record.get("P_U1_given_Y"),
                 "sampled_U": record.get("controller_sampled_U"),
-                "acted": bool(record.get("controlled_position_count")),
+                "U": record.get("U_k"),
+                "b": record.get("b", record.get("intervention_budget")),
+                "acted": bool(record.get("controller_sampled_U")),
                 "action": record.get("controller_action"),
                 "target": record.get("controller_target"),
+                "coordinator_public_vote": record.get("coordinator_public_vote"),
+                "controller_timing": record.get("controller_timing"),
                 "injection_within_round_indices": record.get(
                     "controller_injection_within_round_indices", []
                 ),
@@ -325,6 +399,8 @@ def build_blackboard_pilot_artifacts(
                     "controller_injection_global_update_indices", []
                 ),
                 "directive_ids": record.get("controller_post_ids", []),
+                "directive_message_ids": record.get("directive_message_ids", []),
+                "dawn_directive_count": record.get("dawn_directive_count", 0),
                 "directive_texts": [
                     message.get("text")
                     for message in messages
@@ -338,7 +414,24 @@ def build_blackboard_pilot_artifacts(
                         if event.get("sampled_controller_message_ids")
                     }
                 ),
+                "directive_exposed_focal_updates": record.get(
+                    "directive_exposed_focal_updates", 0
+                ),
+                "realized_directive_exposure_fraction": record.get(
+                    "realized_directive_exposure_fraction", 0.0
+                ),
                 "reply_count": record.get("controller_direct_replies", 0),
+                "report_reply_count": record.get("directive_report_reply_count", 0),
+                "evidence_report_count": record.get(
+                    "directive_evidence_report_count", 0
+                ),
+                "directive_attributed_acquisitions": record.get(
+                    "directive_attributed_acquisitions", 0
+                ),
+                "directive_attributed_refreshes": record.get(
+                    "directive_attributed_refreshes", 0
+                ),
+                "n_k_plus_1": record.get("n_k_plus_1"),
                 "downstream_exact_evidence_moved": sum(
                     int(event.get("new_peer_facts", 0))
                     + int(event.get("reactivated_peer_facts", 0))
@@ -349,6 +442,7 @@ def build_blackboard_pilot_artifacts(
             }
         )
     _write_jsonl(root / "controller_events.jsonl", controller_rows)
+    _write_jsonl(root / "round_control_events.jsonl", controller_rows)
 
     task_state = checkpoint["state"]["task"]
     latent_for = _latent_map(task_state)
@@ -367,7 +461,19 @@ def build_blackboard_pilot_artifacts(
         )
     }
     update_rows: list[dict[str, Any]] = []
+    persistence_by_round: dict[int, list[dict[str, Any]]] = {}
+    for row in persistence_rows:
+        persistence_by_round.setdefault(int(row["round"]), []).append(row)
+    applied_persistence_rounds: set[int] = set()
     for event in trajectory:
+        event_round = int(event["round_index"])
+        if (
+            event_round not in applied_persistence_rounds
+            and rounds[event_round].get("controller_timing") == "dawn_only"
+        ):
+            for item in persistence_by_round.get(event_round, ()):
+                active[str(item["agent_id"])].discard(str(item["fact_id"]))
+            applied_persistence_rounds.add(event_round)
         focal = str(event["focal_agent_id"])
         active[focal] = set(event["focal_active_fact_ids_after"])
         known[focal] = set(event["focal_known_fact_ids_after"])
@@ -460,6 +566,12 @@ def build_blackboard_pilot_artifacts(
         population_rows.append(
             {
                 "round": record["round_index"],
+                "n_k": record.get("n_k"),
+                "Y_k": record.get("Y_k"),
+                "P_U1_given_Y": record.get("P_U1_given_Y"),
+                "U_k": record.get("U_k"),
+                "b": record.get("b"),
+                "n_k_plus_1": record.get("n_k_plus_1"),
                 "vote_counts": _json_cell(counts),
                 "p_truth": record["truth_vote_share"],
                 "mean_active": record["active_mean_fact_count_after"],
@@ -492,6 +604,13 @@ def build_blackboard_pilot_artifacts(
                         )
                     ]
                 ),
+                "dawn_directive_count": record.get("dawn_directive_count", 0),
+                "directive_exposed_focal_updates": record.get(
+                    "directive_exposed_focal_updates", 0
+                ),
+                "directive_unique_readers": record.get(
+                    "controller_unique_readers", 0
+                ),
             }
         )
     _write_csv(
@@ -499,12 +618,21 @@ def build_blackboard_pilot_artifacts(
         population_rows,
         (
             "round",
+            "n_k",
+            "Y_k",
+            "P_U1_given_Y",
+            "U_k",
+            "b",
+            "n_k_plus_1",
             "vote_counts",
             "p_truth",
             "mean_active",
             "mean_historical",
             "active_latent_coverage",
             "historical_latent_coverage",
+            "dawn_directive_count",
+            "directive_exposed_focal_updates",
+            "directive_unique_readers",
         ),
     )
 
@@ -543,8 +671,39 @@ def build_blackboard_pilot_artifacts(
     counts = Counter(message.get("message_type") for message in messages)
     exact = sum(row["event_type"] == "acquisition" for row in transfer_rows)
     refreshes = sum(row["event_type"] == "refresh" for row in transfer_rows)
+    attributed_exact = sum(
+        row.get("event_type") == "acquisition" for row in lineage_rows
+    )
+    attributed_refreshes = sum(
+        row.get("event_type") == "refresh" for row in lineage_rows
+    )
     initial_truth = rounds[0]["truth_vote_share_before"]
     final_truth = rounds[-1]["truth_vote_share"]
+    transition_lines = "\n".join(
+        "| {round} | {n} | {y} | {p:.4f} | {u} | {d} | {e} | {after} |".format(
+            round=int(record["round_index"]) + 1,
+            n=record.get("n_k"),
+            y=record.get("Y_k"),
+            p=float(record.get("P_U1_given_Y") or 0.0),
+            u=record.get("U_k"),
+            d=record.get("dawn_directive_count", 0),
+            e=record.get("directive_exposed_focal_updates", 0),
+            after=record.get("n_k_plus_1"),
+        )
+        for record in rounds
+    )
+    dawn_contract = all(
+        int(record.get("dawn_directive_count", 0))
+        == (int(record.get("b", 0)) if record.get("U_k") == 1 else 0)
+        for record in rounds
+    )
+    daytime_silent = not any(
+        event.get("controller_message_posted") for event in trajectory
+    )
+    sensor_population_only = all(
+        set(record.get("sensor_agent_ids", ())).issubset(set(record["agent_ids"]))
+        for record in rounds
+    )
     report = f"""# MuSR blackboard task001 pilot report
 
 This is an engineering inspection report for one short episode. It does not support strong scientific claims.
@@ -561,20 +720,46 @@ This is an engineering inspection report for one short episode. It does not supp
 - DIRECTIVE messages: `{counts["DIRECTIVE"]}`
 - Exact evidence acquisitions: `{exact}`
 - Refresh events: `{refreshes}`
+- Directive-attributed acquisitions: `{attributed_exact}`
+- Directive-attributed refreshes: `{attributed_refreshes}`
 - Persistence deactivations: `{len(persistence_rows)}`
 
-## Mechanical checks
+## Round transition compatibility
 
-1. The new runtime stores only REQUEST and REPORT for ordinary agents and DIRECTIVE for the controller.
-2. Exact evidence is accepted only from REPORT messages.
-3. REQUEST and DIRECTIVE messages are factless.
-4. Historical and active evidence are archived separately after every round.
-5. Board expiry and persistence events are retained independently.
-6. Every provider attempt is available under `analysis/prompts/`.
+The established round variables remain the primary controller transition;
+blackboard observables are additional columns and artifacts.
 
-## Inspection questions
+| Round | n_k | Y_k | P(U=1|Y) | U_k | Dawn DIRECTIVEs | Exposed focal updates | n_k+1 |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+{transition_lines}
 
-Use the dashboard and prompt archive to inspect request quality, directive responses, evidence movement, refreshes, active-memory saturation, and prompt clarity. These are observations from one episode, not estimates of a general effect.
+These rows remain consumable by the existing relational round-record adapter
+for sensing MI, controller-to-population CMI, susceptibility, signed response,
+and efficiency diagnostics. One five-round episode is not adequate scientific
+support for estimating controller efficiency.
+
+## Protocol-freeze checks
+
+1. Sequence: each row records night sensing and `U`, then dawn seeding, an autonomous day, and `n_k+1`.
+2. Policy: the inherited soft-target probability and sampled action are retained unchanged.
+3. `U=0`: every such round has zero dawn DIRECTIVEs: `{all(int(r.get('dawn_directive_count', 0)) == 0 for r in rounds if r.get('U_k') == 0)}`.
+4. `U=1`: exactly `b` dawn DIRECTIVEs: `{dawn_contract}`.
+5. Dawn ordering: all coordinator posts have the round-boundary micro-step and exist before the first focal update.
+6. Day silence: no coordinator post is created by a daytime focal update: `{daytime_silent}`.
+7. Prompt identity: coordinator messages render under the neutral public alias `{control_label(population_size)}`; the special role label is absent from rendered prompts.
+8. Population boundary: coordinator vote is social context only; every sensor ID belongs to the `{population_size}` ordinary agents: `{sensor_population_only}`.
+9. Realized exposure is reported per round above; nominal `b` is never substituted for sampled exposure.
+10. DIRECTIVE replies: `{sum(int(r.get('controller_direct_replies', 0)) for r in rounds)}` total, including `{sum(int(r.get('directive_report_reply_count', 0)) for r in rounds)}` REPORT replies.
+11. Transitive evidence lineage records `{attributed_exact}` acquisitions and `{attributed_refreshes}` refreshes.
+12. `K_active`, `K_hist`, board expiry, and persistence are archived independently.
+13. Mechanical freeze status: `{'PASS' if dawn_contract and daytime_silent and sensor_population_only else 'FAIL'}`. This is an engineering result, not a scientific efficiency claim.
+
+## Artifact guide
+
+Use `round_control_events.jsonl` for the causal round transition,
+`message_reads.jsonl` for realized public-channel pressure,
+`directive_lineage.jsonl` for reply-ancestry evidence events, and the dashboard
+and prompt archive for human inspection.
 """
     (root / "analysis" / "task001_pilot_report.md").parent.mkdir(
         parents=True, exist_ok=True
@@ -593,8 +778,41 @@ Use the dashboard and prompt archive to inspect request quality, directive respo
             m for m in messages if int(m.get("round_created") or 0) == round_index
         ]
         sections.append(f"<h2>Round {round_index + 1}</h2>")
+        sections.append("<h3>NIGHT</h3>")
         sections.append(
-            f"<p>Votes: {html.escape(_json_cell(Counter(record['population_state_after'])))}; p_truth={record['truth_vote_share']:.4f}; mean active={record['active_mean_fact_count_after']:.3f}; mean historical={record['mean_known_fact_count']:.3f}</p>"
+            f"<p>n_k={record.get('n_k')}; Y_k={record.get('Y_k')}; "
+            f"P(U=1|Y)={float(record.get('P_U1_given_Y') or 0.0):.4f}; "
+            f"sampled U_k={record.get('U_k')}; sensed agents="
+            f"{html.escape(_json_cell(record.get('sensor_agent_ids', [])))}</p>"
+        )
+        directive_texts = [
+            str(message.get("text"))
+            for message in round_messages
+            if message.get("message_type") == "DIRECTIVE"
+        ]
+        sections.append("<h3>DAWN</h3>")
+        sections.append(
+            f"<p>DIRECTIVEs seeded={record.get('dawn_directive_count', 0)}; "
+            f"coordinator public vote={html.escape(str(record.get('coordinator_public_vote')))}; "
+            f"texts={html.escape(_json_cell(directive_texts))}</p>"
+        )
+        sections.append("<h3>DAY</h3>")
+        sections.append(
+            f"<p>Realized exposed focal updates={record.get('directive_exposed_focal_updates', 0)} "
+            f"({float(record.get('realized_directive_exposure_fraction', 0.0)):.3f}); "
+            f"unique readers={record.get('controller_unique_readers', 0)}; "
+            f"REQUEST={record.get('request_count', 0)}; REPORT={record.get('report_count', 0)}; "
+            f"acquisitions={record.get('new_evidence_acquisitions', 0)}; "
+            f"refreshes={int(record.get('reactivated_peer_fact_count', 0)) + int(record.get('reactivated_controller_fact_count', 0))}; "
+            f"eligible DIRECTIVE share={float(record.get('directive_share_among_eligible_messages', 0.0)):.3f}</p>"
+        )
+        sections.append("<h3>END OF DAY</h3>")
+        sections.append(
+            f"<p>n_k+1={record.get('n_k_plus_1')}; votes: "
+            f"{html.escape(_json_cell(Counter(record['population_state_after'])))}; "
+            f"p_truth={record['truth_vote_share']:.4f}; "
+            f"mean K_active={record['active_mean_fact_count_after']:.3f}; "
+            f"mean K_hist={record['mean_known_fact_count']:.3f}</p>"
         )
         sections.append(
             f'<p><img src="../figures/active_evidence_heatmap_round_{round_index + 1:02d}.png" alt="active evidence heatmap"> <img src="../figures/historical_evidence_heatmap_round_{round_index + 1:02d}.png" alt="historical evidence heatmap"></p>'
@@ -616,7 +834,7 @@ Use the dashboard and prompt archive to inspect request quality, directive respo
                         f"<td>{html.escape(str(message.get(key)))}</td>"
                         for key in (
                             "message_id",
-                            "author_id",
+                            "author_public_id",
                             "author_kind",
                             "message_type",
                             "text",
@@ -636,7 +854,7 @@ Use the dashboard and prompt archive to inspect request quality, directive respo
     )
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "episode_dir": str(episode_dir),
         "outputs": {
             relative: hashlib.sha256((root / relative).read_bytes()).hexdigest()
@@ -648,6 +866,8 @@ Use the dashboard and prompt archive to inspect request quality, directive respo
             "directives": counts["DIRECTIVE"],
             "exact_acquisitions": exact,
             "refreshes": refreshes,
+            "directive_attributed_acquisitions": attributed_exact,
+            "directive_attributed_refreshes": attributed_refreshes,
             "prompt_attempts": len(audits),
         },
     }

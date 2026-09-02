@@ -134,6 +134,8 @@ class BlackboardMessage:
             )
         if not self.text.strip():
             raise ValueError("blackboard message text must be non-empty")
+        if not isinstance(self.vote, str) or not self.vote.strip():
+            raise ValueError("blackboard message vote must be non-empty")
         if self.author_kind not in {"agent", "controller"}:
             raise ValueError("blackboard author_kind must be agent or controller")
         if self.schema_version == BLACKBOARD_MESSAGE_SCHEMA_VERSION:

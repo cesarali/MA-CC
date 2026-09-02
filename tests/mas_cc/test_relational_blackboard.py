@@ -20,8 +20,13 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     SCHEDULE_ALWAYS,
     SCHEDULE_NEVER,
     SCHEDULE_SOFT,
+    TIMING_DAWN_ONLY,
     RelationalRoundBudgetedControl,
 )
+from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+    adapt_relational_round_record,
+)
+from mas_cc.games.hidden_bench.imitation.controller import advocacy_probability
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     BlackboardBallotContract,
 )
@@ -132,6 +137,20 @@ def _control(config, mode):
     )
 
 
+def _dawn_control(config, *, schedule=SCHEDULE_ALWAYS, budget=4):
+    return RelationalRoundBudgetedControl.from_options(
+        {
+            **dict(config.control.options),
+            "sensor_sample_size": 6,
+            "intervention_budget": budget,
+            "advocacy_schedule": schedule,
+            "message_mode": RECOMMENDATION_ONLY,
+            "controller_actuation_mode": COORDINATION_REQUEST,
+            "controller_timing": TIMING_DAWN_ONLY,
+        }
+    )
+
+
 def test_board_state_lifetime_and_serialization():
     message = BlackboardMessage(
         message_id="m1",
@@ -236,6 +255,19 @@ def test_request_cannot_attach_evidence_and_report_can():
 
 
 def test_new_messages_are_role_aware_and_legacy_records_remain_readable():
+    with pytest.raises(ValueError, match="vote must be non-empty"):
+        BlackboardMessage(
+            message_id="m0",
+            author_id="agent_001",
+            message_type="REQUEST",
+            text="invalid missing vote",
+            vote="",
+            shared_fact_id=None,
+            reply_to=None,
+            round_created=0,
+            micro_step_created=0,
+            expires_after_round=0,
+        )
     with pytest.raises(ValueError, match="controller messages"):
         BlackboardMessage(
             message_id="m1",
@@ -407,6 +439,193 @@ def test_pilot_uses_existing_stochastic_soft_policy_and_exact_controller_paramet
     assert control.threshold == 0.5
     assert control.target == "correct"
     assert control.controller_actuation_mode == COORDINATION_REQUEST
+    assert control.controller_timing == TIMING_DAWN_ONLY
+
+
+def test_dawn_blackboard_seeds_exact_budget_before_day_and_never_posts_during_day():
+    config = _config(q=1)
+    result, ballots = _run(config, control=_dawn_control(config))
+    event = result.rounds[0].event
+    micro_events = [item.transition.event for item in result.interactions]
+    directives = [
+        message
+        for message in result.final_state.blackboard.messages
+        if message.author_kind == "controller"
+    ]
+
+    assert event["controller_sampled_U"] == 1
+    assert event["b"] == 4
+    assert event["controlled_positions"] == []
+    assert event["controlled_positions_seed"] is None
+    assert event["controlled_positions_hash_or_id"] is None
+    assert event["dawn_directive_count"] == 4
+    assert len(directives) == 4
+    assert all(message.micro_step_created == 0 for message in directives)
+    assert micro_events[0]["board_size_before"] == 4
+    assert all(not item["controlled_slot"] for item in micro_events)
+    assert all(not item["controller_message_posted"] for item in micro_events)
+    assert sum(
+        message.author_kind == "agent"
+        for message in result.final_state.blackboard.messages
+    ) == len(result.interactions)
+    prompt = next(text for text in ballots.prompts if "Type: DIRECTIVE" in text)
+    assert f"Agent {event['N'] + 1}" in prompt
+    assert "controller" not in prompt.lower()
+    assert "analysis/dashboard" not in prompt.lower()
+
+
+def test_dawn_no_op_has_no_coordinator_message_and_population_contract_is_unchanged():
+    config = _config(q=1)
+    result, _ = _run(
+        config, control=_dawn_control(config, schedule=SCHEDULE_NEVER)
+    )
+    event = result.rounds[0].event
+    adapted = adapt_relational_round_record(event)
+
+    assert event["U_k"] == 0
+    assert event["dawn_directive_count"] == 0
+    assert event["directive_message_ids"] == []
+    assert all(
+        message.author_kind != "controller"
+        for message in result.final_state.blackboard.messages
+    )
+    assert len(event["sensor_agent_ids"]) == 6
+    assert set(event["sensor_agent_ids"]).issubset(set(event["agent_ids"]))
+    assert "control-source" not in event["sensor_agent_ids"]
+    assert sum(event["occupation_counts_before"]) == event["N"]
+    assert sum(event["occupation_counts_after"]) == event["N"]
+    assert adapted.event["target_count_before"] == event["n_k"]
+    assert adapted.event["target_count_after"] == event["n_k_plus_1"]
+    assert adapted.event["b"] == event["b"]
+
+
+def test_dawn_mode_never_calls_the_microscopic_position_scheduler(monkeypatch):
+    config = _config(q=1)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("microscopic controller scheduler was called")
+
+    monkeypatch.setattr(
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.runtime."
+        "sample_controlled_positions",
+        forbidden,
+    )
+    result, _ = _run(config, control=_dawn_control(config))
+
+    assert result.rounds[0].event["dawn_directive_count"] == 4
+
+
+def test_dawn_persistence_runs_before_the_day_and_never_deletes_history():
+    config = _config(q=1)
+    options = {
+        **dict(config.game.options),
+        "epistemic_persistence": 0.0,
+    }
+    config = replace(config, game=replace(config.game, options=options))
+    result, _ = _run(
+        config, control=_dawn_control(config, schedule=SCHEDULE_NEVER)
+    )
+    event = result.rounds[0].event
+
+    assert event["persistence_deactivated_fact_count"] > 0
+    assert event["active_mean_fact_count_before"] == 0.0
+    assert event["historical_mean_supporting_fact_coverage_before"] > 0.0
+    assert all(
+        set(agent.active_fact_ids).issubset(set(agent.known_fact_ids))
+        for agent in result.final_state.agents
+    )
+    assert all(
+        set(initial.known_fact_ids).issubset(set(final.known_fact_ids))
+        for initial, final in zip(
+            result.initial_state.agents, result.final_state.agents, strict=True
+        )
+    )
+
+
+def test_directive_report_reply_lineage_reaches_later_exact_acquisition():
+    config = _config(q=1)
+
+    class _LineageBallots(_BoardBallots):
+        def provider(self, provider_config):
+            def factory(request):
+                prompt = "\n\n".join(message.content for message in request.messages)
+                self.prompts.append(prompt)
+                known = [
+                    line[2:].split(":", 1)[0]
+                    for line in prompt.splitlines()
+                    if line.startswith("- f")
+                ]
+                visible_id = next(
+                    (
+                        line.split(":", 1)[1].strip()
+                        for line in prompt.splitlines()
+                        if line.startswith("Message ID:")
+                    ),
+                    None,
+                )
+                directive = "Type: DIRECTIVE" in prompt
+                return json.dumps(
+                    {
+                        "vote": "A",
+                        "private_reason": "private",
+                        "public_message": {
+                            "type": "REPORT" if directive and known else "NONE",
+                            "text": "Here is exact evidence relevant to the request."
+                            if directive and known
+                            else None,
+                            "shared_fact_id": known[0]
+                            if directive and known
+                            else None,
+                            "reply_to": visible_id
+                            if directive and known
+                            else None,
+                        },
+                    }
+                )
+
+            return MockLLMProvider(provider_config, response_factory=factory)
+
+    result, _ = _run(
+        config,
+        control=_dawn_control(config, budget=1),
+        ballots=_LineageBallots(),
+    )
+    lineage = result.rounds[0].event["directive_lineage_events"]
+
+    assert lineage
+    assert all(row["origin_directive_id"].startswith("m") for row in lineage)
+    assert all(row["reply_message_id"].startswith("m") for row in lineage)
+    assert any(row["event_type"] == "acquisition" for row in lineage)
+    assert result.rounds[0].event["directive_attributed_acquisitions"] >= 1
+
+
+@pytest.mark.parametrize("target_count", (0, 1, 3, 6))
+def test_soft_policy_monte_carlo_matches_the_configured_probability(target_count):
+    control = RelationalRoundBudgetedControl.from_options(
+        {
+            "target": "correct",
+            "sensor_sample_size": 6,
+            "threshold": 0.5,
+            "beta": 4.0,
+            "intervention_budget": 4,
+            "advocacy_schedule": SCHEDULE_SOFT,
+            "message_mode": RECOMMENDATION_ONLY,
+            "controller_actuation_mode": COORDINATION_REQUEST,
+            "controller_timing": TIMING_DAWN_ONLY,
+        }
+    )
+    rng = __import__("random").Random(20260902 + target_count)
+    trials = 40_000
+    acted = sum(
+        control.select_action(target_count / 6, rng)[0] == "ADVOCATE_Z"
+        for _ in range(trials)
+    )
+    expected = advocacy_probability(
+        target_count / 6, threshold=control.threshold, beta=control.beta
+    )
+    standard_error = (expected * (1.0 - expected) / trials) ** 0.5
+
+    assert abs(acted / trials - expected) <= 5 * standard_error + 0.001
 
 
 def test_board_shared_evidence_is_acquired_with_message_provenance():
@@ -551,4 +770,62 @@ def test_pilot_artifact_builder_writes_complete_inspection_bundle(tmp_path):
     assert summary["counts"]["prompt_attempts"] == 24
     for relative in REQUIRED_OUTPUTS:
         assert (result.output_dir / relative).is_file(), relative
-    assert len(list((result.output_dir / "analysis" / "prompts").glob("*.md"))) == 24
+    prompt_paths = list((result.output_dir / "analysis" / "prompts").glob("*.md"))
+    assert len(prompt_paths) == 24
+    directive_prompt = next(
+        path.read_text(encoding="utf-8")
+        for path in prompt_paths
+        if "Type: DIRECTIVE" in path.read_text(encoding="utf-8")
+    )
+    assert "Agent 25" in directive_prompt
+    assert "controller" not in directive_prompt.lower()
+
+    control_rows = [
+        json.loads(line)
+        for line in (result.output_dir / "round_control_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert len(control_rows) == 1
+    assert {
+        "n_k",
+        "Y_k",
+        "P_U1_given_Y",
+        "U",
+        "b",
+        "n_k_plus_1",
+        "directive_message_ids",
+    }.issubset(control_rows[0])
+    message_rows = [
+        json.loads(line)
+        for line in (result.output_dir / "messages.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    public_schema = {
+        "message_id",
+        "author_public_id",
+        "vote",
+        "type",
+        "text",
+        "shared_fact_id",
+        "reply_to",
+        "created_round",
+        "expires_round",
+    }
+    assert all(public_schema.issubset(row) for row in message_rows)
+    assert all(row["vote"] for row in message_rows)
+    assert {
+        row["author_public_id"]
+        for row in message_rows
+        if row["type"] == "DIRECTIVE"
+    } == {"Agent 25"}
+    dashboard = (result.output_dir / "analysis/dashboard/index.html").read_text(
+        encoding="utf-8"
+    )
+    assert all(phase in dashboard for phase in ("NIGHT", "DAWN", "DAY", "END OF DAY"))
+    assert (
+        result.output_dir
+        / "relational_imitation_round_feedback_analysis"
+        / "round_information_estimates.csv"
+    ).is_file()

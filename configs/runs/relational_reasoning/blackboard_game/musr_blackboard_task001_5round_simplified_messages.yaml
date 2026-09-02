@@ -63,6 +63,7 @@ control:
     advocacy_schedule: soft
     message_mode: recommendation_only
     controller_actuation_mode: coordination_request
+    controller_timing: dawn_only
 
 execution:
   seed: 20260902
@@ -110,7 +111,19 @@ storage:
 
 analysis:
   enabled: true
-  estimators: [blackboard_episode_inspection]
+  estimators:
+    - blackboard_episode_inspection
+    - round_sensing_mi
+    - round_target_sensing_mi
+    - round_sensor_action_mi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_population_actuation_cmi
+    - round_target_actuation_cmi
+    - round_target_susceptibility
+    - round_target_signed_response_share
+    - round_target_signed_actuation
+    - round_target_information_fraction
   options:
     theoretical_reference: none
   comet_export: false
@@ -140,5 +153,6 @@ experiment:
     epistemic_persistence: 0.50
     board_lifetime_rounds: 1
     intervention_budget: 6
+    controller_timing: dawn_only
     initial_latent_breadth: 1
     evidence_profile: F9
