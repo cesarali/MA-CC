@@ -308,11 +308,22 @@ def build_blackboard_pilot_artifacts(
         controller_rows.append(
             {
                 "round": round_index,
+                "Y": record.get("controller_sensor_Y"),
                 "sensed_agent_ids": record.get("sensor_agent_ids", []),
                 "sensed_votes": record.get("sensor_observed_opinions", []),
+                "probability_U1_given_Y": record.get(
+                    "controller_probability_U1_given_Y"
+                ),
+                "sampled_U": record.get("controller_sampled_U"),
                 "acted": bool(record.get("controlled_position_count")),
                 "action": record.get("controller_action"),
                 "target": record.get("controller_target"),
+                "injection_within_round_indices": record.get(
+                    "controller_injection_within_round_indices", []
+                ),
+                "injection_global_update_indices": record.get(
+                    "controller_injection_global_update_indices", []
+                ),
                 "directive_ids": record.get("controller_post_ids", []),
                 "directive_texts": [
                     message.get("text")

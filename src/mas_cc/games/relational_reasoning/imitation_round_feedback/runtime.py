@@ -1113,6 +1113,27 @@ async def run_relational_imitation_round_feedback_game(
         target_index = options.index(analysis_target)
         q_c = None if round_signal is None else int(sensor.get("sample_size", 0))
         sensor_target_share = None if not q_c else sensor_counts[target_index] / q_c
+        controller_sensor_y = (
+            None
+            if round_signal is None
+            else {
+                "sample_size": q_c,
+                "sampled_agent_ids": list(sensor.get("sampled_agent_ids", ())),
+                "sampled_votes": list(sensor.get("sampled_opinions", ())),
+                "vote_counts": {
+                    option: sensor_counts[index] for index, option in enumerate(options)
+                },
+                "target": analysis_target,
+                "target_count": sensor_counts[target_index],
+                "target_share": sensor_target_share,
+            }
+        )
+        controller_sampled_u = (
+            None if round_signal is None else int(action == ADVOCATE_TARGET)
+        )
+        controller_injection_global_indices = [
+            round_index * rules.n_agents + position for position in controlled_positions
+        ]
         messages_created = tuple(
             message
             for message in state.blackboard.messages
@@ -1169,6 +1190,17 @@ async def run_relational_imitation_round_feedback_game(
             ),
             "controller_advocate_probability": probability,
             "controller_advocacy_probability": probability,
+            # Explicit controller-decision record requested by the blackboard
+            # pilot. Y is the exact q_c-vote sample; U is the sampled binary
+            # action. Injection times are empty for U=0 and contain exactly b
+            # zero-based microscopic positions for U=1.
+            "controller_sensor_Y": controller_sensor_y,
+            "controller_probability_U1_given_Y": probability,
+            "controller_sampled_U": controller_sampled_u,
+            "controller_injection_within_round_indices": list(controlled_positions),
+            "controller_injection_global_update_indices": (
+                controller_injection_global_indices
+            ),
             "controller_message_mode": message_mode,
             "controller_actuation_mode": actuation_mode,
             "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,

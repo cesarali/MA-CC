@@ -60,7 +60,7 @@ control:
     threshold: 0.50
     beta: 4.0
     intervention_budget: 6
-    advocacy_schedule: always
+    advocacy_schedule: soft
     message_mode: recommendation_only
     controller_actuation_mode: coordination_request
 
