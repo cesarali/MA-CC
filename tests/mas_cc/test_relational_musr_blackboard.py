@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 import asyncio
+import hashlib
 import json
+from pathlib import Path
 
 from mas_cc.config import load_run_config
 from mas_cc.games import create_game
@@ -18,8 +20,15 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     run_relational_imitation_round_feedback_game,
 )
 
-CONFIG = "configs/runs/relational_reasoning/relational_blackboard_no_control_smoke.yaml"
+CONFIG = (
+    "configs/runs/relational_reasoning/misselaneous/"
+    "relational_blackboard_no_control_smoke.yaml"
+)
 DATASET = "results/studies/musr_team_allocation_validation_01/tasks"
+PILOT_CONFIG = (
+    "configs/runs/relational_reasoning/blackboard_game/"
+    "musr_blackboard_task001_5round_simplified_messages.yaml"
+)
 
 
 def _musr_config():
@@ -30,10 +39,12 @@ def _musr_config():
         "task_dataset_dir": DATASET,
         "task_id": "task_001",
         "n_agents": 12,
+        "prompt_version": 2,
     }
     return replace(
         config,
         game=replace(config.game, population_size=12, options=options),
+        prompt=replace(config.prompt, prompt_version=2),
     )
 
 
@@ -107,3 +118,48 @@ def test_initialization_only_asks_each_agent_once_and_runs_no_social_updates():
     assert result.interactions == ()
     assert result.rounds == ()
     assert len(result.initial_state.initial_votes) == 12
+
+
+def test_pilot_assignment_is_hash_pinned_f9_and_exactly_one_card_per_agent():
+    config = load_run_config(PILOT_CONFIG, environment={})
+    game = create_game(config.game)
+    task = game.load_task(config.game)
+    artifact_path = Path(config.game.options["initial_information"]["artifact_path"])
+
+    assert (
+        hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+        == (config.game.options["initial_information"]["expected_file_sha256"])
+    )
+    assert len(task.agent_ids) == 24
+    assert len(task.fact_order) == 9
+    assert len(task.supporting_fact_groups or {}) == 9
+    assert all(len(task.known_facts(agent)) == 1 for agent in task.agent_ids)
+    assert {
+        fact for agent in task.agent_ids for fact in task.known_facts(agent)
+    } == set(task.fact_order)
+    counts = [
+        sum(fact in task.known_facts(agent) for agent in task.agent_ids)
+        for fact in task.fact_order
+    ]
+    assert sorted(counts) == [2, 2, 2, 3, 3, 3, 3, 3, 3]
+
+
+def test_pilot_prompt_exposes_only_simplified_actions_and_no_hidden_values():
+    config = load_run_config(PILOT_CONFIG, environment={})
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    prompt = "\n\n".join(
+        message.content
+        for message in game.ballot_request(
+            state, state.agents[0].agent_id, (), config.game
+        )
+        .prompt.compile(RegexTokenCounter())
+        .messages
+    )
+
+    assert "REQUEST | REPORT | NONE" in prompt
+    for legacy in ("CLAIM", "RESULT", "REPLY", "CORRECTION"):
+        assert legacy not in prompt
+    assert "skill_matrix" not in prompt
+    assert "cooperation_matrix" not in prompt
+    assert "hidden_claim" not in prompt

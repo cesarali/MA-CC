@@ -21,6 +21,7 @@ source-evidence acquisition; it is not exhaustive semantic knowledge there.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,7 @@ from mas_cc.games.protocols import AgentState, GameState, Transition, _thaw
 
 from ..data import DEFAULT_TASK_DATASET_DIR
 from .prompts import (
+    BOARD_PROMPT_VERSION,
     IMPLEMENTED_VOTE_VISIBILITIES,
     LOCAL_PROMPT_VARIANTS,
     PROMPT_VERSION,
@@ -78,21 +80,24 @@ SOCIAL_MODES = (SOCIAL_MODE_PEER, SOCIAL_MODE_BOARD)
 BOARD_SAMPLING_UNIFORM = "uniform"
 BOARD_SAMPLING_MODES = (BOARD_SAMPLING_UNIFORM,)
 
-MESSAGE_CLAIM = "CLAIM"
-MESSAGE_QUESTION = "QUESTION"
 MESSAGE_REQUEST = "REQUEST"
-MESSAGE_RESULT = "RESULT"
-MESSAGE_REPLY = "REPLY"
-MESSAGE_CORRECTION = "CORRECTION"
-BOARD_MESSAGE_TYPES = (
-    MESSAGE_CLAIM,
-    MESSAGE_QUESTION,
-    MESSAGE_REQUEST,
-    MESSAGE_RESULT,
-    MESSAGE_REPLY,
-    MESSAGE_CORRECTION,
+MESSAGE_REPORT = "REPORT"
+MESSAGE_NONE = "NONE"
+MESSAGE_DIRECTIVE = "DIRECTIVE"
+ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
+ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
+CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE,)
+BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
+LEGACY_BOARD_MESSAGE_TYPES = (
+    "CLAIM",
+    "QUESTION",
+    "REQUEST",
+    "RESULT",
+    "REPLY",
+    "CORRECTION",
 )
-REPLY_MESSAGE_TYPES = (MESSAGE_REPLY, MESSAGE_CORRECTION)
+BLACKBOARD_MESSAGE_SCHEMA_VERSION = 2
+LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,20 +115,43 @@ class BlackboardMessage:
     micro_step_created: int
     expires_after_round: int
     author_kind: str = "agent"
+    schema_version: int = BLACKBOARD_MESSAGE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.message_id.strip():
             raise ValueError("blackboard message_id must be non-empty")
-        if self.message_type not in BOARD_MESSAGE_TYPES:
+        allowed = (
+            LEGACY_BOARD_MESSAGE_TYPES
+            if self.schema_version == LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION
+            else BOARD_MESSAGE_TYPES
+            if self.schema_version == BLACKBOARD_MESSAGE_SCHEMA_VERSION
+            else ()
+        )
+        if self.message_type not in allowed:
             raise ValueError(
-                f"blackboard message_type must be one of {list(BOARD_MESSAGE_TYPES)}"
+                f"blackboard message_type must be one of {list(allowed)} for "
+                f"schema version {self.schema_version}"
             )
         if not self.text.strip():
             raise ValueError("blackboard message text must be non-empty")
-        if self.message_type in REPLY_MESSAGE_TYPES and not self.reply_to:
-            raise ValueError(f"{self.message_type} requires reply_to")
         if self.author_kind not in {"agent", "controller"}:
             raise ValueError("blackboard author_kind must be agent or controller")
+        if self.schema_version == BLACKBOARD_MESSAGE_SCHEMA_VERSION:
+            role_types = (
+                CONTROLLER_MESSAGE_TYPES
+                if self.author_kind == "controller"
+                else ORDINARY_MESSAGE_TYPES
+            )
+            if self.message_type not in role_types:
+                raise ValueError(
+                    f"{self.author_kind} messages must use one of {list(role_types)}"
+                )
+            if self.message_type in {MESSAGE_REQUEST, MESSAGE_DIRECTIVE} and (
+                self.shared_fact_id is not None
+            ):
+                raise ValueError(f"{self.message_type} cannot carry shared_fact_id")
+        elif self.message_type in {"REPLY", "CORRECTION"} and not self.reply_to:
+            raise ValueError(f"{self.message_type} requires reply_to")
         if self.expires_after_round < self.round_created:
             raise ValueError("blackboard expiry cannot precede creation")
 
@@ -145,6 +173,11 @@ class BlackboardMessage:
             micro_step_created=int(value["micro_step_created"]),
             expires_after_round=int(value["expires_after_round"]),
             author_kind=str(value.get("author_kind", "agent")),
+            # Historical records predate explicit message schema versioning.
+            # Keep their labels verbatim instead of silently relabeling raw data.
+            schema_version=int(
+                value.get("schema_version", LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION)
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -498,6 +531,8 @@ class RelationalRules:
     task_family: str
     task_dataset_dir: str
     task_id: str | None
+    initial_information_path: str | None
+    initial_information_sha256: str | None
     vote_visibility: str
     prompt_version: int
     receiver_epistemic_disposition: str
@@ -588,6 +623,40 @@ class RelationalRules:
             )
         if task_family == "musr_team_allocation" and task_id is None:
             raise ValueError("MuSR Team Allocation requires game.options.task_id")
+        initial_information = _mapping(
+            options.get("initial_information"),
+            "game.options.initial_information",
+        )
+        initial_information_path = initial_information.get("artifact_path")
+        initial_information_sha256 = initial_information.get("expected_file_sha256")
+        if initial_information_path is not None and (
+            not isinstance(initial_information_path, str)
+            or not initial_information_path.strip()
+        ):
+            raise ValueError(
+                "game.options.initial_information.artifact_path must be a path"
+            )
+        if initial_information_sha256 is not None and (
+            not isinstance(initial_information_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", initial_information_sha256)
+        ):
+            raise ValueError(
+                "game.options.initial_information.expected_file_sha256 must be "
+                "a lowercase 64-character SHA-256"
+            )
+        if (initial_information_path is None) != (initial_information_sha256 is None):
+            raise ValueError(
+                "game.options.initial_information must provide artifact_path and "
+                "expected_file_sha256 together"
+            )
+        if (
+            initial_information_path is not None
+            and task_family != "musr_team_allocation"
+        ):
+            raise ValueError(
+                "game.options.initial_information is supported only for "
+                "musr_team_allocation"
+            )
 
         visibility = str(options.get("vote_visibility", "public"))
         if visibility not in VOTE_VISIBILITIES:
@@ -620,11 +689,17 @@ class RelationalRules:
         except ValueError as exc:
             raise ValueError(f"game.options.{exc}") from exc
 
-        prompt_version = options.get("prompt_version", PROMPT_VERSION)
-        if isinstance(prompt_version, bool) or prompt_version != PROMPT_VERSION:
+        expected_prompt_version = (
+            BOARD_PROMPT_VERSION if social_mode == SOCIAL_MODE_BOARD else PROMPT_VERSION
+        )
+        prompt_version = options.get("prompt_version", expected_prompt_version)
+        if (
+            isinstance(prompt_version, bool)
+            or prompt_version != expected_prompt_version
+        ):
             raise ValueError(
                 f"the {GAME_TYPE!r} prompt family has one version; "
-                f"game.options.prompt_version must be {PROMPT_VERSION}"
+                f"game.options.prompt_version must be {expected_prompt_version}"
             )
 
         initialization = _mapping(
@@ -716,6 +791,8 @@ class RelationalRules:
             task_family=task_family,
             task_dataset_dir=str(dataset_dir),
             task_id=task_id,
+            initial_information_path=initial_information_path,
+            initial_information_sha256=initial_information_sha256,
             vote_visibility=visibility,
             prompt_version=int(prompt_version),
             receiver_epistemic_disposition=prompt_class,

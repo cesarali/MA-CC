@@ -17,27 +17,18 @@ afterwards.  ``"none"`` is always a legal answer: an agent is never forced to
 disclose, or the distributed-information problem would dissolve on the first
 round.
 
-**`shared_fact_id` is the only task-information channel between participants.**
-A ballot's ``reason`` is written, parsed, stored and analysed - but it is
-*never* rendered into another agent's prompt.  If prose were shown to peers, an
-agent could pass a fact, or a conclusion derived from one, while reporting
-``shared_fact_id: none``, and information would move without appearing in any
-``K_i``.  The knowledge state would then be a lower bound on what the population
-actually knows rather than an exact record of it, and every epistemic
-observable built on it would be unfalsifiable.  So a visible participant shows
-exactly three things: who it is, what it votes, and the fact it chose to expose.
+In board mode, public prose is an intentional semantic channel. Exact evidence
+memory still changes only when a REPORT carries ``shared_fact_id``. A semantic-
+only REPORT may affect a later vote, but it does not add anything to the exact
+historical or active evidence sets.
 
 An agent sees its own facts *with their identifiers* - it needs them to cite one
 - and sees a peer's exposed fact as **rendered text only**.  There is no place
 in this family where a raw symbolic tuple reaches a model: the experiment is a
 language reasoning task and the symbols stay in the log.
 
-``render_social_source`` is the single renderer for a visible participant, used
-for ordinary peers and for the controller alike.  That is deliberate: the
-controller occupies one ordinary social slot and must be indistinguishable from
-a participant, so its recommendation (its vote) and its injected fact travel
-through exactly the same fields a peer's would - and it gets no prose channel a
-peer does not have either.
+Peer mode retains the older structured ballot channel. Board mode uses
+``render_board_message`` for REQUEST, REPORT, and controller DIRECTIVE prose.
 """
 
 from __future__ import annotations
@@ -63,6 +54,7 @@ from ..data import NO_FACT
 PROMPT_FAMILY = "relational_public_ballot"
 BOARD_PROMPT_FAMILY = "relational_blackboard_ballot"
 PROMPT_VERSION = 1
+BOARD_PROMPT_VERSION = 2
 
 VOTE_VISIBILITIES = ("public", "hidden")
 IMPLEMENTED_VOTE_VISIBILITIES = ("public",)
@@ -78,14 +70,10 @@ essay - which truncates at ``max_output_tokens`` and breaks the JSON anyway -
 not to police wording."""
 
 BOARD_MESSAGE_TYPES = (
-    "CLAIM",
-    "QUESTION",
     "REQUEST",
-    "RESULT",
-    "REPLY",
-    "CORRECTION",
+    "REPORT",
 )
-BOARD_REPLY_TYPES = ("REPLY", "CORRECTION")
+BOARD_ACTION_TYPES = (*BOARD_MESSAGE_TYPES, "NONE")
 MAX_PUBLIC_MESSAGE_CHARACTERS = 1200
 
 LOCAL_PROMPT_P0 = "P0"
@@ -335,15 +323,15 @@ BOARD_DECISION_BASIS_NONE_VISIBLE = (
 BOARD_DECISION_INSTRUCTION = (
     "DECISION\n\n"
     "Vote for the option best supported by the information available to you.\n"
-    "Write a brief private reason. You may also post at most one public message,\n"
-    "or use null. Public message types are CLAIM, QUESTION, REQUEST, RESULT,\n"
-    "REPLY, and CORRECTION. REPLY and CORRECTION must name a visible message ID\n"
-    "in reply_to; other types must use null. Public prose may report reasoning,\n"
-    "ask questions, or correct a visible message.\n\n"
-    "If you expose one exact source fact, give its identifier in shared_fact_id.\n"
-    'You may cite only a fact listed under YOUR CURRENT KNOWLEDGE. Use "none"\n'
-    "when no exact fact is attached. If public_message is null, shared_fact_id\n"
-    'must be "none". Do not invent evidence or identifiers.'
+    "Write a brief private reason. For public_message choose exactly one type:\n"
+    "- REQUEST asks for information or work. It cannot attach exact evidence.\n"
+    "- REPORT shares information, an answer, a conclusion, or a correction. It\n"
+    "  may attach one exact evidence identifier.\n"
+    "- NONE posts nothing; use null for text, shared_fact_id, and reply_to.\n\n"
+    "REQUEST and REPORT may reply to any visible message by putting that message\n"
+    "ID in reply_to. Use null when the message is not a reply. A REPORT may cite\n"
+    "only a fact listed under YOUR CURRENT KNOWLEDGE. Do not invent evidence or\n"
+    "identifiers. Your private reason is never copied into public_message."
 )
 
 NO_KNOWN_FACTS = (
@@ -1018,8 +1006,19 @@ def parse_relational_ballot(
 ) -> ParsedBallot:
     parsed = extract_json_object(response)
     raw_vote = parsed.get("vote") if parsed else None
-    raw_reason = parsed.get("reason") if parsed else None
-    raw_shared = parsed.get("shared_fact_id") if parsed else None
+    raw_reason = parsed.get("private_reason", parsed.get("reason")) if parsed else None
+    public = (
+        dict(parsed["public_message"])
+        if parsed and isinstance(parsed.get("public_message"), Mapping)
+        else None
+    )
+    raw_shared = (
+        public.get("shared_fact_id")
+        if public is not None
+        else parsed.get("shared_fact_id")
+        if parsed
+        else None
+    )
     reason = (
         raw_reason.strip()
         if isinstance(raw_reason, str) and raw_reason.strip()
@@ -1036,12 +1035,12 @@ def parse_relational_ballot(
         ),
         raw_vote=raw_vote,
         raw_shared_fact_id=raw_shared,
-        shared_fact_present=bool(parsed) and "shared_fact_id" in parsed,
-        public_message=(
-            dict(parsed["public_message"])
-            if parsed and isinstance(parsed.get("public_message"), Mapping)
-            else None
+        shared_fact_present=(
+            "shared_fact_id" in public
+            if public is not None
+            else bool(parsed) and "shared_fact_id" in parsed
         ),
+        public_message=public,
         public_message_present=bool(parsed) and "public_message" in parsed,
     )
 
@@ -1066,53 +1065,103 @@ class BlackboardBallotContract(RelationalBallotContract):
             "Return only valid JSON:\n\n"
             "{\n"
             f'  "vote": "<{options}>",\n'
-            '  "reason": "<brief private reason>",\n'
-            f'  "shared_fact_id": "<{citable}>",\n'
-            '  "public_message": null\n'
-            "}\n\n"
-            "Or replace null with:\n"
-            '{"type": "<CLAIM | QUESTION | REQUEST | RESULT | REPLY | CORRECTION>", '
-            '"text": "<public text>", "reply_to": null}'
+            '  "private_reason": "<brief private reason>",\n'
+            '  "public_message": {\n'
+            '    "type": "<REQUEST | REPORT | NONE>",\n'
+            '    "text": "<public text or null>",\n'
+            f'    "shared_fact_id": "<{citable}> or null,\n'
+            '    "reply_to": "<visible message ID or null>"\n'
+            "  }\n"
+            "}"
         )
 
     def validate(self, response: str) -> ValidationResult:
-        base = RelationalBallotContract.validate(self, response)
-        if not base.valid:
-            return base
         parsed = extract_json_object(response)
-        assert parsed is not None
+        if parsed is None:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response",
+                    "must contain a JSON object with vote, private_reason and public_message",
+                    response,
+                )
+            )
+        aliases = {relation.upper(): relation for relation in self.relations}
+        if resolve_vote(parsed.get("vote"), self.allowed_values, aliases) is None:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.vote",
+                    f"must resolve to exactly one of: {', '.join(self.allowed_values)}",
+                    parsed.get("vote"),
+                )
+            )
+        reason = parsed.get("private_reason")
+        if not isinstance(reason, str) or not reason.strip():
+            return ValidationResult.failure(
+                ValidationIssue("response.private_reason", "must be non-empty text")
+            )
+        if len(reason.strip()) > MAX_REASON_CHARACTERS:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.private_reason",
+                    f"must be at most {MAX_REASON_CHARACTERS} characters",
+                )
+            )
         if "public_message" not in parsed:
             return ValidationResult.failure(
                 ValidationIssue(
                     "response.public_message",
-                    "must be present; use null to post nothing",
+                    "must be present and use type NONE to post nothing",
                 )
             )
         public = parsed.get("public_message")
-        shared = normalize_shared_fact_id(parsed.get("shared_fact_id"))
-        if public is None:
-            if shared is not None:
-                return ValidationResult.failure(
-                    ValidationIssue(
-                        "response.shared_fact_id",
-                        "must be none when public_message is null",
-                    )
-                )
-            return ValidationResult.success()
         if not isinstance(public, Mapping):
             return ValidationResult.failure(
-                ValidationIssue("response.public_message", "must be null or an object")
+                ValidationIssue("response.public_message", "must be an object")
+            )
+        if "shared_fact_id" not in public:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.shared_fact_id",
+                    "must be present; use null when no exact evidence is attached",
+                )
+            )
+        if "reply_to" not in public:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.reply_to",
+                    "must be present; use null when this is not a reply",
+                )
             )
         message_type = public.get("type")
-        if message_type not in BOARD_MESSAGE_TYPES:
+        if message_type not in BOARD_ACTION_TYPES:
             return ValidationResult.failure(
                 ValidationIssue(
                     "response.public_message.type",
-                    f"must be one of {list(BOARD_MESSAGE_TYPES)}",
+                    f"must be one of {list(BOARD_ACTION_TYPES)}",
                     message_type,
                 )
             )
         text = public.get("text")
+        raw_shared = public.get("shared_fact_id")
+        if raw_shared is not None and not isinstance(raw_shared, str):
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.shared_fact_id",
+                    "must be a string or null",
+                    raw_shared,
+                )
+            )
+        shared = normalize_shared_fact_id(raw_shared)
+        reply_to = public.get("reply_to")
+        if message_type == "NONE":
+            if text is not None or shared is not None or reply_to is not None:
+                return ValidationResult.failure(
+                    ValidationIssue(
+                        "response.public_message",
+                        "NONE requires null text, shared_fact_id, and reply_to",
+                    )
+                )
+            return ValidationResult.success()
         if not isinstance(text, str) or not text.strip():
             return ValidationResult.failure(
                 ValidationIssue(
@@ -1126,45 +1175,57 @@ class BlackboardBallotContract(RelationalBallotContract):
                     f"must be at most {MAX_PUBLIC_MESSAGE_CHARACTERS} characters",
                 )
             )
-        reply_to = public.get("reply_to")
-        if message_type in BOARD_REPLY_TYPES:
-            if (
-                not isinstance(reply_to, str)
-                or reply_to not in self.visible_message_ids
-            ):
-                return ValidationResult.failure(
-                    ValidationIssue(
-                        "response.public_message.reply_to",
-                        "must name a message visible in this update",
-                        reply_to,
-                    )
-                )
-        elif reply_to is not None:
+        if reply_to is not None and (
+            not isinstance(reply_to, str) or reply_to not in self.visible_message_ids
+        ):
             return ValidationResult.failure(
                 ValidationIssue(
                     "response.public_message.reply_to",
-                    "must be null unless type is REPLY or CORRECTION",
+                    "must be null or name a message visible in this update",
                     reply_to,
                 )
             )
+        if message_type == "REQUEST" and shared is not None:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.shared_fact_id",
+                    "REQUEST cannot attach exact evidence",
+                    raw_shared,
+                )
+            )
+        if shared is not None:
+            if not _FACT_ID.match(shared):
+                return ValidationResult.failure(
+                    ValidationIssue(
+                        "response.public_message.shared_fact_id",
+                        "must be a bare fact identifier such as f1",
+                        raw_shared,
+                    )
+                )
+            if shared not in self.fact_ids:
+                return ValidationResult.failure(
+                    ValidationIssue(
+                        "response.public_message.shared_fact_id",
+                        f"{shared!r} is not among the facts this agent may share",
+                        raw_shared,
+                    )
+                )
         return ValidationResult.success()
 
     def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
         issue = issues[0]
-        if (
-            issue.field == "response.shared_fact_id"
-            and "when public_message is null" in issue.message
-        ):
+        if issue.field in {
+            "response.public_message.shared_fact_id",
+            "response.public_message",
+        }:
+            allowed = ", ".join(f'"{value}"' for value in self.fact_ids)
             return (
-                "Your previous response was invalid because it attached an exact "
-                "source fact while public_message was null.\n\n"
-                "Return the complete JSON object again. Choose exactly one:\n"
-                '1. Set "public_message" to null and "shared_fact_id" to "none".\n'
-                "2. Post a public_message object and set shared_fact_id to one "
-                "available bare fact identifier.\n\n"
-                "Do not attach a fact to a null public message."
+                "Your previous public_message used an invalid shared_fact_id.\n\n"
+                "Return the complete JSON object again. REQUEST and NONE must use "
+                "null. REPORT may use null or one available bare identifier"
+                f"{': ' + allowed if allowed else ''}."
             )
-        return super().repair_guidance(issues)
+        return RelationalBallotContract.repair_guidance(self, issues)
 
 
 # --------------------------------------------------------------------------
@@ -1251,7 +1312,7 @@ def relational_blackboard_ballot_prompt(
     )
     return BlackboardBallotPrompt(
         BOARD_PROMPT_FAMILY,
-        PROMPT_VERSION,
+        BOARD_PROMPT_VERSION,
         (
             IdentityBlock(),
             SocialEnvironmentBlock(environment),
@@ -1428,8 +1489,9 @@ __all__ = [
     "LOCAL_PROMPT_P3",
     "LOCAL_PROMPT_VARIANTS",
     "BOARD_PROMPT_FAMILY",
+    "BOARD_PROMPT_VERSION",
     "BOARD_MESSAGE_TYPES",
-    "BOARD_REPLY_TYPES",
+    "BOARD_ACTION_TYPES",
     "BlackboardBallotContract",
     "BlackboardBallotPrompt",
     "CONTROL_RECOMMENDATION",

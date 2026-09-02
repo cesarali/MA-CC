@@ -85,7 +85,7 @@ from .prompts import (
 from .state import (
     ACTIVE_FACT_IDS,
     FOCAL_UPDATE,
-    MESSAGE_REQUEST,
+    MESSAGE_DIRECTIVE,
     SOCIAL_MODE_BOARD,
     SOCIAL_MODE_PEER,
     BlackboardMessage,
@@ -450,7 +450,6 @@ def _transient_recommendation_source(
     target: str,
     round_index: int,
     within_round_index: int,
-    shared_fact_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "message_id": f"direct-r{round_index:04d}-u{within_round_index:04d}",
@@ -458,13 +457,11 @@ def _transient_recommendation_source(
         "source_type": "control",
         "author_kind": "controller",
         "label": control_label(len(state.agents)),
-        "message_type": "CLAIM",
+        "message_type": MESSAGE_DIRECTIVE,
         "text": render_control_reason(target),
         "vote": target,
-        "shared_fact_id": shared_fact_id,
-        "shared_fact_text": (
-            None if shared_fact_id is None else state.fact_text(shared_fact_id)
-        ),
+        "shared_fact_id": None,
+        "shared_fact_text": None,
         "reply_to": None,
         "round_created": round_index,
         "micro_step_created": state.turn,
@@ -487,7 +484,7 @@ def _append_controller_request(
     message = BlackboardMessage(
         message_id=f"m{len(board.messages) + 1:06d}",
         author_id=CONTROL_SOURCE_ID,
-        message_type=MESSAGE_REQUEST,
+        message_type=MESSAGE_DIRECTIVE,
         text=text,
         vote=target,
         shared_fact_id=None,
@@ -791,7 +788,9 @@ async def run_relational_imitation_round_feedback_game(
         # Evidence only ever reaches a focal agent through an actuated slot, so
         # a NO_OP round transmits nothing even under recommendation_plus_fact.
         round_controller_fact = (
-            controller_fact_id if action == ADVOCATE_TARGET else None
+            controller_fact_id
+            if action == ADVOCATE_TARGET and rules.social_mode == SOCIAL_MODE_PEER
+            else None
         )
         before_obs = population_observables(
             population_before, options, state.correct_answer, analysis_target
@@ -906,7 +905,6 @@ async def run_relational_imitation_round_feedback_game(
                             target=target,
                             round_index=round_index,
                             within_round_index=within_round_index,
-                            shared_fact_id=round_controller_fact,
                         ),
                     )
                 social_sources = tuple(sources)
@@ -1228,6 +1226,18 @@ async def run_relational_imitation_round_feedback_game(
             "initial_known_fact_ids_by_agent": [
                 list(agent.known_fact_ids) for agent in initial_state.agents
             ],
+            "persistence_deactivated_pairs": [
+                {"agent_id": agent_id, "fact_id": fact_id}
+                for agent_id, fact_id in deactivated
+            ],
+            "active_fact_ids_by_agent_after": {
+                str(agent.agent_id): list(agent.active_fact_ids)
+                for agent in state.agents
+            },
+            "known_fact_ids_by_agent_after": {
+                str(agent.agent_id): list(agent.known_fact_ids)
+                for agent in state.agents
+            },
             "initial_task_id": str(initial_state.task["task_id"]),
             "initialization_source": initialization_source,
             "initialization_repetition": initialization_repetition,
@@ -1348,10 +1358,9 @@ async def run_relational_imitation_round_feedback_game(
                 else 0.0
             ),
             "message_type_counts": message_type_counts,
-            "reply_count": message_type_counts.get("REPLY", 0),
-            "correction_count": message_type_counts.get("CORRECTION", 0),
             "request_count": message_type_counts.get("REQUEST", 0),
-            "result_count": message_type_counts.get("RESULT", 0),
+            "report_count": message_type_counts.get("REPORT", 0),
+            "directive_count": message_type_counts.get("DIRECTIVE", 0),
             "controller_posts": len(round_controller_post_ids),
             "controller_post_ids": list(round_controller_post_ids),
             "controller_message_exposures": round_controller_exposure_count,

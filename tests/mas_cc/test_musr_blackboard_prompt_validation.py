@@ -42,7 +42,7 @@ def test_frozen_states_use_actual_runtime_and_expected_coverage(tmp_path):
         assert set(row["original_evidence_ids"]).issubset(row["total_evidence_ids"])
         assert set(row["acquired_evidence_ids"]).issubset(row["total_evidence_ids"])
         if row["state_id"] == "S2":
-            assert row["sampled_message_types"] == ["REPLY"]
+            assert row["sampled_message_types"] == ["REPORT"]
             assert next(iter(row["reply_to_structure"].values())) is not None
     evidence, schema, lifetime = _sanity(tmp_path, states)
     assert all(
@@ -65,7 +65,7 @@ def test_call_plan_matches_states_and_repetitions():
     assert len({call.call_id for call in calls}) == 12
 
 
-def test_public_contract_rejects_no_post_with_fact_and_invisible_reply():
+def test_public_contract_rejects_none_with_fact_and_invisible_reply():
     config = load_config(SMOKE)
     states = build_frozen_states(config, _tasks(config))
     s1 = next(
@@ -77,19 +77,23 @@ def test_public_contract_rejects_no_post_with_fact_and_invisible_reply():
     no_post = json.dumps(
         {
             "vote": letter,
-            "reason": "private",
-            "shared_fact_id": fact,
-            "public_message": None,
+            "private_reason": "private",
+            "public_message": {
+                "type": "NONE",
+                "text": None,
+                "shared_fact_id": fact,
+                "reply_to": None,
+            },
         }
     )
     bad_reply = json.dumps(
         {
             "vote": letter,
-            "reason": "private",
-            "shared_fact_id": "none",
+            "private_reason": "private",
             "public_message": {
-                "type": "REPLY",
+                "type": "REPORT",
                 "text": "public",
+                "shared_fact_id": None,
                 "reply_to": "missing",
             },
         }
@@ -98,5 +102,4 @@ def test_public_contract_rejects_no_post_with_fact_and_invisible_reply():
     assert not contract.validate(bad_reply).valid
     issues = contract.validate(no_post).issues
     guidance = contract.repair_guidance(issues)
-    assert '"public_message" to null and "shared_fact_id" to "none"' in guidance
-    assert "Do not attach a fact to a null public message" in guidance
+    assert "REQUEST and NONE must use null" in guidance
