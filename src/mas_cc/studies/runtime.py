@@ -51,11 +51,24 @@ def validate_study_execution_site(manifest_path: str | Path) -> None:
 def configure_study_provider_load_control(manifest_path: str | Path) -> None:
     """Expose one study-wide adaptive policy to every provider factory call."""
 
-    study_root = Path(manifest_path).expanduser().resolve().parent
+    manifest = Path(manifest_path).expanduser().resolve()
+    study_root = manifest.parent
+    try:
+        import csv
+
+        with manifest.open(newline="", encoding="utf-8") as stream:
+            first = next(csv.DictReader(stream), {})
+        declared_root = first.get("study_root") if isinstance(first, Mapping) else None
+        if declared_root:
+            study_root = Path(str(declared_root)).expanduser().resolve()
+    except (OSError, StopIteration):
+        pass
     study = _mapping_file(study_root / "study_manifest.json")
     execution = study.get("execution", {})
     raw = execution.get("provider_load_control") if isinstance(execution, Mapping) else None
-    plan = _mapping_file(study_root / "execution_plan.json")
+    plan = _mapping_file(manifest.parent / "execution_plan.json")
+    if not plan:
+        plan = _mapping_file(study_root / "execution_plan.json")
     resolved = plan.get("provider_load_control") if isinstance(plan, Mapping) else None
     if resolved is None:
         total = int(plan.get("total_request_concurrency", 24)) if plan else 24

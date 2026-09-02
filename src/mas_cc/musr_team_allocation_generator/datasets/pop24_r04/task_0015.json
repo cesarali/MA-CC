@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0015",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 215,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Elizabeth, George, Carla) must be allocated between Violinist and Cellist. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Elizabeth",
+    "George",
+    "Carla"
+  ],
+  "tasks": [
+    "Violinist",
+    "Cellist"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Violinist: George, Cellist: Carla and Elizabeth",
+      "assignment": {
+        "Violinist": [
+          "George"
+        ],
+        "Cellist": [
+          "Carla",
+          "Elizabeth"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Violinist: Elizabeth, Cellist: Carla and George",
+      "assignment": {
+        "Violinist": [
+          "Elizabeth"
+        ],
+        "Cellist": [
+          "Carla",
+          "George"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Violinist: Carla, Cellist: Elizabeth and George",
+      "assignment": {
+        "Violinist": [
+          "Carla"
+        ],
+        "Cellist": [
+          "Elizabeth",
+          "George"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "The disagreement created lingering tension between them causing their performances to be out of sync.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Elizabeth and George had a disagreement during a previous performance.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Carla often found the requirements of reading bass clef music confusing.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Carla couldn't master the finger positioning required for the cello.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "She frequently has trouble with intonation and keeping pitch when switching notes.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Elizabeth has a hard time maintaining the proper bow grip needed for playing various notes.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "The two still have not sorted out their differences and often avoid each other during practice.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Elizabeth and Carla had a falling out over a solo performance opportunity a year ago.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Carla also has trouble maintaining the fast paced rhythm required for many violin pieces.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Carla struggles to adapt to the high dexterity required for changing strings quickly on violin.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Elizabeth expressed frustration in getting the right pressure and weight distribution during bowing.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Elizabeth has a fear of larger string instruments due to a childhood incident involving a bass violin.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "George prefers the rich tone of the cello, but still struggles with fast passages.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "George managed to play cello in a community orchestra for a couple of years.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Carla and George often practice together in their free time.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "George often helps Carla with the difficult parts of her music.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "George was unable to achieve a smooth and stable vibrato on the violin.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "George finds the higher octaves of the violin uncomfortable and jarring to his ears.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e02_00",
+        "e03_01",
+        "e08_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e08_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e02_01",
+        "e05_01",
+        "e07_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e08_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e01_01",
+        "e05_00",
+        "e06_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e06_01",
+        "e07_00",
+        "e08_00"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e02_01",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e04_00",
+        "e04_01",
+        "e08_00"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e03_00",
+        "e07_00",
+        "e07_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e03_00",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_01",
+        "e03_00",
+        "e07_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_01",
+        "e03_01",
+        "e05_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e08_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e05_01",
+        "e06_00",
+        "e07_00"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e00_00",
+        "e04_01",
+        "e06_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_00",
+        "e02_00",
+        "e03_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e01_00",
+        "e02_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e06_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e05_00"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e01_01",
+        "e02_00",
+        "e03_01"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e04_01",
+        "e06_01",
+        "e08_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e00_00",
+        "e04_00",
+        "e07_00"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e00_01",
+        "e05_01",
+        "e06_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e04_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Elizabeth and George work badly together.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "coop:Elizabeth:George",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Carla is bad at cellist.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Carla:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Elizabeth is bad at violinist.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Elizabeth:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Elizabeth and Carla work badly together.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "coop:Elizabeth:Carla",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Carla is bad at violinist.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Carla:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Elizabeth is bad at cellist.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Elizabeth:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "George is okay at cellist.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:George:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "George and Carla work well together.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "coop:George:Carla",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "George is bad at violinist.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:George:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Violinist",
+      "Cellist"
+    ],
+    "people": [
+      "Elizabeth",
+      "George",
+      "Carla"
+    ],
+    "matrix": {
+      "Elizabeth": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "George": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Carla": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Elizabeth"
+      ],
+      [
+        "Carla",
+        "George"
+      ]
+    ],
+    "choice_scores": [
+      4,
+      7,
+      5
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "67b27a6139a4710ea7e22ad0e6c50de0d75e0a2de3c920e38c627a376b6740f3"
+}

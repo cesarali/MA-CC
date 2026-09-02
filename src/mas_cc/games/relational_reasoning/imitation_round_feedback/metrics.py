@@ -42,10 +42,20 @@ def _fact_ids(agent: Any, attribute: str) -> tuple[str, ...]:
 
 
 def supporting_fact_coverage(
-    known_fact_ids: Sequence[str], supporting_fact_ids: Sequence[str]
+    known_fact_ids: Sequence[str],
+    supporting_fact_ids: Sequence[str],
+    supporting_fact_groups: Mapping[str, Sequence[str]] | None = None,
 ) -> float:
     """``|K_i n S| / |S|`` - how much of the required proof this agent holds."""
 
+    if supporting_fact_groups:
+        known = set(known_fact_ids)
+        represented = sum(
+            1
+            for alternatives in supporting_fact_groups.values()
+            if known.intersection(alternatives)
+        )
+        return represented / len(supporting_fact_groups)
     supporting = set(supporting_fact_ids)
     if not supporting:
         return 1.0
@@ -57,6 +67,7 @@ def knowledge_observables(
     supporting_fact_ids: Sequence[str],
     *,
     fact_ids_attribute: str = "known_fact_ids",
+    supporting_fact_groups: Mapping[str, Sequence[str]] | None = None,
 ) -> dict[str, Any]:
     """Population-level epistemic state from one fact-list attribute.
 
@@ -71,6 +82,7 @@ def knowledge_observables(
         supporting_fact_coverage(
             _fact_ids(agent, fact_ids_attribute),
             supporting_fact_ids,
+            supporting_fact_groups,
         )
         for agent in agents
     ]
@@ -103,6 +115,7 @@ def knowledge_strata(
     votes: Mapping[str, str] | None = None,
     *,
     fact_ids_attribute: str = "known_fact_ids",
+    supporting_fact_groups: Mapping[str, Sequence[str]] | None = None,
 ) -> dict[str, Any]:
     """Population split by *how much of the proof* each agent holds.
 
@@ -124,12 +137,20 @@ def knowledge_strata(
     """
 
     supporting = set(supporting_fact_ids)
-    depth = len(supporting)
+    depth = len(supporting_fact_groups or supporting)
     counts = [0] * (depth + 1)
     correct = [0] * (depth + 1)
     for agent in agents:
         known = set(_fact_ids(agent, fact_ids_attribute))
-        k = len(known & supporting)
+        k = (
+            sum(
+                1
+                for alternatives in supporting_fact_groups.values()
+                if known.intersection(alternatives)
+            )
+            if supporting_fact_groups
+            else len(known & supporting)
+        )
         counts[k] += 1
         vote = (
             agent.attributes.get("committed_action")
@@ -194,6 +215,12 @@ METRICS = [
     _SummaryMetric("new_controller_facts"),
     _SummaryMetric("reactivated_peer_facts"),
     _SummaryMetric("reactivated_controller_facts"),
+    _SummaryMetric("q_effective"),
+    _SummaryMetric("board_size_before"),
+    _SummaryMetric("board_size_after"),
+    _SummaryMetric("focal_posted_message"),
+    _SummaryMetric("controller_message_posted"),
+    _SummaryMetric("controller_message_directly_exposed"),
 ]
 
 

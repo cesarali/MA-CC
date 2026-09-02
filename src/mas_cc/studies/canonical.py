@@ -16,6 +16,8 @@ from .discovery import DiscoveredCell
 TABLE_SCHEMAS: Mapping[str, tuple[str, ...]] = {
     "cells": (
         "study_id",
+        "source_extension_index",
+        "source_submission_attempt",
         "source_config_index",
         "source_run_id",
         "source_run_path",
@@ -32,12 +34,18 @@ TABLE_SCHEMAS: Mapping[str, tuple[str, ...]] = {
     ),
     "episodes": (
         "study_id",
+        "source_extension_index",
+        "source_submission_attempt",
         "source_config_index",
         "source_run_id",
         "source_run_path",
         "cell_id",
         "source_cell_id",
         "episode_id",
+        "source_episode_id",
+        "cell_key",
+        "repetition_index",
+        "episode_key",
         "episode_seed",
         "status",
         "interaction_count",
@@ -51,23 +59,35 @@ TABLE_SCHEMAS: Mapping[str, tuple[str, ...]] = {
     ),
     "rounds": (
         "study_id",
+        "source_extension_index",
+        "source_submission_attempt",
         "source_config_index",
         "source_run_id",
         "source_run_path",
         "cell_id",
         "source_cell_id",
         "episode_id",
+        "source_episode_id",
+        "cell_key",
+        "repetition_index",
+        "episode_key",
         "round_index",
         "record_source",
     ),
     "micro_slots": (
         "study_id",
+        "source_extension_index",
+        "source_submission_attempt",
         "source_config_index",
         "source_run_id",
         "source_run_path",
         "cell_id",
         "source_cell_id",
         "episode_id",
+        "source_episode_id",
+        "cell_key",
+        "repetition_index",
+        "episode_key",
         "round_index",
         "micro_slot_index",
         "record_source",
@@ -94,8 +114,19 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             result[leaf] = result[paths[0]]
     for dotted, label in (
         ("game.options.task_id", "task_id"),
+        ("game.options.task_family", "task_family"),
         ("game.population_size", "population_size"),
         ("game.options.social_group_size", "social_group_size"),
+        ("game.options.social_mode", "social_mode"),
+        ("game.options.board.sampling", "board_sampling"),
+        (
+            "game.options.board.message_lifetime_rounds",
+            "message_lifetime_rounds",
+        ),
+        (
+            "game.options.board.exclude_self_authored",
+            "board_exclude_self_authored",
+        ),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
@@ -109,6 +140,10 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             "controller_evidence_strategy",
         ),
         ("control.options.message_mode", "message_mode"),
+        (
+            "control.options.controller_actuation_mode",
+            "controller_actuation_mode",
+        ),
         ("control.options.target", "controller_target_semantics"),
         ("experiment.metadata.controller_semantics", "controller_semantics"),
         ("experiment.metadata.target_semantics", "target_semantics"),
@@ -162,6 +197,8 @@ def _scientific_frame(cell: DiscoveredCell) -> pd.DataFrame:
 def _provenance(study_id: str, cell: DiscoveredCell) -> dict[str, Any]:
     return {
         "study_id": study_id,
+        "source_extension_index": cell.run.entry.source_extension_index,
+        "source_submission_attempt": cell.run.entry.source_submission_attempt,
         "source_config_index": cell.run.entry.array_index,
         "source_run_id": cell.run.run_id,
         "source_run_path": str(cell.run.path),
@@ -182,6 +219,12 @@ def _episode_rows(
                 {
                     **provenance,
                     "episode_id": str(episode_id),
+                    "source_episode_id": str(episode_id),
+                    "cell_key": cell.cell_key,
+                    "repetition_index": _repetition_index(str(episode_id)),
+                    "episode_key": _episode_key(
+                        cell.cell_key, _repetition_index(str(episode_id))
+                    ),
                     "episode_seed": first.get("episode_seed"),
                     "status": str(first.get("status", "completed")),
                     "interaction_count": int(
@@ -205,6 +248,15 @@ def _episode_rows(
             {
                 **provenance,
                 "episode_id": str(payload.get("episode_id", path.parent.name)),
+                "source_episode_id": str(payload.get("episode_id", path.parent.name)),
+                "cell_key": cell.cell_key,
+                "repetition_index": _repetition_index(
+                    str(payload.get("episode_id", path.parent.name))
+                ),
+                "episode_key": _episode_key(
+                    cell.cell_key,
+                    _repetition_index(str(payload.get("episode_id", path.parent.name))),
+                ),
                 "episode_seed": payload.get("seed"),
                 "status": str(payload.get("status", "unknown")),
                 "interaction_count": payload.get("interactions", 0),
@@ -218,6 +270,21 @@ def _episode_rows(
             }
         )
     return rows
+
+
+def _repetition_index(episode_id: str) -> int:
+    import re
+
+    match = re.search(r"-(\d+)$", episode_id)
+    return int(match.group(1)) if match is not None else -1
+
+
+def _episode_key(cell_key: str, repetition_index: int) -> str | None:
+    if repetition_index < 0 or not cell_key or cell_key.startswith("config-"):
+        return None
+    from .identity import episode_key
+
+    return episode_key(cell_key, repetition_index)
 
 
 def _jsonl(path: Path) -> Iterable[Mapping[str, Any]]:
@@ -252,6 +319,12 @@ def _rich_rows(
                     **event,
                     **provenance,
                     "episode_id": episode_id,
+                    "source_episode_id": episode_id,
+                    "cell_key": cell.cell_key,
+                    "repetition_index": _repetition_index(episode_id),
+                    "episode_key": _episode_key(
+                        cell.cell_key, _repetition_index(episode_id)
+                    ),
                     # Full-profile event payloads can carry a game-local task
                     # identity here while the enclosing artifact directory
                     # carries the orchestrator's canonical episode identity.
@@ -278,6 +351,12 @@ def _compact_round_rows(
                 **row,
                 **provenance,
                 "episode_id": str(row.get("episode_id")),
+                "source_episode_id": str(row.get("episode_id")),
+                "cell_key": cell.cell_key,
+                "repetition_index": _repetition_index(str(row.get("episode_id"))),
+                "episode_key": _episode_key(
+                    cell.cell_key, _repetition_index(str(row.get("episode_id")))
+                ),
                 "round_index": row.get("interaction_index"),
                 "record_source": "scientific_events.parquet",
             }

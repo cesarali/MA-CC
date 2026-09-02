@@ -11,6 +11,7 @@ from mas_cc.config import RunConfig
 
 
 RELATIONAL_ROUND_FEEDBACK = "relational_imitation_round_feedback"
+BLACKBOARD_EPISODE_INSPECTION = "blackboard_episode_inspection"
 RELATIONAL_THEORETICAL_REFERENCES = frozenset(
     {"single_affinity_revised", "none", "matched_qvoter_null"}
 )
@@ -59,7 +60,14 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
         )
 
         requested = tuple(analysis.estimators)
-        unknown = sorted(set(requested) - set(ROUND_ANALYSIS_STATISTICS))
+        inspection = (
+            config.game.type == RELATIONAL_ROUND_FEEDBACK
+            and BLACKBOARD_EPISODE_INSPECTION in requested
+        )
+        statistical = tuple(
+            name for name in requested if name != BLACKBOARD_EPISODE_INSPECTION
+        )
+        unknown = sorted(set(statistical) - set(ROUND_ANALYSIS_STATISTICS))
         if unknown:
             raise ValueError(
                 "analysis.estimators contains unsupported round-feedback statistic(s): "
@@ -67,7 +75,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
             )
         # Validated here rather than at analysis time so a typo in the estimator
         # list fails at preflight, before the run spends anything.
-        statistics = requested
+        statistics = statistical
         diagnostics: tuple[str, ...] = ()
         current_statistics: tuple[str, ...] = ()
     else:
@@ -146,6 +154,14 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
                 "analysis.options.theoretical_reference must be 'none' when "
                 "game.options.epistemic_persistence is below 1.0"
             )
+        if (
+            config.game.options.get("social_mode", "peer") == "board"
+            and theoretical_reference != "none"
+        ):
+            raise ValueError(
+                "analysis.options.theoretical_reference must be 'none' for "
+                "game.options.social_mode 'board'; q-voter theory assumes current peers"
+            )
         return {
             "bootstrap_resamples": _integer_option(
                 options, "bootstrap_resamples", 1000
@@ -161,6 +177,7 @@ def _configured_arguments(config: RunConfig) -> dict[str, Any] | None:
             "comet_export": analysis.comet_export and config.logging.comet,
             "comet_project": str(config.logging.options.get("comet_project", "mas-cc")),
             "comet_run_name": f"{run_id}/analysis",
+            "blackboard_episode_inspection": inspection,
         }
     return {
         "bootstrap_resamples": _integer_option(options, "bootstrap_resamples", 1000),
@@ -222,15 +239,31 @@ def run_configured_analysis(
 
     root = Path(run_dir)
     if config.game.type == RELATIONAL_ROUND_FEEDBACK:
+        inspection = bool(arguments.pop("blackboard_episode_inspection", False))
+        if inspection:
+            from mas_cc.games.relational_reasoning.imitation_round_feedback.pilot_artifacts import (
+                build_blackboard_pilot_artifacts,
+            )
+
+            inspection_summary = build_blackboard_pilot_artifacts(config, root)
+        else:
+            inspection_summary = None
+        if not arguments["statistics"]:
+            return inspection_summary
         from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
             analyze_relational_imitation_round_feedback,
         )
 
-        return analyze_relational_imitation_round_feedback(
+        summary = analyze_relational_imitation_round_feedback(
             root,
             root / "relational_imitation_round_feedback_analysis",
             comet_sink=comet_sink,
             **arguments,
+        )
+        return (
+            summary
+            if inspection_summary is None
+            else {**summary, "blackboard_episode_inspection": inspection_summary}
         )
 
     if config.game.type == "hidden_bench_imitation_round_feedback":

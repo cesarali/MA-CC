@@ -1,0 +1,59 @@
+theoretical_reference: none
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_target_actuation_cmi
+  - round_target_information_fraction
+  - round_target_susceptibility
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - episode_current
+  - cell_current
+  - effective_affinity
+  - kinetic_compliance
+resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 20260831}
+derived:
+  - round_target_susceptibility
+  - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
+state_local: [x]
+state_local_x_bins: 8
+rho_aggregated_descriptive: true
+episode_endpoints: {classifier: relational_persistence_truth_aligned_v1}
+plots:
+  late_target_by_budget: {source: episode_endpoints, value: late_time_mean_controller_target_share, x: actuation_fraction, series: epistemic_persistence, kind: line, show_variability: true}
+  late_truth_by_budget: {source: episode_endpoints, value: late_time_mean_truth_share, x: actuation_fraction, series: epistemic_persistence, kind: line, show_variability: true}
+  active_phi_by_budget: {source: episode_endpoints, value: late_time_mean_active_phi, x: actuation_fraction, series: epistemic_persistence, kind: line, show_variability: true}
+  chi_by_budget: {source: derived_observables, metric: susceptibility_occupancy_weighted, x: actuation_fraction, series: epistemic_persistence, kind: line}
+  T_pi_by_budget: {source: primary_estimates, metric: round_target_actuation_cmi, x: actuation_fraction, series: epistemic_persistence, kind: line}
+  T_pi_phi_by_budget: {source: primary_estimates, metric: round_phi_target_actuation_cmi, x: actuation_fraction, series: epistemic_persistence, kind: line}
+  eta_IF_by_budget: {source: primary_estimates, metric: round_target_information_fraction, x: actuation_fraction, series: epistemic_persistence, kind: line}
+  eta_IR_by_budget: {source: derived_observables, metric: eta_ir, x: actuation_fraction, series: epistemic_persistence, kind: line}
+  eta_th_signed_by_budget: {source: derived_observables, metric: eta_th_signed, x: actuation_fraction, series: epistemic_persistence, kind: line}
+  chi_x_b_by_rho: &phase {source: state_local_phase_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, kind: heatmap, color_scale: independent, status_column: phase_status}
+  T_pi_x_b_by_rho: {<<: *phase, metric: T_pi}
+  eta_IF_x_b_by_rho: {<<: *phase, metric: eta_IF}
+  eta_IR_x_b_by_rho: {<<: *phase, metric: eta_IR}
+  occupancy_x_b_by_rho: {source: state_occupancy_binned, value: n_observations, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, kind: heatmap, color_scale: independent, status_column: phase_status}
+  rho_aggregated_chi_x_b: &rho_phase {source: rho_aggregated_state_local_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, kind: heatmap, color_scale: independent, status_column: phase_status}
+  rho_aggregated_T_pi_x_b: {<<: *rho_phase, metric: T_pi}
+  rho_aggregated_eta_IF_x_b: {<<: *rho_phase, metric: eta_IF}
+  rho_aggregated_eta_IR_x_b: {<<: *rho_phase, metric: eta_IR}
+  rho_aggregated_occupancy_x_b: {source: rho_aggregated_state_occupancy, value: n_observations, x: intervention_budget, y: target_fraction_bin_center, kind: heatmap, color_scale: independent, status_column: phase_status}

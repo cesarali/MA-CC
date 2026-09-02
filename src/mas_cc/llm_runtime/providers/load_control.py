@@ -1,15 +1,21 @@
 """Reliable cross-process provider load coordination on a shared filesystem."""
 
 from __future__ import annotations
-import asyncio, json, logging, math, os, random, socket, tempfile, time, uuid
+import asyncio
+import json
+import logging
+import math
+import os
+import random
+import shutil
+import socket
+import tempfile
+import time
+import uuid
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
-
-try:
-    import fcntl
-except ImportError:
-    fcntl = None  # type: ignore
 
 LOAD_CONTROL_CONFIG_ENV = "MAS_CC_PROVIDER_LOAD_CONTROL"
 LOAD_CONTROL_DIR_ENV = "MAS_CC_PROVIDER_CONTROL_DIR"
@@ -26,6 +32,12 @@ class ProviderCoordinationStateError(RuntimeError):
 
 class _IncompleteStateRead(OSError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class _OperationResult:
+    value: Any
+    dirty: bool = True
 
 
 def _num(raw, key, default, minimum):
@@ -58,6 +70,7 @@ class ProviderLoadControlConfig:
     transaction_retry_attempts: int = 6
     transaction_backoff_initial_seconds: float = 0.05
     transaction_backoff_max_seconds: float = 2.0
+    lock_stale_seconds: float = 30.0
     polling_seconds: float = 0.25
     event_window_seconds: float = 60.0
     local_failure_threshold: int = 3
@@ -104,6 +117,7 @@ class ProviderLoadControlConfig:
             transaction_backoff_max_seconds=_num(
                 v, "transaction_backoff_max_seconds", 2, 0.001
             ),
+            lock_stale_seconds=_num(v, "lock_stale_seconds", 30, 0.1),
             polling_seconds=_num(v, "polling_seconds", 0.25, 0.01),
             event_window_seconds=_num(v, "event_window_seconds", 60, 1),
             local_failure_threshold=_int(v, "local_failure_threshold", 3, 1),
@@ -158,10 +172,6 @@ class RequestLease:
 
 class SharedProviderCoordinator:
     def __init__(self, root, config, *, worker_id=None, node_id=None, clock=time.time):
-        if fcntl is None:
-            raise RuntimeError(
-                "shared provider load control requires POSIX file locking"
-            )
         self.root = Path(root)
         self.config = config
         self.node_id = node_id or socket.gethostname()
@@ -175,12 +185,57 @@ class SharedProviderCoordinator:
         self._retries = {}
         self._last_error = None
         self.root.mkdir(parents=True, exist_ok=True)
-        self._lock_path = self.root / "state.lock"
+        # Exclusive file creation and directory enumeration are shared across
+        # the cluster filesystem. Each transaction gets a unique queue ticket;
+        # unlike an advisory fcntl lock or a bare mkdir race, this both excludes
+        # cross-node writers and prevents one busy node from starving another.
+        self._lock_path = self.root / "state.lock.queue"
+        self._lock_path.mkdir(exist_ok=True)
+        self._owner_path = self.root / "state.lock.owner"
+        # At most one coroutine per worker polls for new capacity. Without this
+        # gate, a reduced global limit creates a local thundering herd of
+        # waiters. Renewals and releases deliberately bypass the gate so a
+        # pending acquisition can never block live-lease maintenance.
+        self._acquire_gate = asyncio.Lock()
         self._state_path = self.root / "state.json"
         # Stable across state.json replacements. Once this exists, a missing
         # state file is a transient/corrupt shared-filesystem observation, not
         # permission to recreate an empty semaphore and erase live leases.
         self._initialized_path = self.root / "state.initialized"
+
+    def _reap_abandoned_owner(self, stale_after: float) -> bool:
+        """Recover a lock whose process died inside the critical section."""
+
+        try:
+            owner_stat = self._owner_path.stat()
+        except FileNotFoundError:
+            return False
+        if time.time() - owner_stat.st_mtime <= stale_after:
+            return False
+        marker = self._owner_path / "ticket"
+        try:
+            owner_ticket = marker.read_text(encoding="ascii").strip()
+        except (FileNotFoundError, OSError):
+            owner_ticket = ""
+        live_ticket = self._lock_path / owner_ticket if owner_ticket else None
+        if live_ticket is not None:
+            try:
+                if time.time() - live_ticket.stat().st_mtime <= stale_after:
+                    return False
+            except FileNotFoundError:
+                pass
+        quarantine = self.root / f"state.lock.owner.abandoned-{uuid.uuid4().hex}"
+        try:
+            os.replace(self._owner_path, quarantine)
+        except FileNotFoundError:
+            return False
+        shutil.rmtree(quarantine, ignore_errors=True)
+        LOGGER.warning(
+            "reaped abandoned provider coordinator owner lock root=%s ticket=%s",
+            self.root,
+            owner_ticket or "unknown",
+        )
+        return True
 
     def _initial(self, now):
         return {
@@ -257,9 +312,71 @@ class SharedProviderCoordinator:
             except FileNotFoundError:
                 pass
 
-    def _once(self, name, op):
-        with self._lock_path.open("a+b") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    @contextmanager
+    def _exclusive_lock(self, *, deadline=None):
+        wait_deadline = deadline or (time.monotonic() + max(30.0, self.config.lease_seconds))
+        stale_after = max(self.config.lock_stale_seconds, self.config.lease_seconds)
+        # The creation timestamp in the name is the stable FIFO key. The file
+        # mtime is only a liveness heartbeat and can therefore be refreshed
+        # without moving a waiter to the back of the queue.
+        ticket = self._lock_path / f"{time.time_ns():020d}-{uuid.uuid4().hex}"
+        owns_lock = False
+        try:
+            ticket.touch(exist_ok=False)
+            while True:
+                ticket.touch(exist_ok=True)
+                now = time.time()
+                contenders = []
+                for candidate in self._lock_path.iterdir():
+                    try:
+                        stat = candidate.stat()
+                    except FileNotFoundError:
+                        continue
+                    if candidate != ticket and now - stat.st_mtime > stale_after:
+                        try:
+                            candidate.unlink()
+                        except FileNotFoundError:
+                            pass
+                        continue
+                    contenders.append((candidate.name, candidate))
+                if contenders and min(contenders)[1] == ticket:
+                    try:
+                        os.mkdir(self._owner_path)
+                        (self._owner_path / "ticket").write_text(
+                            ticket.name, encoding="ascii"
+                        )
+                        owns_lock = True
+                        break
+                    except FileExistsError:
+                        self._reap_abandoned_owner(stale_after)
+                if time.monotonic() >= wait_deadline:
+                    raise TimeoutError(
+                        f"timed out waiting for provider coordinator lock {self._lock_path}"
+                    )
+                time.sleep(self._jitter.uniform(0.005, 0.025))
+            yield
+        finally:
+            if owns_lock:
+                try:
+                    marker = self._owner_path / "ticket"
+                    if marker.read_text(encoding="ascii").strip() != ticket.name:
+                        raise RuntimeError(
+                            "provider coordinator owner identity changed while held"
+                        )
+                    marker.unlink()
+                    os.rmdir(self._owner_path)
+                except FileNotFoundError:
+                    LOGGER.error(
+                        "provider coordinator owner lock disappeared: %s",
+                        self._owner_path,
+                    )
+            try:
+                ticket.unlink()
+            except FileNotFoundError:
+                LOGGER.error("provider coordinator ticket disappeared: %s", ticket)
+
+    def _once(self, name, op, *, deadline=None):
+        with self._exclusive_lock(deadline=deadline):
             now = float(self._clock())
             s = self._read(now)
             expired = sum(
@@ -282,6 +399,7 @@ class SharedProviderCoordinator:
                 k: v for k, v in s["node_pauses"].items() if float(v) > now
             }
             h = s["health"]
+            maintenance_dirty = bool(expired)
             h["expired_leases"] = int(h.get("expired_leases", 0)) + expired
             for k, v in self._pending.items():
                 h.setdefault("transaction_failures", {})[k] = (
@@ -299,6 +417,16 @@ class SharedProviderCoordinator:
                     "node": self.node_id,
                 }
             result = op(s, now)
+            if isinstance(result, _OperationResult):
+                operation_dirty = result.dirty
+                result = result.value
+            else:
+                operation_dirty = True
+            dirty = maintenance_dirty or operation_dirty or bool(
+                self._pending or self._retries or self._last_error
+            )
+            if not dirty:
+                return result
             h.setdefault("transaction_successes", {})[name] = (
                 int(h["transaction_successes"].get(name, 0)) + 1
             )
@@ -313,7 +441,7 @@ class SharedProviderCoordinator:
         last = None
         for attempt in range(1, self.config.transaction_retry_attempts + 1):
             try:
-                return self._once(name, op)
+                return self._once(name, op, deadline=deadline)
             except ProviderCoordinationStateError:
                 raise
             except OSError as e:
@@ -354,12 +482,21 @@ class SharedProviderCoordinator:
                 float(s["node_pauses"].get(self.node_id, 0)),
             )
             if pause > now:
-                return None, min(self.config.polling_seconds, pause - now)
+                return _OperationResult(
+                    (None, min(self.config.polling_seconds, pause - now)), dirty=False
+                )
             if len(s["leases"]) >= int(s["limit"]):
-                return None, self.config.polling_seconds
+                return _OperationResult((None, self.config.polling_seconds), dirty=False)
             if len(s["dispatches"]) >= self.config.target_rpm:
-                return None, max(
-                    self.config.polling_seconds, 60 - (now - float(s["dispatches"][0]))
+                return _OperationResult(
+                    (
+                        None,
+                        max(
+                            self.config.polling_seconds,
+                            60 - (now - float(s["dispatches"][0])),
+                        ),
+                    ),
+                    dirty=False,
                 )
             # A rolling-window ceiling alone permits a large startup burst and
             # then forces every worker to idle until the oldest dispatch ages
@@ -389,28 +526,38 @@ class SharedProviderCoordinator:
 
     async def acquire(self, *, deadline=None):
         token = uuid.uuid4().hex
-        while deadline is None or time.monotonic() < deadline:
-            try:
-                lease, delay = await asyncio.to_thread(
-                    self._try_acquire, token, deadline=deadline
+        async with self._acquire_gate:
+            contention_delay = self.config.polling_seconds
+            while deadline is None or time.monotonic() < deadline:
+                try:
+                    lease, delay = await asyncio.to_thread(
+                        self._try_acquire, token, deadline=deadline
+                    )
+                except ProviderCoordinationUnavailable:
+                    if deadline is None:
+                        raise
+                    delay = contention_delay
+                    lease = None
+                if lease:
+                    return lease
+                if delay <= self.config.polling_seconds:
+                    contention_delay = min(
+                        max(1.0, self.config.polling_seconds * 8),
+                        max(self.config.polling_seconds, contention_delay * 1.5),
+                    )
+                    delay = self._jitter.uniform(
+                        0.75 * contention_delay, 1.25 * contention_delay
+                    )
+                await asyncio.sleep(
+                    min(
+                        max(0.01, delay),
+                        (
+                            max(0, deadline - time.monotonic())
+                            if deadline
+                            else max(0.01, delay)
+                        ),
+                    )
                 )
-            except ProviderCoordinationUnavailable:
-                if deadline is None:
-                    raise
-                delay = self.config.polling_seconds
-                lease = None
-            if lease:
-                return lease
-            await asyncio.sleep(
-                min(
-                    max(0.01, delay),
-                    (
-                        max(0, deadline - time.monotonic())
-                        if deadline
-                        else max(0.01, delay)
-                    ),
-                )
-            )
         raise ProviderCoordinationUnavailable(
             f"coordinator acquire deadline expired root={self.root} node={self.node_id} worker={self.worker_id}"
         )
@@ -526,7 +673,7 @@ class SharedProviderCoordinator:
                 "global_pause_until": s["global_pause_until"],
                 "node_pause_until": s["node_pauses"].get(self.node_id, 0.0),
             }
-            return out
+            return _OperationResult(out, dirty=False)
 
         return self._transaction("snapshot", op)
 

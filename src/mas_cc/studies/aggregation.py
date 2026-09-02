@@ -31,7 +31,11 @@ from .table_io import (
     retained_table_path,
     write_scientific_table,
 )
-from .validation import validate_study, validation_markdown
+from .validation import (
+    paired_initialization_diagnostics,
+    validate_study,
+    validation_markdown,
+)
 
 ESTIMATOR_ALIASES = {
     "round_target_actuation_cmi_memory": "round_memory_target_actuation_cmi",
@@ -60,6 +64,8 @@ PRIMARY_COLUMNS = (
     "bootstrap_resamples",
     "n_observations",
     "n_episodes",
+    "action_entropy_ceiling_bits",
+    "dual_action_support_fraction",
     "units",
     "support_status",
     "p_plus",
@@ -472,6 +478,12 @@ def _information_tables(
                     "bootstrap_resamples": int(settings["bootstrap_resamples"]),
                     "n_observations": item.get("n_rounds"),
                     "n_episodes": item.get("n_episodes"),
+                    "action_entropy_ceiling_bits": item.get(
+                        "conditional_action_entropy_bits"
+                    ),
+                    "dual_action_support_fraction": item.get(
+                        "round_dual_action_state_fraction"
+                    ),
                     "units": item.get("units"),
                     "support_status": _support_status(item),
                     "analysis_hash": analysis_hash,
@@ -569,6 +581,7 @@ def _state_local_primary(
     rows: list[dict[str, Any]] = []
     statistics = (
         "round_target_actuation_cmi",
+        "round_target_information_fraction",
         "round_target_signed_actuation",
         # The canonical chi. `round_target_signed_actuation` stays beside it as
         # the legacy magnetization diagnostic; the two differ by K/(K-1) and
@@ -648,6 +661,12 @@ def _state_local_primary(
                             "bootstrap_resamples": 0,
                             "n_observations": item.get("n_rounds"),
                             "n_episodes": item.get("n_episodes"),
+                            "action_entropy_ceiling_bits": item.get(
+                                "conditional_action_entropy_bits"
+                            ),
+                            "dual_action_support_fraction": item.get(
+                                "round_dual_action_state_fraction"
+                            ),
                             "units": item.get("units"),
                             "support_status": _support_status(item),
                             "analysis_hash": analysis_hash,
@@ -1701,6 +1720,165 @@ def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFram
     )
 
 
+def _blackboard_diagnostic_table(
+    rounds: pd.DataFrame, cells: pd.DataFrame
+) -> pd.DataFrame:
+    """Summarize retained public-channel mechanisms without redefining estimators."""
+
+    if rounds.empty or "cell_id" not in rounds:
+        return pd.DataFrame()
+    source = rounds.copy()
+    numeric = (
+        "dawn_directive_count",
+        "controller_message_exposures",
+        "directive_exposed_focal_updates",
+        "controller_unique_readers",
+        "eligible_message_opportunities",
+        "eligible_directive_opportunities",
+        "request_count",
+        "report_count",
+        "new_evidence_acquisitions",
+        "reactivated_peer_fact_count",
+        "reactivated_controller_fact_count",
+        "directive_report_reply_count",
+        "directive_attributed_acquisitions",
+        "directive_attributed_refreshes",
+        "active_mean_fact_count_after",
+        "historical_mean_supporting_fact_coverage_after",
+        "active_mean_supporting_fact_coverage_after",
+        "realized_directive_exposure_fraction",
+    )
+    for column in numeric:
+        if column not in source:
+            source[column] = math.nan
+        source[column] = pd.to_numeric(source[column], errors="coerce")
+    grouped = source.groupby("cell_id", dropna=False)
+    result = grouped.agg(
+        rounds=("cell_id", "size"),
+        episodes=("episode_id", "nunique"),
+        directives_posted=("dawn_directive_count", "sum"),
+        directives_read=("controller_message_exposures", "sum"),
+        directive_exposed_updates=("directive_exposed_focal_updates", "sum"),
+        unique_agents_exposed_round_sum=("controller_unique_readers", "sum"),
+        eligible_message_opportunities=("eligible_message_opportunities", "sum"),
+        eligible_directive_opportunities=("eligible_directive_opportunities", "sum"),
+        request_count=("request_count", "sum"),
+        report_count=("report_count", "sum"),
+        exact_acquisitions=("new_evidence_acquisitions", "sum"),
+        peer_refreshes=("reactivated_peer_fact_count", "sum"),
+        controller_refreshes=("reactivated_controller_fact_count", "sum"),
+        directive_report_replies=("directive_report_reply_count", "sum"),
+        directive_attributed_acquisitions=("directive_attributed_acquisitions", "sum"),
+        directive_attributed_refreshes=("directive_attributed_refreshes", "sum"),
+        mean_active_fact_count=("active_mean_fact_count_after", "mean"),
+        active_latent_coverage_mean=(
+            "active_mean_supporting_fact_coverage_after",
+            "mean",
+        ),
+        historical_latent_coverage_mean=(
+            "historical_mean_supporting_fact_coverage_after",
+            "mean",
+        ),
+        realized_directive_exposure_fraction_mean=(
+            "realized_directive_exposure_fraction",
+            "mean",
+        ),
+    ).reset_index()
+    result["refresh_events"] = result["peer_refreshes"] + result["controller_refreshes"]
+    denominator = result["eligible_message_opportunities"].replace(0, np.nan)
+    result["eligible_directive_fraction"] = (
+        result["eligible_directive_opportunities"] / denominator
+    )
+    return _attach_coordinates(result, cells)
+
+
+def _write_blackboard_population_views(
+    tables_dir: Path,
+    analysis_dir: Path,
+    *,
+    canonical: Mapping[str, pd.DataFrame],
+    primary: pd.DataFrame,
+    derived: pd.DataFrame,
+    outputs: Mapping[str, pd.DataFrame],
+) -> None:
+    """Write named downstream views requested by the blackboard study handoff."""
+
+    cells = canonical["cells"]
+    rounds = _attach_coordinates(canonical["rounds"], cells)
+    diagnostics = _blackboard_diagnostic_table(rounds, cells)
+    write_scientific_table(tables_dir, "blackboard_diagnostics", diagnostics)
+    write_scientific_table(tables_dir, "cell_summary", cells)
+    write_scientific_table(
+        tables_dir,
+        "state_resolved_x_b",
+        outputs.get("state_local_phase_maps", pd.DataFrame()),
+    )
+    selections = {
+        "sensing_information": {"round_sensing_mi", "round_target_sensing_mi"},
+        "transfer_information": {
+            "round_population_actuation_cmi",
+            "round_target_actuation_cmi",
+            "round_truth_actuation_cmi",
+        },
+        "susceptibility": {"round_target_susceptibility"},
+    }
+    for name, metrics in selections.items():
+        frame = primary[
+            primary.get("metric", pd.Series(dtype=str)).isin(metrics)
+        ].copy()
+        if name == "susceptibility" and not derived.empty:
+            extra = derived[derived.get("metric", pd.Series(dtype=str)).isin(metrics)]
+            frame = pd.concat([frame, extra], ignore_index=True, sort=False)
+        write_scientific_table(tables_dir, name, frame)
+    efficiencies = derived[
+        derived.get("metric", pd.Series(dtype=str)).astype(str).str.startswith("eta_")
+    ].copy()
+    write_scientific_table(tables_dir, "efficiencies", efficiencies)
+    if not diagnostics.empty:
+        group_columns = [
+            column
+            for column in (
+                "target_semantics",
+                "epistemic_persistence",
+                "intervention_budget",
+            )
+            if column in diagnostics
+        ]
+        measures = [
+            column
+            for column in diagnostics.select_dtypes(include=["number"]).columns
+            if column not in {"source_config_index"}
+        ]
+        rho_b = (
+            diagnostics.groupby(group_columns, dropna=False, as_index=False)[
+                measures
+            ].mean()
+            if group_columns
+            else diagnostics
+        )
+    else:
+        rho_b = diagnostics
+    write_scientific_table(tables_dir, "rho_b_summary", rho_b)
+    lines = [
+        "# Blackboard Population Study 01",
+        "",
+        "This report separates outcomes, control response, efficiency, and blackboard mechanism diagnostics.",
+        "The existing information and susceptibility estimators are reused without changing their definitions.",
+        "Microscopic effective-affinity quantities can be unsupported because dawn directives do not mark controlled microscopic slots; undefined values remain explicit.",
+        "",
+        f"- Structural cells available: {len(cells)}",
+        f"- Retained round rows: {len(rounds)}",
+        f"- Primary estimator rows: {len(primary)}",
+        f"- Derived efficiency rows: {len(efficiencies)}",
+        f"- Blackboard diagnostic rows: {len(diagnostics)}",
+        "",
+        "See `tables/` for state-resolved, persistence-budget, sensing, transfer, susceptibility, efficiency, and blackboard mechanism views.",
+    ]
+    (analysis_dir / "blackboard_1_report.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+
+
 def _expected_cell_coordinates(entries: Sequence[Any]) -> list[dict[str, Any]]:
     """Resolve the declared structural grid, including cells not yet run."""
 
@@ -1788,6 +1966,7 @@ def _state_local_phase_tables(
     metrics = {
         "chi": "round_target_susceptibility",
         "T_pi": "round_target_actuation_cmi",
+        "eta_IF": "round_target_information_fraction",
         "eta_IR": "eta_ir_state_local",
     }
     for coordinate in expected:
@@ -1851,6 +2030,159 @@ def _state_local_phase_tables(
                     }
                 )
     return pd.DataFrame(phase_rows), pd.DataFrame(occupancy_rows)
+
+
+def _phi_conditioning_comparison(primary: pd.DataFrame) -> pd.DataFrame:
+    """Cellwise raw/null-adjusted comparison of T_pi and T_pi_phi."""
+
+    if primary.empty:
+        return pd.DataFrame()
+    wanted = primary[
+        primary["metric"].isin(
+            {"round_target_actuation_cmi", "round_phi_target_actuation_cmi"}
+        )
+    ].copy()
+    if wanted.empty:
+        return pd.DataFrame()
+    keys = ["study_id", "source_run_id", "cell_id"]
+    rows: list[dict[str, Any]] = []
+    for coordinates, group in wanted.groupby(keys, dropna=False):
+        by_metric = {str(row["metric"]): row for row in group.to_dict(orient="records")}
+        base = by_metric.get("round_target_actuation_cmi")
+        conditioned = by_metric.get("round_phi_target_actuation_cmi")
+        if base is None or conditioned is None:
+            continue
+
+        def finite_or_nan(value: Any) -> float:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return math.nan
+            return number if math.isfinite(number) else math.nan
+
+        t_pi = finite_or_nan(base.get("estimate"))
+        t_phi = finite_or_nan(conditioned.get("estimate"))
+        null_pi = finite_or_nan(base.get("null_mean"))
+        null_phi = finite_or_nan(conditioned.get("null_mean"))
+        rows.append(
+            {
+                **dict(zip(keys, coordinates, strict=True)),
+                "T_pi": t_pi,
+                "T_pi_phi": t_phi,
+                "Delta_T_phi": t_phi - t_pi,
+                "T_pi_null_mean": null_pi,
+                "T_pi_phi_null_mean": null_phi,
+                "T_pi_null_adjusted": t_pi - null_pi,
+                "T_pi_phi_null_adjusted": t_phi - null_phi,
+                "T_pi_ci_low": base.get("ci_low"),
+                "T_pi_ci_high": base.get("ci_high"),
+                "T_pi_phi_ci_low": conditioned.get("ci_low"),
+                "T_pi_phi_ci_high": conditioned.get("ci_high"),
+                "T_pi_action_entropy_ceiling_bits": base.get(
+                    "action_entropy_ceiling_bits"
+                ),
+                "T_pi_phi_action_entropy_ceiling_bits": conditioned.get(
+                    "action_entropy_ceiling_bits"
+                ),
+                "T_pi_dual_action_support_fraction": base.get(
+                    "dual_action_support_fraction"
+                ),
+                "T_pi_phi_dual_action_support_fraction": conditioned.get(
+                    "dual_action_support_fraction"
+                ),
+                "T_pi_support_status": base.get("support_status"),
+                "T_pi_phi_support_status": conditioned.get("support_status"),
+                "T_pi_n_observations": base.get("n_observations"),
+                "T_pi_phi_n_observations": conditioned.get("n_observations"),
+                "descriptive_caution": (
+                    "Raw conditioned CMI can rise with finite-sample null bias; "
+                    "compare the separate null-adjusted values."
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _rho_aggregated_state_local_maps(
+    phase: pd.DataFrame, occupancy: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Observation-weighted descriptive maps over rho, never pooled estimators."""
+
+    if phase.empty or occupancy.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    keys = [
+        column
+        for column in (
+            "social_group_size",
+            "controller_evidence_strategy",
+            "receiver_epistemic_disposition",
+            "target_semantics",
+            "intervention_budget",
+            "target_fraction_bin_index",
+            "target_fraction_bin_lower",
+            "target_fraction_bin_upper",
+            "target_fraction_bin_center",
+            "target_fraction_bin_count",
+        )
+        if column in phase.columns
+    ]
+    map_rows: list[dict[str, Any]] = []
+    for coordinates, group in phase.groupby([*keys, "metric"], dropna=False):
+        valid = group[
+            group["phase_status"].isin(["adequate", "limited"])
+            & pd.to_numeric(group["estimate"], errors="coerce").notna()
+        ].copy()
+        weights = pd.to_numeric(valid.get("n_observations"), errors="coerce")
+        values = pd.to_numeric(valid.get("estimate"), errors="coerce")
+        estimate = (
+            math.nan
+            if valid.empty or weights.sum() <= 0
+            else float(np.average(values, weights=weights))
+        )
+        status = (
+            "state_not_visited"
+            if int(pd.to_numeric(group["n_observations"], errors="coerce").sum()) == 0
+            else "insufficient_estimator_support"
+            if valid.empty
+            else "limited"
+            if (valid["phase_status"] == "limited").any()
+            else "adequate"
+        )
+        coordinate_values = coordinates[:-1]
+        map_rows.append(
+            {
+                **dict(zip(keys, coordinate_values, strict=True)),
+                "metric": coordinates[-1],
+                "estimate": estimate,
+                "n_observations": int(weights.sum()) if not valid.empty else 0,
+                "n_rho": int(group["epistemic_persistence"].nunique()),
+                "rho_values_json": json.dumps(
+                    sorted(
+                        float(value)
+                        for value in group["epistemic_persistence"].dropna().unique()
+                    )
+                ),
+                "phase_status": status,
+                "aggregation_scope": "rho-aggregated descriptive state-local summaries",
+                "aggregation_weight": "n_observations",
+                "descriptive_only": True,
+            }
+        )
+    occupancy_rows = occupancy.groupby(keys, dropna=False, as_index=False).agg(
+        n_observations=("n_observations", "sum"),
+        n_episodes=("n_episodes", "sum"),
+        n_rho=("epistemic_persistence", "nunique"),
+    )
+    occupancy_rows["estimate"] = occupancy_rows["n_observations"]
+    occupancy_rows["phase_status"] = np.where(
+        occupancy_rows["n_observations"] > 0, "visited", "state_not_visited"
+    )
+    occupancy_rows["aggregation_scope"] = (
+        "rho-aggregated descriptive state-local summaries"
+    )
+    occupancy_rows["aggregation_weight"] = "n_observations"
+    occupancy_rows["descriptive_only"] = True
+    return pd.DataFrame(map_rows), occupancy_rows
 
 
 def _rho_aggregated_descriptive_summary(
@@ -1945,9 +2277,7 @@ def _rho_aggregated_descriptive_summary(
                             sorted(
                                 {
                                     float(value)
-                                    for value in group[
-                                        "epistemic_persistence"
-                                    ].dropna()
+                                    for value in group["epistemic_persistence"].dropna()
                                 }
                             )
                         ),
@@ -2606,7 +2936,14 @@ def aggregate_study(
         raise ValueError(f"not a submitted MA-CC study directory: {root}")
     study_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     study_id = str(study_manifest["study_id"])
-    entries = read_submission_manifest(submission_path)
+    lineage_mode = (root / "study_lineage.json").is_file()
+    target_manifest = None
+    if lineage_mode:
+        from .extension import extension_aggregation_context
+
+        target_manifest, entries = extension_aggregation_context(root)
+    else:
+        entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
@@ -2629,7 +2966,14 @@ def aggregate_study(
     }
     if cells:
         canonical, canonical_metadata = build_canonical_tables(study_id, cells)
-        validation = validate_study(entries, runs, cells, canonical)
+        if target_manifest is not None:
+            from .extension import consolidate_extension_tables
+
+            canonical, validation = consolidate_extension_tables(
+                canonical, target_manifest
+            )
+        else:
+            validation = validate_study(entries, runs, cells, canonical)
     elif all(path is not None for path in retained_paths.values()):
         canonical = {
             name: read_scientific_table(path) for name, path in retained_paths.items()
@@ -2673,6 +3017,22 @@ def aggregate_study(
     tables_dir = analysis_dir / "tables"
     tables_dir.mkdir(parents=True, exist_ok=True)
 
+    if lineage_mode:
+        provenance = analysis_dir / "provenance"
+        provenance.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / "study_lineage.json", provenance / "study_lineage.json")
+        for path in sorted((root / "extensions").glob("extension-*/*.json")):
+            if path.name in {
+                "target_manifest.json",
+                "compatibility_report.json",
+                "state.json",
+                "migration.json",
+            }:
+                shutil.copy2(
+                    path,
+                    provenance / f"{path.parent.name}_{path.name}",
+                )
+
     validation["allow_incomplete"] = bool(allow_incomplete)
     if not validation["valid"] and allow_incomplete:
         validation["complete"] = False
@@ -2715,6 +3075,14 @@ def aggregate_study(
         raise ValueError(
             "analysis theoretical_reference must be none for finite epistemic "
             "persistence"
+        )
+    if theoretical_reference != "none" and any(
+        event.event.get("record_type") == "relational_imitation_round_feedback"
+        and event.event.get("social_mode", "peer") == "board"
+        for event in events
+    ):
+        raise ValueError(
+            "analysis theoretical_reference must be none for finite-memory board mode"
         )
     endpoint_recipe = recipe.get("episode_endpoints")
     episode_endpoints = pd.DataFrame()
@@ -2887,6 +3255,18 @@ def aggregate_study(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    phi_comparison = _phi_conditioning_comparison(primary)
+    if not phi_comparison.empty:
+        outputs["phi_conditioning_comparison"] = _attach_coordinates(
+            phi_comparison, canonical["cells"]
+        )
+    initialization_summary, initialization_audit, _ = paired_initialization_diagnostics(
+        canonical
+    )
+    if not initialization_summary.empty:
+        outputs["initialization_diagnostics"] = initialization_summary
+    if not initialization_audit.empty:
+        outputs["matched_initialization_audit"] = initialization_audit
     raw_state_bins = recipe.get("state_local_x_bins")
     state_bins = int(raw_state_bins) if raw_state_bins is not None else None
     phase_maps, binned_occupancy = _state_local_phase_tables(
@@ -2901,6 +3281,14 @@ def aggregate_study(
         outputs["state_local_phase_maps"] = phase_maps
     if not binned_occupancy.empty:
         outputs["state_occupancy_binned"] = binned_occupancy
+    if bool(recipe.get("rho_aggregated_descriptive", False)):
+        rho_phase, rho_occupancy = _rho_aggregated_state_local_maps(
+            phase_maps, binned_occupancy
+        )
+        if not rho_phase.empty:
+            outputs["rho_aggregated_state_local_maps"] = rho_phase
+        if not rho_occupancy.empty:
+            outputs["rho_aggregated_state_occupancy"] = rho_occupancy
     if bool(recipe.get("rho_aggregated_descriptive", False)):
         rho_summary = _rho_aggregated_descriptive_summary(
             primary, derived, episode_endpoints
@@ -2934,6 +3322,19 @@ def aggregate_study(
         )
     for name, frame in outputs.items():
         write_scientific_table(tables_dir, name, frame)
+    if bool(recipe.get("blackboard_population_outputs", False)):
+        _write_blackboard_population_views(
+            tables_dir,
+            analysis_dir,
+            canonical=canonical,
+            primary=primary,
+            derived=derived,
+            outputs=outputs,
+        )
+        outputs["blackboard_diagnostics"] = _blackboard_diagnostic_table(
+            _attach_coordinates(canonical["rounds"], canonical["cells"]),
+            canonical["cells"],
+        )
 
     plot_tables = {
         **canonical,

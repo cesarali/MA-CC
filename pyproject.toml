@@ -42,6 +42,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "mas_cc.llm_runtime.providers" = ["model_profiles.json"]
+"mas_cc.musr_team_allocation_generator" = ["README.md", "attribution.md", "LICENSES/*.txt"]
+"mas_cc.blackboard_dashboard.assets" = ["*.html", "*.css", "*.js"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

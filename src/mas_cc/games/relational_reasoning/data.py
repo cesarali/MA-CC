@@ -21,12 +21,18 @@ README §7 and the checked-in ``examples/`` for the authoritative shape.
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 SCHEMA_VERSION = "spatial_relational_task_v1"
 """The one task schema this loader accepts."""
+
+MUSR_TASK_FAMILY = "musr_team_allocation"
+MUSR_SCHEMA_VERSION = "musr_team_allocation_native_v1"
+MUSR_DISTRIBUTION_SCHEMA_VERSION = "musr_team_allocation_distribution_v1"
+MUSR_INITIAL_INFORMATION_SCHEMA_VERSION = "musr_initial_information_v1"
 
 SUPPORTING = "supporting"
 DISTRACTOR = "distractor"
@@ -111,6 +117,9 @@ class RelationalTask:
     agent_fact_ids: Mapping[str, tuple[str, ...]]
     reasoning_chain: tuple[str, ...]
     source_path: str
+    task_family: str = "spatial_relational"
+    answer_display_texts: Mapping[str, str] | None = None
+    supporting_fact_groups: Mapping[str, tuple[str, ...]] | None = None
 
     def fact(self, fact_id: str) -> RelationalFact:
         try:
@@ -149,10 +158,14 @@ class RelationalTask:
     def to_dict(self) -> dict[str, Any]:
         """The task projection carried in ``GameState.data['task']``."""
 
-        return {
+        projection = {
             "task_id": self.task_id,
             "task_seed": self.seed,
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": (
+                MUSR_SCHEMA_VERSION
+                if self.task_family == MUSR_TASK_FAMILY
+                else SCHEMA_VERSION
+            ),
             "source_path": self.source_path,
             "question": self.question,
             "reasoning_depth": self.reasoning_depth,
@@ -175,6 +188,19 @@ class RelationalTask:
             },
             "reasoning_chain": list(self.reasoning_chain),
         }
+        # MuSR adds these fields, but their empty defaults must not perturb the
+        # historical spatial projection: paired initialization artifacts use
+        # this exact projection as part of their frozen compatibility hash.
+        if self.task_family != "spatial_relational":
+            projection["task_family"] = self.task_family
+        if self.answer_display_texts:
+            projection["answer_display_texts"] = dict(self.answer_display_texts)
+        if self.supporting_fact_groups:
+            projection["supporting_fact_groups"] = {
+                key: list(values)
+                for key, values in self.supporting_fact_groups.items()
+            }
+        return projection
 
 
 # --------------------------------------------------------------------------
@@ -231,6 +257,288 @@ def load_relational_task(
     return _build_task(payload, path, population_size)
 
 
+def _sha256_object(value: Any) -> str:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def load_musr_team_allocation_task(
+    dataset_dir: str | Path,
+    task_id: str,
+    *,
+    population_size: int,
+    initial_information_path: str | Path | None = None,
+    initial_information_sha256: str | None = None,
+) -> RelationalTask:
+    """Adapt a validated MuSR task and its distribution to this game."""
+
+    root = Path(dataset_dir) / str(task_id)
+    base_path = root / "base_task.json"
+    distribution_path = root / f"distribution_N{population_size}.json"
+    assignment_path = (
+        None if initial_information_path is None else Path(initial_information_path)
+    )
+    for path in (base_path, assignment_path or distribution_path):
+        if not path.is_file():
+            raise RelationalTaskError(f"required MuSR task file does not exist: {path}")
+    try:
+        base = json.loads(base_path.read_text(encoding="utf-8"))
+        assignment_source = assignment_path or distribution_path
+        distribution = json.loads(assignment_source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RelationalTaskError(f"MuSR task JSON is invalid: {exc}") from exc
+    if not isinstance(base, Mapping) or not isinstance(distribution, Mapping):
+        raise RelationalTaskError("MuSR base task and distribution must be objects")
+    if base.get("schema_version") != MUSR_SCHEMA_VERSION:
+        raise RelationalTaskError(
+            f"{base_path} must use schema {MUSR_SCHEMA_VERSION!r}"
+        )
+    if base.get("task_family") != MUSR_TASK_FAMILY:
+        raise RelationalTaskError(f"{base_path} is not a MuSR Team Allocation task")
+    expected_assignment_schema = (
+        MUSR_INITIAL_INFORMATION_SCHEMA_VERSION
+        if assignment_path is not None
+        else MUSR_DISTRIBUTION_SCHEMA_VERSION
+    )
+    if distribution.get("schema_version") != expected_assignment_schema:
+        raise RelationalTaskError(
+            f"{assignment_source} must use schema {expected_assignment_schema!r}"
+        )
+    if str(base.get("task_id")) != str(task_id) or str(
+        distribution.get("task_id")
+    ) != str(task_id):
+        raise RelationalTaskError("MuSR base/assignment task IDs do not match")
+    semantic_hash = str(base.get("semantic_world_sha256", ""))
+    expected_hash = _sha256_object(
+        {key: value for key, value in base.items() if key != "semantic_world_sha256"}
+    )
+    if semantic_hash != expected_hash:
+        raise RelationalTaskError("MuSR base task semantic_world_sha256 does not match")
+    if distribution.get("semantic_world_sha256") != semantic_hash:
+        raise RelationalTaskError("MuSR assignment does not match the base task")
+    if assignment_path is None:
+        fingerprint = distribution.get("fingerprint_sha256")
+        if fingerprint != _sha256_object(
+            {
+                key: value
+                for key, value in distribution.items()
+                if key != "fingerprint_sha256"
+            }
+        ):
+            raise RelationalTaskError(
+                "MuSR distribution fingerprint_sha256 does not match"
+            )
+    else:
+        if not initial_information_sha256:
+            raise RelationalTaskError(
+                "MuSR initial-information artifact requires an expected file SHA-256"
+            )
+        actual_file_hash = hashlib.sha256(assignment_path.read_bytes()).hexdigest()
+        if actual_file_hash != initial_information_sha256:
+            raise RelationalTaskError(
+                "MuSR initial-information artifact file SHA-256 does not match"
+            )
+        assignment_hash = distribution.get("assignment_sha256")
+        if assignment_hash != _sha256_object(
+            {
+                key: value
+                for key, value in distribution.items()
+                if key != "assignment_sha256"
+            }
+        ):
+            raise RelationalTaskError(
+                "MuSR initial-information assignment_sha256 does not match"
+            )
+    if int(distribution.get("population_size", -1)) != population_size:
+        raise RelationalTaskError("MuSR distribution population size does not match")
+    if (
+        assignment_path is None
+        and int(distribution.get("no_single_agent_violations", -1)) != 0
+    ):
+        raise RelationalTaskError(
+            "MuSR distribution violates no-single-agent constraint"
+        )
+
+    facts: dict[str, RelationalFact] = {}
+    groups: dict[str, list[str]] = {}
+    order: list[str] = []
+    for raw in _sequence(base.get("evidence", ()), "evidence", base_path):
+        item = _mapping(raw, "evidence[]", base_path)
+        evidence_id = str(_require(item, "evidence_id", base_path))
+        latent_id = str(_require(item, "latent_fact_id", base_path))
+        statements = _sequence(
+            _require(item, "text", base_path), "evidence[].text", base_path
+        )
+        text = " ".join(str(statement).strip() for statement in statements).strip()
+        if not text or evidence_id in facts:
+            raise RelationalTaskError(
+                "MuSR evidence IDs must be unique with non-empty text"
+            )
+        facts[evidence_id] = RelationalFact(
+            fact_id=evidence_id,
+            subject=latent_id,
+            relation="EVIDENCE_FOR",
+            object=latent_id,
+            role=SUPPORTING,
+            text=text,
+        )
+        order.append(evidence_id)
+        groups.setdefault(latent_id, []).append(evidence_id)
+
+    if assignment_path is not None:
+        profile = tuple(
+            str(item)
+            for item in _sequence(
+                distribution.get("evidence_profile_ids", ()),
+                "evidence_profile_ids",
+                assignment_source,
+            )
+        )
+        if len(profile) != 9 or len(set(profile)) != 9:
+            raise RelationalTaskError(
+                "MuSR F9 initial-information profile must contain nine unique cards"
+            )
+        unknown_profile = set(profile) - set(facts)
+        if unknown_profile:
+            raise RelationalTaskError(
+                f"MuSR initial-information profile has unknown evidence: "
+                f"{sorted(unknown_profile)}"
+            )
+        card_latent = {
+            evidence_id: latent_id
+            for latent_id, evidence_ids in groups.items()
+            for evidence_id in evidence_ids
+        }
+        if len({card_latent[evidence_id] for evidence_id in profile}) != 9:
+            raise RelationalTaskError(
+                "MuSR F9 initial-information profile must cover nine latent values"
+            )
+        selected = set(profile)
+        order = [evidence_id for evidence_id in order if evidence_id in selected]
+        facts = {evidence_id: facts[evidence_id] for evidence_id in order}
+        groups = {
+            latent_id: [
+                evidence_id for evidence_id in evidence_ids if evidence_id in selected
+            ]
+            for latent_id, evidence_ids in groups.items()
+            if any(evidence_id in selected for evidence_id in evidence_ids)
+        }
+
+    options_raw = _sequence(base.get("options", ()), "options", base_path)
+    if len(options_raw) != 3:
+        raise RelationalTaskError(
+            "MuSR Team Allocation task must contain three options"
+        )
+    option_ids: list[str] = []
+    display: dict[str, str] = {}
+    for raw in options_raw:
+        item = _mapping(raw, "options[]", base_path)
+        option_id = str(_require(item, "id", base_path))
+        text = str(_require(item, "display_text", base_path)).strip()
+        if option_id in display or not text:
+            raise RelationalTaskError(
+                "MuSR option IDs must be unique with non-empty display text"
+            )
+        option_ids.append(option_id)
+        display[option_id] = text
+    gold = str(base.get("gold_answer", ""))
+    if gold not in display:
+        raise RelationalTaskError("MuSR gold_answer is not among the options")
+
+    assignment_key = (
+        "agent_assignments" if assignment_path is not None else "agent_evidence_ids"
+    )
+    assignments = _mapping(
+        distribution.get(assignment_key), assignment_key, assignment_source
+    )
+    agent_fact_ids: dict[str, tuple[str, ...]] = {}
+
+    def agent_number(value: Any) -> int:
+        text = str(value)
+        return (
+            int(text.rsplit("_", 1)[-1]) - 1 if text.startswith("agent_") else int(text)
+        )
+
+    for raw_agent_id, raw_ids in sorted(
+        assignments.items(), key=lambda pair: agent_number(pair[0])
+    ):
+        ids = tuple(
+            str(item)
+            for item in _sequence(raw_ids, f"{assignment_key}[]", assignment_source)
+        )
+        unknown = set(ids) - set(facts)
+        if unknown:
+            raise RelationalTaskError(
+                f"MuSR agent references unknown evidence: {sorted(unknown)}"
+            )
+        if assignment_path is not None and len(ids) != 1:
+            raise RelationalTaskError(
+                "MuSR F9 initial-information assignment requires one card per agent"
+            )
+        agent_fact_ids[f"agent_{agent_number(raw_agent_id) + 1:03d}"] = tuple(
+            evidence_id for evidence_id in order if evidence_id in set(ids)
+        )
+    if len(agent_fact_ids) != population_size:
+        raise RelationalTaskError("MuSR distribution agent count does not match")
+    if {item for ids in agent_fact_ids.values() for item in ids} != set(order):
+        raise RelationalTaskError("MuSR population evidence union is incomplete")
+    if assignment_path is not None:
+        holder_counts = {
+            evidence_id: sum(evidence_id in ids for ids in agent_fact_ids.values())
+            for evidence_id in order
+        }
+        if sorted(holder_counts.values()) != [2, 2, 2, 3, 3, 3, 3, 3, 3]:
+            raise RelationalTaskError(
+                "MuSR F9 initial-information holder counts must be six 3s and three 2s"
+            )
+        declared_counts = distribution.get("card_holder_counts")
+        if (
+            declared_counts is not None
+            and {
+                str(key): int(value)
+                for key, value in _mapping(
+                    declared_counts, "card_holder_counts", assignment_source
+                ).items()
+            }
+            != holder_counts
+        ):
+            raise RelationalTaskError(
+                "MuSR initial-information card_holder_counts do not match assignment"
+            )
+
+    scenario = str(base.get("scenario", "")).strip()
+    question = str(base.get("question", "")).strip()
+    if not scenario or not question:
+        raise RelationalTaskError("MuSR scenario and question must be non-empty")
+    return RelationalTask(
+        task_id=str(task_id),
+        seed=int(base.get("generation", {}).get("task_seed", 0)),
+        population_size=population_size,
+        reasoning_depth=len(groups),
+        question=f"SCENARIO\n{scenario}\n\nQUESTION\n{question}",
+        fact_order=tuple(order),
+        facts=facts,
+        supporting_fact_ids=tuple(order),
+        distractor_fact_ids=(),
+        option_labels=tuple(chr(ord("A") + index) for index in range(len(option_ids))),
+        option_relations={
+            chr(ord("A") + index): option_id
+            for index, option_id in enumerate(option_ids)
+        },
+        correct_option=chr(ord("A") + option_ids.index(gold)),
+        correct_relation=gold,
+        agent_ids=tuple(agent_fact_ids),
+        agent_fact_ids=agent_fact_ids,
+        reasoning_chain=(),
+        source_path=f"{base_path}|{assignment_source}",
+        task_family=MUSR_TASK_FAMILY,
+        answer_display_texts=display,
+        supporting_fact_groups={key: tuple(values) for key, values in groups.items()},
+    )
+
+
 def _require(payload: Mapping[str, Any], key: str, path: Path) -> Any:
     if key not in payload:
         raise RelationalTaskError(f"task file {path} is missing {key!r}")
@@ -278,7 +586,9 @@ def _build_task(
                 )
         fact_id = str(item["id"])
         if fact_id in facts:
-            raise RelationalTaskError(f"task file {path}: duplicate fact id {fact_id!r}")
+            raise RelationalTaskError(
+                f"task file {path}: duplicate fact id {fact_id!r}"
+            )
         role = str(item["role"])
         if role not in FACT_ROLES:
             raise RelationalTaskError(
@@ -311,12 +621,17 @@ def _build_task(
         )
 
     supporting = tuple(
-        str(item) for item in _sequence(
-            _require(query, "supporting_fact_ids", path), "query.supporting_fact_ids", path
+        str(item)
+        for item in _sequence(
+            _require(query, "supporting_fact_ids", path),
+            "query.supporting_fact_ids",
+            path,
         )
     )
     if not supporting:
-        raise RelationalTaskError(f"task file {path}: query.supporting_fact_ids is empty")
+        raise RelationalTaskError(
+            f"task file {path}: query.supporting_fact_ids is empty"
+        )
     for fact_id in supporting:
         if fact_id not in facts:
             raise RelationalTaskError(
@@ -335,7 +650,9 @@ def _build_task(
             f"task file {path}: query.supporting_fact_ids {sorted(supporting)} does not "
             f"match the facts marked supporting {sorted(declared_supporting)}"
         )
-    distractors = tuple(fact_id for fact_id in order if not facts[fact_id].is_supporting)
+    distractors = tuple(
+        fact_id for fact_id in order if not facts[fact_id].is_supporting
+    )
 
     labels: list[str] = []
     relations: dict[str, str] = {}
@@ -358,7 +675,9 @@ def _build_task(
         labels.append(label)
         relations[label] = relation
     if len(labels) < 2:
-        raise RelationalTaskError(f"task file {path}: answer.options needs at least two options")
+        raise RelationalTaskError(
+            f"task file {path}: answer.options needs at least two options"
+        )
     correct_option = str(_require(answer, "correct_option", path))
     correct_relation = str(_require(answer, "correct_relation", path))
     if correct_option not in relations:
@@ -436,7 +755,8 @@ def _build_task(
         agent_ids=tuple(assignment),
         agent_fact_ids=assignment,
         reasoning_chain=tuple(
-            str(item) for item in _sequence(
+            str(item)
+            for item in _sequence(
                 rendered.get("reasoning_chain", ()), "rendered.reasoning_chain", path
             )
         ),
@@ -448,6 +768,10 @@ __all__ = [
     "DEFAULT_TASK_DATASET_DIR",
     "DISTRACTOR",
     "FACT_ROLES",
+    "MUSR_DISTRIBUTION_SCHEMA_VERSION",
+    "MUSR_INITIAL_INFORMATION_SCHEMA_VERSION",
+    "MUSR_SCHEMA_VERSION",
+    "MUSR_TASK_FAMILY",
     "NO_FACT",
     "SCHEMA_VERSION",
     "SUPPORTING",
@@ -455,5 +779,6 @@ __all__ = [
     "RelationalTask",
     "RelationalTaskError",
     "list_relational_task_ids",
+    "load_musr_team_allocation_task",
     "load_relational_task",
 ]

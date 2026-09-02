@@ -1,0 +1,63 @@
+probe: musr_blackboard_prompt_validation
+mode: full
+
+source:
+  calibration_root: results/studies/musr_symbolic_ambiguity_calibration_01
+  expected_manifest_file_sha256: 12bd5953ac91206f450c535b1d87aadc22cdb9cefc2fa38bf5b2e28d7856b2ca
+  expected_manifest_content_sha256: 06eb3ef5503ddd75bc09714caf73c7b81d6ebcee0f05e08f035b8e537800160a
+  expected_symbolic_selection_sha256: df421510993e770f44b73be2612609864b6b74ba4c6f5d6c81f2b8c19872d23b
+
+provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 4096
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 30
+  options:
+    estimated_latency_seconds: 10.0
+
+frozen_design:
+  task_ids: [task_001, task_002, task_003, task_004, task_005, task_006]
+  agents_by_task:
+    task_001: [agent_001, agent_002, agent_003, agent_006]
+    task_002: [agent_001, agent_002, agent_003, agent_004]
+    task_003: [agent_001, agent_002, agent_003, agent_004]
+    task_004: [agent_001, agent_002, agent_003, agent_004]
+    task_005: [agent_001, agent_002, agent_003, agent_004]
+    task_006: [agent_001, agent_002, agent_003, agent_004]
+  state_ids: [S0, S1, S2]
+  q: 1
+  private_breadth: 4
+  max_predictability: 0.45
+  min_normalized_entropy: 0.90
+  min_score_margin: 2
+  round_zero_prompt: P2
+  full_profile: F9
+  current_vote_policy: calibration_private_repetition_0
+  state_seed: 20260902
+
+execution:
+  repetitions: 5
+  local_workers: 4
+  max_concurrency: 30
+  max_rpm: 500
+  fallback_concurrency: [30, 20, 10]
+  invalid_response_retries: 1
+
+analysis:
+  static_comparison:
+    enabled: false
+
+storage:
+  output_dir: results/studies/musr_blackboard_prompt_validation_01
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  max_provider_requests: 1440
+  max_input_tokens: 6000000
+  max_output_tokens: 3000000
+  max_cost: 10.0

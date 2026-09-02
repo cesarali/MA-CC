@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import os
@@ -72,6 +73,20 @@ def main(argv: list[str] | None = None) -> int:
         cell = source.cells[entry.cell_index]
         if cell.cell_id != entry.cell_id:
             raise ValueError("execution manifest cell identity no longer matches config")
+        episode_plan = None
+        if entry.episode_plan_path:
+            with Path(entry.episode_plan_path).open(newline="", encoding="utf-8") as stream:
+                rows = list(csv.DictReader(stream))
+            if not rows:
+                raise ValueError("extension episode plan is empty")
+            if entry.cell_key and any(row.get("cell_key") != entry.cell_key for row in rows):
+                raise ValueError("extension episode plan cell key does not match manifest")
+            episode_plan = {
+                cell.cell_id: {
+                    int(row["repetition_index"]): int(row["episode_seed"])
+                    for row in rows
+                }
+            }
         shard = _GridCellShard(source.base, source.axes, source.grid_id, cell)
         output = Path(entry.output_dir)
         output.mkdir(parents=True, exist_ok=True)
@@ -82,7 +97,9 @@ def main(argv: list[str] | None = None) -> int:
             f"[shard] config={entry.config_index} cell={cell.cell_id} "
             f"index={cell.index} output={output}", flush=True,
         )
-        run_experiment_grid_sync(shard, output, show_progress=False)
+        run_experiment_grid_sync(
+            shard, output, show_progress=False, episode_plan=episode_plan
+        )
         return 0
     except (OSError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

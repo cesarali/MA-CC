@@ -100,6 +100,16 @@ class ResponseContract:
             instruction = f"{decision.strip()}\n\n{instruction}"
         return ((role, instruction),)
 
+    def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
+        """Render a minimal, contract-owned request for a complete replacement."""
+
+        detail = "; ".join(f"{issue.field}: {issue.message}" for issue in issues)
+        return (
+            "Your previous response was invalid:\n"
+            f"{detail}\n\n"
+            "Return the complete response again, matching the original response schema."
+        )
+
     def validate(self, response: str) -> ValidationResult:
         if not isinstance(response, str):
             return ValidationResult.failure(

@@ -1,0 +1,79 @@
+probe: musr_symbolic_ambiguity
+
+generation_provider:
+  type: university
+  model: microsoft/gpt-5.6-terra
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 2048
+  timeout_seconds: 180
+  max_retries: 0
+  request_concurrency: 4
+  options:
+    estimated_latency_seconds: 10.0
+
+behavioral_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 4096
+  timeout_seconds: 180
+  max_retries: 0
+  request_concurrency: 4
+  options:
+    estimated_latency_seconds: 10.0
+
+symbolic_ambiguity:
+  candidate_worlds: 10000
+  private_breadth_candidates: [2, 3, 4]
+  preferred_max_predictability: 0.45
+  fallback_max_predictability: 0.50
+  min_normalized_entropy: 0.90
+  evaluate_all_subsets: true
+
+world_filter:
+  require_unique_optimum: true
+  min_score_margin_candidates: [1, 2]
+  balance_gold_allocations: true
+  final_tasks: 6
+
+generation:
+  population_size: 12
+  minimum_holders: 2
+  seed: 20260901
+  branches_per_latent_fact: 3
+  statements_per_branch: 2
+  tree_depth: 2
+  semantic_retries: 3
+
+behavioral_validation:
+  model: gwdg/openai-gpt-oss-120b
+  prompt_variant: P2
+  full_profile: F9
+  private_repetitions: 3
+  endpoint_repetitions: 10
+  zero_max_truth_rate: 0.45
+  private_max_truth_rate: 0.45
+  full_min_truth_rate: 0.80
+  preferred_full_truth_rate: 0.90
+
+execution:
+  generation_workers: 4
+  behavioral_workers: 4
+
+storage:
+  output_dir: results/studies/musr_symbolic_ambiguity_calibration_01
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  max_generation_requests: 180
+  max_behavioral_requests: 360
+  max_generation_input_tokens: 500000
+  max_behavioral_input_tokens: 4000000
+  max_generation_output_tokens: 360000
+  max_behavioral_output_tokens: 1500000
+  max_generation_cost: 5.0
+  max_behavioral_cost: 5.0

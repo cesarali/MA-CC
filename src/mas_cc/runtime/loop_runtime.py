@@ -16,11 +16,16 @@ reason a call happens, never the mechanism.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from mas_cc.config import GameConfig
 from mas_cc.llm_runtime.providers import CompletionRequest, CompletionResponse, LLMProvider
 from mas_cc.llm_runtime.prompts import CompiledPrompt
+from mas_cc.llm_runtime.messages import Message, MessageRole
+from mas_cc.llm_runtime.exceptions import ValidationError
+from mas_cc.llm_runtime.validation import ValidationIssue
 
 if TYPE_CHECKING:
     # Deferred: `mas_cc.games` imports this module (via `runner.py` and
@@ -44,6 +49,7 @@ class ValidationAttempt:
     action: Action | None
     validation_error: str | None
     provider_error: str | None
+    validation_issues: tuple[ValidationIssue, ...] = ()
 
     @property
     def valid(self) -> bool:
@@ -92,13 +98,33 @@ async def run_validated_decision(
 
     attempts: list[ValidationAttempt] = []
     last_error = "unknown validation failure"
+    messages = prompt.messages
     for attempt_index in range(request.retry_bound + 1):
+        metadata = dict(metadata_for_attempt(attempt_index))
+        metadata.update(
+            {
+                "validation_repair": attempt_index > 0,
+                "repair_schema_version": 1,
+                "validation_retry_bound": request.retry_bound,
+                "correction_message_hash": (
+                    hashlib.sha256(messages[-1].content.encode("utf-8")).hexdigest()
+                    if attempt_index > 0 else None
+                ),
+                "effective_messages_hash": hashlib.sha256(
+                    json.dumps(
+                        [message.to_dict() for message in messages],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest(),
+            }
+        )
         completion_request = CompletionRequest(
-            messages=prompt.messages,
+            messages=messages,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
             seed=seed_for_attempt(attempt_index),
-            metadata=metadata_for_attempt(attempt_index),
+            metadata=metadata,
         )
         try:
             response = await provider.complete(completion_request)
@@ -109,6 +135,7 @@ async def run_validated_decision(
             raise
         action: Action | None = None
         validation_error: str | None = None
+        validation_issues: tuple[ValidationIssue, ...] = ()
         try:
             prompt.response_contract.validate(response.content).raise_for_errors(
                 context=f"{game.spec.game_type} response contract"
@@ -120,14 +147,22 @@ async def run_validated_decision(
         except (TypeError, ValueError) as exc:
             validation_error = str(exc)
             last_error = validation_error
+            if isinstance(exc, ValidationError):
+                validation_issues = tuple(
+                    issue for issue in exc.issues if isinstance(issue, ValidationIssue)
+                )
         attempt = ValidationAttempt(
             attempt_index + 1, completion_request, response, action, validation_error, None,
+            validation_issues,
         )
         attempts.append(attempt)
         if on_attempt is not None:
             on_attempt(attempt)
         if attempt.valid:
             return ValidatedDecision(action=action, attempts=tuple(attempts))
+        if attempt_index < request.retry_bound:
+            guidance = prompt.response_contract.repair_guidance(validation_issues)
+            messages = (*prompt.messages, Message(MessageRole.USER, guidance))
     raise DecisionLoopExhausted(
         f"{request.agent_id} produced no valid action after {len(attempts)} validation attempts: {last_error}"
     )

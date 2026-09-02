@@ -11,15 +11,17 @@ participant exposes a new fact to *this* agent.  ``K_i`` can also shrink at a
 population-round persistence boundary and grow again when a valid fact is
 communicated.  Nothing in this module derives a vote from either fact set.
 
-``(X_i, S_i)`` - vote and publicly exposed fact id - is the whole socially
-visible state.  ``R_i``, the free-form reason, is recorded for analysis and
-rendered to nobody: not to peers, and not back to its own author on a later
-turn.  Active ``K_i`` is private and reaches only the owning agent's own prompt.
+In legacy peer mode, ``(X_i, S_i)`` - vote and publicly exposed fact id - is
+the whole socially visible state. In board mode, public message prose is an
+intentional additional semantic channel. ``K_i`` remains the exact record of
+source-evidence acquisition; it is not exhaustive semantic knowledge there.
+``R_i``, the free-form private reason, is never rendered to another agent.
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,7 +33,9 @@ from mas_cc.games.protocols import AgentState, GameState, Transition, _thaw
 
 from ..data import DEFAULT_TASK_DATASET_DIR
 from .prompts import (
+    BOARD_PROMPT_VERSION,
     IMPLEMENTED_VOTE_VISIBILITIES,
+    LOCAL_PROMPT_VARIANTS,
     PROMPT_VERSION,
     VOTE_VISIBILITIES,
     resolve_receiver_epistemic_disposition,
@@ -55,7 +59,12 @@ IMPLEMENTED_DYNAMICS_MODES = ("reasoning",)
 for this game would have to decide what a *fact* does to a q-voter jump, and
 inventing that silently would produce numbers nobody could interpret."""
 
-INITIALIZATION_MODES = ("local_vote", "uniform_random", "explicit")
+INITIALIZATION_MODES = (
+    "local_vote",
+    "paired_local_vote",
+    "uniform_random",
+    "explicit",
+)
 
 PEER_SOURCE = "peer"
 CONTROLLER_SOURCE = "controller"
@@ -63,6 +72,175 @@ INITIAL_SOURCE = "initial"
 FACT_SOURCES = (INITIAL_SOURCE, PEER_SOURCE, CONTROLLER_SOURCE)
 """Every way a fact is allowed to enter ``K_i``.  §18's "no information
 teleportation" invariant is exactly the claim that nothing else ever does."""
+
+SOCIAL_MODE_PEER = "peer"
+SOCIAL_MODE_BOARD = "board"
+SOCIAL_MODES = (SOCIAL_MODE_PEER, SOCIAL_MODE_BOARD)
+
+BOARD_SAMPLING_UNIFORM = "uniform"
+BOARD_SAMPLING_MODES = (BOARD_SAMPLING_UNIFORM,)
+
+MESSAGE_REQUEST = "REQUEST"
+MESSAGE_REPORT = "REPORT"
+MESSAGE_NONE = "NONE"
+MESSAGE_DIRECTIVE = "DIRECTIVE"
+ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
+ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
+CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE,)
+BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
+LEGACY_BOARD_MESSAGE_TYPES = (
+    "CLAIM",
+    "QUESTION",
+    "REQUEST",
+    "RESULT",
+    "REPLY",
+    "CORRECTION",
+)
+BLACKBOARD_MESSAGE_SCHEMA_VERSION = 2
+LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True, slots=True)
+class BlackboardMessage:
+    """One immutable public message, retained for complete provenance."""
+
+    message_id: str
+    author_id: str
+    message_type: str
+    text: str
+    vote: str
+    shared_fact_id: str | None
+    reply_to: str | None
+    round_created: int
+    micro_step_created: int
+    expires_after_round: int
+    author_kind: str = "agent"
+    schema_version: int = BLACKBOARD_MESSAGE_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if not self.message_id.strip():
+            raise ValueError("blackboard message_id must be non-empty")
+        allowed = (
+            LEGACY_BOARD_MESSAGE_TYPES
+            if self.schema_version == LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION
+            else BOARD_MESSAGE_TYPES
+            if self.schema_version == BLACKBOARD_MESSAGE_SCHEMA_VERSION
+            else ()
+        )
+        if self.message_type not in allowed:
+            raise ValueError(
+                f"blackboard message_type must be one of {list(allowed)} for "
+                f"schema version {self.schema_version}"
+            )
+        if not self.text.strip():
+            raise ValueError("blackboard message text must be non-empty")
+        if not isinstance(self.vote, str) or not self.vote.strip():
+            raise ValueError("blackboard message vote must be non-empty")
+        if self.author_kind not in {"agent", "controller"}:
+            raise ValueError("blackboard author_kind must be agent or controller")
+        if self.schema_version == BLACKBOARD_MESSAGE_SCHEMA_VERSION:
+            role_types = (
+                CONTROLLER_MESSAGE_TYPES
+                if self.author_kind == "controller"
+                else ORDINARY_MESSAGE_TYPES
+            )
+            if self.message_type not in role_types:
+                raise ValueError(
+                    f"{self.author_kind} messages must use one of {list(role_types)}"
+                )
+            if self.message_type in {MESSAGE_REQUEST, MESSAGE_DIRECTIVE} and (
+                self.shared_fact_id is not None
+            ):
+                raise ValueError(f"{self.message_type} cannot carry shared_fact_id")
+        elif self.message_type in {"REPLY", "CORRECTION"} and not self.reply_to:
+            raise ValueError(f"{self.message_type} requires reply_to")
+        if self.expires_after_round < self.round_created:
+            raise ValueError("blackboard expiry cannot precede creation")
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "BlackboardMessage":
+        return cls(
+            message_id=str(value["message_id"]),
+            author_id=str(value["author_id"]),
+            message_type=str(value["message_type"]),
+            text=str(value["text"]),
+            vote=str(value["vote"]),
+            shared_fact_id=(
+                None
+                if value.get("shared_fact_id") is None
+                else str(value["shared_fact_id"])
+            ),
+            reply_to=None if value.get("reply_to") is None else str(value["reply_to"]),
+            round_created=int(value["round_created"]),
+            micro_step_created=int(value["micro_step_created"]),
+            expires_after_round=int(value["expires_after_round"]),
+            author_kind=str(value.get("author_kind", "agent")),
+            # Historical records predate explicit message schema versioning.
+            # Keep their labels verbatim instead of silently relabeling raw data.
+            schema_version=int(
+                value.get("schema_version", LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION)
+            ),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {field: getattr(self, field) for field in self.__dataclass_fields__}
+
+
+@dataclass(frozen=True, slots=True)
+class BlackboardState:
+    """Append-only message history with a round-based live-message view."""
+
+    messages: tuple[BlackboardMessage, ...] = ()
+
+    @classmethod
+    def from_sequence(cls, values: Sequence[Mapping[str, Any]]) -> "BlackboardState":
+        return cls(tuple(BlackboardMessage.from_mapping(value) for value in values))
+
+    def append(self, message: BlackboardMessage) -> "BlackboardState":
+        if self.find(message.message_id) is not None:
+            raise ValueError(f"duplicate blackboard message id {message.message_id!r}")
+        return BlackboardState((*self.messages, message))
+
+    def live_messages(self, round_idx: int) -> tuple[BlackboardMessage, ...]:
+        return tuple(
+            message
+            for message in self.messages
+            if message.round_created <= round_idx <= message.expires_after_round
+        )
+
+    def sample_live(
+        self,
+        round_idx: int,
+        count: int,
+        rng: Any,
+        *,
+        exclude_author_id: str | None = None,
+    ) -> tuple[BlackboardMessage, ...]:
+        eligible = [
+            message
+            for message in self.live_messages(round_idx)
+            if exclude_author_id is None or message.author_id != exclude_author_id
+        ]
+        return tuple(rng.sample(eligible, min(count, len(eligible))))
+
+    def expire(self, round_idx: int) -> tuple["BlackboardState", tuple[str, ...]]:
+        """Report messages ending now while retaining append-only history."""
+
+        expired = tuple(
+            message.message_id
+            for message in self.messages
+            if message.expires_after_round == round_idx
+        )
+        return self, expired
+
+    def find(self, message_id: str) -> BlackboardMessage | None:
+        return next(
+            (message for message in self.messages if message.message_id == message_id),
+            None,
+        )
+
+    def to_list(self) -> list[dict[str, Any]]:
+        return [message.to_dict() for message in self.messages]
 
 
 # --------------------------------------------------------------------------
@@ -174,6 +352,14 @@ class RelationalGameState(GameState):
         }
 
     @property
+    def answer_display_texts(self) -> Mapping[str, str]:
+        raw = self.task.get("answer_display_texts", {})
+        return {str(key): str(value) for key, value in raw.items()}
+
+    def answer_display_text(self, answer: str) -> str:
+        return self.answer_display_texts.get(answer, answer)
+
+    @property
     def correct_answer(self) -> str:
         return str(self.task["correct_answer"])
 
@@ -196,6 +382,13 @@ class RelationalGameState(GameState):
     @property
     def event_history(self) -> tuple[Mapping[str, Any], ...]:
         return tuple(self.data.get("event_history", ()))
+
+    @property
+    def blackboard(self) -> BlackboardState:
+        raw = self.data.get("blackboard", ())
+        if isinstance(raw, BlackboardState):
+            return raw
+        return BlackboardState.from_sequence(tuple(raw))
 
     @property
     def termination_reason(self) -> str | None:
@@ -236,6 +429,7 @@ class RelationalGameState(GameState):
             "agents": [agent.to_dict() for agent in self.agents],
             "evaluator_history": _thaw(self.evaluator_history),
             "event_history": _thaw(self.event_history),
+            "blackboard": self.blackboard.to_list(),
             "rules": _thaw(self.data.get("rules", {})),
         }
 
@@ -330,14 +524,24 @@ class RelationalRules:
     rounds: int
     horizon: int
     social_group_size: int
+    social_mode: str
+    board_sampling: str
+    board_message_lifetime_rounds: int
+    board_exclude_self_authored: bool
+    board_allow_no_post: bool
     dynamics_mode: str
+    task_family: str
     task_dataset_dir: str
     task_id: str | None
+    initial_information_path: str | None
+    initial_information_sha256: str | None
     vote_visibility: str
     prompt_version: int
     receiver_epistemic_disposition: str
     stop_on_consensus: bool
     initialization_mode: str
+    initialization_only: bool
+    local_prompt_variant: str
     initial_votes: tuple[str, ...] | None
     initial_distribution: Mapping[str, float] | None
     invalid_response_retries: int
@@ -365,11 +569,34 @@ class RelationalRules:
         social_group_size = _positive_int(
             options.get("social_group_size", 1), "game.options.social_group_size"
         )
-        if social_group_size > n_agents - 1:
+        social_mode = str(options.get("social_mode", SOCIAL_MODE_PEER))
+        if social_mode not in SOCIAL_MODES:
+            raise ValueError(
+                f"game.options.social_mode must be one of {list(SOCIAL_MODES)}"
+            )
+        if social_mode == SOCIAL_MODE_PEER and social_group_size > n_agents - 1:
             raise ValueError(
                 "game.options.social_group_size must be between 1 and "
                 "game.population_size - 1"
             )
+        board = _mapping(options.get("board"), "game.options.board")
+        board_sampling = str(board.get("sampling", BOARD_SAMPLING_UNIFORM))
+        if board_sampling not in BOARD_SAMPLING_MODES:
+            raise ValueError(
+                f"game.options.board.sampling must be one of {list(BOARD_SAMPLING_MODES)}"
+            )
+        lifetime = _positive_int(
+            board.get("message_lifetime_rounds", 1),
+            "game.options.board.message_lifetime_rounds",
+        )
+        exclude_self = board.get("exclude_self_authored", True)
+        allow_no_post = board.get("allow_no_post", True)
+        if not isinstance(exclude_self, bool):
+            raise ValueError(
+                "game.options.board.exclude_self_authored must be a boolean"
+            )
+        if not isinstance(allow_no_post, bool):
+            raise ValueError("game.options.board.allow_no_post must be a boolean")
 
         mode = str(options.get("dynamics_mode", "reasoning"))
         if mode not in DYNAMICS_MODES:
@@ -390,6 +617,48 @@ class RelationalRules:
         task_id = options.get("task_id")
         if task_id is not None and not isinstance(task_id, str):
             raise ValueError("game.options.task_id must be a string")
+        task_family = str(options.get("task_family", "spatial_relational"))
+        if task_family not in {"spatial_relational", "musr_team_allocation"}:
+            raise ValueError(
+                "game.options.task_family must be spatial_relational or "
+                "musr_team_allocation"
+            )
+        if task_family == "musr_team_allocation" and task_id is None:
+            raise ValueError("MuSR Team Allocation requires game.options.task_id")
+        initial_information = _mapping(
+            options.get("initial_information"),
+            "game.options.initial_information",
+        )
+        initial_information_path = initial_information.get("artifact_path")
+        initial_information_sha256 = initial_information.get("expected_file_sha256")
+        if initial_information_path is not None and (
+            not isinstance(initial_information_path, str)
+            or not initial_information_path.strip()
+        ):
+            raise ValueError(
+                "game.options.initial_information.artifact_path must be a path"
+            )
+        if initial_information_sha256 is not None and (
+            not isinstance(initial_information_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", initial_information_sha256)
+        ):
+            raise ValueError(
+                "game.options.initial_information.expected_file_sha256 must be "
+                "a lowercase 64-character SHA-256"
+            )
+        if (initial_information_path is None) != (initial_information_sha256 is None):
+            raise ValueError(
+                "game.options.initial_information must provide artifact_path and "
+                "expected_file_sha256 together"
+            )
+        if (
+            initial_information_path is not None
+            and task_family != "musr_team_allocation"
+        ):
+            raise ValueError(
+                "game.options.initial_information is supported only for "
+                "musr_team_allocation"
+            )
 
         visibility = str(options.get("vote_visibility", "public"))
         if visibility not in VOTE_VISIBILITIES:
@@ -422,11 +691,17 @@ class RelationalRules:
         except ValueError as exc:
             raise ValueError(f"game.options.{exc}") from exc
 
-        prompt_version = options.get("prompt_version", PROMPT_VERSION)
-        if isinstance(prompt_version, bool) or prompt_version != PROMPT_VERSION:
+        expected_prompt_version = (
+            BOARD_PROMPT_VERSION if social_mode == SOCIAL_MODE_BOARD else PROMPT_VERSION
+        )
+        prompt_version = options.get("prompt_version", expected_prompt_version)
+        if (
+            isinstance(prompt_version, bool)
+            or prompt_version != expected_prompt_version
+        ):
             raise ValueError(
                 f"the {GAME_TYPE!r} prompt family has one version; "
-                f"game.options.prompt_version must be {PROMPT_VERSION}"
+                f"game.options.prompt_version must be {expected_prompt_version}"
             )
 
         initialization = _mapping(
@@ -452,6 +727,23 @@ class RelationalRules:
         if initialization_mode == "explicit" and initial_votes is None:
             raise ValueError(
                 "initialization.mode 'explicit' requires initialization.initial_votes"
+            )
+        initialization_only = options.get("initialization_only", False)
+        if not isinstance(initialization_only, bool):
+            raise ValueError("game.options.initialization_only must be a boolean")
+        if initialization_only and initialization_mode not in {
+            "local_vote",
+            "paired_local_vote",
+        }:
+            raise ValueError(
+                "game.options.initialization_only requires provider-generated "
+                "local_vote or paired_local_vote initialization"
+            )
+        local_prompt_variant = str(options.get("local_prompt_variant", "P0"))
+        if local_prompt_variant not in LOCAL_PROMPT_VARIANTS:
+            raise ValueError(
+                "game.options.local_prompt_variant must be one of "
+                f"{list(LOCAL_PROMPT_VARIANTS)}"
             )
         distribution_raw = initialization.get("initial_distribution")
         distribution: Mapping[str, float] | None = None
@@ -492,14 +784,24 @@ class RelationalRules:
             rounds=rounds,
             horizon=rounds * n_agents,
             social_group_size=social_group_size,
+            social_mode=social_mode,
+            board_sampling=board_sampling,
+            board_message_lifetime_rounds=lifetime,
+            board_exclude_self_authored=exclude_self,
+            board_allow_no_post=allow_no_post,
             dynamics_mode=mode,
+            task_family=task_family,
             task_dataset_dir=str(dataset_dir),
             task_id=task_id,
+            initial_information_path=initial_information_path,
+            initial_information_sha256=initial_information_sha256,
             vote_visibility=visibility,
             prompt_version=int(prompt_version),
             receiver_epistemic_disposition=prompt_class,
             stop_on_consensus=bool(options.get("stop_on_consensus", False)),
             initialization_mode=initialization_mode,
+            initialization_only=initialization_only,
+            local_prompt_variant=local_prompt_variant,
             initial_votes=initial_votes,
             initial_distribution=distribution,
             invalid_response_retries=int(retries),

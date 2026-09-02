@@ -1,8 +1,13 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from mas_cc.cli.phase7 import run_phase_7_inspection
+from mas_cc.llm_runtime.messages import Message, MessageRole
+from mas_cc.llm_runtime.providers import CompletionRequest, CompletionResponse, ProviderUsage
+from mas_cc.llm_runtime.validation import ValidationIssue
 from mas_cc.observability import DetailedAuditPolicy, DetailedAuditSelector
+from mas_cc.observability.recorder import RunRecorder
 from mas_cc.storage import AtomicCheckpointStore, Checkpoint
 
 
@@ -70,3 +75,49 @@ def test_phase_7_inspection_writes_bounded_local_first_artifacts(tmp_path: Path,
     assert manifest["status"] == "pass"
     assert all(manifest["checks"].values())
     assert "compiled_messages" not in (output / "comet_summary.json").read_text(encoding="utf-8")
+
+
+def test_malformed_response_diagnostic_is_field_only_and_bounded(tmp_path: Path):
+    recorder = RunRecorder(
+        tmp_path, run_id="diagnostic", resolved_config={},
+        policy=DetailedAuditPolicy(enabled=False),
+    )
+    recorder.malformed_response_row_cap = 1
+    request = CompletionRequest(
+        (Message(MessageRole.USER, "original"),),
+        metadata={
+            "interaction_id": "i1", "agent_id": "a1", "decision_stage": "vote",
+            "validation_attempt": 1, "validation_repair": False,
+            "repair_schema_version": 1, "effective_messages_hash": "abc",
+        },
+    )
+    response = CompletionResponse(
+        content='{"reason":"private","shared_fact_id":"Fact f2"}',
+        provider="mock", model="fake", usage=ProviderUsage(10, 5, 15),
+        finish_reason="stop",
+    )
+    prompt = SimpleNamespace(
+        family="test", version=1, definition_hash="definition", instance_hash="instance",
+    )
+    issue = ValidationIssue(
+        "response.shared_fact_id", "must be a bare fact identifier", "Fact f2",
+    )
+    kwargs = dict(
+        round_index=1, game_id="relational", request=request, prompt=prompt,
+        response=response, attempt=1, valid=False, validation_error=str(issue),
+        validation_issues=(issue,),
+    )
+
+    recorder.record_attempt(**kwargs)
+    recorder.record_attempt(**kwargs)
+
+    rows = [json.loads(line) for line in (
+        tmp_path / "runtime" / "malformed_responses.jsonl"
+    ).read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["received_value"] == "Fact f2"
+    assert rows[0]["received_type"] == "str"
+    assert "private" not in json.dumps(rows)
+    assert rows[1] == {
+        "row_cap": 1, "run_id": "diagnostic", "schema_version": 1,
+        "timestamp": rows[1]["timestamp"], "truncated": True,
+    }

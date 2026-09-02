@@ -785,6 +785,10 @@ class _RoundTickingObserver:
         self.prompt_cell_dir = prompt_cell_dir
         self.prompt_episode_id = prompt_episode_id or episode_label
         self._logged_rounds: set[int] = set()
+        # Compact runs stream every canonical micro/round row immediately.
+        # Keeping the rich game result as well duplicates prompts, responses,
+        # transitions, and each progressively growing state history in RAM.
+        self.retain_result_history = not recorder.retention_policy.compact_scientific
 
     def event(self, event_type: str, **payload: Any) -> None:
         self.recorder.event(event_type, **payload)
@@ -1433,7 +1437,9 @@ async def _execute_episode(
             budget_status=guard.checkpoint_state(),
             termination_reason=result.termination_reason,
         )
-        return len(result.interactions), result.termination_reason
+        return int(
+            getattr(result, "logical_decisions", len(result.interactions))
+        ), result.termination_reason
 
     result = await run_game(game, episode_config, guarded_provider)
     progress.round_tick(episode_label, None, count=len(result.interactions))
@@ -2311,6 +2317,7 @@ async def run_experiment_grid(
     resume: bool = True,
     show_progress: bool = True,
     explicit_override: bool | None = None,
+    episode_plan: Mapping[str, Mapping[int, int]] | None = None,
 ) -> GridResult:
     """Run every cell's episodes under one combined concurrency and budget pool.
 
@@ -2322,6 +2329,31 @@ async def run_experiment_grid(
     """
 
     cells = grid.cells
+    cells_by_id = {cell.cell_id: cell for cell in cells}
+    if episode_plan is not None:
+        unknown_cells = sorted(set(episode_plan) - set(cells_by_id))
+        if unknown_cells:
+            raise ValueError(
+                "episode plan contains unknown cell(s): " + ", ".join(unknown_cells)
+            )
+        normalized_episode_plan: dict[str, dict[int, int]] = {}
+        for cell_id, planned in episode_plan.items():
+            normalized: dict[int, int] = {}
+            for raw_index, raw_seed in planned.items():
+                index = int(raw_index)
+                seed = int(raw_seed)
+                if index < 0 or index >= cells_by_id[cell_id].config.execution.repetitions:
+                    raise ValueError(
+                        f"episode plan repetition {index} is outside the target range "
+                        f"for {cell_id}"
+                    )
+                normalized[index] = seed
+            if not normalized:
+                raise ValueError(f"episode plan for {cell_id} is empty")
+            normalized_episode_plan[cell_id] = normalized
+        cells = tuple(cell for cell in cells if cell.cell_id in normalized_episode_plan)
+    else:
+        normalized_episode_plan = {}
     validate_configured_analysis(grid.base)
     for cell in cells:
         if cell.config.execution.repetitions < 1:
@@ -2421,9 +2453,14 @@ async def run_experiment_grid(
         _write(cell_dir / "overrides.json", _json(cell.to_dict()))
         episodes_dir = cell_dir / "data" / "episodes"
         plan = game.call_plan(cell.config.game)
-        total_rounds += _steps_per_episode(plan) * cell.config.execution.repetitions
-        for index in range(cell.config.execution.repetitions):
-            episode_seed = int(cell_seed.derive(f"episode:{index}"))
+        planned_episodes = normalized_episode_plan.get(cell.cell_id)
+        if planned_episodes is None:
+            planned_episodes = {
+                index: int(cell_seed.derive(f"episode:{index}"))
+                for index in range(cell.config.execution.repetitions)
+            }
+        total_rounds += _steps_per_episode(plan) * len(planned_episodes)
+        for index, episode_seed in sorted(planned_episodes.items()):
             episode_id = f"{cell.cell_id}-{index:04d}"
             all_tasks.append(
                 _EpisodeTask(
@@ -2478,7 +2515,9 @@ async def run_experiment_grid(
         cells={
             cell.cell_id: CellLayout(
                 coordinates=tuple(cell.overrides.get(path) for path, _ in axes),
-                episodes=cell.config.execution.repetitions,
+                episodes=len(normalized_episode_plan.get(cell.cell_id, {}))
+                if episode_plan is not None
+                else cell.config.execution.repetitions,
             )
             for cell in cells
         },
@@ -2494,7 +2533,14 @@ async def run_experiment_grid(
         seed=base.execution.seed,
     )
     completion = _CellCompletion(
-        {cell.cell_id: cell.config.execution.repetitions for cell in cells}
+        {
+            cell.cell_id: (
+                len(normalized_episode_plan[cell.cell_id])
+                if episode_plan is not None
+                else cell.config.execution.repetitions
+            )
+            for cell in cells
+        }
     )
     prompt_options = dict(base.logging.options.get("prompt_examples", {}) or {})
     prompt_sampler = (

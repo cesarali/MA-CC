@@ -1,0 +1,69 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "dataset_seed": 20260901,
+  "num_tasks": 20,
+  "population_size": 24,
+  "evidence_redundancy": 4,
+  "min_score_margin": 2,
+  "source": {
+    "path": "/home/cesarali/LanguageGames/MA-CC/external/MuSR/datasets/team_allocation.json",
+    "sha256": "f25653d60abf4e93ecf368e1a83be321cb400df41e43fe7fadc76b023c4b56c1",
+    "project": "MuSR Team Allocation",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5",
+    "code_license": "MIT"
+  },
+  "task_hashes": {
+    "task_0001.json": "9a88f21c8cf7c82aceb07116bc12a395f738197c1d71c31e5626e0fac7a5f5de",
+    "task_0002.json": "0fde3b4fb085615fb773d908bfdc7c48c5907bff43f15a882171e2bffc8b128e",
+    "task_0003.json": "ba232891b4a34da5a47c1298903ceae3a14cfa267693f380d3c3b95883be1441",
+    "task_0004.json": "413d077fb20fcc3ecfacc4bd734d7efb8e5db2e8c59ef6a7997cd308877551c8",
+    "task_0005.json": "17595800815b803449d796d43fbdff32d7f28c5138c20cb85026918069e54679",
+    "task_0006.json": "8e6f6fc6628f9d27ab95e854d32d469e9b229708276bfacb1554241836a9f41f",
+    "task_0007.json": "70d088c63ba889868d58fcf3ebbb03e4f006cf3e6df3a3284d3f6e7a34690435",
+    "task_0008.json": "be6c239c44eb0005448763ee367f76be395a6fbddd994bc6ef82d91da6c57808",
+    "task_0009.json": "2b8e0c869ea8097422a40de632b054c6537d8e0f8daa06da6a745df567ce8939",
+    "task_0010.json": "b3983605bd58ec0545eb342ec111bde3bdd82edaa347fdcecc8b9e8bfca8503a",
+    "task_0011.json": "1edca45ea1357ca77386292c6b9a73150af00f8ce23cb171b8ba7cfa7d0aa88c",
+    "task_0012.json": "7b2a1119a1155bf31ebc9682b09f766376042b20b0bc659b7f1498a0e96a3d17",
+    "task_0013.json": "8df1a22bd8915bf99d24f436f06687d9b60988913bb14d669a21e158b268781d",
+    "task_0014.json": "33dd747bf8dcd499a0a114e689c3873a5803167a2038f8ce8754752cef960d75",
+    "task_0015.json": "cd1d5a21715b7aa9a6eb137a07796574d11a39594457d02234da8eae166d3e79",
+    "task_0016.json": "5fe5ddd76bdacacca025820f52a482eb064e700a8d521b99e06a6b534c98e415",
+    "task_0017.json": "b8f769973818dbde26786014d75befadeadcf7dc218ae7443c2bf2c1faab8e97",
+    "task_0018.json": "e20fbbd2b082795926d3eee880d8285780a261e49f882c0e555dd99c29f989bd",
+    "task_0019.json": "5e90f675bb2f444905f6fcd9ef5110a14d940c23687ff58de20c86bab2a3cc93",
+    "task_0020.json": "2949d3cec929b2407d9016709a22a330261c3804f8f2c51dd71bdcd835f0b48b"
+  },
+  "skipped_examples": [
+    {
+      "source_example_index": 190,
+      "reason": "score margin 1 < required 2"
+    },
+    {
+      "source_example_index": 237,
+      "reason": "score margin 1 < required 2"
+    },
+    {
+      "source_example_index": 132,
+      "reason": "Stored MuSR gold index 2 is not the unique exact winner; scores=[4, 4, 4]"
+    },
+    {
+      "source_example_index": 38,
+      "reason": "score margin 1 < required 2"
+    },
+    {
+      "source_example_index": 145,
+      "reason": "Adapter targets MuSR's 3-person / 2-task Team Allocation format"
+    },
+    {
+      "source_example_index": 91,
+      "reason": "score margin 1 < required 2"
+    },
+    {
+      "source_example_index": 147,
+      "reason": "score margin 1 < required 2"
+    }
+  ],
+  "dataset_fingerprint_sha256": "4950740c07ff0c5ebd8cb3ebdf97f83f9520242f9ca59c3578b09d9bb12a08ff"
+}

@@ -1,0 +1,158 @@
+# One engineering/inspection episode. Do not turn this file into a sweep.
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 1.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 2
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 5
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks
+    task_id: task_001
+    initial_information:
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_F9_N24.json
+      expected_file_sha256: a0bd717bcca2f67f73e4aa981f292f9974f541949bf4fd2843cec47e281de45f
+    dynamics_mode: reasoning
+    rounds: 5
+    social_group_size: 1
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+    epistemic_persistence: 0.50
+    vote_visibility: public
+    prompt_version: 2
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 6
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+    controller_actuation_mode: coordination_request
+    controller_timing: dawn_only
+
+execution:
+  seed: 20260902
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 20.0
+  max_cost_per_run: 20.0
+  max_provider_requests: 432
+  max_input_tokens: 4000000
+  max_output_tokens: 1800000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    detailed_prompt_audit:
+      enabled: true
+      log_every_n_rounds: 1
+      always_log_first_n_rounds: 1
+      max_logged_prompts_per_game: null
+      max_logged_prompts_per_run: null
+      always_log_provider_errors: true
+      always_log_invalid_responses: true
+
+storage:
+  output_dir: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_task001_pilot_01
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: true
+  estimators:
+    - blackboard_episode_inspection
+    - round_sensing_mi
+    - round_target_sensing_mi
+    - round_sensor_action_mi
+    - round_controller_action_entropy
+    - round_controller_action_entropy_given_population
+    - round_population_actuation_cmi
+    - round_target_actuation_cmi
+    - round_target_susceptibility
+    - round_target_signed_response_share
+    - round_target_signed_actuation
+    - round_target_information_fraction
+  options:
+    theoretical_reference: none
+  comet_export: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    sweep_experiment: false
+
+experiment:
+  name: musr-blackboard-task001-pilot-01
+  description: >-
+    One five-round engineering episode on accepted MuSR task_001 with 24 agents,
+    one canonical F9 evidence card per agent, simplified REQUEST/REPORT/NONE
+    messages, controller DIRECTIVEs, and a complete local inspection bundle.
+  tags: [musr, blackboard, task001, inspection, simplified-messages, gpt-oss-120b]
+  metadata:
+    task_id: task_001
+    population_size: 24
+    rounds: 5
+    social_group_size: 1
+    sensor_sample_size: 12
+    epistemic_persistence: 0.50
+    board_lifetime_rounds: 1
+    intervention_budget: 6
+    controller_timing: dawn_only
+    initial_latent_breadth: 1
+    evidence_profile: F9

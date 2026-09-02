@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0013",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 119,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Emma, Mark, Andrew) must be allocated between Baking and Packaging. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Emma",
+    "Mark",
+    "Andrew"
+  ],
+  "tasks": [
+    "Baking",
+    "Packaging"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Baking: Andrew, Packaging: Emma and Mark",
+      "assignment": {
+        "Baking": [
+          "Andrew"
+        ],
+        "Packaging": [
+          "Emma",
+          "Mark"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Baking: Mark, Packaging: Andrew and Emma",
+      "assignment": {
+        "Baking": [
+          "Mark"
+        ],
+        "Packaging": [
+          "Andrew",
+          "Emma"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Baking: Emma, Packaging: Andrew and Mark",
+      "assignment": {
+        "Baking": [
+          "Emma"
+        ],
+        "Packaging": [
+          "Andrew",
+          "Mark"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_2",
+  "correct_option_index": 2,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "The pastries Andrew used to make required complex techniques, but he only did simple tasks like adding toppings.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Andrew used to work at a bakery making pastries.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Andrew finds Emma's constant nagging stressful and distracting.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Emma often complains about Andrew's sloppy packaging methods.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Mark feels insulted and demotivated by Emma's sharp critical remarks.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Emma gets irritated when Mark frequently forgets to attach the labels on the packaging.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "The neighborhood bake sale Mark participated in was a disaster due to his terrible cakes.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Mark once mistook salt for sugar in a cake recipe.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "She manages to pack and inventory the jars efficiently despite it being a hobby.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Emma often lends a hand in the family business, which involves packing homemade jams.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Mark used to arrange and pack the family groceries every week.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Mark always ensures his personal belongings are perfectly neat and organized.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "She learned many recipes from her grandmother who was a professional baker.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Emma has been baking bread for her family meals for years.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Andrew and Mark successfully set up a charity food stall together last year.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Andrew and Mark are often seen hanging out during breaks.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Andrew was frequently praised for his neat, quick and efficient packaging skills.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Andrew used to work in the packaging department of a toy company.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e02_00",
+        "e04_01",
+        "e07_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e02_01",
+        "e05_00",
+        "e05_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e02_01",
+        "e03_00",
+        "e07_00"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e00_00",
+        "e05_01",
+        "e08_00"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e01_01",
+        "e02_01",
+        "e04_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e01_00",
+        "e03_00",
+        "e08_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e00_01",
+        "e03_01",
+        "e05_00"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e02_01",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e01_01",
+        "e04_00",
+        "e07_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e03_00",
+        "e04_00",
+        "e08_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e02_00",
+        "e06_00",
+        "e07_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e02_00",
+        "e04_01",
+        "e05_01"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e00_01",
+        "e04_01",
+        "e06_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e01_00",
+        "e05_00",
+        "e05_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e01_01",
+        "e04_00",
+        "e08_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_01",
+        "e06_00",
+        "e06_01"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e07_00",
+        "e07_01"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_00",
+        "e06_01",
+        "e08_00"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e00_00",
+        "e03_01",
+        "e08_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e02_00",
+        "e03_00",
+        "e05_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e01_00",
+        "e07_00",
+        "e07_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_01",
+        "e04_00",
+        "e08_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e01_00",
+        "e06_01",
+        "e08_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e00_01",
+        "e03_01",
+        "e06_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Andrew is okay at baking.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Andrew:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Emma and Andrew work badly together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Emma:Andrew",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Emma and Mark work badly together.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "coop:Emma:Mark",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Mark is bad at baking.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Mark:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Emma is okay at packaging.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Emma:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Mark is okay at packaging.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Mark:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Emma is okay at baking.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Emma:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Mark and Andrew work okay together.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "coop:Mark:Andrew",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Andrew is good at packaging.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Andrew:1",
+        "latent_value": 3,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Baking",
+      "Packaging"
+    ],
+    "people": [
+      "Emma",
+      "Mark",
+      "Andrew"
+    ],
+    "matrix": {
+      "Emma": {
+        "skills": [
+          2,
+          2
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Mark": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          0,
+          2
+        ]
+      },
+      "Andrew": {
+        "skills": [
+          2,
+          3
+        ],
+        "cooperation": [
+          1,
+          2,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Emma"
+      ],
+      [
+        "Andrew",
+        "Mark"
+      ]
+    ],
+    "choice_scores": [
+      7,
+      7,
+      9
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "d34d2a318a6b6cce93264c28505131723ccdf5d870471b2c09355f595ad8b550"
+}

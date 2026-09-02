@@ -77,11 +77,11 @@ pytestmark = pytest.mark.skipif(
 )
 
 NO_CONTROL = (
-    "configs/runs/relational_reasoning/"
+    "configs/runs/relational_reasoning/misselaneous/"
     "relational_imitation_round_feedback_no_control_smoke.yaml"
 )
 CONTROLLED = (
-    "configs/runs/relational_reasoning/"
+    "configs/runs/relational_reasoning/misselaneous/"
     "relational_imitation_round_feedback_controlled_smoke.yaml"
 )
 # The population state lives in the SEMANTIC alphabet; A/B/C are per-call
@@ -549,7 +549,6 @@ def test_the_contract_accepts_a_fenced_ballot_with_or_without_evidence():
         allowed_values=LETTERS,
         options={"fact_ids": ("f1", "f2"), "relations": ("NORTH",)},
     )
-
     fenced = '```json\n{"vote":"a","reason":"Chain points north.","shared_fact_id":"f1"}\n```'
     assert contract.validate(fenced).is_valid
     ballot = parse_relational_ballot(fenced, LETTERS)
@@ -563,6 +562,76 @@ def test_the_contract_accepts_a_fenced_ballot_with_or_without_evidence():
         ).shared_fact_id
         is None
     )
+
+
+@pytest.mark.parametrize("malformed", ("Fact f2", "f2."))
+def test_shared_fact_repair_guidance_is_strict_and_contract_scoped(malformed):
+    contract = RelationalBallotContract(
+        allowed_values=LETTERS,
+        options={"fact_ids": ("f2",), "relations": ("NORTH",)},
+    )
+    result = contract.validate(
+        json.dumps(
+            {
+                "vote": "A",
+                "reason": "ok",
+                "shared_fact_id": malformed,
+            }
+        )
+    )
+
+    assert not result.is_valid
+    assert result.issues[0].invalid_value == malformed
+    guidance = contract.repair_guidance(result.issues)
+    assert '"f2", "none"' in guidance
+    assert "complete JSON object" in guidance
+    assert "f1" not in guidance and "f3" not in guidance
+
+
+def test_malformed_ballot_is_corrected_inside_the_same_decision():
+    config = _config(rounds=1)
+    options = {**dict(config.game.options), "invalid_response_retries": 3}
+    config = replace(config, game=replace(config.game, options=options))
+    seen = []
+
+    def factory(request):
+        seen.append(request)
+        shared = "Fact f2" if len(seen) == 1 else "none"
+        return json.dumps({"vote": "A", "reason": "ok", "shared_fact_id": shared})
+
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            MockLLMProvider(config.llm_provider, response_factory=factory),
+        )
+    )
+
+    repaired = result.interactions[0].decisions[0]
+    assert repaired.validation_attempts == 2
+    assert seen[0].messages == repaired.compiled_prompt.messages
+    assert len(seen[1].messages) == len(seen[0].messages) + 1
+    assert seen[1].messages[-1].role.value == "user"
+    assert "Fact f2" not in seen[1].messages[-1].content
+    assert seen[0].seed != seen[1].seed
+    assert seen[0].metadata["validation_repair"] is False
+    assert seen[1].metadata["validation_repair"] is True
+    assert (
+        seen[0].metadata["effective_messages_hash"]
+        != seen[1].metadata["effective_messages_hash"]
+    )
+
+
+def test_three_corrections_exhaust_after_four_invalid_ballots():
+    config = _config(rounds=1)
+    options = {**dict(config.game.options), "invalid_response_retries": 3}
+    config = replace(config, game=replace(config.game, options=options))
+    ballots = _Ballots(share="f2.")
+
+    with pytest.raises(RelationalDecisionFailed, match="4 validation attempts"):
+        _run(config, ballots=ballots)
+
+    assert len(ballots.prompts) == 4
 
 
 # ---- evidence honesty (§18) --------------------------------------------
@@ -2821,7 +2890,9 @@ def test_the_overnight_configs_use_the_compact_profile_and_the_full_ones_do_not(
     from mas_cc.config import GridSpec, load_run_config_or_grid
 
     env = {"POTSDAM_API_KEY": "x", "BASE_POTSDAM_LLM_URL": "http://x"}
-    root = Path("configs/runs/relational_reasoning/population_study_01")
+    root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_01"
+    )
     arms = (
         "a_no_control",
         "b_social_control",

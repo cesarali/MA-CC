@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0012",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 7,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Jack, Emily, Oliver) must be allocated between Sports Trainer and Medical Assistance. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Jack",
+    "Emily",
+    "Oliver"
+  ],
+  "tasks": [
+    "Sports Trainer",
+    "Medical Assistance"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Sports Trainer: Emily, Medical Assistance: Jack and Oliver",
+      "assignment": {
+        "Sports Trainer": [
+          "Emily"
+        ],
+        "Medical Assistance": [
+          "Jack",
+          "Oliver"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Sports Trainer: Jack, Medical Assistance: Emily and Oliver",
+      "assignment": {
+        "Sports Trainer": [
+          "Jack"
+        ],
+        "Medical Assistance": [
+          "Emily",
+          "Oliver"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Sports Trainer: Oliver, Medical Assistance: Emily and Jack",
+      "assignment": {
+        "Sports Trainer": [
+          "Oliver"
+        ],
+        "Medical Assistance": [
+          "Emily",
+          "Jack"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "They had an argument over a soccer match which created a rift between them.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Emily always struggles to understand Jack's sarcastic sense of humor.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Emily occasionally reads medical journals in her leisure time.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "Emily took a few basic medical courses in college.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Oliver was the sports captain of his high school team.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Oliver actively engages in sports activities on the weekends.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Jack often gets squeamish at the sight of blood.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Jack failed his biology exam in high school.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Oliver finds Jack's coaching methods too traditional and outdated.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Jack gets easily irritated when Oliver depicts his old sports stories.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Oliver appreciates Emily's interest and knowledge in sports nutrition and often takes her advice.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Emily often helps Oliver with his diet plan, being a sports nutrition enthusiast.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Emily often holds successful sports workshops for budding athletes.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Emily was a professional basketball player before becoming a trainer.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Jack often studies different training methods and techniques, keeping himself updated.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Jack frequently spends his weekends training kids in the local soccer league.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Oliver has been a crucial help during minor sports injuries at the weekend games.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Oliver voluntarily partakes in first-aid courses every year.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e03_00",
+        "e05_00",
+        "e08_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e01_01",
+        "e05_01",
+        "e07_01"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e01_01",
+        "e03_01",
+        "e05_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e02_01",
+        "e04_00",
+        "e06_00"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e03_00",
+        "e05_01",
+        "e07_00"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e00_01",
+        "e02_00",
+        "e04_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e00_00",
+        "e01_00",
+        "e07_01"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e01_01",
+        "e02_00",
+        "e06_00"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e03_00",
+        "e04_01",
+        "e05_00"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e02_01",
+        "e05_00",
+        "e07_00"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e00_00",
+        "e06_01",
+        "e07_01"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e02_00",
+        "e05_00",
+        "e07_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e04_00",
+        "e06_01",
+        "e08_00"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e00_01",
+        "e01_01",
+        "e02_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e00_00",
+        "e00_01",
+        "e02_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e02_01",
+        "e06_01",
+        "e07_00"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e04_01",
+        "e05_01",
+        "e08_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e03_00",
+        "e04_00",
+        "e06_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e01_00",
+        "e07_01",
+        "e08_01"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e01_00",
+        "e04_00",
+        "e08_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e00_00",
+        "e00_01",
+        "e03_01"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e04_01",
+        "e06_00",
+        "e08_00"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e03_01",
+        "e06_00",
+        "e08_01"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e01_00",
+        "e03_01",
+        "e08_01"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Jack and Emily work badly together.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "coop:Jack:Emily",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Emily is okay at medical assistance.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "skill:Emily:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Oliver is okay at sports trainer.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Oliver:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Jack is bad at medical assistance.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Jack:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Jack and Oliver work badly together.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "coop:Jack:Oliver",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Emily and Oliver work well together.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "coop:Emily:Oliver",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Emily is good at sports trainer.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "skill:Emily:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Jack is okay at sports trainer.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Jack:0",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Oliver is okay at medical assistance.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "skill:Oliver:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Sports Trainer",
+      "Medical Assistance"
+    ],
+    "people": [
+      "Jack",
+      "Emily",
+      "Oliver"
+    ],
+    "matrix": {
+      "Jack": {
+        "skills": [
+          2,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Emily": {
+        "skills": [
+          3,
+          2
+        ],
+        "cooperation": [
+          1,
+          0,
+          3
+        ]
+      },
+      "Oliver": {
+        "skills": [
+          2,
+          2
+        ],
+        "cooperation": [
+          1,
+          3,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Jack"
+      ],
+      [
+        "Emily",
+        "Oliver"
+      ]
+    ],
+    "choice_scores": [
+      7,
+      9,
+      6
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "7027d8cc976c3461670dd5709abfca56589495a79a3d51fe3b51dca1e3ad65f0"
+}

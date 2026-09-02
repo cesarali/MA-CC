@@ -1,3 +1,24 @@
+# Incremental study extension
+
+An existing standardized study can be enlarged without rerunning valid
+episodes. A **lineage** is the permanent identity shared by the original study
+and all later enlargements.
+
+```bash
+mas-cc study index-existing --study-dir <existing-study-results> --dry-run
+mas-cc study index-existing --study-dir <existing-study-results>
+mas-cc study extend --study-dir <existing-study-results> --config-dir <target-configs> --dry-run
+mas-cc study extend --study-dir <existing-study-results> --config-dir <target-configs>
+mas-cc study aggregate --study-dir <existing-study-results>
+```
+
+The target config folder describes the complete desired design. The extension
+planner compares typed scientific cell keys and exact repetition indices. It
+writes per-cell episode plans and submits only missing work through the generic
+cell-array launcher. Grid order, filenames, output paths, and scheduler IDs do
+not define scientific identity. Conflicting duplicate episodes stop planning or
+strict aggregation instead of being overwritten.
+
 # LLM Naming Game benchmark
 
 This repository compares two different binary Naming Game dynamics with equal

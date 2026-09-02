@@ -1,0 +1,548 @@
+{
+  "schema_version": "distributed_musr_team_allocation_v1",
+  "task_id": "task_0007",
+  "task_family": "distributed_musr_team_allocation",
+  "source": {
+    "dataset": "MuSR Team Allocation",
+    "source_example_index": 233,
+    "paper": "MuSR: Testing the Limits of Chain-of-thought with Multistep Soft Reasoning",
+    "repository": "https://github.com/Zayne-sprague/MuSR",
+    "commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5"
+  },
+  "population_size": 24,
+  "question": "Given the story, how would you uniquely allocate each person to make sure both tasks are accomplished efficiently?",
+  "public_setup": "Three people (Emily, Alex, Michael) must be allocated between Writing and Editing. Use your private evidence and evidence shared by other agents to decide which allocation is most effective.",
+  "people": [
+    "Emily",
+    "Alex",
+    "Michael"
+  ],
+  "tasks": [
+    "Writing",
+    "Editing"
+  ],
+  "options": [
+    {
+      "id": "ALLOCATION_0",
+      "label": "Writing: Alex, Editing: Emily and Michael",
+      "assignment": {
+        "Writing": [
+          "Alex"
+        ],
+        "Editing": [
+          "Emily",
+          "Michael"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_1",
+      "label": "Writing: Emily, Editing: Alex and Michael",
+      "assignment": {
+        "Writing": [
+          "Emily"
+        ],
+        "Editing": [
+          "Alex",
+          "Michael"
+        ]
+      }
+    },
+    {
+      "id": "ALLOCATION_2",
+      "label": "Writing: Michael, Editing: Alex and Emily",
+      "assignment": {
+        "Writing": [
+          "Michael"
+        ],
+        "Editing": [
+          "Alex",
+          "Emily"
+        ]
+      }
+    }
+  ],
+  "correct_answer": "ALLOCATION_1",
+  "correct_option_index": 1,
+  "facts": [
+    {
+      "id": "e00_00",
+      "text": "Michael sometimes misses content-related errors in the narrative flow of the story.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e00_01",
+      "text": "Michael has caught multiple typographical errors in finished articles in the past.",
+      "root_claim_id": "c00",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_00",
+      "text": "Their arguments resulted in project delays.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e01_01",
+      "text": "In a past project, Alex and Michael constantly argued over small details.",
+      "root_claim_id": "c01",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_00",
+      "text": "Michael struggles to develop complex characters and plotlines.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e02_01",
+      "text": "Michael failed a creative writing course in college.",
+      "root_claim_id": "c02",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_00",
+      "text": "Alex failed to notice an erroneous chapter title repetition in the previous publication.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e03_01",
+      "text": "Alex often overlooks common punctuation mistakes in manuscripts.",
+      "root_claim_id": "c03",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_00",
+      "text": "Alex rarely reads books and struggles to form captivating narratives.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e04_01",
+      "text": "Alex had his short story submission rejected by multiple literary magazines.",
+      "root_claim_id": "c04",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_00",
+      "text": "Emily failed to spot key grammatical errors in a draft she was reviewing.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e05_01",
+      "text": "Emily has never completed an editing internship or formal training in editing.",
+      "root_claim_id": "c05",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_00",
+      "text": "Alex felt that Emily constantly challenged his decisions, leading to friction.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e06_01",
+      "text": "Emily feels Alex often dismisses her input without regarding its merits.",
+      "root_claim_id": "c06",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_00",
+      "text": "Emily often receives praise for her engaging and descriptive writing style.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e07_01",
+      "text": "Emily's novel won a local writing competition.",
+      "root_claim_id": "c07",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_00",
+      "text": "Michael is often dismissive of Emily's ideas, creating tension.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    },
+    {
+      "id": "e08_01",
+      "text": "Emily consistently complains about Michael's editing style.",
+      "root_claim_id": "c08",
+      "kind": "musr_explicit_leaf"
+    }
+  ],
+  "agents": {
+    "0": {
+      "fact_ids": [
+        "e02_01",
+        "e04_01",
+        "e05_01"
+      ]
+    },
+    "1": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e05_00"
+      ]
+    },
+    "2": {
+      "fact_ids": [
+        "e00_01",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "3": {
+      "fact_ids": [
+        "e00_01",
+        "e06_01",
+        "e08_01"
+      ]
+    },
+    "4": {
+      "fact_ids": [
+        "e01_00",
+        "e04_01",
+        "e08_01"
+      ]
+    },
+    "5": {
+      "fact_ids": [
+        "e04_01",
+        "e08_00",
+        "e08_01"
+      ]
+    },
+    "6": {
+      "fact_ids": [
+        "e02_00",
+        "e03_01",
+        "e07_00"
+      ]
+    },
+    "7": {
+      "fact_ids": [
+        "e02_00",
+        "e05_00",
+        "e07_01"
+      ]
+    },
+    "8": {
+      "fact_ids": [
+        "e02_00",
+        "e04_00",
+        "e04_01"
+      ]
+    },
+    "9": {
+      "fact_ids": [
+        "e05_00",
+        "e05_01",
+        "e07_01"
+      ]
+    },
+    "10": {
+      "fact_ids": [
+        "e03_00",
+        "e03_01",
+        "e07_00"
+      ]
+    },
+    "11": {
+      "fact_ids": [
+        "e00_01",
+        "e03_01",
+        "e06_00"
+      ]
+    },
+    "12": {
+      "fact_ids": [
+        "e01_01",
+        "e03_00",
+        "e07_01"
+      ]
+    },
+    "13": {
+      "fact_ids": [
+        "e01_01",
+        "e03_01",
+        "e05_01"
+      ]
+    },
+    "14": {
+      "fact_ids": [
+        "e06_00",
+        "e07_01",
+        "e08_00"
+      ]
+    },
+    "15": {
+      "fact_ids": [
+        "e00_00",
+        "e01_01",
+        "e03_00"
+      ]
+    },
+    "16": {
+      "fact_ids": [
+        "e00_00",
+        "e03_00",
+        "e05_00"
+      ]
+    },
+    "17": {
+      "fact_ids": [
+        "e00_00",
+        "e05_01",
+        "e06_01"
+      ]
+    },
+    "18": {
+      "fact_ids": [
+        "e01_00",
+        "e01_01",
+        "e04_00"
+      ]
+    },
+    "19": {
+      "fact_ids": [
+        "e00_01",
+        "e02_01",
+        "e06_00"
+      ]
+    },
+    "20": {
+      "fact_ids": [
+        "e01_00",
+        "e02_01",
+        "e07_00"
+      ]
+    },
+    "21": {
+      "fact_ids": [
+        "e01_00",
+        "e04_00",
+        "e06_01"
+      ]
+    },
+    "22": {
+      "fact_ids": [
+        "e02_01",
+        "e06_00",
+        "e08_00"
+      ]
+    },
+    "23": {
+      "fact_ids": [
+        "e00_00",
+        "e07_00",
+        "e08_00"
+      ]
+    }
+  },
+  "reasoning_structure": {
+    "root_claims": [
+      {
+        "id": "c00",
+        "text": "Michael is okay at editing.",
+        "evidence_ids": [
+          "e00_00",
+          "e00_01"
+        ],
+        "latent_key": "skill:Michael:1",
+        "latent_value": 2,
+        "render_to_agents": false
+      },
+      {
+        "id": "c01",
+        "text": "Alex and Michael work badly together.",
+        "evidence_ids": [
+          "e01_00",
+          "e01_01"
+        ],
+        "latent_key": "coop:Alex:Michael",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c02",
+        "text": "Michael is bad at writing.",
+        "evidence_ids": [
+          "e02_00",
+          "e02_01"
+        ],
+        "latent_key": "skill:Michael:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c03",
+        "text": "Alex is bad at editing.",
+        "evidence_ids": [
+          "e03_00",
+          "e03_01"
+        ],
+        "latent_key": "skill:Alex:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c04",
+        "text": "Alex is bad at writing.",
+        "evidence_ids": [
+          "e04_00",
+          "e04_01"
+        ],
+        "latent_key": "skill:Alex:0",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c05",
+        "text": "Emily is bad at editing.",
+        "evidence_ids": [
+          "e05_00",
+          "e05_01"
+        ],
+        "latent_key": "skill:Emily:1",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c06",
+        "text": "Emily and Alex work badly together.",
+        "evidence_ids": [
+          "e06_00",
+          "e06_01"
+        ],
+        "latent_key": "coop:Emily:Alex",
+        "latent_value": 1,
+        "render_to_agents": false
+      },
+      {
+        "id": "c07",
+        "text": "Emily is good at writing.",
+        "evidence_ids": [
+          "e07_00",
+          "e07_01"
+        ],
+        "latent_key": "skill:Emily:0",
+        "latent_value": 3,
+        "render_to_agents": false
+      },
+      {
+        "id": "c08",
+        "text": "Emily and Michael work badly together.",
+        "evidence_ids": [
+          "e08_00",
+          "e08_01"
+        ],
+        "latent_key": "coop:Emily:Michael",
+        "latent_value": 1,
+        "render_to_agents": false
+      }
+    ],
+    "all_evidence_ids": [
+      "e00_00",
+      "e00_01",
+      "e01_00",
+      "e01_01",
+      "e02_00",
+      "e02_01",
+      "e03_00",
+      "e03_01",
+      "e04_00",
+      "e04_01",
+      "e05_00",
+      "e05_01",
+      "e06_00",
+      "e06_01",
+      "e07_00",
+      "e07_01",
+      "e08_00",
+      "e08_01"
+    ],
+    "root_claim_count": 9,
+    "evidence_count": 18
+  },
+  "ground_truth": {
+    "tasks": [
+      "Writing",
+      "Editing"
+    ],
+    "people": [
+      "Emily",
+      "Alex",
+      "Michael"
+    ],
+    "matrix": {
+      "Emily": {
+        "skills": [
+          3,
+          1
+        ],
+        "cooperation": [
+          0,
+          1,
+          1
+        ]
+      },
+      "Alex": {
+        "skills": [
+          1,
+          1
+        ],
+        "cooperation": [
+          1,
+          0,
+          1
+        ]
+      },
+      "Michael": {
+        "skills": [
+          1,
+          2
+        ],
+        "cooperation": [
+          1,
+          1,
+          0
+        ]
+      }
+    },
+    "best_pair": [
+      [
+        "Emily"
+      ],
+      [
+        "Alex",
+        "Michael"
+      ]
+    ],
+    "choice_scores": [
+      5,
+      7,
+      4
+    ],
+    "score_margin": 2
+  },
+  "validation": {
+    "unique_exact_winner": true,
+    "gold_matches_exact_solver": true,
+    "min_required_margin": 2,
+    "score_margin": 2,
+    "population_union_contains_all_evidence": true,
+    "no_agent_can_certify_unique_choice": true,
+    "evidence_redundancy": 4,
+    "agent_evidence_min": 3,
+    "agent_evidence_max": 3,
+    "agent_evidence_mean": 3.0,
+    "mapped_root_claim_fraction": 1.0,
+    "no_single_agent_solution_semantics": "Conservative interval certificate over MuSR's hidden skill/cooperation scores; an empirical partial-information LLM sanity check is still required."
+  },
+  "fingerprint_sha256": "c35a106f4bb112e712dc70d3e252623b86e270060782b29307ed14fbf4bfb533"
+}

@@ -17,6 +17,7 @@ from .submission import SubmissionEntry
 
 EXECUTION_COLUMNS = (
     "array_index", "config_index", "config_path", "cell_index", "cell_id", "output_dir",
+    "extension_index", "cell_key", "episode_plan_path", "study_root",
 )
 
 
@@ -28,6 +29,10 @@ class ExecutionEntry:
     cell_index: int
     cell_id: str
     output_dir: str
+    extension_index: int = 0
+    cell_key: str = ""
+    episode_plan_path: str = ""
+    study_root: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,12 +147,21 @@ def write_execution_manifest(path: str | Path, entries: Sequence[ExecutionEntry]
 
 def read_execution_manifest(path: str | Path) -> tuple[ExecutionEntry, ...]:
     with Path(path).open(newline="", encoding="utf-8") as stream:
-        rows = list(csv.DictReader(stream))
+        reader = csv.DictReader(stream)
+        columns = tuple(reader.fieldnames or ())
+        legacy = EXECUTION_COLUMNS[:6]
+        if columns not in {legacy, EXECUTION_COLUMNS}:
+            raise ValueError(f"execution manifest has incompatible columns: {path}")
+        rows = list(reader)
     entries = tuple(
         ExecutionEntry(
             array_index=int(row["array_index"]), config_index=int(row["config_index"]),
             config_path=row["config_path"], cell_index=int(row["cell_index"]),
             cell_id=row["cell_id"], output_dir=row["output_dir"],
+            extension_index=int(row.get("extension_index") or 0),
+            cell_key=row.get("cell_key", ""),
+            episode_plan_path=row.get("episode_plan_path", ""),
+            study_root=row.get("study_root", ""),
         )
         for row in rows
     )

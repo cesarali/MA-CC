@@ -100,7 +100,7 @@ def relational_false_takeover_tables(
                 ),
                 "ground_truth": truth,
                 "controller_target": target,
-                "controller_target_is_truth": False,
+                "controller_target_is_truth": bool(allow_truth_target),
                 "initial_false_target_share": trajectory[0][1],
                 "final_false_target_share": trajectory[-1][1],
                 "initial_truth_share": truth_trajectory[0][1],
