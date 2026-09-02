@@ -34,14 +34,14 @@ def validate_study_execution_site(manifest_path: str | Path) -> None:
     """
 
     actual = os.environ.get(EXECUTION_SITE_ENV, "").strip()
-    if actual and actual not in {"potsdam", "nersc"}:
+    if actual and actual not in {"potsdam", "nersc", "amarel"}:
         raise ValueError(f"unsupported execution site: {actual!r}")
     study_root = Path(manifest_path).expanduser().resolve().parent
     preparation = _mapping_file(study_root / "preparation.json")
     expected = str(preparation.get("execution_site", "unspecified"))
     if expected == "unspecified" and not actual:
         return
-    if expected not in {"potsdam", "nersc"} or expected != actual:
+    if expected not in {"potsdam", "nersc", "amarel"} or expected != actual:
         raise ValueError(
             f"study was prepared for execution site {expected!r}, "
             f"not {actual or 'unset'!r}: {study_root}"

@@ -49,9 +49,29 @@ the QoS, reject non-interactive allocations, and place logs with results on
 `mas-cc study prepare` before running them with
 `scripts/nersc/run_study.sh`.
 
-Outside Potsdam and NERSC, use the existing environment and setup conventions
-of the local checkout. Do not require either cluster's environment name or
-absolute Conda path on a developer's local machine.
+## Rutgers Amarel batch scheduler
+
+Develop Amarel changes locally and use the `amarel` courier for every remote
+operation. Never SSH directly. Tell the operator to approve the Duo push before
+each call and batch remote inspection, setup, submission, and polling to avoid
+unnecessary approvals.
+
+Amarel uses `sbatch` with account `general`, partition `main`, QoS `normal`, and
+a hard 72-hour walltime. Use only the generic templates under
+`scripts/Amarel/SLURM/`. Results, logs, provider coordination, and all model or
+Comet caches belong under `/scratch/df630`, outside the repository and home.
+Check scratch space before staging. Build and run the named `MA-CC` Conda
+environment from `environment.yml`; do not use the base Python installations.
+
+Submit with `mas-cc study submit --execution-site amarel`, an explicit result
+root under `/scratch/df630/MA-CC-results`, and the matching
+`--require-results-under` guard. Long studies must rely on the existing episode
+checkpoints, a provider-safe array throttle, and resubmission of the same study
+root rather than exceeding the 72-hour cap.
+
+Outside Potsdam, NERSC, and Amarel, use the existing environment and setup
+conventions of the local checkout. Do not require any cluster's environment
+name or absolute Conda path on a developer's local machine.
 
 ## Read the architecture first
 
@@ -72,7 +92,8 @@ family is demonstrably closer to the requested scientific design.
   another launcher only when scheduler topology genuinely differs, and explain
   that difference. NERSC's interactive-only `salloc` topology is implemented
   once by the generic launchers under `scripts/nersc/`; never create a
-  study-specific NERSC launcher.
+  study-specific NERSC launcher. Amarel's batch topology is implemented once
+  under `scripts/Amarel/SLURM/`; never create a study-specific Amarel launcher.
 - Put hypotheses, fixed parameters, sweep axes, seeds, models, budgets,
   retention, and analysis requests in YAML—not shell scripts.
 - Group related configs in one study folder with `study.yaml` and, when needed,

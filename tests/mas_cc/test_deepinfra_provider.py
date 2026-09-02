@@ -104,6 +104,10 @@ def _completion(content: str = '{"status":"ready"}') -> _Response:
     )
 
 
+def _models(*model_ids: str) -> _Response:
+    return _Response({"data": [{"id": model_id} for model_id in model_ids]})
+
+
 def _embedded_json_object(content: str) -> dict:
     """Parse one object while tolerating a provider-added Markdown fence."""
 
@@ -118,7 +122,7 @@ def _embedded_json_object(content: str) -> dict:
 
 
 def test_deepinfra_uses_its_own_key_fixed_chat_route_and_json_default():
-    session = _Session(posts=[_completion()])
+    session = _Session(gets=[_models(MODEL)], posts=[_completion()])
     provider = create_llm_provider(
         LLMProviderConfig(type="deepinfra", model=MODEL, max_retries=0),
         environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
@@ -131,8 +135,9 @@ def test_deepinfra_uses_its_own_key_fixed_chat_route_and_json_default():
     assert response.provider == "deepinfra"
     assert response.model == MODEL
     assert _embedded_json_object(response.content) == {"status": "ready"}
-    # DeepInfra's model catalogue is not below its /v1/openai chat prefix.
-    assert session.get_calls == []
+    assert [call[0] for call in session.get_calls] == [
+        "https://api.deepinfra.com/v1/models"
+    ]
     assert [call[0] for call in session.post_calls] == [
         "https://api.deepinfra.com/v1/openai/chat/completions"
     ]
@@ -153,7 +158,7 @@ def test_deepinfra_uses_its_own_key_fixed_chat_route_and_json_default():
 
 
 def test_deepinfra_json_default_has_an_explicit_provider_opt_out():
-    session = _Session(posts=[_completion("ready")])
+    session = _Session(gets=[_models(MODEL)], posts=[_completion("ready")])
     provider = create_llm_provider(
         LLMProviderConfig(
             type="deepinfra",
@@ -172,7 +177,7 @@ def test_deepinfra_json_default_has_an_explicit_provider_opt_out():
 
 
 def test_deepinfra_e4b_has_a_provider_owned_json_object_exception():
-    session = _Session(posts=[_completion()])
+    session = _Session(gets=[_models(GEMMA_MODEL)], posts=[_completion()])
     provider = create_llm_provider(
         LLMProviderConfig(type="deepinfra", model=GEMMA_MODEL, max_retries=0),
         environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
@@ -241,7 +246,10 @@ def test_deepinfra_rejects_a_malformed_account_limit_response():
 
 
 def test_deepinfra_payment_required_is_normalized_and_not_retried():
-    session = _Session(posts=[_Response({"error": "balance required"}, status_code=402)])
+    session = _Session(
+        gets=[_models(GEMMA_MODEL)],
+        posts=[_Response({"error": "balance required"}, status_code=402)],
+    )
     provider = create_llm_provider(
         LLMProviderConfig(
             type="deepinfra",
@@ -260,6 +268,37 @@ def test_deepinfra_payment_required_is_normalized_and_not_retried():
     assert captured.value.status_code == 402
     assert captured.value.retryable is False
     assert len(session.post_calls) == 1
+
+
+def test_deepinfra_rejects_a_model_missing_from_the_live_catalogue():
+    session = _Session(gets=[_models("deepseek-ai/some-other-model")])
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=MODEL, max_retries=0),
+        environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        session=session,
+    )
+
+    with pytest.raises(ProviderError, match="is not listed") as captured:
+        asyncio.run(provider.complete(_request()))
+    provider.close()
+
+    assert captured.value.code == "model_unavailable"
+    assert session.post_calls == []
+
+
+def test_deepinfra_accepts_an_explicit_base_url_environment_setting():
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=MODEL),
+        environment={
+            "DEEPINFRA_API_KEY": "deepinfra-test-secret",
+            "DEEPINFRA_BASE_URL": "https://deepinfra.example/v1/openai/",
+        },
+        session=_Session(),
+    )
+
+    assert provider._base_url == "https://deepinfra.example/v1/openai"
+    assert provider._chat_url == "https://deepinfra.example/v1/openai/chat/completions"
+    provider.close()
 
 
 def test_deepinfra_does_not_fall_back_to_other_provider_keys_or_urls():

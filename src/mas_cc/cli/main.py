@@ -224,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     study_prepare.add_argument(
         "--execution-site",
-        choices=("nersc", "potsdam"),
+        choices=("amarel", "nersc", "potsdam"),
         help="stamp prepared artifacts for one scheduler adapter",
     )
     study_preflight = study_commands.add_parser(
@@ -249,7 +249,18 @@ def build_parser() -> argparse.ArgumentParser:
     study_submit.add_argument(
         "--job-script",
         type=Path,
-        help="config-array job script (default: scripts/Potsdam/SLURM/run_config_array.job)",
+        help="override the generic job script selected by --execution-site",
+    )
+    study_submit.add_argument(
+        "--execution-site",
+        choices=("amarel", "potsdam"),
+        default="potsdam",
+        help="scheduler adapter used for the one batch submission",
+    )
+    study_submit.add_argument(
+        "--require-results-under",
+        type=Path,
+        help="explicit site result boundary recorded in the prepared manifest",
     )
     study_aggregate = study_commands.add_parser(
         "aggregate",
@@ -785,6 +796,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.results_dir,
                 throttle=args.throttle,
                 job_script=args.job_script,
+                require_results_under=args.require_results_under,
+                execution_site=args.execution_site,
             )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

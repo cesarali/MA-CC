@@ -28,6 +28,8 @@ class DeepInfraProvider(OpenAICompatibleProvider):
     """Use DeepInfra with isolated routing, credentials, and JSON defaults."""
 
     _ACCOUNT_LIMITS_URL = "https://api.deepinfra.com/v1/me/rate_limit"
+    _DEFAULT_BASE_URL = "https://api.deepinfra.com/v1/openai"
+    _MODEL_LIST_URL = "https://api.deepinfra.com/v1/models"
 
     def __init__(
         self,
@@ -63,11 +65,14 @@ class DeepInfraProvider(OpenAICompatibleProvider):
             config,
             provider_name="deepinfra",
             default_credentials_env="DEEPINFRA_API_KEY",
-            fixed_base_url="https://api.deepinfra.com/v1/openai",
+            default_base_url_env="DEEPINFRA_BASE_URL",
+            fallback_base_url=self._DEFAULT_BASE_URL,
             # DeepInfra's OpenAI-compatible chat route is below /v1/openai,
             # while its model catalogue is exposed separately at /v1/models.
-            # Generic endpoint discovery would therefore probe the wrong URL.
-            discover_endpoint=False,
+            # The shared transport validates the exact configured model while
+            # retaining the separate fixed chat route.
+            validate_model=True,
+            model_list_url=self._MODEL_LIST_URL,
             environment=environment,
             session=session,
             request_coordinator=request_coordinator,

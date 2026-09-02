@@ -24,7 +24,10 @@ conda run -n MA-CC python -m pip install -e .
 Copy `.env.example` only when a repository-root `.env` is not already present.
 The real client reads `POTSDAM_API_KEY` and `BASE_POTSDAM_LLM_URL`, validates
 the requested model against the live `/models` endpoint, and never logs the
-key. The existing `.env` must not be committed.
+key. DeepInfra uses `DEEPINFRA_API_KEY`, optionally
+`DEEPINFRA_BASE_URL`, and validates the exact configured model against its live
+catalogue before sending a chat request. The existing `.env` must not be
+committed.
 
 ## Commands
 
@@ -34,6 +37,16 @@ array, then build the canonical cross-run analysis package after it finishes:
 ```bash
 mas-cc study submit --config-dir configs/runs/<study-folder>
 mas-cc study aggregate --study-dir results/<study-name>
+```
+
+On Rutgers Amarel, select the isolated site adapter and keep all outputs on
+scratch storage:
+
+```bash
+mas-cc study submit --execution-site amarel \
+  --config-dir configs/runs/<study-folder> \
+  --results-dir /scratch/df630/MA-CC-results/studies/<study-name> \
+  --require-results-under /scratch/df630/MA-CC-results
 ```
 
 An optional `study.yaml` fixes config order, study name, array throttle, and

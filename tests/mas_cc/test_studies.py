@@ -170,6 +170,88 @@ def test_real_batch_submission_is_disabled_on_nersc(tmp_path, monkeypatch):
     assert not any(tmp_path.iterdir())
 
 
+def test_amarel_config_array_submission_uses_site_policy_and_scratch_boundary(
+    tmp_path, monkeypatch
+):
+    _standalone_config(tmp_path / "config.yaml", name="amarel-config")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: amarel-config}\nconfigs: [config.yaml]\n", encoding="utf-8"
+    )
+    scratch = tmp_path / "scratch" / "MA-CC-results"
+    monkeypatch.setenv("AMAREL_RESULTS_ROOT", str(scratch))
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 9001\n", "")
+
+    result = submit_study(tmp_path, execution_site="amarel", run=fake_run)
+
+    assert result.study_dir == (scratch / "amarel-config").resolve()
+    assert calls[0][0] == "sbatch"
+    assert "--account=general" in calls[0]
+    assert "--partition=main" in calls[0]
+    assert "--qos=normal" in calls[0]
+    assert any(item.startswith("--chdir=") for item in calls[0])
+    assert any(item.startswith("--export=ALL,AMAREL_REPO_ROOT=") for item in calls[0])
+    assert any(
+        item.endswith("/scripts/Amarel/SLURM/run_config_array.job")
+        for item in calls[0]
+    )
+    preparation = json.loads((result.study_dir / "preparation.json").read_text())
+    manifest = json.loads((result.study_dir / "study_manifest.json").read_text())
+    assert preparation["execution_site"] == "amarel"
+    assert manifest["execution"]["require_results_under"] == str(scratch.resolve())
+
+
+def test_amarel_worker_site_stamp_is_accepted_and_other_sites_are_rejected(
+    tmp_path, monkeypatch
+):
+    manifest = tmp_path / "submission_manifest.csv"
+    manifest.write_text("", encoding="utf-8")
+    (tmp_path / "preparation.json").write_text(
+        json.dumps({"status": "prepared", "execution_site": "amarel"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MAS_CC_EXECUTION_SITE", "amarel")
+    validate_study_execution_site(manifest)
+    monkeypatch.setenv("MAS_CC_EXECUTION_SITE", "potsdam")
+    with pytest.raises(ValueError, match="prepared for execution site 'amarel'"):
+        validate_study_execution_site(manifest)
+
+
+def test_amarel_preserves_lexical_scratch_mount_paths(tmp_path, monkeypatch):
+    _standalone_config(tmp_path / "config.yaml", name="lexical-mount")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: lexical-mount}\nconfigs: [config.yaml]\n", encoding="utf-8"
+    )
+    physical = tmp_path / "physical"
+    physical.mkdir()
+    lexical = tmp_path / "scratch"
+    lexical.symlink_to(physical, target_is_directory=True)
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    result = prepare_study(
+        tmp_path,
+        lexical / "results" / "lexical-mount",
+        require_results_under=lexical / "results",
+        execution_site="amarel",
+    )
+
+    assert str(result.study_dir).startswith(str(lexical))
+    assert str(result.study_dir).startswith(str(physical)) is False
+
+
 def test_prepare_writes_manifests_without_contacting_slurm(tmp_path, monkeypatch):
     _standalone_config(tmp_path / "config.yaml", name="prepared")
     (tmp_path / "study.yaml").write_text(
@@ -301,6 +383,52 @@ def test_potsdam_study_launchers_pin_dedicated_conda_environment():
         assert f"readonly CONDA_EXE={expected_conda}" in script
         assert "run -n MA-CC --live-stream" in script
         assert "\npython -m mas_cc.studies." not in script
+
+
+def test_amarel_launchers_are_generic_site_isolated_and_use_scratch_caches():
+    launchers = (
+        Path("scripts/Amarel/SLURM/run_config_array.job"),
+        Path("scripts/Amarel/SLURM/run_study_cell_array.job"),
+    )
+    common = Path("scripts/Amarel/SLURM/_common.sh").read_text(encoding="utf-8")
+    assert "/scratch/df630" in common
+    assert "HF_HOME" in common
+    assert "COMET_CACHE_DIR" in common
+    assert "CONDA_ENVS_PATH" in common
+    assert "CONDA_PKGS_DIRS" in common
+    assert "df -Pk" in common
+    for launcher in launchers:
+        script = launcher.read_text(encoding="utf-8")
+        assert "MAS_CC_EXECUTION_SITE=amarel" in script
+        assert 'PYTHONPATH="${AMAREL_REPO_ROOT}/src' in script
+        assert "#SBATCH --account=general" in script
+        assert "#SBATCH --partition=main" in script
+        assert "#SBATCH --qos=normal" in script
+        assert "${AMAREL_REPO_ROOT}/scripts/Amarel/SLURM/_common.sh" in script
+        assert "scripts/nersc" not in script
+        assert "/work/ojedamarin" not in script
+
+
+def test_amarel_deepinfra_smoke_is_one_tiny_cell_and_uses_the_shared_planner():
+    root = Path("configs/runs/smoke/amarel_deepinfra")
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, "/tmp/amarel-smoke", git_commit="test")
+    shards = build_cell_execution_entries(spec, submissions)
+    plan = plan_cell_execution(spec, len(shards))
+    source = load_run_config_or_grid(spec.configs[0], environment={})
+
+    assert isinstance(source, GridSpec)
+    assert len(source.cells) == 1
+    assert submissions[0].expected_episode_count == 1
+    assert source.base.game.population_size == 2
+    assert source.base.game.horizon == 2
+    assert source.base.llm_provider.type == "deepinfra"
+    assert source.base.llm_provider.model == "deepseek-ai/DeepSeek-V4-Flash-0731"
+    assert len(shards) == 1
+    assert plan.array_throttle == 1
+    assert plan.cpus_per_task == 1
+    assert plan.memory == "2G"
+    assert plan.time_limit == "00:10:00"
 
 
 def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
@@ -604,6 +732,84 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
         for argument in calls[0]
     )
     assert any(argument.startswith("--array=0-1%") for argument in calls[0])
+
+
+def test_amarel_auto_submission_uses_generic_cell_launcher_and_ignores_source_site(
+    tmp_path, monkeypatch
+):
+    source = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+    )
+    config = tmp_path / "grid.yaml"
+    config.write_text(
+        yaml.safe_dump(source.base.to_dict(), sort_keys=False)
+        + "grid:\n  control.options.intervention_budget: [8, 16]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: amarel-auto}\nconfigs: [grid.yaml]\n"
+        "execution:\n  mode: auto\n  target_rpm: 900\n"
+        "  assumed_latency_seconds: 10\n  max_active_nodes: 2\n"
+        "  cpus_per_task: 8\n  memory: 8G\n  time_limit: '04:00:00'\n"
+        "  partition: all\n  qos: potsdam-only\n",
+        encoding="utf-8",
+    )
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("AMAREL_RESULTS_ROOT", str(scratch))
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 9002\n", "")
+
+    result = submit_study(tmp_path, execution_site="amarel", run=fake_run)
+
+    assert "--account=general" in calls[0]
+    assert "--partition=main" in calls[0]
+    assert "--qos=normal" in calls[0]
+    assert any(item.startswith("--chdir=") for item in calls[0])
+    assert any(item.startswith("--export=ALL,AMAREL_REPO_ROOT=") for item in calls[0])
+    assert "--partition=all" not in calls[0]
+    assert "--qos=potsdam-only" not in calls[0]
+    assert any(
+        item.endswith("/scripts/Amarel/SLURM/run_study_cell_array.job")
+        for item in calls[0]
+    )
+    assert result.execution_plan["shard_count"] == 2
+
+
+def test_amarel_rejects_a_cell_plan_above_the_72_hour_hard_limit(
+    tmp_path, monkeypatch
+):
+    source = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+    )
+    (tmp_path / "grid.yaml").write_text(
+        yaml.safe_dump(source.base.to_dict(), sort_keys=False)
+        + "grid:\n  control.options.intervention_budget: [8]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: too-long}\nconfigs: [grid.yaml]\n"
+        "execution: {mode: auto, time_limit: '3-00:00:01'}\n",
+        encoding="utf-8",
+    )
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("AMAREL_RESULTS_ROOT", str(scratch))
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    with pytest.raises(ValueError, match="cannot exceed 3-00:00:00"):
+        prepare_study(tmp_path, execution_site="amarel")
 
 
 def test_required_results_root_rejects_home_repository_destination(tmp_path):

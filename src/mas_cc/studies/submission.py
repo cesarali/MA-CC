@@ -33,6 +33,12 @@ SUBMISSION_COLUMNS = (
     "git_commit",
 )
 
+AMAREL_ACCOUNT = "general"
+AMAREL_PARTITION = "main"
+AMAREL_QOS = "normal"
+AMAREL_MAX_WALLTIME_SECONDS = 72 * 60 * 60
+AMAREL_RESULTS_ROOT = "/scratch/df630/MA-CC-results"
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -51,6 +57,38 @@ def _file_hash(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _slurm_walltime_seconds(value: str) -> int:
+    """Parse SLURM's ``[days-]hours:minutes:seconds`` walltime form."""
+
+    match = re.fullmatch(r"(?:(\d+)-)?(\d+):(\d{2}):(\d{2})", value)
+    if match is None:
+        raise ValueError(f"invalid SLURM time limit: {value!r}")
+    days, hours, minutes, seconds = (int(item or 0) for item in match.groups())
+    if minutes >= 60 or seconds >= 60:
+        raise ValueError(f"invalid SLURM time limit: {value!r}")
+    return ((days * 24 + hours) * 60 + minutes) * 60 + seconds
+
+
+def _default_job_script(execution_site: str, *, cell_array: bool) -> Path:
+    filename = "run_study_cell_array.job" if cell_array else "run_config_array.job"
+    root = "scripts/Amarel/SLURM" if execution_site == "amarel" else "scripts/Potsdam/SLURM"
+    return Path(root) / filename
+
+
+def _absolute_path(path: str | Path, *, preserve_symlinks: bool = False) -> Path:
+    """Return an absolute path, optionally retaining a site's lexical mount."""
+
+    expanded = Path(path).expanduser()
+    if preserve_symlinks:
+        if expanded.is_absolute():
+            return Path(os.path.abspath(str(expanded)))
+        logical_cwd = Path(os.environ.get("PWD", os.getcwd()))
+        candidate = logical_cwd / expanded
+        if candidate.exists():
+            return Path(os.path.normpath(str(candidate)))
+    return expanded.resolve()
 
 
 def _git_commit(root: Path) -> str:
@@ -244,30 +282,45 @@ def prepare_study(
 
     from mas_cc.cli.experiment import run_experiment_preflight
 
-    if execution_site not in {"unspecified", "potsdam", "nersc"}:
-        raise ValueError("execution_site must be 'unspecified', 'potsdam', or 'nersc'")
+    if execution_site not in {"unspecified", "potsdam", "nersc", "amarel"}:
+        raise ValueError(
+            "execution_site must be 'unspecified', 'potsdam', 'nersc', or 'amarel'"
+        )
     spec = discover_study(config_dir)
     from .preflight import validate_study_preflight_contract
 
     validate_study_preflight_contract(spec)
     configured_results = spec.execution.get("results_root")
-    study_dir = Path(
-        results_dir or configured_results or (Path("results") / spec.name)
-    ).expanduser().resolve()
+    amarel_results_root = _absolute_path(
+        os.environ.get("AMAREL_RESULTS_ROOT", AMAREL_RESULTS_ROOT),
+        preserve_symlinks=execution_site == "amarel",
+    )
+    if execution_site == "amarel" and results_dir is None:
+        configured_results = amarel_results_root / spec.name
+    study_dir = _absolute_path(
+        results_dir or configured_results or (Path("results") / spec.name),
+        preserve_symlinks=execution_site == "amarel",
+    )
     required_results_under = (
         require_results_under
         if require_results_under is not None
-        else spec.execution.get("require_results_under")
+        else (
+            amarel_results_root
+            if execution_site == "amarel"
+            else spec.execution.get("require_results_under")
+        )
     )
     if required_results_under is not None:
-        required_root = Path(str(required_results_under)).expanduser().resolve()
+        required_root = _absolute_path(
+            str(required_results_under), preserve_symlinks=execution_site == "amarel"
+        )
         try:
             study_dir.relative_to(required_root)
         except ValueError as exc:
             raise ValueError(
                 f"study results must be stored under {required_root}, got {study_dir}"
             ) from exc
-        if require_results_under is not None:
+        if require_results_under is not None or execution_site == "amarel":
             spec = replace(
                 spec,
                 execution={
@@ -350,14 +403,32 @@ def prepare_study(
             json.dumps(execution_plan, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        script = Path(
-            job_script or "scripts/Potsdam/SLURM/run_study_cell_array.job"
-        ).resolve()
+        script = _absolute_path(
+            job_script or _default_job_script(execution_site, cell_array=True),
+            preserve_symlinks=execution_site == "amarel",
+        )
         array = f"0-{len(shards) - 1}%{plan.array_throttle}"
+        if execution_site == "amarel":
+            if _slurm_walltime_seconds(plan.time_limit) > AMAREL_MAX_WALLTIME_SECONDS:
+                raise ValueError(
+                    "Amarel time limit cannot exceed 3-00:00:00; use episode "
+                    "checkpoints and a throttled/resubmitted array"
+                )
+            scheduler_options = (
+                f"--account={AMAREL_ACCOUNT}",
+                f"--partition={AMAREL_PARTITION}",
+                f"--qos={AMAREL_QOS}",
+                f"--chdir={script.parents[3]}",
+                f"--export=ALL,AMAREL_REPO_ROOT={script.parents[3]}",
+            )
+        else:
+            scheduler_options = (
+                f"--partition={plan.partition}",
+                f"--qos={plan.qos}",
+            )
         command = (
             "sbatch",
-            f"--partition={plan.partition}",
-            f"--qos={plan.qos}",
+            *scheduler_options,
             "--nodes=1",
             "--ntasks=1",
             f"--array={array}",
@@ -370,16 +441,29 @@ def prepare_study(
             str(execution_manifest),
         )
     else:
-        script = Path(
-            job_script or "scripts/Potsdam/SLURM/run_config_array.job"
-        ).resolve()
+        script = _absolute_path(
+            job_script or _default_job_script(execution_site, cell_array=False),
+            preserve_symlinks=execution_site == "amarel",
+        )
         configured_throttle = spec.execution.get("throttle")
         limit = throttle if throttle is not None else configured_throttle
         if limit is not None and (isinstance(limit, bool) or int(limit) < 1):
             raise ValueError("SLURM array throttle must be a positive integer")
         array = f"0-{len(entries) - 1}" + ("" if limit is None else f"%{int(limit)}")
+        scheduler_options = (
+            (
+                f"--account={AMAREL_ACCOUNT}",
+                f"--partition={AMAREL_PARTITION}",
+                f"--qos={AMAREL_QOS}",
+                f"--chdir={script.parents[3]}",
+                f"--export=ALL,AMAREL_REPO_ROOT={script.parents[3]}",
+            )
+            if execution_site == "amarel"
+            else ()
+        )
         command = (
             "sbatch",
+            *scheduler_options,
             f"--array={array}",
             f"--output={stdout_pattern}",
             f"--error={stderr_pattern}",
@@ -417,10 +501,14 @@ def submit_study(
     *,
     throttle: int | None = None,
     job_script: str | Path | None = None,
+    require_results_under: str | Path | None = None,
+    execution_site: str = "potsdam",
     run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> SubmissionResult:
     """Prepare a study, then call ``sbatch`` exactly once."""
 
+    if execution_site not in {"potsdam", "amarel"}:
+        raise ValueError("batch study submission supports only 'potsdam' or 'amarel'")
     if run is None and os.environ.get("NERSC_HOST") == "perlmutter":
         raise ValueError(
             "batch study submission is disabled on NERSC Perlmutter; use "
@@ -432,7 +520,8 @@ def submit_study(
         results_dir,
         throttle=throttle,
         job_script=job_script,
-        execution_site="potsdam",
+        require_results_under=require_results_under,
+        execution_site=execution_site,
     )
     runner = subprocess.run if run is None else run
     command = prepared.command

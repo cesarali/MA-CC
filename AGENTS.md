@@ -1,5 +1,26 @@
 # Repository Agent Instructions
 
+## Rutgers Amarel environment
+
+Develop and inspect Amarel support locally. Reach Amarel only through the
+operator-provided `amarel` command; never SSH directly, configure a VPN, or
+operate the courier MacBook. Lead remote work with `amarel snapshot`, batch
+commands aggressively, and tell the operator to approve the Duo push before
+every call. Each courier call is high-latency and requires one phone approval.
+
+Amarel production work uses ordinary SLURM batch jobs on account `general`,
+partition `main`, and QoS `normal`. The hard walltime limit is 72 hours. Use the
+generic launchers under `scripts/Amarel/SLURM/`; never create a study-specific
+job. Build/use the named `MA-CC` Conda environment from `environment.yml`
+because the base Python installations are unsuitable.
+
+Put results, scheduler logs, Hugging Face/model caches, and Comet caches under
+`/scratch/df630`, never in the source checkout or home directory. Check free
+scratch space before staging because the filesystem is nearly full. Prepare or
+submit studies with `--execution-site amarel`; the generated workers retain the
+same scientific cells, episode seeds, resume behavior, and provider limits as
+other sites.
+
 ## NERSC Perlmutter Python environment
 
 This section applies when operating in this checkout on NERSC Perlmutter. The

@@ -138,7 +138,10 @@ class OpenAICompatibleProvider:
         default_credentials_env: str,
         fixed_base_url: str | None = None,
         default_base_url_env: str | None = None,
+        fallback_base_url: str | None = None,
         discover_endpoint: bool = False,
+        validate_model: bool = False,
+        model_list_url: str | None = None,
         environment: Mapping[str, str] | None = None,
         session: Any | None = None,
         request_coordinator: SharedProviderCoordinator | None = None,
@@ -156,7 +159,9 @@ class OpenAICompatibleProvider:
             )
         if fixed_base_url is None:
             base_env = config.base_url_env or default_base_url_env
-            base_url = environment.get(base_env or "", "").strip()
+            base_url = environment.get(base_env or "", "").strip() or (
+                fallback_base_url or ""
+            )
             if not base_url:
                 raise ProviderError(
                     f"{provider_name} base URL is not configured in {base_env}.",
@@ -188,6 +193,8 @@ class OpenAICompatibleProvider:
                 retryable=False,
             )
         self._discover_endpoint = discover_endpoint
+        self._validate_model = validate_model
+        self._model_list_url = model_list_url
         self._chat_url: str | None = (
             None if discover_endpoint else f"{self._base_url}/chat/completions"
         )
@@ -343,14 +350,14 @@ class OpenAICompatibleProvider:
         async with self._endpoint_lock:
             if self._available_models is not None:
                 return self._available_models
-            url = f"{self._base_url}/models"
+            url = self._model_list_url or f"{self._base_url}/models"
             try:
                 response = await self._coordinated_get(
                     url,
                     headers={"Authorization": f"Bearer {self._key}"},
                     timeout=self._timeout,
                 )
-                if response.status_code == 404:
+                if response.status_code == 404 and self._model_list_url is None:
                     response = await self._coordinated_get(
                         f"{self._base_url}/v1/models",
                         headers={"Authorization": f"Bearer {self._key}"},
@@ -372,7 +379,8 @@ class OpenAICompatibleProvider:
                 models = {
                     item.get("id") for item in entries if isinstance(item, Mapping)
                 }
-                self._chat_url = f"{prefix}/chat/completions"
+                if self._discover_endpoint:
+                    self._chat_url = f"{prefix}/chat/completions"
                 self._available_models = tuple(
                     sorted(item for item in models if isinstance(item, str) and item)
                 )
@@ -385,7 +393,7 @@ class OpenAICompatibleProvider:
                 ) from exc
 
     async def _ensure_endpoint(self) -> None:
-        if not self._discover_endpoint:
+        if not self._discover_endpoint and not self._validate_model:
             return
         models = await self.discover_models()
         if self.model not in models:
