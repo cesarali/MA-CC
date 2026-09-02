@@ -10,6 +10,12 @@ from .schemas import CandidateAllocation, LatentFact, LatentProblem, TaskSpec
 _LEVEL_WORDS = {1: "limited", 2: "moderate", 3: "strong"}
 _COOPERATION_WORDS = {1: "poorly", 2: "adequately", 3: "very well"}
 
+# This is the authoritative latent prior used by both world sampling and the
+# exact symbolic ambiguity analysis.  Keeping it explicit prevents the
+# completion enumerator from silently drifting away from generation.
+LATENT_VALUE_PRIOR = ((1, 1.0 / 3.0), (2, 1.0 / 3.0), (3, 1.0 / 3.0))
+LATENT_VALUE_SUPPORT = tuple(value for value, _ in LATENT_VALUE_PRIOR)
+
 _PEOPLE = (
     ("Alice", "Bruno", "Chandra"),
     ("Diego", "Elena", "Farah"),
@@ -62,19 +68,45 @@ def score_allocation(problem: LatentProblem, allocation: CandidateAllocation) ->
     return first + second + teamwork
 
 
-def _draw_problem(rng: random.Random) -> LatentProblem:
-    people = tuple(rng.choice(_PEOPLE))
-    tasks = tuple(rng.choice(_TASK_PAIRS))
-    skills = {person: (rng.randint(1, 3), rng.randint(1, 3)) for person in people}
-    cooperation = {
-        cooperation_key(people[i], people[j]): rng.randint(1, 3)
-        for i in range(3)
-        for j in range(i + 1, 3)
+def latent_values(problem: LatentProblem) -> tuple[int, ...]:
+    """Return the nine latent values in the stable ``latent_facts`` order."""
+
+    return tuple(fact.value for fact in latent_facts(problem))
+
+
+def problem_from_latent_values(
+    values: Sequence[int],
+    *,
+    people: Sequence[str] | None = None,
+    tasks: Sequence[TaskSpec] | None = None,
+) -> LatentProblem:
+    """Construct and exactly score a world from its canonical latent vector."""
+
+    if len(values) != 9:
+        raise ValueError("Team Allocation requires exactly nine latent values")
+    if any(value not in LATENT_VALUE_SUPPORT for value in values):
+        raise ValueError(
+            f"latent values must belong to {list(LATENT_VALUE_SUPPORT)}"
+        )
+    selected_people = tuple(people or _PEOPLE[0])
+    selected_tasks = tuple(tasks or _TASK_PAIRS[0])
+    if len(selected_people) != 3 or len(set(selected_people)) != 3:
+        raise ValueError("Team Allocation requires exactly three distinct people")
+    if len(selected_tasks) != 2:
+        raise ValueError("Team Allocation requires exactly two tasks")
+    skills = {
+        selected_people[index]: (int(values[2 * index]), int(values[2 * index + 1]))
+        for index in range(3)
     }
-    allocations = enumerate_allocations(people)
+    cooperation = {
+        cooperation_key(selected_people[0], selected_people[1]): int(values[6]),
+        cooperation_key(selected_people[0], selected_people[2]): int(values[7]),
+        cooperation_key(selected_people[1], selected_people[2]): int(values[8]),
+    }
+    allocations = enumerate_allocations(selected_people)
     temporary = LatentProblem(
-        people=people,  # type: ignore[arg-type]
-        tasks=tasks,  # type: ignore[arg-type]
+        people=selected_people,  # type: ignore[arg-type]
+        tasks=selected_tasks,  # type: ignore[arg-type]
         skill_matrix=skills,
         cooperation_matrix=cooperation,
         candidate_allocations=allocations,  # type: ignore[arg-type]
@@ -82,13 +114,11 @@ def _draw_problem(rng: random.Random) -> LatentProblem:
         gold_index=0,
         margin_to_second_best=0,
     )
-    scores = tuple(
-        score_allocation(temporary, allocation) for allocation in allocations
-    )
+    scores = tuple(score_allocation(temporary, item) for item in allocations)
     ranked = sorted(scores, reverse=True)
     return LatentProblem(
-        people=people,  # type: ignore[arg-type]
-        tasks=tasks,  # type: ignore[arg-type]
+        people=selected_people,  # type: ignore[arg-type]
+        tasks=selected_tasks,  # type: ignore[arg-type]
         skill_matrix=skills,
         cooperation_matrix=cooperation,
         candidate_allocations=allocations,  # type: ignore[arg-type]
@@ -96,6 +126,17 @@ def _draw_problem(rng: random.Random) -> LatentProblem:
         gold_index=scores.index(ranked[0]),
         margin_to_second_best=ranked[0] - ranked[1],
     )
+
+
+def _draw_problem(rng: random.Random) -> LatentProblem:
+    people = tuple(rng.choice(_PEOPLE))
+    tasks = tuple(rng.choice(_TASK_PAIRS))
+    values = rng.choices(
+        LATENT_VALUE_SUPPORT,
+        weights=tuple(weight for _, weight in LATENT_VALUE_PRIOR),
+        k=9,
+    )
+    return problem_from_latent_values(values, people=people, tasks=tasks)
 
 
 def generate_latent_problem(

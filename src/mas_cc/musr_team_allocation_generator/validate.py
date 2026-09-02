@@ -46,9 +46,11 @@ def _known_values(
     }
 
 
-def _candidate_coefficients(
+def candidate_score_terms(
     problem: LatentProblem, candidate_index: int
-) -> dict[str, int]:
+) -> frozenset[str]:
+    """The four latent values required to score one candidate allocation."""
+
     allocation = problem.candidate_allocations[candidate_index]
     person_indices = {person: index for index, person in enumerate(problem.people)}
     pair_indices = sorted(person_indices[person] for person in allocation.pair)
@@ -57,7 +59,13 @@ def _candidate_coefficients(
         *(f"skill_p{person_indices[person]}_t1" for person in allocation.pair),
         f"coop_p{pair_indices[0]}_p{pair_indices[1]}",
     ]
-    return {key: keys.count(key) for key in set(keys)}
+    return frozenset(keys)
+
+
+def _candidate_coefficients(
+    problem: LatentProblem, candidate_index: int
+) -> dict[str, int]:
+    return {key: 1 for key in candidate_score_terms(problem, candidate_index)}
 
 
 def _minimum_score_difference(

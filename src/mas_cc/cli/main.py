@@ -520,6 +520,11 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             help="artifact directory (default: storage.output_dir from the config)",
         )
+        sub.add_argument(
+            "--approve-preflight",
+            type=Path,
+            help="preflight_id.txt required by real-provider probes",
+        )
 
     inspect = commands.add_parser(
         "inspect", help="produce stable phase inspection artifacts"
@@ -1017,11 +1022,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{message}: {destination}")
         return 0 if ok else 1
     if args.command == "probe":
-        from .probe import run_controller_retention_probe
+        from .probe import run_configured_probe
 
         try:
-            ok, destination, message = run_controller_retention_probe(
-                args.config, args.output_dir, mode=args.probe_command
+            ok, destination, message = run_configured_probe(
+                args.config,
+                args.output_dir,
+                mode=args.probe_command,
+                approve_preflight=args.approve_preflight,
             )
         except (
             ConfigurationError,

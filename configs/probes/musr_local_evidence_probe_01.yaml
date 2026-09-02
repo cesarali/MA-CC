@@ -1,0 +1,39 @@
+probe: musr_local_evidence
+
+provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 4096
+  timeout_seconds: 180
+  max_retries: 0
+  request_concurrency: 4
+  options:
+    estimated_latency_seconds: 10.0
+
+task:
+  dataset_dir: results/studies/musr_team_allocation_validation_01/tasks
+  task_id: task_001
+  population_size: 12
+
+design:
+  seed: 20260901
+  agents: [1, 4, 3]
+  pair_repetitions: 10
+  doses: [0, 3, 6, 9, 12, 18, 27]
+  dose_repetitions: 3
+
+execution:
+  workers: 4
+
+storage:
+  output_dir: results/studies/musr_local_evidence_probe_01
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  max_cost: 5.0
+  max_requests: 150
+  max_input_tokens: 2000000
+  max_output_tokens: 600000

@@ -718,7 +718,7 @@ async def run_relational_imitation_round_feedback_game(
     validation_attempts = sum(
         decision.validation_attempts for decision in initial_decisions
     )
-    for round_index in range(rules.rounds):
+    for round_index in range(0 if rules.initialization_only else rules.rounds):
         if state.terminated:
             break
         options = tuple(state.possible_answers)

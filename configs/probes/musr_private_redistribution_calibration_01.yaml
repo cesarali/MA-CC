@@ -1,0 +1,41 @@
+probe: musr_private_redistribution
+
+provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 4096
+  timeout_seconds: 180
+  max_retries: 0
+  request_concurrency: 4
+  options:
+    estimated_latency_seconds: 10.0
+
+tasks:
+  dataset_dir: results/studies/musr_team_allocation_validation_01/tasks
+  ids: [task_001, task_002, task_003]
+  development: [task_001, task_002]
+  heldout: [task_003]
+  population_size: 12
+
+design:
+  prompt_variant: P2
+  full_profile: F9
+  private_repetitions: 3
+  endpoint_repetitions: 10
+  seed: 20260901
+
+execution:
+  workers: 4
+
+storage:
+  output_dir: results/studies/musr_private_redistribution_calibration_01
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  max_cost: 5.0
+  max_requests: 550
+  max_input_tokens: 6000000
+  max_output_tokens: 2200000

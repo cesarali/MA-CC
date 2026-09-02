@@ -1,0 +1,116 @@
+# Round-zero calibration: each MuSR agent votes once from private evidence only.
+# No social update, board sampling, or controller action occurs.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 4
+  temperature: 1.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 10.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 12
+  horizon: 1
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_team_allocation_validation_01/tasks
+    task_id: task_001
+    dynamics_mode: reasoning
+    rounds: 1
+    initialization_only: true
+    social_group_size: 1
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+    vote_visibility: public
+    prompt_version: 1
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: none
+
+execution:
+  seed: 20260901
+  repetitions: 3
+  parallelism: 3
+  fail_fast: true
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 5.0
+  max_cost_per_run: 5.0
+  max_provider_requests: 100
+  max_input_tokens: 500000
+  max_output_tokens: 200000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 12
+      scope: episode
+
+storage:
+  output_dir: results/studies/musr_blackboard_round_zero_01/runs
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: true
+  comet_export: []
+
+observability:
+  schema_version: 1
+  comet:
+    sweep_experiment: false
+
+experiment:
+  name: musr-blackboard-round-zero-gpt-oss
+  description: >-
+    Three initialization-only replicas on validated MuSR task_001. Each of 12
+    agents votes once from its private evidence with no social interaction.
+  tags: [musr, blackboard, round-zero, calibration, gpt-oss-120b]
+  metadata:
+    task_id: task_001
+    population_size: 12
+    initialization_only: true

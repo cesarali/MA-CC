@@ -33,6 +33,7 @@ from mas_cc.games.protocols import AgentState, GameState, Transition, _thaw
 from ..data import DEFAULT_TASK_DATASET_DIR
 from .prompts import (
     IMPLEMENTED_VOTE_VISIBILITIES,
+    LOCAL_PROMPT_VARIANTS,
     PROMPT_VERSION,
     VOTE_VISIBILITIES,
     resolve_receiver_epistemic_disposition,
@@ -502,6 +503,8 @@ class RelationalRules:
     receiver_epistemic_disposition: str
     stop_on_consensus: bool
     initialization_mode: str
+    initialization_only: bool
+    local_prompt_variant: str
     initial_votes: tuple[str, ...] | None
     initial_distribution: Mapping[str, float] | None
     invalid_response_retries: int
@@ -648,6 +651,23 @@ class RelationalRules:
             raise ValueError(
                 "initialization.mode 'explicit' requires initialization.initial_votes"
             )
+        initialization_only = options.get("initialization_only", False)
+        if not isinstance(initialization_only, bool):
+            raise ValueError("game.options.initialization_only must be a boolean")
+        if initialization_only and initialization_mode not in {
+            "local_vote",
+            "paired_local_vote",
+        }:
+            raise ValueError(
+                "game.options.initialization_only requires provider-generated "
+                "local_vote or paired_local_vote initialization"
+            )
+        local_prompt_variant = str(options.get("local_prompt_variant", "P0"))
+        if local_prompt_variant not in LOCAL_PROMPT_VARIANTS:
+            raise ValueError(
+                "game.options.local_prompt_variant must be one of "
+                f"{list(LOCAL_PROMPT_VARIANTS)}"
+            )
         distribution_raw = initialization.get("initial_distribution")
         distribution: Mapping[str, float] | None = None
         if distribution_raw is not None:
@@ -701,6 +721,8 @@ class RelationalRules:
             receiver_epistemic_disposition=prompt_class,
             stop_on_consensus=bool(options.get("stop_on_consensus", False)),
             initialization_mode=initialization_mode,
+            initialization_only=initialization_only,
+            local_prompt_variant=local_prompt_variant,
             initial_votes=initial_votes,
             initial_distribution=distribution,
             invalid_response_retries=int(retries),
