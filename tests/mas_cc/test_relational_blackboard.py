@@ -18,6 +18,8 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     DIRECT_RECOMMENDATION,
     RECOMMENDATION_ONLY,
     SCHEDULE_ALWAYS,
+    SCHEDULE_NEVER,
+    SCHEDULE_SOFT,
     RelationalRoundBudgetedControl,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
@@ -351,6 +353,62 @@ def test_coordination_request_posts_exact_budget_before_sampling():
     assert round_record["theory_status"] == "reference_only"
 
 
+@pytest.mark.parametrize(
+    ("schedule", "expected_u", "expected_probability", "expected_directives"),
+    [
+        (SCHEDULE_NEVER, 0, 0.0, 0),
+        (SCHEDULE_ALWAYS, 1, 1.0, 4),
+    ],
+)
+def test_controller_round_record_logs_y_u_and_directive_injection_times(
+    schedule, expected_u, expected_probability, expected_directives
+):
+    config = _config(q=1)
+    control = RelationalRoundBudgetedControl.from_options(
+        {
+            **dict(config.control.options),
+            "sensor_sample_size": 6,
+            "intervention_budget": 4,
+            "advocacy_schedule": schedule,
+            "message_mode": RECOMMENDATION_ONLY,
+            "controller_actuation_mode": COORDINATION_REQUEST,
+        }
+    )
+    result, _ = _run(config, control=control)
+    event = result.rounds[0].event
+
+    assert event["controller_sensor_Y"]["sample_size"] == 6
+    assert len(event["controller_sensor_Y"]["sampled_agent_ids"]) == 6
+    assert len(event["controller_sensor_Y"]["sampled_votes"]) == 6
+    assert event["controller_sampled_U"] == expected_u
+    assert event["controller_probability_U1_given_Y"] == expected_probability
+    assert (
+        len(event["controller_injection_within_round_indices"]) == expected_directives
+    )
+    assert (
+        len(event["controller_injection_global_update_indices"]) == expected_directives
+    )
+    assert event["directive_count"] == expected_directives
+    assert event["controller_posts"] == expected_directives
+
+
+def test_pilot_uses_existing_stochastic_soft_policy_and_exact_controller_parameters():
+    config = load_run_config(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "musr_blackboard_task001_5round_simplified_messages.yaml",
+        environment={},
+    )
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+
+    assert control.sensor_sample_size == 12
+    assert control.intervention_budget == 6
+    assert control.advocacy_schedule == SCHEDULE_SOFT
+    assert control.beta == 4.0
+    assert control.threshold == 0.5
+    assert control.target == "correct"
+    assert control.controller_actuation_mode == COORDINATION_REQUEST
+
+
 def test_board_shared_evidence_is_acquired_with_message_provenance():
     config = _config(q=1)
 
@@ -460,6 +518,13 @@ def test_pilot_artifact_builder_writes_complete_inspection_bundle(tmp_path):
             options={"response": response},
         ),
         execution=replace(config.execution, repetitions=1, parallelism=1),
+        control=replace(
+            config.control,
+            options={
+                **dict(config.control.options),
+                "advocacy_schedule": SCHEDULE_ALWAYS,
+            },
+        ),
         pricing=replace(
             config.pricing,
             mode="offline",
