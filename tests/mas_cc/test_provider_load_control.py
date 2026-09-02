@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import multiprocessing
+import os
 import time
+
 import pytest
 
 from mas_cc.llm_runtime.providers.load_control import (
@@ -64,6 +66,20 @@ def _contending_worker(root, active, observed_max):
     )
 
 
+def _die_while_holding_owner_lock(root, ready):
+    coordinator = SharedProviderCoordinator(
+        root,
+        _config(
+            lease_seconds=1,
+            heartbeat_seconds=0.2,
+            lock_stale_seconds=0.1,
+        ),
+    )
+    with coordinator._exclusive_lock():
+        ready.set()
+        os._exit(0)
+
+
 def test_shared_workers_use_one_leased_concurrency_limit(tmp_path):
     first = SharedProviderCoordinator(
         tmp_path, _config(), worker_id="worker-a", node_id="node-a"
@@ -108,6 +124,80 @@ def test_concurrent_processes_cannot_exceed_shared_limit(tmp_path):
         assert worker.exitcode == 0
     assert observed_max.value == 2
     assert SharedProviderCoordinator(tmp_path, _config()).snapshot()["leases"] == {}
+
+
+def test_process_death_inside_owner_lock_is_recovered(tmp_path):
+    context = multiprocessing.get_context("fork")
+    ready = context.Event()
+    worker = context.Process(
+        target=_die_while_holding_owner_lock,
+        args=(tmp_path, ready),
+    )
+    worker.start()
+    assert ready.wait(timeout=3)
+    worker.join(timeout=3)
+    assert worker.exitcode == 0
+
+    owner = tmp_path / "state.lock.owner"
+    assert owner.is_dir()
+    abandoned_time = time.time() - 5
+    os.utime(owner, (abandoned_time, abandoned_time))
+    marker = owner / "ticket"
+    os.utime(marker, (abandoned_time, abandoned_time))
+    for ticket in (tmp_path / "state.lock.queue").iterdir():
+        os.utime(ticket, (abandoned_time, abandoned_time))
+
+    coordinator = SharedProviderCoordinator(
+        tmp_path,
+        _config(
+            lease_seconds=1,
+            heartbeat_seconds=0.2,
+            lock_stale_seconds=0.1,
+        ),
+    )
+    lease = asyncio.run(coordinator.acquire(deadline=time.monotonic() + 3))
+    asyncio.run(
+        coordinator.release(
+            lease,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.01,
+        )
+    )
+    assert not owner.exists()
+
+
+def test_pending_acquisition_gate_never_blocks_lease_renewal(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path,
+        _config(
+            initial_concurrency=1,
+            maximum_concurrency=1,
+            lease_seconds=3,
+            heartbeat_seconds=1,
+        ),
+    )
+
+    async def exercise():
+        lease = await coordinator.acquire()
+        await coordinator._acquire_gate.acquire()
+        try:
+            assert await asyncio.wait_for(coordinator.renew(lease), timeout=1)
+            await asyncio.wait_for(
+                coordinator.release(
+                    lease,
+                    success=True,
+                    retryable=False,
+                    status_code=200,
+                    latency_seconds=0.01,
+                ),
+                timeout=1,
+            )
+        finally:
+            coordinator._acquire_gate.release()
+
+    asyncio.run(exercise())
 
 
 def test_local_pause_and_global_breaker_are_distinct(tmp_path):

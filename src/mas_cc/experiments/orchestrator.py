@@ -785,6 +785,10 @@ class _RoundTickingObserver:
         self.prompt_cell_dir = prompt_cell_dir
         self.prompt_episode_id = prompt_episode_id or episode_label
         self._logged_rounds: set[int] = set()
+        # Compact runs stream every canonical micro/round row immediately.
+        # Keeping the rich game result as well duplicates prompts, responses,
+        # transitions, and each progressively growing state history in RAM.
+        self.retain_result_history = not recorder.retention_policy.compact_scientific
 
     def event(self, event_type: str, **payload: Any) -> None:
         self.recorder.event(event_type, **payload)
@@ -1433,7 +1437,9 @@ async def _execute_episode(
             budget_status=guard.checkpoint_state(),
             termination_reason=result.termination_reason,
         )
-        return len(result.interactions), result.termination_reason
+        return int(
+            getattr(result, "logical_decisions", len(result.interactions))
+        ), result.termination_reason
 
     result = await run_game(game, episode_config, guarded_provider)
     progress.round_tick(episode_label, None, count=len(result.interactions))

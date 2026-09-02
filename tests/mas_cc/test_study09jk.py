@@ -157,16 +157,24 @@ def test_artifact_replay_pairs_full_state_and_sends_no_initialization_calls(tmp_
         calls += 1
         return '{"vote":"A","reason":"update","shared_fact_id":"none"}'
 
+    class _CompactObserver:
+        retain_result_history = False
+
     result = asyncio.run(
         run_relational_imitation_round_feedback_game(
             game,
             config,
             MockLLMProvider(config.llm_provider, response_factory=response),
             control=create_control(config.control),
+            observer=_CompactObserver(),
         )
     )
     assert result.initial_decisions == ()
     assert calls == 24  # one round of updates, not 24 extra local-vote calls
+    assert result.logical_decisions == 24
+    assert result.validation_attempts == 24
+    assert result.interactions == ()
+    assert len(result.rounds) == 1
     assert (
         physical_initial_state_projection(result.initial_state)
         == artifact["physical_initial_state"]

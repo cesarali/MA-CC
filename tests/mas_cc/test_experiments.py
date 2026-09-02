@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from mas_cc.config import RunConfig, load_run_config
+from mas_cc.cli.experiment import compute_preflight_id
 from mas_cc.experiments import run_experiment_sync
 from mas_cc.experiments.orchestrator import _LiveSpendWatcher
 from mas_cc.games import create_game
@@ -64,6 +65,31 @@ def test_static_experiment_preflight_multiplies_the_per_episode_estimate():
     assert estimate.total_input_tokens.expected == per_episode.input_tokens.expected * 5
     assert estimate.total_output_tokens.conservative == per_episode.output_tokens.conservative * 5
     assert estimate.launch_status == "permitted"
+
+
+def test_preflight_approval_ignores_live_retrieval_time_but_not_rate_changes():
+    config = _toy_config()
+    quote = OfflinePricingSource().fetch(
+        config.llm_provider.type, config.llm_provider.model
+    )
+    later = replace(
+        quote,
+        retrieved_at="2099-01-01T00:00:00Z",
+        fresh_until="2099-01-02T00:00:00Z",
+    )
+    assert compute_preflight_id(config, quote) == compute_preflight_id(config, later)
+    assert quote.pricing is not None
+    changed = replace(
+        later,
+        pricing=replace(
+            later.pricing,
+            ordinary_input_per_million=(
+                later.pricing.ordinary_input_per_million or 0
+            )
+            + 1,
+        ),
+    )
+    assert compute_preflight_id(config, quote) != compute_preflight_id(config, changed)
 
 
 def test_static_experiment_preflight_denies_when_total_demand_exceeds_a_run_budget():

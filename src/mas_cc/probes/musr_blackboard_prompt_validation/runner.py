@@ -372,7 +372,11 @@ async def run(
     )
     states = load_frozen_states(config, _tasks(config), states_path)
     calls = call_plan(config, states)
-    journal = root / "behavioral/smoke_raw_calls.jsonl"
+    journal = (
+        root / "behavioral/smoke_raw_calls.jsonl"
+        if config.mode == "smoke"
+        else root / "behavioral/full_raw_calls.jsonl"
+    )
     archived_rows = read(journal)
     attempts = sum(
         len(row.get("attempts") or ())

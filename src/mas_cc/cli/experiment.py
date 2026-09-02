@@ -16,7 +16,6 @@ from mas_cc.experiments import (
 from mas_cc.experiments.console import format_money
 from mas_cc.games import create_game
 from mas_cc.llm_runtime.providers import PricingQuote
-from mas_cc.observability import price_snapshot_hash
 from mas_cc.planning import (
     ExperimentPreflightEstimate,
     GridPreflightEstimate,
@@ -61,8 +60,34 @@ def compute_preflight_id(config: RunConfig, quote: PricingQuote) -> str:
     return canonical_hash(
         {
             "resolved_config_hash": canonical_hash(config.to_dict()),
-            "pricing_snapshot_hash": price_snapshot_hash(quote.to_dict()),
+            "pricing_snapshot_hash": _approval_pricing_hash(quote),
             "episode_count": config.execution.repetitions,
+        }
+    )
+
+
+def _approval_pricing_hash(quote: PricingQuote) -> str:
+    """Identify approved rates without binding to volatile retrieval metadata.
+
+    Live pricing is fetched once by ``preflight`` and again by ``run``.  Those
+    snapshots necessarily have different retrieval/freshness timestamps and
+    may have a different live account balance even when the model's approved
+    rates are identical.  Binding approval to those volatile fields made every
+    live preflight token unusable.  The runtime still performs its independent
+    freshness and immediate pricing-term checks before provider calls.
+    """
+
+    pricing_terms = None
+    if quote.pricing is not None:
+        pricing_terms = quote.pricing.to_dict()
+        for field in ("source", "retrieved_at", "version"):
+            pricing_terms.pop(field, None)
+    return canonical_hash(
+        {
+            "provider": quote.provider,
+            "model": quote.model,
+            "available": quote.available,
+            "pricing_terms": pricing_terms,
         }
     )
 
@@ -74,7 +99,7 @@ def compute_grid_preflight_id(grid: GridSpec, quote: PricingQuote) -> str:
         {
             "grid_id": grid.grid_id,
             "base_config_hash": canonical_hash(grid.base.to_dict()),
-            "pricing_snapshot_hash": price_snapshot_hash(quote.to_dict()),
+            "pricing_snapshot_hash": _approval_pricing_hash(quote),
             "cell_count": len(grid.cells),
         }
     )

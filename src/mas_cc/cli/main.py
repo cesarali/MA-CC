@@ -198,6 +198,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="also create a copy-friendly zip excluding :Zone.Identifier sidecars",
     )
 
+    blackboard = commands.add_parser(
+        "blackboard", help="inspect a relational blackboard run without modifying it"
+    )
+    blackboard_commands = blackboard.add_subparsers(
+        dest="blackboard_command", required=True
+    )
+    blackboard_dashboard = blackboard_commands.add_parser(
+        "dashboard", help="serve the interactive read-only blackboard dashboard"
+    )
+    blackboard_dashboard.add_argument("--run-dir", type=Path, required=True)
+    blackboard_dashboard.add_argument("--episode-id")
+    blackboard_dashboard.add_argument("--host", default="127.0.0.1")
+    blackboard_dashboard.add_argument("--port", type=int, default=8765)
+    blackboard_export = blackboard_commands.add_parser(
+        "export", help="write a portable completed-run dashboard"
+    )
+    blackboard_export.add_argument("--run-dir", type=Path, required=True)
+    blackboard_export.add_argument("--episode-id")
+    blackboard_export.add_argument("--output-dir", type=Path, required=True)
+
     study = commands.add_parser(
         "study", help="submit and aggregate a folder of ordinary experiment configs"
     )
@@ -726,6 +746,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if summary.get("archive"):
             print(f"  archive: {summary['archive']}")
+        return 0
+    if args.command == "blackboard" and args.blackboard_command == "dashboard":
+        from mas_cc.blackboard_dashboard import serve_dashboard
+
+        try:
+            serve_dashboard(
+                args.run_dir,
+                episode_id=args.episode_id,
+                host=args.host,
+                port=args.port,
+            )
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+    if args.command == "blackboard" and args.blackboard_command == "export":
+        from mas_cc.blackboard_dashboard import export_dashboard
+
+        try:
+            destination = export_dashboard(
+                args.run_dir, args.output_dir, episode_id=args.episode_id
+            )
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Interactive blackboard dashboard exported: {destination}")
         return 0
     if args.command == "study" and args.study_command == "preflight":
         from mas_cc.studies import run_study_preflight
