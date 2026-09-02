@@ -157,7 +157,7 @@ class RelationalTask:
     def to_dict(self) -> dict[str, Any]:
         """The task projection carried in ``GameState.data['task']``."""
 
-        return {
+        projection = {
             "task_id": self.task_id,
             "task_seed": self.seed,
             "schema_version": (
@@ -165,7 +165,6 @@ class RelationalTask:
                 if self.task_family == MUSR_TASK_FAMILY
                 else SCHEMA_VERSION
             ),
-            "task_family": self.task_family,
             "source_path": self.source_path,
             "question": self.question,
             "reasoning_depth": self.reasoning_depth,
@@ -179,7 +178,6 @@ class RelationalTask:
             "option_relations": dict(self.option_relations),
             "correct_option": self.correct_option,
             "correct_relation": self.correct_relation,
-            "answer_display_texts": dict(self.answer_display_texts or {}),
             "fact_order": list(self.fact_order),
             "facts": {key: value.to_dict() for key, value in self.facts.items()},
             "supporting_fact_ids": list(self.supporting_fact_ids),
@@ -188,11 +186,20 @@ class RelationalTask:
                 agent: list(ids) for agent, ids in self.agent_fact_ids.items()
             },
             "reasoning_chain": list(self.reasoning_chain),
-            "supporting_fact_groups": {
-                key: list(values)
-                for key, values in (self.supporting_fact_groups or {}).items()
-            },
         }
+        # MuSR adds these fields, but their empty defaults must not perturb the
+        # historical spatial projection: paired initialization artifacts use
+        # this exact projection as part of their frozen compatibility hash.
+        if self.task_family != "spatial_relational":
+            projection["task_family"] = self.task_family
+        if self.answer_display_texts:
+            projection["answer_display_texts"] = dict(self.answer_display_texts)
+        if self.supporting_fact_groups:
+            projection["supporting_fact_groups"] = {
+                key: list(values)
+                for key, values in self.supporting_fact_groups.items()
+            }
+        return projection
 
 
 # --------------------------------------------------------------------------
