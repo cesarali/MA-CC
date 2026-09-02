@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from mas_cc.llm_runtime.messages import MessageRole
@@ -87,6 +87,17 @@ BOARD_MESSAGE_TYPES = (
 )
 BOARD_REPLY_TYPES = ("REPLY", "CORRECTION")
 MAX_PUBLIC_MESSAGE_CHARACTERS = 1200
+
+LOCAL_PROMPT_P0 = "P0"
+LOCAL_PROMPT_P1 = "P1"
+LOCAL_PROMPT_P2 = "P2"
+LOCAL_PROMPT_P3 = "P3"
+LOCAL_PROMPT_VARIANTS = (
+    LOCAL_PROMPT_P0,
+    LOCAL_PROMPT_P1,
+    LOCAL_PROMPT_P2,
+    LOCAL_PROMPT_P3,
+)
 
 RECEIVER_EPISTEMIC_DISPOSITIONS = ("naive", "vigilant")
 # Deprecated import compatibility. New configuration must use the factorized
@@ -288,6 +299,23 @@ DECISION_INSTRUCTION = (
     "given to you.\n"
     "\n"
     "Keep your reason to at most three sentences."
+)
+
+ALLOCATION_DECISION_SCAFFOLD = (
+    "Evaluate each candidate allocation using the evidence available to you.\n"
+    "\n"
+    "For each allocation, consider:\n"
+    "1. the pipeline ability of the person assigned to the pipeline;\n"
+    "2. the interview ability of each person assigned to interviews;\n"
+    "3. the cooperation evidence for the two-person interview team.\n"
+    "\n"
+    "Compare all three candidate allocations before choosing.\n"
+    "\n"
+    "Evidence may describe these properties indirectly.\n"
+    "Do not treat missing evidence as evidence for or against an allocation.\n"
+    "\n"
+    "Determine your vote from the evidence first.\n"
+    "Only after deciding, choose which evidence item, if any, to share."
 )
 
 BOARD_DECISION_BASIS = (
@@ -509,6 +537,24 @@ class DecisionBasisBlock(PromptBlock[str]):
 
     def value_issues(self, value: str) -> tuple[ValidationIssue, ...]:
         return _text_issues("decision_basis", value)
+
+    def render(self) -> str:
+        return str(self.value)
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionScaffoldBlock(PromptBlock[str]):
+    """Optional MuSR allocation-comparison instructions for local decisions."""
+
+    name: str = field(init=False, default="decision_scaffold")
+    title: str = field(init=False, default="Allocation comparison scaffold")
+    role: MessageRole = field(init=False, default=MessageRole.SYSTEM)
+    value: str | Unbound = ALLOCATION_DECISION_SCAFFOLD
+    required: bool = field(init=False, default=True)
+    binding: str = field(init=False, default="fixed")
+
+    def value_issues(self, value: str) -> tuple[ValidationIssue, ...]:
+        return _text_issues("decision_scaffold", value)
 
     def render(self) -> str:
         return str(self.value)
@@ -1103,6 +1149,23 @@ class BlackboardBallotContract(RelationalBallotContract):
             )
         return ValidationResult.success()
 
+    def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
+        issue = issues[0]
+        if (
+            issue.field == "response.shared_fact_id"
+            and "when public_message is null" in issue.message
+        ):
+            return (
+                "Your previous response was invalid because it attached an exact "
+                "source fact while public_message was null.\n\n"
+                "Return the complete JSON object again. Choose exactly one:\n"
+                '1. Set "public_message" to null and "shared_fact_id" to "none".\n'
+                "2. Post a public_message object and set shared_fact_id to one "
+                "available bare fact identifier.\n\n"
+                "Do not attach a fact to a null public message."
+            )
+        return super().repair_guidance(issues)
+
 
 # --------------------------------------------------------------------------
 # Full prompt
@@ -1223,6 +1286,7 @@ def build_relational_ballot_prompt(
     social_distrust: bool | None = None,
     social_context: bool = False,
     answer_display_texts: Mapping[str, str] | None = None,
+    local_prompt_variant: str = LOCAL_PROMPT_P0,
 ) -> RelationalBallotPrompt:
     """Bind one focal update, or - with no sources and no vote - one local vote.
 
@@ -1237,6 +1301,10 @@ def build_relational_ballot_prompt(
     consistent and no letter carries meaning across calls.
     """
 
+    if local_prompt_variant not in LOCAL_PROMPT_VARIANTS:
+        raise ValueError(
+            f"local_prompt_variant must be one of {list(LOCAL_PROMPT_VARIANTS)}"
+        )
     letters = tuple(option_letters)
     prompt = relational_public_ballot_prompt(
         letters,
@@ -1246,7 +1314,25 @@ def build_relational_ballot_prompt(
         relations=tuple(sorted(option_letters.values())),
         receiver_epistemic_disposition=receiver_epistemic_disposition,
         social_distrust=social_distrust,
-    ).bind(
+    )
+    if local_prompt_variant in {LOCAL_PROMPT_P2, LOCAL_PROMPT_P3}:
+        prompt = replace(
+            prompt,
+            blocks=tuple(
+                replace(block, value=SOCIAL_ENVIRONMENT_NAIVE)
+                if isinstance(block, SocialEnvironmentBlock)
+                else block
+                for block in prompt.blocks
+            ),
+        )
+    if local_prompt_variant in {LOCAL_PROMPT_P1, LOCAL_PROMPT_P3}:
+        blocks = list(prompt.blocks)
+        insert_at = next(
+            index for index, block in enumerate(blocks) if block.name == "task"
+        )
+        blocks.insert(insert_at, DecisionScaffoldBlock())
+        prompt = replace(prompt, blocks=tuple(blocks))
+    prompt = prompt.bind(
         identity=identity,
         decision_basis=(
             # No sources is ambiguous on its own: it is round 0 for everybody,
@@ -1335,6 +1421,12 @@ def build_relational_blackboard_prompt(
 
 
 __all__ = [
+    "ALLOCATION_DECISION_SCAFFOLD",
+    "LOCAL_PROMPT_P0",
+    "LOCAL_PROMPT_P1",
+    "LOCAL_PROMPT_P2",
+    "LOCAL_PROMPT_P3",
+    "LOCAL_PROMPT_VARIANTS",
     "BOARD_PROMPT_FAMILY",
     "BOARD_MESSAGE_TYPES",
     "BOARD_REPLY_TYPES",

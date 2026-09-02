@@ -74,7 +74,7 @@ class GenerationConfig:
                 )
 
 
-def _option_rows(problem: Any) -> list[dict[str, Any]]:
+def option_rows(problem: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, allocation in enumerate(problem.candidate_allocations):
         first_task, second_task = problem.tasks
@@ -152,7 +152,7 @@ async def generate_world(
             "people": list(problem.people),
             "tasks": [task.to_dict() for task in problem.tasks],
             "skills": [task.skill for task in problem.tasks],
-            "options": _option_rows(problem),
+            "options": option_rows(problem),
             "gold_index": problem.gold_index,
             "gold_answer": f"ALLOCATION_{problem.gold_index}",
             "evidence": [card.to_dict() for card in generated.cards],

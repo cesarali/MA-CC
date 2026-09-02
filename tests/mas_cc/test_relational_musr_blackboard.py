@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import asyncio
+import json
 
 from mas_cc.config import load_run_config
 from mas_cc.games import create_game
@@ -11,6 +13,10 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
     supporting_fact_coverage,
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
+from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
+    run_relational_imitation_round_feedback_game,
+)
 
 CONFIG = "configs/runs/relational_reasoning/relational_blackboard_no_control_smoke.yaml"
 DATASET = "results/studies/musr_team_allocation_validation_01/tasks"
@@ -74,3 +80,30 @@ def test_musr_board_prompt_renders_scenario_allocations_and_no_hidden_latent_dat
     assert "skill_matrix" not in prompt
     assert "cooperation_matrix" not in prompt
     assert "hidden_claim" not in prompt
+
+
+def test_initialization_only_asks_each_agent_once_and_runs_no_social_updates():
+    config = _musr_config()
+    options = {
+        **dict(config.game.options),
+        "initialization_only": True,
+        "initialization": {"mode": "local_vote"},
+    }
+    config = replace(config, game=replace(config.game, options=options))
+    provider = MockLLMProvider(
+        config.llm_provider,
+        response_factory=lambda _request: json.dumps(
+            {"vote": "A", "reason": "private", "shared_fact_id": "none"}
+        ),
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game), config, provider
+        )
+    )
+
+    assert len(result.initial_decisions) == 12
+    assert result.logical_decisions == 12
+    assert result.interactions == ()
+    assert result.rounds == ()
+    assert len(result.initial_state.initial_votes) == 12

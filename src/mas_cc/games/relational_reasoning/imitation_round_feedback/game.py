@@ -351,6 +351,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 ),
                 social_context=stage == FOCAL_UPDATE,
                 answer_display_texts=state.answer_display_texts,
+                local_prompt_variant=(
+                    rules.local_prompt_variant if stage == INITIAL_VOTE else "P0"
+                ),
             )
         )
         return DecisionRequest(
@@ -1145,7 +1148,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 ),
                 DecisionStagePlan(
                     name="relational_ballot_update",
-                    requests_per_interaction=rules.horizon,
+                    requests_per_interaction=(
+                        0 if rules.initialization_only else rules.horizon
+                    ),
                     retry_bound=rules.invalid_response_retries,
                     expected_attempts_per_request=expected_attempts,
                     concurrency_within_stage=1,
@@ -1169,6 +1174,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "dynamics_mode": rules.dynamics_mode,
                 "interactions_per_episode": rules.horizon,
                 "population_rounds": rules.rounds,
+                "initialization_only": rules.initialization_only,
                 "social_group_size": rules.social_group_size,
                 "social_mode": rules.social_mode,
                 "vote_visibility": rules.vote_visibility,

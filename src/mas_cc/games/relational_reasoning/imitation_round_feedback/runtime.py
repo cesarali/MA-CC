@@ -711,7 +711,7 @@ async def run_relational_imitation_round_feedback_game(
 
     interactions: list[RelationalInteractionRecord] = []
     round_records: list[RelationalRoundRecord] = []
-    for round_index in range(rules.rounds):
+    for round_index in range(0 if rules.initialization_only else rules.rounds):
         if state.terminated:
             break
         options = tuple(state.possible_answers)
