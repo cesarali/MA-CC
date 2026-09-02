@@ -41,7 +41,10 @@ class LocalEvidenceProbeConfig:
 
     @property
     def nominal_calls(self) -> int:
-        return len(self.agents) * self.pair_repetitions * 2 + len(self.agents) * len(self.doses) * self.dose_repetitions
+        return (
+            len(self.agents) * self.pair_repetitions * 2
+            + len(self.agents) * len(self.doses) * self.dose_repetitions
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -109,42 +112,86 @@ def load_probe_config(path: str | Path) -> LocalEvidenceProbeConfig:
             f"this probe requires {REQUIRED_PROVIDER}/{REQUIRED_MODEL}"
         )
     if provider.max_retries != 0:
-        raise LocalEvidenceConfigError("provider.max_retries must be 0 for exact attempt accounting")
+        raise LocalEvidenceConfigError(
+            "provider.max_retries must be 0 for exact attempt accounting"
+        )
     task = _mapping(payload.get("task"), "task")
     design = _mapping(payload.get("design"), "design")
     agents = tuple(int(item) for item in design.get("agents", (1, 4, 3)))
-    if len(agents) < 3 or len(set(agents)) != len(agents) or any(item < 1 for item in agents):
-        raise LocalEvidenceConfigError("design.agents must contain at least three unique positive IDs")
+    if (
+        len(agents) < 3
+        or len(set(agents)) != len(agents)
+        or any(item < 1 for item in agents)
+    ):
+        raise LocalEvidenceConfigError(
+            "design.agents must contain at least three unique positive IDs"
+        )
     doses = tuple(int(item) for item in design.get("doses", (0, 3, 6, 9, 12, 18, 27)))
     if doses != (0, 3, 6, 9, 12, 18, 27):
-        raise LocalEvidenceConfigError("design.doses must be exactly [0, 3, 6, 9, 12, 18, 27]")
+        raise LocalEvidenceConfigError(
+            "design.doses must be exactly [0, 3, 6, 9, 12, 18, 27]"
+        )
     execution = _mapping(payload.get("execution", {}), "execution")
     storage = _mapping(payload.get("storage", {}), "storage")
     budget = _mapping(payload.get("budget", {}), "budget")
     config = LocalEvidenceProbeConfig(
         source_path=str(source),
         provider=provider,
-        task_dir=Path(str(task.get("dataset_dir", "results/studies/musr_team_allocation_validation_01/tasks"))),
+        task_dir=Path(
+            str(
+                task.get(
+                    "dataset_dir",
+                    "results/studies/musr_team_allocation_validation_01/tasks",
+                )
+            )
+        ),
         task_id=str(task.get("task_id", "task_001")),
-        population_size=_positive(int(task.get("population_size", 12)), "task.population_size"),
+        population_size=_positive(
+            int(task.get("population_size", 12)), "task.population_size"
+        ),
         agents=agents,
-        pair_repetitions=_positive(int(design.get("pair_repetitions", 10)), "design.pair_repetitions"),
+        pair_repetitions=_positive(
+            int(design.get("pair_repetitions", 10)), "design.pair_repetitions"
+        ),
         doses=doses,
-        dose_repetitions=_positive(int(design.get("dose_repetitions", 3)), "design.dose_repetitions"),
+        dose_repetitions=_positive(
+            int(design.get("dose_repetitions", 3)), "design.dose_repetitions"
+        ),
         seed=int(design.get("seed", 20260901)),
         workers=_positive(int(execution.get("workers", 4)), "execution.workers"),
-        output_dir=Path(str(storage.get("output_dir", "results/studies/musr_local_evidence_probe_01"))),
-        max_requests=_positive(int(budget.get("max_requests", 150)), "budget.max_requests"),
-        max_input_tokens=_positive(int(budget.get("max_input_tokens", 2_000_000)), "budget.max_input_tokens"),
-        max_output_tokens_total=_positive(int(budget.get("max_output_tokens", 600_000)), "budget.max_output_tokens"),
+        output_dir=Path(
+            str(
+                storage.get(
+                    "output_dir", "results/studies/musr_local_evidence_probe_01"
+                )
+            )
+        ),
+        max_requests=_positive(
+            int(budget.get("max_requests", 150)), "budget.max_requests"
+        ),
+        max_input_tokens=_positive(
+            int(budget.get("max_input_tokens", 2_000_000)), "budget.max_input_tokens"
+        ),
+        max_output_tokens_total=_positive(
+            int(budget.get("max_output_tokens", 600_000)), "budget.max_output_tokens"
+        ),
         max_cost=float(budget.get("max_cost", 5.0)),
         accounting_unit=str(budget.get("accounting_unit", "proxy_accounting_unit")),
     )
     if config.nominal_calls != 123:
-        raise LocalEvidenceConfigError(f"the paper probe must schedule 123 calls, got {config.nominal_calls}")
+        raise LocalEvidenceConfigError(
+            f"the paper probe must schedule 123 calls, got {config.nominal_calls}"
+        )
     if config.workers > provider.request_concurrency:
-        raise LocalEvidenceConfigError("execution.workers cannot exceed provider.request_concurrency")
+        raise LocalEvidenceConfigError(
+            "execution.workers cannot exceed provider.request_concurrency"
+        )
     return config
 
 
-__all__ = ["LocalEvidenceConfigError", "LocalEvidenceProbeConfig", "PROBE_NAME", "load_probe_config"]
+__all__ = [
+    "LocalEvidenceConfigError",
+    "LocalEvidenceProbeConfig",
+    "PROBE_NAME",
+    "load_probe_config",
+]

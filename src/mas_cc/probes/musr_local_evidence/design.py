@@ -47,15 +47,21 @@ def option_mapping(task: RelationalTask, seed: Seed) -> dict[str, str]:
     return {letter: option for letter, option in zip("ABC", options, strict=True)}
 
 
-def nested_card_order(task: RelationalTask, agent_number: int, root: Seed) -> tuple[str, ...]:
-    groups = {key: list(values) for key, values in (task.supporting_fact_groups or {}).items()}
+def nested_card_order(
+    task: RelationalTask, agent_number: int, root: Seed
+) -> tuple[str, ...]:
+    groups = {
+        key: list(values) for key, values in (task.supporting_fact_groups or {}).items()
+    }
     if len(groups) != 9:
         raise ValueError("the local evidence probe requires exactly nine latent facts")
     natural = list(task.known_facts(f"agent_{agent_number:03d}"))
     card_group = {card: latent for latent, cards in groups.items() for card in cards}
     natural_groups = [card_group[card] for card in natural]
     if len(set(natural_groups)) != len(natural_groups):
-        raise ValueError("the selected natural view must contain at most one branch per latent fact")
+        raise ValueError(
+            "the selected natural view must contain at most one branch per latent fact"
+        )
     rng = root.derive(f"dose-order:agent-{agent_number}").create_random()
     natural_group_order = list(dict.fromkeys(natural_groups))
     rng.shuffle(natural_group_order)
@@ -149,7 +155,9 @@ def build_call_plan(
         for dose in doses:
             evidence = tuple(by_key[(agent, dose)]["evidence_ids"])
             for repetition in range(dose_repetitions):
-                call_id = f"dose:agent-{agent:03d}:cards-{dose:02d}:rep-{repetition:02d}"
+                call_id = (
+                    f"dose:agent-{agent:03d}:cards-{dose:02d}:rep-{repetition:02d}"
+                )
                 call_seed = root.derive(call_id)
                 specs.append(
                     CallSpec(
@@ -159,7 +167,9 @@ def build_call_plan(
                         agent_number=agent,
                         repetition=repetition,
                         evidence_ids=evidence,
-                        option_mapping=option_mapping(task, call_seed.derive("option-permutation")),
+                        option_mapping=option_mapping(
+                            task, call_seed.derive("option-permutation")
+                        ),
                         dose=dose,
                         requested_seed=int(call_seed.derive("provider")),
                     )
@@ -169,4 +179,10 @@ def build_call_plan(
     return tuple(specs), definitions
 
 
-__all__ = ["CallSpec", "build_call_plan", "dose_definitions", "nested_card_order", "option_mapping"]
+__all__ = [
+    "CallSpec",
+    "build_call_plan",
+    "dose_definitions",
+    "nested_card_order",
+    "option_mapping",
+]

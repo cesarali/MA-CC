@@ -15,7 +15,9 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
 )
 from mas_cc.llm_runtime.messages import Message
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
-from mas_cc.musr_team_allocation_generator.evidence_generation import extract_json_object
+from mas_cc.musr_team_allocation_generator.evidence_generation import (
+    extract_json_object,
+)
 from mas_cc.musr_team_allocation_generator.validation_study import (
     VALIDATION_PROMPT_VERSION,
     validation_prompt,
@@ -44,7 +46,9 @@ class RenderedCall:
         }
 
 
-def displayed_options(task: RelationalTask, mapping: Mapping[str, str]) -> list[dict[str, str]]:
+def displayed_options(
+    task: RelationalTask, mapping: Mapping[str, str]
+) -> list[dict[str, str]]:
     return [
         {
             "label": letter,
@@ -76,7 +80,9 @@ def render_call(task: RelationalTask, spec: CallSpec) -> RenderedCall:
         identity=f"Agent {spec.agent_number}",
         question=task.question,
         option_letters=spec.option_mapping,
-        known_facts=tuple(render_own_fact(card, task.fact_text(card)) for card in spec.evidence_ids),
+        known_facts=tuple(
+            render_own_fact(card, task.fact_text(card)) for card in spec.evidence_ids
+        ),
         fact_ids=spec.evidence_ids,
         current_vote=None,
         social_sources=(),
@@ -111,13 +117,24 @@ def parse_response(spec: CallSpec, content: str) -> dict[str, Any]:
                 "shared_fact_id": None,
                 "parse_error": None,
             }
-        ballot = parse_relational_ballot(content, tuple(spec.option_mapping), spec.option_mapping)
-        if ballot.vote is None or ballot.reason is None or not ballot.shared_fact_present:
-            raise ValueError("game ballot did not contain a valid vote, reason, and shared_fact_id")
+        ballot = parse_relational_ballot(
+            content, tuple(spec.option_mapping), spec.option_mapping
+        )
+        if (
+            ballot.vote is None
+            or ballot.reason is None
+            or not ballot.shared_fact_present
+        ):
+            raise ValueError(
+                "game ballot did not contain a valid vote, reason, and shared_fact_id"
+            )
         semantic = spec.option_mapping.get(ballot.vote, ballot.vote)
         if semantic not in spec.option_mapping.values():
             raise ValueError("game vote did not resolve to a semantic allocation")
-        if ballot.shared_fact_id is not None and ballot.shared_fact_id not in spec.evidence_ids:
+        if (
+            ballot.shared_fact_id is not None
+            and ballot.shared_fact_id not in spec.evidence_ids
+        ):
             raise ValueError("game ballot cited evidence outside the available set")
         return {
             "parse_success": True,

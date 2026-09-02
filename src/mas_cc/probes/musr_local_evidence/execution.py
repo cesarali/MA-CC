@@ -42,7 +42,11 @@ def append_journal(path: Path, row: Mapping[str, Any]) -> None:
 def read_journal(path: Path) -> tuple[dict[str, Any], ...]:
     if not path.is_file():
         return ()
-    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    return tuple(
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
 
 
 def terminal_rows(paths: tuple[Path, ...]) -> dict[str, dict[str, Any]]:
@@ -54,7 +58,9 @@ def terminal_rows(paths: tuple[Path, ...]) -> dict[str, dict[str, Any]]:
     return found
 
 
-async def execute_plan(config: LocalEvidenceProbeConfig, plan: ProbePlan, root: Path) -> dict[str, Any]:
+async def execute_plan(
+    config: LocalEvidenceProbeConfig, plan: ProbePlan, root: Path
+) -> dict[str, Any]:
     paths = (
         root / "prompt_equivalence/raw_calls.jsonl",
         root / "evidence_dose/raw_calls.jsonl",
@@ -142,7 +148,8 @@ async def execute_plan(config: LocalEvidenceProbeConfig, plan: ProbePlan, root: 
                     **spec.to_dict(),
                     **rendered.to_dict(),
                     **parsed,
-                    "correct": parsed["parsed_semantic_answer"] == plan.task.correct_relation,
+                    "correct": parsed["parsed_semantic_answer"]
+                    == plan.task.correct_relation,
                     "raw_response": response.content,
                     "response": response.to_dict(),
                     "redacted_provider_response": response.redacted_raw_response(),
@@ -183,8 +190,15 @@ async def execute_plan(config: LocalEvidenceProbeConfig, plan: ProbePlan, root: 
         "previously_terminal": len(completed),
         "attempted_now": len(outstanding),
         "terminal": len(expected & set(terminal)),
-        "successful": sum(terminal.get(call_id, {}).get("parse_success") is True for call_id in expected),
-        "failed": sum(terminal.get(call_id, {}).get("parse_success") is not True for call_id in expected if call_id in terminal),
+        "successful": sum(
+            terminal.get(call_id, {}).get("parse_success") is True
+            for call_id in expected
+        ),
+        "failed": sum(
+            terminal.get(call_id, {}).get("parse_success") is not True
+            for call_id in expected
+            if call_id in terminal
+        ),
         "budget_status": guard.status(),
         "pricing": quote.to_dict(),
     }
