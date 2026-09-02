@@ -29,7 +29,10 @@ def make_handler(reader: BlackboardRunReader):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'",
+            )
             self.end_headers()
             self.wfile.write(body)
 
@@ -56,13 +59,21 @@ def make_handler(reader: BlackboardRunReader):
                     round_index = int(query["round"][0]) if "round" in query else None
                     step = int(query["step"][0]) if "step" in query else None
                     agent = query.get("agent", [None])[0]
-                    self._send(200, "application/json", _json(reader.snapshot(round_index, step, agent)))
+                    self._send(
+                        200,
+                        "application/json",
+                        _json(reader.snapshot(round_index, step, agent)),
+                    )
                     return
                 if parsed.path.startswith("/api/prompt/"):
                     token = parsed.path.removeprefix("/api/prompt/")
                     if not token.isdigit():
-                        raise ValueError("prompt identifier must be a non-negative integer")
-                    self._send(200, "application/json", _json(reader.prompt(int(token))))
+                        raise ValueError(
+                            "prompt identifier must be a non-negative integer"
+                        )
+                    self._send(
+                        200, "application/json", _json(reader.prompt(int(token)))
+                    )
                     return
                 self._send(404, "application/json", _json({"error": "not found"}))
             except (OSError, ValueError) as exc:
@@ -83,7 +94,9 @@ def serve_dashboard(
 ) -> None:
     reader = BlackboardRunReader(run_dir, episode_id)
     if host not in {"127.0.0.1", "localhost", "::1"}:
-        raise ValueError("dashboard must bind to localhost; use an SSH tunnel for remote viewing")
+        raise ValueError(
+            "dashboard must bind to localhost; use an SSH tunnel for remote viewing"
+        )
     server = ThreadingHTTPServer((host, port), make_handler(reader))
     print(f"Blackboard dashboard: http://{host}:{server.server_port}")
     print(f"Episode: {reader.episode_dir}")
@@ -108,15 +121,15 @@ def export_dashboard(
     snapshots = {}
     agents = {}
     for cursor in timeline["available_cursors"]:
-        key = f"{cursor['round_index']}:{cursor['step']}"
+        key = f"{cursor['phase']}:{cursor['round_index']}:{cursor['step']}"
         snapshot = reader.snapshot(cursor["round_index"], cursor["step"])
         snapshot.pop("available_cursors", None)
         snapshot.pop("agent", None)
         snapshots[key] = snapshot
         agents[key] = {
-            agent_id: reader.snapshot(
-                cursor["round_index"], cursor["step"], agent_id
-            )["agent"]
+            agent_id: reader.snapshot(cursor["round_index"], cursor["step"], agent_id)[
+                "agent"
+            ]
             for agent_id in timeline["agents"]
         }
     bundle = {
@@ -126,10 +139,16 @@ def export_dashboard(
         "snapshots": snapshots,
         "agents": agents,
     }
-    embedded = json.dumps(bundle, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    html = _asset("index.html").decode("utf-8").replace(
-        '<script id="dashboard-data" type="application/json"></script>',
-        f'<script id="dashboard-data" type="application/json">{embedded}</script>',
+    embedded = json.dumps(bundle, ensure_ascii=False, separators=(",", ":")).replace(
+        "</", "<\\/"
+    )
+    html = (
+        _asset("index.html")
+        .decode("utf-8")
+        .replace(
+            '<script id="dashboard-data" type="application/json"></script>',
+            f'<script id="dashboard-data" type="application/json">{embedded}</script>',
+        )
     )
     (destination / "index.html").write_text(html, encoding="utf-8")
     (destination / "app.js").write_bytes(_asset("app.js"))

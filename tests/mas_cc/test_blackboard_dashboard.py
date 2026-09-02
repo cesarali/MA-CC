@@ -50,7 +50,9 @@ def _run(tmp_path: Path) -> Path:
             "new_peer_fact_ids": ["f2"] if index else [],
             "reactivated_peer_fact_ids": [],
         }
-        events.append({"interaction_id": f"interaction-{index + 1:04d}", "event": event})
+        events.append(
+            {"interaction_id": f"interaction-{index + 1:04d}", "event": event}
+        )
     (episode / "trajectory.jsonl").write_text(
         "".join(_line(row) for row in events), encoding="utf-8"
     )
@@ -68,7 +70,9 @@ def _run(tmp_path: Path) -> Path:
         "controller_action": "NO_OP",
         "controller_sensor_Y": {"sample_size": 1},
     }
-    (episode / "round_trajectory.jsonl").write_text(_line(round_record), encoding="utf-8")
+    (episode / "round_trajectory.jsonl").write_text(
+        _line(round_record), encoding="utf-8"
+    )
     audits = []
     for index, focal in enumerate(("agent_001", "agent_002")):
         audits.append(
@@ -79,7 +83,9 @@ def _run(tmp_path: Path) -> Path:
                 "interaction_id": f"interaction-{index + 1:04d}",
                 "compiled_messages": [{"role": "user", "content": f"prompt {index}"}],
                 "observation": {"visible_state": {"current_vote": "A"}},
-                "response": {"content": json.dumps({"vote": "A", "private_reason": "because"})},
+                "response": {
+                    "content": json.dumps({"vote": "A", "private_reason": "because"})
+                },
                 "valid": True,
             }
         )
@@ -141,7 +147,9 @@ def test_dashboard_http_api_and_export(tmp_path: Path):
     try:
         base = f"http://127.0.0.1:{server.server_port}"
         opener = build_opener(ProxyHandler({}))
-        with opener.open(base + "/api/snapshot?round=0&step=2&agent=agent_002") as response:
+        with opener.open(
+            base + "/api/snapshot?round=0&step=2&agent=agent_002"
+        ) as response:
             payload = json.load(response)
         assert payload["agent"]["agent_id"] == "agent_002"
         with opener.open(base + "/") as response:
@@ -152,9 +160,19 @@ def test_dashboard_http_api_and_export(tmp_path: Path):
         thread.join()
 
     destination = tmp_path / "export"
-    assert main([
-        "blackboard", "export", "--run-dir", str(run), "--output-dir", str(destination)
-    ]) == 0
+    assert (
+        main(
+            [
+                "blackboard",
+                "export",
+                "--run-dir",
+                str(run),
+                "--output-dir",
+                str(destination),
+            ]
+        )
+        == 0
+    )
     assert "dashboard-data" in (destination / "index.html").read_text(encoding="utf-8")
     assert (destination / "app.js").is_file()
 
@@ -162,3 +180,93 @@ def test_dashboard_http_api_and_export(tmp_path: Path):
 def test_dashboard_refuses_non_local_binding(tmp_path: Path):
     with pytest.raises(ValueError, match="localhost"):
         serve_dashboard(_run(tmp_path), host="0.0.0.0", port=0)
+
+
+def test_modern_dawn_persistence_is_applied_before_first_day_update(tmp_path: Path):
+    run = _run(tmp_path)
+    episode = run / "data" / "episodes" / "episode-0000"
+    first_round = json.loads((episode / "round_trajectory.jsonl").read_text())
+    first_round["protocol"] = "night_dawn_autonomous_day_v1"
+    first_round["controller_timing"] = "dawn_only"
+    second_round = {
+        **first_round,
+        "round_index": 1,
+        "population_state_before": ["A", "A"],
+        "population_state_after": ["A", "A"],
+        "persistence_deactivated_pairs": [{"agent_id": "agent_002", "fact_id": "f2"}],
+    }
+    (episode / "round_trajectory.jsonl").write_text(
+        _line(first_round) + _line(second_round), encoding="utf-8"
+    )
+    event = {
+        "round_index": 1,
+        "within_round_index": 0,
+        "global_update_index": 2,
+        "interaction_index": 3,
+        "focal_agent_id": "agent_001",
+        "population_state_after": ["A", "A"],
+        "focal_active_fact_ids_after": ["f1"],
+        "focal_known_fact_ids_after": ["f1"],
+        "correct_answer": "A",
+    }
+    with (episode / "trajectory.jsonl").open("a", encoding="utf-8") as stream:
+        stream.write(_line({"interaction_id": "interaction-0003", "event": event}))
+    snapshot = BlackboardRunReader(run).snapshot(1, 1, "agent_002")
+    assert snapshot["source"]["protocol"] == "night_dawn_autonomous_day_v1"
+    assert snapshot["agent"]["active_fact_ids"] == []
+    assert snapshot["agent"]["historical_fact_ids"] == ["f2"]
+
+
+def test_dashboard_preserves_all_validation_attempts(tmp_path: Path):
+    run = _run(tmp_path)
+    episode = run / "data" / "episodes" / "episode-0000"
+    audits = [
+        {
+            "agent_id": "agent_002",
+            "attempt": 1,
+            "decision_stage": "focal_update",
+            "interaction_id": "interaction-0002",
+            "response": {"content": "bad"},
+            "valid": False,
+            "validation_error": "invalid JSON",
+        },
+        {
+            "agent_id": "agent_002",
+            "attempt": 2,
+            "decision_stage": "focal_update",
+            "interaction_id": "interaction-0002",
+            "response": {"content": '{"vote":"A"}'},
+            "valid": True,
+        },
+    ]
+    (episode / "audit_traces.jsonl").write_text(
+        "".join(_line(row) for row in audits), encoding="utf-8"
+    )
+    history = BlackboardRunReader(run).snapshot(0, 2, "agent_002")["agent"][
+        "attempt_history"
+    ]
+    assert [row["valid"] for row in history] == [False, True]
+    assert history[0]["validation_error"] == "invalid JSON"
+
+
+def test_completed_unknown_schema_and_partial_tail_fail_clearly(tmp_path: Path):
+    run = _run(tmp_path)
+    (run / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 999,
+                "game_type": "relational_imitation_round_feedback",
+                "artifact_profile": "full",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unsupported dashboard run schema"):
+        BlackboardRunReader(run).timeline()
+
+    run = _run(tmp_path / "partial")
+    episode = run / "data" / "episodes" / "episode-0000"
+    with (episode / "trajectory.jsonl").open("a", encoding="utf-8") as stream:
+        stream.write('{"partial":')
+    with pytest.raises(ValueError, match="partial trailing record"):
+        BlackboardRunReader(run).timeline()

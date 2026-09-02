@@ -1720,6 +1720,165 @@ def _attach_coordinates(frame: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFram
     )
 
 
+def _blackboard_diagnostic_table(
+    rounds: pd.DataFrame, cells: pd.DataFrame
+) -> pd.DataFrame:
+    """Summarize retained public-channel mechanisms without redefining estimators."""
+
+    if rounds.empty or "cell_id" not in rounds:
+        return pd.DataFrame()
+    source = rounds.copy()
+    numeric = (
+        "dawn_directive_count",
+        "controller_message_exposures",
+        "directive_exposed_focal_updates",
+        "controller_unique_readers",
+        "eligible_message_opportunities",
+        "eligible_directive_opportunities",
+        "request_count",
+        "report_count",
+        "new_evidence_acquisitions",
+        "reactivated_peer_fact_count",
+        "reactivated_controller_fact_count",
+        "directive_report_reply_count",
+        "directive_attributed_acquisitions",
+        "directive_attributed_refreshes",
+        "active_mean_fact_count_after",
+        "historical_mean_supporting_fact_coverage_after",
+        "active_mean_supporting_fact_coverage_after",
+        "realized_directive_exposure_fraction",
+    )
+    for column in numeric:
+        if column not in source:
+            source[column] = math.nan
+        source[column] = pd.to_numeric(source[column], errors="coerce")
+    grouped = source.groupby("cell_id", dropna=False)
+    result = grouped.agg(
+        rounds=("cell_id", "size"),
+        episodes=("episode_id", "nunique"),
+        directives_posted=("dawn_directive_count", "sum"),
+        directives_read=("controller_message_exposures", "sum"),
+        directive_exposed_updates=("directive_exposed_focal_updates", "sum"),
+        unique_agents_exposed_round_sum=("controller_unique_readers", "sum"),
+        eligible_message_opportunities=("eligible_message_opportunities", "sum"),
+        eligible_directive_opportunities=("eligible_directive_opportunities", "sum"),
+        request_count=("request_count", "sum"),
+        report_count=("report_count", "sum"),
+        exact_acquisitions=("new_evidence_acquisitions", "sum"),
+        peer_refreshes=("reactivated_peer_fact_count", "sum"),
+        controller_refreshes=("reactivated_controller_fact_count", "sum"),
+        directive_report_replies=("directive_report_reply_count", "sum"),
+        directive_attributed_acquisitions=("directive_attributed_acquisitions", "sum"),
+        directive_attributed_refreshes=("directive_attributed_refreshes", "sum"),
+        mean_active_fact_count=("active_mean_fact_count_after", "mean"),
+        active_latent_coverage_mean=(
+            "active_mean_supporting_fact_coverage_after",
+            "mean",
+        ),
+        historical_latent_coverage_mean=(
+            "historical_mean_supporting_fact_coverage_after",
+            "mean",
+        ),
+        realized_directive_exposure_fraction_mean=(
+            "realized_directive_exposure_fraction",
+            "mean",
+        ),
+    ).reset_index()
+    result["refresh_events"] = result["peer_refreshes"] + result["controller_refreshes"]
+    denominator = result["eligible_message_opportunities"].replace(0, np.nan)
+    result["eligible_directive_fraction"] = (
+        result["eligible_directive_opportunities"] / denominator
+    )
+    return _attach_coordinates(result, cells)
+
+
+def _write_blackboard_population_views(
+    tables_dir: Path,
+    analysis_dir: Path,
+    *,
+    canonical: Mapping[str, pd.DataFrame],
+    primary: pd.DataFrame,
+    derived: pd.DataFrame,
+    outputs: Mapping[str, pd.DataFrame],
+) -> None:
+    """Write named downstream views requested by the blackboard study handoff."""
+
+    cells = canonical["cells"]
+    rounds = _attach_coordinates(canonical["rounds"], cells)
+    diagnostics = _blackboard_diagnostic_table(rounds, cells)
+    write_scientific_table(tables_dir, "blackboard_diagnostics", diagnostics)
+    write_scientific_table(tables_dir, "cell_summary", cells)
+    write_scientific_table(
+        tables_dir,
+        "state_resolved_x_b",
+        outputs.get("state_local_phase_maps", pd.DataFrame()),
+    )
+    selections = {
+        "sensing_information": {"round_sensing_mi", "round_target_sensing_mi"},
+        "transfer_information": {
+            "round_population_actuation_cmi",
+            "round_target_actuation_cmi",
+            "round_truth_actuation_cmi",
+        },
+        "susceptibility": {"round_target_susceptibility"},
+    }
+    for name, metrics in selections.items():
+        frame = primary[
+            primary.get("metric", pd.Series(dtype=str)).isin(metrics)
+        ].copy()
+        if name == "susceptibility" and not derived.empty:
+            extra = derived[derived.get("metric", pd.Series(dtype=str)).isin(metrics)]
+            frame = pd.concat([frame, extra], ignore_index=True, sort=False)
+        write_scientific_table(tables_dir, name, frame)
+    efficiencies = derived[
+        derived.get("metric", pd.Series(dtype=str)).astype(str).str.startswith("eta_")
+    ].copy()
+    write_scientific_table(tables_dir, "efficiencies", efficiencies)
+    if not diagnostics.empty:
+        group_columns = [
+            column
+            for column in (
+                "target_semantics",
+                "epistemic_persistence",
+                "intervention_budget",
+            )
+            if column in diagnostics
+        ]
+        measures = [
+            column
+            for column in diagnostics.select_dtypes(include=["number"]).columns
+            if column not in {"source_config_index"}
+        ]
+        rho_b = (
+            diagnostics.groupby(group_columns, dropna=False, as_index=False)[
+                measures
+            ].mean()
+            if group_columns
+            else diagnostics
+        )
+    else:
+        rho_b = diagnostics
+    write_scientific_table(tables_dir, "rho_b_summary", rho_b)
+    lines = [
+        "# Blackboard Population Study 01",
+        "",
+        "This report separates outcomes, control response, efficiency, and blackboard mechanism diagnostics.",
+        "The existing information and susceptibility estimators are reused without changing their definitions.",
+        "Microscopic effective-affinity quantities can be unsupported because dawn directives do not mark controlled microscopic slots; undefined values remain explicit.",
+        "",
+        f"- Structural cells available: {len(cells)}",
+        f"- Retained round rows: {len(rounds)}",
+        f"- Primary estimator rows: {len(primary)}",
+        f"- Derived efficiency rows: {len(efficiencies)}",
+        f"- Blackboard diagnostic rows: {len(diagnostics)}",
+        "",
+        "See `tables/` for state-resolved, persistence-budget, sensing, transfer, susceptibility, efficiency, and blackboard mechanism views.",
+    ]
+    (analysis_dir / "blackboard_1_report.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+
+
 def _expected_cell_coordinates(entries: Sequence[Any]) -> list[dict[str, Any]]:
     """Resolve the declared structural grid, including cells not yet run."""
 
@@ -3163,6 +3322,19 @@ def aggregate_study(
         )
     for name, frame in outputs.items():
         write_scientific_table(tables_dir, name, frame)
+    if bool(recipe.get("blackboard_population_outputs", False)):
+        _write_blackboard_population_views(
+            tables_dir,
+            analysis_dir,
+            canonical=canonical,
+            primary=primary,
+            derived=derived,
+            outputs=outputs,
+        )
+        outputs["blackboard_diagnostics"] = _blackboard_diagnostic_table(
+            _attach_coordinates(canonical["rounds"], canonical["cells"]),
+            canonical["cells"],
+        )
 
     plot_tables = {
         **canonical,

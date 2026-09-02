@@ -17,7 +17,17 @@ venv/
 .tags*
 
 # Generated benchmark artifacts (inspection bundles live in results/inspection/)
-results/
+/results/*
+!results/studies/
+results/studies/*
+!results/studies/musr_symbolic_ambiguity_calibration_01/
+results/studies/musr_symbolic_ambiguity_calibration_01/*
+!results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks/
+results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks/*
+!results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks/task_001/
+results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks/task_001/*
+!results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks/task_001/base_task.json
+/docs/reports/results/
 
 # Legacy inspection location - artifacts now go to results/inspection/
 inspection/

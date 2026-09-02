@@ -105,6 +105,12 @@
   function render(snapshot) {
     state.snapshot = snapshot;
     setStatus(snapshot.run);
+    if (!snapshot.cursor) {
+      $('cards').innerHTML = '<div class="card"><span>Status</span><strong>Waiting for the first retained update</strong></div>';
+      $('messages').innerHTML = '<div class="panel">No blackboard records are available yet.</div>';
+      $('matrix').innerHTML = '';
+      return;
+    }
     renderOverview(snapshot); renderMessages(snapshot); renderCoverage(snapshot); renderAgent(snapshot); renderController(snapshot);
   }
 
@@ -113,7 +119,7 @@
     state.busy = true;
     try {
       if (state.staticMode) {
-        const key = `${$('round').value}:${$('step').value}`;
+        const key = `round:${$('round').value}:${$('step').value}`;
         const base = state.staticBundle.snapshots[key];
         if (!base) throw new Error('No exported snapshot exists at this cursor');
         render({...base, agent: state.staticBundle.agents[key][$('agent').value]});
@@ -165,7 +171,7 @@
     state.staticMode = true; state.staticBundle = JSON.parse(embedded);
     populateTimeline(state.staticBundle.timeline);
     const edge = state.staticBundle.timeline.available_cursors.at(-1);
-    $('round').value = edge.round_index; updateStepRange(); $('step').value = edge.step; $('step-value').value = edge.step;
+    if (edge) { $('round').value = edge.round_index; updateStepRange(); $('step').value = edge.step; $('step-value').value = edge.step; }
     $('follow').checked = false;
     refresh();
   } else {

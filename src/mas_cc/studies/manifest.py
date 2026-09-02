@@ -22,6 +22,7 @@ _PREFLIGHT_CONTRACTS = frozenset(
         "relational_persistence_high_statistics_truth_v1",
         "relational_persistence_large_population_false_v1",
         "relational_persistence_large_population_truth_v1",
+        "musr_blackboard_population_01_v1",
     }
 )
 
