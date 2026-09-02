@@ -102,7 +102,7 @@ logging:
       always_log_invalid_responses: true
 
 storage:
-  output_dir: results/studies/musr_blackboard_task001_pilot_01
+  output_dir: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_task001_pilot_01
   format: jsonl
   artifact_profile: full
   checkpoint_mode: episode

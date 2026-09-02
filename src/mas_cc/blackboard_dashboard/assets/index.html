@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MA-CC Blackboard Observatory</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">MA-CC / RELATIONAL REASONING</p>
+      <h1>Blackboard Observatory</h1>
+    </div>
+    <div class="status"><span id="status-dot"></span><span id="status-text">connecting</span></div>
+  </header>
+
+  <section class="controls panel">
+    <label>Round <select id="round"></select></label>
+    <label class="step-control">Microscopic update
+      <input id="step" type="range" min="1" value="1">
+      <output id="step-value">1</output>
+    </label>
+    <label>Agent <select id="agent"></select></label>
+    <label class="follow"><input id="follow" type="checkbox" checked> Follow live edge</label>
+    <span id="refreshed"></span>
+  </section>
+
+  <nav id="tabs">
+    <button class="active" data-view="overview">Overview</button>
+    <button data-view="blackboard">Blackboard</button>
+    <button data-view="coverage">Coverage</button>
+    <button data-view="agent-view">Agent</button>
+    <button data-view="controller">Controller</button>
+  </nav>
+
+  <main>
+    <section id="overview" class="view active">
+      <div id="cards" class="cards"></div>
+      <div class="grid two">
+        <article class="panel"><h2>Population</h2><div id="vote-bars"></div></article>
+        <article class="panel"><h2>Latest activity</h2><div id="activity"></div></article>
+      </div>
+    </section>
+
+    <section id="blackboard" class="view">
+      <div class="panel toolbar">
+        <label><input class="message-filter" type="checkbox" value="REQUEST" checked> REQUEST</label>
+        <label><input class="message-filter" type="checkbox" value="REPORT" checked> REPORT</label>
+        <label><input class="message-filter" type="checkbox" value="DIRECTIVE" checked> DIRECTIVE</label>
+        <label><input id="expired" type="checkbox"> Show expired history</label>
+      </div>
+      <div id="messages" class="message-list"></div>
+    </section>
+
+    <section id="coverage" class="view">
+      <div class="panel toolbar">
+        <label>Memory <select id="memory-mode"><option value="active">Active</option><option value="historical">Historical</option></select></label>
+        <span>Click an agent row to inspect that agent.</span>
+      </div>
+      <div class="panel matrix-wrap"><table id="matrix"></table></div>
+    </section>
+
+    <section id="agent-view" class="view">
+      <div class="grid agent-grid">
+        <article class="panel"><h2 id="agent-title">Agent</h2><div id="agent-state"></div></article>
+        <article class="panel"><h2>Decision timeline</h2><div id="agent-timeline"></div></article>
+      </div>
+      <article class="panel"><h2>Visible state</h2><pre id="visible-state"></pre></article>
+      <article class="panel"><h2>Exact rendered prompt</h2><div id="compiled-prompt"></div></article>
+      <div class="grid two">
+        <article class="panel"><h2>Raw model response</h2><pre id="raw-response"></pre></article>
+        <article class="panel"><h2>Parsed decision / private model rationale</h2><pre id="parsed-response"></pre></article>
+      </div>
+    </section>
+
+    <section id="controller" class="view">
+      <article class="panel"><h2>Round controller</h2><div id="controller-state"></div></article>
+    </section>
+  </main>
+
+  <footer>Read-only projection · state shown after the selected update · ←/→ navigate · Shift+←/→ change round</footer>
+  <script id="dashboard-data" type="application/json"></script>
+  <script src="app.js"></script>
+</body>
+</html>
