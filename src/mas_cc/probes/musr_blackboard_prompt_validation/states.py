@@ -171,7 +171,7 @@ def _state_definition(
         message = BlackboardMessage(
             message_id=f"{task_id}-{agent_id}-{state_id}-acq-{index:02d}",
             author_id=f"agent_{12 - index + 1:03d}",
-            message_type="RESULT",
+            message_type="REPORT",
             text=f"I checked one exact source item relevant to {latent}.",
             vote=previous_vote,
             shared_fact_id=fact_id,
@@ -187,7 +187,7 @@ def _state_definition(
     parent = BlackboardMessage(
         message_id=f"{task_id}-{agent_id}-{state_id}-parent",
         author_id="agent_011",
-        message_type="RESULT",
+        message_type="REPORT",
         text="I compared the team allocations using the evidence available to me.",
         vote=previous_vote,
         shared_fact_id=None,
@@ -199,7 +199,7 @@ def _state_definition(
     reply = BlackboardMessage(
         message_id=f"{task_id}-{agent_id}-{state_id}-reply",
         author_id="agent_012",
-        message_type="REPLY",
+        message_type="REPORT",
         text="That comparison also depends on cooperation within the paired role.",
         vote=previous_vote,
         shared_fact_id=None,

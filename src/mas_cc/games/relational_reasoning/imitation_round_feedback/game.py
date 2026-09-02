@@ -70,6 +70,9 @@ from .state import (
     GAME_TYPE,
     INITIAL_SOURCE,
     INITIAL_VOTE,
+    MESSAGE_NONE,
+    MESSAGE_REPORT,
+    MESSAGE_REQUEST,
     PEER_SOURCE,
     SOCIAL_MODE_BOARD,
     BlackboardMessage,
@@ -121,6 +124,8 @@ class RelationalImitationRoundFeedbackGame(Game):
                 rules.task_dataset_dir,
                 rules.task_id,
                 population_size=rules.n_agents,
+                initial_information_path=rules.initial_information_path,
+                initial_information_sha256=rules.initial_information_sha256,
             )
         return load_relational_task(
             rules.task_dataset_dir,
@@ -514,15 +519,23 @@ class RelationalImitationRoundFeedbackGame(Game):
                 issues.append(
                     ValidationIssue(
                         "action.public_message",
-                        "must be present; use null to post nothing",
+                        "must be present; use type NONE to post nothing",
                     )
                 )
             public = action.metadata.get("public_message")
-            if public is None and shared is not None:
+            public_type = public.get("type") if isinstance(public, Mapping) else None
+            if public_type not in {MESSAGE_REQUEST, MESSAGE_REPORT, MESSAGE_NONE}:
+                issues.append(
+                    ValidationIssue(
+                        "action.public_message.type",
+                        "ordinary agents may use REQUEST, REPORT, or NONE only",
+                    )
+                )
+            if public_type in {MESSAGE_REQUEST, MESSAGE_NONE} and shared is not None:
                 issues.append(
                     ValidationIssue(
                         "action.shared_fact_id",
-                        "must be none when no public message is posted",
+                        f"must be none for {public_type}",
                     )
                 )
             if isinstance(public, Mapping) and public.get("reply_to") is not None:
@@ -536,7 +549,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                             "must reference a message visible in this update",
                         )
                     )
-            if not rules.board_allow_no_post and public is None:
+            if not rules.board_allow_no_post and public_type == MESSAGE_NONE:
                 issues.append(
                     ValidationIssue(
                         "action.public_message", "a public message is required"
@@ -709,7 +722,11 @@ class RelationalImitationRoundFeedbackGame(Game):
         board = state.blackboard
         new_message: BlackboardMessage | None = None
         public = action.metadata.get("public_message")
-        if rules.social_mode == SOCIAL_MODE_BOARD and isinstance(public, Mapping):
+        if (
+            rules.social_mode == SOCIAL_MODE_BOARD
+            and isinstance(public, Mapping)
+            and public.get("type") != MESSAGE_NONE
+        ):
             created_round = int((round_fields or {}).get("round_index", 0))
             new_message = BlackboardMessage(
                 message_id=f"m{len(board.messages) + 1:06d}",
@@ -1002,6 +1019,14 @@ class RelationalImitationRoundFeedbackGame(Game):
             fact_id = source.get("shared_fact_id")
             if not fact_id:
                 continue
+            # On the public board, exact evidence may travel only through an
+            # ordinary REPORT. Controller DIRECTIVEs and agent REQUESTs are
+            # semantic coordination channels, never evidence containers.
+            if (
+                source.get("message_id") is not None
+                and source.get("message_type") != MESSAGE_REPORT
+            ):
+                continue
             kind = (
                 CONTROLLER_SOURCE
                 if str(source.get("source_type")) == "control"
@@ -1076,7 +1101,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "message_id": f"m{slot + 1:06d}",
                 "label": f"Agent {slot + 2}",
                 "vote": relations[slot % len(relations)],
-                "message_type": "RESULT",
+                "message_type": "REPORT",
                 "text": "I compared the evidence and this option fits best.",
                 "reply_to": None,
                 "shared_fact_text": "Kavi is east of Tero.",

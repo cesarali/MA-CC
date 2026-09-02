@@ -23,15 +23,21 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     BlackboardBallotContract,
 )
+from mas_cc.games.relational_reasoning.imitation_round_feedback.pilot_artifacts import (
+    REQUIRED_OUTPUTS,
+)
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     run_relational_imitation_round_feedback_game,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.state import (
-    BOARD_MESSAGE_TYPES,
+    BLACKBOARD_MESSAGE_SCHEMA_VERSION,
+    LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION,
+    ORDINARY_ACTION_TYPES,
     BlackboardMessage,
     BlackboardState,
 )
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.experiments import run_experiment_sync
 
 pytestmark = pytest.mark.skipif(
     not (DEFAULT_TASK_DATASET_DIR / "task_0001.json").exists(),
@@ -40,7 +46,7 @@ pytestmark = pytest.mark.skipif(
 
 CONFIG = (
     "configs/runs/relational_reasoning/"
-    "relational_imitation_round_feedback_no_control_smoke.yaml"
+    "misselaneous/relational_imitation_round_feedback_no_control_smoke.yaml"
 )
 
 
@@ -51,6 +57,7 @@ def _config(*, rounds=1, q=1, lifetime=1):
         "rounds": rounds,
         "social_group_size": q,
         "social_mode": "board",
+        "prompt_version": 2,
         "board": {
             "sampling": "uniform",
             "message_lifetime_rounds": lifetime,
@@ -58,7 +65,11 @@ def _config(*, rounds=1, q=1, lifetime=1):
             "allow_no_post": True,
         },
     }
-    prompt = replace(config.prompt, prompt_family="relational_blackboard_ballot")
+    prompt = replace(
+        config.prompt,
+        prompt_family="relational_blackboard_ballot",
+        prompt_version=2,
+    )
     return replace(
         config,
         game=replace(config.game, horizon=rounds, options=options),
@@ -78,17 +89,15 @@ class _BoardBallots:
             return json.dumps(
                 {
                     "vote": "A",
-                    "reason": "private reasoning that must not be shared",
-                    "shared_fact_id": "none",
-                    "public_message": (
-                        {
-                            "type": "RESULT",
-                            "text": "I compared my available evidence.",
-                            "reply_to": None,
-                        }
+                    "private_reason": "private reasoning that must not be shared",
+                    "public_message": {
+                        "type": "REPORT" if self.post else "NONE",
+                        "text": "I compared my available evidence."
                         if self.post
-                        else None
-                    ),
+                        else None,
+                        "shared_fact_id": None,
+                        "reply_to": None,
+                    },
                 }
             )
 
@@ -125,7 +134,7 @@ def test_board_state_lifetime_and_serialization():
     message = BlackboardMessage(
         message_id="m1",
         author_id="agent_001",
-        message_type="QUESTION",
+        message_type="REQUEST",
         text="What evidence separates A and B?",
         vote="NORTH",
         shared_fact_id=None,
@@ -148,7 +157,7 @@ def test_board_sampling_excludes_self_and_never_duplicates_messages():
         BlackboardMessage(
             message_id=f"m{index}",
             author_id="agent_001" if index == 1 else "agent_002",
-            message_type="CLAIM",
+            message_type="REPORT",
             text=f"message {index}",
             vote="NORTH",
             shared_fact_id=None,
@@ -169,9 +178,8 @@ def test_board_sampling_excludes_self_and_never_duplicates_messages():
     assert {message.author_id for message in sampled} == {"agent_002"}
 
 
-def test_all_message_types_validate_and_replies_need_visible_target():
-    for kind in BOARD_MESSAGE_TYPES:
-        reply_to = "m1" if kind in {"REPLY", "CORRECTION"} else None
+def test_all_ordinary_actions_validate_and_replies_need_visible_target():
+    for kind in ORDINARY_ACTION_TYPES:
         contract = BlackboardBallotContract(
             allowed_values=("A", "B"),
             options={"fact_ids": (), "relations": (), "visible_message_ids": ("m1",)},
@@ -179,19 +187,83 @@ def test_all_message_types_validate_and_replies_need_visible_target():
         response = json.dumps(
             {
                 "vote": "A",
-                "reason": "private",
-                "shared_fact_id": "none",
+                "private_reason": "private",
                 "public_message": {
                     "type": kind,
-                    "text": "public",
-                    "reply_to": reply_to,
+                    "text": None if kind == "NONE" else "public",
+                    "shared_fact_id": None,
+                    "reply_to": None,
                 },
             }
         )
         assert contract.validate(response).valid
 
-    invalid = response.replace('"reply_to": "m1"', '"reply_to": "missing"')
+    invalid = json.dumps(
+        {
+            "vote": "A",
+            "private_reason": "private",
+            "public_message": {
+                "type": "REPORT",
+                "text": "public",
+                "shared_fact_id": None,
+                "reply_to": "missing",
+            },
+        }
+    )
     assert not contract.validate(invalid).valid
+
+
+def test_request_cannot_attach_evidence_and_report_can():
+    contract = BlackboardBallotContract(
+        allowed_values=("A", "B"),
+        options={"fact_ids": ("f1",), "relations": (), "visible_message_ids": ()},
+    )
+    request = {
+        "vote": "A",
+        "private_reason": "private",
+        "public_message": {
+            "type": "REQUEST",
+            "text": "Who has evidence?",
+            "shared_fact_id": "f1",
+            "reply_to": None,
+        },
+    }
+    assert not contract.validate(json.dumps(request)).valid
+    request["public_message"]["type"] = "REPORT"
+    assert contract.validate(json.dumps(request)).valid
+
+
+def test_new_messages_are_role_aware_and_legacy_records_remain_readable():
+    with pytest.raises(ValueError, match="controller messages"):
+        BlackboardMessage(
+            message_id="m1",
+            author_id="control-source",
+            author_kind="controller",
+            message_type="REPORT",
+            text="invalid role",
+            vote="NORTH",
+            shared_fact_id=None,
+            reply_to=None,
+            round_created=0,
+            micro_step_created=0,
+            expires_after_round=0,
+        )
+    legacy = BlackboardMessage.from_mapping(
+        {
+            "message_id": "old",
+            "author_id": "agent_001",
+            "message_type": "CORRECTION",
+            "text": "historical record",
+            "vote": "NORTH",
+            "shared_fact_id": None,
+            "reply_to": "older",
+            "round_created": 0,
+            "micro_step_created": 1,
+            "expires_after_round": 0,
+        }
+    )
+    assert legacy.schema_version == LEGACY_BLACKBOARD_MESSAGE_SCHEMA_VERSION
+    assert BLACKBOARD_MESSAGE_SCHEMA_VERSION == 2
 
 
 def test_empty_board_has_no_peer_fallback_and_later_posts_are_visible():
@@ -272,7 +344,7 @@ def test_coordination_request_posts_exact_budget_before_sampling():
 
     assert len(controller_messages) == 4
     assert len({message.message_id for message in controller_messages}) == 4
-    assert all(message.message_type == "REQUEST" for message in controller_messages)
+    assert all(message.message_type == "DIRECTIVE" for message in controller_messages)
     assert all(message.shared_fact_id is None for message in controller_messages)
     assert round_record["controller_posts"] == 4
     assert round_record["controller_message_exposures"] <= 4
@@ -296,11 +368,11 @@ def test_board_shared_evidence_is_acquired_with_message_provenance():
                 return json.dumps(
                     {
                         "vote": "A",
-                        "reason": "private",
-                        "shared_fact_id": shared,
+                        "private_reason": "private",
                         "public_message": {
-                            "type": "RESULT",
+                            "type": "REPORT",
                             "text": "I found a useful exact evidence item.",
+                            "shared_fact_id": None if shared == "none" else shared,
                             "reply_to": None,
                         },
                     }
@@ -348,3 +420,70 @@ def test_peer_mode_is_the_default():
         ).controller_actuation_mode
         == DIRECT_RECOMMENDATION
     )
+
+
+def test_pilot_artifact_builder_writes_complete_inspection_bundle(tmp_path):
+    config = load_run_config(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "musr_blackboard_task001_5round_simplified_messages.yaml",
+        environment={},
+    )
+    options = {
+        **dict(config.game.options),
+        "rounds": 1,
+        "initialization": {
+            "mode": "explicit",
+            "initial_votes": ["ALLOCATION_0"] * 24,
+        },
+    }
+    response = json.dumps(
+        {
+            "vote": "A",
+            "private_reason": "private",
+            "public_message": {
+                "type": "REPORT",
+                "text": "Public report without exact evidence.",
+                "shared_fact_id": None,
+                "reply_to": None,
+            },
+        }
+    )
+    config = replace(
+        config,
+        game=replace(config.game, horizon=1, options=options),
+        llm_provider=replace(
+            config.llm_provider,
+            type="mock",
+            model="deterministic-smoke",
+            temperature=0.0,
+            max_output_tokens=256,
+            options={"response": response},
+        ),
+        execution=replace(config.execution, repetitions=1, parallelism=1),
+        pricing=replace(
+            config.pricing,
+            mode="offline",
+            require_fresh_at_launch=False,
+            explicit_unknown_price_override=True,
+        ),
+        budget=replace(
+            config.budget,
+            system_max_cost_per_run=None,
+            max_cost_per_run=None,
+            allow_unbounded_paid_requests=True,
+        ),
+        storage=replace(config.storage, output_dir=str(tmp_path), overwrite=True),
+    )
+    result = run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
+    summary = json.loads(
+        (result.output_dir / "analysis" / "artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert summary["counts"]["reports"] == 24
+    assert summary["counts"]["directives"] == 6
+    assert summary["counts"]["prompt_attempts"] == 24
+    for relative in REQUIRED_OUTPUTS:
+        assert (result.output_dir / relative).is_file(), relative
+    assert len(list((result.output_dir / "analysis" / "prompts").glob("*.md"))) == 24

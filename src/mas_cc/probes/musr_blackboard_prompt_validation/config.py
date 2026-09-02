@@ -94,7 +94,7 @@ class BlackboardValidationConfig:
                     "allow_no_post": True,
                 },
                 "vote_visibility": "public",
-                "prompt_version": 1,
+                "prompt_version": 2,
                 "receiver_epistemic_disposition": "vigilant",
                 "stop_on_consensus": False,
                 "invalid_response_retries": self.invalid_response_retries,

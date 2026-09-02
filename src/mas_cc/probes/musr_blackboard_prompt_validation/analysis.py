@@ -167,7 +167,7 @@ Every S0/S1/S2 call uses `RelationalImitationRoundFeedbackGame.ballot_request` a
 
 ## D. S0/S1/S2 state construction
 
-S0 contains the original private evidence, no acquired evidence, and no visible board message. S1 contains two acquired exact cards, six represented latent values, and one live semantic-only RESULT message. S2 contains five acquired cards, all nine represented latent values, and one live semantic-only REPLY whose `reply_to` points to its archived parent. Older exact-evidence messages have expired, while their evidence persists in private memory.
+S0 contains the original private evidence, no acquired evidence, and no visible board message. S1 contains two acquired exact cards, six represented latent values, and one live semantic-only REPORT message. S2 contains five acquired cards, all nine represented latent values, and one live semantic-only REPORT whose `reply_to` points to its archived parent. Older exact-evidence messages have expired, while their evidence persists in private memory.
 
 ## E. Parallel execution
 
@@ -191,7 +191,7 @@ Truth is summarized against latent coverage, exact evidence-card count, and visi
 
 ## J. Blackboard semantic checks
 
-The sanity tables verify RESULT rendering, valid REPLY targets, semantic-only non-acquisition, exact evidence acquisition, message expiry, persistent acquired evidence, private-reason exclusion, output-schema acceptance, intended S0/S1/S2 coverage, and hidden-data exclusion.
+The sanity tables verify REPORT rendering, valid `reply_to` targets, semantic-only non-acquisition, exact evidence acquisition, message expiry, persistent acquired evidence, private-reason exclusion, output-schema acceptance, intended S0/S1/S2 coverage, and hidden-data exclusion.
 
 ## K. PASS / BORDERLINE PASS / FAIL
 

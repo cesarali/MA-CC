@@ -141,35 +141,22 @@ def _sanity(
         assert isinstance(contract, BlackboardBallotContract)
         visible = tuple(row["sampled_message_ids"])
         vote = next(iter(row["option_letters"]))
-        for message_type in (
-            "CLAIM",
-            "QUESTION",
-            "REQUEST",
-            "RESULT",
-            "REPLY",
-            "CORRECTION",
-        ):
-            reply_to = (
-                visible[0]
-                if message_type in {"REPLY", "CORRECTION"} and visible
-                else None
-            )
+        for message_type in ("REQUEST", "REPORT", "NONE"):
+            reply_to = visible[0] if message_type == "REPORT" and visible else None
             response = json.dumps(
                 {
                     "vote": vote,
-                    "reason": "private",
-                    "shared_fact_id": "none",
+                    "private_reason": "private",
                     "public_message": {
                         "type": message_type,
-                        "text": "public",
+                        "text": None if message_type == "NONE" else "public",
+                        "shared_fact_id": None,
                         "reply_to": reply_to,
                     },
                 }
             )
             valid = contract.validate(response).valid
-            expected_valid = message_type not in {"REPLY", "CORRECTION"} or bool(
-                visible
-            )
+            expected_valid = True
             schema_rows.append(
                 {
                     "state_key": key,
@@ -184,11 +171,11 @@ def _sanity(
             invalid = json.dumps(
                 {
                     "vote": vote,
-                    "reason": "private",
-                    "shared_fact_id": "none",
+                    "private_reason": "private",
                     "public_message": {
-                        "type": "REPLY",
+                        "type": "REPORT",
                         "text": "public",
+                        "shared_fact_id": None,
                         "reply_to": "missing",
                     },
                 }
@@ -196,7 +183,7 @@ def _sanity(
             schema_rows.append(
                 {
                     "state_key": key,
-                    "message_type": "REPLY_INVALID",
+                    "message_type": "REPORT_INVALID_REPLY",
                     "expected_valid": False,
                     "observed_valid": contract.validate(invalid).valid,
                     "passed": not contract.validate(invalid).valid,

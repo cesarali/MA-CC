@@ -1,0 +1,63 @@
+{
+  "agent_assignments": {
+    "agent_001": ["e_skill_p0_t0_b00"],
+    "agent_002": ["e_skill_p0_t1_b00"],
+    "agent_003": ["e_skill_p1_t0_b00"],
+    "agent_004": ["e_skill_p1_t1_b00"],
+    "agent_005": ["e_skill_p2_t0_b00"],
+    "agent_006": ["e_skill_p2_t1_b00"],
+    "agent_007": ["e_skill_p0_t0_b00"],
+    "agent_008": ["e_skill_p0_t1_b00"],
+    "agent_009": ["e_skill_p1_t0_b00"],
+    "agent_010": ["e_skill_p1_t1_b00"],
+    "agent_011": ["e_skill_p2_t0_b00"],
+    "agent_012": ["e_skill_p2_t1_b00"],
+    "agent_013": ["e_skill_p0_t0_b00"],
+    "agent_014": ["e_skill_p0_t1_b00"],
+    "agent_015": ["e_skill_p1_t0_b00"],
+    "agent_016": ["e_skill_p1_t1_b00"],
+    "agent_017": ["e_skill_p2_t0_b00"],
+    "agent_018": ["e_skill_p2_t1_b00"],
+    "agent_019": ["e_coop_p0_p1_b00"],
+    "agent_020": ["e_coop_p0_p2_b00"],
+    "agent_021": ["e_coop_p1_p2_b00"],
+    "agent_022": ["e_coop_p0_p1_b00"],
+    "agent_023": ["e_coop_p0_p2_b00"],
+    "agent_024": ["e_coop_p1_p2_b00"]
+  },
+  "assignment_sha256": "3304cb7fec8399c7a3b6ba2b3c1ee4f76cb97edba02843c6916265f57fedfacc",
+  "card_holder_counts": {
+    "e_coop_p0_p1_b00": 2,
+    "e_coop_p0_p2_b00": 2,
+    "e_coop_p1_p2_b00": 2,
+    "e_skill_p0_t0_b00": 3,
+    "e_skill_p0_t1_b00": 3,
+    "e_skill_p1_t0_b00": 3,
+    "e_skill_p1_t1_b00": 3,
+    "e_skill_p2_t0_b00": 3,
+    "e_skill_p2_t1_b00": 3
+  },
+  "evidence_profile_ids": [
+    "e_skill_p0_t0_b00",
+    "e_skill_p0_t1_b00",
+    "e_skill_p1_t0_b00",
+    "e_skill_p1_t1_b00",
+    "e_skill_p2_t0_b00",
+    "e_skill_p2_t1_b00",
+    "e_coop_p0_p1_b00",
+    "e_coop_p0_p2_b00",
+    "e_coop_p1_p2_b00"
+  ],
+  "population_size": 24,
+  "profile_name": "F9",
+  "profile_source": {
+    "file_sha256": "7330e05f7a2b8468484d54a5787e969a7a22e686508abf0b2d0fbbf1b92a41f6",
+    "path": "results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks/full_profile_packets.json"
+  },
+  "schema_version": "musr_initial_information_v1",
+  "semantic_world_sha256": "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750",
+  "target_cards_per_agent": 1,
+  "target_latents_per_agent": 1,
+  "task_family": "musr_team_allocation",
+  "task_id": "task_001"
+}

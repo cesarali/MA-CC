@@ -76,11 +76,11 @@ pytestmark = pytest.mark.skipif(
 )
 
 NO_CONTROL = (
-    "configs/runs/relational_reasoning/"
+    "configs/runs/relational_reasoning/misselaneous/"
     "relational_imitation_round_feedback_no_control_smoke.yaml"
 )
 CONTROLLED = (
-    "configs/runs/relational_reasoning/"
+    "configs/runs/relational_reasoning/misselaneous/"
     "relational_imitation_round_feedback_controlled_smoke.yaml"
 )
 # The population state lives in the SEMANTIC alphabet; A/B/C are per-call
@@ -569,9 +569,15 @@ def test_shared_fact_repair_guidance_is_strict_and_contract_scoped(malformed):
         allowed_values=LETTERS,
         options={"fact_ids": ("f2",), "relations": ("NORTH",)},
     )
-    result = contract.validate(json.dumps({
-        "vote": "A", "reason": "ok", "shared_fact_id": malformed,
-    }))
+    result = contract.validate(
+        json.dumps(
+            {
+                "vote": "A",
+                "reason": "ok",
+                "shared_fact_id": malformed,
+            }
+        )
+    )
 
     assert not result.is_valid
     assert result.issues[0].invalid_value == malformed
@@ -592,10 +598,13 @@ def test_malformed_ballot_is_corrected_inside_the_same_decision():
         shared = "Fact f2" if len(seen) == 1 else "none"
         return json.dumps({"vote": "A", "reason": "ok", "shared_fact_id": shared})
 
-    result = asyncio.run(run_relational_imitation_round_feedback_game(
-        create_game(config.game), config,
-        MockLLMProvider(config.llm_provider, response_factory=factory),
-    ))
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            MockLLMProvider(config.llm_provider, response_factory=factory),
+        )
+    )
 
     repaired = result.interactions[0].decisions[0]
     assert repaired.validation_attempts == 2
@@ -606,7 +615,10 @@ def test_malformed_ballot_is_corrected_inside_the_same_decision():
     assert seen[0].seed != seen[1].seed
     assert seen[0].metadata["validation_repair"] is False
     assert seen[1].metadata["validation_repair"] is True
-    assert seen[0].metadata["effective_messages_hash"] != seen[1].metadata["effective_messages_hash"]
+    assert (
+        seen[0].metadata["effective_messages_hash"]
+        != seen[1].metadata["effective_messages_hash"]
+    )
 
 
 def test_three_corrections_exhaust_after_four_invalid_ballots():
@@ -619,6 +631,7 @@ def test_three_corrections_exhaust_after_four_invalid_ballots():
         _run(config, ballots=ballots)
 
     assert len(ballots.prompts) == 4
+
 
 # ---- evidence honesty (§18) --------------------------------------------
 
@@ -2837,7 +2850,9 @@ def test_the_overnight_configs_use_the_compact_profile_and_the_full_ones_do_not(
     from mas_cc.config import GridSpec, load_run_config_or_grid
 
     env = {"POTSDAM_API_KEY": "x", "BASE_POTSDAM_LLM_URL": "http://x"}
-    root = Path("configs/runs/relational_reasoning/population_study_01")
+    root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_01"
+    )
     arms = (
         "a_no_control",
         "b_social_control",

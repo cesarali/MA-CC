@@ -4,12 +4,12 @@ llm_provider:
   temperature: 0.0
   max_output_tokens: 256
   options:
-    response: '{"vote":"C","reason":"private smoke reasoning","shared_fact_id":"none","public_message":{"type":"RESULT","text":"My current evidence favors this option.","reply_to":null}}'
+    response: '{"vote":"C","private_reason":"private smoke reasoning","public_message":{"type":"REPORT","text":"My current evidence favors this option.","shared_fact_id":null,"reply_to":null}}'
 
 prompt:
   schema_version: 2
   prompt_family: relational_blackboard_ballot
-  prompt_version: 1
+  prompt_version: 2
   response_contract:
     type: relational_blackboard_ballot
     allowed_values: [A, B, C]
@@ -32,13 +32,22 @@ game:
       exclude_self_authored: true
       allow_no_post: true
     vote_visibility: public
-    prompt_version: 1
+    prompt_version: 2
     receiver_epistemic_disposition: vigilant
     initialization:
       mode: uniform_random
 
 control:
-  mechanism: none
+  mechanism: relational_round_budgeted
+  options:
+    target: correct
+    sensor_sample_size: 6
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 4
+    advocacy_schedule: always
+    message_mode: recommendation_only
+    controller_actuation_mode: coordination_request
 
 execution:
   seed: 20260901
@@ -89,6 +98,6 @@ observability:
     sweep_experiment: false
 
 experiment:
-  name: relational-blackboard-no-control-smoke
-  description: Finite-memory board smoke run without a controller.
-  tags: [relational, board, no-control, smoke]
+  name: relational-blackboard-coordination-smoke
+  description: Finite-memory board smoke run with persistent coordination requests.
+  tags: [relational, board, coordination-request, smoke]
