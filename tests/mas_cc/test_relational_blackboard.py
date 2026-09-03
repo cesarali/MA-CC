@@ -254,6 +254,32 @@ def test_request_cannot_attach_evidence_and_report_can():
     assert contract.validate(json.dumps(request)).valid
 
 
+def test_invalid_blackboard_fact_repair_requires_null_without_coercion():
+    contract = BlackboardBallotContract(
+        allowed_values=("A", "B"),
+        options={"fact_ids": ("f1",), "relations": (), "visible_message_ids": ()},
+    )
+    response = json.dumps(
+        {
+            "vote": "A",
+            "private_reason": "private",
+            "public_message": {
+                "type": "REPORT",
+                "text": "public",
+                "shared_fact_id": "f99",
+                "reply_to": None,
+            },
+        }
+    )
+
+    result = contract.validate(response)
+    assert not result.valid
+    guidance = contract.repair_guidance(result.issues)
+    assert "shared_fact_id to null" in guidance
+    assert "Do not repeat" in guidance
+    assert "f1" not in guidance
+
+
 def test_new_messages_are_role_aware_and_legacy_records_remain_readable():
     with pytest.raises(ValueError, match="vote must be non-empty"):
         BlackboardMessage(

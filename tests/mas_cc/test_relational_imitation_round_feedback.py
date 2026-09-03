@@ -587,6 +587,27 @@ def test_shared_fact_repair_guidance_is_strict_and_contract_scoped(malformed):
     assert "f1" not in guidance and "f3" not in guidance
 
 
+def test_generic_relational_repair_guidance_does_not_use_fragile_slots_super():
+    contract = RelationalBallotContract(
+        allowed_values=LETTERS,
+        options={"fact_ids": ("f2",), "relations": ("NORTH",)},
+    )
+    result = contract.validate(
+        json.dumps(
+            {
+                "vote": "A",
+                "reason": "x" * 601,
+                "shared_fact_id": "none",
+            }
+        )
+    )
+
+    assert not result.is_valid
+    guidance = contract.repair_guidance(result.issues)
+    assert "response.reason" in guidance
+    assert "complete response again" in guidance
+
+
 def test_malformed_ballot_is_corrected_inside_the_same_decision():
     config = _config(rounds=1)
     options = {**dict(config.game.options), "invalid_response_retries": 3}

@@ -982,7 +982,10 @@ class RelationalBallotContract(ResponseContract):
                 f"{allowed}\n\n"
                 "Do not include a label, fact text, punctuation, or explanation in that field."
             )
-        return super().repair_guidance(issues)
+        # ``dataclass(slots=True)`` creates a replacement class object.  A
+        # zero-argument ``super()`` can retain the pre-replacement ``__class__``
+        # cell and fail at runtime while constructing a validation retry.
+        return ResponseContract.repair_guidance(self, issues)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1218,12 +1221,12 @@ class BlackboardBallotContract(RelationalBallotContract):
             "response.public_message.shared_fact_id",
             "response.public_message",
         }:
-            allowed = ", ".join(f'"{value}"' for value in self.fact_ids)
             return (
                 "Your previous public_message used an invalid shared_fact_id.\n\n"
-                "Return the complete JSON object again. REQUEST and NONE must use "
-                "null. REPORT may use null or one available bare identifier"
-                f"{': ' + allowed if allowed else ''}."
+                "Return a complete replacement JSON object. For this correction, "
+                "set public_message.shared_fact_id to null. Do not repeat the "
+                "previous identifier and do not substitute another identifier. "
+                "Keep every other required field in the original response schema."
             )
         return RelationalBallotContract.repair_guidance(self, issues)
 

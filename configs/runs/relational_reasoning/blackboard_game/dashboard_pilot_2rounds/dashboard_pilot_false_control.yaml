@@ -1,0 +1,123 @@
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 1.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 4.5}
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 2
+  response_contract: {type: relational_blackboard_ballot, allowed_values: [A, B, C]}
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 2
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks
+    task_id: task_001
+    initial_information:
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_F9_N24.json
+      expected_file_sha256: a0bd717bcca2f67f73e4aa981f292f9974f541949bf4fd2843cec47e281de45f
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 1
+    social_mode: board
+    board: {sampling: uniform, message_lifetime_rounds: 1, exclude_self_authored: true, allow_no_post: true}
+    epistemic_persistence: 0.74
+    vote_visibility: public
+    prompt_version: 2
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 3
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: local_vote
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_1
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+    controller_actuation_mode: coordination_request
+    controller_timing: dawn_only
+
+execution: {seed: 20260902, repetitions: 1, parallelism: 1, fail_fast: true}
+
+pricing: {mode: live, max_age_seconds: 600, require_fresh_at_launch: true, fallback_policy: deny, explicit_unknown_price_override: false}
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 20.0
+  max_cost_per_run: 20.0
+  max_provider_requests: 1000
+  max_input_tokens: 10000000
+  max_output_tokens: 5000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    detailed_prompt_audit:
+      enabled: true
+      log_every_n_rounds: 1
+      always_log_first_n_rounds: 2
+      max_logged_prompts_per_game: null
+      max_logged_prompts_per_run: null
+      always_log_provider_errors: true
+      always_log_invalid_responses: true
+
+storage:
+  output_dir: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_dashboard_pilot_2rounds
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+observability:
+  schema_version: 1
+  comet: {sweep_experiment: false}
+
+experiment:
+  name: musr-blackboard-dashboard-pilot-2rounds
+  description: Two-round, one-episode engineering pilot for the modern blackboard dashboard using the false-control arm.
+  tags: [musr, blackboard, dashboard, pilot, false-control, dawn-only]
+  metadata:
+    study: blackboard_dashboard_pilot_2rounds
+    arm: false_control
+    task_id: task_001
+    ground_truth: ALLOCATION_0
+    controller_target: ALLOCATION_1
+    controller_target_is_truth: false
+    population_size: 24
+    population_rounds: 2
+    social_group_size: 1
+    sensor_sample_size: 12
+    beta: 4.0
+    theta: 0.5
+    board_lifetime_rounds: 1
+    repetitions: 1
+
+grid:
+  game.options.epistemic_persistence: [0.74]
+  control.options.intervention_budget: [3]
