@@ -60,8 +60,6 @@ def _file_hash(path: Path) -> str:
 
 
 def _slurm_walltime_seconds(value: str) -> int:
-    """Parse SLURM's ``[days-]hours:minutes:seconds`` walltime form."""
-
     match = re.fullmatch(r"(?:(\d+)-)?(\d+):(\d{2}):(\d{2})", value)
     if match is None:
         raise ValueError(f"invalid SLURM time limit: {value!r}")
@@ -71,24 +69,17 @@ def _slurm_walltime_seconds(value: str) -> int:
     return ((days * 24 + hours) * 60 + minutes) * 60 + seconds
 
 
-def _default_job_script(execution_site: str, *, cell_array: bool) -> Path:
-    filename = "run_study_cell_array.job" if cell_array else "run_config_array.job"
-    root = "scripts/Amarel/SLURM" if execution_site == "amarel" else "scripts/Potsdam/SLURM"
-    return Path(root) / filename
-
-
 def _absolute_path(path: str | Path, *, preserve_symlinks: bool = False) -> Path:
-    """Return an absolute path, optionally retaining a site's lexical mount."""
-
     expanded = Path(path).expanduser()
     if preserve_symlinks:
-        if expanded.is_absolute():
-            return Path(os.path.abspath(str(expanded)))
-        logical_cwd = Path(os.environ.get("PWD", os.getcwd()))
-        candidate = logical_cwd / expanded
-        if candidate.exists():
-            return Path(os.path.normpath(str(candidate)))
+        return Path(os.path.abspath(str(expanded)))
     return expanded.resolve()
+
+
+def _default_job_script(execution_site: str, *, cell_array: bool) -> Path:
+    filename = "run_study_cell_array.job" if cell_array else "run_config_array.job"
+    folder = "scripts/Amarel/SLURM" if execution_site == "amarel" else "scripts/Potsdam/SLURM"
+    return Path(folder) / filename
 
 
 def _git_commit(root: Path) -> str:
@@ -116,6 +107,9 @@ class SubmissionEntry:
     expected_episode_count: int
     execution_seed: int
     git_commit: str
+    source_extension_index: int = 0
+    source_submission_attempt: int = 0
+    scientific_cell_key: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +127,7 @@ def build_submission_entries(
 ) -> tuple[SubmissionEntry, ...]:
     """Resolve every config and create the stable scientific array mapping."""
 
-    destination = Path(results_dir).expanduser().resolve()
+    destination = Path(os.path.abspath(str(Path(results_dir).expanduser())))
     commit = _git_commit(spec.config_dir) if git_commit is None else git_commit
     entries: list[SubmissionEntry] = []
     labels: set[str] = set()
@@ -191,7 +185,10 @@ def write_submission_manifest(
             stream, fieldnames=SUBMISSION_COLUMNS, lineterminator="\n"
         )
         writer.writeheader()
-        writer.writerows(asdict(entry) for entry in entries)
+        writer.writerows(
+            {column: getattr(entry, column) for column in SUBMISSION_COLUMNS}
+            for entry in entries
+        )
     return destination
 
 
@@ -269,27 +266,75 @@ def _study_manifest(
     }
 
 
-def prepare_study(
+def _validate_required_initializations(spec: StudySpec) -> None:
+    """Paired dynamics may start only after every shared state is sealed."""
+
+    from mas_cc.games import create_game
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization import (
+        initialization_artifact_path,
+        paired_initialization_required,
+        read_initialization_artifact,
+    )
+    from mas_cc.studies.initialization import build_initialization_plan
+
+    paired_configs = []
+    for path in spec.configs:
+        source = load_run_config_or_grid(path)
+        base = source.base if isinstance(source, GridSpec) else source
+        if paired_initialization_required(base):
+            paired_configs.append((path, base))
+    if not paired_configs:
+        return
+    plans = build_initialization_plan(
+        [path for path, _ in paired_configs],
+        initialization_artifact_path(
+            paired_configs[0][1], paired_configs[0][1].execution.seed
+        ).parent,
+    )
+    for _, config in paired_configs:
+        game = create_game(config.game)
+        for plan in plans:
+            episode_config = replace(
+                config,
+                execution=replace(config.execution, seed=plan.episode_seed),
+            )
+            path = initialization_artifact_path(episode_config, plan.episode_seed)
+            if not path.is_file():
+                raise ValueError(
+                    "paired initialization is incomplete; missing artifact "
+                    f"for repetition {plan.repetition_index}: {path}"
+                )
+            read_initialization_artifact(path, game, episode_config, plan.episode_seed)
+
+
+def submit_study(
     config_dir: str | Path,
     results_dir: str | Path | None = None,
     *,
     throttle: int | None = None,
     job_script: str | Path | None = None,
     require_results_under: str | Path | None = None,
-    execution_site: str = "unspecified",
+    execution_site: str = "potsdam",
+    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> SubmissionResult:
-    """Preflight all configs and publish manifests without contacting a scheduler."""
+    """Preflight all configs, publish manifests, then call ``sbatch`` exactly once."""
 
     from mas_cc.cli.experiment import run_experiment_preflight
 
-    if execution_site not in {"unspecified", "potsdam", "nersc", "amarel"}:
+    if run is None and os.environ.get("NERSC_HOST") == "perlmutter":
         raise ValueError(
-            "execution_site must be 'unspecified', 'potsdam', 'nersc', or 'amarel'"
+            "batch study submission is disabled on NERSC Perlmutter; use "
+            "`mas-cc study prepare` followed by `scripts/nersc/run_study.sh` "
+            "so the allocation uses --qos=interactive"
         )
+    if execution_site not in {"potsdam", "nersc", "amarel"}:
+        raise ValueError("execution_site must be 'potsdam', 'nersc', or 'amarel'")
     spec = discover_study(config_dir)
     from .preflight import validate_study_preflight_contract
 
     validate_study_preflight_contract(spec)
+    _validate_required_initializations(spec)
+    runner = subprocess.run if run is None else run
     configured_results = spec.execution.get("results_root")
     amarel_results_root = _absolute_path(
         os.environ.get("AMAREL_RESULTS_ROOT", AMAREL_RESULTS_ROOT),
@@ -312,7 +357,8 @@ def prepare_study(
     )
     if required_results_under is not None:
         required_root = _absolute_path(
-            str(required_results_under), preserve_symlinks=execution_site == "amarel"
+            str(required_results_under),
+            preserve_symlinks=execution_site == "amarel",
         )
         try:
             study_dir.relative_to(required_root)
@@ -362,6 +408,11 @@ def prepare_study(
         json.dumps(_study_manifest(spec, entries), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    # New studies are born as extension zero. Root-level manifests remain as
+    # compatibility projections for existing readers and tools.
+    from .extension import index_existing_study
+
+    index_existing_study(study_dir)
 
     mode = str(spec.execution.get("mode", "config_array"))
     execution_plan: Mapping[str, Any] | None = None
@@ -410,10 +461,7 @@ def prepare_study(
         array = f"0-{len(shards) - 1}%{plan.array_throttle}"
         if execution_site == "amarel":
             if _slurm_walltime_seconds(plan.time_limit) > AMAREL_MAX_WALLTIME_SECONDS:
-                raise ValueError(
-                    "Amarel time limit cannot exceed 3-00:00:00; use episode "
-                    "checkpoints and a throttled/resubmitted array"
-                )
+                raise ValueError("Amarel time limit cannot exceed 3-00:00:00")
             scheduler_options = (
                 f"--account={AMAREL_ACCOUNT}",
                 f"--partition={AMAREL_PARTITION}",
@@ -472,13 +520,12 @@ def prepare_study(
         )
     if not script.is_file():
         raise ValueError(f"SLURM study job script does not exist: {script}")
-    prepared = _now()
     (study_dir / "preparation.json").write_text(
         json.dumps(
             {
                 "schema_version": 1,
                 "status": "prepared",
-                "prepared_at": prepared,
+                "prepared_at": _now(),
                 "execution_site": execution_site,
                 "array": array,
                 "worker_manifest": str(execution_manifest or manifest_path),
@@ -489,50 +536,6 @@ def prepare_study(
         )
         + "\n",
         encoding="utf-8",
-    )
-    return SubmissionResult(
-        study_dir, manifest_path, None, entries, command, execution_plan
-    )
-
-
-def submit_study(
-    config_dir: str | Path,
-    results_dir: str | Path | None = None,
-    *,
-    throttle: int | None = None,
-    job_script: str | Path | None = None,
-    require_results_under: str | Path | None = None,
-    execution_site: str = "potsdam",
-    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
-) -> SubmissionResult:
-    """Prepare a study, then call ``sbatch`` exactly once."""
-
-    if execution_site not in {"potsdam", "amarel"}:
-        raise ValueError("batch study submission supports only 'potsdam' or 'amarel'")
-    if run is None and os.environ.get("NERSC_HOST") == "perlmutter":
-        raise ValueError(
-            "batch study submission is disabled on NERSC Perlmutter; use "
-            "`mas-cc study prepare` followed by `scripts/nersc/run_study.sh` "
-            "so the allocation uses --qos=interactive"
-        )
-    prepared = prepare_study(
-        config_dir,
-        results_dir,
-        throttle=throttle,
-        job_script=job_script,
-        require_results_under=require_results_under,
-        execution_site=execution_site,
-    )
-    runner = subprocess.run if run is None else run
-    command = prepared.command
-    study_dir = prepared.study_dir
-    array = next(
-        (
-            argument.removeprefix("--array=")
-            for argument in command
-            if argument.startswith("--array=")
-        ),
-        "",
     )
     started = _now()
     try:
@@ -569,7 +572,7 @@ def submit_study(
                 "array": array,
                 "command": list(command),
                 "stdout": stdout,
-                "execution_plan": prepared.execution_plan,
+                "execution_plan": execution_plan,
             },
             indent=2,
             sort_keys=True,
@@ -578,13 +581,37 @@ def submit_study(
         encoding="utf-8",
     )
     return SubmissionResult(
-        study_dir,
-        prepared.manifest_path,
-        job_id,
-        prepared.entries,
-        command,
-        prepared.execution_plan,
+        study_dir, manifest_path, job_id, entries, command, execution_plan
     )
+
+
+def prepare_study(
+    config_dir: str | Path,
+    results_dir: str | Path | None = None,
+    *,
+    throttle: int | None = None,
+    job_script: str | Path | None = None,
+    require_results_under: str | Path | None = None,
+    execution_site: str = "potsdam",
+) -> SubmissionResult:
+    """Prepare manifests and a scheduler command without contacting SLURM."""
+
+    def _capture(
+        command: Sequence[str], **_: Any
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 0\n", "")
+
+    result = submit_study(
+        config_dir,
+        results_dir,
+        throttle=throttle,
+        job_script=job_script,
+        require_results_under=require_results_under,
+        execution_site=execution_site,
+        run=_capture,
+    )
+    (result.study_dir / "submission.json").unlink(missing_ok=True)
+    return replace(result, job_id=None)
 
 
 __all__ = [

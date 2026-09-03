@@ -198,40 +198,53 @@ def build_parser() -> argparse.ArgumentParser:
         help="also create a copy-friendly zip excluding :Zone.Identifier sidecars",
     )
 
+    blackboard = commands.add_parser(
+        "blackboard", help="inspect a relational blackboard run without modifying it"
+    )
+    blackboard_commands = blackboard.add_subparsers(
+        dest="blackboard_command", required=True
+    )
+    blackboard_dashboard = blackboard_commands.add_parser(
+        "dashboard", help="serve the interactive read-only blackboard dashboard"
+    )
+    blackboard_dashboard.add_argument("--run-dir", type=Path, required=True)
+    blackboard_dashboard.add_argument("--episode-id")
+    blackboard_dashboard.add_argument("--host", default="127.0.0.1")
+    blackboard_dashboard.add_argument("--port", type=int, default=8765)
+    blackboard_export = blackboard_commands.add_parser(
+        "export", help="write a portable completed-run dashboard"
+    )
+    blackboard_export.add_argument("--run-dir", type=Path, required=True)
+    blackboard_export.add_argument("--episode-id")
+    blackboard_export.add_argument("--output-dir", type=Path, required=True)
+
     study = commands.add_parser(
         "study", help="submit and aggregate a folder of ordinary experiment configs"
     )
     study_commands = study.add_subparsers(dest="study_command", required=True)
     study_prepare = study_commands.add_parser(
-        "prepare",
-        help="preflight every config and write worker manifests without submitting",
+        "prepare", help="preflight every config and write worker manifests without submitting"
     )
     study_prepare.add_argument("--config-dir", type=Path, required=True)
+    study_prepare.add_argument("--results-dir", type=Path)
+    study_prepare.add_argument("--throttle", type=int)
+    study_prepare.add_argument("--require-results-under", type=Path)
     study_prepare.add_argument(
-        "--results-dir",
-        type=Path,
-        help="common study result root (default: results/<study.name>)",
-    )
-    study_prepare.add_argument(
-        "--throttle",
-        type=int,
-        help="maximum number of simultaneously running worker processes",
-    )
-    study_prepare.add_argument(
-        "--require-results-under",
-        type=Path,
-        help="explicit site result boundary recorded in the prepared manifest",
-    )
-    study_prepare.add_argument(
-        "--execution-site",
-        choices=("amarel", "nersc", "potsdam"),
-        help="stamp prepared artifacts for one scheduler adapter",
+        "--execution-site", choices=("amarel", "nersc", "potsdam"), default="potsdam"
     )
     study_preflight = study_commands.add_parser(
         "preflight", help="validate every config and the optional strict study contract"
     )
     study_preflight.add_argument("--config-dir", type=Path, required=True)
     study_preflight.add_argument("--output-dir", type=Path, required=True)
+    study_initialize = study_commands.add_parser(
+        "initialize",
+        help="generate one shared relational local-vote state per repetition",
+    )
+    study_initialize.add_argument(
+        "--config-dir", type=Path, action="append", required=True
+    )
+    study_initialize.add_argument("--output-dir", type=Path, required=True)
     study_submit = study_commands.add_parser(
         "submit", help="preflight every config and submit one SLURM config array"
     )
@@ -262,6 +275,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="explicit site result boundary recorded in the prepared manifest",
     )
+    study_extend = study_commands.add_parser(
+        "extend", help="reuse compatible episodes and submit only missing target work"
+    )
+    study_extend.add_argument("--study-dir", type=Path, required=True)
+    study_extend.add_argument("--config-dir", type=Path, required=True)
+    study_extend.add_argument("--dry-run", action="store_true")
+    study_extend.add_argument("--throttle", type=int)
+    study_extend.add_argument("--job-script", type=Path)
+    study_index = study_commands.add_parser(
+        "index-existing", help="add lineage identity to an existing standardized study"
+    )
+    study_index.add_argument("--study-dir", type=Path, required=True)
+    study_index.add_argument("--dry-run", action="store_true")
     study_aggregate = study_commands.add_parser(
         "aggregate",
         help="validate, normalize, analyze, plot, report, and package a study",
@@ -535,6 +561,11 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             help="artifact directory (default: storage.output_dir from the config)",
         )
+        sub.add_argument(
+            "--approve-preflight",
+            type=Path,
+            help="preflight_id.txt required by real-provider probes",
+        )
 
     inspect = commands.add_parser(
         "inspect", help="produce stable phase inspection artifacts"
@@ -737,39 +768,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         if summary.get("archive"):
             print(f"  archive: {summary['archive']}")
         return 0
-    if args.command == "study" and args.study_command == "prepare":
-        from mas_cc.studies import prepare_study
+    if args.command == "blackboard" and args.blackboard_command == "dashboard":
+        from mas_cc.blackboard_dashboard import serve_dashboard
 
         try:
-            result = prepare_study(
-                args.config_dir,
-                args.results_dir,
-                throttle=args.throttle,
-                require_results_under=args.require_results_under,
-                execution_site=args.execution_site or "unspecified",
+            serve_dashboard(
+                args.run_dir,
+                episode_id=args.episode_id,
+                host=args.host,
+                port=args.port,
             )
-        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        worker_manifest = (
-            result.study_dir / "execution_manifest.csv"
-            if result.execution_plan is not None
-            else result.manifest_path
-        )
-        print(
-            f"Study {result.study_dir.name} prepared: {len(result.entries)} config(s), "
-            f"{result.study_dir}"
-        )
-        print(f"  Worker manifest: {worker_manifest}")
-        if result.execution_plan is not None:
-            plan = result.execution_plan
-            print(
-                f"  Execution: {plan['shard_count']} cell shard(s), "
-                f"throttle {plan['array_throttle']}, "
-                f"{plan['total_episode_slots']} episode slot(s), "
-                f"{plan['total_request_concurrency']} request slot(s), "
-                f"~{plan['estimated_rpm']:.0f} RPM"
+        return 0
+    if args.command == "blackboard" and args.blackboard_command == "export":
+        from mas_cc.blackboard_dashboard import export_dashboard
+
+        try:
+            destination = export_dashboard(
+                args.run_dir, args.output_dir, episode_id=args.episode_id
             )
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Interactive blackboard dashboard exported: {destination}")
         return 0
     if args.command == "study" and args.study_command == "preflight":
         from mas_cc.studies import run_study_preflight
@@ -787,6 +810,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(f"  Report: {result.output_dir / 'report.md'}")
         return 0
+    if args.command == "study" and args.study_command == "prepare":
+        from mas_cc.studies import prepare_study
+
+        try:
+            result = prepare_study(
+                args.config_dir,
+                args.results_dir,
+                throttle=args.throttle,
+                require_results_under=args.require_results_under,
+                execution_site=args.execution_site,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        worker_manifest = (
+            result.study_dir / "execution_manifest.csv"
+            if result.execution_plan is not None
+            else result.manifest_path
+        )
+        print(f"Study {result.study_dir.name} prepared: {len(result.entries)} config(s), {result.study_dir}")
+        print(f"  Worker manifest: {worker_manifest}")
+        return 0
+    if args.command == "study" and args.study_command == "initialize":
+        from mas_cc.studies.initialization import materialize_study_initializations
+
+        try:
+            plan = materialize_study_initializations(args.config_dir, args.output_dir)
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Materialized {len(plan)} paired initialization artifacts")
+        print(f"  Output: {args.output_dir.resolve()}")
+        return 0
     if args.command == "study" and args.study_command == "submit":
         from mas_cc.studies import submit_study
 
@@ -796,8 +852,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.results_dir,
                 throttle=args.throttle,
                 job_script=args.job_script,
-                require_results_under=args.require_results_under,
                 execution_site=args.execution_site,
+                require_results_under=args.require_results_under,
             )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
@@ -836,6 +892,44 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{summary['archive']}"
         )
         return 0 if summary["complete"] else 1
+    if args.command == "study" and args.study_command == "index-existing":
+        from mas_cc.studies import index_existing_study
+
+        try:
+            result = index_existing_study(args.study_dir, dry_run=args.dry_run)
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        action = "Inspected" if args.dry_run else "Indexed"
+        print(f"{action} study lineage {result['study_lineage_id']}: {args.study_dir}")
+        return 0
+    if args.command == "study" and args.study_command == "extend":
+        from mas_cc.studies import extend_study
+
+        try:
+            result = extend_study(
+                args.study_dir,
+                args.config_dir,
+                dry_run=args.dry_run,
+                throttle=args.throttle,
+                job_script=args.job_script,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        report = result.plan.report()
+        action = "Extension dry run" if result.dry_run else "Extension planned"
+        print(
+            f"{action}: {report['target_cells']} cells, "
+            f"{report['target_episodes']} target episodes, "
+            f"{report['reused_episodes']} reused, "
+            f"{report['missing_episodes_to_execute']} missing"
+        )
+        if result.job_id is not None:
+            print(f"  Submitted as SLURM job {result.job_id}")
+        elif report["missing_episodes_to_execute"] == 0:
+            print("  Empty delta: no SLURM job submitted")
+        return 0
     if args.command == "synthetic":
         from .synthetic import (
             DEFAULT_EPSILON_GRID,
@@ -1019,11 +1113,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{message}: {destination}")
         return 0 if ok else 1
     if args.command == "probe":
-        from .probe import run_controller_retention_probe
+        from .probe import run_configured_probe
 
         try:
-            ok, destination, message = run_controller_retention_probe(
-                args.config, args.output_dir, mode=args.probe_command
+            ok, destination, message = run_configured_probe(
+                args.config,
+                args.output_dir,
+                mode=args.probe_command,
+                approve_preflight=args.approve_preflight,
             )
         except (
             ConfigurationError,

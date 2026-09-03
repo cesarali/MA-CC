@@ -28,6 +28,19 @@ PERSISTENCE_HIGH_STATISTICS_FALSE_CONTRACT = (
 PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT = (
     "relational_persistence_high_statistics_truth_v1"
 )
+PERSISTENCE_LARGE_POPULATION_FALSE_CONTRACT = (
+    "relational_persistence_large_population_false_v1"
+)
+PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT = (
+    "relational_persistence_large_population_truth_v1"
+)
+MUSR_BLACKBOARD_POPULATION_01_CONTRACT = "musr_blackboard_population_01_v1"
+MUSR_BLACKBOARD_TASK_HASH = (
+    "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750"
+)
+MUSR_BLACKBOARD_ASSIGNMENT_HASH = (
+    "a0bd717bcca2f67f73e4aa981f292f9974f541949bf4fd2843cec47e281de45f"
+)
 
 
 def _repo_root(path: Path) -> Path:
@@ -73,6 +86,10 @@ def _validate_persistence_contract(
     redundancy_value: int = 3,
     expected_truth: str = "NORTH",
     expected_target: str | None = None,
+    population_value: int = 12,
+    sensor_value: int = 6,
+    receiver_disposition: str = "naive",
+    initialization_mode: str = "local_vote",
 ) -> dict[str, Any]:
     """Validate an exact finite-persistence study design."""
 
@@ -139,6 +156,7 @@ def _validate_persistence_contract(
     betas: set[float] = set()
     thresholds: set[float] = set()
     repetitions: set[int] = set()
+    initialization_modes: set[str] = set()
     resolved_cells: set[tuple[int, str, float, int]] = set()
     task_audit: dict[str, dict[str, Any]] = {}
 
@@ -176,8 +194,12 @@ def _validate_persistence_contract(
         betas.add(float(control_options.get("beta")))
         thresholds.add(float(control_options.get("threshold")))
         repetitions.add(int(config.execution.repetitions))
+        initialization = options.get("initialization", {})
+        initialization_modes.add(str(initialization.get("mode")))
         try:
-            task = load_relational_task(dataset, task_id, population_size=12)
+            task = load_relational_task(
+                dataset, task_id, population_size=population_value
+            )
             raw_task = json.loads(Path(task.source_path).read_text(encoding="utf-8"))
             controller = create_control(config.control)
             target = controller.resolved_target_for_task(task, config.execution.seed)
@@ -245,8 +267,8 @@ def _validate_persistence_contract(
         }
 
     _require(
-        populations == {12},
-        f"population size must be [12], got {sorted(populations)}",
+        populations == {population_value},
+        f"population size must be [{population_value}], got {sorted(populations)}",
         errors,
     )
     _require(rounds == {30}, f"rounds must be [30], got {sorted(rounds)}", errors)
@@ -265,7 +287,11 @@ def _validate_persistence_contract(
         f"support redundancy must be [{redundancy_value}], got {sorted(redundancies)}",
         errors,
     )
-    _require(sensors == {6}, f"sensor size must be [6], got {sorted(sensors)}", errors)
+    _require(
+        sensors == {sensor_value},
+        f"sensor size must be [{sensor_value}], got {sorted(sensors)}",
+        errors,
+    )
     _require(
         persistence == set(rho_values),
         f"rho values are incorrect: {sorted(persistence)}",
@@ -295,8 +321,13 @@ def _validate_persistence_contract(
         errors,
     )
     _require(
-        dispositions == {"naive"},
-        f"receiver must be naive, got {sorted(dispositions)}",
+        dispositions == {receiver_disposition},
+        f"receiver must be {receiver_disposition}, got {sorted(dispositions)}",
+        errors,
+    )
+    _require(
+        initialization_modes == {initialization_mode},
+        f"initialization mode must be {initialization_mode}, got {sorted(initialization_modes)}",
         errors,
     )
     _require(
@@ -379,6 +410,7 @@ def _validate_persistence_contract(
         "schedule": sorted(schedules),
         "number_of_frozen_tasks": len(tasks),
         "repetitions": sorted(repetitions),
+        "initialization_modes": sorted(initialization_modes),
         "structural_regimes": len(resolved_cells),
         "resolved_regimes": [list(value) for value in sorted(resolved_cells)],
         "total_cells": len(cells),
@@ -472,6 +504,315 @@ def _validate_persistence_high_statistics_contract(
     )
 
 
+def _validate_persistence_large_population_contract(
+    spec: StudySpec, *, truth_aligned: bool
+) -> dict[str, Any]:
+    """Validate the focused N=24, q=1, L=2 paired persistence successor."""
+
+    return _validate_persistence_contract(
+        spec,
+        contract=(
+            PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT
+            if truth_aligned
+            else PERSISTENCE_LARGE_POPULATION_FALSE_CONTRACT
+        ),
+        rho_values=[0.75, 0.85, 1.0],
+        repetitions_value=20,
+        target_is_truth=truth_aligned,
+        q_values_expected=[1],
+        evidence_strategies_expected=["strategic"],
+        budget_values=[6, 8, 12, 16, 18, 24],
+        depth_value=2,
+        redundancy_value=6,
+        expected_truth="SOUTHWEST",
+        expected_target="SOUTHWEST" if truth_aligned else "SOUTH",
+        population_value=24,
+        sensor_value=12,
+        receiver_disposition="vigilant",
+        initialization_mode="paired_local_vote",
+    )
+
+
+def _validate_musr_blackboard_population_01_contract(
+    spec: StudySpec,
+) -> dict[str, Any]:
+    """Validate the exact 27-cell, 270-episode frozen blackboard design."""
+
+    errors: list[str] = []
+    _require(
+        len(spec.configs) == 3, "study must list exactly three arm configs", errors
+    )
+    expected_counts = {"no_control": 3, "truth_control": 12, "false_control": 12}
+    expected_rho = {0.74, 0.85, 1.0}
+    expected_b = {3, 6, 12, 24}
+    all_cells: list[Any] = []
+    arm_cells: dict[str, list[Any]] = {key: [] for key in expected_counts}
+    coordinates: set[tuple[str, float, int | None]] = set()
+    targets: dict[str, set[str | None]] = {key: set() for key in expected_counts}
+    task_audit: dict[str, Any] | None = None
+
+    for path in spec.configs:
+        source = load_run_config_or_grid(path)
+        _require(
+            isinstance(source, GridSpec), f"{path.name} must be a grid config", errors
+        )
+        if not isinstance(source, GridSpec):
+            continue
+        axes = [(axis.path, list(axis.values)) for axis in source.axes]
+        for cell in source.cells:
+            config = cell.config
+            options = config.game.options
+            metadata = config.experiment.metadata
+            arm = str(metadata.get("arm"))
+            _require(arm in expected_counts, f"unknown arm {arm!r}", errors)
+            if arm not in arm_cells:
+                continue
+            arm_cells[arm].append(cell)
+            all_cells.append(cell)
+            rho = float(options.get("epistemic_persistence", -1))
+            control_options = config.control.options
+            budget = (
+                None
+                if arm == "no_control"
+                else int(control_options.get("intervention_budget", -1))
+            )
+            coordinates.add((arm, rho, budget))
+            _require(
+                config.game.type == "relational_imitation_round_feedback",
+                "game type is not frozen",
+                errors,
+            )
+            _require(
+                config.game.population_size == 24 and config.game.horizon == 30,
+                "N and horizon must be 24 and 30",
+                errors,
+            )
+            _require(
+                options.get("rounds") == 30 and options.get("social_group_size") == 1,
+                "rounds and q must be 30 and 1",
+                errors,
+            )
+            _require(
+                options.get("social_mode") == "board",
+                "social mode must be board",
+                errors,
+            )
+            board = options.get("board", {})
+            _require(
+                board.get("message_lifetime_rounds") == 1, "tau_B must equal 1", errors
+            )
+            _require(
+                options.get("task_family") == "musr_team_allocation"
+                and options.get("task_id") == "task_001",
+                "task must be MuSR task_001",
+                errors,
+            )
+            _require(
+                config.execution.repetitions == 10,
+                "every cell must have 10 repetitions",
+                errors,
+            )
+            _require(
+                metadata.get("common_random_numbers_across_grid") is True,
+                "common random numbers must be enabled",
+                errors,
+            )
+            initialization = options.get("initialization", {})
+            _require(
+                initialization.get("mode") == "paired_local_vote"
+                and initialization.get("require_artifact") is True,
+                "paired initialization must be required",
+                errors,
+            )
+            assignment = _dataset_path(
+                spec, options.get("initial_information", {}).get("artifact_path")
+            )
+            _require(
+                assignment.is_file(),
+                f"missing assignment artifact {assignment}",
+                errors,
+            )
+            if assignment.is_file():
+                _require(
+                    hashlib.sha256(assignment.read_bytes()).hexdigest()
+                    == MUSR_BLACKBOARD_ASSIGNMENT_HASH,
+                    "assignment hash is not frozen",
+                    errors,
+                )
+            dataset = _dataset_path(spec, options.get("task_dataset_dir"))
+            try:
+                task = load_relational_task(dataset, "task_001", population_size=24)
+            except (OSError, ValueError) as exc:
+                # MuSR tasks use the specialized adapter rather than the spatial loader.
+                try:
+                    from mas_cc.games.relational_reasoning.data import (
+                        load_musr_team_allocation_task,
+                    )
+
+                    task = load_musr_team_allocation_task(
+                        dataset,
+                        "task_001",
+                        population_size=24,
+                        initial_information_path=assignment,
+                        initial_information_sha256=MUSR_BLACKBOARD_ASSIGNMENT_HASH,
+                    )
+                except (OSError, ValueError) as nested:
+                    errors.append(f"cannot validate frozen MuSR task: {nested}")
+                    continue
+            _require(
+                task.correct_relation == "ALLOCATION_0",
+                "gold target must be ALLOCATION_0",
+                errors,
+            )
+            semantic_hash = json.loads(
+                (dataset / "task_001" / "base_task.json").read_text(encoding="utf-8")
+            ).get("semantic_world_sha256")
+            _require(
+                semantic_hash == MUSR_BLACKBOARD_TASK_HASH,
+                "task semantic hash is not frozen",
+                errors,
+            )
+            if task_audit is None:
+                task_audit = {
+                    "task_id": "task_001",
+                    "fingerprint_sha256": semantic_hash,
+                    "ground_truth": task.correct_relation,
+                    "controller_target": "ALLOCATION_0 / ALLOCATION_1 by arm",
+                    "assignment_path": str(assignment),
+                    "assignment_sha256": MUSR_BLACKBOARD_ASSIGNMENT_HASH,
+                }
+            if arm == "no_control":
+                _require(
+                    config.control.mechanism == "none",
+                    "no-control arm must use mechanism none",
+                    errors,
+                )
+                _require(
+                    len(axes) == 1
+                    and axes[0]
+                    == ("game.options.epistemic_persistence", [0.74, 0.85, 1.0]),
+                    "no-control grid must contain only rho",
+                    errors,
+                )
+                target = None
+            else:
+                _require(
+                    config.control.mechanism == "relational_round_budgeted",
+                    "controlled arms require relational_round_budgeted",
+                    errors,
+                )
+                _require(
+                    float(control_options.get("beta", -1)) == 4.0
+                    and float(control_options.get("threshold", -1)) == 0.5,
+                    "beta/theta must equal 4/0.5",
+                    errors,
+                )
+                _require(
+                    int(control_options.get("sensor_sample_size", -1)) == 12,
+                    "q_c must equal 12",
+                    errors,
+                )
+                _require(
+                    control_options.get("policy") == "soft_target",
+                    "policy must be soft_target",
+                    errors,
+                )
+                _require(
+                    control_options.get("controller_actuation_mode")
+                    == "coordination_request"
+                    and control_options.get("controller_timing") == "dawn_only",
+                    "controlled arms must use dawn-only coordination requests",
+                    errors,
+                )
+                _require(
+                    control_options.get("message_mode") == "recommendation_only"
+                    and control_options.get("advocacy_schedule") == "soft",
+                    "message mode/schedule are not frozen",
+                    errors,
+                )
+                controller = create_control(config.control)
+                target = controller.resolved_target_for_task(
+                    task, config.execution.seed
+                )
+                expected_target = (
+                    "ALLOCATION_0" if arm == "truth_control" else "ALLOCATION_1"
+                )
+                _require(
+                    target == expected_target,
+                    f"{arm} target must be {expected_target}",
+                    errors,
+                )
+                _require(
+                    axes
+                    == [
+                        ("game.options.epistemic_persistence", [0.74, 0.85, 1.0]),
+                        ("control.options.intervention_budget", [3, 6, 12, 24]),
+                    ],
+                    f"{arm} grid axes are incorrect",
+                    errors,
+                )
+            targets[arm].add(target)
+
+    for arm, count in expected_counts.items():
+        _require(
+            len(arm_cells[arm]) == count, f"{arm} must contain {count} cells", errors
+        )
+    _require(
+        {rho for _, rho, _ in coordinates} == expected_rho,
+        "rho values are incorrect",
+        errors,
+    )
+    _require(
+        {budget for _, _, budget in coordinates if budget is not None} == expected_b,
+        "b values are incorrect",
+        errors,
+    )
+    _require(
+        len(coordinates) == 27 and len(all_cells) == 27,
+        "study must contain 27 unique structural cells",
+        errors,
+    )
+    total_episodes = sum(cell.config.execution.repetitions for cell in all_cells)
+    _require(total_episodes == 270, "study must contain 270 planned episodes", errors)
+    seeds = {cell.config.execution.seed for cell in all_cells}
+    _require(len(seeds) == 1, "all arms must share one root seed", errors)
+
+    report = {
+        "contract": MUSR_BLACKBOARD_POPULATION_01_CONTRACT,
+        "status": "failed" if errors else "permitted",
+        "population_size": [24],
+        "rounds": [30],
+        "q_values": [1],
+        "L_values": [9],
+        "support_redundancy": [2, 3],
+        "sensor_size": [12],
+        "rho_values": sorted(expected_rho),
+        "b_values": sorted(expected_b),
+        "target_semantics": ["none", "truth", "false"],
+        "receiver_dispositions": ["vigilant"],
+        "evidence_strategies": ["none"],
+        "message_modes": ["recommendation_only"],
+        "beta": [4.0],
+        "theta": [0.5],
+        "schedule": ["soft"],
+        "number_of_frozen_tasks": 1,
+        "repetitions": [10],
+        "initialization_modes": ["paired_local_vote"],
+        "structural_regimes": len(coordinates),
+        "resolved_regimes": [list(value) for value in sorted(coordinates, key=str)],
+        "arm_cells": {key: len(value) for key, value in arm_cells.items()},
+        "total_cells": len(all_cells),
+        "total_episodes": total_episodes,
+        "matched_revised_theory_applicable": False,
+        "tasks": [] if task_audit is None else [task_audit],
+        "targets": {key: sorted(value, key=str) for key, value in targets.items()},
+        "errors": errors,
+    }
+    if errors:
+        raise ValueError("Study preflight contract failed:\n- " + "\n- ".join(errors))
+    return report
+
+
 def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
     """Validate the optional cross-config contract without invoking an LLM."""
 
@@ -492,6 +833,14 @@ def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
         return _validate_persistence_high_statistics_contract(spec, truth_aligned=False)
     if contract == PERSISTENCE_HIGH_STATISTICS_TRUTH_CONTRACT:
         return _validate_persistence_high_statistics_contract(spec, truth_aligned=True)
+    if contract == PERSISTENCE_LARGE_POPULATION_FALSE_CONTRACT:
+        return _validate_persistence_large_population_contract(
+            spec, truth_aligned=False
+        )
+    if contract == PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT:
+        return _validate_persistence_large_population_contract(spec, truth_aligned=True)
+    if contract == MUSR_BLACKBOARD_POPULATION_01_CONTRACT:
+        return _validate_musr_blackboard_population_01_contract(spec)
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 
@@ -874,14 +1223,12 @@ def run_study_preflight(
         "",
     ]
     for task in design["tasks"]:
-        fact_id = task.get("strategic_fact_id", task.get("evidence_fact_id"))
-        fact_relation = task.get(
-            "strategic_fact_relation", task.get("evidence_fact_relation")
-        )
         lines.append(
-            f"- `{task['task_id']}`: truth `{task['ground_truth']}`, false target "
-            f"`{task['controller_target']}`, true strategic fact `{fact_id}` "
-            f"(`{fact_relation}`), fingerprint `{task['fingerprint_sha256']}`"
+            f"- `{task['task_id']}`: truth `{task['ground_truth']}`, controller target "
+            f"`{task['controller_target']}`, true strategic fact "
+            f"`{task.get('strategic_fact_id', task.get('evidence_fact_id'))}` "
+            f"(`{task.get('strategic_fact_relation', task.get('evidence_fact_relation'))}`), "
+            f"fingerprint `{task['fingerprint_sha256']}`"
         )
     (destination / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return StudyPreflightResult(spec.config_dir, destination, design, tuple(estimates))
@@ -889,6 +1236,7 @@ def run_study_preflight(
 
 __all__ = [
     "FALSE_TAKEOVER_CONTRACT",
+    "MUSR_BLACKBOARD_POPULATION_01_CONTRACT",
     "PERSISTENCE_EXPLORATORY_CONTRACT",
     "StudyPreflightResult",
     "run_study_preflight",
