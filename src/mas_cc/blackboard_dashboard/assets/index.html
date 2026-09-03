@@ -21,8 +21,8 @@
     <section class="controls panel study-filters">
       <label>Experiment block <select id="filter-block"><option value="">All</option></select></label>
       <label>Controller condition <select id="filter-controller"><option value="">All</option></select></label>
+      <label>ρ (evidence persistence) <select id="filter-rho"><option value="">All</option></select></label>
       <label>Cell status <select id="filter-status"><option value="">All</option></select></label>
-      <label>Parameter value <input id="filter-parameter" placeholder="rho=0.85"></label>
       <label>Sort <select id="cell-sort"><option value="identity">Identity</option><option value="status">Status</option><option value="progress">Progress</option></select></label>
       <span id="study-refreshed"></span>
     </section>
@@ -33,11 +33,26 @@
       </section>
       <section id="cell-view" hidden>
         <div id="cell-cards" class="cards"></div>
-        <div class="grid two">
-          <article class="panel"><h2>Resolved parameters</h2><div id="cell-parameters" class="parameter-table"></div></article>
-          <article class="panel"><h2>Vote trajectories</h2><p id="mean-label" class="meta"></p><div id="cell-votes"></div></article>
-        </div>
-        <article class="panel"><h2>Episodes</h2><div class="table-scroll"><table id="episode-table"></table></div></article>
+        <article class="panel">
+          <h2>Scientific parameters</h2>
+          <div id="primary-parameters" class="primary-parameters"></div>
+          <details id="all-parameters"><summary>All resolved parameters</summary><div id="cell-parameters" class="parameter-table"></div></details>
+        </article>
+        <nav id="cell-tabs" class="cell-tabs">
+          <button class="active" data-cell-view="cell-episodes">Episodes</button>
+          <button data-cell-view="cell-trajectories">Trajectories</button>
+        </nav>
+        <section id="cell-episodes" class="cell-subview">
+          <article class="panel"><h2>Episodes</h2><div class="table-scroll"><table id="episode-table"></table></div></article>
+        </section>
+        <section id="cell-trajectories" class="cell-subview" hidden>
+          <article class="panel">
+            <h2>Vote trajectories</h2>
+            <p id="mean-label" class="meta"></p>
+            <div id="trajectory-controls" class="trajectory-controls"></div>
+            <div id="cell-votes"></div>
+          </article>
+        </section>
       </section>
     </main>
   </section>

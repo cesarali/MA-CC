@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, mode: 'episode', study: null, cell: null, episodeId: null };
+  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set() };
   const embedded = $('dashboard-data').textContent.trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
@@ -25,16 +25,17 @@
   }
 
   function showShell(name) {
+    state.mode = name;
     $('study-shell').hidden = name === 'episode';
     $('episode-shell').hidden = name !== 'episode';
     $('study-view').hidden = name !== 'study';
     $('cell-view').hidden = name !== 'cell';
-    $('breadcrumbs').hidden = state.mode !== 'study';
+    $('breadcrumbs').hidden = state.staticMode || !state.study;
   }
 
   function renderBreadcrumbs(cell = null, episode = null) {
     $('breadcrumbs').innerHTML = `<button data-crumb="study">${esc(state.study?.study_id || 'Study')}</button>${cell ? `<span>›</span><button data-crumb="cell">${esc(cell.config_name)} / ${esc(cell.cell_id)}</button>` : ''}${episode ? `<span>›</span><span>${esc(episode)}</span>` : ''}`;
-    $('breadcrumbs').querySelector('[data-crumb="study"]')?.addEventListener('click', () => { state.cell = null; state.episodeId = null; history.replaceState({}, '', location.pathname); renderStudy(); });
+    $('breadcrumbs').querySelector('[data-crumb="study"]')?.addEventListener('click', () => { state.cell = null; state.cellId = null; state.episodeId = null; history.replaceState({}, '', location.pathname); renderStudy(); });
     $('breadcrumbs').querySelector('[data-crumb="cell"]')?.addEventListener('click', () => openCell(cell.qualified_id));
   }
 
@@ -48,56 +49,95 @@
     showShell('study'); renderBreadcrumbs();
     const study = state.study;
     document.querySelector('h1').textContent = study.study_id;
-    const totals = study.episode_counts;
-    $('status-text').textContent = `${study.live ? 'live' : 'finished'} · ${totals.completed}/${study.expected_episode_count} episodes complete`;
+    const totals = study.episode_outcomes, activity = study.episode_activity;
+    $('status-text').textContent = `${totals.completed} durable episodes complete · ${activity.advancing} actively advancing · ${study.active_scheduler_tasks} SLURM cell tasks active`;
     document.querySelector('.status').className = `status ${study.live ? 'running' : 'completed'}`;
     $('study-refreshed').textContent = `refreshed ${new Date(study.refreshed_at).toLocaleTimeString()}`;
     const cards = [
       ['Cells', `${study.discovered_cell_count}/${study.expected_cell_count}`], ['Episodes expected', study.expected_episode_count],
-      ['Pending', totals.pending], ['Running', totals.running], ['Completed', totals.completed], ['Failed', totals.failed + totals.aborted],
+      ['Not started', activity.not_started], ['Actively advancing', activity.advancing], ['Durable complete', totals.completed], ['Failed', totals.failed + totals.aborted],
       ['Unknown', totals.unknown], ['SLURM active', study.scheduler.available ? study.active_scheduler_tasks : 'Unavailable']
     ];
     $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
     filterOptions('filter-block', study.cells.map(cell => cell.parameters.experiment_block));
     filterOptions('filter-controller', study.cells.map(cell => cell.parameters.controller_condition));
+    filterOptions('filter-rho', study.cells.map(cell => cell.parameters.rho).sort((a,b) => Number(a)-Number(b)));
     filterOptions('filter-status', study.cells.map(cell => cell.status));
     renderCellTable();
   }
 
   function renderCellTable() {
-    const parameter = $('filter-parameter').value.trim().toLowerCase();
     let cells = state.study.cells.filter(cell =>
       (!$('filter-block').value || String(cell.parameters.experiment_block) === $('filter-block').value) &&
       (!$('filter-controller').value || String(cell.parameters.controller_condition) === $('filter-controller').value) &&
+      (!$('filter-rho').value || Number(cell.parameters.rho) === Number($('filter-rho').value)) &&
       (!$('filter-status').value || cell.status === $('filter-status').value) &&
-      (!parameter || Object.entries(cell.parameters).some(([key,value]) => `${key}=${value}`.toLowerCase().includes(parameter)))
+      true
     );
     const sort = $('cell-sort').value;
-    cells.sort((a,b) => sort === 'status' ? a.status.localeCompare(b.status) : sort === 'progress' ? b.status_counts.completed - a.status_counts.completed : a.qualified_id.localeCompare(b.qualified_id));
-    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Status</th><th>Episodes</th><th>Current</th><th>Vote preview</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(unavailable(cell.parameters.controller_condition))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${statusBadge(cell.status)}${cell.scheduler ? `<br><span class="meta">SLURM ${esc(cell.scheduler.state)} · ${esc(unavailable(cell.scheduler.node))}</span>` : ''}</td><td>${cell.status_counts.completed}/${cell.expected_episodes}<br><span class="meta">${cell.status_counts.running} running · ${cell.status_counts.failed + cell.status_counts.aborted} failed</span></td><td>${cell.current_round == null ? 'Unavailable' : `round ${cell.current_round + 1}`} ${cell.current_update == null ? '' : `· update ${cell.current_update + 1}`}</td><td>${sparkline(cell.vote_preview)}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
+    cells.sort((a,b) => sort === 'status' ? a.status.localeCompare(b.status) : sort === 'progress' ? b.outcome_counts.completed - a.outcome_counts.completed : a.qualified_id.localeCompare(b.qualified_id));
+    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Scientific outcomes</th><th>Live activity</th><th>SLURM task</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(unavailable(cell.parameters.controller_condition))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${cell.outcome_counts.completed}/${cell.expected_episodes} durable complete<br><span class="meta">${cell.outcome_counts.failed} failed · ${cell.outcome_counts.aborted} aborted · ${cell.outcome_counts.unknown} unknown</span></td><td>${cell.activity_counts.advancing} advancing<br><span class="meta">${cell.activity_counts.started_unchanged} started but unchanged</span></td><td>${cell.scheduler ? `${statusBadge(cell.scheduler.state)}<br><span class="meta">array ${cell.scheduler.array_index} · ${esc(unavailable(cell.scheduler.node))} · ${esc(unavailable(cell.scheduler.elapsed))}</span>` : '<span class="unavailable">Unavailable</span>'}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
     document.querySelectorAll('.open-cell').forEach(button => button.addEventListener('click', () => openCell(button.dataset.cell)));
   }
 
-  async function openCell(id) {
+  function setCellTab(id) {
+    state.cellTab = id;
+    document.querySelectorAll('#cell-tabs button').forEach(button => button.classList.toggle('active', button.dataset.cellView === id));
+    document.querySelectorAll('.cell-subview').forEach(view => { view.hidden = view.id !== id; });
+    updateHash();
+  }
+
+  function updateHash() {
+    if (!state.study) return;
+    const params = new URLSearchParams();
+    if (state.cellId) params.set('cell', state.cellId);
+    if (state.episodeId) params.set('episode', state.episodeId);
+    if (state.cellTab) params.set('cellTab', state.cellTab);
+    if ($('all-parameters').open) params.set('parameters', 'open');
+    if (state.selectedTrajectories.size) params.set('trajectories', [...state.selectedTrajectories].join(','));
+    const activeTab = document.querySelector('#tabs button.active')?.dataset.view;
+    if (state.episodeId && activeTab) params.set('episodeTab', activeTab);
+    if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); params.set('agent', $('agent').value); params.set('follow', $('follow').checked ? '1' : '0'); }
+    if ($('filter-rho').value) params.set('rho', $('filter-rho').value);
+    history.replaceState({}, '', `#${params}`);
+  }
+
+  function renderCell(cell) {
+    showShell('cell'); renderBreadcrumbs(cell);
+    const c = cell.outcome_counts, a = cell.activity_counts;
+    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Actively advancing', a.advancing], ['Started unchanged', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    const primary = [['Controller condition', cell.parameters.controller_condition], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Controller target', cell.parameters.controller_target], ['Truth', cell.parameters.ground_truth]];
+    $('primary-parameters').innerHTML = primary.filter(([,value]) => value != null).map(([name,value]) => kv(name, value)).join('');
+    $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
+    $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
+    $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Durable outcome</th><th>Live activity</th><th>Progress</th><th>Last update / elapsed</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.durable_status)}${episode.status_reason ? `<br><span class="meta">${esc(episode.status_reason)}</span>` : ''}</td><td>${statusBadge(episode.activity_status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${episode.last_update_at ? esc(new Date(episode.last_update_at).toLocaleTimeString()) : episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect episode</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">${esc(episode.detail_reason)}</span>`}</td></tr>`).join('')}</tbody>`;
+    if (!state.selectedTrajectories.size) cell.episodes.forEach(episode => { if (cell.vote_series[episode.qualified_id]?.points.length) state.selectedTrajectories.add(episode.qualified_id); });
+    $('trajectory-controls').innerHTML = cell.episodes.filter(episode => cell.vote_series[episode.qualified_id]?.points.length).map(episode => `<label><input type="checkbox" data-trajectory="${esc(episode.qualified_id)}" ${state.selectedTrajectories.has(episode.qualified_id) ? 'checked' : ''}> repetition ${episode.repetition_index} <button class="trajectory-inspect" data-episode="${esc(episode.qualified_id)}" ${episode.detail_available ? '' : 'disabled'}>Inspect</button></label>`).join('');
+    renderTrajectories(); setCellTab(state.cellTab);
+    document.querySelectorAll('.open-episode,.trajectory-inspect').forEach(button => button.addEventListener('click', () => openEpisode(button.dataset.episode)));
+    document.querySelectorAll('[data-trajectory]').forEach(input => input.addEventListener('change', () => { input.checked ? state.selectedTrajectories.add(input.dataset.trajectory) : state.selectedTrajectories.delete(input.dataset.trajectory); renderTrajectories(); updateHash(); }));
+  }
+
+  function renderTrajectories() {
+    const cell = state.cell;
+    const individual = cell.episodes.filter(episode => state.selectedTrajectories.has(episode.qualified_id)).map(episode => `<div class="trajectory-row"><span>Repetition ${episode.repetition_index}</span>${sparkline(cell.vote_series[episode.qualified_id].points, 'truth_share', 520, 90)}${sparkline(cell.vote_series[episode.qualified_id].points, 'controller_target_share', 520, 90)}</div>`).join('');
+    $('cell-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth</span><span class="target-line">Controller target</span></div><h3>Descriptive mean</h3>${sparkline(cell.mean_vote_series, 'truth_share', 520, 120)}${sparkline(cell.mean_vote_series, 'controller_target_share', 520, 120)}<h3>Selected repetitions</h3>${individual || '<span class="unavailable">No trajectories selected</span>'}`;
+  }
+
+  async function openCell(id, polling = false) {
     try {
-      state.episodeId = null;
-      state.cell = await get(`/api/study/cell/${encodeURIComponent(id)}`);
-      showShell('cell'); renderBreadcrumbs(state.cell);
-      history.replaceState({}, '', `#cell=${encodeURIComponent(id)}`);
-      const cell = state.cell;
-      const c = cell.status_counts;
-      $('cell-cards').innerHTML = [['Status', cell.status], ['Expected episodes', cell.expected_episodes], ['Completed', c.completed], ['Running', c.running], ['Failed / aborted', c.failed + c.aborted], ['Unknown', c.unknown]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
-      $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
-      $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
-      $('cell-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth</span><span class="target-line">Controller target</span></div>${sparkline(cell.mean_vote_series, 'truth_share', 520, 150)}${sparkline(cell.mean_vote_series, 'controller_target_share', 520, 150)}`;
-      $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Status</th><th>Progress</th><th>Elapsed</th><th>Truth trajectory</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => { const points = cell.vote_series[episode.qualified_id]?.points || []; return `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${sparkline(points)}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">Detail unavailable</span>`}</td></tr>`; }).join('')}</tbody>`;
-      document.querySelectorAll('.open-episode').forEach(button => button.addEventListener('click', () => openEpisode(button.dataset.episode)));
+      const disclosureOpen = $('all-parameters').open;
+      state.cellId = id; state.cell = await get(`/api/study/cell/${encodeURIComponent(id)}`);
+      if (!polling) state.episodeId = null;
+      renderCell(state.cell); $('all-parameters').open = disclosureOpen;
+      updateHash();
     } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
   }
 
   async function openEpisode(id) {
     state.episodeId = id; showShell('episode'); renderBreadcrumbs(state.cell, id);
     $('episode-nav').hidden = false;
+    updateHash();
     await refresh(true);
   }
 
@@ -220,7 +260,7 @@
         render({...base, agent: state.staticBundle.agents[key][$('agent').value]});
         return;
       }
-      const prefix = state.mode === 'study' && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
+      const prefix = state.study && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
       const timeline = await get(`${prefix}/timeline`);
       populateTimeline(timeline);
       if ($('follow').checked || forceEdge) {
@@ -244,11 +284,12 @@
   document.querySelectorAll('#tabs button').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('#tabs button,.view').forEach(node => node.classList.remove('active'));
     button.classList.add('active'); $(button.dataset.view).classList.add('active');
+    updateHash();
   }));
-  $('round').addEventListener('change', () => { $('follow').checked = false; updateStepRange(); refresh(); });
-  $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; refresh(); });
-  $('agent').addEventListener('change', () => refresh());
-  $('follow').addEventListener('change', () => refresh(true));
+  $('round').addEventListener('change', () => { $('follow').checked = false; updateStepRange(); updateHash(); refresh(); });
+  $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; updateHash(); refresh(); });
+  $('agent').addEventListener('change', () => { updateHash(); refresh(); });
+  $('follow').addEventListener('change', () => { updateHash(); refresh(true); });
   $('expired').addEventListener('change', () => renderMessages(state.snapshot));
   $('memory-mode').addEventListener('change', () => renderCoverage(state.snapshot));
   document.querySelectorAll('.message-filter').forEach(node => node.addEventListener('change', () => renderMessages(state.snapshot)));
@@ -266,16 +307,33 @@
   async function startStudy() {
     try {
       state.study = await get('/api/study'); state.mode = 'study'; renderStudy();
-      const match = location.hash.match(/^#cell=(.+)$/);
-      if (match) await openCell(decodeURIComponent(match[1]));
+      const restored = new URLSearchParams(location.hash.slice(1));
+      if (restored.get('rho')) { $('filter-rho').value = restored.get('rho'); renderCellTable(); }
+      if (restored.get('cellTab')) state.cellTab = restored.get('cellTab');
+      if (restored.get('trajectories')) state.selectedTrajectories = new Set(restored.get('trajectories').split(','));
+      if (restored.get('cell')) await openCell(restored.get('cell'));
+      $('all-parameters').open = restored.get('parameters') === 'open';
+      if (restored.get('episode')) {
+        $('follow').checked = restored.get('follow') !== '0';
+        await openEpisode(restored.get('episode'));
+        if (!$('follow').checked) {
+          $('round').value = restored.get('round') || $('round').value; updateStepRange();
+          $('step').value = restored.get('step') || $('step').value; $('step-value').value = $('step').value;
+          $('agent').value = restored.get('agent') || $('agent').value;
+          await refresh(false);
+        }
+        document.querySelector(`[data-view="${restored.get('episodeTab') || 'overview'}"]`)?.click();
+      }
       setInterval(async () => {
         if (state.episodeId) { if ($('follow').checked) refresh(true); return; }
-        if (state.mode === 'study') { state.study = await get('/api/study'); state.cell ? openCell(state.cell.qualified_id) : renderStudy(); }
+        if (state.mode === 'cell' && state.cellId) { await openCell(state.cellId, true); return; }
+        if (state.mode === 'study') { state.study = await get('/api/study'); renderStudy(); }
       }, 2000);
     } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
   }
-  ['filter-block','filter-controller','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', renderCellTable));
-  $('filter-parameter').addEventListener('input', renderCellTable);
+  ['filter-block','filter-controller','filter-rho','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', () => { renderCellTable(); updateHash(); }));
+  document.querySelectorAll('#cell-tabs button').forEach(button => button.addEventListener('click', () => setCellTab(button.dataset.cellView)));
+  $('all-parameters').addEventListener('toggle', updateHash);
   $('previous-episode').addEventListener('click', () => adjacentEpisode(-1));
   $('next-episode').addEventListener('click', () => adjacentEpisode(1));
 

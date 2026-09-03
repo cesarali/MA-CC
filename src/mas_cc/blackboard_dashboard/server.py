@@ -85,10 +85,20 @@ def make_handler(reader: DashboardReader):
                     if parsed.path.startswith(episode_prefix):
                         remainder = parsed.path.removeprefix(episode_prefix)
                         token, separator, action = remainder.rpartition("/")
-                        if separator and action in {"timeline", "snapshot"}:
+                        if separator and (
+                            action in {"timeline", "snapshot"}
+                            or action.startswith("prompt-")
+                        ):
                             episode_reader = reader.episode_reader(unquote(token))
                             if action == "timeline":
                                 payload = episode_reader.timeline()
+                            elif action.startswith("prompt-"):
+                                prompt_id = action.removeprefix("prompt-")
+                                if not prompt_id.isdigit():
+                                    raise ValueError(
+                                        "prompt identifier must be a non-negative integer"
+                                    )
+                                payload = episode_reader.prompt(int(prompt_id))
                             else:
                                 query = parse_qs(parsed.query)
                                 round_index = (

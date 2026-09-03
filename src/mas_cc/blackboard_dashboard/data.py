@@ -143,8 +143,18 @@ def resolve_episode_dir(run_dir: str | Path, episode_id: str | None = None) -> P
     root = Path(run_dir).expanduser().resolve()
     if (root / "trajectory.jsonl").is_file() or root.name == episode_id:
         return root
-    episodes_root = root / "data" / "episodes"
-    candidates = sorted(path for path in episodes_root.glob("*") if path.is_dir())
+    candidates = sorted(
+        {
+            path.resolve()
+            for episodes_root in (
+                root / "data" / "episodes",
+                *(root / "cells").glob("*/data/episodes"),
+            )
+            for path in episodes_root.glob("*")
+            if path.is_dir()
+        },
+        key=str,
+    )
     if episode_id is not None:
         candidates = [path for path in candidates if path.name == episode_id]
     if not candidates:

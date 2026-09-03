@@ -14,12 +14,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+import pandas as pd
+
 from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.core.random import Seed
 from mas_cc.studies.discovery import DiscoveredCell, discover_cells, discover_runs
 from mas_cc.studies.execution import read_execution_manifest
 from mas_cc.studies.submission import read_submission_manifest
-from mas_cc.storage.scientific import validate_cell_artifact
+from mas_cc.storage.scientific import (
+    ScientificIdentity,
+    validate_cell_artifact,
+    validate_episode_artifact,
+)
 
 from .data import BlackboardRunReader, _event, _jsonl, _safe_json
 
@@ -27,7 +33,8 @@ from .data import BlackboardRunReader, _event, _jsonl, _safe_json
 _TERMINAL_COMPLETE = {"completed", "skipped_resumed"}
 _TERMINAL_FAILED = {"failed"}
 _TERMINAL_ABORTED = {"aborted", "skipped_aborted"}
-_STATUS_ORDER = ("pending", "running", "completed", "failed", "aborted", "unknown")
+_OUTCOME_ORDER = ("completed", "failed", "aborted", "incomplete", "unknown")
+_ACTIVITY_ORDER = ("advancing", "started_unchanged", "not_started")
 _JOB_ID = re.compile(r"^[0-9]+(?:_[0-9]+)?$")
 
 
@@ -55,15 +62,33 @@ class CellDescriptor:
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedDashboardCellPaths:
+    """Canonical paths shared by status, votes, and detailed inspection."""
+
+    shard_root: Path | None
+    run_root: Path
+    cell_root: Path
+    full_episodes_root: Path
+    round_records_root: Path
+    resume_root: Path
+    cell_summary_path: Path
+    cell_seal_path: Path
+    scientific_table_path: Path
+
+
+@dataclass(frozen=True, slots=True)
 class EpisodeDescriptor:
     qualified_id: str
     cell_id: str
     episode_id: str
     repetition_index: int
     seed: int | None
-    status: str
+    durable_status: str
+    activity_status: str
+    status_reason: str | None
     current_round: int | None
     current_update: int | None
+    last_update_at: str | None
     elapsed_seconds: float | None
     detail_available: bool
     detail_reason: str | None
@@ -157,6 +182,40 @@ def _timestamp_seconds(value: Any) -> float | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):
         return None
+
+
+def _validate_compact_episode(path: Path, episode_id: str) -> Mapping[str, Any]:
+    """Validate a durable shard using the identity stored in its own rows."""
+
+    try:
+        frame = pd.read_parquet(path, engine="pyarrow")
+    except Exception as exc:
+        raise ValueError(
+            f"cannot read scientific artifact {path}: {type(exc).__name__}"
+        ) from exc
+    matching = frame[frame["episode_id"].astype(str) == episode_id]
+    if matching.empty:
+        raise ValueError(f"scientific artifact {path} has no rows for {episode_id}")
+    row = matching.iloc[0]
+    identity = ScientificIdentity(
+        run_id=str(row["run_id"]),
+        cell_id=str(row["cell_id"]),
+        episode_id=episode_id,
+        episode_seed=int(row["episode_seed"]),
+        resolved_config_hash=str(row["resolved_config_hash"]),
+        prompt_definition_hashes_hash=str(row["prompt_definition_hashes_hash"]),
+        pricing_snapshot_hash=str(row["pricing_snapshot_hash"]),
+        game_type=str(row["game_type"]),
+        dynamics_mode=None
+        if pd.isna(row["dynamics_mode"])
+        else str(row["dynamics_mode"]),
+        control_mechanism=None
+        if pd.isna(row["control_mechanism"])
+        else str(row["control_mechanism"]),
+        task_id=None if pd.isna(row["task_id"]) else str(row["task_id"]),
+    )
+    validated = validate_episode_artifact(path, identity)
+    return validated.iloc[0].to_dict()
 
 
 def _counts(row: Mapping[str, Any], suffix: str) -> dict[str, int]:
@@ -368,15 +427,22 @@ class BlackboardStudyReader:
         ] = {}
         self._last_trajectory_signatures: dict[Path, tuple[str, int, int] | None] = {}
         self._resolved_configs: dict[str, Mapping[str, Any]] = {}
+        self._paths: dict[str, ResolvedDashboardCellPaths] = {}
         self._cells = self._build_cells()
         self._cell_map = {cell.qualified_id: cell for cell in self._cells}
 
     def _build_cells(self) -> tuple[CellDescriptor, ...]:
         discovered: dict[tuple[int, str], DiscoveredCell] = {}
         for cell in discover_cells(discover_runs(self.submissions)):
-            discovered.setdefault(
-                (cell.run.entry.array_index, cell.local_cell_id), cell
-            )
+            key = (cell.run.entry.array_index, cell.local_cell_id)
+            previous = discovered.get(key)
+            if previous is not None and previous.path != cell.path:
+                raise ValueError(
+                    "ambiguous dashboard cell resolution for "
+                    f"config {key[0]} {key[1]}: {previous.run.run_id} at "
+                    f"{previous.path} and {cell.run.run_id} at {cell.path}"
+                )
+            discovered[key] = cell
         execution_by_cell = {
             (row.config_index, row.cell_id): row for row in self.executions
         }
@@ -430,20 +496,29 @@ class BlackboardStudyReader:
                 execution = execution_by_cell.get((config_index, local_id))
                 qualified = f"config-{config_index:04d}~{local_id}"
                 repetitions = int(_nested(config, "execution.repetitions") or 0)
+                paths = None
+                if actual is not None:
+                    cell_root = actual.path
+                    paths = ResolvedDashboardCellPaths(
+                        shard_root=Path(execution.output_dir).resolve()
+                        if execution is not None
+                        else None,
+                        run_root=actual.run.path,
+                        cell_root=cell_root,
+                        full_episodes_root=cell_root / "data" / "episodes",
+                        round_records_root=cell_root / "round_records",
+                        resume_root=cell_root / ".resume",
+                        cell_summary_path=cell_root / "cell_summary.json",
+                        cell_seal_path=cell_root / "cell_complete.json",
+                        scientific_table_path=cell_root / "scientific_events.parquet",
+                    )
                 descriptors.append(
                     CellDescriptor(
                         qualified_id=qualified,
                         config_index=config_index,
                         config_name=config_name,
                         cell_id=local_id,
-                        path=(
-                            str(actual.path)
-                            if actual is not None
-                            else str(execution.output_dir)
-                            if execution is not None
-                            and Path(execution.output_dir).is_dir()
-                            else None
-                        ),
+                        path=str(actual.path) if actual is not None else None,
                         expected_episodes=repetitions,
                         parameters=_parameters(config, overrides),
                         scheduler_array_index=execution.array_index
@@ -452,6 +527,8 @@ class BlackboardStudyReader:
                     )
                 )
                 self._resolved_configs[qualified] = config
+                if paths is not None:
+                    self._paths[qualified] = paths
         return tuple(descriptors)
 
     def _rows(self, path: Path, *, completed: bool = False) -> list[dict[str, Any]]:
@@ -464,13 +541,11 @@ class BlackboardStudyReader:
         return rows
 
     def _seal(self, cell: CellDescriptor) -> tuple[bool, str | None, set[str]]:
-        if cell.path is None:
+        paths = self._paths.get(cell.qualified_id)
+        if paths is None:
             return False, None, set()
-        root = Path(cell.path)
-        seal_path, table_path = (
-            root / "cell_complete.json",
-            root / "scientific_events.parquet",
-        )
+        root = paths.cell_root
+        seal_path, table_path = paths.cell_seal_path, paths.scientific_table_path
         signature = (_signature(seal_path), _signature(table_path))
         cached = self._seal_cache.get(root)
         if cached is not None and cached[0] == signature:
@@ -527,16 +602,14 @@ class BlackboardStudyReader:
                 for row in csv.DictReader(stream):
                     seeds[int(row["repetition_index"])] = int(row["episode_seed"])
         sealed, seal_error, sealed_ids = self._seal(cell)
-        root = Path(cell.path) if cell.path else None
-        summary = _safe_json(root / "cell_summary.json") if root else {}
+        paths = self._paths.get(cell.qualified_id)
+        summary = _safe_json(paths.cell_summary_path) if paths else {}
         outcomes = summary.get("outcomes", [])
         failures = summary.get("failures", [])
         explicit: dict[str, Mapping[str, Any]] = {}
         for value in (*outcomes, *failures):
             if isinstance(value, Mapping) and value.get("episode_id"):
                 explicit[str(value["episode_id"])] = value
-        scheduler = self._scheduler.snapshot()
-        scheduler_task = scheduler.tasks.get(cell.scheduler_array_index or -1, {})
         episodes: list[EpisodeDescriptor] = []
         series: dict[str, VoteSeries] = {}
         for repetition in range(cell.expected_episodes):
@@ -546,58 +619,72 @@ class BlackboardStudyReader:
                 else f"episode-{repetition:04d}"
             )
             round_path = (
-                root / "round_records" / local_id / "round_trajectory.jsonl"
-                if root
+                paths.round_records_root / local_id / "round_trajectory.jsonl"
+                if paths
                 else None
             )
-            full_path = root / "data" / "episodes" / local_id if root else None
+            full_path = paths.full_episodes_root / local_id if paths else None
+            if (
+                round_path is not None
+                and not round_path.is_file()
+                and full_path is not None
+                and (full_path / "round_trajectory.jsonl").is_file()
+            ):
+                round_path = full_path / "round_trajectory.jsonl"
+            resume_path = paths.resume_root / local_id if paths else None
             compact_path = (
-                root / ".resume" / local_id / "scientific_events.parquet"
-                if root
-                else None
+                resume_path / "scientific_events.parquet" if resume_path else None
             )
             full_manifest = _safe_json(full_path / "manifest.json") if full_path else {}
-            record = explicit.get(local_id, full_manifest)
+            compact_manifest = (
+                _safe_json(resume_path / "manifest.json") if resume_path else {}
+            )
+            record = compact_manifest or full_manifest or explicit.get(local_id, {})
             raw_status = str(record.get("status", ""))
             trajectory_exists = bool(round_path and round_path.is_file())
-            completed = sealed and local_id in sealed_ids
-            status = (
+            durable_status = (
                 "completed"
-                if completed or raw_status in _TERMINAL_COMPLETE
+                if sealed and local_id in sealed_ids or raw_status in _TERMINAL_COMPLETE
                 else (
                     "failed"
                     if raw_status in _TERMINAL_FAILED
                     else "aborted"
                     if raw_status in _TERMINAL_ABORTED
-                    else "pending"
+                    else "incomplete"
                 )
             )
+            status_reason = None
+            if raw_status in _TERMINAL_COMPLETE and compact_manifest:
+                if compact_path is None or not compact_path.is_file():
+                    durable_status = "unknown"
+                    status_reason = "Compact manifest says completed but scientific_events.parquet is missing."
+                else:
+                    try:
+                        compact_row = _validate_compact_episode(compact_path, local_id)
+                        record = {**compact_row, **compact_manifest}
+                    except (KeyError, TypeError, ValueError) as exc:
+                        durable_status = "unknown"
+                        status_reason = f"Invalid compact completion artifact: {exc}"
             if seal_error and (
                 trajectory_exists or compact_path and compact_path.is_file()
             ):
-                status = "unknown"
-            elif status == "pending" and trajectory_exists:
+                durable_status = "unknown"
+                status_reason = seal_error
+            activity_status = "not_started"
+            if trajectory_exists:
                 current = _signature(round_path)
                 previous = self._last_trajectory_signatures.get(round_path)
-                if previous is not None and current != previous:
-                    status = "running"
-                elif scheduler_task.get("state") == "running":
-                    status = "running"
-                else:
-                    status = "unknown"
+                activity_status = (
+                    "advancing"
+                    if previous is not None and current != previous
+                    else "started_unchanged"
+                )
                 self._last_trajectory_signatures[round_path] = current
             rows = (
-                self._rows(round_path, completed=status == "completed")
+                self._rows(round_path, completed=durable_status == "completed")
                 if trajectory_exists
                 else []
             )
-            if (
-                status == "completed"
-                and compact_path
-                and compact_path.is_file()
-                and not sealed
-            ):
-                status = "unknown"
             points: list[Mapping[str, Any]] = []
             if rows:
                 points.append(
@@ -606,7 +693,7 @@ class BlackboardStudyReader:
                         phase="initialization",
                         round_index=None,
                         suffix="before",
-                        complete=status == "completed",
+                        complete=durable_status == "completed",
                     )
                 )
                 points.extend(
@@ -615,7 +702,7 @@ class BlackboardStudyReader:
                         phase="round",
                         round_index=int(row.get("round_index", index)),
                         suffix="after",
-                        complete=status == "completed",
+                        complete=durable_status == "completed",
                     )
                     for index, row in enumerate(rows)
                 )
@@ -632,6 +719,13 @@ class BlackboardStudyReader:
             detail_available = bool(
                 full_path and (full_path / "trajectory.jsonl").is_file()
             )
+            detail_reason = None
+            if not detail_available:
+                detail_reason = (
+                    f"Missing full episode trajectory: {full_path / 'trajectory.jsonl'}"
+                    if full_path
+                    else "The scientific cell has not been discovered."
+                )
             episodes.append(
                 EpisodeDescriptor(
                     qualified_id=qualified,
@@ -639,7 +733,9 @@ class BlackboardStudyReader:
                     episode_id=local_id,
                     repetition_index=repetition,
                     seed=record.get("seed", seeds.get(repetition)),
-                    status=status,
+                    durable_status=durable_status,
+                    activity_status=activity_status,
+                    status_reason=status_reason,
                     current_round=int(last["round_index"])
                     if "round_index" in last
                     else None,
@@ -649,11 +745,16 @@ class BlackboardStudyReader:
                     if last
                     and ("global_update_index" in last or "within_round_index" in last)
                     else None,
+                    last_update_at=(
+                        datetime.fromtimestamp(round_path.stat().st_mtime, timezone.utc)
+                        .isoformat()
+                        .replace("+00:00", "Z")
+                        if trajectory_exists and round_path is not None
+                        else None
+                    ),
                     elapsed_seconds=elapsed,
                     detail_available=detail_available,
-                    detail_reason=None
-                    if detail_available
-                    else "Full prompts and microscopic updates were not retained for this episode.",
+                    detail_reason=detail_reason,
                 )
             )
         return episodes, series
@@ -662,17 +763,21 @@ class BlackboardStudyReader:
         self, cell: CellDescriptor, *, include_votes: bool = True
     ) -> dict[str, Any]:
         episodes, votes = self._episode_records(cell)
-        counts = {
-            name: sum(item.status == name for item in episodes)
-            for name in _STATUS_ORDER
+        outcome_counts = {
+            name: sum(item.durable_status == name for item in episodes)
+            for name in _OUTCOME_ORDER
         }
-        active = [item for item in episodes if item.status == "running"]
+        activity_counts = {
+            name: sum(item.activity_status == name for item in episodes)
+            for name in _ACTIVITY_ORDER
+        }
+        active = [item for item in episodes if item.activity_status == "advancing"]
         scheduler_index = (
             cell.scheduler_array_index if cell.scheduler_array_index is not None else -1
         )
         scheduler = self._scheduler.snapshot().tasks.get(scheduler_index)
         groups: dict[tuple[str, int | None], list[Mapping[str, Any]]] = {}
-        for episode_id, vote_series in votes.items():
+        for vote_series in votes.values():
             if not vote_series.points:
                 continue
             for point in vote_series.points:
@@ -709,18 +814,36 @@ class BlackboardStudyReader:
         return {
             **asdict(cell),
             "discovered": cell.path is not None,
-            "episodes_discovered": sum(item.status != "pending" for item in episodes),
-            "status_counts": counts,
+            "episodes_discovered": sum(
+                item.activity_status != "not_started"
+                or item.durable_status != "incomplete"
+                for item in episodes
+            ),
+            "outcome_counts": outcome_counts,
+            "activity_counts": activity_counts,
+            "status_counts": {
+                "completed": outcome_counts["completed"],
+                "failed": outcome_counts["failed"],
+                "aborted": outcome_counts["aborted"],
+                "unknown": outcome_counts["unknown"],
+                "running": activity_counts["advancing"],
+                "pending": sum(
+                    item.activity_status == "not_started"
+                    and item.durable_status == "incomplete"
+                    for item in episodes
+                ),
+            },
             "status": "failed"
-            if counts["failed"]
+            if outcome_counts["failed"]
             else "aborted"
-            if counts["aborted"]
+            if outcome_counts["aborted"]
             else "running"
-            if counts["running"]
+            if activity_counts["advancing"]
             else "unknown"
-            if counts["unknown"]
+            if outcome_counts["unknown"]
             else "completed"
-            if counts["completed"] == cell.expected_episodes and cell.expected_episodes
+            if outcome_counts["completed"] == cell.expected_episodes
+            and cell.expected_episodes
             else "pending",
             "current_round": max(
                 (
@@ -739,7 +862,9 @@ class BlackboardStudyReader:
                 default=None,
             ),
             "scheduler": scheduler,
-            "episodes": [asdict(item) for item in episodes],
+            "episodes": [
+                {**asdict(item), "status": item.durable_status} for item in episodes
+            ],
             "vote_preview": mean[:: max(1, len(mean) // 12)]
             if len(mean) > 12
             else mean,
@@ -756,9 +881,13 @@ class BlackboardStudyReader:
             cells = [
                 self._cell_payload(cell, include_votes=False) for cell in self._cells
             ]
-            totals = {
-                name: sum(cell["status_counts"][name] for cell in cells)
-                for name in _STATUS_ORDER
+            outcome_totals = {
+                name: sum(cell["outcome_counts"][name] for cell in cells)
+                for name in _OUTCOME_ORDER
+            }
+            activity_totals = {
+                name: sum(cell["activity_counts"][name] for cell in cells)
+                for name in _ACTIVITY_ORDER
             }
             scheduler = self._scheduler.snapshot()
             descriptor = StudyDescriptor(
@@ -783,12 +912,21 @@ class BlackboardStudyReader:
                 "schema_version": 1,
                 **asdict(descriptor),
                 "discovered_cell_count": sum(cell["discovered"] for cell in cells),
-                "episode_counts": totals,
+                "episode_outcomes": outcome_totals,
+                "episode_activity": activity_totals,
+                "episode_counts": {
+                    "completed": outcome_totals["completed"],
+                    "failed": outcome_totals["failed"],
+                    "aborted": outcome_totals["aborted"],
+                    "unknown": outcome_totals["unknown"],
+                    "running": activity_totals["advancing"],
+                    "pending": sum(cell["status_counts"]["pending"] for cell in cells),
+                },
                 "active_scheduler_tasks": sum(
                     item.get("state") == "running" for item in scheduler.tasks.values()
                 ),
                 "scheduler": asdict(scheduler),
-                "live": bool(totals["running"] or scheduler.tasks),
+                "live": bool(activity_totals["advancing"] or scheduler.tasks),
                 "refreshed_at": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
@@ -843,9 +981,14 @@ class BlackboardStudyReader:
         status = self.episode_status(qualified_id)
         if not status["detail_available"]:
             raise ValueError(status["detail_reason"])
-        cell = self._cell_map[status["cell_id"]]
-        assert cell.path is not None
-        return BlackboardRunReader(cell.path, status["episode_id"])
+        paths = self._paths[status["cell_id"]]
+        return BlackboardRunReader(paths.run_root, status["episode_id"])
+
+    def resolved_paths(self, qualified_id: str) -> ResolvedDashboardCellPaths:
+        try:
+            return self._paths[qualified_id]
+        except KeyError as exc:
+            raise ValueError("qualified cell has no discovered artifact paths") from exc
 
     @property
     def descriptor(self) -> StudyDescriptor:
@@ -859,6 +1002,7 @@ __all__ = [
     "BlackboardStudyReader",
     "CellDescriptor",
     "EpisodeDescriptor",
+    "ResolvedDashboardCellPaths",
     "SchedulerSnapshot",
     "StudyDescriptor",
     "VoteSeries",
