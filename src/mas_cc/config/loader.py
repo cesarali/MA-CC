@@ -58,7 +58,9 @@ SUPPORTED_SCHEMA_VERSIONS = (1,)
 
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ENV_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
-_SECRET_ENV_NAME = re.compile(r"(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
+_SECRET_ENV_NAME = re.compile(
+    r"(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE
+)
 _SECRET_FIELD = re.compile(
     r"(?:^|_)(?:api_key|access_token|auth_token|authorization|bearer|client_secret|"
     r"private_key|secret|password|credential|credentials)(?:$|_)",
@@ -69,13 +71,25 @@ _ENV_NAME_FIELDS = frozenset(
 )
 _COMPONENT_SECTIONS = frozenset(
     {
-        "llm_provider", "provider", "prompt", "game", "execution", "logging",
-        "storage", "analysis", "control", "experiment", "aggregation", "observability",
+        "llm_provider",
+        "provider",
+        "prompt",
+        "game",
+        "execution",
+        "logging",
+        "storage",
+        "analysis",
+        "control",
+        "experiment",
+        "aggregation",
+        "observability",
     }
 )
 
 
-def _issue(issues: list[ValidationIssue], field: str, message: str, value: Any = None) -> None:
+def _issue(
+    issues: list[ValidationIssue], field: str, message: str, value: Any = None
+) -> None:
     issues.append(ValidationIssue(field or "config", message, value))
 
 
@@ -126,7 +140,9 @@ def _run_config_source(path: str | Path) -> Path:
     return source
 
 
-def _deep_merge(base: Mapping[str, Any], overrides: Mapping[str, Any]) -> dict[str, Any]:
+def _deep_merge(
+    base: Mapping[str, Any], overrides: Mapping[str, Any]
+) -> dict[str, Any]:
     merged = dict(base)
     for key, value in overrides.items():
         if isinstance(value, Mapping) and isinstance(merged.get(key), Mapping):
@@ -186,7 +202,11 @@ def _resolve_component(
     if path in stack:
         cycle = " -> ".join(str(item) for item in (*stack, path))
         raise ConfigurationError(
-            [ValidationIssue(f"{section}.component", f"component reference cycle: {cycle}")],
+            [
+                ValidationIssue(
+                    f"{section}.component", f"component reference cycle: {cycle}"
+                )
+            ],
             context="configuration resolution",
         )
     component = _read_yaml(path)
@@ -199,7 +219,11 @@ def _resolve_component(
         )
     if not isinstance(component, Mapping):
         raise ConfigurationError(
-            [ValidationIssue(f"{section}.component", "referenced component must be a mapping")],
+            [
+                ValidationIssue(
+                    f"{section}.component", "referenced component must be a mapping"
+                )
+            ],
             context="configuration resolution",
         )
     return _deep_merge(component, overrides)
@@ -218,7 +242,10 @@ def _resolve_components(raw: Mapping[str, Any], source: Path) -> dict[str, Any]:
         canonical = "llm_provider" if section == "provider" else section
         if canonical in result:
             result[canonical] = _resolve_component(
-                result[canonical], section=canonical, owner=source, stack=(source.resolve(),)
+                result[canonical],
+                section=canonical,
+                owner=source,
+                stack=(source.resolve(),),
             )
     return result
 
@@ -265,7 +292,9 @@ def _expand_environment(
     def replace(match: re.Match[str]) -> str:
         name, default = match.group(1), match.group(2)
         if _SECRET_ENV_NAME.search(name):
-            _issue(issues, path, f"secret environment variable {name!r} cannot be expanded")
+            _issue(
+                issues, path, f"secret environment variable {name!r} cannot be expanded"
+            )
             return match.group(0)
         if name in environment:
             return environment[name]
@@ -287,7 +316,9 @@ def _expand_environment(
     return expanded
 
 
-def _validate_secret_fields(value: Any, *, path: str, issues: list[ValidationIssue]) -> None:
+def _validate_secret_fields(
+    value: Any, *, path: str, issues: list[ValidationIssue]
+) -> None:
     if isinstance(value, Mapping):
         for raw_key, item in value.items():
             key = str(raw_key)
@@ -300,7 +331,11 @@ def _validate_secret_fields(value: Any, *, path: str, issues: list[ValidationIss
                 )
             if key in _ENV_NAME_FIELDS and item is not None:
                 if not isinstance(item, str) or not _ENV_NAME.fullmatch(item):
-                    _issue(issues, child, "must be an environment variable name, not a value")
+                    _issue(
+                        issues,
+                        child,
+                        "must be an environment variable name, not a value",
+                    )
             _validate_secret_fields(item, path=child, issues=issues)
     elif isinstance(value, list):
         for index, item in enumerate(value):
@@ -315,7 +350,10 @@ def _as_mapping(value: Any, path: str, issues: list[ValidationIssue]) -> dict[st
 
 
 def _unknown_fields(
-    values: Mapping[str, Any], allowed: set[str], path: str, issues: list[ValidationIssue]
+    values: Mapping[str, Any],
+    allowed: set[str],
+    path: str,
+    issues: list[ValidationIssue],
 ) -> None:
     for name in sorted(set(values) - allowed):
         _issue(issues, f"{path}.{name}" if path else name, "unknown field")
@@ -335,7 +373,12 @@ def _string(
     if value is None and not required:
         return None
     if not isinstance(value, str) or (required and not value.strip()):
-        _issue(issues, field, "must be a non-empty string" if required else "must be a string", value)
+        _issue(
+            issues,
+            field,
+            "must be a non-empty string" if required else "must be a string",
+            value,
+        )
         return default
     return value
 
@@ -384,7 +427,12 @@ def _number(
 
 
 def _boolean(
-    values: Mapping[str, Any], key: str, path: str, issues: list[ValidationIssue], *, default: bool
+    values: Mapping[str, Any],
+    key: str,
+    path: str,
+    issues: list[ValidationIssue],
+    *,
+    default: bool,
 ) -> bool:
     field = f"{path}.{key}" if path else key
     value = values.get(key, default)
@@ -418,7 +466,9 @@ def _string_tuple(
     return tuple(result)
 
 
-def _schema_version(values: Mapping[str, Any], path: str, issues: list[ValidationIssue]) -> int:
+def _schema_version(
+    values: Mapping[str, Any], path: str, issues: list[ValidationIssue]
+) -> int:
     version = _integer(values, "schema_version", path, issues, default=1, minimum=1)
     if version not in SUPPORTED_SCHEMA_VERSIONS:
         _issue(
@@ -435,9 +485,17 @@ def _parse_provider(raw: Any, issues: list[ValidationIssue]) -> LLMProviderConfi
     path = "llm_provider"
     values = _as_mapping(raw, path, issues)
     allowed = {
-        "schema_version", "type", "model", "credentials_env", "base_url_env",
-        "timeout_seconds", "max_retries", "request_concurrency", "temperature",
-        "max_output_tokens", "options",
+        "schema_version",
+        "type",
+        "model",
+        "credentials_env",
+        "base_url_env",
+        "timeout_seconds",
+        "max_retries",
+        "request_concurrency",
+        "temperature",
+        "max_output_tokens",
+        "options",
     }
     _unknown_fields(values, allowed, path, issues)
     options = _as_mapping(values.get("options", {}), f"{path}.options", issues)
@@ -445,15 +503,27 @@ def _parse_provider(raw: Any, issues: list[ValidationIssue]) -> LLMProviderConfi
     base_url = _string(values, "base_url_env", path, issues)
     return LLMProviderConfig(
         schema_version=_schema_version(values, path, issues),
-        type=_string(values, "type", path, issues, default="invalid", required=True) or "invalid",
-        model=_string(values, "model", path, issues, default="invalid", required=True) or "invalid",
+        type=_string(values, "type", path, issues, default="invalid", required=True)
+        or "invalid",
+        model=_string(values, "model", path, issues, default="invalid", required=True)
+        or "invalid",
         credentials_env=credentials,
         base_url_env=base_url,
-        timeout_seconds=_number(values, "timeout_seconds", path, issues, default=60.0, minimum=0.001) or 60.0,
+        timeout_seconds=_number(
+            values, "timeout_seconds", path, issues, default=60.0, minimum=0.001
+        )
+        or 60.0,
         max_retries=_integer(values, "max_retries", path, issues, default=2, minimum=0),
-        request_concurrency=_integer(values, "request_concurrency", path, issues, default=1, minimum=1),
-        temperature=_number(values, "temperature", path, issues, default=0.0, minimum=0.0) or 0.0,
-        max_output_tokens=_integer(values, "max_output_tokens", path, issues, default=256, minimum=1),
+        request_concurrency=_integer(
+            values, "request_concurrency", path, issues, default=1, minimum=1
+        ),
+        temperature=_number(
+            values, "temperature", path, issues, default=0.0, minimum=0.0
+        )
+        or 0.0,
+        max_output_tokens=_integer(
+            values, "max_output_tokens", path, issues, default=256, minimum=1
+        ),
         options=options,
     )
 
@@ -462,8 +532,14 @@ def _parse_prompt(raw: Any, issues: list[ValidationIssue]) -> PromptConfig:
     path = "prompt"
     values = _as_mapping(raw, path, issues)
     allowed = {
-        "schema_version", "prompt_family", "prompt_version", "blocks",
-        "response_contract", "message_mode", "block_separator", "options",
+        "schema_version",
+        "prompt_family",
+        "prompt_version",
+        "blocks",
+        "response_contract",
+        "message_mode",
+        "block_separator",
+        "options",
     }
     _unknown_fields(values, allowed, path, issues)
     response_contract = _as_mapping(
@@ -490,9 +566,7 @@ def _parse_prompt(raw: Any, issues: list[ValidationIssue]) -> PromptConfig:
         or not response_contract["type"].strip()
     ):
         _issue(issues, f"{path}.response_contract.type", "must be a non-empty string")
-    blocks = _string_tuple(
-        values, "blocks", path, issues, required=prompt_schema == 1
-    )
+    blocks = _string_tuple(values, "blocks", path, issues, required=prompt_schema == 1)
     if prompt_schema == 2 and "blocks" in values:
         _issue(
             issues,
@@ -502,7 +576,8 @@ def _parse_prompt(raw: Any, issues: list[ValidationIssue]) -> PromptConfig:
         )
     message_mode = _string(values, "message_mode", path, issues)
     if message_mode is not None and message_mode not in {
-        "per_block", "merge_consecutive_roles"
+        "per_block",
+        "merge_consecutive_roles",
     }:
         _issue(
             issues,
@@ -516,8 +591,13 @@ def _parse_prompt(raw: Any, issues: list[ValidationIssue]) -> PromptConfig:
         separator = None
     return PromptConfig(
         schema_version=prompt_schema,
-        prompt_family=_string(values, "prompt_family", path, issues, default="invalid", required=True) or "invalid",
-        prompt_version=_integer(values, "prompt_version", path, issues, default=1, minimum=1),
+        prompt_family=_string(
+            values, "prompt_family", path, issues, default="invalid", required=True
+        )
+        or "invalid",
+        prompt_version=_integer(
+            values, "prompt_version", path, issues, default=1, minimum=1
+        ),
         blocks=() if prompt_schema == 2 else blocks,
         response_contract=response_contract,
         message_mode=message_mode,
@@ -529,14 +609,27 @@ def _parse_prompt(raw: Any, issues: list[ValidationIssue]) -> PromptConfig:
 def _parse_game(raw: Any, issues: list[ValidationIssue]) -> GameConfig:
     path = "game"
     values = _as_mapping(raw, path, issues)
-    allowed = {"schema_version", "type", "population_size", "horizon", "topology", "options"}
+    allowed = {
+        "schema_version",
+        "type",
+        "population_size",
+        "horizon",
+        "topology",
+        "options",
+    }
     _unknown_fields(values, allowed, path, issues)
     return GameConfig(
         schema_version=_schema_version(values, path, issues),
-        type=_string(values, "type", path, issues, default="invalid", required=True) or "invalid",
-        population_size=_integer(values, "population_size", path, issues, default=2, minimum=2),
+        type=_string(values, "type", path, issues, default="invalid", required=True)
+        or "invalid",
+        population_size=_integer(
+            values, "population_size", path, issues, default=2, minimum=2
+        ),
         horizon=_integer(values, "horizon", path, issues, default=1, minimum=1),
-        topology=_string(values, "topology", path, issues, default="complete", required=True) or "complete",
+        topology=_string(
+            values, "topology", path, issues, default="complete", required=True
+        )
+        or "complete",
         options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
     )
 
@@ -544,45 +637,90 @@ def _parse_game(raw: Any, issues: list[ValidationIssue]) -> GameConfig:
 def _parse_pricing(raw: Any, issues: list[ValidationIssue]) -> PricingConfig:
     path = "pricing"
     values = _as_mapping(raw, path, issues)
-    allowed = {"schema_version", "mode", "cache_path", "max_age_seconds",
-               "require_fresh_at_launch", "fallback_policy", "explicit_unknown_price_override"}
+    allowed = {
+        "schema_version",
+        "mode",
+        "cache_path",
+        "max_age_seconds",
+        "require_fresh_at_launch",
+        "fallback_policy",
+        "explicit_unknown_price_override",
+    }
     _unknown_fields(values, allowed, path, issues)
-    mode = _string(values, "mode", path, issues, default="offline", required=True) or "offline"
-    fallback = _string(values, "fallback_policy", path, issues, default="deny", required=True) or "deny"
+    mode = (
+        _string(values, "mode", path, issues, default="offline", required=True)
+        or "offline"
+    )
+    fallback = (
+        _string(values, "fallback_policy", path, issues, default="deny", required=True)
+        or "deny"
+    )
     if mode not in {"live", "cached", "offline"}:
         _issue(issues, f"{path}.mode", "must be live, cached, or offline", mode)
     if fallback not in {"deny", "offline", "allow_stale"}:
-        _issue(issues, f"{path}.fallback_policy", "must be deny, offline, or allow_stale", fallback)
+        _issue(
+            issues,
+            f"{path}.fallback_policy",
+            "must be deny, offline, or allow_stale",
+            fallback,
+        )
     return PricingConfig(
-        schema_version=_schema_version(values, path, issues), mode=mode,
+        schema_version=_schema_version(values, path, issues),
+        mode=mode,
         cache_path=_string(values, "cache_path", path, issues),
-        max_age_seconds=_number(values, "max_age_seconds", path, issues, default=86400.0, minimum=0.0) or 0.0,
-        require_fresh_at_launch=_boolean(values, "require_fresh_at_launch", path, issues, default=True),
+        max_age_seconds=_number(
+            values, "max_age_seconds", path, issues, default=86400.0, minimum=0.0
+        )
+        or 0.0,
+        require_fresh_at_launch=_boolean(
+            values, "require_fresh_at_launch", path, issues, default=True
+        ),
         fallback_policy=fallback,
-        explicit_unknown_price_override=_boolean(values, "explicit_unknown_price_override", path, issues, default=False),
+        explicit_unknown_price_override=_boolean(
+            values, "explicit_unknown_price_override", path, issues, default=False
+        ),
     )
 
 
 def _parse_budget(raw: Any, issues: list[ValidationIssue]) -> BudgetConfig:
     path = "budget"
     values = _as_mapping(raw, path, issues)
-    allowed = {"schema_version", "accounting_unit", "system_max_cost_per_run", "max_cost_per_run",
-               "max_provider_requests", "max_input_tokens", "max_output_tokens",
-               "allow_unbounded_paid_requests", "live_spend_poll_seconds"}
+    allowed = {
+        "schema_version",
+        "accounting_unit",
+        "system_max_cost_per_run",
+        "max_cost_per_run",
+        "max_provider_requests",
+        "max_input_tokens",
+        "max_output_tokens",
+        "allow_unbounded_paid_requests",
+        "live_spend_poll_seconds",
+    }
     _unknown_fields(values, allowed, path, issues)
+
     def optional_integer(name: str) -> int | None:
         if values.get(name) is None:
             return None
         return _integer(values, name, path, issues, default=0, minimum=0)
+
     return BudgetConfig(
         schema_version=_schema_version(values, path, issues),
-        accounting_unit=_string(values, "accounting_unit", path, issues, default="unknown", required=True) or "unknown",
-        system_max_cost_per_run=_number(values, "system_max_cost_per_run", path, issues, default=None, minimum=0.0),
-        max_cost_per_run=_number(values, "max_cost_per_run", path, issues, default=None, minimum=0.0),
+        accounting_unit=_string(
+            values, "accounting_unit", path, issues, default="unknown", required=True
+        )
+        or "unknown",
+        system_max_cost_per_run=_number(
+            values, "system_max_cost_per_run", path, issues, default=None, minimum=0.0
+        ),
+        max_cost_per_run=_number(
+            values, "max_cost_per_run", path, issues, default=None, minimum=0.0
+        ),
         max_provider_requests=optional_integer("max_provider_requests"),
         max_input_tokens=optional_integer("max_input_tokens"),
         max_output_tokens=optional_integer("max_output_tokens"),
-        allow_unbounded_paid_requests=_boolean(values, "allow_unbounded_paid_requests", path, issues, default=False),
+        allow_unbounded_paid_requests=_boolean(
+            values, "allow_unbounded_paid_requests", path, issues, default=False
+        ),
         live_spend_poll_seconds=(
             None
             if values.get("live_spend_poll_seconds") is None
@@ -603,7 +741,14 @@ def _parse_execution(raw: Any, issues: list[ValidationIssue]) -> ExecutionConfig
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
         values,
-        {"schema_version", "seed", "repetitions", "parallelism", "fail_fast", "timeout_seconds"},
+        {
+            "schema_version",
+            "seed",
+            "repetitions",
+            "parallelism",
+            "fail_fast",
+            "timeout_seconds",
+        },
         path,
         issues,
     )
@@ -613,7 +758,9 @@ def _parse_execution(raw: Any, issues: list[ValidationIssue]) -> ExecutionConfig
         repetitions=_integer(values, "repetitions", path, issues, default=1, minimum=1),
         parallelism=_integer(values, "parallelism", path, issues, default=1, minimum=1),
         fail_fast=_boolean(values, "fail_fast", path, issues, default=True),
-        timeout_seconds=_number(values, "timeout_seconds", path, issues, default=None, minimum=0.001),
+        timeout_seconds=_number(
+            values, "timeout_seconds", path, issues, default=None, minimum=0.001
+        ),
     )
 
 
@@ -621,14 +768,28 @@ def _parse_logging(
     raw: Any, issues: list[ValidationIssue], *, artifact_profile: str = "full"
 ) -> LoggingConfig:
     path = "logging"
-    compact_profile = artifact_profile in {"results_only", "timing_study"}
+    compact_profile = artifact_profile in {
+        "dashboard_semantic",
+        "results_only",
+        "timing_study",
+    }
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
-        values, {"schema_version", "level", "console", "audit", "comet", "options"}, path, issues
+        values,
+        {"schema_version", "level", "console", "audit", "comet", "options"},
+        path,
+        issues,
     )
-    level = (_string(values, "level", path, issues, default="INFO", required=True) or "INFO").upper()
+    level = (
+        _string(values, "level", path, issues, default="INFO", required=True) or "INFO"
+    ).upper()
     if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
-        _issue(issues, f"{path}.level", "must be DEBUG, INFO, WARNING, ERROR, or CRITICAL", level)
+        _issue(
+            issues,
+            f"{path}.level",
+            "must be DEBUG, INFO, WARNING, ERROR, or CRITICAL",
+            level,
+        )
         level = "INFO"
     options = dict(_as_mapping(values.get("options", {}), f"{path}.options", issues))
     examples_path = f"{path}.options.prompt_examples"
@@ -681,8 +842,14 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
     _unknown_fields(
         values,
         {
-            "schema_version", "output_dir", "format", "checkpoints",
-            "artifact_profile", "checkpoint_mode", "overwrite", "wipe_and_recompute",
+            "schema_version",
+            "output_dir",
+            "format",
+            "checkpoints",
+            "artifact_profile",
+            "checkpoint_mode",
+            "overwrite",
+            "wipe_and_recompute",
             "options",
         },
         path,
@@ -694,21 +861,30 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
             path,
             "checkpoints and checkpoint_mode cannot both be specified",
         )
-    profile = _string(
-        values, "artifact_profile", path, issues, default="full", required=True
-    ) or "full"
-    if profile not in {"full", "results_only", "timing_study"}:
+    profile = (
+        _string(values, "artifact_profile", path, issues, default="full", required=True)
+        or "full"
+    )
+    if profile not in {"full", "dashboard_semantic", "results_only", "timing_study"}:
         _issue(
             issues,
             f"{path}.artifact_profile",
-            "must be one of full, results_only, timing_study",
+            "must be one of full, dashboard_semantic, results_only, timing_study",
             profile,
         )
         profile = "full"
     if "checkpoint_mode" in values:
-        checkpoint_mode = _string(
-            values, "checkpoint_mode", path, issues, default="episode", required=True
-        ) or "episode"
+        checkpoint_mode = (
+            _string(
+                values,
+                "checkpoint_mode",
+                path,
+                issues,
+                default="episode",
+                required=True,
+            )
+            or "episode"
+        )
     elif "checkpoints" in values:
         checkpoint_mode = (
             "episode"
@@ -725,15 +901,36 @@ def _parse_storage(raw: Any, issues: list[ValidationIssue]) -> StorageConfig:
             checkpoint_mode,
         )
         checkpoint_mode = "episode"
+    options = dict(_as_mapping(values.get("options", {}), f"{path}.options", issues))
+    if "expected_public_message_characters" in options:
+        message_characters = options["expected_public_message_characters"]
+        if (
+            isinstance(message_characters, bool)
+            or not isinstance(message_characters, int)
+            or message_characters < 0
+            or message_characters > 1200
+        ):
+            _issue(
+                issues,
+                f"{path}.options.expected_public_message_characters",
+                "must be an integer between 0 and 1200",
+                message_characters,
+            )
     return StorageConfig(
         schema_version=_schema_version(values, path, issues),
-        output_dir=_string(values, "output_dir", path, issues, default="results", required=True) or "results",
-        format=_string(values, "format", path, issues, default="jsonl", required=True) or "jsonl",
+        output_dir=_string(
+            values, "output_dir", path, issues, default="results", required=True
+        )
+        or "results",
+        format=_string(values, "format", path, issues, default="jsonl", required=True)
+        or "jsonl",
         artifact_profile=profile,
         checkpoint_mode=checkpoint_mode,
         overwrite=_boolean(values, "overwrite", path, issues, default=False),
-        wipe_and_recompute=_boolean(values, "wipe_and_recompute", path, issues, default=False),
-        options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
+        wipe_and_recompute=_boolean(
+            values, "wipe_and_recompute", path, issues, default=False
+        ),
+        options=options,
     )
 
 
@@ -741,7 +938,10 @@ def _parse_analysis(raw: Any, issues: list[ValidationIssue]) -> AnalysisConfig:
     path = "analysis"
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
-        values, {"schema_version", "enabled", "estimators", "options", "comet_export"}, path, issues
+        values,
+        {"schema_version", "enabled", "estimators", "options", "comet_export"},
+        path,
+        issues,
     )
     return AnalysisConfig(
         schema_version=_schema_version(values, path, issues),
@@ -758,7 +958,10 @@ def _parse_control(raw: Any, issues: list[ValidationIssue]) -> ControlConfig:
     _unknown_fields(values, {"schema_version", "mechanism", "options"}, path, issues)
     return ControlConfig(
         schema_version=_schema_version(values, path, issues),
-        mechanism=_string(values, "mechanism", path, issues, default="none", required=True) or "none",
+        mechanism=_string(
+            values, "mechanism", path, issues, default="none", required=True
+        )
+        or "none",
         options=_as_mapping(values.get("options", {}), f"{path}.options", issues),
     )
 
@@ -769,8 +972,13 @@ def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
     _unknown_fields(
         values,
         {
-            "schema_version", "enabled", "comet_export", "available",
-            "bin_size_interactions", "partial_final_bin", "exclude_committed_outputs",
+            "schema_version",
+            "enabled",
+            "comet_export",
+            "available",
+            "bin_size_interactions",
+            "partial_final_bin",
+            "exclude_committed_outputs",
         },
         path,
         issues,
@@ -780,7 +988,9 @@ def _parse_metrics(raw: Any, issues: list[ValidationIssue]) -> MetricsConfig:
     # than defaulted to a number here where the population isn't known.
     bin_size = values.get("bin_size_interactions")
     if bin_size is not None:
-        bin_size = _integer(values, "bin_size_interactions", path, issues, default=1, minimum=1)
+        bin_size = _integer(
+            values, "bin_size_interactions", path, issues, default=1, minimum=1
+        )
     partial_final_bin = (
         _string(values, "partial_final_bin", path, issues, default="drop") or "drop"
     )
@@ -844,18 +1054,29 @@ def _parse_aggregation(raw: Any, issues: list[ValidationIssue]) -> AggregationCo
     _unknown_fields(
         values,
         {
-            "schema_version", "forward_fill", "relabel_by_winner", "percentiles",
-            "rolling_window", "cell_metrics", "sweep_metrics", "horizons",
+            "schema_version",
+            "forward_fill",
+            "relabel_by_winner",
+            "percentiles",
+            "rolling_window",
+            "cell_metrics",
+            "sweep_metrics",
+            "horizons",
             "null_permutations",
         },
         path,
         issues,
     )
-    forward_fill = _string(values, "forward_fill", path, issues, default="absorbing") or "absorbing"
+    forward_fill = (
+        _string(values, "forward_fill", path, issues, default="absorbing")
+        or "absorbing"
+    )
     if forward_fill not in FORWARD_FILL_MODES:
         _issue(
-            issues, f"{path}.forward_fill",
-            f"must be one of {', '.join(FORWARD_FILL_MODES)}", forward_fill,
+            issues,
+            f"{path}.forward_fill",
+            f"must be one of {', '.join(FORWARD_FILL_MODES)}",
+            forward_fill,
         )
         forward_fill = "absorbing"
     # Metric names are validated here, not at first use: a typo in a day-long
@@ -874,27 +1095,43 @@ def _parse_aggregation(raw: Any, issues: list[ValidationIssue]) -> AggregationCo
         for name in names:
             if name not in known:
                 _issue(
-                    issues, f"{path}.{field_name}",
-                    f"unknown metric {name!r}; available: {', '.join(sorted(known))}", name,
+                    issues,
+                    f"{path}.{field_name}",
+                    f"unknown metric {name!r}; available: {', '.join(sorted(known))}",
+                    name,
                 )
     return AggregationConfig(
         schema_version=_schema_version(values, path, issues),
         forward_fill=forward_fill,
-        relabel_by_winner=_boolean(values, "relabel_by_winner", path, issues, default=True),
-        percentiles=_integer_tuple(
-            values, "percentiles", path, issues, default=(10, 50, 90), minimum=0, maximum=100
+        relabel_by_winner=_boolean(
+            values, "relabel_by_winner", path, issues, default=True
         ),
-        rolling_window=_integer(values, "rolling_window", path, issues, default=20, minimum=1),
+        percentiles=_integer_tuple(
+            values,
+            "percentiles",
+            path,
+            issues,
+            default=(10, 50, 90),
+            minimum=0,
+            maximum=100,
+        ),
+        rolling_window=_integer(
+            values, "rolling_window", path, issues, default=20, minimum=1
+        ),
         cell_metrics=cell_metrics,
         sweep_metrics=sweep_metrics,
-        horizons=_integer_tuple(values, "horizons", path, issues, default=(1,), minimum=1),
+        horizons=_integer_tuple(
+            values, "horizons", path, issues, default=(1,), minimum=1
+        ),
         null_permutations=_integer(
             values, "null_permutations", path, issues, default=200, minimum=0
         ),
     )
 
 
-def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> ObservabilityConfig:
+def _parse_observability(
+    raw: Any, issues: list[ValidationIssue]
+) -> ObservabilityConfig:
     path = "observability"
     values = _as_mapping(raw, path, issues)
     _unknown_fields(values, {"schema_version", "comet"}, path, issues)
@@ -918,22 +1155,32 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
     _unknown_fields(
         comet,
         {
-            "writer", "heartbeat_seconds", "grid_image_every_n_episodes",
-            "sweep_experiment", "cell_reporting", "metric_plots",
+            "writer",
+            "heartbeat_seconds",
+            "grid_image_every_n_episodes",
+            "sweep_experiment",
+            "cell_reporting",
+            "metric_plots",
             "progress_metrics",
             # Listed so the loop above is the only thing that reports them,
             # rather than the migration message arriving next to a duplicate
             # "unknown field" for the same key.
-            "cell_experiments", "master_aggregates",
+            "cell_experiments",
+            "master_aggregates",
         },
         comet_path,
         issues,
     )
-    writer = _string(comet, "writer", comet_path, issues, default="master_only") or "master_only"
+    writer = (
+        _string(comet, "writer", comet_path, issues, default="master_only")
+        or "master_only"
+    )
     if writer not in COMET_WRITERS:
         _issue(
-            issues, f"{comet_path}.writer",
-            f"must be one of {', '.join(COMET_WRITERS)}; workers never write to Comet", writer,
+            issues,
+            f"{comet_path}.writer",
+            f"must be one of {', '.join(COMET_WRITERS)}; workers never write to Comet",
+            writer,
         )
         writer = "master_only"
     if isinstance(comet.get("cell_reporting"), bool):
@@ -941,7 +1188,8 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
         # to write "do not report cells" arrives here as a boolean. Say that,
         # instead of "must be a string" about a line that looks like a word.
         _issue(
-            issues, f"{comet_path}.cell_reporting",
+            issues,
+            f"{comet_path}.cell_reporting",
             "reads as a boolean: YAML treats a bare off/no/on/yes that way. "
             f"Use one of {', '.join(CELL_REPORTING_MODES)}",
             comet["cell_reporting"],
@@ -953,8 +1201,10 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
     )
     if cell_reporting not in CELL_REPORTING_MODES:
         _issue(
-            issues, f"{comet_path}.cell_reporting",
-            f"must be one of {', '.join(CELL_REPORTING_MODES)}", cell_reporting,
+            issues,
+            f"{comet_path}.cell_reporting",
+            f"must be one of {', '.join(CELL_REPORTING_MODES)}",
+            cell_reporting,
         )
         cell_reporting = "experiments"
     return ObservabilityConfig(
@@ -962,18 +1212,32 @@ def _parse_observability(raw: Any, issues: list[ValidationIssue]) -> Observabili
         comet=CometObservability(
             writer=writer,
             heartbeat_seconds=_number(
-                comet, "heartbeat_seconds", comet_path, issues, default=60.0, minimum=0.001
+                comet,
+                "heartbeat_seconds",
+                comet_path,
+                issues,
+                default=60.0,
+                minimum=0.001,
             )
             or 60.0,
             grid_image_every_n_episodes=_integer(
-                comet, "grid_image_every_n_episodes", comet_path, issues, default=25, minimum=1
+                comet,
+                "grid_image_every_n_episodes",
+                comet_path,
+                issues,
+                default=25,
+                minimum=1,
             ),
             sweep_experiment=_boolean(
                 comet, "sweep_experiment", comet_path, issues, default=True
             ),
             cell_reporting=cell_reporting,
-            metric_plots=_boolean(comet, "metric_plots", comet_path, issues, default=False),
-            progress_metrics=_string_tuple(comet, "progress_metrics", comet_path, issues),
+            metric_plots=_boolean(
+                comet, "metric_plots", comet_path, issues, default=False
+            ),
+            progress_metrics=_string_tuple(
+                comet, "progress_metrics", comet_path, issues
+            ),
         ),
     )
 
@@ -982,11 +1246,16 @@ def _parse_experiment(raw: Any, issues: list[ValidationIssue]) -> ExperimentConf
     path = "experiment"
     values = _as_mapping(raw, path, issues)
     _unknown_fields(
-        values, {"schema_version", "name", "description", "tags", "metadata"}, path, issues
+        values,
+        {"schema_version", "name", "description", "tags", "metadata"},
+        path,
+        issues,
     )
     return ExperimentConfig(
         schema_version=_schema_version(values, path, issues),
-        name=_string(values, "name", path, issues, default="unnamed-experiment", required=True)
+        name=_string(
+            values, "name", path, issues, default="unnamed-experiment", required=True
+        )
         or "unnamed-experiment",
         description=_string(values, "description", path, issues, default="") or "",
         tags=_string_tuple(values, "tags", path, issues),
@@ -1000,9 +1269,21 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
     issues: list[ValidationIssue] = []
     values = {str(key): value for key, value in raw.items()}
     allowed = {
-        "schema_version", "llm_provider", "prompt", "game", "execution",
-        "logging", "storage", "analysis", "control", "metrics", "aggregation",
-        "observability", "experiment", "pricing", "budget",
+        "schema_version",
+        "llm_provider",
+        "prompt",
+        "game",
+        "execution",
+        "logging",
+        "storage",
+        "analysis",
+        "control",
+        "metrics",
+        "aggregation",
+        "observability",
+        "experiment",
+        "pricing",
+        "budget",
     }
     _unknown_fields(values, allowed, "", issues)
     schema_version = _schema_version(values, "", issues)
@@ -1031,6 +1312,32 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         pricing=_parse_pricing(values.get("pricing", {}), issues),
         budget=_parse_budget(values.get("budget", {}), issues),
     )
+    if storage.artifact_profile == "dashboard_semantic":
+        if config.game.type != "relational_imitation_round_feedback":
+            _issue(
+                issues,
+                "storage.artifact_profile",
+                "dashboard_semantic currently requires game.type relational_imitation_round_feedback",
+                config.game.type,
+            )
+        if str(config.game.options.get("social_mode", "peer")) != "board":
+            _issue(
+                issues,
+                "storage.artifact_profile",
+                "dashboard_semantic currently requires game.options.social_mode board",
+                config.game.options.get("social_mode"),
+            )
+        prompt_examples = config.logging.options.get("prompt_examples", {})
+        if (
+            isinstance(prompt_examples, Mapping)
+            and int(prompt_examples.get("count", 0)) > 0
+        ):
+            _issue(
+                issues,
+                "logging.options.prompt_examples.count",
+                "must be 0 for dashboard_semantic because prompts and responses are not retained",
+                prompt_examples.get("count"),
+            )
     if issues:
         raise ConfigurationError(issues, context="configuration validation")
     return config
@@ -1059,7 +1366,9 @@ def validate_run_config(raw: Mapping[str, Any]) -> ValidationResult:
     try:
         parse_run_config(raw)
     except ConfigurationError as exc:
-        return ValidationResult(tuple(issue for issue in exc.issues if isinstance(issue, ValidationIssue)))
+        return ValidationResult(
+            tuple(issue for issue in exc.issues if isinstance(issue, ValidationIssue))
+        )
     return ValidationResult.success()
 
 

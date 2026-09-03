@@ -3,6 +3,15 @@
 from .checkpoints import AtomicCheckpointStore, Checkpoint, canonical_hash
 from .results import results_run_dir
 from .compaction import compact_run_directory
+from .dashboard_semantic import (
+    DASHBOARD_SEMANTIC_SCHEMA_VERSION,
+    SemanticDashboardWriter,
+    read_semantic_stream,
+    reset_semantic_attempt,
+    semantic_seal_path,
+    semantic_stream_path,
+    validate_semantic_stream,
+)
 from .scientific import (
     ALL_COLUMNS,
     SCIENTIFIC_SCHEMA_VERSION,
@@ -27,8 +36,10 @@ __all__ = [
     "ALL_COLUMNS",
     "AtomicCheckpointStore",
     "Checkpoint",
+    "DASHBOARD_SEMANTIC_SCHEMA_VERSION",
     "SCIENTIFIC_SCHEMA_VERSION",
     "ScientificIdentity",
+    "SemanticDashboardWriter",
     "canonical_hash",
     "compact_imitation_event",
     "compact_run_directory",
@@ -41,9 +52,14 @@ __all__ = [
     "merge_episode_artifacts",
     "prompt_definition_hash",
     "read_scientific_tables",
+    "read_semantic_stream",
+    "reset_semantic_attempt",
     "results_run_dir",
+    "semantic_seal_path",
+    "semantic_stream_path",
     "validate_cell_artifact",
     "validate_episode_artifact",
     "validate_episode_frame",
+    "validate_semantic_stream",
     "write_completed_episode",
 ]

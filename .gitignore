@@ -15,6 +15,7 @@ venv/
 
 .DS_Store
 .tags*
+*:Zone.Identifier
 
 # Generated benchmark artifacts (inspection bundles live in results/inspection/)
 /results/*

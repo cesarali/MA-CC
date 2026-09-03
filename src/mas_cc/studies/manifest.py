@@ -158,6 +158,13 @@ def discover_study(config_dir: str | Path) -> StudySpec:
             raise ValueError(f"invalid YAML in {recipe}: {exc}") from exc
 
     preflight = dict(_mapping(raw.get("preflight"), "preflight"))
+    storage_ceiling = preflight.get("storage_ceiling_bytes")
+    if storage_ceiling is not None and (
+        isinstance(storage_ceiling, bool)
+        or not isinstance(storage_ceiling, int)
+        or storage_ceiling < 1
+    ):
+        raise ValueError("preflight.storage_ceiling_bytes must be a positive integer")
     contract = preflight.get("contract")
     if contract is not None and contract not in _PREFLIGHT_CONTRACTS:
         raise ValueError(

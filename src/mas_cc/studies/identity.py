@@ -27,6 +27,10 @@ PROTOCOL_EXCLUDED_PATHS: tuple[str, ...] = (
     "execution.parallelism",
     "execution.fail_fast",
     "storage.output_dir",
+    "storage.artifact_profile",
+    "storage.checkpoint_mode",
+    "storage.format",
+    "storage.options",
     "storage.overwrite",
     "storage.wipe_and_recompute",
     "logging",
@@ -121,9 +125,7 @@ def canonical_coordinates(coordinates: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def scientific_cell_key(
-    protocol: str, coordinates: Mapping[str, Any]
-) -> str:
+def scientific_cell_key(protocol: str, coordinates: Mapping[str, Any]) -> str:
     return _hash(
         {
             "cell_key_version": CELL_KEY_VERSION,

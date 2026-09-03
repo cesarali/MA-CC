@@ -77,6 +77,7 @@ from mas_cc.storage import (
     validate_cell_artifact,
     validate_episode_artifact,
     validate_episode_frame,
+    validate_semantic_stream,
 )
 
 from .aggregation import GridAggregator, aggregation_ground_truth
@@ -816,6 +817,7 @@ class _RoundTickingObserver:
         if (
             self.prompt_sampler is not None
             and self.prompt_cell_dir is not None
+            and not self.recorder.retention_policy.semantic_dashboard
             and attempt == 1
             and payload.get("valid")
         ):
@@ -839,6 +841,12 @@ class _RoundTickingObserver:
             **payload, budget_status=self.guard.checkpoint_state()
         )
         self.progress.round_tick(self.episode_label, payload.get("round_index"))
+
+    def record_semantic_initialization(self, **payload: Any) -> None:
+        self.recorder.record_semantic_initialization(**payload)
+
+    def record_semantic_round_start(self, **payload: Any) -> None:
+        self.recorder.record_semantic_round_start(**payload)
 
     def record_trajectory(self, **payload: Any) -> None:
         self.recorder.record_trajectory(**payload)
@@ -1126,6 +1134,12 @@ def _partition_resume_tasks(
             else:
                 scheduled.append(task)
                 continue
+            if task.config.storage.retention_policy.semantic_dashboard:
+                validate_semantic_stream(
+                    (task.cell_dir or task.episode_dir)
+                    / "round_records"
+                    / task.episode_id
+                )
             resumed.append(
                 EpisodeOutcome(
                     task.episode_id,
@@ -1400,6 +1414,8 @@ async def _execute_episode(
                 "count", 0
             )
         )
+        if retention_policy.semantic_dashboard:
+            prompt_example_rounds = 0
         prompt_scope = str(
             dict(episode_config.logging.options.get("prompt_examples", {}) or {}).get(
                 "scope",
@@ -1427,7 +1443,11 @@ async def _execute_episode(
         try:
             result = await runtime(observer)
         except Exception as exc:
-            recorder.event("run_failed", error_type=type(exc).__name__, error=str(exc))
+            recorder.event(
+                "run_failed",
+                error_type=type(exc).__name__,
+                **({} if retention_policy.semantic_dashboard else {"error": str(exc)}),
+            )
             recorder.finalize(
                 status="failed", budget_status=guard.checkpoint_state(), error=exc
             )
@@ -1667,10 +1687,19 @@ async def _run_episode_task(
                 task.seed,
                 "failed",
                 error_type=type(exc).__name__,
-                error=str(exc),
+                error=(
+                    None
+                    if task.config.storage.retention_policy.semantic_dashboard
+                    else str(exc)
+                ),
                 cell_id=task.cell_id,
             )
-            LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
+            if task.config.storage.retention_policy.semantic_dashboard:
+                LOGGER.error("episode %s failed: %s", label, type(exc).__name__)
+            else:
+                LOGGER.error(
+                    "episode %s failed: %s: %s", label, type(exc).__name__, exc
+                )
         finally:
             _TIMING_EPISODE.reset(timing_token)
         outcome = _timed(outcome)
@@ -1977,7 +2006,8 @@ async def run_experiment(
     prompt_options = dict(config.logging.options.get("prompt_examples", {}) or {})
     prompt_sampler = (
         _CellPromptSampler(int(prompt_options.get("count", 0)))
-        if prompt_options.get(
+        if not config.storage.retention_policy.semantic_dashboard
+        and prompt_options.get(
             "scope",
             "cell" if config.storage.retention_policy.compact_scientific else "episode",
         )
@@ -2342,7 +2372,10 @@ async def run_experiment_grid(
             for raw_index, raw_seed in planned.items():
                 index = int(raw_index)
                 seed = int(raw_seed)
-                if index < 0 or index >= cells_by_id[cell_id].config.execution.repetitions:
+                if (
+                    index < 0
+                    or index >= cells_by_id[cell_id].config.execution.repetitions
+                ):
                     raise ValueError(
                         f"episode plan repetition {index} is outside the target range "
                         f"for {cell_id}"
@@ -2545,7 +2578,8 @@ async def run_experiment_grid(
     prompt_options = dict(base.logging.options.get("prompt_examples", {}) or {})
     prompt_sampler = (
         _CellPromptSampler(int(prompt_options.get("count", 0)))
-        if prompt_options.get(
+        if not base.storage.retention_policy.semantic_dashboard
+        and prompt_options.get(
             "scope",
             "cell" if base.storage.retention_policy.compact_scientific else "episode",
         )

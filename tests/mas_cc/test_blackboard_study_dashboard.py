@@ -26,6 +26,7 @@ from mas_cc.storage.scientific import (
     empty_compact_row,
     write_completed_episode,
 )
+from mas_cc.storage.dashboard_semantic import SemanticDashboardWriter
 
 
 def _line(value: object) -> str:
@@ -427,3 +428,87 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     )[0]
     assert "sparkline" not in episode_template
     assert "Truth trajectory" not in episode_template
+
+
+def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):
+    root = _study(tmp_path)
+    reader = BlackboardStudyReader(root, scheduler=False)
+    paths = reader.resolved_paths("config-0000~cell-0000")
+    full_episode = paths.full_episodes_root / "cell-0000-0000"
+    for path in sorted(full_episode.rglob("*"), reverse=True):
+        if path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            path.rmdir()
+    full_episode.rmdir()
+    semantic_dir = paths.round_records_root / "cell-0000-0000"
+    semantic = SemanticDashboardWriter(
+        semantic_dir,
+        identity={
+            "run_id": "run-1",
+            "cell_id": "cell-0000",
+            "episode_id": "cell-0000-0000",
+            "episode_seed": 77,
+        },
+        header={
+            "game_type": "relational_imitation_round_feedback",
+            "protocol_version": "night_dawn_autonomous_day_v1",
+            "population_size": 2,
+            "rounds": 1,
+            "expected_updates": 2,
+        },
+    )
+    semantic.initialization(
+        {
+            "task": {"correct_answer": "A", "possible_answers": ["A", "B"]},
+            "agents": [
+                {
+                    "agent_id": "agent_001",
+                    "committed_action": "A",
+                    "active_fact_ids": ["f1"],
+                    "known_fact_ids": ["f1"],
+                },
+                {
+                    "agent_id": "agent_002",
+                    "committed_action": "B",
+                    "active_fact_ids": ["f2"],
+                    "known_fact_ids": ["f2"],
+                },
+            ],
+            "blackboard": [],
+        }
+    )
+    semantic.update(
+        {
+            "round_index": 0,
+            "within_round_index": 0,
+            "global_update_index": 0,
+            "interaction_index": 1,
+            "focal_agent_id": "agent_001",
+            "focal_vote_before": "A",
+            "focal_vote_after": "A",
+            "population_state_before": ["A", "B"],
+            "population_state_after": ["A", "B"],
+            "focal_active_fact_ids_after": ["f1"],
+            "focal_known_fact_ids_after": ["f1"],
+            "possible_answers": ["A", "B"],
+            "correct_answer": "A",
+        }
+    )
+    before = hashlib.sha256(
+        (semantic_dir / "dashboard_semantic.jsonl").read_bytes()
+    ).hexdigest()
+    reader = BlackboardStudyReader(root, scheduler=False)
+    status = reader.episode_status("config-0000~cell-0000~episode-0000")
+    assert status["detail_available"] is True
+    assert status["activity_status"] == "started_unchanged"
+    first_reader = reader.episode_reader("config-0000~cell-0000~episode-0000")
+    assert first_reader is reader.episode_reader("config-0000~cell-0000~episode-0000")
+    assert (
+        first_reader.snapshot(0, 1, "agent_001")["source"]["artifact_profile"]
+        == "dashboard_semantic"
+    )
+    after = hashlib.sha256(
+        (semantic_dir / "dashboard_semantic.jsonl").read_bytes()
+    ).hexdigest()
+    assert before == after

@@ -745,12 +745,11 @@ async def run_relational_imitation_round_feedback_game(
         initialization_artifact_hash=initialization_artifact_hash,
         physical_initial_state_hash=physical_initial_state_hash,
     )
+    _notify(observer, "record_semantic_initialization", state=initial_state.to_dict())
 
     interactions: list[RelationalInteractionRecord] = []
     round_records: list[RelationalRoundRecord] = []
-    retain_result_history = bool(
-        getattr(observer, "retain_result_history", True)
-    )
+    retain_result_history = bool(getattr(observer, "retain_result_history", True))
     logical_decisions = len(initial_decisions)
     validation_attempts = sum(
         decision.validation_attempts for decision in initial_decisions
@@ -909,6 +908,28 @@ async def run_relational_imitation_round_feedback_game(
                 )
                 round_controller_post_ids.append(controller_post.message_id)
                 round_created_message_ids.append(controller_post.message_id)
+
+        _notify(
+            observer,
+            "record_semantic_round_start",
+            round_index=round_index,
+            state=state.to_dict(),
+            expired_message_ids=list(night_expired_message_ids),
+            deactivated_pairs=[
+                {"agent_id": agent_id, "fact_id": fact_id}
+                for agent_id, fact_id in deactivated
+            ],
+            controller={
+                "enabled": round_signal is not None,
+                "action": action,
+                "target": target,
+                "probability": probability,
+                "sensor": None
+                if round_signal is None
+                else dict(round_signal.observation),
+                "directive_ids": list(round_controller_post_ids),
+            },
+        )
 
         for within_round_index in range(rules.n_agents):
             controlled_slot = within_round_index in controlled_set
@@ -1109,9 +1130,7 @@ async def run_relational_imitation_round_feedback_game(
                     else 0
                 ),
                 "eligible_directive_count": (
-                    eligible_directives
-                    if rules.social_mode == SOCIAL_MODE_BOARD
-                    else 0
+                    eligible_directives if rules.social_mode == SOCIAL_MODE_BOARD else 0
                 ),
                 "eligible_directive_share": (
                     eligible_directives / len(eligible_messages)
@@ -1383,9 +1402,7 @@ async def run_relational_imitation_round_feedback_game(
             "n_k_plus_1": _count_vector(after_obs["occupation_counts"], options)[
                 options.index(analysis_target)
             ],
-            "Y_k": sensor_counts[target_index]
-            if round_signal is not None
-            else None,
+            "Y_k": sensor_counts[target_index] if round_signal is not None else None,
             "P_U1_given_Y": probability,
             "U_k": controller_sampled_u,
             "controller_sensor_Y": controller_sensor_y,
