@@ -39,6 +39,9 @@ MUSR_BLACKBOARD_POPULATION_01_EXTENDED_CONTRACT = "musr_blackboard_population_01
 MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT = (
     "musr_blackboard_false_q3_companion_v1"
 )
+MUSR_BLACKBOARD_POPULATION_SCOUT_R1_CONTRACT = (
+    "musr_blackboard_population_scout_r1_v1"
+)
 MUSR_BLACKBOARD_TASK_HASH = (
     "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750"
 )
@@ -542,6 +545,7 @@ def _validate_musr_blackboard_population_01_contract(
     *,
     include_false_q3: bool = False,
     q3_only: bool = False,
+    repetitions: int = 10,
 ) -> dict[str, Any]:
     """Validate the frozen blackboard design and its additive q=3 false arm."""
 
@@ -625,8 +629,8 @@ def _validate_musr_blackboard_population_01_contract(
                 errors,
             )
             _require(
-                config.execution.repetitions == 10,
-                "every cell must have 10 repetitions",
+                config.execution.repetitions == repetitions,
+                f"every cell must have {repetitions} repetitions",
                 errors,
             )
             _require(
@@ -792,8 +796,9 @@ def _validate_musr_blackboard_population_01_contract(
     )
     total_episodes = sum(cell.config.execution.repetitions for cell in all_cells)
     _require(
-        total_episodes == (120 if q3_only else 390 if include_false_q3 else 270),
-        f"study must contain {120 if q3_only else 390 if include_false_q3 else 270} planned episodes",
+        total_episodes
+        == (12 if q3_only else 39 if include_false_q3 else 27) * repetitions,
+        f"study must contain {(12 if q3_only else 39 if include_false_q3 else 27) * repetitions} planned episodes",
         errors,
     )
     seeds = {cell.config.execution.seed for cell in all_cells}
@@ -818,7 +823,7 @@ def _validate_musr_blackboard_population_01_contract(
         "theta": [0.5],
         "schedule": ["soft"],
         "number_of_frozen_tasks": 1,
-        "repetitions": [10],
+        "repetitions": [repetitions],
         "initialization_modes": ["paired_local_vote"],
         "structural_regimes": len(coordinates),
         "resolved_regimes": [list(value) for value in sorted(coordinates, key=str)],
@@ -869,6 +874,10 @@ def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
         )
     if contract == MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT:
         return _validate_musr_blackboard_population_01_contract(spec, q3_only=True)
+    if contract == MUSR_BLACKBOARD_POPULATION_SCOUT_R1_CONTRACT:
+        return _validate_musr_blackboard_population_01_contract(
+            spec, include_false_q3=True, repetitions=1
+        )
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 

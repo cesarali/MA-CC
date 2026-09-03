@@ -87,7 +87,14 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
     for path in spec.configs:
         source = load_run_config_or_grid(path)
         bases.append(source.base if isinstance(source, GridSpec) else source)
-    request_concurrencies = {base.llm_provider.request_concurrency for base in bases}
+    request_concurrencies = {
+        min(
+            base.llm_provider.request_concurrency,
+            base.execution.parallelism,
+            base.execution.repetitions,
+        )
+        for base in bases
+    }
     if len(request_concurrencies) != 1:
         raise ValueError("automatic cell-array planning requires one request concurrency")
     per_shard = request_concurrencies.pop()
