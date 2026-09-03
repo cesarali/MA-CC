@@ -257,7 +257,17 @@ class _SchedulerReader:
         assert self.job_id is not None
         commands = []
         if shutil.which("squeue"):
-            commands.append(["squeue", "-h", "-j", self.job_id, "-o", "%A|%a|%T|%N|%M"])
+            commands.append(
+                [
+                    "squeue",
+                    "-h",
+                    "-r",
+                    "-j",
+                    self.job_id,
+                    "-o",
+                    "%F|%K|%T|%N|%M",
+                ]
+            )
         if shutil.which("sacct"):
             commands.append(
                 [
@@ -426,7 +436,14 @@ class BlackboardStudyReader:
                         config_index=config_index,
                         config_name=config_name,
                         cell_id=local_id,
-                        path=str(actual.path) if actual is not None else None,
+                        path=(
+                            str(actual.path)
+                            if actual is not None
+                            else str(execution.output_dir)
+                            if execution is not None
+                            and Path(execution.output_dir).is_dir()
+                            else None
+                        ),
                         expected_episodes=repetitions,
                         parameters=_parameters(config, overrides),
                         scheduler_array_index=execution.array_index
