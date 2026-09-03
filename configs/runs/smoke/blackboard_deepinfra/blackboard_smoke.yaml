@@ -21,7 +21,7 @@ game:
   topology: complete
   options:
     task_family: musr_team_allocation
-    task_dataset_dir: ../../relational_reasoning/blackboard_game/artifacts
+    task_dataset_dir: configs/runs/relational_reasoning/blackboard_game/artifacts
     task_id: task_001
     initial_information:
       artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_F9_N24.json
