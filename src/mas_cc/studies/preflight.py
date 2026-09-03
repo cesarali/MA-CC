@@ -36,9 +36,7 @@ PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT = (
 )
 MUSR_BLACKBOARD_POPULATION_01_CONTRACT = "musr_blackboard_population_01_v1"
 MUSR_BLACKBOARD_POPULATION_01_EXTENDED_CONTRACT = "musr_blackboard_population_01_v2"
-MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT = (
-    "musr_blackboard_false_q3_companion_v1"
-)
+MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT = "musr_blackboard_false_q3_companion_v1"
 MUSR_BLACKBOARD_TASK_HASH = (
     "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750"
 )
@@ -1217,6 +1215,40 @@ def run_study_preflight(
         for key in ("lower", "expected", "conservative")
     }
     design = {**design, "provider_calls": calls}
+    from mas_cc.config import GridSpec, load_run_config_or_grid
+    from mas_cc.planning.semantic_storage import estimate_semantic_storage
+
+    semantic_estimates = []
+    for path in spec.configs:
+        source = load_run_config_or_grid(path)
+        base = source.base if isinstance(source, GridSpec) else source
+        episodes = (
+            sum(cell.config.execution.repetitions for cell in source.cells)
+            if isinstance(source, GridSpec)
+            else base.execution.repetitions
+        )
+        storage = estimate_semantic_storage(base.to_dict(), episodes)
+        if storage is not None:
+            semantic_estimates.append(storage)
+    if semantic_estimates:
+        semantic_total = sum(item.total_bytes for item in semantic_estimates)
+        ceiling = spec.preflight.get("storage_ceiling_bytes")
+        design = {
+            **design,
+            "semantic_storage": {
+                "estimated_total_bytes": semantic_total,
+                "estimated_files": sum(
+                    item.files_per_episode * item.episode_count
+                    for item in semantic_estimates
+                ),
+                "storage_ceiling_bytes": ceiling,
+            },
+        }
+        if ceiling is not None and semantic_total > int(ceiling):
+            raise ValueError(
+                "semantic dashboard storage estimate exceeds "
+                f"preflight.storage_ceiling_bytes: {semantic_total} > {ceiling}"
+            )
     (destination / "design_validation.json").write_text(
         json.dumps(design, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -1245,6 +1277,14 @@ def run_study_preflight(
         f"- Nominal provider calls: {calls['lower']}",
         f"- Expected provider calls: {calls['expected']}",
         f"- Conservative provider calls: {calls['conservative']}",
+        *(
+            [
+                f"- Estimated dashboard-semantic storage: {design['semantic_storage']['estimated_total_bytes']} bytes",
+                f"- Dashboard-semantic storage ceiling: {design['semantic_storage']['storage_ceiling_bytes']}",
+            ]
+            if "semantic_storage" in design
+            else []
+        ),
         "- Matched revised q=1 theory applicable: false",
         "",
         "## Frozen task audit",

@@ -71,9 +71,7 @@ def config_schema() -> dict[str, Any]:
                         "required": ["type"],
                         "properties": {"type": {"type": "string", "minLength": 1}},
                     },
-                    "message_mode": {
-                        "enum": ["per_block", "merge_consecutive_roles"]
-                    },
+                    "message_mode": {"enum": ["per_block", "merge_consecutive_roles"]},
                     "block_separator": {"type": "string"},
                     "options": options,
                 },
@@ -109,7 +107,9 @@ def config_schema() -> dict[str, Any]:
             "logging": _simple_object(
                 {
                     "schema_version": {"const": 1},
-                    "level": {"enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]},
+                    "level": {
+                        "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+                    },
                     "console": {"type": "boolean"},
                     "audit": {"type": "boolean"},
                     "comet": {"type": "boolean"},
@@ -130,20 +130,27 @@ def config_schema() -> dict[str, Any]:
                 }
             ),
             "storage": {
-                **_simple_object({
-                    "schema_version": {"const": 1},
-                    "output_dir": {"type": "string", "minLength": 1},
-                    "format": {"type": "string", "minLength": 1},
-                    "checkpoints": {"type": "boolean"},
-                    "artifact_profile": {"enum": ["full", "results_only", "timing_study"]},
-                    "checkpoint_mode": {"enum": ["off", "episode"]},
-                    "overwrite": {"type": "boolean"},
-                    "wipe_and_recompute": {"type": "boolean"},
-                    "options": options,
-                }),
-                "allOf": [
-                    {"not": {"required": ["checkpoints", "checkpoint_mode"]}}
-                ],
+                **_simple_object(
+                    {
+                        "schema_version": {"const": 1},
+                        "output_dir": {"type": "string", "minLength": 1},
+                        "format": {"type": "string", "minLength": 1},
+                        "checkpoints": {"type": "boolean"},
+                        "artifact_profile": {
+                            "enum": [
+                                "full",
+                                "dashboard_semantic",
+                                "results_only",
+                                "timing_study",
+                            ]
+                        },
+                        "checkpoint_mode": {"enum": ["off", "episode"]},
+                        "overwrite": {"type": "boolean"},
+                        "wipe_and_recompute": {"type": "boolean"},
+                        "options": options,
+                    }
+                ),
+                "allOf": [{"not": {"required": ["checkpoints", "checkpoint_mode"]}}],
             },
             "analysis": _simple_object(
                 {
@@ -199,12 +206,18 @@ def config_schema() -> dict[str, Any]:
                             # master writes Comet, so there is one writer per
                             # experiment key and no step-counter race.
                             "writer": {"const": "master_only"},
-                            "heartbeat_seconds": {"type": "number", "exclusiveMinimum": 0},
+                            "heartbeat_seconds": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                            },
                             "progress_metrics": {
                                 "type": "array",
                                 "items": {"type": "string"},
                             },
-                            "grid_image_every_n_episodes": {"type": "integer", "minimum": 1},
+                            "grid_image_every_n_episodes": {
+                                "type": "integer",
+                                "minimum": 1,
+                            },
                             "sweep_experiment": {"type": "boolean"},
                             "cell_reporting": {
                                 "enum": ["experiments", "master", "disabled"]
@@ -238,13 +251,22 @@ def config_schema() -> dict[str, Any]:
                 {
                     "schema_version": {"const": 1},
                     "accounting_unit": {"type": "string", "minLength": 1},
-                    "system_max_cost_per_run": {"type": ["number", "null"], "minimum": 0},
+                    "system_max_cost_per_run": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                    },
                     "max_cost_per_run": {"type": ["number", "null"], "minimum": 0},
-                    "max_provider_requests": {"type": ["integer", "null"], "minimum": 0},
+                    "max_provider_requests": {
+                        "type": ["integer", "null"],
+                        "minimum": 0,
+                    },
                     "max_input_tokens": {"type": ["integer", "null"], "minimum": 0},
                     "max_output_tokens": {"type": ["integer", "null"], "minimum": 0},
                     "allow_unbounded_paid_requests": {"type": "boolean"},
-                    "live_spend_poll_seconds": {"type": ["integer", "null"], "minimum": 10},
+                    "live_spend_poll_seconds": {
+                        "type": ["integer", "null"],
+                        "minimum": 10,
+                    },
                 }
             ),
         },

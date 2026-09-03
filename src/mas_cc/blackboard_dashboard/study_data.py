@@ -428,6 +428,7 @@ class BlackboardStudyReader:
         self._last_trajectory_signatures: dict[Path, tuple[str, int, int] | None] = {}
         self._resolved_configs: dict[str, Mapping[str, Any]] = {}
         self._paths: dict[str, ResolvedDashboardCellPaths] = {}
+        self._episode_readers: dict[str, BlackboardRunReader] = {}
         self._cells = self._build_cells()
         self._cell_map = {cell.qualified_id: cell for cell in self._cells}
 
@@ -624,6 +625,11 @@ class BlackboardStudyReader:
                 else None
             )
             full_path = paths.full_episodes_root / local_id if paths else None
+            semantic_path = (
+                paths.round_records_root / local_id / "dashboard_semantic.jsonl"
+                if paths
+                else None
+            )
             if (
                 round_path is not None
                 and not round_path.is_file()
@@ -642,6 +648,7 @@ class BlackboardStudyReader:
             record = compact_manifest or full_manifest or explicit.get(local_id, {})
             raw_status = str(record.get("status", ""))
             trajectory_exists = bool(round_path and round_path.is_file())
+            semantic_exists = bool(semantic_path and semantic_path.is_file())
             durable_status = (
                 "completed"
                 if sealed and local_id in sealed_ids or raw_status in _TERMINAL_COMPLETE
@@ -666,20 +673,24 @@ class BlackboardStudyReader:
                         durable_status = "unknown"
                         status_reason = f"Invalid compact completion artifact: {exc}"
             if seal_error and (
-                trajectory_exists or compact_path and compact_path.is_file()
+                trajectory_exists
+                or semantic_exists
+                or compact_path
+                and compact_path.is_file()
             ):
                 durable_status = "unknown"
                 status_reason = seal_error
             activity_status = "not_started"
-            if trajectory_exists:
-                current = _signature(round_path)
-                previous = self._last_trajectory_signatures.get(round_path)
+            activity_path = semantic_path if semantic_exists else round_path
+            if activity_path is not None and activity_path.is_file():
+                current = _signature(activity_path)
+                previous = self._last_trajectory_signatures.get(activity_path)
                 activity_status = (
                     "advancing"
                     if previous is not None and current != previous
                     else "started_unchanged"
                 )
-                self._last_trajectory_signatures[round_path] = current
+                self._last_trajectory_signatures[activity_path] = current
             rows = (
                 self._rows(round_path, completed=durable_status == "completed")
                 if trajectory_exists
@@ -716,13 +727,26 @@ class BlackboardStudyReader:
                 else None
             )
             last = rows[-1] if rows else {}
+            if semantic_exists and semantic_path is not None:
+                from mas_cc.storage.dashboard_semantic import read_semantic_stream
+
+                semantic_updates = [
+                    row
+                    for row in read_semantic_stream(semantic_path)
+                    if row.get("record_type") == "update"
+                ]
+                if semantic_updates:
+                    last = semantic_updates[-1]
             detail_available = bool(
-                full_path and (full_path / "trajectory.jsonl").is_file()
+                full_path
+                and (full_path / "trajectory.jsonl").is_file()
+                or semantic_path
+                and semantic_path.is_file()
             )
             detail_reason = None
             if not detail_available:
                 detail_reason = (
-                    f"Missing full episode trajectory: {full_path / 'trajectory.jsonl'}"
+                    "Neither a full trajectory nor dashboard_semantic.jsonl was retained."
                     if full_path
                     else "The scientific cell has not been discovered."
                 )
@@ -746,10 +770,12 @@ class BlackboardStudyReader:
                     and ("global_update_index" in last or "within_round_index" in last)
                     else None,
                     last_update_at=(
-                        datetime.fromtimestamp(round_path.stat().st_mtime, timezone.utc)
+                        datetime.fromtimestamp(
+                            activity_path.stat().st_mtime, timezone.utc
+                        )
                         .isoformat()
                         .replace("+00:00", "Z")
-                        if trajectory_exists and round_path is not None
+                        if activity_path is not None and activity_path.is_file()
                         else None
                     ),
                     elapsed_seconds=elapsed,
@@ -981,8 +1007,12 @@ class BlackboardStudyReader:
         status = self.episode_status(qualified_id)
         if not status["detail_available"]:
             raise ValueError(status["detail_reason"])
-        paths = self._paths[status["cell_id"]]
-        return BlackboardRunReader(paths.run_root, status["episode_id"])
+        reader = self._episode_readers.get(qualified_id)
+        if reader is None:
+            paths = self._paths[status["cell_id"]]
+            reader = BlackboardRunReader(paths.run_root, status["episode_id"])
+            self._episode_readers[qualified_id] = reader
+        return reader
 
     def resolved_paths(self, qualified_id: str) -> ResolvedDashboardCellPaths:
         try:

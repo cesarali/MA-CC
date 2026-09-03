@@ -6,7 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from mas_cc.config import GridSpec, RunConfig, load_run_config_or_grid, resolved_config_yaml
+from mas_cc.config import (
+    GridSpec,
+    RunConfig,
+    load_run_config_or_grid,
+    resolved_config_yaml,
+)
 from mas_cc.experiments import (
     ExperimentResult,
     GridResult,
@@ -23,6 +28,7 @@ from mas_cc.planning import (
     static_grid_preflight,
 )
 from mas_cc.storage import canonical_hash
+from mas_cc.planning.semantic_storage import estimate_semantic_storage
 
 from .game import _budgets, _quote
 from .inspect import _write, _write_manifest
@@ -39,7 +45,9 @@ def _output_dir(source: RunConfig | GridSpec, output_dir: str | Path | None) -> 
     return Path(base.storage.output_dir)
 
 
-def resolve_output_dir(config_path: str | Path, output_dir: str | Path | None = None) -> Path:
+def resolve_output_dir(
+    config_path: str | Path, output_dir: str | Path | None = None
+) -> Path:
     """The directory a preflight/run against ``config_path`` will land in.
 
     Lets the CLI report the resolved destination in its own status line
@@ -105,29 +113,49 @@ def compute_grid_preflight_id(grid: GridSpec, quote: PricingQuote) -> str:
     )
 
 
-def _run_single_preflight(config: RunConfig, destination: Path) -> ExperimentPreflightEstimate:
+def _run_single_preflight(
+    config: RunConfig, destination: Path
+) -> ExperimentPreflightEstimate:
     game = create_game(config.game)
     plan = game.call_plan(config.game)
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)
 
     estimate = static_experiment_preflight(
-        plan, config.prompt, config.llm_provider,
-        episode_count=config.execution.repetitions, concurrency=config.execution.parallelism,
-        assumed_output_tokens=config.llm_provider.max_output_tokens, pricing_quote=quote,
-        system_budget=system_budget, run_budget=run_budget,
+        plan,
+        config.prompt,
+        config.llm_provider,
+        episode_count=config.execution.repetitions,
+        concurrency=config.execution.parallelism,
+        assumed_output_tokens=config.llm_provider.max_output_tokens,
+        pricing_quote=quote,
+        system_budget=system_budget,
+        run_budget=run_budget,
         explicit_override=config.pricing.explicit_unknown_price_override,
         allow_stale_pricing=not config.pricing.require_fresh_at_launch,
     )
 
     preflight_id = compute_preflight_id(config, quote)
     _write(destination / "resolved_config.yaml", resolved_config_yaml(config))
-    _write(destination / "per_episode_estimate.json", _json(estimate.per_episode.to_dict()))
-    _write(destination / "experiment_estimate.json", _json(estimate.to_dict()))
+    _write(
+        destination / "per_episode_estimate.json", _json(estimate.per_episode.to_dict())
+    )
+    payload = estimate.to_dict()
+    storage_estimate = estimate_semantic_storage(
+        config.to_dict(), config.execution.repetitions
+    )
+    if storage_estimate is not None:
+        payload["semantic_storage"] = storage_estimate.to_dict()
+    _write(destination / "experiment_estimate.json", _json(payload))
     _write(destination / "pricing_snapshot.json", _json(quote.to_dict()))
     _write(
         destination / "budget_status.json",
-        _json({"system_budget": system_budget.to_dict(), "run_budget": run_budget.to_dict()}),
+        _json(
+            {
+                "system_budget": system_budget.to_dict(),
+                "run_budget": run_budget.to_dict(),
+            }
+        ),
     )
     _write(destination / "preflight_id.txt", preflight_id + "\n")
 
@@ -139,6 +167,7 @@ def _run_single_preflight(config: RunConfig, destination: Path) -> ExperimentPre
 - Episodes: {estimate.episode_count} (concurrency {estimate.concurrency}).
 - Expected total cost: {format_money(estimate.total_costs.expected)}; conservative: {format_money(estimate.total_costs.conservative)}.
 - Rough total runtime: {estimate.rough_runtime_seconds:.1f}s.
+{f"- Estimated dashboard-semantic storage: {storage_estimate.total_bytes} bytes ({storage_estimate.files_per_episode * storage_estimate.episode_count} episode files)." if storage_estimate is not None else ""}
 - Preflight ID: `{preflight_id}` — pass this to `mas-cc experiment run --approve-preflight` to bind the launch to this estimate.
 
 ## Warnings
@@ -146,7 +175,13 @@ def _run_single_preflight(config: RunConfig, destination: Path) -> ExperimentPre
 {chr(10).join(f"- {warning}" for warning in estimate.warnings) or "- none"}
 """
     _write(destination / "report.md", report)
-    _write_manifest(destination, phase=9, status=status, checks={"launch_permitted": estimate.launch_status == "permitted"}, warnings=list(estimate.warnings))
+    _write_manifest(
+        destination,
+        phase=9,
+        status=status,
+        checks={"launch_permitted": estimate.launch_status == "permitted"},
+        warnings=list(estimate.warnings),
+    )
     return estimate
 
 
@@ -155,9 +190,12 @@ def _run_grid_preflight(grid: GridSpec, destination: Path) -> GridPreflightEstim
     system_budget, run_budget = _budgets(grid.base, quote)
 
     estimate = static_grid_preflight(
-        grid, concurrency=grid.base.execution.parallelism,
-        assumed_output_tokens=grid.base.llm_provider.max_output_tokens, pricing_quote=quote,
-        system_budget=system_budget, run_budget=run_budget,
+        grid,
+        concurrency=grid.base.execution.parallelism,
+        assumed_output_tokens=grid.base.llm_provider.max_output_tokens,
+        pricing_quote=quote,
+        system_budget=system_budget,
+        run_budget=run_budget,
         explicit_override=grid.base.pricing.explicit_unknown_price_override,
         allow_stale_pricing=not grid.base.pricing.require_fresh_at_launch,
     )
@@ -165,16 +203,29 @@ def _run_grid_preflight(grid: GridSpec, destination: Path) -> GridPreflightEstim
     preflight_id = compute_grid_preflight_id(grid, quote)
     _write(destination / "resolved_base_config.yaml", resolved_config_yaml(grid.base))
     _write(destination / "grid_definition.json", _json(grid.to_dict()))
-    _write(destination / "grid_estimate.json", _json(estimate.to_dict()))
+    payload = estimate.to_dict()
+    storage_estimate = estimate_semantic_storage(
+        grid.base.to_dict(), estimate.total_episode_count
+    )
+    if storage_estimate is not None:
+        payload["semantic_storage"] = storage_estimate.to_dict()
+    _write(destination / "grid_estimate.json", _json(payload))
     _write(destination / "pricing_snapshot.json", _json(quote.to_dict()))
     _write(
         destination / "budget_status.json",
-        _json({"system_budget": system_budget.to_dict(), "run_budget": run_budget.to_dict()}),
+        _json(
+            {
+                "system_budget": system_budget.to_dict(),
+                "run_budget": run_budget.to_dict(),
+            }
+        ),
     )
     _write(destination / "preflight_id.txt", preflight_id + "\n")
 
     status = "pass" if estimate.launch_status == "permitted" else "fail"
-    axes_lines = "\n".join(f"- `{axis.path}`: {list(axis.values)}" for axis in grid.axes)
+    axes_lines = "\n".join(
+        f"- `{axis.path}`: {list(axis.values)}" for axis in grid.axes
+    )
     report = f"""# Phase 9 grid preflight
 
 - Status: **{status.upper()}** (`{estimate.launch_status}`)
@@ -184,6 +235,7 @@ def _run_grid_preflight(grid: GridSpec, destination: Path) -> GridPreflightEstim
 {axes_lines}
 - Expected total cost: {format_money(estimate.total_costs.expected)}; conservative: {format_money(estimate.total_costs.conservative)}.
 - Rough total runtime: {estimate.rough_runtime_seconds:.1f}s.
+{f"- Estimated dashboard-semantic storage: {storage_estimate.total_bytes} bytes ({storage_estimate.files_per_episode * storage_estimate.episode_count} episode files)." if storage_estimate is not None else ""}
 - Preflight ID: `{preflight_id}` — pass this to `mas-cc experiment run --approve-preflight` to bind the launch to this estimate.
 
 ## Warnings
@@ -191,7 +243,13 @@ def _run_grid_preflight(grid: GridSpec, destination: Path) -> GridPreflightEstim
 {chr(10).join(f"- {warning}" for warning in estimate.warnings) or "- none"}
 """
     _write(destination / "report.md", report)
-    _write_manifest(destination, phase=9, status=status, checks={"launch_permitted": estimate.launch_status == "permitted"}, warnings=list(estimate.warnings))
+    _write_manifest(
+        destination,
+        phase=9,
+        status=status,
+        checks={"launch_permitted": estimate.launch_status == "permitted"},
+        warnings=list(estimate.warnings),
+    )
     return estimate
 
 
@@ -208,13 +266,25 @@ def run_experiment_preflight(
     return _run_single_preflight(source, destination)
 
 
-def _approve(base_config: RunConfig, quote: PricingQuote, approve_preflight: str | Path | None, *, grid: GridSpec | None) -> None:
+def _approve(
+    base_config: RunConfig,
+    quote: PricingQuote,
+    approve_preflight: str | Path | None,
+    *,
+    grid: GridSpec | None,
+) -> None:
     if approve_preflight is None:
         return
     path = Path(approve_preflight)
-    approved_id = path.read_text(encoding="utf-8").strip() if path.is_file() else str(approve_preflight).strip()
+    approved_id = (
+        path.read_text(encoding="utf-8").strip()
+        if path.is_file()
+        else str(approve_preflight).strip()
+    )
     current_id = (
-        compute_grid_preflight_id(grid, quote) if grid is not None else compute_preflight_id(base_config, quote)
+        compute_grid_preflight_id(grid, quote)
+        if grid is not None
+        else compute_preflight_id(base_config, quote)
     )
     if approved_id != current_id:
         raise ValueError(
@@ -240,7 +310,9 @@ def run_aggregate_command(
     aggregation = None
     if config_path is not None:
         source = load_run_config_or_grid(config_path)
-        aggregation = (source.base if isinstance(source, GridSpec) else source).aggregation
+        aggregation = (
+            source.base if isinstance(source, GridSpec) else source
+        ).aggregation
     return aggregate_grid_directory(run_dir, aggregation)
 
 
@@ -273,7 +345,11 @@ def run_experiment_command(
     if isinstance(source, GridSpec):
         quote = _quote(source.base)
         _approve(source.base, quote, approve_preflight, grid=source)
-        return run_experiment_grid_sync(source, destination, resume=resume, show_progress=show_progress)
+        return run_experiment_grid_sync(
+            source, destination, resume=resume, show_progress=show_progress
+        )
     quote = _quote(source)
     _approve(source, quote, approve_preflight, grid=None)
-    return run_experiment_sync(source, destination, resume=resume, show_progress=show_progress)
+    return run_experiment_sync(
+        source, destination, resume=resume, show_progress=show_progress
+    )

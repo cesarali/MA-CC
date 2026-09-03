@@ -223,12 +223,14 @@
 
   function renderAgent(snapshot) {
     const a = snapshot.agent;
+    const promptReason = snapshot.capabilities?.prompts?.reason;
+    const responseReason = snapshot.capabilities?.raw_response?.reason;
     $('agent-title').textContent = `${a.agent_id || 'Agent'} decision context`;
     $('agent-state').innerHTML = kv('Vote', a.vote) + kv('Focal at cursor', a.is_focal_at_cursor ? 'yes' : 'no') + kv('Latest decision update', a.latest_decision_global_update == null ? 'initialization' : Number(a.latest_decision_global_update)+1) + kv('Attempt', a.attempt || '—') + kv('Valid', a.valid == null ? '—' : a.valid) + kv('Active evidence', a.active_fact_ids || []) + kv('Historical evidence', a.historical_fact_ids || []);
     $('agent-timeline').innerHTML = (a.timeline || []).map(item => `<div class="timeline-item"><b>R${Number(item.round_index)+1}.${item.step}</b> ${esc(item.vote_before)} → ${esc(item.vote_after)} · ${esc(item.message_type || 'NONE')}</div>`).join('') || 'No social update for this agent yet.';
     $('visible-state').textContent = json(a.visible_state);
-    $('compiled-prompt').innerHTML = (a.compiled_messages || []).map(message => `<div class="prompt-message"><div class="prompt-role">${esc(message.role)}</div><pre>${esc(message.content)}</pre></div>`).join('') || 'No recorded prompt yet.';
-    $('raw-response').textContent = a.raw_response || 'No recorded response yet.';
+    $('compiled-prompt').innerHTML = promptReason ? `<span class="unavailable">${esc(promptReason)}</span>` : (a.compiled_messages || []).map(message => `<div class="prompt-message"><div class="prompt-role">${esc(message.role)}</div><pre>${esc(message.content)}</pre></div>`).join('') || 'No recorded prompt yet.';
+    $('raw-response').textContent = responseReason || a.raw_response || 'No recorded response yet.';
     $('parsed-response').textContent = json(a.parsed_response);
   }
 

@@ -25,14 +25,16 @@ from mas_cc.metrics.interactions import PARTIAL_BIN_POLICIES, BinnedTrajectoryPo
 
 __all_reexported__ = ("LLMProviderConfig", "PromptConfig", "ProviderConfig")
 
-ARTIFACT_PROFILES = ("full", "results_only", "timing_study")
+ARTIFACT_PROFILES = ("full", "dashboard_semantic", "results_only", "timing_study")
 CHECKPOINT_MODES = ("off", "episode")
 PROMPT_EXAMPLE_SCOPES = ("episode", "cell")
 
 
 def _freeze(value: Any) -> Any:
     if isinstance(value, Mapping):
-        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+        return MappingProxyType(
+            {str(key): _freeze(item) for key, item in value.items()}
+        )
     if isinstance(value, (list, tuple)):
         return tuple(_freeze(item) for item in value)
     if isinstance(value, set):
@@ -186,6 +188,7 @@ class RetentionPolicy:
     rich_analysis_intermediates: bool
     per_episode_prompt_files: bool
     compact_scientific: bool
+    semantic_dashboard: bool
     detailed_timing: bool
 
     @classmethod
@@ -199,6 +202,7 @@ class RetentionPolicy:
             rich_analysis_intermediates=full,
             per_episode_prompt_files=full,
             compact_scientific=not full,
+            semantic_dashboard=profile == "dashboard_semantic",
             detailed_timing=profile == "timing_study",
         )
 
@@ -286,7 +290,9 @@ class MetricsConfig:
         object.__setattr__(self, "comet_export", tuple(self.comet_export))
         object.__setattr__(self, "available", _freeze(self.available))
         if self.bin_size_interactions is not None and self.bin_size_interactions < 1:
-            raise ValueError("metrics.bin_size_interactions must be a positive integer or null")
+            raise ValueError(
+                "metrics.bin_size_interactions must be a positive integer or null"
+            )
         if self.partial_final_bin not in PARTIAL_BIN_POLICIES:
             raise ValueError(
                 f"metrics.partial_final_bin must be one of {PARTIAL_BIN_POLICIES}, "
@@ -498,7 +504,9 @@ class CometObservability:
         if self.heartbeat_seconds <= 0:
             raise ValueError("observability.comet.heartbeat_seconds must be positive")
         if self.grid_image_every_n_episodes < 1:
-            raise ValueError("observability.comet.grid_image_every_n_episodes must be at least 1")
+            raise ValueError(
+                "observability.comet.grid_image_every_n_episodes must be at least 1"
+            )
         object.__setattr__(self, "progress_metrics", tuple(self.progress_metrics))
 
     def to_dict(self) -> dict[str, Any]:
