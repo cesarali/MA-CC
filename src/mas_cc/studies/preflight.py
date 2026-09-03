@@ -35,6 +35,10 @@ PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT = (
     "relational_persistence_large_population_truth_v1"
 )
 MUSR_BLACKBOARD_POPULATION_01_CONTRACT = "musr_blackboard_population_01_v1"
+MUSR_BLACKBOARD_POPULATION_01_EXTENDED_CONTRACT = "musr_blackboard_population_01_v2"
+MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT = (
+    "musr_blackboard_false_q3_companion_v1"
+)
 MUSR_BLACKBOARD_TASK_HASH = (
     "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750"
 )
@@ -535,14 +539,25 @@ def _validate_persistence_large_population_contract(
 
 def _validate_musr_blackboard_population_01_contract(
     spec: StudySpec,
+    *,
+    include_false_q3: bool = False,
+    q3_only: bool = False,
 ) -> dict[str, Any]:
-    """Validate the exact 27-cell, 270-episode frozen blackboard design."""
+    """Validate the frozen blackboard design and its additive q=3 false arm."""
 
     errors: list[str] = []
     _require(
-        len(spec.configs) == 3, "study must list exactly three arm configs", errors
+        len(spec.configs) == (1 if q3_only else 4 if include_false_q3 else 3),
+        f"study must list exactly {1 if q3_only else 4 if include_false_q3 else 3} arm configs",
+        errors,
     )
-    expected_counts = {"no_control": 3, "truth_control": 12, "false_control": 12}
+    expected_counts = (
+        {"false_control_q3": 12}
+        if q3_only
+        else {"no_control": 3, "truth_control": 12, "false_control": 12}
+    )
+    if include_false_q3 and not q3_only:
+        expected_counts["false_control_q3"] = 12
     expected_rho = {0.74, 0.85, 1.0}
     expected_b = {3, 6, 12, 24}
     all_cells: list[Any] = []
@@ -588,8 +603,10 @@ def _validate_musr_blackboard_population_01_contract(
                 errors,
             )
             _require(
-                options.get("rounds") == 30 and options.get("social_group_size") == 1,
-                "rounds and q must be 30 and 1",
+                options.get("rounds") == 30
+                and options.get("social_group_size")
+                == (3 if arm == "false_control_q3" else 1),
+                f"rounds/q must be 30/{3 if arm == 'false_control_q3' else 1}",
                 errors,
             )
             _require(
@@ -768,12 +785,17 @@ def _validate_musr_blackboard_population_01_contract(
         errors,
     )
     _require(
-        len(coordinates) == 27 and len(all_cells) == 27,
-        "study must contain 27 unique structural cells",
+        len(coordinates) == (12 if q3_only else 39 if include_false_q3 else 27)
+        and len(all_cells) == (12 if q3_only else 39 if include_false_q3 else 27),
+        f"study must contain {12 if q3_only else 39 if include_false_q3 else 27} unique structural cells",
         errors,
     )
     total_episodes = sum(cell.config.execution.repetitions for cell in all_cells)
-    _require(total_episodes == 270, "study must contain 270 planned episodes", errors)
+    _require(
+        total_episodes == (120 if q3_only else 390 if include_false_q3 else 270),
+        f"study must contain {120 if q3_only else 390 if include_false_q3 else 270} planned episodes",
+        errors,
+    )
     seeds = {cell.config.execution.seed for cell in all_cells}
     _require(len(seeds) == 1, "all arms must share one root seed", errors)
 
@@ -782,7 +804,7 @@ def _validate_musr_blackboard_population_01_contract(
         "status": "failed" if errors else "permitted",
         "population_size": [24],
         "rounds": [30],
-        "q_values": [1],
+        "q_values": [3] if q3_only else [1, 3] if include_false_q3 else [1],
         "L_values": [9],
         "support_redundancy": [2, 3],
         "sensor_size": [12],
@@ -841,6 +863,12 @@ def validate_study_preflight_contract(spec: StudySpec) -> dict[str, Any]:
         return _validate_persistence_large_population_contract(spec, truth_aligned=True)
     if contract == MUSR_BLACKBOARD_POPULATION_01_CONTRACT:
         return _validate_musr_blackboard_population_01_contract(spec)
+    if contract == MUSR_BLACKBOARD_POPULATION_01_EXTENDED_CONTRACT:
+        return _validate_musr_blackboard_population_01_contract(
+            spec, include_false_q3=True
+        )
+    if contract == MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT:
+        return _validate_musr_blackboard_population_01_contract(spec, q3_only=True)
     if contract != FALSE_TAKEOVER_CONTRACT:
         raise ValueError(f"unsupported study preflight contract {contract!r}")
 

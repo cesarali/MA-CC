@@ -414,7 +414,12 @@ def _retained_episodes(study_dir: Path, target_cells: Sequence[TargetCell]) -> t
                     "cell_key": target.cell_key,
                     "repetition_index": repetition,
                     "episode_seed": int(first["episode_seed"]),
-                    "content_hash": canonical_hash(group.to_dict(orient="records")),
+                    # Round-trip through pandas' JSON encoder so ndarray/list
+                    # columns and numpy scalar values have stable JSON-native
+                    # representations before canonical hashing.
+                    "content_hash": canonical_hash(
+                        json.loads(group.to_json(orient="records", date_format="iso"))
+                    ),
                     "source": str(cell_dir),
                 }
                 previous = retained.get(key)
@@ -666,11 +671,19 @@ def plan_extension(
         for item in previous_target.get("cells", [])
         if isinstance(item, Mapping)
     }
-    prior_by_coordinates = {
-        canonical_hash(item.get("coordinates", {})): item
-        for item in previous_target.get("cells", [])
-        if isinstance(item, Mapping)
-    }
+    prior_protocols_by_coordinates: dict[str, set[str]] = {}
+    for item in previous_target.get("cells", []):
+        if isinstance(item, Mapping):
+            coordinate_key = canonical_hash(item.get("coordinates", {}))
+            prior_protocols_by_coordinates.setdefault(coordinate_key, set()).add(
+                str(item.get("protocol_fingerprint"))
+            )
+    target_protocols_by_coordinates: dict[str, set[str]] = {}
+    for item in target_cells:
+        coordinate_key = canonical_hash(item.coordinates)
+        target_protocols_by_coordinates.setdefault(coordinate_key, set()).add(
+            item.protocol_fingerprint
+        )
     retained, conflicts = _retained_episodes(root, target_cells)
     incompatible: list[str] = []
     classifications: dict[str, str] = {}
@@ -679,11 +692,13 @@ def plan_extension(
     extension_root = root / "extensions" / f"extension-{selected_index:04d}"
     for cell in target_cells:
         previous = prior_cells.get(cell.cell_key)
-        coordinate_match = prior_by_coordinates.get(canonical_hash(cell.coordinates))
+        coordinate_key = canonical_hash(cell.coordinates)
+        prior_protocols = prior_protocols_by_coordinates.get(coordinate_key, set())
+        target_protocols = target_protocols_by_coordinates.get(coordinate_key, set())
         if (
             previous is None
-            and coordinate_match is not None
-            and coordinate_match.get("protocol_fingerprint") != cell.protocol_fingerprint
+            and prior_protocols
+            and not prior_protocols.issubset(target_protocols)
         ):
             incompatible.append(cell.cell_key)
             classifications[cell.cell_key] = CompatibilityStatus.INCOMPATIBLE.value
