@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false };
+  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, mode: 'episode', study: null, cell: null, episodeId: null };
   const embedded = $('dashboard-data').textContent.trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
@@ -12,6 +12,101 @@
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || response.statusText);
     return payload;
+  }
+
+  const unavailable = value => value == null || value === '' ? 'Unavailable' : value;
+  const statusBadge = value => `<span class="status-badge ${esc(value)}">${esc(value)}</span>`;
+  function sparkline(points, key = 'truth_share', width = 150, height = 42) {
+    const values = points.map((point, index) => [index, point[key]]).filter(item => item[1] != null);
+    if (!values.length) return '<span class="unavailable">Unavailable</span>';
+    const denominator = Math.max(1, points.length - 1);
+    const coordinates = values.map(([index, value]) => `${(index / denominator) * width},${height - Number(value) * height}`).join(' ');
+    return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(key)} trajectory"><polyline points="${coordinates}"></polyline></svg>`;
+  }
+
+  function showShell(name) {
+    $('study-shell').hidden = name === 'episode';
+    $('episode-shell').hidden = name !== 'episode';
+    $('study-view').hidden = name !== 'study';
+    $('cell-view').hidden = name !== 'cell';
+    $('breadcrumbs').hidden = state.mode !== 'study';
+  }
+
+  function renderBreadcrumbs(cell = null, episode = null) {
+    $('breadcrumbs').innerHTML = `<button data-crumb="study">${esc(state.study?.study_id || 'Study')}</button>${cell ? `<span>›</span><button data-crumb="cell">${esc(cell.config_name)} / ${esc(cell.cell_id)}</button>` : ''}${episode ? `<span>›</span><span>${esc(episode)}</span>` : ''}`;
+    $('breadcrumbs').querySelector('[data-crumb="study"]')?.addEventListener('click', () => { state.cell = null; state.episodeId = null; history.replaceState({}, '', location.pathname); renderStudy(); });
+    $('breadcrumbs').querySelector('[data-crumb="cell"]')?.addEventListener('click', () => openCell(cell.qualified_id));
+  }
+
+  function filterOptions(id, values) {
+    const select = $(id), previous = select.value;
+    select.replaceChildren(new Option('All', ''), ...[...new Set(values.filter(value => value != null))].sort().map(value => new Option(value, value)));
+    select.value = [...select.options].some(option => option.value === previous) ? previous : '';
+  }
+
+  function renderStudy() {
+    showShell('study'); renderBreadcrumbs();
+    const study = state.study;
+    document.querySelector('h1').textContent = study.study_id;
+    const totals = study.episode_counts;
+    $('status-text').textContent = `${study.live ? 'live' : 'finished'} · ${totals.completed}/${study.expected_episode_count} episodes complete`;
+    document.querySelector('.status').className = `status ${study.live ? 'running' : 'completed'}`;
+    $('study-refreshed').textContent = `refreshed ${new Date(study.refreshed_at).toLocaleTimeString()}`;
+    const cards = [
+      ['Cells', `${study.discovered_cell_count}/${study.expected_cell_count}`], ['Episodes expected', study.expected_episode_count],
+      ['Pending', totals.pending], ['Running', totals.running], ['Completed', totals.completed], ['Failed', totals.failed + totals.aborted],
+      ['Unknown', totals.unknown], ['SLURM active', study.scheduler.available ? study.active_scheduler_tasks : 'Unavailable']
+    ];
+    $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    filterOptions('filter-block', study.cells.map(cell => cell.parameters.experiment_block));
+    filterOptions('filter-controller', study.cells.map(cell => cell.parameters.controller_condition));
+    filterOptions('filter-status', study.cells.map(cell => cell.status));
+    renderCellTable();
+  }
+
+  function renderCellTable() {
+    const parameter = $('filter-parameter').value.trim().toLowerCase();
+    let cells = state.study.cells.filter(cell =>
+      (!$('filter-block').value || String(cell.parameters.experiment_block) === $('filter-block').value) &&
+      (!$('filter-controller').value || String(cell.parameters.controller_condition) === $('filter-controller').value) &&
+      (!$('filter-status').value || cell.status === $('filter-status').value) &&
+      (!parameter || Object.entries(cell.parameters).some(([key,value]) => `${key}=${value}`.toLowerCase().includes(parameter)))
+    );
+    const sort = $('cell-sort').value;
+    cells.sort((a,b) => sort === 'status' ? a.status.localeCompare(b.status) : sort === 'progress' ? b.status_counts.completed - a.status_counts.completed : a.qualified_id.localeCompare(b.qualified_id));
+    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Status</th><th>Episodes</th><th>Current</th><th>Vote preview</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(unavailable(cell.parameters.controller_condition))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${statusBadge(cell.status)}${cell.scheduler ? `<br><span class="meta">SLURM ${esc(cell.scheduler.state)} · ${esc(unavailable(cell.scheduler.node))}</span>` : ''}</td><td>${cell.status_counts.completed}/${cell.expected_episodes}<br><span class="meta">${cell.status_counts.running} running · ${cell.status_counts.failed + cell.status_counts.aborted} failed</span></td><td>${cell.current_round == null ? 'Unavailable' : `round ${cell.current_round + 1}`} ${cell.current_update == null ? '' : `· update ${cell.current_update + 1}`}</td><td>${sparkline(cell.vote_preview)}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
+    document.querySelectorAll('.open-cell').forEach(button => button.addEventListener('click', () => openCell(button.dataset.cell)));
+  }
+
+  async function openCell(id) {
+    try {
+      state.episodeId = null;
+      state.cell = await get(`/api/study/cell/${encodeURIComponent(id)}`);
+      showShell('cell'); renderBreadcrumbs(state.cell);
+      history.replaceState({}, '', `#cell=${encodeURIComponent(id)}`);
+      const cell = state.cell;
+      const c = cell.status_counts;
+      $('cell-cards').innerHTML = [['Status', cell.status], ['Expected episodes', cell.expected_episodes], ['Completed', c.completed], ['Running', c.running], ['Failed / aborted', c.failed + c.aborted], ['Unknown', c.unknown]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+      $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
+      $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
+      $('cell-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth</span><span class="target-line">Controller target</span></div>${sparkline(cell.mean_vote_series, 'truth_share', 520, 150)}${sparkline(cell.mean_vote_series, 'controller_target_share', 520, 150)}`;
+      $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Status</th><th>Progress</th><th>Elapsed</th><th>Truth trajectory</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => { const points = cell.vote_series[episode.qualified_id]?.points || []; return `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${sparkline(points)}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">Detail unavailable</span>`}</td></tr>`; }).join('')}</tbody>`;
+      document.querySelectorAll('.open-episode').forEach(button => button.addEventListener('click', () => openEpisode(button.dataset.episode)));
+    } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
+  }
+
+  async function openEpisode(id) {
+    state.episodeId = id; showShell('episode'); renderBreadcrumbs(state.cell, id);
+    $('episode-nav').hidden = false;
+    await refresh(true);
+  }
+
+  function adjacentEpisode(delta) {
+    if (!state.cell || !state.episodeId) return;
+    const available = state.cell.episodes.filter(episode => episode.detail_available);
+    const index = available.findIndex(episode => episode.qualified_id === state.episodeId);
+    const target = available[index + delta];
+    if (target) openEpisode(target.qualified_id);
   }
 
   function setStatus(run) {
@@ -125,14 +220,15 @@
         render({...base, agent: state.staticBundle.agents[key][$('agent').value]});
         return;
       }
-      const timeline = await get('/api/timeline');
+      const prefix = state.mode === 'study' && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
+      const timeline = await get(`${prefix}/timeline`);
       populateTimeline(timeline);
       if ($('follow').checked || forceEdge) {
         const edge = timeline.available_cursors.at(-1);
         if (edge) { $('round').value = edge.round_index; updateStepRange(); $('step').value = edge.step; $('step-value').value = edge.step; }
       }
       const query = new URLSearchParams({round: $('round').value, step: $('step').value, agent: $('agent').value});
-      render(await get(`/api/snapshot?${query}`));
+      render(await get(`${prefix}/snapshot?${query}`));
     } catch (error) {
       $('status-text').textContent = `error · ${error.message}`;
     } finally { state.busy = false; }
@@ -167,6 +263,22 @@
     $('step-value').value = $('step').value; refresh();
   });
 
+  async function startStudy() {
+    try {
+      state.study = await get('/api/study'); state.mode = 'study'; renderStudy();
+      const match = location.hash.match(/^#cell=(.+)$/);
+      if (match) await openCell(decodeURIComponent(match[1]));
+      setInterval(async () => {
+        if (state.episodeId) { if ($('follow').checked) refresh(true); return; }
+        if (state.mode === 'study') { state.study = await get('/api/study'); state.cell ? openCell(state.cell.qualified_id) : renderStudy(); }
+      }, 2000);
+    } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
+  }
+  ['filter-block','filter-controller','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', renderCellTable));
+  $('filter-parameter').addEventListener('input', renderCellTable);
+  $('previous-episode').addEventListener('click', () => adjacentEpisode(-1));
+  $('next-episode').addEventListener('click', () => adjacentEpisode(1));
+
   if (embedded) {
     state.staticMode = true; state.staticBundle = JSON.parse(embedded);
     populateTimeline(state.staticBundle.timeline);
@@ -175,6 +287,6 @@
     $('follow').checked = false;
     refresh();
   } else {
-    refresh(true); setInterval(() => { if ($('follow').checked) refresh(true); }, 2000);
+    get('/api/study').then(() => startStudy()).catch(() => { refresh(true); setInterval(() => { if ($('follow').checked) refresh(true); }, 2000); });
   }
 })();
