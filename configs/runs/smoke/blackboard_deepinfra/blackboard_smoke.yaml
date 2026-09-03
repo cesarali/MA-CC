@@ -41,9 +41,9 @@ game:
     initialization: {mode: uniform_random}
 control: {mechanism: none, options: {}}
 execution: {seed: 20260902, repetitions: 1, parallelism: 1, fail_fast: true}
-pricing: {mode: live, max_age_seconds: 600, require_fresh_at_launch: true, fallback_policy: deny, explicit_unknown_price_override: false}
+pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: false}
 budget:
-  accounting_unit: proxy_accounting_unit
+  accounting_unit: USD
   system_max_cost_per_run: 1000.0
   max_cost_per_run: 1000.0
   max_provider_requests: 90000
