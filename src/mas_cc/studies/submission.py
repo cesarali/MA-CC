@@ -72,7 +72,12 @@ def _slurm_walltime_seconds(value: str) -> int:
 def _absolute_path(path: str | Path, *, preserve_symlinks: bool = False) -> Path:
     expanded = Path(path).expanduser()
     if preserve_symlinks:
-        return Path(os.path.abspath(str(expanded)))
+        if expanded.is_absolute():
+            return Path(os.path.abspath(str(expanded)))
+        logical_cwd = Path(os.environ.get("PWD", os.getcwd()))
+        candidate = logical_cwd / expanded
+        if candidate.exists():
+            return Path(os.path.normpath(str(candidate)))
     return expanded.resolve()
 
 
