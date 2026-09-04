@@ -1,0 +1,11 @@
+schema_version: 1
+type: deepinfra
+model: deepseek-ai/DeepSeek-V4-Flash
+credentials_env: DEEPINFRA_API_KEY
+timeout_seconds: 120
+max_retries: 2
+request_concurrency: 32
+temperature: 0.0
+max_output_tokens: 4096
+options:
+  estimated_latency_seconds: 5.0

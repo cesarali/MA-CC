@@ -24,7 +24,25 @@ from ..load_control import (
 )
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
+_JSON_OBJECT_RESPONSE_FORMAT = {"type": "json_object"}
 LOGGER = logging.getLogger(__name__)
+
+
+def _response_format_from_options(
+    options: Mapping[str, Any], *, provider_name: str
+) -> dict[str, str] | None:
+    value = options.get("response_format")
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or dict(value) != _JSON_OBJECT_RESPONSE_FORMAT:
+        raise ProviderError(
+            f"{provider_name} options.response_format currently supports only "
+            "{'type': 'json_object'}.",
+            provider=provider_name,
+            code="configuration_error",
+            retryable=False,
+        )
+    return dict(_JSON_OBJECT_RESPONSE_FORMAT)
 
 
 def _load_dotenv_if_available() -> None:
@@ -60,7 +78,10 @@ class OpenAICompatibleProvider:
         default_credentials_env: str,
         fixed_base_url: str | None = None,
         default_base_url_env: str | None = None,
+        fallback_base_url: str | None = None,
         discover_endpoint: bool = False,
+        validate_model: bool = False,
+        model_list_url: str | None = None,
         environment: Mapping[str, str] | None = None,
         session: Any | None = None,
         request_coordinator: SharedProviderCoordinator | None = None,
@@ -78,7 +99,9 @@ class OpenAICompatibleProvider:
             )
         if fixed_base_url is None:
             base_env = config.base_url_env or default_base_url_env
-            base_url = environment.get(base_env or "", "").strip()
+            base_url = environment.get(base_env or "", "").strip() or (
+                fallback_base_url or ""
+            )
             if not base_url:
                 raise ProviderError(
                     f"{provider_name} base URL is not configured in {base_env}.",
@@ -95,7 +118,12 @@ class OpenAICompatibleProvider:
         self._timeout = config.timeout_seconds
         self._max_retries = config.max_retries
         self._concurrency = config.request_concurrency
+        self._response_format = _response_format_from_options(
+            config.options, provider_name=provider_name
+        )
         self._discover_endpoint = discover_endpoint
+        self._validate_model = validate_model
+        self._model_list_url = model_list_url
         self._chat_url: str | None = (
             None if discover_endpoint else f"{self._base_url}/chat/completions"
         )
@@ -251,14 +279,14 @@ class OpenAICompatibleProvider:
         async with self._endpoint_lock:
             if self._available_models is not None:
                 return self._available_models
-            url = f"{self._base_url}/models"
+            url = self._model_list_url or f"{self._base_url}/models"
             try:
                 response = await self._coordinated_get(
                     url,
                     headers={"Authorization": f"Bearer {self._key}"},
                     timeout=self._timeout,
                 )
-                if response.status_code == 404:
+                if response.status_code == 404 and self._model_list_url is None:
                     response = await self._coordinated_get(
                         f"{self._base_url}/v1/models",
                         headers={"Authorization": f"Bearer {self._key}"},
@@ -280,7 +308,8 @@ class OpenAICompatibleProvider:
                 models = {
                     item.get("id") for item in entries if isinstance(item, Mapping)
                 }
-                self._chat_url = f"{prefix}/chat/completions"
+                if self._discover_endpoint:
+                    self._chat_url = f"{prefix}/chat/completions"
                 self._available_models = tuple(
                     sorted(item for item in models if isinstance(item, str) and item)
                 )
@@ -293,7 +322,7 @@ class OpenAICompatibleProvider:
                 ) from exc
 
     async def _ensure_endpoint(self) -> None:
-        if not self._discover_endpoint:
+        if not self._discover_endpoint and not self._validate_model:
             return
         models = await self.discover_models()
         if self.model not in models:
@@ -351,6 +380,8 @@ class OpenAICompatibleProvider:
             payload["temperature"] = request.temperature
         if request.seed is not None:
             payload["seed"] = request.seed
+        if self._response_format is not None:
+            payload["response_format"] = dict(self._response_format)
         headers = {
             "Authorization": f"Bearer {self._key}",
             "Content-Type": "application/json",
@@ -553,6 +584,8 @@ class OpenAICompatibleProvider:
         retryable = self._is_retryable(status)
         if status in (401, 403):
             code = "authentication_failed"
+        elif status == 402:
+            code = "payment_required"
         elif status == 429:
             code = "rate_limited"
         elif status is not None:

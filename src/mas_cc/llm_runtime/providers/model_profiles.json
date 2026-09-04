@@ -2,6 +2,24 @@
   "schema_version": 1,
   "profiles": [
     {
+      "provider_type": "deepinfra",
+      "model": "deepseek-ai/DeepSeek-V4-Flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra public metadata listed deepseek-ai/DeepSeek-V4-Flash on 2026-08-30.",
+        "The model reports OpenAI chat, JSON-object, temperature, seed, and system-message support. Run the opt-in live smoke before production."
+      ]
+    },
+    {
       "provider_type": "university",
       "model": "microsoft/gpt-4o",
       "family": "gpt-4",

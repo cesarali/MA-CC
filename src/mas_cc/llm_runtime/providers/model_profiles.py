@@ -136,6 +136,7 @@ def infer_model_family(model: str) -> str:
         return "gpt-4"
     for prefix, family in (
         ("claude", "claude"),
+        ("deepseek", "deepseek"),
         ("qwen", "qwen"),
         ("gemma", "gemma"),
         ("llama", "llama"),
