@@ -23,7 +23,7 @@ from mas_cc.storage import canonical_hash, file_sha256
 from mas_cc.storage.scientific import compact_row_to_imitation_event
 
 from .canonical import build_canonical_tables
-from .discovery import DiscoveredRun, discover_cells, discover_runs
+from .discovery import DiscoveredCell, DiscoveredRun, discover_cells, discover_runs
 from .submission import read_submission_manifest
 from .table_io import (
     CANONICAL_TABLE_FORMAT,
@@ -42,6 +42,51 @@ ESTIMATOR_ALIASES = {
     "round_target_actuation_cmi_memory_phi": "round_phi_target_actuation_cmi",
     "target_signed_actuation": "round_target_signed_actuation",
 }
+
+
+def _align_indexed_lineage_cells(
+    cells: tuple[DiscoveredCell, ...], target: Mapping[str, Any]
+) -> tuple[DiscoveredCell, ...]:
+    """Use persisted keys for cells inherited from the indexed base study.
+
+    Base submission rows predate per-cell scientific keys, so discovery uses
+    ``AUTO`` and would otherwise derive identity from the *current* config at
+    aggregation time. Config files can legitimately gain non-scientific
+    retention or observability fields after indexing. The lineage target is
+    authoritative: bind base cells by their stable submission config index and
+    local source cell id. Extension shards already carry an explicit key and
+    are left untouched.
+    """
+
+    persisted = {
+        (int(item["config_index"]), str(item["source_cell_id"])): str(item["cell_key"])
+        for item in target.get("cells", ())
+        if isinstance(item, Mapping)
+        and "config_index" in item
+        and "source_cell_id" in item
+        and "cell_key" in item
+    }
+    aligned: list[DiscoveredCell] = []
+    for cell in cells:
+        entry = cell.run.entry
+        key = (
+            persisted.get((int(entry.array_index), cell.local_cell_id))
+            if int(entry.source_extension_index) == 0
+            else None
+        )
+        if key is None or key == cell.cell_key:
+            aligned.append(cell)
+            continue
+        aligned.append(
+            replace(
+                cell,
+                run=replace(
+                    cell.run,
+                    entry=replace(entry, scientific_cell_key=key),
+                ),
+            )
+        )
+    return tuple(aligned)
 
 PRIMARY_COLUMNS = (
     "study_id",
@@ -2960,6 +3005,8 @@ def aggregate_study(
     retained_input_identity: str | None = None
     runs = discover_runs(entries)
     cells = discover_cells(runs)
+    if target_manifest is not None:
+        cells = _align_indexed_lineage_cells(cells, target_manifest)
     retained_paths = {
         name: retained_table_path(analysis_dir / "tables", name)
         for name in ("cells", "episodes", "rounds", "micro_slots")

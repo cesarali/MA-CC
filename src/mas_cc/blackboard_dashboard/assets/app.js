@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set() };
+  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map() };
   const embedded = $('dashboard-data').textContent.trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
@@ -19,9 +19,15 @@
   function sparkline(points, key = 'truth_share', width = 150, height = 42) {
     const values = points.map((point, index) => [index, point[key]]).filter(item => item[1] != null);
     if (!values.length) return '<span class="unavailable">Unavailable</span>';
+    const left = 30, right = 8, top = 8, bottom = 18;
+    const plotWidth = width - left - right, plotHeight = height - top - bottom;
     const denominator = Math.max(1, points.length - 1);
-    const coordinates = values.map(([index, value]) => `${(index / denominator) * width},${height - Number(value) * height}`).join(' ');
-    return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(key)} trajectory"><polyline points="${coordinates}"></polyline></svg>`;
+    const x = index => left + (index / denominator) * plotWidth;
+    const y = value => top + (1 - Number(value)) * plotHeight;
+    const coordinates = values.map(([index, value]) => `${x(index)},${y(value)}`).join(' ');
+    const grid = [1, 0.5, 0].map(value => `<line class="plot-grid${value === 0 ? ' zero' : ''}" x1="${left}" y1="${y(value)}" x2="${width-right}" y2="${y(value)}"></line><text class="axis-label" x="${left-5}" y="${y(value)+3}" text-anchor="end">${value.toFixed(value === 0.5 ? 1 : 0)}</text>`).join('');
+    const dots = values.map(([index, value]) => { const point = points[index], update = point.global_update_index == null ? index + 1 : Number(point.global_update_index) + 1; return `<circle class="plot-point" cx="${x(index)}" cy="${y(value)}" r="2.5"><title>Update ${update}: ${Number(value).toFixed(3)}</title></circle>`; }).join('');
+    return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(key)} trajectory">${grid}<polyline points="${coordinates}"></polyline>${dots}<text class="axis-label" x="${left}" y="${height-3}">1</text><text class="axis-label" x="${width-right}" y="${height-3}" text-anchor="end">${points.length}</text></svg>`;
   }
 
   function showShell(name) {
@@ -50,12 +56,12 @@
     const study = state.study;
     document.querySelector('h1').textContent = study.study_id;
     const totals = study.episode_outcomes, activity = study.episode_activity;
-    $('status-text').textContent = `${totals.completed} durable episodes complete · ${activity.advancing} actively advancing · ${study.active_scheduler_tasks} SLURM cell tasks active`;
+    $('status-text').textContent = `${totals.completed} durable episodes complete · ${activity.running + activity.advancing} running · ${study.active_scheduler_tasks} SLURM cell tasks active`;
     document.querySelector('.status').className = `status ${study.live ? 'running' : 'completed'}`;
     $('study-refreshed').textContent = `refreshed ${new Date(study.refreshed_at).toLocaleTimeString()}`;
     const cards = [
       ['Cells', `${study.discovered_cell_count}/${study.expected_cell_count}`], ['Episodes expected', study.expected_episode_count],
-      ['Not started', activity.not_started], ['Actively advancing', activity.advancing], ['Durable complete', totals.completed], ['Failed', totals.failed + totals.aborted],
+      ['Not started', activity.not_started], ['Running', activity.running + activity.advancing], ['Durable complete', totals.completed], ['Failed', totals.failed + totals.aborted],
       ['Unknown', totals.unknown], ['SLURM active', study.scheduler.available ? study.active_scheduler_tasks : 'Unavailable']
     ];
     $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
@@ -76,7 +82,7 @@
     );
     const sort = $('cell-sort').value;
     cells.sort((a,b) => sort === 'status' ? a.status.localeCompare(b.status) : sort === 'progress' ? b.outcome_counts.completed - a.outcome_counts.completed : a.qualified_id.localeCompare(b.qualified_id));
-    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Scientific outcomes</th><th>Live activity</th><th>SLURM task</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(unavailable(cell.parameters.controller_condition))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${cell.outcome_counts.completed}/${cell.expected_episodes} durable complete<br><span class="meta">${cell.outcome_counts.failed} failed · ${cell.outcome_counts.aborted} aborted · ${cell.outcome_counts.unknown} unknown</span></td><td>${cell.activity_counts.advancing} advancing<br><span class="meta">${cell.activity_counts.started_unchanged} started but unchanged</span></td><td>${cell.scheduler ? `${statusBadge(cell.scheduler.state)}<br><span class="meta">array ${cell.scheduler.array_index} · ${esc(unavailable(cell.scheduler.node))} · ${esc(unavailable(cell.scheduler.elapsed))}</span>` : '<span class="unavailable">Unavailable</span>'}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
+    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Scientific outcomes</th><th>Live activity</th><th>SLURM task</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(unavailable(cell.parameters.controller_condition))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${cell.outcome_counts.completed}/${cell.expected_episodes} durable complete<br><span class="meta">${cell.outcome_counts.failed} failed · ${cell.outcome_counts.aborted} aborted · ${cell.outcome_counts.unknown} unknown</span></td><td>${cell.activity_counts.running + cell.activity_counts.advancing} running<br><span class="meta">${cell.activity_counts.started_unchanged} inactive stream</span></td><td>${cell.scheduler ? `${statusBadge(cell.scheduler.state)}<br><span class="meta">array ${cell.scheduler.array_index} · ${esc(unavailable(cell.scheduler.node))} · ${esc(unavailable(cell.scheduler.elapsed))}</span>` : '<span class="unavailable">Unavailable</span>'}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
     document.querySelectorAll('.open-cell').forEach(button => button.addEventListener('click', () => openCell(button.dataset.cell)));
   }
 
@@ -105,7 +111,7 @@
   function renderCell(cell) {
     showShell('cell'); renderBreadcrumbs(cell);
     const c = cell.outcome_counts, a = cell.activity_counts;
-    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Actively advancing', a.advancing], ['Started unchanged', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Running', a.running + a.advancing], ['Inactive stream', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
     const primary = [['Controller condition', cell.parameters.controller_condition], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Controller target', cell.parameters.controller_target], ['Truth', cell.parameters.ground_truth]];
     $('primary-parameters').innerHTML = primary.filter(([,value]) => value != null).map(([name,value]) => kv(name, value)).join('');
     $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
@@ -138,7 +144,20 @@
     state.episodeId = id; showShell('episode'); renderBreadcrumbs(state.cell, id);
     $('episode-nav').hidden = false;
     updateHash();
-    await refresh(true);
+    const cached = state.episodeCache.get(id);
+    if (cached) {
+      state.episodeCache.delete(id); state.episodeCache.set(id, cached);
+      populateTimeline(cached.timeline); render(cached.snapshot);
+      return;
+    }
+    $('status-text').textContent = 'Loading episode detail…';
+    try {
+      const detail = await get(`/api/study/episode/${encodeURIComponent(id)}/detail`);
+      if (state.episodeId !== id) return;
+      state.episodeCache.set(id, detail);
+      while (state.episodeCache.size > 8) state.episodeCache.delete(state.episodeCache.keys().next().value);
+      populateTimeline(detail.timeline); render(detail.snapshot);
+    } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
   }
 
   function adjacentEpisode(delta) {
@@ -167,6 +186,14 @@
     agent.replaceChildren(...timeline.agents.map(id => new Option(id.replace('agent_', 'Agent '), id)));
     if (timeline.agents.includes(previousAgent)) agent.value = previousAgent;
     updateStepRange();
+    renderEpisodeTrajectory(timeline);
+  }
+
+  function renderEpisodeTrajectory(timeline) {
+    const points = timeline.time_series || [];
+    const cursor = state.snapshot?.cursor?.global_update_index;
+    const marker = cursor == null ? '' : `<p class="meta">Selected update: ${Number(cursor) + 1}</p>`;
+    $('episode-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth share</span><span class="target-line">Controller-target share</span></div>${marker}<h3>Truth</h3>${sparkline(points, 'truth_share', 900, 180)}<h3>Controller target</h3>${sparkline(points, 'controller_target_share', 900, 180)}`;
   }
 
   function updateStepRange() {
@@ -249,6 +276,7 @@
       return;
     }
     renderOverview(snapshot); renderMessages(snapshot); renderCoverage(snapshot); renderAgent(snapshot); renderController(snapshot);
+    if (state.timeline) renderEpisodeTrajectory(state.timeline);
   }
 
   async function refresh(forceEdge = false) {

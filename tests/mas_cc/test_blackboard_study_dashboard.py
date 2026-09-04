@@ -346,6 +346,12 @@ def test_study_api_is_batched_and_rejects_unknown_ids(tmp_path: Path):
                 ).timeline()
             )
         with opener.open(
+            base + "/api/study/episode/config-0000~cell-0000~episode-0000/detail"
+        ) as response:
+            detail = json.load(response)
+        assert detail["timeline"]["available_cursors"]
+        assert detail["snapshot"]["cursor"]["global_update_index"] == 0
+        with opener.open(
             base
             + "/api/study/episode/config-0000~cell-0000~episode-0000/snapshot?round=0&step=1&agent=agent_001"
         ) as response:
@@ -377,6 +383,40 @@ def test_study_reader_is_read_only_and_rejects_completed_partial_jsonl(tmp_path:
     reader = BlackboardStudyReader(root, scheduler=False)
     with pytest.raises(ValueError, match="partial trailing record"):
         reader.cell("config-0000~cell-0000")
+
+
+def test_study_index_never_loads_trajectory_rows(monkeypatch, tmp_path: Path):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("the lightweight index parsed an episode trajectory")
+
+    monkeypatch.setattr(reader, "_rows", fail)
+    payload = reader.study()
+    assert payload["expected_episode_count"] == 4
+    assert len(payload["cells"]) == 2
+
+
+def test_study_index_cache_invalidates_when_cell_marker_changes(tmp_path: Path):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+    first = reader.study()
+    assert first["episode_outcomes"]["failed"] == 1
+
+    summary = reader.resolved_paths(
+        "config-0000~cell-0000"
+    ).cell_summary_path
+    summary.write_text(json.dumps({"failures": []}), encoding="utf-8")
+    second = reader.study()
+    assert second["episode_outcomes"]["failed"] == 0
+
+
+def test_episode_reader_cache_is_bounded(tmp_path: Path):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+    reader._episode_reader_limit = 1
+    qualified = "config-0000~cell-0000~episode-0000"
+    first = reader.episode_reader(qualified)
+    assert reader.episode_reader(qualified) is first
+    assert len(reader._episode_readers) == 1
 
 
 def test_unrelated_layout_is_rejected(tmp_path: Path):
@@ -428,6 +468,11 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     )[0]
     assert "sparkline" not in episode_template
     assert "Truth trajectory" not in episode_template
+    assert "Loading episode detail" in script
+    assert "/detail`" in script
+    assert "episodeCache" in script
+    assert 'class="plot-grid' in script
+    assert "Update ${update}:" in script
 
 
 def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):

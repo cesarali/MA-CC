@@ -72,6 +72,7 @@
 
   <nav id="tabs">
     <button class="active" data-view="overview">Overview</button>
+    <button data-view="episode-trajectory">Trajectory</button>
     <button data-view="blackboard">Blackboard</button>
     <button data-view="coverage">Coverage</button>
     <button data-view="agent-view">Agent</button>
@@ -85,6 +86,14 @@
         <article class="panel"><h2>Population</h2><div id="vote-bars"></div></article>
         <article class="panel"><h2>Latest activity</h2><div id="activity"></div></article>
       </div>
+    </section>
+
+    <section id="episode-trajectory" class="view">
+      <article class="panel">
+        <h2>Episode vote trajectory</h2>
+        <p class="meta">Microscopic-update time series for this episode. The marker follows the selected replay cursor.</p>
+        <div id="episode-votes"></div>
+      </article>
     </section>
 
     <section id="blackboard" class="view">

@@ -86,11 +86,22 @@ def make_handler(reader: DashboardReader):
                         remainder = parsed.path.removeprefix(episode_prefix)
                         token, separator, action = remainder.rpartition("/")
                         if separator and (
-                            action in {"timeline", "snapshot"}
+                            action in {"detail", "timeline", "snapshot"}
                             or action.startswith("prompt-")
                         ):
                             episode_reader = reader.episode_reader(unquote(token))
-                            if action == "timeline":
+                            if action == "detail":
+                                timeline = episode_reader.timeline()
+                                edge = timeline["available_cursors"][-1] if timeline["available_cursors"] else None
+                                payload = {
+                                    "schema_version": 1,
+                                    "timeline": timeline,
+                                    "snapshot": episode_reader.snapshot(
+                                        edge["round_index"] if edge else None,
+                                        edge["step"] if edge else None,
+                                    ),
+                                }
+                            elif action == "timeline":
                                 payload = episode_reader.timeline()
                             elif action.startswith("prompt-"):
                                 prompt_id = action.removeprefix("prompt-")

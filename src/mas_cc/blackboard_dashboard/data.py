@@ -507,6 +507,15 @@ class BlackboardRunReader:
         data = self._load()
         trajectory = data["trajectory"]
         agents = self._agents(data)
+        truth = data["state"].get("task", {}).get("correct_answer")
+        controller_target = next(
+            (
+                row.get("controller_target")
+                for row in data["rounds"]
+                if row.get("controller_target") is not None
+            ),
+            None,
+        )
         rounds: dict[int, int] = {}
         for event in trajectory:
             round_index = int(event.get("round_index", 0))
@@ -522,6 +531,27 @@ class BlackboardRunReader:
             }
             for index, event in enumerate(trajectory)
         ]
+        time_series = []
+        for index, event in enumerate(trajectory):
+            votes = [str(value) for value in event.get("population_state_after", ())]
+            total = len(votes)
+            time_series.append(
+                {
+                    "global_update_index": int(
+                        event.get("global_update_index", index)
+                    ),
+                    "round_index": int(event.get("round_index", 0)),
+                    "step": int(event.get("within_round_index", 0)) + 1,
+                    "truth_share": (
+                        votes.count(str(truth)) / total if truth is not None and total else None
+                    ),
+                    "controller_target_share": (
+                        votes.count(str(controller_target)) / total
+                        if controller_target is not None and total
+                        else None
+                    ),
+                }
+            )
         return {
             "schema_version": 1,
             "source": asdict(data["source"]),
@@ -532,6 +562,7 @@ class BlackboardRunReader:
                 for key, value in sorted(rounds.items())
             ],
             "available_cursors": cursors,
+            "time_series": time_series,
             "initialization_attempts": sum(
                 row.get("decision_stage") == "initial_vote" for row in data["audits"]
             ),

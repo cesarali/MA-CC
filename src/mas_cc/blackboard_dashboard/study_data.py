@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 import shutil
 import subprocess
 import threading
 import time
-from collections import Counter
-from dataclasses import asdict, dataclass
+from collections import Counter, OrderedDict
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -34,7 +35,7 @@ _TERMINAL_COMPLETE = {"completed", "skipped_resumed"}
 _TERMINAL_FAILED = {"failed"}
 _TERMINAL_ABORTED = {"aborted", "skipped_aborted"}
 _OUTCOME_ORDER = ("completed", "failed", "aborted", "incomplete", "unknown")
-_ACTIVITY_ORDER = ("advancing", "started_unchanged", "not_started")
+_ACTIVITY_ORDER = ("running", "advancing", "started_unchanged", "not_started")
 _JOB_ID = re.compile(r"^[0-9]+(?:_[0-9]+)?$")
 
 
@@ -182,6 +183,31 @@ def _timestamp_seconds(value: Any) -> float | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):
         return None
+
+
+def _last_jsonl_event(path: Path) -> dict[str, Any]:
+    """Read only the final complete JSONL record from a live semantic stream."""
+
+    try:
+        with path.open("rb") as stream:
+            stream.seek(0, 2)
+            end = stream.tell()
+            if not end:
+                return {}
+            size = min(end, 64 * 1024)
+            stream.seek(end - size)
+            lines = stream.read(size).splitlines()
+    except OSError:
+        return {}
+    for raw in reversed(lines):
+        if not raw.strip():
+            continue
+        try:
+            value = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        return _event(value) if isinstance(value, Mapping) else {}
+    return {}
 
 
 def _validate_compact_episode(path: Path, episode_id: str) -> Mapping[str, Any]:
@@ -412,6 +438,41 @@ class BlackboardStudyReader:
             else ()
         )
         self.submission = _safe_json(self.study_dir / "submission.json")
+        self._extension_target: Mapping[str, Any] | None = None
+        targets = sorted(
+            self.study_dir.glob("extensions/extension-*/target_manifest.json")
+        )
+        if targets:
+            latest_target_path = targets[-1]
+            latest_target = _safe_json(latest_target_path, required=True)
+            if int(latest_target.get("extension_index", 0)) > 0:
+                extension_dir = latest_target_path.parent
+                execution_path = extension_dir / "execution_manifest.csv"
+                if execution_path.is_file():
+                    self._extension_target = latest_target
+                    self.executions = read_execution_manifest(execution_path)
+                    attempts = sorted(
+                        (extension_dir / "submissions").glob("attempt-*.json")
+                    )
+                    self.submission = (
+                        _safe_json(attempts[-1], required=True) if attempts else {}
+                    )
+                    self.manifest = {
+                        **self.manifest,
+                        "expected_config_count": len(
+                            {
+                                int(cell.get("config_index", 0))
+                                for cell in latest_target.get("cells", ())
+                                if isinstance(cell, Mapping)
+                            }
+                        ),
+                        "expected_cell_count": int(
+                            latest_target.get("target_cell_count", 0)
+                        ),
+                        "expected_episode_count": int(
+                            latest_target.get("target_episode_count", 0)
+                        ),
+                    }
         job = self.submission.get("job_id")
         self._scheduler = (
             _SchedulerReader(str(job) if job is not None else None)
@@ -428,11 +489,15 @@ class BlackboardStudyReader:
         self._last_trajectory_signatures: dict[Path, tuple[str, int, int] | None] = {}
         self._resolved_configs: dict[str, Mapping[str, Any]] = {}
         self._paths: dict[str, ResolvedDashboardCellPaths] = {}
-        self._episode_readers: dict[str, BlackboardRunReader] = {}
+        self._episode_readers: OrderedDict[str, BlackboardRunReader] = OrderedDict()
+        self._episode_reader_limit = 8
+        self._index_cells: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
         self._cells = self._build_cells()
         self._cell_map = {cell.qualified_id: cell for cell in self._cells}
 
     def _build_cells(self) -> tuple[CellDescriptor, ...]:
+        if self._extension_target is not None:
+            return self._build_extension_cells(self._extension_target)
         discovered: dict[tuple[int, str], DiscoveredCell] = {}
         for cell in discover_cells(discover_runs(self.submissions)):
             key = (cell.run.entry.array_index, cell.local_cell_id)
@@ -532,6 +597,90 @@ class BlackboardStudyReader:
                     self._paths[qualified] = paths
         return tuple(descriptors)
 
+    def _build_extension_cells(
+        self, target: Mapping[str, Any]
+    ) -> tuple[CellDescriptor, ...]:
+        """Build the latest target hierarchy while reading live extension paths."""
+
+        execution_by_key = {
+            row.cell_key: row
+            for row in self.executions
+            if row.cell_key
+        }
+        descriptors: list[CellDescriptor] = []
+        for item in target.get("cells", ()):
+            if not isinstance(item, Mapping):
+                continue
+            key = str(item.get("cell_key", ""))
+            config_index = int(item.get("config_index", 0))
+            local_id = str(item.get("source_cell_id", "run"))
+            config_path = Path(str(item.get("config_path", "")))
+            execution = execution_by_key.get(key)
+            config: Mapping[str, Any] = {}
+            try:
+                source = load_run_config_or_grid(config_path)
+                if isinstance(source, GridSpec):
+                    source_index = int(item.get("source_cell_index", 0))
+                    config = next(
+                        cell.config.to_dict()
+                        for cell in source.cells
+                        if int(cell.index) == source_index
+                    )
+                else:
+                    config = source.to_dict()
+            except (OSError, StopIteration, TypeError, ValueError):
+                config = {
+                    "execution": {"repetitions": int(item.get("repetitions", 0))}
+                }
+            cell_root: Path | None = None
+            run_root: Path | None = None
+            if execution is not None:
+                output = Path(execution.output_dir)
+                candidates = sorted(
+                    path.parent
+                    for path in output.rglob("resolved_config.yaml")
+                    if path.parent.name == local_id
+                )
+                if candidates:
+                    cell_root = candidates[-1]
+                    run_root = cell_root.parent.parent
+            qualified = f"config-{config_index:04d}~{local_id}"
+            descriptors.append(
+                CellDescriptor(
+                    qualified_id=qualified,
+                    config_index=config_index,
+                    config_name=config_path.stem,
+                    cell_id=local_id,
+                    path=str(cell_root) if cell_root is not None else None,
+                    expected_episodes=int(item.get("repetitions", 0)),
+                    parameters=_parameters(
+                        config,
+                        item.get("coordinates", {})
+                        if isinstance(item.get("coordinates"), Mapping)
+                        else {},
+                    ),
+                    scheduler_array_index=(
+                        execution.array_index if execution is not None else None
+                    ),
+                )
+            )
+            self._resolved_configs[qualified] = config
+            if cell_root is not None and run_root is not None:
+                self._paths[qualified] = ResolvedDashboardCellPaths(
+                    shard_root=Path(execution.output_dir).resolve()
+                    if execution is not None
+                    else None,
+                    run_root=run_root,
+                    cell_root=cell_root,
+                    full_episodes_root=cell_root / "data" / "episodes",
+                    round_records_root=cell_root / "round_records",
+                    resume_root=cell_root / ".resume",
+                    cell_summary_path=cell_root / "cell_summary.json",
+                    cell_seal_path=cell_root / "cell_complete.json",
+                    scientific_table_path=cell_root / "scientific_events.parquet",
+                )
+        return tuple(descriptors)
+
     def _rows(self, path: Path, *, completed: bool = False) -> list[dict[str, Any]]:
         signature = _signature(path)
         cached = self._jsonl_cache.get(path)
@@ -584,7 +733,7 @@ class BlackboardStudyReader:
         }
 
     def _episode_records(
-        self, cell: CellDescriptor
+        self, cell: CellDescriptor, *, include_votes: bool = True
     ) -> tuple[list[EpisodeDescriptor], dict[str, VoteSeries]]:
         config = self._resolved_configs[cell.qualified_id]
         seeds = self._planned_seeds(cell, config)
@@ -661,7 +810,11 @@ class BlackboardStudyReader:
                 )
             )
             status_reason = None
-            if raw_status in _TERMINAL_COMPLETE and compact_manifest:
+            if (
+                raw_status in _TERMINAL_COMPLETE
+                and compact_manifest
+                and not (sealed and local_id in sealed_ids)
+            ):
                 if compact_path is None or not compact_path.is_file():
                     durable_status = "unknown"
                     status_reason = "Compact manifest says completed but scientific_events.parquet is missing."
@@ -693,7 +846,7 @@ class BlackboardStudyReader:
                 self._last_trajectory_signatures[activity_path] = current
             rows = (
                 self._rows(round_path, completed=durable_status == "completed")
-                if trajectory_exists
+                if include_votes and trajectory_exists
                 else []
             )
             points: list[Mapping[str, Any]] = []
@@ -727,16 +880,10 @@ class BlackboardStudyReader:
                 else None
             )
             last = rows[-1] if rows else {}
-            if semantic_exists and semantic_path is not None:
-                from mas_cc.storage.dashboard_semantic import read_semantic_stream
-
-                semantic_updates = [
-                    row
-                    for row in read_semantic_stream(semantic_path)
-                    if row.get("record_type") == "update"
-                ]
-                if semantic_updates:
-                    last = semantic_updates[-1]
+            if include_votes and semantic_exists and semantic_path is not None:
+                semantic_last = _last_jsonl_event(semantic_path)
+                if semantic_last.get("record_type") == "update":
+                    last = semantic_last
             detail_available = bool(
                 full_path
                 and (full_path / "trajectory.jsonl").is_file()
@@ -785,10 +932,54 @@ class BlackboardStudyReader:
             )
         return episodes, series
 
+    def _cell_index_signature(self, cell: CellDescriptor) -> tuple[Any, ...]:
+        """Fingerprint compact status inputs without reading trajectory contents."""
+
+        paths = self._paths.get(cell.qualified_id)
+        if paths is None:
+            return (None,)
+        markers = []
+        for repetition in range(cell.expected_episodes):
+            local_id = (
+                f"{cell.cell_id}-{repetition:04d}"
+                if cell.cell_id != "run"
+                else f"episode-{repetition:04d}"
+            )
+            full = paths.full_episodes_root / local_id
+            resume = paths.resume_root / local_id
+            records = paths.round_records_root / local_id
+            markers.append(
+                (
+                    _signature(full / "manifest.json"),
+                    _signature(resume / "manifest.json"),
+                    _signature(resume / "scientific_events.parquet"),
+                    _signature(records / "dashboard_semantic.jsonl"),
+                    _signature(records / "round_trajectory.jsonl"),
+                    _signature(full / "trajectory.jsonl"),
+                )
+            )
+        return (
+            _signature(paths.cell_summary_path),
+            _signature(paths.cell_seal_path),
+            _signature(paths.scientific_table_path),
+            tuple(markers),
+        )
+
     def _cell_payload(
         self, cell: CellDescriptor, *, include_votes: bool = True
     ) -> dict[str, Any]:
-        episodes, votes = self._episode_records(cell)
+        scheduler_index = (
+            cell.scheduler_array_index if cell.scheduler_array_index is not None else -1
+        )
+        scheduler = self._scheduler.snapshot().tasks.get(scheduler_index)
+        episodes, votes = self._episode_records(cell, include_votes=include_votes)
+        if scheduler and scheduler.get("state") == "running":
+            episodes = [
+                replace(item, activity_status="running")
+                if item.detail_available and item.durable_status == "incomplete"
+                else item
+                for item in episodes
+            ]
         outcome_counts = {
             name: sum(item.durable_status == name for item in episodes)
             for name in _OUTCOME_ORDER
@@ -797,11 +988,11 @@ class BlackboardStudyReader:
             name: sum(item.activity_status == name for item in episodes)
             for name in _ACTIVITY_ORDER
         }
-        active = [item for item in episodes if item.activity_status == "advancing"]
-        scheduler_index = (
-            cell.scheduler_array_index if cell.scheduler_array_index is not None else -1
-        )
-        scheduler = self._scheduler.snapshot().tasks.get(scheduler_index)
+        active = [
+            item
+            for item in episodes
+            if item.activity_status in {"running", "advancing"}
+        ]
         groups: dict[tuple[str, int | None], list[Mapping[str, Any]]] = {}
         for vote_series in votes.values():
             if not vote_series.points:
@@ -852,7 +1043,7 @@ class BlackboardStudyReader:
                 "failed": outcome_counts["failed"],
                 "aborted": outcome_counts["aborted"],
                 "unknown": outcome_counts["unknown"],
-                "running": activity_counts["advancing"],
+                "running": activity_counts["running"] + activity_counts["advancing"],
                 "pending": sum(
                     item.activity_status == "not_started"
                     and item.durable_status == "incomplete"
@@ -864,7 +1055,7 @@ class BlackboardStudyReader:
             else "aborted"
             if outcome_counts["aborted"]
             else "running"
-            if activity_counts["advancing"]
+            if activity_counts["running"] or activity_counts["advancing"]
             else "unknown"
             if outcome_counts["unknown"]
             else "completed"
@@ -904,9 +1095,17 @@ class BlackboardStudyReader:
 
     def study(self) -> dict[str, Any]:
         with self._lock:
-            cells = [
-                self._cell_payload(cell, include_votes=False) for cell in self._cells
-            ]
+            scheduler = self._scheduler.snapshot()
+            cells = []
+            for cell in self._cells:
+                signature = self._cell_index_signature(cell)
+                cached = self._index_cells.get(cell.qualified_id)
+                if not scheduler.tasks and cached is not None and cached[0] == signature:
+                    payload = dict(cached[1])
+                else:
+                    payload = self._cell_payload(cell, include_votes=False)
+                    self._index_cells[cell.qualified_id] = (signature, dict(payload))
+                cells.append(payload)
             outcome_totals = {
                 name: sum(cell["outcome_counts"][name] for cell in cells)
                 for name in _OUTCOME_ORDER
@@ -915,7 +1114,6 @@ class BlackboardStudyReader:
                 name: sum(cell["activity_counts"][name] for cell in cells)
                 for name in _ACTIVITY_ORDER
             }
-            scheduler = self._scheduler.snapshot()
             descriptor = StudyDescriptor(
                 study_id=str(self.manifest.get("study_id", self.study_dir.name)),
                 study_root=str(self.study_dir),
@@ -945,7 +1143,8 @@ class BlackboardStudyReader:
                     "failed": outcome_totals["failed"],
                     "aborted": outcome_totals["aborted"],
                     "unknown": outcome_totals["unknown"],
-                    "running": activity_totals["advancing"],
+                    "running": activity_totals["running"]
+                    + activity_totals["advancing"],
                     "pending": sum(cell["status_counts"]["pending"] for cell in cells),
                 },
                 "active_scheduler_tasks": sum(
@@ -990,7 +1189,10 @@ class BlackboardStudyReader:
 
     def episode_status(self, qualified_id: str) -> dict[str, Any]:
         cell_id = qualified_id.rsplit("~episode-", 1)[0]
-        payload = self.cell(cell_id)
+        cell = self._cell_map.get(cell_id)
+        if cell is None:
+            raise ValueError("unknown qualified episode identifier")
+        payload = self._cell_payload(cell, include_votes=False)
         episode = next(
             (
                 item
@@ -1012,6 +1214,9 @@ class BlackboardStudyReader:
             paths = self._paths[status["cell_id"]]
             reader = BlackboardRunReader(paths.run_root, status["episode_id"])
             self._episode_readers[qualified_id] = reader
+        self._episode_readers.move_to_end(qualified_id)
+        while len(self._episode_readers) > self._episode_reader_limit:
+            self._episode_readers.popitem(last=False)
         return reader
 
     def resolved_paths(self, qualified_id: str) -> ResolvedDashboardCellPaths:
