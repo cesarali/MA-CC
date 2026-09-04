@@ -1188,7 +1188,16 @@ def run_study_preflight(
         key: sum(int(row["total_provider_requests"][key]) for row in estimates)
         for key in ("lower", "expected", "conservative")
     }
-    design = {**design, "provider_calls": calls}
+    design = {
+        **design,
+        "provider_calls": calls,
+        "total_cells": design.get(
+            "total_cells", sum(int(row["cell_count"]) for row in estimates)
+        ),
+        "total_episodes": design.get(
+            "total_episodes", sum(int(row["total_episode_count"]) for row in estimates)
+        ),
+    }
     (destination / "design_validation.json").write_text(
         json.dumps(design, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -1196,33 +1205,53 @@ def run_study_preflight(
         "# Study preflight",
         "",
         f"- Status: **{design['status'].upper()}**",
-        f"- Population size: {design['population_size']}",
-        f"- q values: {design['q_values']}",
-        f"- L values: {design['L_values']}",
-        f"- Support redundancy: {design['support_redundancy']}",
-        f"- Sensor size q_c: {design['sensor_size']}",
-        *([f"- rho values: {design['rho_values']}"] if "rho_values" in design else []),
-        f"- b values: {design['b_values']}",
-        f"- Target semantics: {design['target_semantics']}",
-        f"- Receiver dispositions: {design['receiver_dispositions']}",
-        f"- Evidence strategies: {design['evidence_strategies']}",
-        f"- Message modes: {design['message_modes']}",
-        f"- beta: {design['beta']}",
-        f"- theta: {design['theta']}",
-        f"- Schedule: {design['schedule']}",
-        f"- Frozen tasks: {design.get('number_of_frozen_tasks', design.get('frozen_tasks'))}",
-        f"- Repetitions: {design['repetitions']}",
-        f"- Structural regimes: {design['structural_regimes']} {design['resolved_regimes']}",
-        f"- Total episodes: {design['total_episodes']}",
-        f"- Nominal provider calls: {calls['lower']}",
-        f"- Expected provider calls: {calls['expected']}",
-        f"- Conservative provider calls: {calls['conservative']}",
-        "- Matched revised q=1 theory applicable: false",
-        "",
-        "## Frozen task audit",
-        "",
     ]
-    for task in design["tasks"]:
+    if design["contract"] is not None:
+        lines.extend(
+            [
+                f"- Population size: {design['population_size']}",
+                f"- q values: {design['q_values']}",
+                f"- L values: {design['L_values']}",
+                f"- Support redundancy: {design['support_redundancy']}",
+                f"- Sensor size q_c: {design['sensor_size']}",
+                *(
+                    [f"- rho values: {design['rho_values']}"]
+                    if "rho_values" in design
+                    else []
+                ),
+                f"- b values: {design['b_values']}",
+                f"- Target semantics: {design['target_semantics']}",
+                f"- Receiver dispositions: {design['receiver_dispositions']}",
+                f"- Evidence strategies: {design['evidence_strategies']}",
+                f"- Message modes: {design['message_modes']}",
+                f"- beta: {design['beta']}",
+                f"- theta: {design['theta']}",
+                f"- Schedule: {design['schedule']}",
+                f"- Frozen tasks: {design.get('number_of_frozen_tasks', design.get('frozen_tasks'))}",
+                f"- Repetitions: {design['repetitions']}",
+                f"- Structural regimes: {design['structural_regimes']} {design['resolved_regimes']}",
+                f"- Total episodes: {design['total_episodes']}",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"- Total cells: {design['total_cells']}",
+                f"- Total episodes: {design['total_episodes']}",
+            ]
+        )
+    lines.extend(
+        [
+            f"- Nominal provider calls: {calls['lower']}",
+            f"- Expected provider calls: {calls['expected']}",
+            f"- Conservative provider calls: {calls['conservative']}",
+            "- Matched revised q=1 theory applicable: false",
+            "",
+            "## Frozen task audit",
+            "",
+        ]
+    )
+    for task in design.get("tasks", ()):
         lines.append(
             f"- `{task['task_id']}`: truth `{task['ground_truth']}`, controller target "
             f"`{task['controller_target']}`, true strategic fact "

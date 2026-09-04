@@ -982,7 +982,11 @@ class RelationalBallotContract(ResponseContract):
                 f"{allowed}\n\n"
                 "Do not include a label, fact text, punctuation, or explanation in that field."
             )
-        return super().repair_guidance(issues)
+        # Explicit rather than ``super()``: ``@dataclass(slots=True)`` rebuilds
+        # the class and leaves the zero-argument form's ``__class__`` cell
+        # pointing at the discarded original.  This method is also reached
+        # through ``BlackboardBallotContract`` for ordinary schema failures.
+        return ResponseContract.repair_guidance(self, issues)
 
 
 @dataclass(frozen=True, slots=True)
