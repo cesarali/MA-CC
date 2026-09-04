@@ -190,6 +190,7 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     # ballot: the extra `shared_fact_id` is state, not decoration, so it needs a
     # family of its own rather than a rebinding of the HiddenBench one.
     registry.register(relational_public_ballot_prompt)
+    registry.register(lambda: relational_blackboard_ballot_prompt(version=2))
     registry.register(relational_blackboard_ballot_prompt)
     return registry
 

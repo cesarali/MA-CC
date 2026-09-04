@@ -204,12 +204,12 @@ def render_canonical_equality_evidence(
     if fact.kind == "skill_comparison":
         return (
             f"An independent assessment compared {left} with {right} using one shared categorical proficiency rubric.",
-            "The assessment placed both abilities in the same proficiency category.",
+            f"That assessment placed {left} and {right} in the same proficiency category.",
         )
     if fact.kind == "cooperation_comparison":
         return (
             f"An independent teamwork assessment compared {left} with {right} using one shared categorical rubric.",
-            "The assessment placed both working relationships in the same category.",
+            f"That assessment placed {left} and {right} in the same category.",
         )
     raise ValueError(f"unsupported equality fact kind {fact.kind!r}")
 

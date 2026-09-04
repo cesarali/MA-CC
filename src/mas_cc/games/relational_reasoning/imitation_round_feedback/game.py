@@ -336,6 +336,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 ),
                 social_context=True,
                 answer_display_texts=state.answer_display_texts,
+                version=rules.prompt_version,
             )
             if rules.social_mode == SOCIAL_MODE_BOARD and stage == FOCAL_UPDATE
             else build_relational_ballot_prompt(
@@ -1126,6 +1127,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                     vote_visibility=rules.vote_visibility,
                     receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
                     social_context=True,
+                    version=rules.prompt_version,
                 )
                 if rules.social_mode == SOCIAL_MODE_BOARD
                 else build_relational_ballot_prompt(

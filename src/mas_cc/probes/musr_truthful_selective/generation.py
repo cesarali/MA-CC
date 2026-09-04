@@ -150,6 +150,7 @@ async def generate(
 
     async def one(task_root: Path) -> Mapping[str, Any]:
         problem, facts = _load_task(task_root)
+        provenance: list[dict[str, Any]] | None = None
         cards_path = task_root / "generation/generated_cards.json"
         provenance_path = task_root / "generation/branch_leaf_provenance.json"
         roles = {
@@ -256,17 +257,17 @@ async def generate(
                 )
             write_json_atomic(cards_path, cards)
             write_json_atomic(provenance_path, provenance)
-            write_json_atomic(
-                task_root / "generation/prompt_hashes.json",
-                {row["fact_id"]: row["generation_prompt_hash"] for row in cards},
-            )
             generation_attempts = generated.attempts
             generation_failures = list(generated.failures)
         # Equality is rendered canonically for both resumed and fresh tasks.
         cards_by_id = {str(row["fact_id"]): dict(row) for row in cards}
         provenance_by_id = {
             str(row["latent_fact_id"]): dict(row)
-            for row in json.loads(provenance_path.read_text(encoding="utf-8"))
+            for row in (
+                provenance
+                if provenance is not None
+                else json.loads(provenance_path.read_text(encoding="utf-8"))
+            )
         }
         for fact in facts:
             if fact.operator != "eq":
@@ -298,6 +299,13 @@ async def generate(
         write_json_atomic(cards_path, cards)
         write_json_atomic(
             provenance_path, [provenance_by_id[fact.fact_id] for fact in facts]
+        )
+        write_json_atomic(
+            task_root / "generation/prompt_hashes.json",
+            {
+                row["fact_id"]: row.get("generation_prompt_hash")
+                for row in cards
+            },
         )
         semantic = await audit_cards(
             model,

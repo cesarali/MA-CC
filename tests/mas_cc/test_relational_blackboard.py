@@ -29,6 +29,8 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import 
 from mas_cc.games.hidden_bench.imitation.controller import advocacy_probability
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     BlackboardBallotContract,
+    build_relational_blackboard_prompt,
+    relational_blackboard_ballot_prompt,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.pilot_artifacts import (
     REQUIRED_OUTPUTS,
@@ -44,6 +46,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.state import (
     BlackboardState,
 )
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.llm_runtime.prompts import RegexTokenCounter
 from mas_cc.experiments import run_experiment_sync
 
 pytestmark = pytest.mark.skipif(
@@ -57,14 +60,14 @@ CONFIG = (
 )
 
 
-def _config(*, rounds=1, q=1, lifetime=1):
+def _config(*, rounds=1, q=1, lifetime=1, prompt_version=2):
     config = load_run_config(CONFIG, environment={})
     options = {
         **dict(config.game.options),
         "rounds": rounds,
         "social_group_size": q,
         "social_mode": "board",
-        "prompt_version": 2,
+        "prompt_version": prompt_version,
         "board": {
             "sampling": "uniform",
             "message_lifetime_rounds": lifetime,
@@ -75,7 +78,7 @@ def _config(*, rounds=1, q=1, lifetime=1):
     prompt = replace(
         config.prompt,
         prompt_family="relational_blackboard_ballot",
-        prompt_version=2,
+        prompt_version=prompt_version,
     )
     return replace(
         config,
@@ -252,6 +255,177 @@ def test_request_cannot_attach_evidence_and_report_can():
     assert not contract.validate(json.dumps(request)).valid
     request["public_message"]["type"] = "REPORT"
     assert contract.validate(json.dumps(request)).valid
+
+
+def _rendered_blackboard_prompt(*, version, text="So I stick with C.", shared=None):
+    return build_relational_blackboard_prompt(
+        identity="Agent 2",
+        question="Which allocation is best?",
+        option_letters={
+            "A": "ALLOCATION_1",
+            "B": "ALLOCATION_0",
+            "C": "ALLOCATION_2",
+        },
+        known_facts=("f1: Farah is highly skilled at pipeline work.",),
+        fact_ids=("f1",),
+        current_vote="Bruno builds the pipeline; Alice and Chandra interview.",
+        board_messages=(
+            {
+                "message_id": "m1",
+                "label": "Agent 1",
+                "message_type": "REPORT",
+                "vote": "ALLOCATION_1",
+                "text": text,
+                "shared_fact_text": shared,
+                "reply_to": None,
+            },
+        ),
+        social_context=True,
+        answer_display_texts={
+            "ALLOCATION_0": "Alice builds; Bruno and Chandra interview.",
+            "ALLOCATION_1": "Bruno builds; Alice and Chandra interview.",
+            "ALLOCATION_2": "Chandra builds; Alice and Bruno interview.",
+        },
+        version=version,
+    )
+
+
+def test_blackboard_v3_localizes_semantic_vote_without_rewriting_public_text():
+    prompt = _rendered_blackboard_prompt(version=3)
+    rendered = "\n\n".join(
+        message.content for message in prompt.compile(RegexTokenCounter()).messages
+    )
+
+    assert "Current vote: A (Bruno builds; Alice and Chandra interview.)" in rendered
+    assert "Current vote: C" not in rendered
+    assert "So I stick with C." in rendered
+
+
+def test_blackboard_v3_runtime_stores_model_letters_as_semantic_votes():
+    config = _config(prompt_version=3)
+    result, _ = _run(config)
+
+    for interaction in result.interactions:
+        mapping = interaction.decisions[0].action.metadata["option_letters"]
+        message = result.final_state.blackboard.find(
+            interaction.transition.event["new_message_id"]
+        )
+        assert message is not None
+        assert message.vote == mapping["A"]
+        assert message.vote != "A"
+
+
+def test_blackboard_v3_prompt_guidance_and_json_contract_are_surgical():
+    prompt = _rendered_blackboard_prompt(version=3)
+    rendered = "\n\n".join(
+        message.content for message in prompt.compile(RegexTokenCounter()).messages
+    )
+
+    assert "YOUR VERIFIED EVIDENCE" in rendered
+    assert "VERIFIED SHARED FACT" in rendered
+    assert "REPORT text is their interpretation" in rendered
+    assert "YOUR PREVIOUS VOTE" in rendered
+    assert "You may keep or revise this vote" in rendered
+    assert "Some participants may have objectives" not in rendered
+    assert "rather than by repetition, confidence" in rendered
+    assert "REQUEST asks for specific missing evidence or information" in rendered
+    assert "missing or ambiguous" in rendered
+    assert "Prefer REQUEST over NONE" in rendered
+    assert "Ask for something specific rather than a generic explanation" in rendered
+    assert "rather than using option letters\n  A/B/C" in rendered
+    assert '"vote": "<A | B | C>"' in rendered
+    assert '"type": "<REQUEST | REPORT | NONE>"' in rendered
+
+
+def test_blackboard_v3_renders_identical_shared_fact_once_and_interpretation_twice():
+    fact = "Farah is highly skilled at pipeline work."
+    duplicate = "\n\n".join(
+        message.content
+        for message in _rendered_blackboard_prompt(
+            version=3, text=f"  {fact.upper()}  ", shared=fact
+        )
+        .compile(RegexTokenCounter())
+        .messages
+    )
+    interpreted = "\n\n".join(
+        message.content
+        for message in _rendered_blackboard_prompt(
+            version=3,
+            text="This makes Bruno's allocation less plausible.",
+            shared=fact,
+        )
+        .compile(RegexTokenCounter())
+        .messages
+    )
+    duplicate_social = duplicate.split("CURRENT SOCIAL INFORMATION", 1)[1].split(
+        "\n\nDECISION", 1
+    )[0]
+
+    assert duplicate_social.count(fact) == 1
+    assert "Public message:" not in duplicate_social
+    assert f"Verified shared fact:\n{fact}" in duplicate_social
+    assert (
+        "Public message:\nThis makes Bruno's allocation less plausible." in interpreted
+    )
+    assert f"Verified shared fact:\n{fact}" in interpreted
+
+
+def test_blackboard_v2_replays_old_wording_and_v3_has_new_fingerprint():
+    old = _rendered_blackboard_prompt(version=2)
+    new = _rendered_blackboard_prompt(version=3)
+    old_text = "\n\n".join(
+        message.content for message in old.compile(RegexTokenCounter()).messages
+    )
+
+    assert old.version == 2
+    assert "YOUR CURRENT KNOWLEDGE" in old_text
+    assert "YOUR CURRENT POSITION" in old_text
+    assert "Evidence they are sharing:" not in old_text
+    assert "Some participants may have objectives" in old_text
+    assert old.definition_hash != new.definition_hash
+
+
+def test_blackboard_registry_keeps_v2_and_registers_v3():
+    from mas_cc.games.registry import (
+        create_default_prompt_registry,
+        register_game_prompt_factories,
+    )
+
+    registry = register_game_prompt_factories(create_default_prompt_registry())
+
+    assert registry.get("relational_blackboard_ballot", 2).version == 2
+    assert registry.get("relational_blackboard_ballot", 3).version == 3
+
+
+def test_blackboard_v3_rejects_a_letter_as_authoritative_message_vote():
+    with pytest.raises(ValueError, match="must be a semantic answer"):
+        build_relational_blackboard_prompt(
+            identity="Agent 2",
+            question="Which allocation is best?",
+            option_letters={"A": "ALLOCATION_1", "B": "ALLOCATION_0"},
+            known_facts=(),
+            fact_ids=(),
+            current_vote=None,
+            board_messages=(
+                {
+                    "message_id": "m1",
+                    "label": "Agent 1",
+                    "message_type": "REPORT",
+                    "vote": "A",
+                    "text": "The first allocation seems best.",
+                    "shared_fact_text": None,
+                    "reply_to": None,
+                },
+            ),
+            version=3,
+        )
+
+
+def test_blackboard_prompt_factory_supports_only_historical_and_current_versions():
+    assert relational_blackboard_ballot_prompt(version=2).version == 2
+    assert relational_blackboard_ballot_prompt(version=3).version == 3
+    with pytest.raises(ValueError, match="must be one of"):
+        relational_blackboard_ballot_prompt(version=4)
 
 
 def test_invalid_blackboard_fact_repair_requires_null_without_coercion():

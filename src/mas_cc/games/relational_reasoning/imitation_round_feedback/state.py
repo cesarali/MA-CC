@@ -34,6 +34,7 @@ from mas_cc.games.protocols import AgentState, GameState, Transition, _thaw
 from ..data import DEFAULT_TASK_DATASET_DIR
 from .prompts import (
     BOARD_PROMPT_VERSION,
+    BOARD_PROMPT_VERSIONS,
     IMPLEMENTED_VOTE_VISIBILITIES,
     LOCAL_PROMPT_VARIANTS,
     PROMPT_VERSION,
@@ -748,14 +749,24 @@ class RelationalRules:
         expected_prompt_version = (
             BOARD_PROMPT_VERSION if social_mode == SOCIAL_MODE_BOARD else PROMPT_VERSION
         )
+        supported_prompt_versions = (
+            BOARD_PROMPT_VERSIONS
+            if social_mode == SOCIAL_MODE_BOARD
+            else (PROMPT_VERSION,)
+        )
         prompt_version = options.get("prompt_version", expected_prompt_version)
         if (
             isinstance(prompt_version, bool)
-            or prompt_version != expected_prompt_version
+            or prompt_version not in supported_prompt_versions
         ):
+            if social_mode != SOCIAL_MODE_BOARD:
+                raise ValueError(
+                    f"the {GAME_TYPE!r} prompt family has one version; "
+                    f"game.options.prompt_version must be {expected_prompt_version}"
+                )
             raise ValueError(
-                f"the {GAME_TYPE!r} prompt family has one version; "
-                f"game.options.prompt_version must be {expected_prompt_version}"
+                f"game.options.prompt_version must be one of "
+                f"{list(supported_prompt_versions)}"
             )
 
         initialization = _mapping(
