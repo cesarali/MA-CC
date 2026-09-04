@@ -534,6 +534,13 @@ def test_scheduler_annotations_are_batched_cached_and_read_only(monkeypatch):
 def test_cell_markup_separates_episode_navigation_and_trajectories():
     html = Path("src/mas_cc/blackboard_dashboard/assets/index.html").read_text()
     script = Path("src/mas_cc/blackboard_dashboard/assets/app.js").read_text()
+    style = Path("src/mas_cc/blackboard_dashboard/assets/style.css").read_text()
+    assert 'id="theme-toggle"' in html
+    assert 'id="manual-refresh"' in html
+    assert "mas-cc-dashboard-theme" in script
+    assert "setInterval(" not in script
+    assert "refreshCurrentView" in script
+    assert ':root[data-theme="dark"]' in style
     assert 'id="cell-episodes"' in html
     assert 'id="cell-trajectories"' in html
     assert '<details id="all-parameters">' in html

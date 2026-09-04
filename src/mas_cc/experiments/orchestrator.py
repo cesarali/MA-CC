@@ -23,6 +23,7 @@ import resource
 import shutil
 import threading
 import time
+import traceback
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -760,6 +761,21 @@ class _CellCompletion:
         return self._seen[cell_id] == self._expected[cell_id]
 
 
+def _crash_site(exc: BaseException) -> str:
+    """Where an exception was raised, with no message text.
+
+    Used where the retention profile forbids keeping ``str(exc)``.  A file,
+    line, and function name are enough to find the bug and cannot leak a
+    provider response.
+    """
+
+    frames = traceback.extract_tb(exc.__traceback__)
+    if not frames:
+        return "unknown location"
+    last = frames[-1]
+    return f"{Path(last.filename).name}:{last.lineno} in {last.name}"
+
+
 class _RoundTickingObserver:
     """Adds budget/progress ticks and optional prompt Markdown at runtime."""
 
@@ -1103,7 +1119,7 @@ class _CellPromptSampler:
             path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_name(path.name + ".tmp")
             with gzip.open(temporary, "wt", encoding="utf-8") as stream:
-                json.dump(candidates, stream, ensure_ascii=False)
+                json.dump(candidates, stream, ensure_ascii=False, default=str)
             temporary.replace(path)
 
     def render(
@@ -1590,7 +1606,11 @@ async def _execute_episode(
                     "vote_visibility": episode_config.game.options.get(
                         "vote_visibility"
                     ),
-                    "board": episode_config.game.options.get("board"),
+                    # ``game.options`` hands out read-only mappingproxy views.
+                    # ``json.dump`` refuses one, and this value is copied into
+                    # every retained prompt example, so leaving it unconverted
+                    # kills the episode at its first prompt capture.
+                    "board": dict(episode_config.game.options.get("board") or {}),
                 },
                 "prompt_schema_version": episode_config.prompt.schema_version,
                 "prompt_template_version": episode_config.prompt.prompt_version,
@@ -1853,7 +1873,16 @@ async def _run_episode_task(
                 cell_id=task.cell_id,
             )
             if task.config.storage.retention_policy.semantic_dashboard:
-                LOGGER.error("episode %s failed: %s", label, type(exc).__name__)
+                # Lean retention deliberately drops ``str(exc)``: an exception
+                # message can quote a raw provider response, which this profile
+                # must not keep.  The crash site carries no provider text, so
+                # log that instead of leaving only a bare exception name.
+                LOGGER.error(
+                    "episode %s failed: %s at %s",
+                    label,
+                    type(exc).__name__,
+                    _crash_site(exc),
+                )
             else:
                 LOGGER.error(
                     "episode %s failed: %s: %s", label, type(exc).__name__, exc

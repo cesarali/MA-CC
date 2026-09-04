@@ -1,0 +1,24 @@
+study: {name: musr_blackboard_01_deepinfra_truthful_false_q3_stress}
+configs:
+  - blackboard_1_deepinfra_false_control_q3.yaml
+execution:
+  mode: auto
+  cells_per_shard: 2
+  target_rpm: 1000
+  assumed_latency_seconds: 6.0
+  max_active_nodes: 10
+  throttle: 10
+  cpus_per_task: 8
+  memory: 12G
+  time_limit: "04:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_01_deepinfra_truthful_false_q3_stress
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 100
+    minimum_concurrency: 10
+    maximum_concurrency: 100
+    target_rpm: 1000
+    retry_max_elapsed_seconds: 300

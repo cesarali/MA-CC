@@ -232,7 +232,78 @@ class TranscriptBlock(PromptBlock[tuple[Mapping[str, Any], ...]]):
 _JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
 
-def extract_json_object(response: str) -> Mapping[str, Any] | None:
+_JSON_FENCE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
+
+
+def _balanced_object_spans(text: str) -> list[str]:
+    """Every balanced ``{...}`` span, outermost first, left to right.
+
+    Brace counting is string- and escape-aware, so a ``{`` that only appears
+    inside a JSON string value never opens a span.
+    """
+
+    spans: list[str] = []
+    depth = 0
+    start = -1
+    in_string = False
+    escaped = False
+    for index, character in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif character == "}":
+            if depth:
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    spans.append(text[start : index + 1])
+    return spans
+
+
+def _mapping_candidates(
+    response: str, *, depth: int = 2
+) -> list[Mapping[str, Any]]:
+    """Objects a model may have buried in prose, a fence, or an envelope.
+
+    Fenced blocks come first, because a model that apologises and then emits
+    the real answer puts the answer in the fence.  The search then descends one
+    level into every string value, which is where a ballot ends up in the two
+    shapes seen in practice: a chat envelope like
+    ``{"role": "assistant", "content": "{...}"}``, and a broken opening
+    fragment whose single value swallows the rest of the reply as text.
+    """
+
+    if depth < 0:
+        return []
+    seen: list[Mapping[str, Any]] = []
+    ordered = _JSON_FENCE.findall(response) + _balanced_object_spans(response)
+    for span in ordered:
+        try:
+            parsed = json.loads(span)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, Mapping):
+            continue
+        seen.append(parsed)
+        for value in parsed.values():
+            if isinstance(value, str) and "{" in value:
+                seen.extend(_mapping_candidates(value, depth=depth - 1))
+    return seen
+
+
+def extract_json_object(
+    response: str, *, required_keys: Sequence[str] | None = None
+) -> Mapping[str, Any] | None:
     """The first JSON object in `response`, tolerating fences and stray prose.
 
     Models routinely wrap the vote in ```json fences or precede it with a
@@ -240,18 +311,38 @@ def extract_json_object(response: str) -> Mapping[str, Any] | None:
     response that is, semantically, a perfectly good vote - and a vote that is
     silently counted as wrong is one of the three failure modes the brief's §9.5
     tells us to suspect when the reproduction numbers drift.
+
+    ``required_keys`` names the fields the caller actually needs, and is the
+    only way to reach the wider search.  Without it this behaves exactly as it
+    always has, so no existing caller changes.  With it, a response that opens
+    with a broken fragment and then supplies a complete answer resolves to the
+    complete answer rather than to the fragment.
+
+    The search only ever *locates* an object the model really sent.  It never
+    renames a key, fills a missing field, or infers a vote, so a corrupted
+    ballot still fails validation instead of being quietly repaired into data.
     """
 
     if not isinstance(response, str):
         return None
+    legacy: Mapping[str, Any] | None = None
     match = _JSON_OBJECT.search(response)
-    if match is None:
-        return None
-    try:
-        parsed = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, Mapping) else None
+    if match is not None:
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, Mapping):
+            legacy = parsed
+    required = tuple(required_keys or ())
+    if not required:
+        return legacy
+    if legacy is not None and all(key in legacy for key in required):
+        return legacy
+    for candidate in _mapping_candidates(response):
+        if all(key in candidate for key in required):
+            return candidate
+    return legacy
 
 
 def normalize_vote(value: Any, possible_answers: Sequence[str]) -> str | None:

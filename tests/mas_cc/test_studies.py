@@ -26,6 +26,7 @@ from mas_cc.studies.aggregation import (
 )
 from mas_cc.studies.manifest import StudySpec, discover_study
 from mas_cc.studies.execution import (
+    ExecutionEntry,
     build_cell_execution_entries,
     plan_cell_execution,
     read_execution_manifest,
@@ -202,6 +203,63 @@ def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
     assert plan.provider_load_control["minimum_concurrency"] == 4
     assert plan.provider_load_control["maximum_concurrency"] == 144
     assert plan.provider_load_control["target_rpm"] == 900
+
+
+def test_cell_bundles_share_an_array_allocation_without_changing_cell_outputs(tmp_path):
+    root = Path(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "blackboard_1_deepinfra_q3_stress"
+    )
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, tmp_path / "results", git_commit="test")
+    entries = build_cell_execution_entries(spec, submissions)
+
+    assert len(entries) == 21
+    assert [entry.array_index for entry in entries[:5]] == [0, 0, 1, 1, 2]
+    assert len({entry.output_dir for entry in entries}) == 21
+
+    manifest = write_execution_manifest(tmp_path / "execution.csv", entries)
+    assert read_execution_manifest(manifest) == entries
+
+    shard_count = max(entry.array_index for entry in entries) + 1
+    plan = plan_cell_execution(spec, shard_count)
+    assert shard_count == plan.shard_count == 11
+    assert plan.request_concurrency_per_shard == 20
+    assert plan.episode_slots_per_shard == 20
+    assert plan.array_throttle == 5
+    assert plan.total_request_concurrency == 100
+    assert plan.total_episode_slots == 100
+    assert plan.cpus_per_task == 8
+
+
+def test_cell_worker_runs_every_cell_in_selected_bundle(tmp_path, monkeypatch):
+    config = Path(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "blackboard_1_deepinfra_q3_stress/blackboard_1_deepinfra_false_control_q3.yaml"
+    ).resolve()
+    entries = (
+        ExecutionEntry(0, 0, str(config), 0, "cell-0000", str(tmp_path / "cell-0")),
+        ExecutionEntry(0, 0, str(config), 1, "cell-0001", str(tmp_path / "cell-1")),
+    )
+    manifest = write_execution_manifest(tmp_path / "execution.csv", entries)
+    calls = []
+
+    monkeypatch.setattr(
+        "mas_cc.studies.cell_worker.configure_study_provider_load_control",
+        lambda _: None,
+    )
+    monkeypatch.setattr(
+        "mas_cc.studies.cell_worker.run_experiment_grid_sync",
+        lambda shard, output, **kwargs: calls.append(
+            (shard.selected_cell.cell_id, Path(output))
+        ),
+    )
+
+    assert cell_worker_main([str(manifest), "0"]) == 0
+    assert sorted(calls) == [
+        ("cell-0000", tmp_path / "cell-0"),
+        ("cell-0001", tmp_path / "cell-1"),
+    ]
 
 
 def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
