@@ -1218,6 +1218,13 @@ class BlackboardBallotContract(RelationalBallotContract):
 
     def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
         issue = issues[0]
+        if issue.field == "response.private_reason":
+            return (
+                "Your previous private_reason was too long.\n\n"
+                "Return the complete JSON object again with the same fields. "
+                "private_reason must be one short sentence of at most 300 characters. "
+                "Do not include analysis or any text outside the JSON object."
+            )
         if issue.field in {
             "response.public_message.shared_fact_id",
             "response.public_message",

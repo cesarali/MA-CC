@@ -258,9 +258,10 @@ def test_blackboard_contract_can_request_repair_for_an_overlong_private_reason()
     assert result.issues[0].field == "response.private_reason"
     guidance = contract.repair_guidance(result.issues)
 
-    assert "response.private_reason" in guidance
-    assert f"at most {MAX_REASON_CHARACTERS} characters" in guidance
-    assert "complete response" in guidance
+    assert "private_reason was too long" in guidance
+    assert "one short sentence of at most 300 characters" in guidance
+    assert "complete JSON object" in guidance
+    assert "outside the JSON object" in guidance
 
 
 def test_blackboard_overlong_private_reason_is_repaired_in_the_decision_loop():
@@ -300,7 +301,8 @@ def test_blackboard_overlong_private_reason_is_repaired_in_the_decision_loop():
     assert repaired.validation_attempts == 2
     assert len(seen[1].messages) == len(seen[0].messages) + 1
     assert seen[1].messages[-1].role.value == "user"
-    assert "response.private_reason" in seen[1].messages[-1].content
+    assert "private_reason was too long" in seen[1].messages[-1].content
+    assert "one short sentence of at most 300 characters" in seen[1].messages[-1].content
     assert seen[0].metadata["validation_repair"] is False
     assert seen[1].metadata["validation_repair"] is True
 

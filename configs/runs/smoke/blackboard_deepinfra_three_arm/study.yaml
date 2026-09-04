@@ -14,7 +14,7 @@ execution:
   time_limit: "00:10:00"
   partition: main
   qos: normal
-  results_root: /scratch/df630/MA-CC-results/smoke/blackboard_deepinfra_three_arm_smoke_v2
+  results_root: /scratch/df630/MA-CC-results/smoke/blackboard_deepinfra_three_arm_smoke_v3
   require_results_under: /scratch/df630/MA-CC-results
   provider_load_control:
     mode: shared_adaptive
