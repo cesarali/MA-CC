@@ -1,0 +1,25 @@
+study: {name: blackboard_deepinfra_three_arm_smoke}
+configs:
+  - no_control.yaml
+  - truth_control.yaml
+  - false_control.yaml
+execution:
+  mode: auto
+  target_rpm: 30
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 1
+  memory: 4G
+  time_limit: "00:10:00"
+  partition: main
+  qos: normal
+  results_root: /scratch/df630/MA-CC-results/smoke/blackboard_deepinfra_three_arm_smoke_v1
+  require_results_under: /scratch/df630/MA-CC-results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 2
+    minimum_concurrency: 1
+    maximum_concurrency: 2
+    target_rpm: 30
+    retry_max_elapsed_seconds: 300

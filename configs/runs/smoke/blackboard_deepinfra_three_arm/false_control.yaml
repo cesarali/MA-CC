@@ -1,0 +1,99 @@
+llm_provider:
+  type: deepinfra
+  model: deepseek-ai/DeepSeek-V4-Flash-0731
+  credentials_env: DEEPINFRA_API_KEY
+  base_url_env: DEEPINFRA_BASE_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 2
+  temperature: 1.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 4.5}
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 2
+  response_contract: {type: relational_blackboard_ballot, allowed_values: [A, B, C]}
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 1
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: configs/runs/relational_reasoning/blackboard_game/artifacts
+    task_id: task_001
+    initial_information:
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_F9_N24.json
+      expected_file_sha256: a0bd717bcca2f67f73e4aa981f292f9974f541949bf4fd2843cec47e281de45f
+    dynamics_mode: reasoning
+    rounds: 1
+    social_group_size: 1
+    social_mode: board
+    board: {sampling: uniform, message_lifetime_rounds: 1, exclude_self_authored: true, allow_no_post: true}
+    epistemic_persistence: 0.74
+    vote_visibility: public
+    prompt_version: 2
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 3
+    expected_validation_failure_rate: 0.05
+    initialization:
+      mode: paired_local_vote
+      artifact_dir: /scratch/df630/MA-CC-results/inputs/blackboard_deepinfra_three_arm_smoke_v1_initializations
+      require_artifact: true
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_1
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: always
+    message_mode: recommendation_only
+    controller_actuation_mode: coordination_request
+    controller_timing: dawn_only
+execution: {seed: 20260902, repetitions: 1, parallelism: 1, fail_fast: true}
+pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: false}
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 1000.0
+  max_cost_per_run: 1000.0
+  max_provider_requests: 90000
+  max_input_tokens: 500000000
+  max_output_tokens: 500000000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options: {comet_project: mas-cc, prompt_examples: {count: 1, scope: cell}}
+storage: {output_dir: results, format: jsonl, artifact_profile: results_only, checkpoint_mode: episode, overwrite: false}
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+observability:
+  schema_version: 1
+  comet: {writer: master_only, heartbeat_seconds: 20, progress_metrics: [episodes_done], grid_image_every_n_episodes: 1, sweep_experiment: true, cell_reporting: master, metric_plots: true}
+experiment:
+  name: blackboard-deepinfra-three-arm-smoke-false-control
+  description: One-round paired-initialization DeepInfra blackboard smoke with a guaranteed false directive.
+  tags: [musr, blackboard, deepinfra, smoke, false-control, dawn-only, paired-initialization]
+  metadata:
+    study: blackboard_deepinfra_three_arm_smoke
+    arm: false_control
+    task_id: task_001
+    ground_truth: ALLOCATION_0
+    controller_target: ALLOCATION_1
+    controller_target_is_truth: false
+    population_size: 24
+    population_rounds: 1
+    social_group_size: 1
+    sensor_sample_size: 12
+    board_lifetime_rounds: 1
+    repetitions: 1
+grid:
+  game.options.epistemic_persistence: [0.74]
+  control.options.intervention_budget: [3]
