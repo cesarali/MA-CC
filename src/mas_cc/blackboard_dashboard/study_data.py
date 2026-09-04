@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import re
 import shutil
@@ -16,10 +17,16 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
+import yaml
 
 from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.core.random import Seed
-from mas_cc.studies.discovery import DiscoveredCell, discover_cells, discover_runs
+from mas_cc.studies.discovery import (
+    DiscoveredCell,
+    DiscoveredRun,
+    discover_cells,
+    discover_runs,
+)
 from mas_cc.studies.execution import read_execution_manifest
 from mas_cc.studies.submission import read_submission_manifest
 from mas_cc.storage.scientific import (
@@ -60,6 +67,124 @@ class CellDescriptor:
     expected_episodes: int
     parameters: Mapping[str, Any]
     scheduler_array_index: int | None
+
+
+def _live_runs(
+    submissions: tuple[Any, ...], executions: tuple[Any, ...]
+) -> tuple[DiscoveredRun, ...]:
+    """Run roots that hold real episodes but have not been sealed yet.
+
+    ``mas_cc.studies.discovery`` deliberately requires a run manifest before it
+    will call a tree a run: aggregation and validation must never count an
+    unfinished shard as science.  A dashboard has the opposite need — it exists
+    to watch a study while it is still running — so the leniency lives here and
+    never weakens the shared scientific check.
+
+    A live root is recognised by the artifacts a running worker has already
+    written: a ``cells`` directory holding at least one resolved cell config.
+    Roots that already carry ``manifest.json`` are left to strict discovery, so
+    the two sets never overlap and a sealed cell is always read the strict way.
+    """
+
+    by_index = {entry.array_index: entry for entry in submissions}
+    roots: dict[Path, DiscoveredRun] = {}
+    for row in executions:
+        entry = by_index.get(row.config_index)
+        if entry is None:
+            continue
+        shard_root = Path(row.output_dir)
+        if not shard_root.is_dir():
+            continue
+        for cells_root in shard_root.rglob("cells"):
+            if not cells_root.is_dir():
+                continue
+            run_root = cells_root.parent
+            if (run_root / "manifest.json").is_file():
+                continue  # sealed: strict discovery owns this tree
+            configs = sorted(cells_root.glob("*/resolved_config.yaml"))
+            if not configs:
+                continue
+            resolved = _safe_yaml(configs[0])
+            if resolved is None:
+                continue
+            game_type = str(_nested(resolved, "game.type") or "")
+            if not game_type:
+                continue
+            run_root = run_root.resolve()
+            if run_root in roots:
+                continue
+            roots[run_root] = DiscoveredRun(
+                entry=entry,
+                path=run_root,
+                # Synthesised stand-in for the manifest a sealed run would
+                # carry.  ``live`` marks it so nothing downstream mistakes it
+                # for a sealed run's own record.
+                manifest={
+                    "run_id": run_root.name,
+                    "experiment_name": run_root.parent.name,
+                    "game_type": game_type,
+                    "live": True,
+                },
+                run_id=run_root.name,
+                game_type=game_type,
+                resolved_config=resolved,
+            )
+    return tuple(roots.values())
+
+
+
+def _live_prompt_samples(resume_root: Path) -> list[dict[str, Any]]:
+    """Prompt examples for a cell that has not been rendered yet.
+
+    Mirrors ``_CellPromptSampler.render``: one sample per sample point, taken
+    from the first episode that has one, in beginning/middle/end order, capped
+    at three.  Candidates a worker is mid-write are skipped rather than raising,
+    because this is read while the study is running.
+    """
+
+    if not resume_root.is_dir():
+        return []
+    by_point: dict[str, dict[str, Any]] = {}
+    extra: list[dict[str, Any]] = []
+    for path in sorted(resume_root.glob("*/prompt_candidates.json.gz")):
+        episode_id = path.parent.name
+        try:
+            with gzip.open(path, "rt", encoding="utf-8") as stream:
+                candidates = json.load(stream)
+        except (OSError, ValueError, EOFError):
+            continue
+        if not isinstance(candidates, list):
+            continue
+        for item in candidates:
+            if not isinstance(item, Mapping):
+                continue
+            sample = {
+                key: value
+                for key, value in item.items()
+                if key not in {"rounds"}
+            }
+            sample["episode_id"] = episode_id
+            point = item.get("sample_point")
+            if isinstance(point, str):
+                by_point.setdefault(point, sample)
+            else:
+                extra.append(sample)
+    ordered = [
+        by_point[point]
+        for point in ("beginning", "middle", "end")
+        if point in by_point
+    ]
+    return (ordered + extra)[:3]
+
+
+def _safe_yaml(path: Path) -> Mapping[str, Any] | None:
+    """Read one resolved config, tolerating a file being written right now."""
+
+    try:
+        value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    return value if isinstance(value, Mapping) else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,7 +625,10 @@ class BlackboardStudyReader:
         if self._extension_target is not None:
             return self._build_extension_cells(self._extension_target)
         discovered: dict[tuple[int, str], DiscoveredCell] = {}
-        for cell in discover_cells(discover_runs(self.submissions)):
+        runs = discover_runs(self.submissions) + _live_runs(
+            self.submissions, self.executions
+        )
+        for cell in discover_cells(runs):
             key = (cell.run.entry.array_index, cell.local_cell_id)
             previous = discovered.get(key)
             if previous is not None and previous.path != cell.path:
@@ -1353,15 +1481,29 @@ class BlackboardStudyReader:
             raise ValueError("unknown qualified cell identifier")
         paths = self._paths.get(qualified_id)
         artifact = paths.cell_root / "dashboard_prompt_examples.json" if paths else None
-        if artifact is None or not artifact.is_file():
-            return {
-                "schema_version": 1,
-                "available": False,
-                "reason": "Prompt examples unavailable: not retained by this run",
-                "samples": [],
-            }
-        payload = _safe_json(artifact, required=True)
-        samples = payload.get("samples", [])
+        live = False
+        if artifact is not None and artifact.is_file():
+            payload = _safe_json(artifact, required=True)
+            samples = payload.get("samples", [])
+        else:
+            # The rendered artifact only appears when a cell closes.  Each
+            # worker already writes its per-episode candidates as it goes, so
+            # read those instead of telling a watcher of a running study that
+            # nothing was retained.
+            samples = _live_prompt_samples(paths.resume_root) if paths else []
+            live = True
+            if not samples:
+                return {
+                    "schema_version": 1,
+                    "available": False,
+                    "live": True,
+                    "reason": (
+                        "Prompt examples unavailable: none captured yet"
+                        if paths is not None
+                        else "Prompt examples unavailable: not retained by this run"
+                    ),
+                    "samples": [],
+                }
         if not isinstance(samples, list) or len(samples) > 3:
             raise ValueError("invalid dashboard prompt examples artifact")
         forbidden = {"response", "raw_response", "reasoning", "credentials", "secret"}
@@ -1382,6 +1524,7 @@ class BlackboardStudyReader:
         return {
             "schema_version": 1,
             "available": True,
+            "live": live,
             "samples": samples,
         }
 

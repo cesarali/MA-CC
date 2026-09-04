@@ -596,7 +596,7 @@ def test_generic_relational_repair_guidance_does_not_use_fragile_slots_super():
         json.dumps(
             {
                 "vote": "A",
-                "reason": "x" * 601,
+                "reason": "x" * (MAX_REASON_CHARACTERS + 1),
                 "shared_fact_id": "none",
             }
         )
@@ -1700,7 +1700,7 @@ def test_prompt_snapshot():
         "\n"
         "{\n"
         '  "vote": "<A | B | C>",\n'
-        '  "reason": "<brief private reason>",\n'
+        f'  "reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
         f'  "shared_fact_id": "<{citable}>"\n'
         "}"
     )

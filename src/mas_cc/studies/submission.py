@@ -360,7 +360,8 @@ def submit_study(
         )
 
         shards = build_cell_execution_entries(spec, entries)
-        plan = plan_cell_execution(spec, len(shards))
+        shard_count = max((row.array_index for row in shards), default=-1) + 1
+        plan = plan_cell_execution(spec, shard_count)
         if throttle is not None:
             if throttle < 1:
                 raise ValueError("SLURM array throttle must be a positive integer")
@@ -392,7 +393,7 @@ def submit_study(
         script = Path(
             job_script or "scripts/Potsdam/SLURM/run_study_cell_array.job"
         ).resolve()
-        array = f"0-{len(shards) - 1}%{plan.array_throttle}"
+        array = f"0-{plan.shard_count - 1}%{plan.array_throttle}"
         command = (
             "sbatch",
             f"--partition={plan.partition}",

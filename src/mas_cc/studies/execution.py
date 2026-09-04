@@ -61,6 +61,9 @@ class ExecutionPlan:
 def build_cell_execution_entries(
     spec: StudySpec, submissions: Sequence[SubmissionEntry]
 ) -> tuple[ExecutionEntry, ...]:
+    cells_per_shard = int(spec.execution.get("cells_per_shard", 1))
+    if cells_per_shard < 1:
+        raise ValueError("cells_per_shard must be a positive integer")
     rows: list[ExecutionEntry] = []
     for config_index, (path, submission) in enumerate(zip(spec.configs, submissions)):
         source = load_run_config_or_grid(path)
@@ -69,7 +72,7 @@ def build_cell_execution_entries(
         for cell in source.cells:
             rows.append(
                 ExecutionEntry(
-                    array_index=len(rows),
+                    array_index=len(rows) // cells_per_shard,
                     config_index=config_index,
                     config_path=str(path),
                     cell_index=cell.index,
@@ -97,8 +100,11 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
     }
     if len(request_concurrencies) != 1:
         raise ValueError("automatic cell-array planning requires one request concurrency")
-    per_shard = request_concurrencies.pop()
-    episode_slots = max(base.execution.parallelism for base in bases)
+    cells_per_shard = int(spec.execution.get("cells_per_shard", 1))
+    if cells_per_shard < 1:
+        raise ValueError("cells_per_shard must be a positive integer")
+    per_shard = request_concurrencies.pop() * cells_per_shard
+    episode_slots = max(base.execution.parallelism for base in bases) * cells_per_shard
     policy = spec.execution
     target_rpm = int(policy.get("target_rpm", 900))
     latency = float(policy.get("assumed_latency_seconds", 10.0))
@@ -172,6 +178,11 @@ def read_execution_manifest(path: str | Path) -> tuple[ExecutionEntry, ...]:
         )
         for row in rows
     )
-    if [entry.array_index for entry in entries] != list(range(len(entries))):
-        raise ValueError("execution manifest array indices must be contiguous from zero")
+    indices = [entry.array_index for entry in entries]
+    if indices != sorted(indices) or sorted(set(indices)) != list(
+        range(max(indices, default=-1) + 1)
+    ):
+        raise ValueError(
+            "execution manifest array indices must be grouped and contiguous from zero"
+        )
     return entries

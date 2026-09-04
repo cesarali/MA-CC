@@ -64,7 +64,9 @@ enabling it is a text decision that has not been made.  It is also nearly empty
 now that prose is not shown either - a hidden-vote source would carry its
 identity and its exposed fact and nothing more."""
 
-MAX_REASON_CHARACTERS = 600
+# The prompt states this number, so an agent is never failed for breaking a
+# rule it was not given.  600 rejected ordinary well-formed reasoning.
+MAX_REASON_CHARACTERS = 2000
 """A generous cap on "at most three sentences".  It exists to reject a runaway
 essay - which truncates at ``max_output_tokens`` and breaks the JSON anyway -
 not to police wording."""
@@ -323,7 +325,8 @@ BOARD_DECISION_BASIS_NONE_VISIBLE = (
 BOARD_DECISION_INSTRUCTION = (
     "DECISION\n\n"
     "Vote for the option best supported by the information available to you.\n"
-    "Write a brief private reason. For public_message choose exactly one type:\n"
+    "Write a brief private reason: a few sentences, and at most\n"
+    f"{MAX_REASON_CHARACTERS} characters. For public_message choose exactly one type:\n"
     "- REQUEST asks for information or work. It cannot attach exact evidence.\n"
     "- REPORT shares information, an answer, a conclusion, or a correction. It\n"
     "  may attach one exact evidence identifier.\n"
@@ -896,7 +899,7 @@ class RelationalBallotContract(ResponseContract):
             "\n"
             "{\n"
             f'  "vote": "<{options}>",\n'
-            '  "reason": "<brief private reason>",\n'
+            f'  "reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
             f'  "shared_fact_id": "<{citable}>"\n'
             "}"
         )
@@ -905,7 +908,7 @@ class RelationalBallotContract(ResponseContract):
         return ((MessageRole.USER, self.instruction()),)
 
     def validate(self, response: str) -> ValidationResult:
-        parsed = extract_json_object(response)
+        parsed = extract_json_object(response, required_keys=("vote",))
         if parsed is None:
             return ValidationResult.failure(
                 ValidationIssue(
@@ -1007,7 +1010,7 @@ def parse_relational_ballot(
     option_labels: Sequence[str],
     option_relations: Mapping[str, str] | None = None,
 ) -> ParsedBallot:
-    parsed = extract_json_object(response)
+    parsed = extract_json_object(response, required_keys=("vote",))
     raw_vote = parsed.get("vote") if parsed else None
     raw_reason = parsed.get("private_reason", parsed.get("reason")) if parsed else None
     public = (
@@ -1068,7 +1071,7 @@ class BlackboardBallotContract(RelationalBallotContract):
             "Return only valid JSON:\n\n"
             "{\n"
             f'  "vote": "<{options}>",\n'
-            '  "private_reason": "<brief private reason>",\n'
+            f'  "private_reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
             '  "public_message": {\n'
             '    "type": "<REQUEST | REPORT | NONE>",\n'
             '    "text": "<public text or null>",\n'
@@ -1079,7 +1082,7 @@ class BlackboardBallotContract(RelationalBallotContract):
         )
 
     def validate(self, response: str) -> ValidationResult:
-        parsed = extract_json_object(response)
+        parsed = extract_json_object(response, required_keys=("vote",))
         if parsed is None:
             return ValidationResult.failure(
                 ValidationIssue(
