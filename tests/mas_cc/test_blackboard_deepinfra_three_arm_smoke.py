@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from mas_cc.config import GridSpec, load_run_config_or_grid
+from mas_cc.core import Seed
+from mas_cc.experiments.orchestrator import _grid_cell_seed
 from mas_cc.studies.execution import build_cell_execution_entries, plan_cell_execution
 from mas_cc.studies.initialization import build_initialization_plan
 from mas_cc.studies.manifest import discover_study
@@ -43,6 +45,20 @@ def test_three_arm_smoke_is_small_provider_safe_and_paired(tmp_path):
     assert plan.request_concurrency_per_shard == 2
     assert plan.total_request_concurrency == 2
     assert plan.time_limit == "00:10:00"
+    for name in ("no_control.yaml", "truth_control.yaml", "false_control.yaml"):
+        source = _grid(name)
+        common_random_numbers = bool(
+            source.base.experiment.metadata.get("common_random_numbers_across_grid")
+        )
+        runtime_seed = int(
+            _grid_cell_seed(
+                Seed(source.base.execution.seed),
+                source.cells[0].index,
+                common_random_numbers=common_random_numbers,
+            ).derive("episode:0")
+        )
+        assert common_random_numbers is True
+        assert runtime_seed == initializations[0].episode_seed
 
 
 def test_controlled_smokes_guarantee_both_dawn_directive_paths():
@@ -62,6 +78,9 @@ def test_controlled_smokes_guarantee_both_dawn_directive_paths():
         assert config.execution.repetitions == 1
         assert config.execution.parallelism == 1
         assert config.logging.comet is False
+        assert config.experiment.metadata["common_random_numbers_across_grid"] is True
+        assert config.experiment.metadata["paired_initialization_across_grid"] is True
+        assert config.experiment.metadata["paired_initialization_across_targets"] is True
     for config in (truth, false):
         assert config.control.options["advocacy_schedule"] == "always"
         assert config.control.options["controller_timing"] == "dawn_only"

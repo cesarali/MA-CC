@@ -94,6 +94,9 @@ experiment:
     sensor_sample_size: 12
     board_lifetime_rounds: 1
     repetitions: 1
+    common_random_numbers_across_grid: true
+    paired_initialization_across_grid: true
+    paired_initialization_across_targets: true
 grid:
   game.options.epistemic_persistence: [0.74]
   control.options.intervention_budget: [3]
