@@ -27,6 +27,7 @@ from mas_cc.storage.scientific import (
     write_completed_episode,
 )
 from mas_cc.storage.dashboard_semantic import SemanticDashboardWriter
+from mas_cc.experiments.orchestrator import _CellPromptSampler
 
 
 def _line(value: object) -> str:
@@ -346,6 +347,12 @@ def test_study_api_is_batched_and_rejects_unknown_ids(tmp_path: Path):
                 ).timeline()
             )
         with opener.open(
+            base + "/api/study/episode/config-0000~cell-0000~episode-0000/detail"
+        ) as response:
+            detail = json.load(response)
+        assert detail["timeline"]["available_cursors"]
+        assert detail["snapshot"]["cursor"]["global_update_index"] == 0
+        with opener.open(
             base
             + "/api/study/episode/config-0000~cell-0000~episode-0000/snapshot?round=0&step=1&agent=agent_001"
         ) as response:
@@ -377,6 +384,114 @@ def test_study_reader_is_read_only_and_rejects_completed_partial_jsonl(tmp_path:
     reader = BlackboardStudyReader(root, scheduler=False)
     with pytest.raises(ValueError, match="partial trailing record"):
         reader.cell("config-0000~cell-0000")
+
+
+def test_study_index_never_loads_trajectory_rows(monkeypatch, tmp_path: Path):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("the lightweight index parsed an episode trajectory")
+
+    monkeypatch.setattr(reader, "_rows", fail)
+    payload = reader.study()
+    assert payload["expected_episode_count"] == 4
+    assert len(payload["cells"]) == 2
+
+
+def test_study_index_cache_invalidates_when_cell_marker_changes(tmp_path: Path):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+    first = reader.study()
+    assert first["episode_outcomes"]["failed"] == 1
+
+    summary = reader.resolved_paths(
+        "config-0000~cell-0000"
+    ).cell_summary_path
+    summary.write_text(json.dumps({"failures": []}), encoding="utf-8")
+    second = reader.study()
+    assert second["episode_outcomes"]["failed"] == 0
+
+
+def test_episode_reader_cache_is_bounded(tmp_path: Path):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+    reader._episode_reader_limit = 1
+    qualified = "config-0000~cell-0000~episode-0000"
+    first = reader.episode_reader(qualified)
+    assert reader.episode_reader(qualified) is first
+    assert len(reader._episode_readers) == 1
+
+
+def test_three_prompt_samples_are_capped_and_fall_back_by_episode(tmp_path: Path):
+    cell = tmp_path / "cell-0000"
+    sampler = _CellPromptSampler(3)
+    common = {"rounds": 5, "agent_id": "agent_001", "update_index": 0}
+    sampler.capture(cell, "episode-0000", 0, "beginning zero", metadata=common)
+    sampler.capture(cell, "episode-0000", 0, "later request", metadata={**common, "update_index": 2})
+    for round_index, label in ((0, "beginning one"), (2, "middle"), (4, "end")):
+        sampler.capture(
+            cell,
+            "episode-0001",
+            round_index,
+            label,
+            metadata={**common, "update_index": round_index},
+        )
+    sampler.render(cell, ["episode-0000", "episode-0001"])
+
+    payload = json.loads((cell / "dashboard_prompt_examples.json").read_text())
+    assert [item["sample_point"] for item in payload["samples"]] == [
+        "beginning",
+        "middle",
+        "end",
+    ]
+    assert payload["samples"][0]["episode_id"] == "episode-0000"
+    assert payload["samples"][0]["markdown"] == "beginning zero"
+    assert len(payload["samples"]) == 3
+
+
+def test_prompt_and_analysis_endpoints_are_lazy_and_downloads_allowlisted(
+    tmp_path: Path,
+):
+    root = _study(tmp_path)
+    reader = BlackboardStudyReader(root, scheduler=False)
+    cell_root = reader.resolved_paths("config-0000~cell-0000").cell_root
+    (cell_root / "dashboard_prompt_examples.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "samples": [
+                    {
+                        "sample_point": "beginning",
+                        "episode_id": "cell-0000-0000",
+                        "round_index": 0,
+                        "update_index": 0,
+                        "agent_id": "agent_001",
+                        "markdown": "exact prompt",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    analysis = root / "analysis"
+    (analysis / "reports").mkdir(parents=True)
+    (analysis / "validation.json").write_text(
+        json.dumps({"valid": True, "complete": True}), encoding="utf-8"
+    )
+    (analysis / "analysis_manifest.json").write_text(
+        json.dumps({"schema_version": 2, "requested_statistics": ["chi"]}),
+        encoding="utf-8",
+    )
+    (analysis / "reports" / "summary.md").write_text("canonical", encoding="utf-8")
+
+    assert reader.prompt_examples("config-0000~cell-0000")["available"] is True
+    catalog = reader.analysis_catalog()
+    assert catalog["available"] is True
+    assert {item["id"] for item in catalog["artifacts"]} >= {
+        "validation.json",
+        "reports/summary.md",
+    }
+    assert reader.analysis_file("reports/summary.md").read_text() == "canonical"
+    with pytest.raises(ValueError, match="allowlisted"):
+        reader.analysis_file("../submission.json")
 
 
 def test_unrelated_layout_is_rejected(tmp_path: Path):
@@ -428,6 +543,13 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     )[0]
     assert "sparkline" not in episode_template
     assert "Truth trajectory" not in episode_template
+    assert "Loading episode detail" in script
+    assert "/detail`" in script
+    assert "episodeCache" in script
+    assert 'class="plot-grid' in script
+    assert "Update ${update}:" in script
+    assert 'id="round" type="range"' in html
+    assert 'id="round-value"' in html
 
 
 def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):

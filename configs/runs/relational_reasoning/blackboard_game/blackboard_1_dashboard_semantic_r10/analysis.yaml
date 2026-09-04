@@ -1,0 +1,50 @@
+theoretical_reference: none
+estimators:
+  - round_sensing_mi
+  - round_sensor_mae
+  - round_sensor_mse
+  - round_controller_action_entropy
+  - round_controller_action_entropy_given_population
+  - round_population_actuation_cmi
+  - round_target_actuation_cmi
+  - round_truth_actuation_cmi
+  - round_target_information_fraction
+  - round_target_susceptibility
+  - round_target_signed_response_share
+  - round_target_signed_actuation
+  - round_truth_signed_actuation
+  - round_memory_target_actuation_cmi
+  - round_epistemic_target_actuation_cmi
+  - round_phi_target_actuation_cmi
+  - round_kappa_target_actuation_cmi
+  - round_conditioning_state_count
+  - round_dual_action_state_fraction
+  - round_dual_action_event_fraction
+  - round_single_action_slice_fraction
+  - round_singleton_fraction
+  - episode_current
+  - cell_current
+  - effective_affinity
+  - kinetic_compliance
+resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 20260902}
+derived:
+  - round_target_susceptibility
+  - eta_ir
+  - target_sensing_information_nats
+  - controlled_current
+  - affinity_weighted_current_nats
+  - thermodynamic_control_expenditure_nats
+  - eta_th
+state_local: [x]
+state_local_x_bins: 8
+rho_aggregated_descriptive: true
+blackboard_population_outputs: true
+plots:
+  chi_x_b_by_rho: &phase {source: state_local_phase_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, series: target_semantics, kind: heatmap, color_scale: independent, status_column: phase_status}
+  T_pi_x_b_by_rho: {<<: *phase, metric: T_pi}
+  eta_IF_x_b_by_rho: {<<: *phase, metric: eta_IF}
+  eta_IR_x_b_by_rho: {<<: *phase, metric: eta_IR}
+  occupancy_x_b_by_rho: {source: state_occupancy_binned, value: n_observations, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, series: target_semantics, kind: heatmap, color_scale: independent, status_column: phase_status}
+  realized_exposure_by_budget: {source: blackboard_diagnostics, value: realized_directive_exposure_fraction_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
+  active_coverage_by_budget: {source: blackboard_diagnostics, value: active_latent_coverage_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
+  historical_coverage_by_budget: {source: blackboard_diagnostics, value: historical_latent_coverage_mean, x: intervention_budget, series: epistemic_persistence, kind: line}

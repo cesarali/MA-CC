@@ -25,6 +25,7 @@ _PREFLIGHT_CONTRACTS = frozenset(
         "musr_blackboard_population_01_v1",
         "musr_blackboard_population_01_v2",
         "musr_blackboard_false_q3_companion_v1",
+        "musr_blackboard_population_scout_r1_v1",
     }
 )
 

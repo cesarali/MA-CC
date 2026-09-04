@@ -401,9 +401,12 @@ def _retained_episodes(study_dir: Path, target_cells: Sequence[TargetCell]) -> t
                 import yaml
 
                 resolved = yaml.safe_load(resolved_path.read_text(encoding="utf-8"))
+                current_target_fingerprint = _prior_cell_current_fingerprint(
+                    asdict(target)
+                )
                 if not isinstance(resolved, Mapping) or protocol_fingerprint(
                     resolved, swept_paths=swept_paths
-                ) != target.protocol_fingerprint:
+                ) != (current_target_fingerprint or target.protocol_fingerprint):
                     continue
             for episode_id, group in frame.groupby("episode_id", sort=True):
                 repetition = _repetition_index(str(episode_id))
@@ -461,6 +464,62 @@ def _target_signature(cells: Sequence[TargetCell], analysis_hash: str | None) ->
             "analysis_recipe_hash": analysis_hash,
         }
     )
+
+
+def _prior_cell_current_fingerprint(item: Mapping[str, Any]) -> str | None:
+    """Re-evaluate an older manifest cell with the current identity policy."""
+
+    try:
+        source = load_run_config_or_grid(str(item["config_path"]))
+        index = int(item["source_cell_index"])
+        if isinstance(source, GridSpec):
+            cell = next(value for value in source.cells if int(value.index) == index)
+            swept_paths = tuple(axis.path for axis in source.axes)
+        else:
+            if index != 0:
+                return None
+            cell = type("StandaloneCell", (), {"config": source})()
+            swept_paths = ()
+        return protocol_fingerprint(cell.config.to_dict(), swept_paths=swept_paths)
+    except (KeyError, OSError, StopIteration, TypeError, ValueError):
+        return None
+
+
+def _align_target_cells_to_prior_identity(
+    target_cells: Sequence[TargetCell], previous_target: Mapping[str, Any]
+) -> tuple[TargetCell, ...]:
+    """Preserve lineage keys when only the identity exclusion policy changed.
+
+    A retained target manifest is authoritative for cell/episode keys.  Older
+    manifests can be re-evaluated with the current scientific fingerprint
+    policy when their source configs remain available.  If exactly one prior
+    cell now matches a target scientifically, carry its persisted identity
+    forward instead of manufacturing a new lineage solely because an
+    operational retention field was newly classified as non-scientific.
+    """
+
+    prior = [item for item in previous_target.get("cells", ()) if isinstance(item, Mapping)]
+    evaluated = [(item, _prior_cell_current_fingerprint(item)) for item in prior]
+    aligned: list[TargetCell] = []
+    for target in target_cells:
+        matches = [
+            item
+            for item, fingerprint in evaluated
+            if fingerprint == target.protocol_fingerprint
+            and dict(item.get("coordinates", {})) == dict(target.coordinates)
+        ]
+        if len(matches) == 1:
+            match = matches[0]
+            aligned.append(
+                replace(
+                    target,
+                    protocol_fingerprint=str(match["protocol_fingerprint"]),
+                    cell_key=str(match["cell_key"]),
+                )
+            )
+        else:
+            aligned.append(target)
+    return tuple(aligned)
 
 
 def _manifest_target_signature(target: Mapping[str, Any]) -> str:
@@ -655,7 +714,7 @@ def plan_extension(
         lineage = inspection
         previous_target = inspection["target"]
     spec = discover_study(config_dir)
-    target_cells = _cells(spec)
+    target_cells = _align_target_cells_to_prior_identity(_cells(spec), previous_target)
     current_analysis = file_sha256(spec.analysis_recipe) if spec.analysis_recipe else None
     same_target = _target_signature(target_cells, current_analysis) == _manifest_target_signature(
         previous_target

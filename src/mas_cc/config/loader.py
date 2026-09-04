@@ -1327,17 +1327,6 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
                 "dashboard_semantic currently requires game.options.social_mode board",
                 config.game.options.get("social_mode"),
             )
-        prompt_examples = config.logging.options.get("prompt_examples", {})
-        if (
-            isinstance(prompt_examples, Mapping)
-            and int(prompt_examples.get("count", 0)) > 0
-        ):
-            _issue(
-                issues,
-                "logging.options.prompt_examples.count",
-                "must be 0 for dashboard_semantic because prompts and responses are not retained",
-                prompt_examples.get("count"),
-            )
     if issues:
         raise ConfigurationError(issues, context="configuration validation")
     return config
