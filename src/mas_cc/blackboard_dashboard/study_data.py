@@ -604,9 +604,7 @@ class BlackboardStudyReader:
         """Build the latest target hierarchy while reading live extension paths."""
 
         execution_by_key = {
-            row.cell_key: row
-            for row in self.executions
-            if row.cell_key
+            row.cell_key: row for row in self.executions if row.cell_key
         }
         descriptors: list[CellDescriptor] = []
         for item in target.get("cells", ()):
@@ -630,9 +628,7 @@ class BlackboardStudyReader:
                 else:
                     config = source.to_dict()
             except (OSError, StopIteration, TypeError, ValueError):
-                config = {
-                    "execution": {"repetitions": int(item.get("repetitions", 0))}
-                }
+                config = {"execution": {"repetitions": int(item.get("repetitions", 0))}}
             cell_root: Path | None = None
             run_root: Path | None = None
             if execution is not None:
@@ -939,19 +935,34 @@ class BlackboardStudyReader:
         if not rows:
             return {}
         opportunities = sum(bool(row.get("controller_enabled")) for row in rows)
-        advocate = sum(str(row.get("controller_action", "")) == "ADVOCATE" for row in rows)
+        advocate = sum(
+            str(row.get("controller_action", "")) in {"ADVOCATE", "ADVOCATE_Z"}
+            for row in rows
+        )
         no_op = sum(str(row.get("controller_action", "")) == "NO_OP" for row in rows)
         posts = sum(
             int(row.get("controller_posts", row.get("dawn_directive_count", 0)) or 0)
             for row in rows
         )
         exposures = sum(
-            int(row.get("controller_message_exposures", row.get("directive_exposed_focal_updates", 0)) or 0)
+            int(
+                row.get(
+                    "controller_message_exposures",
+                    row.get("directive_exposed_focal_updates", 0),
+                )
+                or 0
+            )
             for row in rows
         )
-        readers = max(
-            (int(row.get("directive_unique_readers", 0) or 0) for row in rows),
-            default=0,
+        readers = sum(
+            int(
+                row.get(
+                    "controller_report_unique_readers",
+                    row.get("controller_unique_readers", 0),
+                )
+                or 0
+            )
+            for row in rows
         )
         return {
             "microscopic_updates": sum(int(row.get("N", 0) or 0) for row in rows),
@@ -961,21 +972,43 @@ class BlackboardStudyReader:
             "controller_posts": posts,
             "controller_message_exposures": exposures,
             "controller_unique_readers": readers,
-            "controller_advocate_fraction": advocate / opportunities if opportunities else None,
-            "controller_post_fraction": posts / opportunities if opportunities else None,
-            "fact_acquisitions": sum(int(row.get("new_evidence_acquisitions", 0) or 0) for row in rows),
+            "controller_advocate_fraction": advocate / opportunities
+            if opportunities
+            else None,
+            "controller_post_fraction": posts / opportunities
+            if opportunities
+            else None,
+            "fact_acquisitions": sum(
+                int(row.get("new_evidence_acquisitions", 0) or 0) for row in rows
+            ),
             "fact_reactivations": sum(
                 int(row.get("reactivated_peer_fact_count", 0) or 0)
                 + int(row.get("reactivated_controller_fact_count", 0) or 0)
                 for row in rows
             ),
-            "fact_deactivations": sum(int(row.get("persistence_deactivated_fact_count", 0) or 0) for row in rows),
+            "controller_report_fact_acquisitions": sum(
+                int(row.get("controller_report_fact_acquisitions", 0) or 0)
+                for row in rows
+            ),
+            "controller_report_fact_reactivations": sum(
+                int(row.get("controller_report_fact_reactivations", 0) or 0)
+                for row in rows
+            ),
+            "controller_report_target_adoptions": sum(
+                int(row.get("controller_report_target_adoptions", 0) or 0)
+                for row in rows
+            ),
+            "fact_deactivations": sum(
+                int(row.get("persistence_deactivated_fact_count", 0) or 0)
+                for row in rows
+            ),
             "board_peak_occupancy": max(
                 (int(row.get("board_peak_size", 0) or 0) for row in rows),
                 default=0,
             ),
             "board_mean_occupancy": (
-                sum(float(row.get("board_mean_size", 0) or 0) for row in rows) / len(rows)
+                sum(float(row.get("board_mean_size", 0) or 0) for row in rows)
+                / len(rows)
             ),
             "saturation_label": "saturation/attention competition",
         }
@@ -1077,12 +1110,16 @@ class BlackboardStudyReader:
                 }
             )
         completed = [item for item in episodes if item.durable_status == "completed"]
-        winner_counts = Counter({"truth": 0, "controller_target": 0, "other": 0, "tie": 0})
+        winner_counts = Counter(
+            {"truth": 0, "controller_target": 0, "other": 0, "tie": 0}
+        )
         truth_wins = target_wins = 0
         final_truth: list[float] = []
         final_target: list[float] = []
         for item in completed:
-            points = votes.get(item.qualified_id, VoteSeries(item.qualified_id, ())).points
+            points = votes.get(
+                item.qualified_id, VoteSeries(item.qualified_id, ())
+            ).points
             if not points:
                 continue
             final = points[-1]
@@ -1102,7 +1139,9 @@ class BlackboardStudyReader:
             else:
                 winner_counts["other"] += 1
             truth_wins += truth in winners and len(winners) == 1
-            target_wins += target is not None and target in winners and len(winners) == 1
+            target_wins += (
+                target is not None and target in winners and len(winners) == 1
+            )
             if final.get("truth_share") is not None:
                 final_truth.append(float(final["truth_share"]))
             if final.get("controller_target_share") is not None:
@@ -1118,6 +1157,7 @@ class BlackboardStudyReader:
                 "q1": float(series.quantile(0.25)) if values else None,
                 "q3": float(series.quantile(0.75)) if values else None,
             }
+
         return {
             **asdict(cell),
             "discovered": cell.path is not None,
@@ -1194,9 +1234,14 @@ class BlackboardStudyReader:
                         "controller_posts",
                         "controller_message_exposures",
                         "controller_unique_readers",
+                        "controller_report_fact_acquisitions",
+                        "controller_report_fact_reactivations",
+                        "controller_report_target_adoptions",
                     )
                 },
-            } if include_votes else None,
+            }
+            if include_votes
+            else None,
             **(
                 {"vote_series": {key: asdict(value) for key, value in votes.items()}}
                 if include_votes
@@ -1211,7 +1256,11 @@ class BlackboardStudyReader:
             for cell in self._cells:
                 signature = self._cell_index_signature(cell)
                 cached = self._index_cells.get(cell.qualified_id)
-                if not scheduler.tasks and cached is not None and cached[0] == signature:
+                if (
+                    not scheduler.tasks
+                    and cached is not None
+                    and cached[0] == signature
+                ):
                     payload = dict(cached[1])
                 else:
                     payload = self._cell_payload(cell, include_votes=False)
@@ -1327,7 +1376,9 @@ class BlackboardStudyReader:
             return set()
 
         if keys(samples) & forbidden:
-            raise ValueError("prompt examples artifact contains forbidden private fields")
+            raise ValueError(
+                "prompt examples artifact contains forbidden private fields"
+            )
         return {
             "schema_version": 1,
             "available": True,
@@ -1375,7 +1426,9 @@ class BlackboardStudyReader:
                     {
                         "id": relative.as_posix(),
                         "name": path.name,
-                        "kind": relative.parts[0] if len(relative.parts) > 1 else "package",
+                        "kind": relative.parts[0]
+                        if len(relative.parts) > 1
+                        else "package",
                         "size": path.stat().st_size,
                     }
                 )
@@ -1406,7 +1459,9 @@ class BlackboardStudyReader:
             "schema_version": 1,
             "available": valid,
             "status": "valid" if valid else "invalid",
-            "reason": None if valid else validation.get("reason", "Analysis validation failed."),
+            "reason": None
+            if valid
+            else validation.get("reason", "Analysis validation failed."),
             "validation": validation,
             "manifest": manifest,
             "artifacts": allowed if valid else [],

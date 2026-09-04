@@ -294,7 +294,7 @@ def test_new_messages_are_role_aware_and_legacy_records_remain_readable():
             micro_step_created=0,
             expires_after_round=0,
         )
-    with pytest.raises(ValueError, match="controller messages"):
+    with pytest.raises(ValueError, match="requires shared_fact_id"):
         BlackboardMessage(
             message_id="m1",
             author_id="control-source",
@@ -308,6 +308,20 @@ def test_new_messages_are_role_aware_and_legacy_records_remain_readable():
             micro_step_created=0,
             expires_after_round=0,
         )
+    report = BlackboardMessage(
+        message_id="m2",
+        author_id="control-source",
+        author_kind="controller",
+        message_type="REPORT",
+        text="canonical fact text",
+        vote="NORTH",
+        shared_fact_id="f1",
+        reply_to=None,
+        round_created=0,
+        micro_step_created=0,
+        expires_after_round=0,
+    )
+    assert report.shared_fact_id == "f1"
     legacy = BlackboardMessage.from_mapping(
         {
             "message_id": "old",
@@ -502,9 +516,7 @@ def test_dawn_blackboard_seeds_exact_budget_before_day_and_never_posts_during_da
 
 def test_dawn_no_op_has_no_coordinator_message_and_population_contract_is_unchanged():
     config = _config(q=1)
-    result, _ = _run(
-        config, control=_dawn_control(config, schedule=SCHEDULE_NEVER)
-    )
+    result, _ = _run(config, control=_dawn_control(config, schedule=SCHEDULE_NEVER))
     event = result.rounds[0].event
     adapted = adapt_relational_round_record(event)
 
@@ -548,9 +560,7 @@ def test_dawn_persistence_runs_before_the_day_and_never_deletes_history():
         "epistemic_persistence": 0.0,
     }
     config = replace(config, game=replace(config.game, options=options))
-    result, _ = _run(
-        config, control=_dawn_control(config, schedule=SCHEDULE_NEVER)
-    )
+    result, _ = _run(config, control=_dawn_control(config, schedule=SCHEDULE_NEVER))
     event = result.rounds[0].event
 
     assert event["persistence_deactivated_fact_count"] > 0
@@ -599,12 +609,8 @@ def test_directive_report_reply_lineage_reaches_later_exact_acquisition():
                             "text": "Here is exact evidence relevant to the request."
                             if directive and known
                             else None,
-                            "shared_fact_id": known[0]
-                            if directive and known
-                            else None,
-                            "reply_to": visible_id
-                            if directive and known
-                            else None,
+                            "shared_fact_id": known[0] if directive and known else None,
+                            "reply_to": visible_id if directive and known else None,
                         },
                     }
                 )
@@ -842,9 +848,7 @@ def test_pilot_artifact_builder_writes_complete_inspection_bundle(tmp_path):
     assert all(public_schema.issubset(row) for row in message_rows)
     assert all(row["vote"] for row in message_rows)
     assert {
-        row["author_public_id"]
-        for row in message_rows
-        if row["type"] == "DIRECTIVE"
+        row["author_public_id"] for row in message_rows if row["type"] == "DIRECTIVE"
     } == {"Agent 25"}
     dashboard = (result.output_dir / "analysis/dashboard/index.html").read_text(
         encoding="utf-8"

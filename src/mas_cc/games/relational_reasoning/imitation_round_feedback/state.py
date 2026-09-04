@@ -86,7 +86,7 @@ MESSAGE_NONE = "NONE"
 MESSAGE_DIRECTIVE = "DIRECTIVE"
 ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
 ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
-CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE,)
+CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE, MESSAGE_REPORT)
 BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
 LEGACY_BOARD_MESSAGE_TYPES = (
     "CLAIM",
@@ -152,6 +152,12 @@ class BlackboardMessage:
                 self.shared_fact_id is not None
             ):
                 raise ValueError(f"{self.message_type} cannot carry shared_fact_id")
+            if (
+                self.author_kind == "controller"
+                and self.message_type == MESSAGE_REPORT
+                and self.shared_fact_id is None
+            ):
+                raise ValueError("controller REPORT requires shared_fact_id")
         elif self.message_type in {"REPLY", "CORRECTION"} and not self.reply_to:
             raise ValueError(f"{self.message_type} requires reply_to")
         if self.expires_after_round < self.round_created:
@@ -535,6 +541,8 @@ class RelationalRules:
     task_id: str | None
     initial_information_path: str | None
     initial_information_sha256: str | None
+    truthful_controller_design_path: str | None
+    truthful_controller_design_sha256: str | None
     vote_visibility: str
     prompt_version: int
     receiver_epistemic_disposition: str
@@ -657,6 +665,44 @@ class RelationalRules:
         ):
             raise ValueError(
                 "game.options.initial_information is supported only for "
+                "musr_team_allocation"
+            )
+        controller_design = _mapping(
+            options.get("truthful_controller_design"),
+            "game.options.truthful_controller_design",
+        )
+        truthful_controller_design_path = controller_design.get("artifact_path")
+        truthful_controller_design_sha256 = controller_design.get(
+            "expected_file_sha256"
+        )
+        if truthful_controller_design_path is not None and (
+            not isinstance(truthful_controller_design_path, str)
+            or not truthful_controller_design_path.strip()
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design.artifact_path must be a path"
+            )
+        if truthful_controller_design_sha256 is not None and (
+            not isinstance(truthful_controller_design_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", truthful_controller_design_sha256)
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design.expected_file_sha256 must "
+                "be a lowercase 64-character SHA-256"
+            )
+        if (truthful_controller_design_path is None) != (
+            truthful_controller_design_sha256 is None
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design must provide artifact_path "
+                "and expected_file_sha256 together"
+            )
+        if (
+            truthful_controller_design_path is not None
+            and task_family != "musr_team_allocation"
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design is supported only for "
                 "musr_team_allocation"
             )
 
@@ -795,6 +841,8 @@ class RelationalRules:
             task_id=task_id,
             initial_information_path=initial_information_path,
             initial_information_sha256=initial_information_sha256,
+            truthful_controller_design_path=truthful_controller_design_path,
+            truthful_controller_design_sha256=truthful_controller_design_sha256,
             vote_visibility=visibility,
             prompt_version=int(prompt_version),
             receiver_epistemic_disposition=prompt_class,

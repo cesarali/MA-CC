@@ -44,9 +44,10 @@ is measuring what one message does.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar
+import hashlib
 import math
 
 from mas_cc.config import ControlConfig
@@ -80,7 +81,15 @@ CONTROLLER_EVIDENCE_STRATEGIES = (EVIDENCE_NEUTRAL, EVIDENCE_STRATEGIC)
 
 DIRECT_RECOMMENDATION = "direct_recommendation"
 COORDINATION_REQUEST = "coordination_request"
-CONTROLLER_ACTUATION_MODES = (DIRECT_RECOMMENDATION, COORDINATION_REQUEST)
+TRUTHFUL_STRATEGIC_REPORT = "truthful_strategic_report"
+CONTROLLER_ACTUATION_MODES = (
+    DIRECT_RECOMMENDATION,
+    COORDINATION_REQUEST,
+    TRUTHFUL_STRATEGIC_REPORT,
+)
+
+STRATEGIC_REPORT_SELECTION_V1 = "target_preserving_v1"
+STRATEGIC_REPORT_SELECTION_STRATEGIES = (STRATEGIC_REPORT_SELECTION_V1,)
 
 TIMING_MICROSCOPIC = "microscopic"
 TIMING_DAWN_ONLY = "dawn_only"
@@ -119,6 +128,28 @@ ignores it, which keeps the sensing columns available for comparison."""
 
 
 @dataclass(frozen=True, slots=True)
+class StrategicReportSelection:
+    """One auditable true-fact choice; only the fact text reaches participants."""
+
+    fact_id: str
+    score: float
+    strategy_class: str
+    novel_on_live_board: bool
+    cooldown_eligible: bool
+    rank: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "fact_id": self.fact_id,
+            "score": self.score,
+            "strategy_class": self.strategy_class,
+            "novel_on_live_board": self.novel_on_live_board,
+            "cooldown_eligible": self.cooldown_eligible,
+            "rank": self.rank,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     """Soft target policy, exact per-round slot budget, explicit evidence choice."""
 
@@ -129,6 +160,8 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     advocacy_schedule: str = SCHEDULE_SOFT
     controller_actuation_mode: str = DIRECT_RECOMMENDATION
     controller_timing: str = TIMING_MICROSCOPIC
+    controller_report_cooldown_rounds: int = 1
+    controller_report_selection_strategy: str = STRATEGIC_REPORT_SELECTION_V1
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -283,6 +316,106 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             "either allocation, report it."
         )
 
+    def validate_truthful_report_task(
+        self, task: RelationalTask, episode_seed: int = 0
+    ) -> None:
+        """Fail before provider use unless the task has a valid frozen pool."""
+
+        if self.controller_actuation_mode != TRUTHFUL_STRATEGIC_REPORT:
+            return
+        target = self.resolved_target_for_task(task, episode_seed)
+        if task.task_family != "musr_team_allocation":
+            raise ValueError(
+                "truthful_strategic_report requires a MuSR Team Allocation task"
+            )
+        if task.controller_target is None:
+            raise ValueError(
+                f"task {task.task_id!r} has no frozen truthful-controller design"
+            )
+        if target != task.controller_target:
+            raise ValueError(
+                f"controller target {target!r} does not match task-declared target "
+                f"{task.controller_target!r}"
+            )
+        if target == task.correct_relation:
+            raise ValueError("truthful strategic controller target must be false")
+        pool = task.controller_reportable_fact_ids
+        if self.intervention_budget > len(pool):
+            raise ValueError(
+                "control.options.intervention_budget exceeds the distinct "
+                f"controller-reportable pool ({self.intervention_budget} > {len(pool)})"
+            )
+        missing = set(pool) - set(task.facts)
+        if missing:
+            raise ValueError(
+                f"controller-reportable pool references unknown facts: {sorted(missing)}"
+            )
+
+    def select_truthful_reports(
+        self,
+        task: RelationalTask,
+        *,
+        episode_seed: int,
+        round_index: int,
+        live_fact_counts: Mapping[str, int],
+        selected_rounds: Mapping[str, Sequence[int]],
+    ) -> tuple[StrategicReportSelection, ...]:
+        """Rank true frozen facts without consuming the action-policy RNG stream."""
+
+        self.validate_truthful_report_task(task, episode_seed)
+        if self.controller_actuation_mode != TRUTHFUL_STRATEGIC_REPORT:
+            return ()
+        classes = task.controller_fact_classes or {}
+        base_scores = task.controller_fact_scores or {}
+        ranked: list[tuple[tuple[Any, ...], str, float, bool, bool]] = []
+        for fact_id in task.controller_reportable_fact_ids:
+            prior_rounds = tuple(
+                int(value) for value in selected_rounds.get(fact_id, ())
+            )
+            cooldown_eligible = not prior_rounds or (
+                round_index - max(prior_rounds)
+                >= self.controller_report_cooldown_rounds
+            )
+            live_count = int(live_fact_counts.get(fact_id, 0))
+            novel = live_count == 0
+            reuse_count = len(prior_rounds)
+            base_score = float(base_scores.get(fact_id, 0.0))
+            score = base_score + float(novel) - live_count - reuse_count
+            tie = hashlib.sha256(
+                f"{episode_seed}:{task.task_id}:{round_index}:{fact_id}".encode("utf-8")
+            ).hexdigest()
+            ranked.append(
+                (
+                    (
+                        not cooldown_eligible,
+                        reuse_count,
+                        live_count,
+                        -base_score,
+                        tie,
+                        fact_id,
+                    ),
+                    fact_id,
+                    score,
+                    novel,
+                    cooldown_eligible,
+                )
+            )
+        ranked.sort(key=lambda item: item[0])
+        selected = ranked[: self.intervention_budget]
+        return tuple(
+            StrategicReportSelection(
+                fact_id=fact_id,
+                score=score,
+                strategy_class=str(classes[fact_id]),
+                novel_on_live_board=novel,
+                cooldown_eligible=cooldown_eligible,
+                rank=rank,
+            )
+            for rank, (_, fact_id, score, novel, cooldown_eligible) in enumerate(
+                selected, start=1
+            )
+        )
+
     @classmethod
     def _extra_from_options(
         cls, options: Mapping[str, Any], issues: list[ValidationIssue]
@@ -369,12 +502,15 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 )
             )
             timing = TIMING_MICROSCOPIC
-        if timing == TIMING_DAWN_ONLY and actuation_mode != COORDINATION_REQUEST:
+        if timing == TIMING_DAWN_ONLY and actuation_mode not in {
+            COORDINATION_REQUEST,
+            TRUTHFUL_STRATEGIC_REPORT,
+        }:
             issues.append(
                 ValidationIssue(
                     "control.options.controller_timing",
                     "dawn_only requires controller_actuation_mode "
-                    "'coordination_request'",
+                    "'coordination_request' or 'truthful_strategic_report'",
                 )
             )
         values["controller_timing"] = str(timing)
@@ -400,6 +536,30 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             )
             strategy = None
         values["controller_evidence_strategy"] = strategy
+
+        cooldown = options.get("controller_report_cooldown_rounds", 1)
+        if isinstance(cooldown, bool) or not isinstance(cooldown, int) or cooldown < 0:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_report_cooldown_rounds",
+                    "must be a non-negative integer",
+                )
+            )
+            cooldown = 1
+        values["controller_report_cooldown_rounds"] = cooldown
+
+        report_strategy = options.get(
+            "controller_report_selection_strategy", STRATEGIC_REPORT_SELECTION_V1
+        )
+        if report_strategy not in STRATEGIC_REPORT_SELECTION_STRATEGIES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_report_selection_strategy",
+                    f"must be one of {list(STRATEGIC_REPORT_SELECTION_STRATEGIES)}",
+                )
+            )
+            report_strategy = STRATEGIC_REPORT_SELECTION_V1
+        values["controller_report_selection_strategy"] = str(report_strategy)
 
         evidence_sources = sum(
             bool(value)
@@ -450,6 +610,22 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                     "never injects controller evidence",
                 )
             )
+        if actuation_mode == TRUTHFUL_STRATEGIC_REPORT:
+            if timing != TIMING_DAWN_ONLY:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.controller_timing",
+                        "truthful_strategic_report requires dawn_only timing",
+                    )
+                )
+            if mode != RECOMMENDATION_ONLY:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.message_mode",
+                        "truthful_strategic_report uses the frozen report pool; "
+                        "message_mode must be recommendation_only",
+                    )
+                )
         return values
 
 
@@ -462,6 +638,7 @@ __all__ = [
     "CONTROLLER_TIMINGS",
     "COORDINATION_REQUEST",
     "DIRECT_RECOMMENDATION",
+    "TRUTHFUL_STRATEGIC_REPORT",
     "ADVOCACY_SCHEDULES",
     "FACTLESS_MESSAGE_MODES",
     "FACT_SELECTORS",
@@ -478,6 +655,9 @@ __all__ = [
     "TIMING_DAWN_ONLY",
     "TIMING_MICROSCOPIC",
     "SELECTOR_SUPPORTING",
+    "STRATEGIC_REPORT_SELECTION_STRATEGIES",
+    "STRATEGIC_REPORT_SELECTION_V1",
+    "StrategicReportSelection",
     "RelationalRoundBudgetedControl",
     "create_relational_round_budgeted_control",
 ]

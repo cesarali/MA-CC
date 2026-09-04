@@ -33,6 +33,7 @@ MUSR_TASK_FAMILY = "musr_team_allocation"
 MUSR_SCHEMA_VERSION = "musr_team_allocation_native_v1"
 MUSR_DISTRIBUTION_SCHEMA_VERSION = "musr_team_allocation_distribution_v1"
 MUSR_INITIAL_INFORMATION_SCHEMA_VERSION = "musr_initial_information_v1"
+MUSR_TRUTHFUL_CONTROLLER_SCHEMA_VERSION = "musr_truthful_controller_v1"
 
 SUPPORTING = "supporting"
 DISTRACTOR = "distractor"
@@ -120,6 +121,12 @@ class RelationalTask:
     task_family: str = "spatial_relational"
     answer_display_texts: Mapping[str, str] | None = None
     supporting_fact_groups: Mapping[str, tuple[str, ...]] | None = None
+    controller_target: str | None = None
+    controller_reportable_fact_ids: tuple[str, ...] = ()
+    decisive_fact_ids: tuple[str, ...] = ()
+    controller_fact_classes: Mapping[str, str] | None = None
+    controller_fact_scores: Mapping[str, float] | None = None
+    controller_design_path: str | None = None
 
     def fact(self, fact_id: str) -> RelationalFact:
         try:
@@ -197,9 +204,21 @@ class RelationalTask:
             projection["answer_display_texts"] = dict(self.answer_display_texts)
         if self.supporting_fact_groups:
             projection["supporting_fact_groups"] = {
-                key: list(values)
-                for key, values in self.supporting_fact_groups.items()
+                key: list(values) for key, values in self.supporting_fact_groups.items()
             }
+        if self.controller_target is not None:
+            projection["controller_target"] = self.controller_target
+            projection["controller_reportable_fact_ids"] = list(
+                self.controller_reportable_fact_ids
+            )
+            projection["decisive_fact_ids"] = list(self.decisive_fact_ids)
+            projection["controller_fact_classes"] = dict(
+                self.controller_fact_classes or {}
+            )
+            projection["controller_fact_scores"] = dict(
+                self.controller_fact_scores or {}
+            )
+            projection["controller_design_path"] = self.controller_design_path
         return projection
 
 
@@ -271,6 +290,8 @@ def load_musr_team_allocation_task(
     population_size: int,
     initial_information_path: str | Path | None = None,
     initial_information_sha256: str | None = None,
+    truthful_controller_design_path: str | Path | None = None,
+    truthful_controller_design_sha256: str | None = None,
 ) -> RelationalTask:
     """Adapt a validated MuSR task and its distribution to this game."""
 
@@ -416,15 +437,18 @@ def load_musr_team_allocation_task(
                 "MuSR F9 initial-information profile must cover nine latent values"
             )
         selected = set(profile)
-        order = [evidence_id for evidence_id in order if evidence_id in selected]
-        facts = {evidence_id: facts[evidence_id] for evidence_id in order}
-        groups = {
-            latent_id: [
-                evidence_id for evidence_id in evidence_ids if evidence_id in selected
-            ]
-            for latent_id, evidence_ids in groups.items()
-            if any(evidence_id in selected for evidence_id in evidence_ids)
-        }
+        if truthful_controller_design_path is None:
+            order = [evidence_id for evidence_id in order if evidence_id in selected]
+            facts = {evidence_id: facts[evidence_id] for evidence_id in order}
+            groups = {
+                latent_id: [
+                    evidence_id
+                    for evidence_id in evidence_ids
+                    if evidence_id in selected
+                ]
+                for latent_id, evidence_ids in groups.items()
+                if any(evidence_id in selected for evidence_id in evidence_ids)
+            }
 
     options_raw = _sequence(base.get("options", ()), "options", base_path)
     if len(options_raw) != 3:
@@ -468,7 +492,11 @@ def load_musr_team_allocation_task(
             str(item)
             for item in _sequence(raw_ids, f"{assignment_key}[]", assignment_source)
         )
-        unknown = set(ids) - set(facts)
+        unknown = (
+            set(ids) - selected
+            if assignment_path is not None
+            else set(ids) - set(facts)
+        )
         if unknown:
             raise RelationalTaskError(
                 f"MuSR agent references unknown evidence: {sorted(unknown)}"
@@ -482,12 +510,15 @@ def load_musr_team_allocation_task(
         )
     if len(agent_fact_ids) != population_size:
         raise RelationalTaskError("MuSR distribution agent count does not match")
-    if {item for ids in agent_fact_ids.values() for item in ids} != set(order):
+    expected_population_union = selected if assignment_path is not None else set(order)
+    if {
+        item for ids in agent_fact_ids.values() for item in ids
+    } != expected_population_union:
         raise RelationalTaskError("MuSR population evidence union is incomplete")
     if assignment_path is not None:
         holder_counts = {
             evidence_id: sum(evidence_id in ids for ids in agent_fact_ids.values())
-            for evidence_id in order
+            for evidence_id in profile
         }
         if sorted(holder_counts.values()) != [2, 2, 2, 3, 3, 3, 3, 3, 3]:
             raise RelationalTaskError(
@@ -507,6 +538,19 @@ def load_musr_team_allocation_task(
             raise RelationalTaskError(
                 "MuSR initial-information card_holder_counts do not match assignment"
             )
+
+    controller_design_path = (
+        None
+        if truthful_controller_design_path is None
+        else Path(truthful_controller_design_path)
+    )
+    controller_design = _load_truthful_controller_design(
+        controller_design_path,
+        truthful_controller_design_sha256,
+        base,
+        facts,
+        groups,
+    )
 
     scenario = str(base.get("scenario", "")).strip()
     question = str(base.get("question", "")).strip()
@@ -536,7 +580,210 @@ def load_musr_team_allocation_task(
         task_family=MUSR_TASK_FAMILY,
         answer_display_texts=display,
         supporting_fact_groups={key: tuple(values) for key, values in groups.items()},
+        controller_target=controller_design.get("target"),
+        controller_reportable_fact_ids=tuple(
+            controller_design.get("reportable_fact_ids", ())
+        ),
+        decisive_fact_ids=tuple(controller_design.get("decisive_fact_ids", ())),
+        controller_fact_classes=controller_design.get("fact_classes"),
+        controller_fact_scores=controller_design.get("fact_scores"),
+        controller_design_path=(
+            str(controller_design_path) if controller_design_path is not None else None
+        ),
     )
+
+
+def _load_truthful_controller_design(
+    path: Path | None,
+    expected_file_sha256: str | None,
+    base: Mapping[str, Any],
+    facts: Mapping[str, RelationalFact],
+    groups: Mapping[str, Sequence[str]],
+) -> dict[str, Any]:
+    """Load and symbolically validate an optional frozen controller design."""
+
+    if path is None:
+        return {}
+    if not path.is_file():
+        raise RelationalTaskError(
+            f"required MuSR truthful-controller design does not exist: {path}"
+        )
+    if not expected_file_sha256:
+        raise RelationalTaskError(
+            "MuSR truthful-controller design requires an expected file SHA-256"
+        )
+    actual_file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual_file_hash != expected_file_sha256:
+        raise RelationalTaskError(
+            "MuSR truthful-controller design file SHA-256 does not match"
+        )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RelationalTaskError(
+            f"MuSR truthful-controller JSON is invalid: {exc}"
+        ) from exc
+    if not isinstance(payload, Mapping):
+        raise RelationalTaskError("MuSR truthful-controller design must be an object")
+    if payload.get("schema_version") != MUSR_TRUTHFUL_CONTROLLER_SCHEMA_VERSION:
+        raise RelationalTaskError(
+            f"{path} must use schema {MUSR_TRUTHFUL_CONTROLLER_SCHEMA_VERSION!r}"
+        )
+    fingerprint = payload.get("fingerprint_sha256")
+    if fingerprint != _sha256_object(
+        {key: value for key, value in payload.items() if key != "fingerprint_sha256"}
+    ):
+        raise RelationalTaskError(
+            "MuSR truthful-controller fingerprint_sha256 does not match"
+        )
+    if payload.get("semantic_world_sha256") != base.get("semantic_world_sha256"):
+        raise RelationalTaskError(
+            "MuSR truthful-controller design does not match the base task"
+        )
+    target = str(payload.get("target", ""))
+    option_ids = {
+        str(item.get("id"))
+        for item in _sequence(base.get("options", ()), "options", path)
+        if isinstance(item, Mapping)
+    }
+    truth = str(base.get("gold_answer", ""))
+    if target not in option_ids or target == truth:
+        raise RelationalTaskError(
+            "MuSR truthful-controller target must be a configured false option"
+        )
+    reportable = tuple(
+        str(value)
+        for value in _sequence(
+            payload.get("reportable_fact_ids", ()), "reportable_fact_ids", path
+        )
+    )
+    decisive = tuple(
+        str(value)
+        for value in _sequence(
+            payload.get("decisive_fact_ids", ()), "decisive_fact_ids", path
+        )
+    )
+    if not reportable or len(reportable) != len(set(reportable)):
+        raise RelationalTaskError(
+            "MuSR controller reportable_fact_ids must be non-empty and unique"
+        )
+    if not decisive or len(decisive) != len(set(decisive)):
+        raise RelationalTaskError(
+            "MuSR controller decisive_fact_ids must be non-empty and unique"
+        )
+    unknown = (set(reportable) | set(decisive)) - set(facts)
+    if unknown:
+        raise RelationalTaskError(
+            f"MuSR truthful-controller design has unknown evidence: {sorted(unknown)}"
+        )
+
+    classes_raw = _mapping(payload.get("fact_classes"), "fact_classes", path)
+    scores_raw = _mapping(payload.get("fact_scores"), "fact_scores", path)
+    if set(classes_raw) != set(reportable) or set(scores_raw) != set(reportable):
+        raise RelationalTaskError(
+            "MuSR truthful-controller classes/scores must cover the reportable pool"
+        )
+    classes = {str(key): str(value) for key, value in classes_raw.items()}
+    if any(
+        value not in {"target-compatible", "target-preserving", "non-discriminating"}
+        for value in classes.values()
+    ):
+        raise RelationalTaskError("MuSR truthful-controller fact class is invalid")
+    try:
+        scores = {str(key): float(value) for key, value in scores_raw.items()}
+    except (TypeError, ValueError) as exc:
+        raise RelationalTaskError(
+            "MuSR truthful-controller fact scores must be numbers"
+        ) from exc
+
+    _validate_truthful_controller_ambiguity(
+        base=base,
+        groups=groups,
+        target=target,
+        reportable=reportable,
+        decisive=decisive,
+    )
+    return {
+        "target": target,
+        "reportable_fact_ids": reportable,
+        "decisive_fact_ids": decisive,
+        "fact_classes": classes,
+        "fact_scores": scores,
+    }
+
+
+def _validate_truthful_controller_ambiguity(
+    *,
+    base: Mapping[str, Any],
+    groups: Mapping[str, Sequence[str]],
+    target: str,
+    reportable: Sequence[str],
+    decisive: Sequence[str],
+) -> None:
+    """Prove the frozen partial-information claims by exact world enumeration."""
+
+    from mas_cc.musr_team_allocation_generator.ambiguity import (
+        TeamAllocationCompletionIndex,
+    )
+    from mas_cc.musr_team_allocation_generator.latent_problem import (
+        latent_facts,
+        latent_values,
+    )
+    from mas_cc.musr_team_allocation_generator.schemas import LatentProblem
+
+    try:
+        problem = LatentProblem.from_dict(
+            _mapping(base.get("latent"), "latent", Path("base_task.json"))
+        )
+        latent = latent_facts(problem)
+        vector = latent_values(problem)
+        options = [str(item["id"]) for item in base["options"]]
+        target_index = options.index(target)
+        index_by_latent = {
+            fact.fact_id: position for position, fact in enumerate(latent)
+        }
+        card_to_latent = {
+            evidence_id: latent_id
+            for latent_id, evidence_ids in groups.items()
+            for evidence_id in evidence_ids
+        }
+        completion_index = TeamAllocationCompletionIndex()
+
+        def metrics(card_ids: Sequence[str]):
+            visible = sorted(
+                {index_by_latent[card_to_latent[card_id]] for card_id in card_ids}
+            )
+            return completion_index.metrics(vector, visible)
+
+        for card_id in reportable:
+            if metrics((card_id,)).probabilities[target_index] <= 0:
+                raise RelationalTaskError(
+                    f"controller fact {card_id!r} individually rules out target {target!r}"
+                )
+        reportable_metrics = metrics(reportable)
+        if reportable_metrics.probabilities[target_index] <= 0:
+            raise RelationalTaskError(
+                "MuSR controller-reportable subset does not preserve target viability"
+            )
+        decisive_metrics = metrics(decisive)
+        if (
+            decisive_metrics.probabilities[problem.gold_index] != 1.0
+            or decisive_metrics.probabilities[target_index] != 0.0
+        ):
+            raise RelationalTaskError(
+                "MuSR decisive subset must uniquely select truth and rule out target"
+            )
+        complete_metrics = completion_index.metrics(vector, range(len(latent)))
+        if complete_metrics.probabilities[problem.gold_index] != 1.0:
+            raise RelationalTaskError(
+                "MuSR complete fact set does not uniquely select ground truth"
+            )
+    except RelationalTaskError:
+        raise
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RelationalTaskError(
+            f"MuSR truthful-controller symbolic validation failed: {exc}"
+        ) from exc
 
 
 def _require(payload: Mapping[str, Any], key: str, path: Path) -> Any:

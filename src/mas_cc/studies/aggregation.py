@@ -88,6 +88,7 @@ def _align_indexed_lineage_cells(
         )
     return tuple(aligned)
 
+
 PRIMARY_COLUMNS = (
     "study_id",
     "source_run_id",
@@ -1792,6 +1793,17 @@ def _blackboard_diagnostic_table(
         "historical_mean_supporting_fact_coverage_after",
         "active_mean_supporting_fact_coverage_after",
         "realized_directive_exposure_fraction",
+        "controller_posts",
+        "controller_reports_requested",
+        "controller_reports_admitted",
+        "controller_report_exposures",
+        "controller_report_unique_readers",
+        "eligible_controller_report_opportunities",
+        "controller_report_fact_acquisitions",
+        "controller_report_fact_reactivations",
+        "controller_report_target_adoptions",
+        "peer_report_exposures_with_controller_actuation",
+        "peer_report_exposures_without_controller_actuation",
     )
     for column in numeric:
         if column not in source:
@@ -1828,11 +1840,46 @@ def _blackboard_diagnostic_table(
             "realized_directive_exposure_fraction",
             "mean",
         ),
+        controller_posts=("controller_posts", "sum"),
+        controller_reports_requested=("controller_reports_requested", "sum"),
+        controller_reports_admitted=("controller_reports_admitted", "sum"),
+        controller_report_exposures=("controller_report_exposures", "sum"),
+        controller_report_unique_readers_round_sum=(
+            "controller_report_unique_readers",
+            "sum",
+        ),
+        eligible_controller_report_opportunities=(
+            "eligible_controller_report_opportunities",
+            "sum",
+        ),
+        controller_report_fact_acquisitions=(
+            "controller_report_fact_acquisitions",
+            "sum",
+        ),
+        controller_report_fact_reactivations=(
+            "controller_report_fact_reactivations",
+            "sum",
+        ),
+        controller_report_target_adoptions=(
+            "controller_report_target_adoptions",
+            "sum",
+        ),
+        peer_report_exposures_with_controller_actuation=(
+            "peer_report_exposures_with_controller_actuation",
+            "sum",
+        ),
+        peer_report_exposures_without_controller_actuation=(
+            "peer_report_exposures_without_controller_actuation",
+            "sum",
+        ),
     ).reset_index()
     result["refresh_events"] = result["peer_refreshes"] + result["controller_refreshes"]
     denominator = result["eligible_message_opportunities"].replace(0, np.nan)
     result["eligible_directive_fraction"] = (
         result["eligible_directive_opportunities"] / denominator
+    )
+    result["eligible_controller_report_fraction"] = (
+        result["eligible_controller_report_opportunities"] / denominator
     )
     return _attach_coordinates(result, cells)
 

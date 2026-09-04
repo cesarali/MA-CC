@@ -537,13 +537,13 @@ class BlackboardRunReader:
             total = len(votes)
             time_series.append(
                 {
-                    "global_update_index": int(
-                        event.get("global_update_index", index)
-                    ),
+                    "global_update_index": int(event.get("global_update_index", index)),
                     "round_index": int(event.get("round_index", 0)),
                     "step": int(event.get("within_round_index", 0)) + 1,
                     "truth_share": (
-                        votes.count(str(truth)) / total if truth is not None and total else None
+                        votes.count(str(truth)) / total
+                        if truth is not None and total
+                        else None
                     ),
                     "controller_target_share": (
                         votes.count(str(controller_target)) / total
@@ -553,8 +553,7 @@ class BlackboardRunReader:
                     "board_size": event.get("board_size_after"),
                     "controller_post": bool(event.get("controller_message_posted")),
                     "controller_exposures": sum(
-                        value == "DIRECTIVE"
-                        for value in event.get("sampled_message_types", ())
+                        1 for value in event.get("sampled_controller_message_ids", ())
                     ),
                 }
             )
@@ -584,13 +583,12 @@ class BlackboardRunReader:
         actions = [str(row.get("controller_action", "")) for row in rounds]
         posts = sum(len(row.get("controller_post_ids", ())) for row in rounds)
         exposures = sum(
-            sum(value == "DIRECTIVE" for value in row.get("sampled_message_types", ()))
-            for row in updates
+            len(row.get("sampled_controller_message_ids", ())) for row in updates
         )
         readers = {
             str(row.get("focal_agent_id"))
             for row in updates
-            if "DIRECTIVE" in row.get("sampled_message_types", ())
+            if row.get("sampled_controller_message_ids", ())
         }
         board_sizes = [
             int(value)
@@ -612,19 +610,47 @@ class BlackboardRunReader:
         return {
             "microscopic_updates": len(updates),
             "controller_opportunities": opportunities,
-            "controller_advocate_rounds": sum(action == "ADVOCATE" for action in actions),
+            "controller_advocate_rounds": sum(
+                action in {"ADVOCATE", "ADVOCATE_Z"} for action in actions
+            ),
             "controller_no_op_rounds": sum(action == "NO_OP" for action in actions),
             "controller_posts": posts,
             "controller_message_exposures": exposures,
             "controller_unique_readers": len(readers),
-            "controller_exposed_update_fraction": exposures / len(updates) if updates else None,
+            "controller_exposed_update_fraction": exposures / len(updates)
+            if updates
+            else None,
             "board_peak_occupancy": max(board_sizes) if board_sizes else None,
-            "board_mean_occupancy": sum(board_sizes) / len(board_sizes) if board_sizes else None,
+            "board_mean_occupancy": sum(board_sizes) / len(board_sizes)
+            if board_sizes
+            else None,
             "fact_acquisitions": acquired,
             "fact_reactivations": reactivated,
-            "validation_repairs": sum(int(row.get("attempt", 1)) > 1 for row in data["audits"]),
-            "malformed_terminal": bool(data["audits"] and not data["audits"][-1].get("valid", True)),
-            "actuation_semantics": "shared-board publication; saturation/attention competition",
+            "controller_report_fact_acquisitions": sum(
+                len(row.get("new_controller_fact_ids", ())) for row in updates
+            ),
+            "controller_report_fact_reactivations": sum(
+                len(row.get("reactivated_controller_fact_ids", ())) for row in updates
+            ),
+            "controller_report_target_adoptions": sum(
+                bool(row.get("sampled_controller_report_ids"))
+                and bool(row.get("focal_adopted_target"))
+                for row in updates
+            ),
+            "validation_repairs": sum(
+                int(row.get("attempt", 1)) > 1 for row in data["audits"]
+            ),
+            "malformed_terminal": bool(
+                data["audits"] and not data["audits"][-1].get("valid", True)
+            ),
+            "actuation_semantics": (
+                "ordinary truthful REPORT publication"
+                if any(
+                    row.get("controller_actuation_mode") == "truthful_strategic_report"
+                    for row in rounds
+                )
+                else "shared-board publication; saturation/attention competition"
+            ),
         }
 
     def status(self) -> dict[str, Any]:
@@ -1132,7 +1158,10 @@ class BlackboardRunReader:
                 "probability": round_record.get("controller_probability_U1_given_Y"),
                 "sampled_action": round_record.get("controller_sampled_U"),
                 "controlled_positions": round_record.get("controlled_positions", []),
-                "directive_ids": round_record.get("controller_post_ids", []),
+                "post_ids": round_record.get("controller_post_ids", []),
+                "directive_ids": round_record.get("directive_message_ids", []),
+                "report_ids": round_record.get("controller_report_ids", []),
+                "report_fact_ids": round_record.get("controller_report_fact_ids", []),
                 "direct_replies": round_record.get("controller_direct_replies"),
                 "unique_readers": round_record.get("controller_unique_readers"),
             },

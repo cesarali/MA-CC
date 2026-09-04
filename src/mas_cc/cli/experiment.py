@@ -18,6 +18,7 @@ from mas_cc.experiments import (
     run_experiment_grid_sync,
     run_experiment_sync,
 )
+from mas_cc.control import create_control
 from mas_cc.experiments.console import format_money
 from mas_cc.games import create_game
 from mas_cc.llm_runtime.providers import PricingQuote
@@ -117,6 +118,11 @@ def _run_single_preflight(
     config: RunConfig, destination: Path
 ) -> ExperimentPreflightEstimate:
     game = create_game(config.game)
+    if config.game.type == "relational_imitation_round_feedback":
+        controller = create_control(config.control)
+        validator = getattr(controller, "validate_truthful_report_task", None)
+        if validator is not None:
+            validator(game.load_task(config.game), config.execution.seed)
     plan = game.call_plan(config.game)
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)

@@ -144,6 +144,14 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             "control.options.controller_actuation_mode",
             "controller_actuation_mode",
         ),
+        (
+            "control.options.controller_report_cooldown_rounds",
+            "controller_report_cooldown_rounds",
+        ),
+        (
+            "control.options.controller_report_selection_strategy",
+            "controller_report_selection_strategy",
+        ),
         ("control.options.target", "controller_target_semantics"),
         ("experiment.metadata.controller_semantics", "controller_semantics"),
         ("experiment.metadata.target_semantics", "target_semantics"),

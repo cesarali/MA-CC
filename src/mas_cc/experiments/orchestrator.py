@@ -1054,7 +1054,9 @@ class _CellPromptSampler:
                     "middle": (rounds - 1) // 2,
                     "end": rounds - 1,
                 }
-                labels = [label for label, target in targets.items() if target == round_index]
+                labels = [
+                    label for label, target in targets.items() if target == round_index
+                ]
                 if not labels:
                     return
                 item["sample_point"] = labels[0]
@@ -1066,7 +1068,10 @@ class _CellPromptSampler:
                     ),
                     None,
                 )
-                ordering = (int(item.get("update_index", 0)), str(item.get("agent_id", "")))
+                ordering = (
+                    int(item.get("update_index", 0)),
+                    str(item.get("agent_id", "")),
+                )
                 if previous is not None and ordering > (
                     int(previous.get("update_index", 0)),
                     str(previous.get("agent_id", "")),
@@ -1116,7 +1121,11 @@ class _CellPromptSampler:
                     with gzip.open(path, "rt", encoding="utf-8") as stream:
                         candidates = list(json.load(stream))
                     match = next(
-                        (item for item in candidates if item.get("sample_point") == label),
+                        (
+                            item
+                            for item in candidates
+                            if item.get("sample_point") == label
+                        ),
                         None,
                     )
                     if match is not None:
@@ -1159,11 +1168,7 @@ class _CellPromptSampler:
                     ]
                 )
                 samples.append(
-                    {
-                        key: value
-                        for key, value in item.items()
-                        if key not in {"rounds"}
-                    }
+                    {key: value for key, value in item.items() if key not in {"rounds"}}
                 )
             destination = cell_dir / "prompt_examples.md"
             _write(destination, "\n".join(sections).rstrip() + "\n")
@@ -1172,9 +1177,9 @@ class _CellPromptSampler:
                 "sample_count": len(samples),
                 "samples": samples,
             }
-            encoded = json.dumps(
-                payload, ensure_ascii=False, sort_keys=True, indent=2
-            ) + "\n"
+            encoded = (
+                json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+            )
             _write(cell_dir / "dashboard_prompt_examples.json", encoded)
             return destination
         return None
@@ -1354,7 +1359,10 @@ class _ResultsOnlyFinalizer:
                         "schema_version": 1,
                     },
                 }
-                _write(cell_dir / "cell_complete.json", json.dumps(summary, sort_keys=True, indent=2) + "\n")
+                _write(
+                    cell_dir / "cell_complete.json",
+                    json.dumps(summary, sort_keys=True, indent=2) + "\n",
+                )
             episodes_dir = cell_dir / "data" / "episodes"
             if episodes_dir.is_dir():
                 shutil.rmtree(episodes_dir)
@@ -1564,14 +1572,24 @@ async def _execute_episode(
                     else prompt_cell_dir.name
                 ),
                 "source_config": episode_config.experiment.name,
-                "rounds": int(episode_config.game.options.get("rounds", episode_config.game.horizon)),
+                "rounds": int(
+                    episode_config.game.options.get(
+                        "rounds", episode_config.game.horizon
+                    )
+                ),
                 "condition": episode_config.experiment.metadata.get("arm"),
                 "controller_role": episode_config.control.mechanism,
                 "game_parameters": {
                     "population_size": episode_config.game.population_size,
-                    "social_group_size": episode_config.game.options.get("social_group_size"),
-                    "epistemic_persistence": episode_config.game.options.get("epistemic_persistence"),
-                    "vote_visibility": episode_config.game.options.get("vote_visibility"),
+                    "social_group_size": episode_config.game.options.get(
+                        "social_group_size"
+                    ),
+                    "epistemic_persistence": episode_config.game.options.get(
+                        "epistemic_persistence"
+                    ),
+                    "vote_visibility": episode_config.game.options.get(
+                        "vote_visibility"
+                    ),
                     "board": episode_config.game.options.get("board"),
                 },
                 "prompt_schema_version": episode_config.prompt.schema_version,
@@ -2010,6 +2028,11 @@ async def run_experiment(
     )
 
     game = create_game(config.game)
+    if config.game.type == "relational_imitation_round_feedback":
+        controller = create_control(config.control)
+        validator = getattr(controller, "validate_truthful_report_task", None)
+        if validator is not None:
+            validator(game.load_task(config.game), config.execution.seed)
     plan = game.call_plan(config.game)
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)
