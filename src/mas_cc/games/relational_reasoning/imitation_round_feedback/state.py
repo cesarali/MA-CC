@@ -415,6 +415,14 @@ class RelationalGameState(GameState):
 
         return str(self.task["facts"][fact_id]["text"])
 
+    def controller_report_text(self, fact_id: str) -> str:
+        """The exact canonical proposition used for truthful controller reports."""
+
+        texts = self.task.get("controller_report_texts", {})
+        if isinstance(texts, Mapping) and fact_id in texts:
+            return str(texts[fact_id])
+        return self.fact_text(fact_id)
+
     def relational_agent(self, agent_id: AgentId) -> RelationalAgentState:
         agent = self.agent(agent_id)
         if not isinstance(agent, RelationalAgentState):

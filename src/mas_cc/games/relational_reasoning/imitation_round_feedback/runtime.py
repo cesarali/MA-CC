@@ -522,7 +522,7 @@ def _append_controller_report(
 ) -> tuple[RelationalGameState, BlackboardMessage]:
     """Publish canonical evidence through the same REPORT schema peers use."""
 
-    canonical_text = state.fact_text(fact_id)
+    canonical_text = state.controller_report_text(fact_id)
     board = state.blackboard
     message = BlackboardMessage(
         message_id=f"m{len(board.messages) + 1:06d}",

@@ -17,6 +17,7 @@ from .latent_problem import (
     problem_from_latent_values,
 )
 from .schemas import LatentProblem
+from .symbolic_facts import CanonicalFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,7 +161,22 @@ class TeamAllocationCompletionIndex:
                 continue
             weight = math.prod(float(self.prior[value]) for value in vector)
             self._worlds.append((vector, winners[0], weight))
-        self._lookups: dict[int, dict[tuple[tuple[int, ...], tuple[int, ...]], PrivateViewMetrics]] = {}
+        self._lookups: dict[
+            int, dict[tuple[tuple[int, ...], tuple[int, ...]], PrivateViewMetrics]
+        ] = {}
+        self._fact_lookups: dict[tuple[tuple[Any, ...], ...], PrivateViewMetrics] = {}
+        self._fact_masks: dict[tuple[Any, ...], int] = {}
+        self._all_world_mask = (1 << len(self._worlds)) - 1
+        self._winner_masks = tuple(
+            sum(
+                1 << position
+                for position, (_, winner, _) in enumerate(self._worlds)
+                if winner == target
+            )
+            for target in range(3)
+        )
+        weights = {weight for _, _, weight in self._worlds}
+        self._uniform_world_weight = next(iter(weights)) if len(weights) == 1 else None
 
     @property
     def valid_world_count(self) -> int:
@@ -192,9 +208,7 @@ class TeamAllocationCompletionIndex:
         for indices, table in tables.items():
             for values, (masses, valid_count, total) in table.items():
                 probabilities = tuple(value / total for value in masses)
-                visible_mass = math.prod(
-                    float(self.prior[value]) for value in values
-                )
+                visible_mass = math.prod(float(self.prior[value]) for value in values)
                 lookup[(indices, values)] = PrivateViewMetrics(
                     visible_indices=indices,
                     visible_values=values,
@@ -224,6 +238,108 @@ class TeamAllocationCompletionIndex:
             self.metrics(vector, indices)
             for indices in itertools.combinations(range(9), k)
         )
+
+    @property
+    def worlds(self) -> tuple[tuple[tuple[int, ...], int, float], ...]:
+        """Valid prior-support worlds used by every posterior calculation."""
+
+        return tuple(self._worlds)
+
+    def metrics_for_facts(self, facts: Sequence[CanonicalFact]) -> PrivateViewMetrics:
+        """Condition the exact prior on arbitrary canonical true propositions."""
+
+        return self.metrics_for_signatures(
+            tuple(fact.logical_signature for fact in facts),
+            tuple(fact.fact_id for fact in facts),
+        )
+
+    def metrics_for_signatures(
+        self,
+        signatures: Sequence[tuple[Any, ...]],
+        identifiers: Sequence[str] | None = None,
+    ) -> PrivateViewMetrics:
+        """Condition on stable logical signatures without rebuilding fact objects."""
+
+        identifiers = tuple(identifiers or (str(value) for value in signatures))
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("posterior evidence contains duplicate fact IDs")
+        key = tuple(sorted(signatures))
+        if key in self._fact_lookups:
+            return self._fact_lookups[key]
+        if self._uniform_world_weight is not None:
+            compatible = self._all_world_mask
+            for signature in signatures:
+                fact_mask = self._fact_masks.get(signature)
+                if fact_mask is None:
+                    fact_mask = sum(
+                        1 << position
+                        for position, (vector, _, _) in enumerate(self._worlds)
+                        if _signature_holds(signature, vector)
+                    )
+                    self._fact_masks[signature] = fact_mask
+                compatible &= fact_mask
+            valid_count = compatible.bit_count()
+            if valid_count <= 0:
+                raise ValueError("canonical fact set has no valid completions")
+            counts = tuple(
+                (compatible & winner_mask).bit_count()
+                for winner_mask in self._winner_masks
+            )
+            probabilities = tuple(count / valid_count for count in counts)
+            result = PrivateViewMetrics(
+                visible_indices=(),
+                visible_values=(),
+                probabilities=probabilities,  # type: ignore[arg-type]
+                max_predictability=max(probabilities),
+                normalized_entropy=_normalized_entropy(probabilities),
+                valid_completion_count=valid_count,
+                invalid_completion_count=len(self._worlds) - valid_count,
+                valid_probability_mass=valid_count * self._uniform_world_weight,
+            )
+            self._fact_lookups[key] = result
+            return result
+        winner_mass = [0.0, 0.0, 0.0]
+        valid_count = 0
+        valid_mass = 0.0
+        for vector, winner, weight in self._worlds:
+            if all(_signature_holds(signature, vector) for signature in signatures):
+                winner_mass[winner] += weight
+                valid_count += 1
+                valid_mass += weight
+        if valid_mass <= 0:
+            raise ValueError("canonical fact set has no valid completions")
+        probabilities = tuple(value / valid_mass for value in winner_mass)
+        result = PrivateViewMetrics(
+            visible_indices=(),
+            visible_values=(),
+            probabilities=probabilities,  # type: ignore[arg-type]
+            max_predictability=max(probabilities),
+            normalized_entropy=_normalized_entropy(probabilities),
+            valid_completion_count=valid_count,
+            invalid_completion_count=len(self._worlds) - valid_count,
+            valid_probability_mass=valid_mass,
+        )
+        self._fact_lookups[key] = result
+        return result
+
+
+def _signature_holds(signature: tuple[Any, ...], vector: Sequence[int]) -> bool:
+    operator, left_index, right_index, threshold = signature
+    left = int(vector[int(left_index)])
+    if operator == "eq_value":
+        return left == int(threshold)
+    if operator == "ge_threshold":
+        return left >= int(threshold)
+    if operator == "le_threshold":
+        return left <= int(threshold)
+    right = int(vector[int(right_index)])
+    if operator == "le":
+        return left <= right
+    if operator == "eq":
+        return left == right
+    if operator == "ge":
+        return left >= right
+    raise ValueError(f"unknown canonical fact operator {operator!r}")
 
 
 def choose_private_views(

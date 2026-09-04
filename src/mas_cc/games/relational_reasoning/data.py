@@ -34,6 +34,7 @@ MUSR_SCHEMA_VERSION = "musr_team_allocation_native_v1"
 MUSR_DISTRIBUTION_SCHEMA_VERSION = "musr_team_allocation_distribution_v1"
 MUSR_INITIAL_INFORMATION_SCHEMA_VERSION = "musr_initial_information_v1"
 MUSR_TRUTHFUL_CONTROLLER_SCHEMA_VERSION = "musr_truthful_controller_v1"
+MUSR_SELECTIVE_SCHEMA_VERSION = "musr_team_allocation_selective_v1"
 
 SUPPORTING = "supporting"
 DISTRACTOR = "distractor"
@@ -126,6 +127,7 @@ class RelationalTask:
     decisive_fact_ids: tuple[str, ...] = ()
     controller_fact_classes: Mapping[str, str] | None = None
     controller_fact_scores: Mapping[str, float] | None = None
+    controller_report_texts: Mapping[str, str] | None = None
     controller_design_path: str | None = None
 
     def fact(self, fact_id: str) -> RelationalFact:
@@ -218,6 +220,9 @@ class RelationalTask:
             projection["controller_fact_scores"] = dict(
                 self.controller_fact_scores or {}
             )
+            projection["controller_report_texts"] = dict(
+                self.controller_report_texts or {}
+            )
             projection["controller_design_path"] = self.controller_design_path
         return projection
 
@@ -296,6 +301,19 @@ def load_musr_team_allocation_task(
     """Adapt a validated MuSR task and its distribution to this game."""
 
     root = Path(dataset_dir) / str(task_id)
+    selective_path = root / "task.json"
+    if selective_path.is_file():
+        try:
+            selective = json.loads(selective_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RelationalTaskError(
+                f"MuSR selective task JSON is invalid: {exc}"
+            ) from exc
+        if (
+            isinstance(selective, Mapping)
+            and selective.get("schema_version") == MUSR_SELECTIVE_SCHEMA_VERSION
+        ):
+            return _load_musr_truthful_selective_task(root, selective, population_size)
     base_path = root / "base_task.json"
     distribution_path = root / f"distribution_N{population_size}.json"
     assignment_path = (
@@ -590,6 +608,170 @@ def load_musr_team_allocation_task(
         controller_design_path=(
             str(controller_design_path) if controller_design_path is not None else None
         ),
+    )
+
+
+def _load_musr_truthful_selective_task(
+    root: Path, task: Mapping[str, Any], population_size: int
+) -> RelationalTask:
+    """Load the exact v2 directory layout produced by the calibration probe."""
+
+    from mas_cc.musr_team_allocation_generator.latent_problem import scenario_for
+    from mas_cc.musr_team_allocation_generator.schemas import LatentProblem
+    from mas_cc.musr_team_allocation_generator.symbolic_facts import CanonicalFact
+
+    if population_size != 24:
+        raise RelationalTaskError("truthful-selective tasks require population_size 24")
+    expected_hash = _sha256_object(
+        {key: value for key, value in task.items() if key != "task_hash"}
+    )
+    if task.get("task_hash") != expected_hash:
+        raise RelationalTaskError("MuSR selective task hash does not match")
+    required = (
+        "hidden_world.json",
+        "facts/all_true_facts.json",
+        "controller/ranked_fact_pool.json",
+        "controller/selected_C3.json",
+        "controller/selected_C6.json",
+        "controller/selected_C12.json",
+        "controller/selected_C24.json",
+        "private/N24_assignment.json",
+    )
+    missing = [name for name in required if not (root / name).is_file()]
+    if missing:
+        raise RelationalTaskError(
+            f"MuSR selective task is missing artifacts: {missing}"
+        )
+    problem = LatentProblem.from_dict(
+        json.loads((root / "hidden_world.json").read_text(encoding="utf-8"))
+    )
+    raw_facts = json.loads(
+        (root / "facts/all_true_facts.json").read_text(encoding="utf-8")
+    )
+    canonical = [CanonicalFact.from_dict(value) for value in raw_facts]
+    if len({fact.fact_id for fact in canonical}) != len(canonical):
+        raise RelationalTaskError("MuSR selective facts contain duplicate IDs")
+    vector = tuple(
+        value for person in problem.people for value in problem.skill_matrix[person]
+    ) + tuple(
+        problem.cooperation_matrix["|".join(sorted(pair))]
+        for pair in (
+            (problem.people[0], problem.people[1]),
+            (problem.people[0], problem.people[2]),
+            (problem.people[1], problem.people[2]),
+        )
+    )
+    if any(not fact.holds(vector) for fact in canonical):
+        raise RelationalTaskError("MuSR selective task contains a false canonical fact")
+    cards_path = root / "generation/generated_cards.json"
+    generated_text = {}
+    if cards_path.is_file():
+        cards = json.loads(cards_path.read_text(encoding="utf-8"))
+        generated_text = {
+            str(row["fact_id"]): " ".join(
+                str(value) for value in row["generated_card_text"]
+            )
+            for row in cards
+        }
+        if set(generated_text) != {fact.fact_id for fact in canonical}:
+            raise RelationalTaskError(
+                "MuSR selective generated-card coverage is incomplete"
+            )
+    facts = {
+        fact.fact_id: RelationalFact(
+            fact.fact_id,
+            str(fact.provenance.get("latent_fact_ids", [fact.fact_id])[0]),
+            "CANONICAL_TRUE_PROPOSITION",
+            fact.kind,
+            SUPPORTING,
+            generated_text.get(fact.fact_id, fact.canonical_text),
+        )
+        for fact in canonical
+    }
+    order = tuple(fact.fact_id for fact in canonical)
+    private = json.loads(
+        (root / "private/N24_assignment.json").read_text(encoding="utf-8")
+    )
+    assignments_raw = _mapping(
+        private.get("agent_assignments"),
+        "agent_assignments",
+        root / "private/N24_assignment.json",
+    )
+    assignments = {
+        str(agent): tuple(str(fact_id) for fact_id in fact_ids)
+        for agent, fact_ids in assignments_raw.items()
+    }
+    if len(assignments) != population_size or any(
+        set(ids) - set(facts) for ids in assignments.values()
+    ):
+        raise RelationalTaskError("MuSR selective private assignment is invalid")
+    ranked = json.loads(
+        (root / "controller/ranked_fact_pool.json").read_text(encoding="utf-8")
+    )
+    reportable = tuple(str(row["fact_id"]) for row in ranked)
+    if len(reportable) < 24 or len(reportable) != len(set(reportable)):
+        raise RelationalTaskError(
+            "MuSR selective controller pool needs 24 unique facts"
+        )
+    decisive = tuple(
+        str(row["fact_id"])
+        for row in json.loads(
+            (root / "facts/decisive_facts.json").read_text(encoding="utf-8")
+        )
+    )
+    options = tuple(f"ALLOCATION_{index}" for index in range(3))
+    display = {
+        option: problem.candidate_allocations[index].to_dict(problem.tasks)[
+            "assignment"
+        ]
+        for index, option in enumerate(options)
+    }
+    display_text = {
+        option: "; ".join(
+            f"{task_name}: {', '.join(people)}"
+            for task_name, people in assignment.items()
+        )
+        for option, assignment in display.items()
+    }
+    return RelationalTask(
+        task_id=str(task["task_id"]),
+        seed=int(task["seed"]),
+        population_size=population_size,
+        reasoning_depth=len(canonical),
+        question=(
+            f"SCENARIO\n{scenario_for(problem)}\n\nQUESTION\n"
+            "Which allocation is expected to be most effective?"
+        ),
+        fact_order=order,
+        facts=facts,
+        supporting_fact_ids=order,
+        distractor_fact_ids=(),
+        option_labels=("A", "B", "C"),
+        option_relations={
+            letter: option for letter, option in zip("ABC", options, strict=True)
+        },
+        correct_option="ABC"[problem.gold_index],
+        correct_relation=str(task["gold_target"]),
+        agent_ids=tuple(sorted(assignments)),
+        agent_fact_ids=assignments,
+        reasoning_chain=(),
+        source_path=str(root),
+        task_family=MUSR_TASK_FAMILY,
+        answer_display_texts=display_text,
+        supporting_fact_groups={fact_id: (fact_id,) for fact_id in order},
+        controller_target=str(task["false_target"]),
+        controller_reportable_fact_ids=reportable,
+        decisive_fact_ids=decisive,
+        controller_fact_classes={
+            fact_id: "target-compatible" for fact_id in reportable
+        },
+        controller_fact_scores={
+            str(row["fact_id"]): float(row["score"]) for row in ranked
+        },
+        controller_report_texts={
+            fact.fact_id: fact.canonical_text for fact in canonical
+        },
+        controller_design_path=str(root / "controller/ranked_fact_pool.json"),
     )
 
 

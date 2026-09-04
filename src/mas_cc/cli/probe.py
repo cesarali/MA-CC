@@ -69,6 +69,38 @@ def run_configured_probe(
         if isinstance(raw, dict)
         else "controller_retention"
     )
+    if probe_name == "musr_truthful_selective":
+        from mas_cc.probes.musr_truthful_selective import (
+            analyze,
+            load_config,
+            prepare,
+            run,
+        )
+
+        config = load_config(config_path)
+        if mode == "preflight":
+            root, payload = prepare(config, output_dir)
+            return (
+                bool(payload["passed"]),
+                root / "preflight/report.md",
+                "MuSR truthful-selective preflight written",
+            )
+        if mode == "analyze":
+            result = analyze(config, output_dir)
+            return (
+                True,
+                Path(result["report"]),
+                "MuSR truthful-selective report written",
+            )
+        result = __import__("asyncio").run(
+            run(config, output_dir, approve_preflight=approve_preflight)
+        )
+        ok = result["execution"]["successful"] == result["execution"]["scheduled"]
+        return (
+            ok,
+            Path(result["report"]),
+            "MuSR truthful-selective calibration completed",
+        )
     if probe_name != "musr_local_evidence":
         if probe_name == "musr_blackboard_prompt_validation":
             from mas_cc.probes.musr_blackboard_prompt_validation import (
