@@ -189,9 +189,11 @@ def test_profile_is_first_class_and_compact():
         parse_run_config(raw)
 
     raw["game"]["options"]["social_mode"] = "board"
-    raw["logging"]["options"]["prompt_examples"] = {"count": 1, "scope": "cell"}
-    with pytest.raises(Exception, match="must be 0 for dashboard_semantic"):
-        parse_run_config(raw)
+    raw["logging"]["options"]["prompt_examples"] = {"count": 3, "scope": "cell"}
+    assert parse_run_config(raw).logging.options["prompt_examples"] == {
+        "count": 3,
+        "scope": "cell",
+    }
 
 
 def test_semantic_stream_reconstructs_supported_dashboard_without_private_data(

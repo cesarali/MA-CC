@@ -30,6 +30,7 @@
       <section id="study-view">
         <div id="study-cards" class="cards"></div>
         <article class="panel"><h2>Scientific cells</h2><div class="table-scroll"><table id="cell-table"></table></div></article>
+        <article class="panel analysis-panel"><details id="study-analysis"><summary>Analysis, reports, plots, and downloads</summary><div id="analysis-content"><span class="unavailable">Open to load the analysis catalog.</span></div></details></article>
       </section>
       <section id="cell-view" hidden>
         <div id="cell-cards" class="cards"></div>
@@ -41,6 +42,8 @@
         <nav id="cell-tabs" class="cell-tabs">
           <button class="active" data-cell-view="cell-episodes">Episodes</button>
           <button data-cell-view="cell-trajectories">Trajectories</button>
+          <button data-cell-view="cell-statistics">Statistics</button>
+          <button data-cell-view="cell-prompts">Prompt examples</button>
         </nav>
         <section id="cell-episodes" class="cell-subview">
           <article class="panel"><h2>Episodes</h2><div class="table-scroll"><table id="episode-table"></table></div></article>
@@ -53,6 +56,12 @@
             <div id="cell-votes"></div>
           </article>
         </section>
+        <section id="cell-statistics" class="cell-subview" hidden>
+          <article class="panel"><h2>Cell outcome statistics</h2><div id="cell-statistics-content"></div></article>
+        </section>
+        <section id="cell-prompts" class="cell-subview" hidden>
+          <article class="panel"><h2>Prompt examples</h2><div id="cell-prompts-content"><span class="unavailable">Open this panel to load retained examples.</span></div></article>
+        </section>
       </section>
     </main>
   </section>
@@ -60,7 +69,10 @@
   <section id="episode-shell">
   <section class="controls panel">
     <span id="episode-nav" hidden><button id="previous-episode">← Previous episode</button> <button id="next-episode">Next episode →</button></span>
-    <label>Round <select id="round"></select></label>
+    <label class="round-control">Round
+      <input id="round" type="range" min="0" max="0" value="0">
+      <output id="round-value">1</output>
+    </label>
     <label class="step-control">Microscopic update
       <input id="step" type="range" min="1" value="1">
       <output id="step-value">1</output>
@@ -86,6 +98,7 @@
         <article class="panel"><h2>Population</h2><div id="vote-bars"></div></article>
         <article class="panel"><h2>Latest activity</h2><div id="activity"></div></article>
       </div>
+      <article class="panel"><h2>Controller funnel and saturation diagnostics</h2><div id="episode-statistics"></div></article>
     </section>
 
     <section id="episode-trajectory" class="view">

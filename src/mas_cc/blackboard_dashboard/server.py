@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
@@ -41,6 +42,19 @@ def make_handler(reader: DashboardReader):
             self.end_headers()
             self.wfile.write(body)
 
+        def _send_file(self, path: Path) -> None:
+            body = path.read_bytes()
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            )
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
             parsed = urlparse(self.path)
             try:
@@ -60,13 +74,31 @@ def make_handler(reader: DashboardReader):
                     if parsed.path == "/api/study/cells":
                         self._send(200, "application/json", _json(reader.cells()))
                         return
+                    if parsed.path == "/api/study/analysis":
+                        self._send(
+                            200, "application/json", _json(reader.analysis_catalog())
+                        )
+                        return
+                    if parsed.path == "/api/study/analysis/download":
+                        identifier = parse_qs(parsed.query).get("id", [""])[0]
+                        self._send_file(reader.analysis_file(identifier))
+                        return
                     prefix = "/api/study/cell/"
                     if parsed.path.startswith(prefix):
                         token = unquote(parsed.path.removeprefix(prefix))
+                        prompts = token.endswith("/prompts")
                         votes = token.endswith("/votes")
-                        if votes:
+                        if prompts:
+                            token = token.removesuffix("/prompts")
+                        elif votes:
                             token = token.removesuffix("/votes")
-                        payload = reader.votes(token) if votes else reader.cell(token)
+                        payload = (
+                            reader.prompt_examples(token)
+                            if prompts
+                            else reader.votes(token)
+                            if votes
+                            else reader.cell(token)
+                        )
                         self._send(200, "application/json", _json(payload))
                         return
                     episode_prefix = "/api/study/episode/"
@@ -100,6 +132,7 @@ def make_handler(reader: DashboardReader):
                                         edge["round_index"] if edge else None,
                                         edge["step"] if edge else None,
                                     ),
+                                    "statistics": episode_reader.statistics(),
                                 }
                             elif action == "timeline":
                                 payload = episode_reader.timeline()

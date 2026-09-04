@@ -138,17 +138,68 @@ roles while reporting the unique final option once.
 For each episode show:
 
 - total microscopic updates;
-- controlled microscopic updates;
-- controlled-update fraction;
-- controller `ADVOCATE` and `NO_OP` counts;
+- controller decision opportunities;
+- controller `ADVOCATE` and `NO_OP` round counts and fractions;
+- controller posts actually admitted to the blackboard;
+- controller-message exposures and unique readers;
+- controller actuation gaps, longest inactive interval, and burst size;
+- controlled microscopic updates and controlled-update fraction only for game
+  modes where those quantities are physically defined;
 - recommendation and fact-sharing counts where retained;
 - fact acquisitions, reactivations, and deactivations;
 - validation-repair count and terminal malformed-response status;
 - final winner, final truth share, final controller-target share, active phi,
   and active kappa.
 
+For the blackboard game, **do not use `controlled_update_count` as the primary
+actuation count**. The controller acts by publishing to the shared board rather
+than replacing an ordinary microscopic interaction slot. Its primary funnel is:
+
+```text
+eligible controller opportunity
+    -> ADVOCATE or NO_OP decision
+    -> controller post admitted
+    -> controller message read/exposed
+    -> target adoption or population response
+```
+
+Show raw numerator/denominator counts at every stage. This must reveal whether
+weak control comes from rare scheduling, repeated `NO_OP`, posts that are not
+read, or messages that are read but do not persuade agents.
+
 Add compact distributions or sortable tables across repetitions. Do not expose
 provider payloads, credentials, private reasoning, or heavy execution logs.
+
+### 7.3 Blackboard saturation and blocking diagnostics
+
+The dashboard must separately test the suspected behavior in which rare
+controller interventions flood the finite board and suppress ordinary peer
+communication. For each episode and cell report, where supported by retained
+records:
+
+- board size and capacity before/after controller posts;
+- peak and mean board occupancy;
+- controller/directive share among eligible board messages;
+- controller/directive share among messages actually sampled/read;
+- ordinary-peer messages created, surviving, expired, and read;
+- controller messages created, surviving, expired, and read;
+- message expiry and lifetime;
+- fraction of eligible focal updates exposed to a controller directive;
+- number and fraction of rounds with controller posts;
+- consecutive controller-post bursts and longest controller-free interval;
+- target-share change immediately after actuation and over the next round;
+- ordinary-peer exposure/read rate in rounds with versus without controller
+  actuation.
+
+If board capacity does not explicitly evict or block messages in the production
+semantics, label this as **saturation/attention competition**, not mechanical
+blocking. Use “blocking” only when a retained event proves that an ordinary
+message or read opportunity was displaced or made unavailable.
+
+Add a compact per-episode **controller funnel** visualization and a cell-level
+summary across repetitions. Overlay controller-post markers and board occupancy
+on the episode vote trajectory so intervention timing can be compared directly
+with truth/target response.
 
 ## 8. Additional plots
 
@@ -158,6 +209,9 @@ Inside a cell provide:
 - cell trajectory summary with median and interquartile band across episodes;
 - final-winner count/fraction chart;
 - controlled-update counts/fractions by episode;
+- controller opportunity -> ADVOCATE -> post -> exposure -> adoption funnel;
+- board occupancy and controller-message share over time;
+- peer-message exposure in actuated versus non-actuated rounds;
 - final and late-time truth/target-share distributions;
 - active phi/kappa summaries where supported;
 - compact fact acquisition/reactivation/deactivation summaries.

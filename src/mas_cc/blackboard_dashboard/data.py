@@ -550,6 +550,12 @@ class BlackboardRunReader:
                         if controller_target is not None and total
                         else None
                     ),
+                    "board_size": event.get("board_size_after"),
+                    "controller_post": bool(event.get("controller_message_posted")),
+                    "controller_exposures": sum(
+                        value == "DIRECTIVE"
+                        for value in event.get("sampled_message_types", ())
+                    ),
                 }
             )
         return {
@@ -566,6 +572,59 @@ class BlackboardRunReader:
             "initialization_attempts": sum(
                 row.get("decision_stage") == "initial_vote" for row in data["audits"]
             ),
+            "statistics": self.statistics(),
+        }
+
+    def statistics(self) -> dict[str, Any]:
+        """Compact descriptive diagnostics from this episode's retained records."""
+
+        data = self._load()
+        updates = data["trajectory"]
+        rounds = data["rounds"]
+        actions = [str(row.get("controller_action", "")) for row in rounds]
+        posts = sum(len(row.get("controller_post_ids", ())) for row in rounds)
+        exposures = sum(
+            sum(value == "DIRECTIVE" for value in row.get("sampled_message_types", ()))
+            for row in updates
+        )
+        readers = {
+            str(row.get("focal_agent_id"))
+            for row in updates
+            if "DIRECTIVE" in row.get("sampled_message_types", ())
+        }
+        board_sizes = [
+            int(value)
+            for row in updates
+            for value in (row.get("board_size_before"), row.get("board_size_after"))
+            if value is not None
+        ]
+        acquired = sum(
+            len(row.get("new_peer_fact_ids", ()))
+            + len(row.get("new_controller_fact_ids", ()))
+            for row in updates
+        )
+        reactivated = sum(
+            len(row.get("reactivated_peer_fact_ids", ()))
+            + len(row.get("reactivated_controller_fact_ids", ()))
+            for row in updates
+        )
+        opportunities = sum(bool(row.get("controller_enabled")) for row in rounds)
+        return {
+            "microscopic_updates": len(updates),
+            "controller_opportunities": opportunities,
+            "controller_advocate_rounds": sum(action == "ADVOCATE" for action in actions),
+            "controller_no_op_rounds": sum(action == "NO_OP" for action in actions),
+            "controller_posts": posts,
+            "controller_message_exposures": exposures,
+            "controller_unique_readers": len(readers),
+            "controller_exposed_update_fraction": exposures / len(updates) if updates else None,
+            "board_peak_occupancy": max(board_sizes) if board_sizes else None,
+            "board_mean_occupancy": sum(board_sizes) / len(board_sizes) if board_sizes else None,
+            "fact_acquisitions": acquired,
+            "fact_reactivations": reactivated,
+            "validation_repairs": sum(int(row.get("attempt", 1)) > 1 for row in data["audits"]),
+            "malformed_terminal": bool(data["audits"] and not data["audits"][-1].get("valid", True)),
+            "actuation_semantics": "shared-board publication; saturation/attention competition",
         }
 
     def status(self) -> dict[str, Any]:

@@ -25,9 +25,10 @@
     const x = index => left + (index / denominator) * plotWidth;
     const y = value => top + (1 - Number(value)) * plotHeight;
     const coordinates = values.map(([index, value]) => `${x(index)},${y(value)}`).join(' ');
+    const interventions = points.map((point, index) => point.controller_post ? `<line class="intervention-marker" x1="${x(index)}" y1="${top}" x2="${x(index)}" y2="${top+plotHeight}"><title>Controller post at update ${index+1}</title></line>` : '').join('');
     const grid = [1, 0.5, 0].map(value => `<line class="plot-grid${value === 0 ? ' zero' : ''}" x1="${left}" y1="${y(value)}" x2="${width-right}" y2="${y(value)}"></line><text class="axis-label" x="${left-5}" y="${y(value)+3}" text-anchor="end">${value.toFixed(value === 0.5 ? 1 : 0)}</text>`).join('');
     const dots = values.map(([index, value]) => { const point = points[index], update = point.global_update_index == null ? index + 1 : Number(point.global_update_index) + 1; return `<circle class="plot-point" cx="${x(index)}" cy="${y(value)}" r="2.5"><title>Update ${update}: ${Number(value).toFixed(3)}</title></circle>`; }).join('');
-    return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(key)} trajectory">${grid}<polyline points="${coordinates}"></polyline>${dots}<text class="axis-label" x="${left}" y="${height-3}">1</text><text class="axis-label" x="${width-right}" y="${height-3}" text-anchor="end">${points.length}</text></svg>`;
+    return `<svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(key)} trajectory">${grid}${interventions}<polyline points="${coordinates}"></polyline>${dots}<text class="axis-label" x="${left}" y="${height-3}">1</text><text class="axis-label" x="${width-right}" y="${height-3}" text-anchor="end">${points.length}</text></svg>`;
   }
 
   function showShell(name) {
@@ -86,11 +87,24 @@
     document.querySelectorAll('.open-cell').forEach(button => button.addEventListener('click', () => openCell(button.dataset.cell)));
   }
 
-  function setCellTab(id) {
+  async function setCellTab(id) {
     state.cellTab = id;
     document.querySelectorAll('#cell-tabs button').forEach(button => button.classList.toggle('active', button.dataset.cellView === id));
     document.querySelectorAll('.cell-subview').forEach(view => { view.hidden = view.id !== id; });
+    if (id === 'cell-prompts' && state.cell && !$('cell-prompts-content').dataset.loaded) await loadPrompts();
     updateHash();
+  }
+
+  async function loadPrompts() {
+    const container = $('cell-prompts-content');
+    container.innerHTML = '<span class="unavailable">Loading retained prompt examples…</span>';
+    try {
+      const payload = await get(`/api/study/cell/${encodeURIComponent(state.cellId)}/prompts`);
+      container.dataset.loaded = '1';
+      if (!payload.available) { container.innerHTML = `<span class="unavailable">${esc(payload.reason)}</span>`; return; }
+      container.innerHTML = payload.samples.map(sample => `<article class="prompt-sample"><h3>${esc(sample.sample_point || 'Example')}</h3><div class="meta">Episode ${esc(sample.episode_id)} · round ${Number(sample.round_index)+1} · update ${Number(sample.update_index)+1} · ${esc(sample.agent_id)} · ${esc(sample.provider)}/${esc(sample.model)}</div><details><summary>Exact rendered prompt</summary><button class="copy-prompt">Copy</button><pre>${esc(sample.markdown)}</pre></details></article>`).join('');
+      container.querySelectorAll('.copy-prompt').forEach((button, index) => button.addEventListener('click', () => navigator.clipboard.writeText(payload.samples[index].markdown)));
+    } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
   }
 
   function updateHash() {
@@ -115,8 +129,13 @@
     const primary = [['Controller condition', cell.parameters.controller_condition], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Controller target', cell.parameters.controller_target], ['Truth', cell.parameters.ground_truth]];
     $('primary-parameters').innerHTML = primary.filter(([,value]) => value != null).map(([name,value]) => kv(name, value)).join('');
     $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
+    delete $('cell-prompts-content').dataset.loaded;
+    $('cell-prompts-content').innerHTML = '<span class="unavailable">Open this panel to load retained examples.</span>';
+    const stats = cell.statistics || {}, winners = stats.winner_counts || {}, truth = stats.final_truth_share || {}, target = stats.final_controller_target_share || {};
+    const funnel = stats.controller_funnel || {};
+    $('cell-statistics-content').innerHTML = `<div class="cards">${[['Completed', stats.completed_episodes], ['Truth wins', `${stats.truth_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Target wins', `${stats.controller_target_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Ties', winners.tie ?? 0], ['Other wins', winners.other ?? 0]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}</div><h3>Controller funnel across repetitions</h3><div class="funnel">${[['Opportunities', funnel.controller_opportunities], ['ADVOCATE', funnel.controller_advocate_rounds], ['Posts admitted', funnel.controller_posts], ['Exposures', funnel.controller_message_exposures], ['Unique readers', funnel.controller_unique_readers]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 0)}</strong></div>`).join('')}</div><p class="meta">Blackboard actuation is reported as saturation/attention competition; it is not labeled mechanical blocking without a retained displacement event.</p><div class="grid two"><div><h3>Final truth share (n=${truth.n ?? 0})</h3>${kv('Mean', truth.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', truth.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', truth.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', truth.q1 == null ? 'Unavailable' : `${truth.q1.toFixed(3)}–${truth.q3.toFixed(3)}`)}</div><div><h3>Final controller-target share (n=${target.n ?? 0})</h3>${kv('Mean', target.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', target.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', target.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', target.q1 == null ? 'Unavailable' : `${target.q1.toFixed(3)}–${target.q3.toFixed(3)}`)}</div></div>`;
     $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
-    $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Durable outcome</th><th>Live activity</th><th>Progress</th><th>Last update / elapsed</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.durable_status)}${episode.status_reason ? `<br><span class="meta">${esc(episode.status_reason)}</span>` : ''}</td><td>${statusBadge(episode.activity_status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${episode.last_update_at ? esc(new Date(episode.last_update_at).toLocaleTimeString()) : episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect episode</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">${esc(episode.detail_reason)}</span>`}</td></tr>`).join('')}</tbody>`;
+    $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Durable outcome</th><th>Live activity</th><th>Progress</th><th>Controller funnel</th><th>Last update / elapsed</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => { const s = episode.statistics || {}; return `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.durable_status)}${episode.status_reason ? `<br><span class="meta">${esc(episode.status_reason)}</span>` : ''}</td><td>${statusBadge(episode.activity_status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${s.controller_opportunities == null ? '<span class="unavailable">Unavailable</span>' : `${s.controller_opportunities} → ${s.controller_advocate_rounds} → ${s.controller_posts} → ${s.controller_message_exposures}<br><span class="meta">opportunity → ADVOCATE → post → exposure</span>`}</td><td>${episode.last_update_at ? esc(new Date(episode.last_update_at).toLocaleTimeString()) : episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect episode</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">${esc(episode.detail_reason)}</span>`}</td></tr>`; }).join('')}</tbody>`;
     if (!state.selectedTrajectories.size) cell.episodes.forEach(episode => { if (cell.vote_series[episode.qualified_id]?.points.length) state.selectedTrajectories.add(episode.qualified_id); });
     $('trajectory-controls').innerHTML = cell.episodes.filter(episode => cell.vote_series[episode.qualified_id]?.points.length).map(episode => `<label><input type="checkbox" data-trajectory="${esc(episode.qualified_id)}" ${state.selectedTrajectories.has(episode.qualified_id) ? 'checked' : ''}> repetition ${episode.repetition_index} <button class="trajectory-inspect" data-episode="${esc(episode.qualified_id)}" ${episode.detail_available ? '' : 'disabled'}>Inspect</button></label>`).join('');
     renderTrajectories(); setCellTab(state.cellTab);
@@ -179,8 +198,11 @@
     state.timeline = timeline;
     const round = $('round');
     const previousRound = round.value;
-    round.replaceChildren(...timeline.rounds.map(item => new Option(`Round ${item.round_index + 1}`, item.round_index)));
-    if (timeline.rounds.some(item => String(item.round_index) === previousRound)) round.value = previousRound;
+    const indices = timeline.rounds.map(item => Number(item.round_index));
+    round.min = indices.length ? Math.min(...indices) : 0;
+    round.max = indices.length ? Math.max(...indices) : 0;
+    round.value = indices.some(index => String(index) === previousRound) ? previousRound : round.max;
+    $('round-value').value = Number(round.value) + 1;
     const agent = $('agent');
     const previousAgent = agent.value;
     agent.replaceChildren(...timeline.agents.map(id => new Option(id.replace('agent_', 'Agent '), id)));
@@ -193,13 +215,14 @@
     const points = timeline.time_series || [];
     const cursor = state.snapshot?.cursor?.global_update_index;
     const marker = cursor == null ? '' : `<p class="meta">Selected update: ${Number(cursor) + 1}</p>`;
-    $('episode-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth share</span><span class="target-line">Controller-target share</span></div>${marker}<h3>Truth</h3>${sparkline(points, 'truth_share', 900, 180)}<h3>Controller target</h3>${sparkline(points, 'controller_target_share', 900, 180)}`;
+    $('episode-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth share</span><span class="target-line">Controller-target share</span><span>│ controller post</span></div>${marker}<h3>Truth</h3>${sparkline(points, 'truth_share', 900, 180)}<h3>Controller target</h3>${sparkline(points, 'controller_target_share', 900, 180)}`;
   }
 
   function updateStepRange() {
     if (!state.timeline) return;
     const selected = state.timeline.rounds.find(item => String(item.round_index) === $('round').value) || state.timeline.rounds.at(-1);
     if (!selected) return;
+    $('round-value').value = Number(selected.round_index) + 1;
     $('step').max = selected.available_steps;
     if (+$('step').value > selected.available_steps || $('follow').checked) $('step').value = selected.available_steps;
     $('step-value').value = $('step').value;
@@ -276,6 +299,8 @@
       return;
     }
     renderOverview(snapshot); renderMessages(snapshot); renderCoverage(snapshot); renderAgent(snapshot); renderController(snapshot);
+    const stats = state.timeline?.statistics || {};
+    $('episode-statistics').innerHTML = `<div class="funnel">${[['Opportunities', stats.controller_opportunities], ['ADVOCATE', stats.controller_advocate_rounds], ['Posts admitted', stats.controller_posts], ['Exposures', stats.controller_message_exposures], ['Unique readers', stats.controller_unique_readers]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 'Unavailable')}</strong></div>`).join('')}</div>${kv('Microscopic updates', stats.microscopic_updates ?? 'Unavailable')}${kv('NO_OP rounds', stats.controller_no_op_rounds ?? 'Unavailable')}${kv('Board peak / mean occupancy', stats.board_peak_occupancy == null ? 'Unavailable' : `${stats.board_peak_occupancy} / ${Number(stats.board_mean_occupancy).toFixed(2)}`)}${kv('Fact acquisitions / reactivations', `${stats.fact_acquisitions ?? 'Unavailable'} / ${stats.fact_reactivations ?? 'Unavailable'}`)}${kv('Validation repairs', stats.validation_repairs ?? 'Unavailable')}<p class="meta">${esc(stats.actuation_semantics || 'Unsupported by retained records')}</p>`;
     if (state.timeline) renderEpisodeTrajectory(state.timeline);
   }
 
@@ -316,7 +341,7 @@
     button.classList.add('active'); $(button.dataset.view).classList.add('active');
     updateHash();
   }));
-  $('round').addEventListener('change', () => { $('follow').checked = false; updateStepRange(); updateHash(); refresh(); });
+  $('round').addEventListener('input', () => { $('follow').checked = false; $('round-value').value = Number($('round').value) + 1; updateStepRange(); updateHash(); refresh(); });
   $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; updateHash(); refresh(); });
   $('agent').addEventListener('change', () => { updateHash(); refresh(); });
   $('follow').addEventListener('change', () => { updateHash(); refresh(true); });
@@ -329,7 +354,7 @@
     if (!['ArrowLeft','ArrowRight'].includes(event.key)) return;
     event.preventDefault(); $('follow').checked = false;
     const delta = event.key === 'ArrowRight' ? 1 : -1;
-    if (event.shiftKey) { $('round').selectedIndex = Math.max(0, Math.min($('round').options.length-1, $('round').selectedIndex + delta)); updateStepRange(); }
+    if (event.shiftKey) { $('round').value = Math.max(+$('round').min, Math.min(+$('round').max, +$('round').value + delta)); $('round-value').value = Number($('round').value) + 1; updateStepRange(); }
     else $('step').value = Math.max(1, Math.min(+$('step').max, +$('step').value + delta));
     $('step-value').value = $('step').value; refresh();
   });
@@ -363,6 +388,19 @@
   }
   ['filter-block','filter-controller','filter-rho','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', () => { renderCellTable(); updateHash(); }));
   document.querySelectorAll('#cell-tabs button').forEach(button => button.addEventListener('click', () => setCellTab(button.dataset.cellView)));
+  $('study-analysis').addEventListener('toggle', async () => {
+    if (!$('study-analysis').open || $('analysis-content').dataset.loaded) return;
+    const container = $('analysis-content'); container.innerHTML = 'Loading analysis catalog…';
+    try {
+      const catalog = await get('/api/study/analysis'); container.dataset.loaded = '1';
+      if (!catalog.available) { container.innerHTML = `<p class="unavailable">${esc(catalog.reason)}</p>${catalog.command ? `<pre>${esc(catalog.command)}</pre>` : ''}`; return; }
+      const artifacts = catalog.artifacts || [];
+      const plots = artifacts.filter(item => item.kind === 'plots' && /\.(png|svg)$/i.test(item.name));
+      const previews = Object.entries(catalog.table_previews || {}).map(([name, preview]) => `<details><summary>${esc(name)} — first ${preview.rows.length} canonical rows</summary><div class="table-scroll"><table><thead><tr>${preview.columns.map(column => `<th>${esc(column)}</th>`).join('')}</tr></thead><tbody>${preview.rows.map(row => `<tr>${preview.columns.map(column => `<td>${esc(row[column] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`).join('');
+      const reports = Object.entries(catalog.reports || {}).map(([name, content]) => `<details><summary>${esc(name)}</summary><pre>${esc(content)}</pre></details>`).join('');
+      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = `/api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = `/api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+    } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
+  });
   $('all-parameters').addEventListener('toggle', updateHash);
   $('previous-episode').addEventListener('click', () => adjacentEpisode(-1));
   $('next-episode').addEventListener('click', () => adjacentEpisode(1));

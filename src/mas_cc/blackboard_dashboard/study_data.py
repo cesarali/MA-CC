@@ -93,6 +93,7 @@ class EpisodeDescriptor:
     elapsed_seconds: float | None
     detail_available: bool
     detail_reason: str | None
+    statistics: Mapping[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -928,9 +929,56 @@ class BlackboardStudyReader:
                     elapsed_seconds=elapsed,
                     detail_available=detail_available,
                     detail_reason=detail_reason,
+                    statistics=self._episode_statistics(rows),
                 )
             )
         return episodes, series
+
+    @staticmethod
+    def _episode_statistics(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+        if not rows:
+            return {}
+        opportunities = sum(bool(row.get("controller_enabled")) for row in rows)
+        advocate = sum(str(row.get("controller_action", "")) == "ADVOCATE" for row in rows)
+        no_op = sum(str(row.get("controller_action", "")) == "NO_OP" for row in rows)
+        posts = sum(
+            int(row.get("controller_posts", row.get("dawn_directive_count", 0)) or 0)
+            for row in rows
+        )
+        exposures = sum(
+            int(row.get("controller_message_exposures", row.get("directive_exposed_focal_updates", 0)) or 0)
+            for row in rows
+        )
+        readers = max(
+            (int(row.get("directive_unique_readers", 0) or 0) for row in rows),
+            default=0,
+        )
+        return {
+            "microscopic_updates": sum(int(row.get("N", 0) or 0) for row in rows),
+            "controller_opportunities": opportunities,
+            "controller_advocate_rounds": advocate,
+            "controller_no_op_rounds": no_op,
+            "controller_posts": posts,
+            "controller_message_exposures": exposures,
+            "controller_unique_readers": readers,
+            "controller_advocate_fraction": advocate / opportunities if opportunities else None,
+            "controller_post_fraction": posts / opportunities if opportunities else None,
+            "fact_acquisitions": sum(int(row.get("new_evidence_acquisitions", 0) or 0) for row in rows),
+            "fact_reactivations": sum(
+                int(row.get("reactivated_peer_fact_count", 0) or 0)
+                + int(row.get("reactivated_controller_fact_count", 0) or 0)
+                for row in rows
+            ),
+            "fact_deactivations": sum(int(row.get("persistence_deactivated_fact_count", 0) or 0) for row in rows),
+            "board_peak_occupancy": max(
+                (int(row.get("board_peak_size", 0) or 0) for row in rows),
+                default=0,
+            ),
+            "board_mean_occupancy": (
+                sum(float(row.get("board_mean_size", 0) or 0) for row in rows) / len(rows)
+            ),
+            "saturation_label": "saturation/attention competition",
+        }
 
     def _cell_index_signature(self, cell: CellDescriptor) -> tuple[Any, ...]:
         """Fingerprint compact status inputs without reading trajectory contents."""
@@ -1028,6 +1076,48 @@ class BlackboardStudyReader:
                     "episodes_expected": cell.expected_episodes,
                 }
             )
+        completed = [item for item in episodes if item.durable_status == "completed"]
+        winner_counts = Counter({"truth": 0, "controller_target": 0, "other": 0, "tie": 0})
+        truth_wins = target_wins = 0
+        final_truth: list[float] = []
+        final_target: list[float] = []
+        for item in completed:
+            points = votes.get(item.qualified_id, VoteSeries(item.qualified_id, ())).points
+            if not points:
+                continue
+            final = points[-1]
+            counts = dict(final.get("option_counts", {}))
+            if not counts:
+                continue
+            maximum = max(counts.values())
+            winners = [option for option, count in counts.items() if count == maximum]
+            truth = final.get("truth_option")
+            target = final.get("controller_target")
+            if len(winners) != 1:
+                winner_counts["tie"] += 1
+            elif winners[0] == truth:
+                winner_counts["truth"] += 1
+            elif target is not None and winners[0] == target:
+                winner_counts["controller_target"] += 1
+            else:
+                winner_counts["other"] += 1
+            truth_wins += truth in winners and len(winners) == 1
+            target_wins += target is not None and target in winners and len(winners) == 1
+            if final.get("truth_share") is not None:
+                final_truth.append(float(final["truth_share"]))
+            if final.get("controller_target_share") is not None:
+                final_target.append(float(final["controller_target_share"]))
+
+        def distribution(values: list[float]) -> dict[str, Any]:
+            series = pd.Series(values, dtype=float)
+            return {
+                "n": len(values),
+                "mean": float(series.mean()) if values else None,
+                "median": float(series.median()) if values else None,
+                "std": float(series.std(ddof=0)) if values else None,
+                "q1": float(series.quantile(0.25)) if values else None,
+                "q3": float(series.quantile(0.75)) if values else None,
+            }
         return {
             **asdict(cell),
             "discovered": cell.path is not None,
@@ -1086,6 +1176,27 @@ class BlackboardStudyReader:
             if len(mean) > 12
             else mean,
             "mean_vote_series": mean,
+            "statistics": {
+                "completed_episodes": len(completed),
+                "winner_counts": dict(winner_counts),
+                "truth_wins": truth_wins,
+                "controller_target_wins": target_wins,
+                "final_truth_share": distribution(final_truth),
+                "final_controller_target_share": distribution(final_target),
+                "controller_funnel": {
+                    name: sum(
+                        int(item.statistics.get(name, 0) or 0) for item in completed
+                    )
+                    for name in (
+                        "controller_opportunities",
+                        "controller_advocate_rounds",
+                        "controller_no_op_rounds",
+                        "controller_posts",
+                        "controller_message_exposures",
+                        "controller_unique_readers",
+                    )
+                },
+            } if include_votes else None,
             **(
                 {"vote_series": {key: asdict(value) for key, value in votes.items()}}
                 if include_votes
@@ -1186,6 +1297,133 @@ class BlackboardStudyReader:
             "vote_series": payload["vote_series"],
             "descriptive_mean": payload["descriptive_mean"],
         }
+
+    def prompt_examples(self, qualified_id: str) -> dict[str, Any]:
+        cell = self._cell_map.get(qualified_id)
+        if cell is None:
+            raise ValueError("unknown qualified cell identifier")
+        paths = self._paths.get(qualified_id)
+        artifact = paths.cell_root / "dashboard_prompt_examples.json" if paths else None
+        if artifact is None or not artifact.is_file():
+            return {
+                "schema_version": 1,
+                "available": False,
+                "reason": "Prompt examples unavailable: not retained by this run",
+                "samples": [],
+            }
+        payload = _safe_json(artifact, required=True)
+        samples = payload.get("samples", [])
+        if not isinstance(samples, list) or len(samples) > 3:
+            raise ValueError("invalid dashboard prompt examples artifact")
+        forbidden = {"response", "raw_response", "reasoning", "credentials", "secret"}
+
+        def keys(value: Any) -> set[str]:
+            if isinstance(value, Mapping):
+                return {str(key).lower() for key in value} | set().union(
+                    *(keys(item) for item in value.values()), set()
+                )
+            if isinstance(value, list):
+                return set().union(*(keys(item) for item in value), set())
+            return set()
+
+        if keys(samples) & forbidden:
+            raise ValueError("prompt examples artifact contains forbidden private fields")
+        return {
+            "schema_version": 1,
+            "available": True,
+            "samples": samples,
+        }
+
+    def analysis_catalog(self) -> dict[str, Any]:
+        root = self.study_dir / "analysis"
+        validation_path = root / "validation.json"
+        if not validation_path.is_file():
+            return {
+                "schema_version": 1,
+                "available": False,
+                "status": "missing",
+                "reason": "Analysis has not been aggregated for this study.",
+                "command": f"mas-cc study aggregate --study-dir {self.study_dir}",
+                "artifacts": [],
+            }
+        try:
+            validation = _safe_json(validation_path, required=True)
+            manifest = _safe_json(root / "analysis_manifest.json", required=True)
+        except ValueError as exc:
+            return {
+                "schema_version": 1,
+                "available": False,
+                "status": "invalid",
+                "reason": str(exc),
+                "command": f"mas-cc study aggregate --study-dir {self.study_dir}",
+                "artifacts": [],
+            }
+        allowed = []
+        roots = ("tables", "plots", "reports", "provenance")
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(root)
+            if relative.parts[0] in roots or relative.name in {
+                "validation.json",
+                "validation.md",
+                "analysis_manifest.json",
+                "analysis_recipe.yaml",
+                f"{self.manifest.get('study_id', self.study_dir.name)}_analysis.zip",
+            }:
+                allowed.append(
+                    {
+                        "id": relative.as_posix(),
+                        "name": path.name,
+                        "kind": relative.parts[0] if len(relative.parts) > 1 else "package",
+                        "size": path.stat().st_size,
+                    }
+                )
+        valid = bool(validation.get("valid", validation.get("complete", False)))
+        table_previews: dict[str, Any] = {}
+        for name in (
+            "primary_estimates.csv",
+            "information_estimates.csv",
+            "support_diagnostics.csv",
+            "derived_observables.csv",
+        ):
+            path = root / "tables" / name
+            if not path.is_file():
+                continue
+            frame = pd.read_csv(path, nrows=20).astype(object)
+            frame = frame.where(pd.notna(frame), None)
+            table_previews[name] = {
+                "columns": list(frame.columns),
+                "rows": frame.to_dict(orient="records"),
+                "preview_limit": 20,
+            }
+        reports = {}
+        for name in ("summary.md", "methods.md"):
+            path = root / "reports" / name
+            if path.is_file():
+                reports[name] = path.read_text(encoding="utf-8")[:100_000]
+        return {
+            "schema_version": 1,
+            "available": valid,
+            "status": "valid" if valid else "invalid",
+            "reason": None if valid else validation.get("reason", "Analysis validation failed."),
+            "validation": validation,
+            "manifest": manifest,
+            "artifacts": allowed if valid else [],
+            "table_previews": table_previews if valid else {},
+            "reports": reports if valid else {},
+        }
+
+    def analysis_file(self, identifier: str) -> Path:
+        catalog = self.analysis_catalog()
+        allowed = {item["id"] for item in catalog.get("artifacts", [])}
+        if identifier not in allowed:
+            raise ValueError("analysis download identifier is not allowlisted")
+        root = (self.study_dir / "analysis").resolve()
+        path = (root / identifier).resolve()
+        if path != root and root not in path.parents:
+            raise ValueError("analysis download escapes the analysis directory")
+        return path
 
     def episode_status(self, qualified_id: str) -> dict[str, Any]:
         cell_id = qualified_id.rsplit("~episode-", 1)[0]
