@@ -302,10 +302,7 @@ async def generate(
         )
         write_json_atomic(
             task_root / "generation/prompt_hashes.json",
-            {
-                row["fact_id"]: row.get("generation_prompt_hash")
-                for row in cards
-            },
+            {row["fact_id"]: row.get("generation_prompt_hash") for row in cards},
         )
         semantic = await audit_cards(
             model,
