@@ -1,0 +1,23 @@
+study: {name: musr_blackboard_dashboard_pilot_2rounds}
+configs:
+  - dashboard_pilot_false_control.yaml
+execution:
+  mode: auto
+  target_rpm: 200
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 4
+  memory: 8G
+  time_limit: "02:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_dashboard_pilot_2rounds
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 10
+    minimum_concurrency: 2
+    maximum_concurrency: 10
+    target_rpm: 200
+    retry_max_elapsed_seconds: 300

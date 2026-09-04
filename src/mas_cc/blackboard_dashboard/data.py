@@ -8,6 +8,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from mas_cc.storage.dashboard_semantic import (
+    read_semantic_stream,
+    semantic_seal_path,
+    semantic_stream_path,
+    validate_semantic_stream,
+)
+
 
 SUPPORTED_GAME = "relational_imitation_round_feedback"
 SUPPORTED_RUN_SCHEMA_VERSIONS = {1}
@@ -89,19 +96,23 @@ def _detect_source(
     if schema not in SUPPORTED_RUN_SCHEMA_VERSIONS:
         raise ValueError(f"unsupported dashboard run schema version: {schema}")
     profile = str(run_manifest.get("artifact_profile", "full"))
-    if profile != "full":
+    if profile not in {"full", "dashboard_semantic"}:
         raise ValueError(
             "blackboard dashboard requires artifact_profile 'full'; "
             f"{profile!r} does not retain complete prompts and evidence state"
         )
-    if not (episode_dir / "trajectory.jsonl").is_file():
+    if profile == "full" and not (episode_dir / "trajectory.jsonl").is_file():
         raise ValueError(f"full blackboard trajectory is missing beneath {episode_dir}")
     protocols = {str(row.get("protocol")) for row in rounds if row.get("protocol")}
     if len(protocols) > 1:
         raise ValueError("round records contain multiple controller protocols")
     protocol = next(iter(protocols), "legacy")
     return BlackboardSourceDescriptor(
-        source_kind="relational_blackboard_full",
+        source_kind=(
+            "relational_blackboard_semantic"
+            if profile == "dashboard_semantic"
+            else "relational_blackboard_full"
+        ),
         game_type=game_type or SUPPORTED_GAME,
         run_schema_version=schema,
         artifact_profile=profile,
@@ -143,8 +154,24 @@ def resolve_episode_dir(run_dir: str | Path, episode_id: str | None = None) -> P
     root = Path(run_dir).expanduser().resolve()
     if (root / "trajectory.jsonl").is_file() or root.name == episode_id:
         return root
-    episodes_root = root / "data" / "episodes"
-    candidates = sorted(path for path in episodes_root.glob("*") if path.is_dir())
+    candidates = sorted(
+        {
+            path.resolve()
+            for episodes_root in (
+                root / "data" / "episodes",
+                *(root / "cells").glob("*/data/episodes"),
+                root / "round_records",
+                *(root / "cells").glob("*/round_records"),
+            )
+            for path in episodes_root.glob("*")
+            if path.is_dir()
+            and (
+                (path / "trajectory.jsonl").is_file()
+                or semantic_stream_path(path).is_file()
+            )
+        },
+        key=str,
+    )
     if episode_id is not None:
         candidates = [path for path in candidates if path.name == episode_id]
     if not candidates:
@@ -164,6 +191,8 @@ class BlackboardRunReader:
         self._cache: dict[str, Any] | None = None
 
     def _load(self) -> dict[str, Any]:
+        semantic_path = semantic_stream_path(self.episode_dir)
+        semantic_seal = semantic_seal_path(self.episode_dir)
         paths = (
             self.episode_dir / "trajectory.jsonl",
             self.episode_dir / "round_trajectory.jsonl",
@@ -174,6 +203,8 @@ class BlackboardRunReader:
             self.episode_dir / ".checkpoints" / "checkpoint.json",
             self.episode_dir / "manifest.json",
             self.run_dir / "manifest.json",
+            semantic_path,
+            semantic_seal,
         )
         signature = tuple(
             (str(path), path.stat().st_mtime_ns, path.stat().st_size)
@@ -184,6 +215,11 @@ class BlackboardRunReader:
             return self._cache
         episode_manifest = _safe_json(self.episode_dir / "manifest.json")
         run_manifest = _safe_json(self.run_dir / "manifest.json")
+        if semantic_path.is_file():
+            loaded = self._load_semantic(run_manifest)
+            self._cache_signature = signature
+            self._cache = loaded
+            return loaded
         completed = episode_manifest.get("status") in {"completed", "skipped_resumed"}
         trajectory = [
             _event(row)
@@ -231,6 +267,193 @@ class BlackboardRunReader:
         self._cache_signature = signature
         self._cache = loaded
         return loaded
+
+    def _load_semantic(self, run_manifest: dict[str, Any]) -> dict[str, Any]:
+        """Adapt the lean semantic stream to the established replay model."""
+
+        seal = _safe_json(semantic_seal_path(self.episode_dir))
+        completed = seal.get("status") == "completed"
+        rows = (
+            validate_semantic_stream(self.episode_dir)
+            if completed
+            else read_semantic_stream(semantic_stream_path(self.episode_dir))
+        )
+        header = next((row for row in rows if row.get("record_type") == "header"), {})
+        initialization = next(
+            (row for row in rows if row.get("record_type") == "initialization"), {}
+        )
+        trajectory = [dict(row) for row in rows if row.get("record_type") == "update"]
+        validations = [
+            {
+                "agent_id": row.get("agent_id"),
+                "attempt": row.get("attempt"),
+                "decision_stage": "focal_update",
+                "interaction_id": row.get("interaction_id"),
+                "valid": row.get("valid"),
+                "validation_issues": row.get("issue_codes", []),
+                "semantic_only": True,
+            }
+            for row in rows
+            if row.get("record_type") == "validation"
+        ]
+        initial_agents = [
+            value
+            for value in initialization.get("agents", ())
+            if isinstance(value, dict)
+        ]
+        agent_ids = [str(value.get("agent_id")) for value in initial_agents]
+        vote_by_agent = {
+            str(value.get("agent_id")): str(value.get("vote"))
+            for value in initial_agents
+        }
+        for row in trajectory:
+            before = [vote_by_agent.get(agent) for agent in agent_ids]
+            focal = str(row.get("focal_agent_id"))
+            vote_by_agent[focal] = str(row.get("focal_vote_after"))
+            row["population_state_before"] = before
+            row["population_state_after"] = [
+                vote_by_agent.get(agent) for agent in agent_ids
+            ]
+        round_ends = {
+            int(row.get("round_index", 0)): row
+            for row in rows
+            if row.get("record_type") == "round_end"
+        }
+        round_starts = {
+            int(row.get("round_index", 0)): row
+            for row in rows
+            if row.get("record_type") == "round_start"
+        }
+        grouped: dict[int, list[dict[str, Any]]] = {}
+        for row in trajectory:
+            grouped.setdefault(int(row.get("round_index", 0)), []).append(row)
+        rounds = []
+        for round_index, updates in sorted(grouped.items()):
+            end = round_ends.get(round_index, {})
+            start = round_starts.get(round_index, {})
+            end_agents = {
+                str(value.get("agent_id")): value
+                for value in end.get("agents", ())
+                if isinstance(value, dict)
+            }
+            first, last = updates[0], updates[-1]
+            rounds.append(
+                {
+                    **last,
+                    "round_index": round_index,
+                    "N": len(agent_ids),
+                    "agent_ids": agent_ids,
+                    "population_state_before": first.get(
+                        "population_state_before",
+                        initialization.get("population_votes", []),
+                    ),
+                    "population_state_after": last.get(
+                        "population_state_after", end.get("population_votes", [])
+                    ),
+                    "initial_active_fact_ids_by_agent": [
+                        list(value.get("active_fact_ids", ()))
+                        for value in initial_agents
+                    ],
+                    "initial_known_fact_ids_by_agent": [
+                        list(value.get("known_fact_ids", ()))
+                        for value in initial_agents
+                    ],
+                    "active_fact_ids_by_agent_after": {
+                        agent: list(value.get("active_fact_ids", ()))
+                        for agent, value in end_agents.items()
+                    },
+                    "known_fact_ids_by_agent_after": {
+                        agent: list(value.get("known_fact_ids", ()))
+                        for agent, value in end_agents.items()
+                    },
+                    "persistence_deactivated_pairs": start.get("deactivated_pairs", []),
+                    "semantic_board_after": end.get("board", []),
+                    "controller_enabled": (start.get("controller") or {}).get(
+                        "enabled"
+                    ),
+                    "controller_action": (start.get("controller") or {}).get("action"),
+                    "controller_target": (start.get("controller") or {}).get("target"),
+                    "controller_probability_U1_given_Y": (
+                        start.get("controller") or {}
+                    ).get("probability"),
+                    "controller_sensor_Y": (start.get("controller") or {}).get(
+                        "sensor"
+                    ),
+                    "controller_post_ids": (start.get("controller") or {}).get(
+                        "directive_ids", []
+                    ),
+                    "protocol": header.get("protocol_version"),
+                }
+            )
+        fact_ids = sorted(
+            {
+                str(fact)
+                for agent in initial_agents
+                for key in ("active_fact_ids", "known_fact_ids")
+                for fact in agent.get(key, ())
+            }
+        )
+        state = {
+            "agents": [
+                {
+                    "agent_id": value.get("agent_id"),
+                    "committed_action": value.get("vote"),
+                    "active_fact_ids": value.get("active_fact_ids", []),
+                    "known_fact_ids": value.get("known_fact_ids", []),
+                }
+                for value in initial_agents
+            ],
+            "blackboard": initialization.get("board", []),
+            "rules": {
+                "n_agents": header.get("population_size"),
+                "rounds": header.get("rounds"),
+            },
+            "task": {
+                "correct_answer": initialization.get("correct_answer"),
+                "facts": {
+                    fact: {"text": "Not retained by dashboard_semantic profile"}
+                    for fact in fact_ids
+                },
+                "supporting_fact_groups": {fact: [fact] for fact in fact_ids},
+            },
+        }
+        terminal = next(
+            (row for row in reversed(rows) if row.get("record_type") == "completion"),
+            {},
+        )
+        semantic_manifest = {
+            "episode_id": header.get("episode_id", self.episode_dir.name),
+            "status": "completed" if completed else terminal.get("status", "running"),
+            "seed": header.get("episode_seed"),
+        }
+        semantic_run_manifest = {
+            **run_manifest,
+            "schema_version": int(run_manifest.get("schema_version", 1)),
+            "game_type": header.get("game_type", SUPPORTED_GAME),
+            "artifact_profile": "dashboard_semantic",
+        }
+        source = _detect_source(
+            self.run_dir,
+            self.episode_dir,
+            semantic_run_manifest,
+            semantic_manifest,
+            rounds,
+        )
+        _validate_records(trajectory, rounds, completed=completed)
+        return {
+            "trajectory": trajectory,
+            "rounds": rounds,
+            "audits": validations,
+            "api_calls": [],
+            "usage": [],
+            "budget": [],
+            "source": source,
+            "checkpoint": {},
+            "state": state,
+            "task": state["task"],
+            "episode_manifest": semantic_manifest,
+            "run_manifest": semantic_run_manifest,
+        }
 
     @staticmethod
     def _agents(data: dict[str, Any]) -> list[str]:
@@ -284,6 +507,15 @@ class BlackboardRunReader:
         data = self._load()
         trajectory = data["trajectory"]
         agents = self._agents(data)
+        truth = data["state"].get("task", {}).get("correct_answer")
+        controller_target = next(
+            (
+                row.get("controller_target")
+                for row in data["rounds"]
+                if row.get("controller_target") is not None
+            ),
+            None,
+        )
         rounds: dict[int, int] = {}
         for event in trajectory:
             round_index = int(event.get("round_index", 0))
@@ -299,6 +531,32 @@ class BlackboardRunReader:
             }
             for index, event in enumerate(trajectory)
         ]
+        time_series = []
+        for index, event in enumerate(trajectory):
+            votes = [str(value) for value in event.get("population_state_after", ())]
+            total = len(votes)
+            time_series.append(
+                {
+                    "global_update_index": int(event.get("global_update_index", index)),
+                    "round_index": int(event.get("round_index", 0)),
+                    "step": int(event.get("within_round_index", 0)) + 1,
+                    "truth_share": (
+                        votes.count(str(truth)) / total
+                        if truth is not None and total
+                        else None
+                    ),
+                    "controller_target_share": (
+                        votes.count(str(controller_target)) / total
+                        if controller_target is not None and total
+                        else None
+                    ),
+                    "board_size": event.get("board_size_after"),
+                    "controller_post": bool(event.get("controller_message_posted")),
+                    "controller_exposures": sum(
+                        1 for value in event.get("sampled_controller_message_ids", ())
+                    ),
+                }
+            )
         return {
             "schema_version": 1,
             "source": asdict(data["source"]),
@@ -309,8 +567,89 @@ class BlackboardRunReader:
                 for key, value in sorted(rounds.items())
             ],
             "available_cursors": cursors,
+            "time_series": time_series,
             "initialization_attempts": sum(
                 row.get("decision_stage") == "initial_vote" for row in data["audits"]
+            ),
+            "statistics": self.statistics(),
+        }
+
+    def statistics(self) -> dict[str, Any]:
+        """Compact descriptive diagnostics from this episode's retained records."""
+
+        data = self._load()
+        updates = data["trajectory"]
+        rounds = data["rounds"]
+        actions = [str(row.get("controller_action", "")) for row in rounds]
+        posts = sum(len(row.get("controller_post_ids", ())) for row in rounds)
+        exposures = sum(
+            len(row.get("sampled_controller_message_ids", ())) for row in updates
+        )
+        readers = {
+            str(row.get("focal_agent_id"))
+            for row in updates
+            if row.get("sampled_controller_message_ids", ())
+        }
+        board_sizes = [
+            int(value)
+            for row in updates
+            for value in (row.get("board_size_before"), row.get("board_size_after"))
+            if value is not None
+        ]
+        acquired = sum(
+            len(row.get("new_peer_fact_ids", ()))
+            + len(row.get("new_controller_fact_ids", ()))
+            for row in updates
+        )
+        reactivated = sum(
+            len(row.get("reactivated_peer_fact_ids", ()))
+            + len(row.get("reactivated_controller_fact_ids", ()))
+            for row in updates
+        )
+        opportunities = sum(bool(row.get("controller_enabled")) for row in rounds)
+        return {
+            "microscopic_updates": len(updates),
+            "controller_opportunities": opportunities,
+            "controller_advocate_rounds": sum(
+                action in {"ADVOCATE", "ADVOCATE_Z"} for action in actions
+            ),
+            "controller_no_op_rounds": sum(action == "NO_OP" for action in actions),
+            "controller_posts": posts,
+            "controller_message_exposures": exposures,
+            "controller_unique_readers": len(readers),
+            "controller_exposed_update_fraction": exposures / len(updates)
+            if updates
+            else None,
+            "board_peak_occupancy": max(board_sizes) if board_sizes else None,
+            "board_mean_occupancy": sum(board_sizes) / len(board_sizes)
+            if board_sizes
+            else None,
+            "fact_acquisitions": acquired,
+            "fact_reactivations": reactivated,
+            "controller_report_fact_acquisitions": sum(
+                len(row.get("new_controller_fact_ids", ())) for row in updates
+            ),
+            "controller_report_fact_reactivations": sum(
+                len(row.get("reactivated_controller_fact_ids", ())) for row in updates
+            ),
+            "controller_report_target_adoptions": sum(
+                bool(row.get("sampled_controller_report_ids"))
+                and bool(row.get("focal_adopted_target"))
+                for row in updates
+            ),
+            "validation_repairs": sum(
+                int(row.get("attempt", 1)) > 1 for row in data["audits"]
+            ),
+            "malformed_terminal": bool(
+                data["audits"] and not data["audits"][-1].get("valid", True)
+            ),
+            "actuation_semantics": (
+                "ordinary truthful REPORT publication"
+                if any(
+                    row.get("controller_actuation_mode") == "truthful_strategic_report"
+                    for row in rounds
+                )
+                else "shared-board publication; saturation/attention competition"
             ),
         }
 
@@ -341,7 +680,12 @@ class BlackboardRunReader:
             "prompt_attempts": len(data["audits"]),
             "provider_attempts": len(data["api_calls"]),
             "invalid_attempts": sum(
-                not bool(row.get("valid", False)) for row in data["api_calls"]
+                not bool(row.get("valid", False))
+                for row in (
+                    data["audits"]
+                    if data["source"].artifact_profile == "dashboard_semantic"
+                    else data["api_calls"]
+                )
             ),
             "provider_status": {
                 "available": bool(data["api_calls"]),
@@ -367,6 +711,8 @@ class BlackboardRunReader:
         agent_id: str | None = None,
     ) -> dict[str, Any]:
         data = self._load()
+        semantic = data["source"].artifact_profile == "dashboard_semantic"
+        unavailable_reason = "Not retained by dashboard_semantic profile"
         trajectory = data["trajectory"]
         if not trajectory:
             return {
@@ -428,7 +774,9 @@ class BlackboardRunReader:
                 str(value) for value in record.get("population_state_after", votes)
             ]
         round_record = rounds_by_index.get(target_round, {})
-        if round_record.get("controller_timing") == "dawn_only":
+        if round_record.get("controller_timing") == "dawn_only" or (
+            semantic and round_record.get("persistence_deactivated_pairs")
+        ):
             for pair in round_record.get("persistence_deactivated_pairs", []):
                 if not isinstance(pair, dict):
                     continue
@@ -492,6 +840,15 @@ class BlackboardRunReader:
         for message in checkpoint_messages:
             if isinstance(message, dict) and message.get("message_id"):
                 messages_by_id[str(message["message_id"])] = dict(message)
+        semantic_messages = rounds_by_index.get(target_round, {}).get(
+            "semantic_board_after", []
+        )
+        if semantic_messages:
+            messages_by_id = {
+                str(message["message_id"]): dict(message)
+                for message in semantic_messages
+                if isinstance(message, dict) and message.get("message_id")
+            }
         for event in trajectory:
             if int(event.get("global_update_index", -1)) > target_global:
                 break
@@ -526,6 +883,17 @@ class BlackboardRunReader:
             message.get("message_type") for message in messages
         )
         evidence_events = []
+        if semantic:
+            for pair in round_record.get("persistence_deactivated_pairs", []):
+                if isinstance(pair, dict):
+                    evidence_events.append(
+                        {
+                            "type": "deactivation",
+                            "fact_id": pair.get("fact_id"),
+                            "agent_id": pair.get("agent_id"),
+                            "round_index": target_round,
+                        }
+                    )
         for event in trajectory:
             if int(event.get("global_update_index", -1)) > target_global:
                 break
@@ -551,7 +919,7 @@ class BlackboardRunReader:
             for fact_id in event.get("reactivated_peer_fact_ids", []):
                 evidence_events.append(
                     {
-                        "type": "refresh",
+                        "type": "reactivation" if semantic else "refresh",
                         "fact_id": fact_id,
                         "agent_id": event.get("focal_agent_id"),
                         "global_update_index": event.get("global_update_index"),
@@ -560,11 +928,20 @@ class BlackboardRunReader:
             for fact_id in event.get("reactivated_controller_fact_ids", []):
                 evidence_events.append(
                     {
-                        "type": "refresh",
+                        "type": "reactivation" if semantic else "refresh",
                         "fact_id": fact_id,
                         "agent_id": event.get("focal_agent_id"),
                         "global_update_index": event.get("global_update_index"),
                         "source": "controller",
+                    }
+                )
+            for fact_id in event.get("refresh_fact_ids", []):
+                evidence_events.append(
+                    {
+                        "type": "refresh",
+                        "fact_id": fact_id,
+                        "agent_id": event.get("focal_agent_id"),
+                        "global_update_index": event.get("global_update_index"),
                     }
                 )
 
@@ -660,12 +1037,29 @@ class BlackboardRunReader:
             "capabilities": {
                 "microscopic_updates": {"available": True},
                 "prompts": {
-                    "available": bool(data["audits"]),
-                    "reason": None if data["audits"] else "not retained",
+                    "available": bool(data["audits"]) and not semantic,
+                    "reason": unavailable_reason
+                    if semantic
+                    else None
+                    if data["audits"]
+                    else "not retained",
                 },
+                "raw_response": {
+                    "available": bool(data["audits"]) and not semantic,
+                    "reason": unavailable_reason
+                    if semantic
+                    else None
+                    if data["audits"]
+                    else "not retained",
+                },
+                "validation_attempts": {"available": bool(data["audits"])},
                 "provider_attempts": {
                     "available": bool(data["api_calls"]),
-                    "reason": None if data["api_calls"] else "not retained",
+                    "reason": unavailable_reason
+                    if semantic
+                    else None
+                    if data["api_calls"]
+                    else "not retained",
                 },
                 "active_evidence": {"available": True},
                 "historical_evidence": {"available": True},
@@ -728,7 +1122,9 @@ class BlackboardRunReader:
                 ),
                 "compiled_messages": audit_value.get("compiled_messages", []),
                 "raw_response": response.get("content"),
-                "parsed_response": parsed_response,
+                "parsed_response": (
+                    target.get("public_action") if semantic else parsed_response
+                ),
                 "attempt_history": attempt_history,
                 "timeline": timeline,
             },
@@ -762,7 +1158,10 @@ class BlackboardRunReader:
                 "probability": round_record.get("controller_probability_U1_given_Y"),
                 "sampled_action": round_record.get("controller_sampled_U"),
                 "controlled_positions": round_record.get("controlled_positions", []),
-                "directive_ids": round_record.get("controller_post_ids", []),
+                "post_ids": round_record.get("controller_post_ids", []),
+                "directive_ids": round_record.get("directive_message_ids", []),
+                "report_ids": round_record.get("controller_report_ids", []),
+                "report_fact_ids": round_record.get("controller_report_fact_ids", []),
                 "direct_replies": round_record.get("controller_direct_replies"),
                 "unique_readers": round_record.get("controller_unique_readers"),
             },

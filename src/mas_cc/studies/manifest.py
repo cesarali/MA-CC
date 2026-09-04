@@ -23,6 +23,9 @@ _PREFLIGHT_CONTRACTS = frozenset(
         "relational_persistence_large_population_false_v1",
         "relational_persistence_large_population_truth_v1",
         "musr_blackboard_population_01_v1",
+        "musr_blackboard_population_01_v2",
+        "musr_blackboard_false_q3_companion_v1",
+        "musr_blackboard_population_scout_r1_v1",
     }
 )
 
@@ -155,6 +158,13 @@ def discover_study(config_dir: str | Path) -> StudySpec:
             raise ValueError(f"invalid YAML in {recipe}: {exc}") from exc
 
     preflight = dict(_mapping(raw.get("preflight"), "preflight"))
+    storage_ceiling = preflight.get("storage_ceiling_bytes")
+    if storage_ceiling is not None and (
+        isinstance(storage_ceiling, bool)
+        or not isinstance(storage_ceiling, int)
+        or storage_ceiling < 1
+    ):
+        raise ValueError("preflight.storage_ceiling_bytes must be a positive integer")
     contract = preflight.get("contract")
     if contract is not None and contract not in _PREFLIGHT_CONTRACTS:
         raise ValueError(

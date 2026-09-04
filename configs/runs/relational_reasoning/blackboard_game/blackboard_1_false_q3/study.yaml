@@ -1,0 +1,24 @@
+study: {name: musr_blackboard_population_01_false_q3}
+configs:
+  - blackboard_1_false_control_q3.yaml
+preflight: {contract: musr_blackboard_false_q3_companion_v1}
+execution:
+  mode: auto
+  target_rpm: 600
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 4
+  throttle: 4
+  cpus_per_task: 10
+  memory: 24G
+  time_limit: "20:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_population_01_false_q3
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 40
+    minimum_concurrency: 4
+    maximum_concurrency: 40
+    target_rpm: 600
+    retry_max_elapsed_seconds: 300

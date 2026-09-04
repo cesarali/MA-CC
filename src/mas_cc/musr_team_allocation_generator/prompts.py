@@ -6,23 +6,29 @@ import json
 from collections.abc import Sequence
 
 from .schemas import LatentFact, LatentProblem
+from .symbolic_facts import CanonicalFact
 
 
 def evidence_prompt(
     problem: LatentProblem,
-    fact: LatentFact,
+    fact: LatentFact | CanonicalFact,
     *,
     branches: int,
     statements_per_branch: int,
     tree_depth: int,
     forbidden_phrases: Sequence[str],
 ) -> str:
+    hidden_conclusion = (
+        fact.hidden_claim if isinstance(fact, LatentFact) else fact.canonical_text
+    )
+    people = list(fact.people) if isinstance(fact, LatentFact) else list(problem.people)
+    level = fact.value if isinstance(fact, LatentFact) else None
     target = {
         "hidden_fact_id": fact.fact_id,
-        "hidden_conclusion": fact.hidden_claim,
-        "people": list(fact.people),
+        "hidden_conclusion": hidden_conclusion,
+        "people": people,
         "kind": fact.kind,
-        "level": fact.value,
+        "level": level,
     }
     return f"""Create independent indirect evidence branches for a Team Allocation reasoning task.
 The evidence must let a careful reader infer the hidden conclusion, but must never state it directly.

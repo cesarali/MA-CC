@@ -1,0 +1,23 @@
+study: {name: musr_blackboard_01_deepinfra_smoke}
+configs:
+  - blackboard_1_deepinfra_no_control.yaml
+execution:
+  mode: auto
+  target_rpm: 1000
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 3
+  throttle: 3
+  cpus_per_task: 1
+  memory: 6G
+  time_limit: "02:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_01_deepinfra_smoke
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 3
+    minimum_concurrency: 1
+    maximum_concurrency: 3
+    target_rpm: 1000
+    retry_max_elapsed_seconds: 300

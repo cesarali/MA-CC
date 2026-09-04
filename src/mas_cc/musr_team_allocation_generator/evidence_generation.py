@@ -13,6 +13,7 @@ from .prompts import evidence_prompt
 from .provider_adapter import MuSRGenerationModel
 from .reasoning_tree import ReasoningTree, build_reasoning_tree
 from .schemas import EvidenceCard, LatentFact, LatentProblem
+from .symbolic_facts import CanonicalFact
 
 _JSON_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
@@ -43,9 +44,14 @@ def extract_json_object(text: str) -> Mapping[str, Any]:
     return value
 
 
-def forbidden_phrases(problem: LatentProblem, fact: LatentFact) -> tuple[str, ...]:
+def forbidden_phrases(
+    problem: LatentProblem, fact: LatentFact | CanonicalFact
+) -> tuple[str, ...]:
+    hidden_claim = (
+        fact.hidden_claim if isinstance(fact, LatentFact) else fact.canonical_text
+    )
     phrases = [
-        fact.hidden_claim,
+        hidden_claim,
         "best allocation",
         "correct allocation",
         "correct assignment",
@@ -139,7 +145,7 @@ def _validate_branch_payload(
 async def generate_evidence_for_fact(
     model: MuSRGenerationModel,
     problem: LatentProblem,
-    fact: LatentFact,
+    fact: LatentFact | CanonicalFact,
     *,
     branches: int,
     statements_per_branch: int,
@@ -184,7 +190,11 @@ async def generate_evidence_for_fact(
                 build_reasoning_tree(
                     latent_fact_id=fact.fact_id,
                     branch_id=branch_id,
-                    hidden_claim=fact.hidden_claim,
+                    hidden_claim=(
+                        fact.hidden_claim
+                        if isinstance(fact, LatentFact)
+                        else fact.canonical_text
+                    ),
                     intermediate_claims=intermediate,
                     statements=statements,
                     commonsense_bridges=bridges,
@@ -202,7 +212,7 @@ async def generate_evidence_for_fact(
 async def generate_all_evidence(
     model: MuSRGenerationModel,
     problem: LatentProblem,
-    facts: Sequence[LatentFact],
+    facts: Sequence[LatentFact | CanonicalFact],
     *,
     branches_per_latent_fact: int,
     statements_per_branch: int,

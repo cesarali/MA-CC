@@ -42,8 +42,8 @@ def test_three_arm_smoke_is_small_provider_safe_and_paired(tmp_path):
     assert plan.array_throttle == 1
     assert plan.cpus_per_task == 1
     assert plan.episode_slots_per_shard == 1
-    assert plan.request_concurrency_per_shard == 2
-    assert plan.total_request_concurrency == 2
+    assert plan.request_concurrency_per_shard == 1
+    assert plan.total_request_concurrency == 1
     assert plan.time_limit == "00:10:00"
     for name in ("no_control.yaml", "truth_control.yaml", "false_control.yaml"):
         source = _grid(name)

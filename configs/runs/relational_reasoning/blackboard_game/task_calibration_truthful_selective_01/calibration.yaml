@@ -1,0 +1,93 @@
+probe: musr_truthful_selective
+
+generation_provider:
+  type: university
+  model: microsoft/gpt-5.6-terra
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 2048
+  timeout_seconds: 180
+  max_retries: 0
+  request_concurrency: 4
+  options:
+    estimated_latency_seconds: 10.0
+
+behavioral_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  temperature: 1.0
+  max_output_tokens: 4096
+  timeout_seconds: 180
+  max_retries: 0
+  request_concurrency: 4
+  options:
+    estimated_latency_seconds: 10.0
+
+scan:
+  candidate_worlds: 10000
+  development_tasks: 3
+  seed: 20260904
+
+symbolic_thresholds:
+  zero_max_probability: 0.45
+  zero_min_entropy: 0.90
+  private_max_probability: 0.45
+  private_min_entropy: 0.90
+  minimum_controller_facts: 24
+  controller_budgets: [3, 6, 12, 24]
+  controller_min_lift: 1.0e-12
+  controller_max_false_probability: 0.70
+  decisive_min_truth_probability: 0.80
+  subset_positive_lift_fraction: 0.70
+  subset_samples: 64
+  population_size: 24
+  private_assignments_tested: 32
+  private_facts_per_agent: 1
+  minimum_private_holders: 1
+
+behavioral_thresholds:
+  zero_min_truth: 0.20
+  zero_max_truth: 0.50
+  zero_min_false: 0.20
+  zero_max_false: 0.50
+  private_max_truth: 0.50
+  private_max_false: 0.50
+  controller_max_false: 0.85
+  decisive_min_truth: 0.70
+  mixed_min_truth: 0.80
+  full_min_truth: 0.90
+  development_full_min_truth: 0.80
+
+replications:
+  zero: 20
+  private: 5
+  controller: 20
+  decisive: 20
+  mixed: 20
+  full: 20
+  alternative_subset: 3
+  alternative_subsets_per_budget: 5
+
+generation:
+  semantic_retries: 3
+
+execution:
+  generation_workers: 4
+  behavioral_workers: 4
+
+storage:
+  output_dir: results/studies/musr_truthful_selective_task_calibration_01
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  max_generation_requests: 1200
+  max_behavioral_requests: 2500
+  max_generation_input_tokens: 4000000
+  max_behavioral_input_tokens: 16000000
+  max_generation_output_tokens: 2400000
+  max_behavioral_output_tokens: 10000000
+  max_generation_cost: 20.0
+  max_behavioral_cost: 40.0

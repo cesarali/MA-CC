@@ -11,12 +11,18 @@ import pytest
 import yaml
 
 from mas_cc.config import load_run_config
+from mas_cc.studies.aggregation import _align_indexed_lineage_cells
+from mas_cc.studies.discovery import DiscoveredCell, DiscoveredRun
 from mas_cc.studies.extension import extend_study, index_existing_study, plan_extension
 from mas_cc.studies.cell_worker import main as cell_worker_main
 from mas_cc.studies.execution import build_cell_execution_entries, write_execution_manifest
 from mas_cc.studies.identity import episode_key, protocol_fingerprint, scientific_cell_key
 from mas_cc.studies.manifest import StudySpec
-from mas_cc.studies.submission import build_submission_entries, write_submission_manifest
+from mas_cc.studies.submission import (
+    SubmissionEntry,
+    build_submission_entries,
+    write_submission_manifest,
+)
 
 
 def _config(path: Path, *, repetitions: int, values=(1, 2), parallelism: int = 1) -> Path:
@@ -214,6 +220,50 @@ def test_completed_cells_reuse_only_missing_repetition_indices(tmp_path):
     } == {0, 1, 2, 3}
 
 
+def test_extension_reuses_prior_keys_after_retention_identity_policy_change(tmp_path):
+    study_dir, config_dir = _legacy_study(tmp_path, repetitions=1, values=(1, 2))
+    spec = StudySpec("extension-test", config_dir, (config_dir / "grid.yaml",))
+    submissions = build_submission_entries(spec, study_dir, git_commit="test")
+    manifest = write_execution_manifest(
+        study_dir / "execution_manifest.csv",
+        build_cell_execution_entries(spec, submissions),
+    )
+    assert cell_worker_main([str(manifest), "0"]) == 0
+    assert cell_worker_main([str(manifest), "1"]) == 0
+    index_existing_study(study_dir)
+
+    target_manifest = study_dir / "extensions" / "extension-0000" / "target_manifest.json"
+    persisted = json.loads(target_manifest.read_text(encoding="utf-8"))
+    for index, cell in enumerate(persisted["cells"]):
+        fingerprint = f"legacy-fingerprint-{index}"
+        cell["protocol_fingerprint"] = fingerprint
+        cell["cell_key"] = scientific_cell_key(fingerprint, cell["coordinates"])
+    target_manifest.write_text(
+        json.dumps(persisted, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    target_dir = tmp_path / "configs-semantic-target"
+    target_dir.mkdir()
+    target_config = _config(target_dir / "grid.yaml", repetitions=4, values=(1, 2))
+    raw = yaml.safe_load(target_config.read_text(encoding="utf-8"))
+    raw["storage"]["options"] = {"expected_public_message_characters": 240}
+    target_config.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    (target_dir / "study.yaml").write_text(
+        "study: {name: extension-test}\nconfigs: [grid.yaml]\n"
+        "execution: {mode: auto, target_rpm: 60, assumed_latency_seconds: 1}\n",
+        encoding="utf-8",
+    )
+
+    plan = plan_extension(study_dir, target_dir)
+    assert plan.incompatible == ()
+    assert plan.retained_episode_count == 2
+    assert plan.missing_episode_count == 6
+    assert {episode.repetition_index for episode in plan.episodes} == {1, 2, 3}
+    assert {cell.cell_key for cell in plan.target_cells} == {
+        cell["cell_key"] for cell in persisted["cells"]
+    }
+
+
 def test_empty_delta_publishes_target_without_sbatch(tmp_path):
     study_dir, config_dir = _legacy_study(tmp_path, repetitions=2, values=(1, 2))
     index_existing_study(study_dir)
@@ -243,3 +293,66 @@ def test_empty_delta_publishes_target_without_sbatch(tmp_path):
     assert result.plan.missing_episode_count == 0
     state = json.loads((result.extension_dir / "state.json").read_text())
     assert state["status"] == "COMPLETE_NO_WORK"
+
+
+def test_aggregation_uses_persisted_identity_for_indexed_base_cells(tmp_path):
+    entry = SubmissionEntry(
+        array_index=2,
+        config_path=str(tmp_path / "config.yaml"),
+        config_hash="config",
+        resolved_config_hash="resolved",
+        output_dir=str(tmp_path),
+        expected_cell_count=1,
+        expected_episode_count=1,
+        execution_seed=7,
+        git_commit="commit",
+        source_extension_index=0,
+        scientific_cell_key="newly-derived-key",
+    )
+    run = DiscoveredRun(entry, tmp_path, {}, "run", "toy", {})
+    cell = DiscoveredCell(run, tmp_path, "cell-0004", {}, {"x": 1})
+    target = {
+        "cells": [
+            {
+                "config_index": 2,
+                "source_cell_id": "cell-0004",
+                "cell_key": "persisted-lineage-key",
+            }
+        ]
+    }
+
+    (aligned,) = _align_indexed_lineage_cells((cell,), target)
+
+    assert aligned.cell_key == "persisted-lineage-key"
+    assert cell.cell_key == "newly-derived-key"
+
+
+def test_aggregation_keeps_explicit_extension_cell_identity(tmp_path):
+    entry = SubmissionEntry(
+        array_index=2,
+        config_path=str(tmp_path / "config.yaml"),
+        config_hash="config",
+        resolved_config_hash="resolved",
+        output_dir=str(tmp_path),
+        expected_cell_count=1,
+        expected_episode_count=1,
+        execution_seed=7,
+        git_commit="commit",
+        source_extension_index=2,
+        scientific_cell_key="extension-key",
+    )
+    run = DiscoveredRun(entry, tmp_path, {}, "run", "toy", {})
+    cell = DiscoveredCell(run, tmp_path, "cell-0004", {}, {"x": 1})
+    target = {
+        "cells": [
+            {
+                "config_index": 2,
+                "source_cell_id": "cell-0004",
+                "cell_key": "persisted-base-key",
+            }
+        ]
+    }
+
+    (aligned,) = _align_indexed_lineage_cells((cell,), target)
+
+    assert aligned.cell_key == "extension-key"

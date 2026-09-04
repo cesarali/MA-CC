@@ -421,7 +421,8 @@ storage:
   format: jsonl                   # String. The full recorder still uses its established JSONL/CSV
                                   # files. results_only always publishes its versioned scientific
                                   # table as Parquet; this legacy field does not override that schema.
-  artifact_profile: full          # full | results_only | timing_study. full preserves the verbose per-episode
+  artifact_profile: full          # full | dashboard_semantic | results_only | timing_study.
+                                  # full preserves the verbose per-episode
                                   # recorder tree. results_only retains atomic compact Parquet,
                                   # aggregate/analysis results, bounded prompt samples, budget
                                   # state, and the manifests needed to understand/resume the run.
@@ -431,6 +432,13 @@ storage:
                                   # results_only and additionally writes per-episode and per-request
                                   # timing CSVs plus timing_study.md. results_only writes only the
                                   # compact Markdown timing summary.
+                                  # dashboard_semantic retains the compact scientific artifacts plus
+                                  # one append-only semantic stream and completion seal per episode.
+                                  # It supports live vote, board, evidence, agent, controller, cursor,
+                                  # and validation-health replay. It excludes compiled prompts, raw
+                                  # responses, provider/request logs, usage logs, budget-event logs,
+                                  # and verbose experiment logs. It currently requires the relational
+                                  # imitation round-feedback game in board mode.
   checkpoint_mode: episode        # off | episode. episode makes a completed episode shard durable
                                   # and skips it after restart. An episode that was in flight starts
                                   # again from round zero with its original seed. This is not a
@@ -446,7 +454,14 @@ storage:
                                   # `resume`/`checkpoint_mode` entirely — nothing is treated as
                                   # already-completed. Use this when you need a clean recompute
                                   # instead of the default resume-by-episode behavior.
+  options:
+    expected_public_message_characters: 240  # Optional 0..1200 planning assumption used only
+                                              # by dashboard_semantic storage preflight estimates.
 ```
+
+A standardized study may set `preflight.storage_ceiling_bytes`. Study preflight
+rejects a projected `dashboard_semantic` result tree above that positive-byte
+ceiling.
 
 For long paid cells, use `results_only` without changing Comet:
 

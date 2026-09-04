@@ -430,7 +430,8 @@ def submit_study(
         )
 
         shards = build_cell_execution_entries(spec, entries)
-        plan = plan_cell_execution(spec, len(shards))
+        shard_count = max((row.array_index for row in shards), default=-1) + 1
+        plan = plan_cell_execution(spec, shard_count)
         if throttle is not None:
             if throttle < 1:
                 raise ValueError("SLURM array throttle must be a positive integer")
@@ -463,7 +464,7 @@ def submit_study(
             job_script or _default_job_script(execution_site, cell_array=True),
             preserve_symlinks=execution_site == "amarel",
         )
-        array = f"0-{len(shards) - 1}%{plan.array_throttle}"
+        array = f"0-{plan.shard_count - 1}%{plan.array_throttle}"
         if execution_site == "amarel":
             if _slurm_walltime_seconds(plan.time_limit) > AMAREL_MAX_WALLTIME_SECONDS:
                 raise ValueError("Amarel time limit cannot exceed 3-00:00:00")

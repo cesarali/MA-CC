@@ -23,7 +23,7 @@ from mas_cc.storage import canonical_hash, file_sha256
 from mas_cc.storage.scientific import compact_row_to_imitation_event
 
 from .canonical import build_canonical_tables
-from .discovery import DiscoveredRun, discover_cells, discover_runs
+from .discovery import DiscoveredCell, DiscoveredRun, discover_cells, discover_runs
 from .submission import read_submission_manifest
 from .table_io import (
     CANONICAL_TABLE_FORMAT,
@@ -42,6 +42,52 @@ ESTIMATOR_ALIASES = {
     "round_target_actuation_cmi_memory_phi": "round_phi_target_actuation_cmi",
     "target_signed_actuation": "round_target_signed_actuation",
 }
+
+
+def _align_indexed_lineage_cells(
+    cells: tuple[DiscoveredCell, ...], target: Mapping[str, Any]
+) -> tuple[DiscoveredCell, ...]:
+    """Use persisted keys for cells inherited from the indexed base study.
+
+    Base submission rows predate per-cell scientific keys, so discovery uses
+    ``AUTO`` and would otherwise derive identity from the *current* config at
+    aggregation time. Config files can legitimately gain non-scientific
+    retention or observability fields after indexing. The lineage target is
+    authoritative: bind base cells by their stable submission config index and
+    local source cell id. Extension shards already carry an explicit key and
+    are left untouched.
+    """
+
+    persisted = {
+        (int(item["config_index"]), str(item["source_cell_id"])): str(item["cell_key"])
+        for item in target.get("cells", ())
+        if isinstance(item, Mapping)
+        and "config_index" in item
+        and "source_cell_id" in item
+        and "cell_key" in item
+    }
+    aligned: list[DiscoveredCell] = []
+    for cell in cells:
+        entry = cell.run.entry
+        key = (
+            persisted.get((int(entry.array_index), cell.local_cell_id))
+            if int(entry.source_extension_index) == 0
+            else None
+        )
+        if key is None or key == cell.cell_key:
+            aligned.append(cell)
+            continue
+        aligned.append(
+            replace(
+                cell,
+                run=replace(
+                    cell.run,
+                    entry=replace(entry, scientific_cell_key=key),
+                ),
+            )
+        )
+    return tuple(aligned)
+
 
 PRIMARY_COLUMNS = (
     "study_id",
@@ -1747,6 +1793,17 @@ def _blackboard_diagnostic_table(
         "historical_mean_supporting_fact_coverage_after",
         "active_mean_supporting_fact_coverage_after",
         "realized_directive_exposure_fraction",
+        "controller_posts",
+        "controller_reports_requested",
+        "controller_reports_admitted",
+        "controller_report_exposures",
+        "controller_report_unique_readers",
+        "eligible_controller_report_opportunities",
+        "controller_report_fact_acquisitions",
+        "controller_report_fact_reactivations",
+        "controller_report_target_adoptions",
+        "peer_report_exposures_with_controller_actuation",
+        "peer_report_exposures_without_controller_actuation",
     )
     for column in numeric:
         if column not in source:
@@ -1783,11 +1840,46 @@ def _blackboard_diagnostic_table(
             "realized_directive_exposure_fraction",
             "mean",
         ),
+        controller_posts=("controller_posts", "sum"),
+        controller_reports_requested=("controller_reports_requested", "sum"),
+        controller_reports_admitted=("controller_reports_admitted", "sum"),
+        controller_report_exposures=("controller_report_exposures", "sum"),
+        controller_report_unique_readers_round_sum=(
+            "controller_report_unique_readers",
+            "sum",
+        ),
+        eligible_controller_report_opportunities=(
+            "eligible_controller_report_opportunities",
+            "sum",
+        ),
+        controller_report_fact_acquisitions=(
+            "controller_report_fact_acquisitions",
+            "sum",
+        ),
+        controller_report_fact_reactivations=(
+            "controller_report_fact_reactivations",
+            "sum",
+        ),
+        controller_report_target_adoptions=(
+            "controller_report_target_adoptions",
+            "sum",
+        ),
+        peer_report_exposures_with_controller_actuation=(
+            "peer_report_exposures_with_controller_actuation",
+            "sum",
+        ),
+        peer_report_exposures_without_controller_actuation=(
+            "peer_report_exposures_without_controller_actuation",
+            "sum",
+        ),
     ).reset_index()
     result["refresh_events"] = result["peer_refreshes"] + result["controller_refreshes"]
     denominator = result["eligible_message_opportunities"].replace(0, np.nan)
     result["eligible_directive_fraction"] = (
         result["eligible_directive_opportunities"] / denominator
+    )
+    result["eligible_controller_report_fraction"] = (
+        result["eligible_controller_report_opportunities"] / denominator
     )
     return _attach_coordinates(result, cells)
 
@@ -2960,6 +3052,8 @@ def aggregate_study(
     retained_input_identity: str | None = None
     runs = discover_runs(entries)
     cells = discover_cells(runs)
+    if target_manifest is not None:
+        cells = _align_indexed_lineage_cells(cells, target_manifest)
     retained_paths = {
         name: retained_table_path(analysis_dir / "tables", name)
         for name in ("cells", "episodes", "rounds", "micro_slots")

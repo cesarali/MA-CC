@@ -38,8 +38,6 @@ nersc_validate_account "${account}"
 nersc_validate_nodes "${nodes}"
 nersc_validate_walltime "${walltime}"
 nersc_validate_immediate "${immediate}"
-nersc_require_command salloc
-
 command=(
   salloc
   --qos=interactive
@@ -56,4 +54,5 @@ if [[ "${dry_run}" == true ]]; then
   exit 0
 fi
 
+nersc_require_command salloc
 exec "${command[@]}"

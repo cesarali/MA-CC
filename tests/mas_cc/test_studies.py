@@ -27,6 +27,7 @@ from mas_cc.studies.aggregation import (
 )
 from mas_cc.studies.manifest import StudySpec, discover_study
 from mas_cc.studies.execution import (
+    ExecutionEntry,
     build_cell_execution_entries,
     plan_cell_execution,
     read_execution_manifest,
@@ -432,7 +433,9 @@ def test_amarel_deepinfra_smoke_is_one_tiny_cell_and_uses_the_shared_planner():
 
 
 def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
-    spec = discover_study("configs/runs/relational_reasoning/population_study_06")
+    spec = discover_study(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_06"
+    )
     submissions = build_submission_entries(
         spec, "results/test-study06", git_commit="test"
     )
@@ -463,8 +466,67 @@ def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
     assert plan.provider_load_control["target_rpm"] == 900
 
 
+def test_cell_bundles_share_an_array_allocation_without_changing_cell_outputs(tmp_path):
+    root = Path(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "blackboard_1_deepinfra_q3_stress"
+    )
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, tmp_path / "results", git_commit="test")
+    entries = build_cell_execution_entries(spec, submissions)
+
+    assert len(entries) == 21
+    assert [entry.array_index for entry in entries[:5]] == [0, 0, 1, 1, 2]
+    assert len({entry.output_dir for entry in entries}) == 21
+
+    manifest = write_execution_manifest(tmp_path / "execution.csv", entries)
+    assert read_execution_manifest(manifest) == entries
+
+    shard_count = max(entry.array_index for entry in entries) + 1
+    plan = plan_cell_execution(spec, shard_count)
+    assert shard_count == plan.shard_count == 11
+    assert plan.request_concurrency_per_shard == 20
+    assert plan.episode_slots_per_shard == 20
+    assert plan.array_throttle == 5
+    assert plan.total_request_concurrency == 100
+    assert plan.total_episode_slots == 100
+    assert plan.cpus_per_task == 8
+
+
+def test_cell_worker_runs_every_cell_in_selected_bundle(tmp_path, monkeypatch):
+    config = Path(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "blackboard_1_deepinfra_q3_stress/blackboard_1_deepinfra_false_control_q3.yaml"
+    ).resolve()
+    entries = (
+        ExecutionEntry(0, 0, str(config), 0, "cell-0000", str(tmp_path / "cell-0")),
+        ExecutionEntry(0, 0, str(config), 1, "cell-0001", str(tmp_path / "cell-1")),
+    )
+    manifest = write_execution_manifest(tmp_path / "execution.csv", entries)
+    calls = []
+
+    monkeypatch.setattr(
+        "mas_cc.studies.cell_worker.configure_study_provider_load_control",
+        lambda _: None,
+    )
+    monkeypatch.setattr(
+        "mas_cc.studies.cell_worker.run_experiment_grid_sync",
+        lambda shard, output, **kwargs: calls.append(
+            (shard.selected_cell.cell_id, Path(output))
+        ),
+    )
+
+    assert cell_worker_main([str(manifest), "0"]) == 0
+    assert sorted(calls) == [
+        ("cell-0000", tmp_path / "cell-0"),
+        ("cell-0001", tmp_path / "cell-1"),
+    ]
+
+
 def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
-    root = Path("configs/runs/relational_reasoning/population_study_07")
+    root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_07"
+    )
     spec = discover_study(root)
     submissions = build_submission_entries(spec, "/tmp/test-study07", git_commit="test")
     shards = build_cell_execution_entries(spec, submissions)
@@ -499,7 +561,8 @@ def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
     }
     study06_analysis = yaml.safe_load(
         Path(
-            "configs/runs/relational_reasoning/population_study_06/analysis.yaml"
+            "configs/runs/relational_reasoning/first_population_studies/"
+            "population_study_06/analysis.yaml"
         ).read_text()
     )
     study07_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
@@ -508,7 +571,9 @@ def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
 
 
 def test_study08_prompt_semantics_design_is_paired_and_provider_safe():
-    root = Path("configs/runs/relational_reasoning/population_study_08")
+    root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_08"
+    )
     spec = discover_study(root)
     submissions = build_submission_entries(spec, "/tmp/test-study08", git_commit="test")
     shards = build_cell_execution_entries(spec, submissions)
@@ -577,7 +642,8 @@ def test_study08_prompt_semantics_design_is_paired_and_provider_safe():
 
     study06_analysis = yaml.safe_load(
         Path(
-            "configs/runs/relational_reasoning/population_study_06/analysis.yaml"
+            "configs/runs/relational_reasoning/first_population_studies/"
+            "population_study_06/analysis.yaml"
         ).read_text()
     )
     study08_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
@@ -614,7 +680,9 @@ def test_study08_prompt_semantics_design_is_paired_and_provider_safe():
 
 
 def test_study08_deepinfra_gemma_preserves_the_scientific_design():
-    source_root = Path("configs/runs/relational_reasoning/population_study_08")
+    source_root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_08"
+    )
     variant_root = Path(
         "configs/runs/relational_reasoning/population_study_08_deepinfra_gemma"
     )
@@ -681,7 +749,8 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
     tmp_path, monkeypatch
 ):
     source = load_run_config_or_grid(
-        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+        "configs/runs/relational_reasoning/first_population_studies/"
+        "population_study_06/study06_beta_ablation.yaml"
     )
     config = tmp_path / "grid.yaml"
     config.write_text(
@@ -738,7 +807,8 @@ def test_amarel_auto_submission_uses_generic_cell_launcher_and_ignores_source_si
     tmp_path, monkeypatch
 ):
     source = load_run_config_or_grid(
-        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+        "configs/runs/relational_reasoning/first_population_studies/"
+        "population_study_06/study06_beta_ablation.yaml"
     )
     config = tmp_path / "grid.yaml"
     config.write_text(
@@ -788,7 +858,8 @@ def test_amarel_rejects_a_cell_plan_above_the_72_hour_hard_limit(
     tmp_path, monkeypatch
 ):
     source = load_run_config_or_grid(
-        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+        "configs/runs/relational_reasoning/first_population_studies/"
+        "population_study_06/study06_beta_ablation.yaml"
     )
     (tmp_path / "grid.yaml").write_text(
         yaml.safe_dump(source.base.to_dict(), sort_keys=False)
@@ -831,7 +902,7 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     raw = yaml.safe_load(
         Path(
             "configs/runs/relational_reasoning/"
-            "relational_imitation_round_feedback_controlled_smoke.yaml"
+            "misselaneous/relational_imitation_round_feedback_controlled_smoke.yaml"
         ).read_text(encoding="utf-8")
     )
     raw["storage"]["artifact_profile"] = "results_only"
@@ -1219,7 +1290,7 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
     raw = yaml.safe_load(
         Path(
             "configs/runs/relational_reasoning/"
-            "relational_imitation_round_feedback_controlled_smoke.yaml"
+            "misselaneous/relational_imitation_round_feedback_controlled_smoke.yaml"
         ).read_text(encoding="utf-8")
     )
     raw["storage"]["overwrite"] = False
@@ -1376,7 +1447,9 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
 
 
 def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path):
-    study_root = Path("configs/runs/relational_reasoning/population_study_06")
+    study_root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_06"
+    )
     study = discover_study(study_root)
     assert [path.name for path in study.configs] == [
         "study06_main_b_theta.yaml",

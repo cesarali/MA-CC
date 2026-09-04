@@ -34,6 +34,7 @@ from mas_cc.games.protocols import AgentState, GameState, Transition, _thaw
 from ..data import DEFAULT_TASK_DATASET_DIR
 from .prompts import (
     BOARD_PROMPT_VERSION,
+    BOARD_PROMPT_VERSIONS,
     IMPLEMENTED_VOTE_VISIBILITIES,
     LOCAL_PROMPT_VARIANTS,
     PROMPT_VERSION,
@@ -86,7 +87,7 @@ MESSAGE_NONE = "NONE"
 MESSAGE_DIRECTIVE = "DIRECTIVE"
 ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
 ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
-CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE,)
+CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE, MESSAGE_REPORT)
 BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
 LEGACY_BOARD_MESSAGE_TYPES = (
     "CLAIM",
@@ -152,6 +153,12 @@ class BlackboardMessage:
                 self.shared_fact_id is not None
             ):
                 raise ValueError(f"{self.message_type} cannot carry shared_fact_id")
+            if (
+                self.author_kind == "controller"
+                and self.message_type == MESSAGE_REPORT
+                and self.shared_fact_id is None
+            ):
+                raise ValueError("controller REPORT requires shared_fact_id")
         elif self.message_type in {"REPLY", "CORRECTION"} and not self.reply_to:
             raise ValueError(f"{self.message_type} requires reply_to")
         if self.expires_after_round < self.round_created:
@@ -409,6 +416,14 @@ class RelationalGameState(GameState):
 
         return str(self.task["facts"][fact_id]["text"])
 
+    def controller_report_text(self, fact_id: str) -> str:
+        """The exact canonical proposition used for truthful controller reports."""
+
+        texts = self.task.get("controller_report_texts", {})
+        if isinstance(texts, Mapping) and fact_id in texts:
+            return str(texts[fact_id])
+        return self.fact_text(fact_id)
+
     def relational_agent(self, agent_id: AgentId) -> RelationalAgentState:
         agent = self.agent(agent_id)
         if not isinstance(agent, RelationalAgentState):
@@ -535,6 +550,8 @@ class RelationalRules:
     task_id: str | None
     initial_information_path: str | None
     initial_information_sha256: str | None
+    truthful_controller_design_path: str | None
+    truthful_controller_design_sha256: str | None
     vote_visibility: str
     prompt_version: int
     receiver_epistemic_disposition: str
@@ -659,6 +676,44 @@ class RelationalRules:
                 "game.options.initial_information is supported only for "
                 "musr_team_allocation"
             )
+        controller_design = _mapping(
+            options.get("truthful_controller_design"),
+            "game.options.truthful_controller_design",
+        )
+        truthful_controller_design_path = controller_design.get("artifact_path")
+        truthful_controller_design_sha256 = controller_design.get(
+            "expected_file_sha256"
+        )
+        if truthful_controller_design_path is not None and (
+            not isinstance(truthful_controller_design_path, str)
+            or not truthful_controller_design_path.strip()
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design.artifact_path must be a path"
+            )
+        if truthful_controller_design_sha256 is not None and (
+            not isinstance(truthful_controller_design_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", truthful_controller_design_sha256)
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design.expected_file_sha256 must "
+                "be a lowercase 64-character SHA-256"
+            )
+        if (truthful_controller_design_path is None) != (
+            truthful_controller_design_sha256 is None
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design must provide artifact_path "
+                "and expected_file_sha256 together"
+            )
+        if (
+            truthful_controller_design_path is not None
+            and task_family != "musr_team_allocation"
+        ):
+            raise ValueError(
+                "game.options.truthful_controller_design is supported only for "
+                "musr_team_allocation"
+            )
 
         visibility = str(options.get("vote_visibility", "public"))
         if visibility not in VOTE_VISIBILITIES:
@@ -694,14 +749,24 @@ class RelationalRules:
         expected_prompt_version = (
             BOARD_PROMPT_VERSION if social_mode == SOCIAL_MODE_BOARD else PROMPT_VERSION
         )
+        supported_prompt_versions = (
+            BOARD_PROMPT_VERSIONS
+            if social_mode == SOCIAL_MODE_BOARD
+            else (PROMPT_VERSION,)
+        )
         prompt_version = options.get("prompt_version", expected_prompt_version)
         if (
             isinstance(prompt_version, bool)
-            or prompt_version != expected_prompt_version
+            or prompt_version not in supported_prompt_versions
         ):
+            if social_mode != SOCIAL_MODE_BOARD:
+                raise ValueError(
+                    f"the {GAME_TYPE!r} prompt family has one version; "
+                    f"game.options.prompt_version must be {expected_prompt_version}"
+                )
             raise ValueError(
-                f"the {GAME_TYPE!r} prompt family has one version; "
-                f"game.options.prompt_version must be {expected_prompt_version}"
+                f"game.options.prompt_version must be one of "
+                f"{list(supported_prompt_versions)}"
             )
 
         initialization = _mapping(
@@ -795,6 +860,8 @@ class RelationalRules:
             task_id=task_id,
             initial_information_path=initial_information_path,
             initial_information_sha256=initial_information_sha256,
+            truthful_controller_design_path=truthful_controller_design_path,
+            truthful_controller_design_sha256=truthful_controller_design_sha256,
             vote_visibility=visibility,
             prompt_version=int(prompt_version),
             receiver_epistemic_disposition=prompt_class,

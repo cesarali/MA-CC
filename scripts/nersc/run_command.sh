@@ -44,9 +44,6 @@ nersc_validate_immediate "${immediate}"
 nersc_validate_positive_integer "cpus per task" "${cpus_per_task}"
 (( cpus_per_task <= NERSC_CPU_LOGICAL_CPUS )) || \
   nersc_die "cpus per task cannot exceed ${NERSC_CPU_LOGICAL_CPUS} logical CPUs"
-nersc_require_command salloc
-nersc_require_command srun
-
 command=(
   salloc
   --qos=interactive
@@ -69,4 +66,6 @@ if [[ "${dry_run}" == true ]]; then
   exit 0
 fi
 
+nersc_require_command salloc
+nersc_require_command srun
 exec "${command[@]}"

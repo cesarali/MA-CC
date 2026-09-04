@@ -21,7 +21,10 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.state import Rel
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 
 
-BASE = "configs/runs/relational_reasoning/relational_imitation_round_feedback_controlled_smoke.yaml"
+BASE = (
+    "configs/runs/relational_reasoning/misselaneous/"
+    "relational_imitation_round_feedback_controlled_smoke.yaml"
+)
 DATASET = "src/mas_cc/relational_task_generator/relational_task_generator/datasets/pop24_L2_r06"
 
 

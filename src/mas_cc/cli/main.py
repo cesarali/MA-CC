@@ -207,7 +207,15 @@ def build_parser() -> argparse.ArgumentParser:
     blackboard_dashboard = blackboard_commands.add_parser(
         "dashboard", help="serve the interactive read-only blackboard dashboard"
     )
-    blackboard_dashboard.add_argument("--run-dir", type=Path, required=True)
+    blackboard_source = blackboard_dashboard.add_mutually_exclusive_group(required=True)
+    blackboard_source.add_argument(
+        "--run-dir",
+        type=Path,
+        help="episode/run directory, or a standardized study root",
+    )
+    blackboard_source.add_argument(
+        "--study-dir", type=Path, help="standardized study result root"
+    )
     blackboard_dashboard.add_argument("--episode-id")
     blackboard_dashboard.add_argument("--host", default="127.0.0.1")
     blackboard_dashboard.add_argument("--port", type=int, default=8765)
@@ -773,7 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         try:
             serve_dashboard(
-                args.run_dir,
+                args.study_dir or args.run_dir,
                 episode_id=args.episode_id,
                 host=args.host,
                 port=args.port,

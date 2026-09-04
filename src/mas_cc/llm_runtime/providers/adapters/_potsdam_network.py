@@ -9,6 +9,7 @@ from __future__ import annotations
 import atexit
 import os
 import socket
+import ssl
 import subprocess
 import threading
 import time
@@ -44,6 +45,18 @@ def _bridge_is_ready(port: int) -> bool:
     return b"204 No Content" in response and b"MA-CC-Potsdam-Bridge" in response
 
 
+def _direct_https_is_ready(hostname: str) -> bool:
+    """Return true when WSL can already reach the VPN endpoint directly."""
+
+    try:
+        raw = socket.create_connection((hostname, 443), timeout=1.5)
+        context = ssl.create_default_context()
+        with raw, context.wrap_socket(raw, server_hostname=hostname):
+            return True
+    except OSError:
+        return False
+
+
 def _find_bridge_script() -> Path:
     starts = [Path(__file__).resolve(), Path.cwd().resolve()]
     checked: set[Path] = set()
@@ -56,7 +69,9 @@ def _find_bridge_script() -> Path:
             candidate = root / "scripts" / "Potsdam" / "windows_connect_proxy.ps1"
             if candidate.is_file():
                 return candidate
-    raise PotsdamNetworkError("Could not find scripts/Potsdam/windows_connect_proxy.ps1.")
+    raise PotsdamNetworkError(
+        "Could not find scripts/Potsdam/windows_connect_proxy.ps1."
+    )
 
 
 def _stop_owned_process() -> None:
@@ -67,11 +82,15 @@ def _stop_owned_process() -> None:
         process.terminate()
 
 
-def ensure_windows_vpn_bridge(base_url: str, *, port: int = DEFAULT_BRIDGE_PORT) -> str | None:
+def ensure_windows_vpn_bridge(
+    base_url: str, *, port: int = DEFAULT_BRIDGE_PORT
+) -> str | None:
     """Return a local HTTPS proxy only for the known Potsdam host under WSL."""
 
     hostname = (urlsplit(base_url).hostname or "").lower()
     if not _is_wsl() or hostname != POTSDAM_PROXY_HOST:
+        return None
+    if _direct_https_is_ready(hostname):
         return None
     if not 1024 <= port <= 65535:
         raise PotsdamNetworkError("Potsdam Windows bridge port is invalid.")

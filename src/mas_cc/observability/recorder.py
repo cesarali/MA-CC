@@ -26,6 +26,7 @@ from mas_cc.storage import (
     AtomicCheckpointStore,
     Checkpoint,
     ScientificIdentity,
+    SemanticDashboardWriter,
     canonical_hash,
     compact_imitation_event,
     empty_compact_row,
@@ -305,6 +306,46 @@ class RunRecorder:
             self._micro_slot_trajectory_path = (
                 self.output_dir / "micro_slot_trajectory.jsonl"
             )
+        self._semantic_writer = None
+        if self.retention_policy.semantic_dashboard:
+            assert self.scientific_identity is not None
+            self._semantic_writer = SemanticDashboardWriter(
+                self._round_trajectory_path.parent,
+                identity={
+                    "run_id": self.scientific_identity.run_id,
+                    "cell_id": self.scientific_identity.cell_id,
+                    "episode_id": self.scientific_identity.episode_id,
+                    "episode_seed": self.scientific_identity.episode_seed,
+                },
+                header={
+                    "game_type": self.scientific_identity.game_type,
+                    "protocol_version": "relational_blackboard_semantic_v1",
+                    "resolved_config_hash": self.scientific_identity.resolved_config_hash,
+                    "prompt_definition_hashes_hash": self.scientific_identity.prompt_definition_hashes_hash,
+                    "task_id": self.scientific_identity.task_id,
+                    "population_size": resolved_config.get("game", {}).get(
+                        "population_size"
+                    ),
+                    "rounds": resolved_config.get("game", {})
+                    .get("options", {})
+                    .get("rounds"),
+                    "q": resolved_config.get("game", {})
+                    .get("options", {})
+                    .get("social_group_size"),
+                    "epistemic_persistence": resolved_config.get("game", {})
+                    .get("options", {})
+                    .get("epistemic_persistence"),
+                    "controller": dict(resolved_config.get("control", {})),
+                    "expected_updates": int(
+                        resolved_config.get("game", {}).get("population_size", 0)
+                    )
+                    * int(
+                        resolved_config.get("game", {})
+                        .get("options", {})
+                        .get("rounds", 0)
+                    ),
+                },
+            )
         self._detailed_created = False
         self._metric_rows: list[dict[str, Any]] = []
         self._checkpoint_store = AtomicCheckpointStore(self.output_dir / ".checkpoints")
@@ -342,11 +383,24 @@ class RunRecorder:
                 stream.write(
                     f"{row['timestamp']} {event_type} {json.dumps({k: v for k, v in payload.items() if k not in {'prompt', 'response'}}, sort_keys=True, default=str)}\n"
                 )
-        self._logger.info(
-            "%s %s",
-            event_type,
-            {k: v for k, v in payload.items() if k not in {"prompt", "response"}},
+        logged_payload = (
+            {
+                key: payload.get(key)
+                for key in (
+                    "round_index",
+                    "within_round_index",
+                    "global_update_index",
+                    "interaction_index",
+                    "status",
+                    "completed_rounds",
+                    "error_type",
+                )
+                if payload.get(key) is not None
+            }
+            if self.retention_policy.semantic_dashboard
+            else {k: v for k, v in payload.items() if k not in {"prompt", "response"}}
         )
+        self._logger.info("%s %s", event_type, logged_payload)
 
     def record_attempt(
         self,
@@ -388,11 +442,22 @@ class RunRecorder:
                 response.usage.output_tokens or 0
             )
         if response is not None and validation_issues:
-            self._record_malformed_response(
-                common=common,
-                response=response,
-                request=request,
-                issues=validation_issues,
+            if not self.retention_policy.semantic_dashboard:
+                self._record_malformed_response(
+                    common=common,
+                    response=response,
+                    request=request,
+                    issues=validation_issues,
+                )
+        if self._semantic_writer is not None:
+            self._semantic_writer.attempt(
+                round_index=round_index,
+                interaction_id=common["interaction_id"],
+                agent_id=common["agent_id"],
+                attempt=attempt,
+                valid=valid,
+                validation_issues=validation_issues,
+                repair=bool(metadata.get("validation_repair", False)),
             )
         if not self.retention_policy.verbose_episode_history:
             return
@@ -601,6 +666,14 @@ class RunRecorder:
             )
             self.event("checkpoint_written", completed_rounds=round_index)
 
+    def record_semantic_initialization(self, *, state: Mapping[str, Any]) -> None:
+        if self._semantic_writer is not None:
+            self._semantic_writer.initialization(state)
+
+    def record_semantic_round_start(self, **payload: Any) -> None:
+        if self._semantic_writer is not None:
+            self._semantic_writer.round_start(**payload)
+
     def record_trajectory(self, *, record: Any) -> None:
         """Persist a game-supplied rich trajectory row locally.
 
@@ -614,6 +687,37 @@ class RunRecorder:
             event = payload.get("event")
             if not isinstance(event, Mapping):
                 return
+            if self._semantic_writer is not None:
+                public_action = None
+                decisions = payload.get("decisions", ())
+                if isinstance(decisions, Sequence) and decisions:
+                    decision = decisions[-1]
+                    if isinstance(decision, Mapping):
+                        action = decision.get("action")
+                        if isinstance(action, Mapping):
+                            metadata = action.get("metadata", {})
+                            message = (
+                                metadata.get("public_message")
+                                if isinstance(metadata, Mapping)
+                                else None
+                            )
+                            public_action = {
+                                "vote": action.get("value"),
+                                "message": (
+                                    None
+                                    if not isinstance(message, Mapping)
+                                    else {
+                                        key: message.get(key)
+                                        for key in (
+                                            "type",
+                                            "text",
+                                            "shared_fact_id",
+                                            "reply_to",
+                                        )
+                                    }
+                                ),
+                            }
+                self._semantic_writer.update(event, public_action)
             if "within_round_index" in event:
                 retained_fields = (
                     "round_index",
@@ -642,6 +746,9 @@ class RunRecorder:
                     "sampled_message_types",
                     "sampled_message_ages",
                     "sampled_controller_message_ids",
+                    "sampled_controller_report_ids",
+                    "new_controller_fact_ids",
+                    "reactivated_controller_fact_ids",
                     "focal_posted_message",
                     "new_message",
                     "new_message_id",
@@ -705,6 +812,9 @@ class RunRecorder:
         prompt_definitions: Mapping[str, str],
     ) -> None:
         """Replace the micro-step checkpoint with the canonical round-end state."""
+
+        if self._semantic_writer is not None:
+            self._semantic_writer.round_end(round_index=round_index, state=state)
 
         if self.checkpoint_enabled and self.retention_policy.verbose_episode_history:
             completed = int(state.get("turn", round_index))
@@ -925,12 +1035,18 @@ class RunRecorder:
         if self.retention_policy.compact_scientific:
             comet = self.comet.close()
             if status != "completed":
+                if self._semantic_writer is not None:
+                    self._semantic_writer.finalize(
+                        status,
+                        error_type=None if error is None else type(error).__name__,
+                    )
                 return {
                     "audit": self.selector.summary(),
                     "comet": comet,
                     "checkpoint": None,
                     "detailed_files_created": False,
                     "scientific_path": None,
+                    "dashboard_semantic_seal": None,
                     "error_type": None if error is None else type(error).__name__,
                 }
             final_metrics = json.dumps(
@@ -949,12 +1065,20 @@ class RunRecorder:
                 started_at=self._started_at,
                 usage=self._episode_usage,
             )
+            semantic_seal = (
+                None
+                if self._semantic_writer is None
+                else self._semantic_writer.finalize("completed")
+            )
             return {
                 "audit": self.selector.summary(),
                 "comet": comet,
                 "checkpoint": {"mode": "episode", "path": str(path)},
                 "detailed_files_created": False,
                 "scientific_path": str(path),
+                "dashboard_semantic_seal": None
+                if semantic_seal is None
+                else str(semantic_seal),
             }
         self.record_budget("run_completed", budget_status)
         self.event("run_completed", status=status, audit=self.selector.summary())

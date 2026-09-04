@@ -254,9 +254,17 @@ def build_blackboard_pilot_artifacts(
             "detailed prompt audit is incomplete; configure every round with no prompt cap"
         )
 
-    assignment_path = Path(
-        str(config.game.options["initial_information"]["artifact_path"])
-    )
+    initial_information = config.game.options.get("initial_information")
+    if isinstance(initial_information, Mapping) and initial_information.get(
+        "artifact_path"
+    ):
+        assignment_path = Path(str(initial_information["artifact_path"]))
+    else:
+        assignment_path = (
+            Path(str(config.game.options["task_dataset_dir"]))
+            / str(config.game.options["task_id"])
+            / f"distribution_N{config.game.population_size}.json"
+        )
     shutil.copyfile(assignment_path, root / "initial_assignment.json")
     (root / "config.yaml").write_text(
         yaml.safe_dump(config.to_dict(), sort_keys=False), encoding="utf-8"
@@ -608,9 +616,7 @@ def build_blackboard_pilot_artifacts(
                 "directive_exposed_focal_updates": record.get(
                     "directive_exposed_focal_updates", 0
                 ),
-                "directive_unique_readers": record.get(
-                    "controller_unique_readers", 0
-                ),
+                "directive_unique_readers": record.get("controller_unique_readers", 0),
             }
         )
     _write_csv(
@@ -742,17 +748,17 @@ support for estimating controller efficiency.
 
 1. Sequence: each row records night sensing and `U`, then dawn seeding, an autonomous day, and `n_k+1`.
 2. Policy: the inherited soft-target probability and sampled action are retained unchanged.
-3. `U=0`: every such round has zero dawn DIRECTIVEs: `{all(int(r.get('dawn_directive_count', 0)) == 0 for r in rounds if r.get('U_k') == 0)}`.
+3. `U=0`: every such round has zero dawn DIRECTIVEs: `{all(int(r.get("dawn_directive_count", 0)) == 0 for r in rounds if r.get("U_k") == 0)}`.
 4. `U=1`: exactly `b` dawn DIRECTIVEs: `{dawn_contract}`.
 5. Dawn ordering: all coordinator posts have the round-boundary micro-step and exist before the first focal update.
 6. Day silence: no coordinator post is created by a daytime focal update: `{daytime_silent}`.
 7. Prompt identity: coordinator messages render under the neutral public alias `{control_label(population_size)}`; the special role label is absent from rendered prompts.
 8. Population boundary: coordinator vote is social context only; every sensor ID belongs to the `{population_size}` ordinary agents: `{sensor_population_only}`.
 9. Realized exposure is reported per round above; nominal `b` is never substituted for sampled exposure.
-10. DIRECTIVE replies: `{sum(int(r.get('controller_direct_replies', 0)) for r in rounds)}` total, including `{sum(int(r.get('directive_report_reply_count', 0)) for r in rounds)}` REPORT replies.
+10. DIRECTIVE replies: `{sum(int(r.get("controller_direct_replies", 0)) for r in rounds)}` total, including `{sum(int(r.get("directive_report_reply_count", 0)) for r in rounds)}` REPORT replies.
 11. Transitive evidence lineage records `{attributed_exact}` acquisitions and `{attributed_refreshes}` refreshes.
 12. `K_active`, `K_hist`, board expiry, and persistence are archived independently.
-13. Mechanical freeze status: `{'PASS' if dawn_contract and daytime_silent and sensor_population_only else 'FAIL'}`. This is an engineering result, not a scientific efficiency claim.
+13. Mechanical freeze status: `{"PASS" if dawn_contract and daytime_silent and sensor_population_only else "FAIL"}`. This is an engineering result, not a scientific efficiency claim.
 
 ## Artifact guide
 

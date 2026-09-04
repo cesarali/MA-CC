@@ -23,6 +23,7 @@ import resource
 import shutil
 import threading
 import time
+import traceback
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -77,6 +78,7 @@ from mas_cc.storage import (
     validate_cell_artifact,
     validate_episode_artifact,
     validate_episode_frame,
+    validate_semantic_stream,
 )
 
 from .aggregation import GridAggregator, aggregation_ground_truth
@@ -759,6 +761,21 @@ class _CellCompletion:
         return self._seen[cell_id] == self._expected[cell_id]
 
 
+def _crash_site(exc: BaseException) -> str:
+    """Where an exception was raised, with no message text.
+
+    Used where the retention profile forbids keeping ``str(exc)``.  A file,
+    line, and function name are enough to find the bug and cannot leak a
+    provider response.
+    """
+
+    frames = traceback.extract_tb(exc.__traceback__)
+    if not frames:
+        return "unknown location"
+    last = frames[-1]
+    return f"{Path(last.filename).name}:{last.lineno} in {last.name}"
+
+
 class _RoundTickingObserver:
     """Adds budget/progress ticks and optional prompt Markdown at runtime."""
 
@@ -774,6 +791,7 @@ class _RoundTickingObserver:
         prompt_sampler: "_CellPromptSampler | None" = None,
         prompt_cell_dir: Path | None = None,
         prompt_episode_id: str | None = None,
+        prompt_context: Mapping[str, Any] | None = None,
     ) -> None:
         self.recorder = recorder
         self.guard = guard
@@ -784,6 +802,7 @@ class _RoundTickingObserver:
         self.prompt_sampler = prompt_sampler
         self.prompt_cell_dir = prompt_cell_dir
         self.prompt_episode_id = prompt_episode_id or episode_label
+        self.prompt_context = dict(prompt_context or {})
         self._logged_rounds: set[int] = set()
         # Compact runs stream every canonical micro/round row immediately.
         # Keeping the rich game result as well duplicates prompts, responses,
@@ -816,7 +835,6 @@ class _RoundTickingObserver:
         if (
             self.prompt_sampler is not None
             and self.prompt_cell_dir is not None
-            and attempt == 1
             and payload.get("valid")
         ):
             request = payload["request"]
@@ -829,9 +847,24 @@ class _RoundTickingObserver:
                     payload["prompt"],
                     title=f"Round {round_index} — agent {agent_id}",
                     metadata={"round_index": round_index, "agent_id": str(agent_id)},
-                    response=payload.get("response"),
-                    validation_error=payload.get("validation_error"),
+                    response=None,
+                    validation_error=None,
                 ),
+                metadata={
+                    **self.prompt_context,
+                    "agent_id": str(agent_id),
+                    "update_index": int(
+                        request.metadata.get(
+                            "global_update_index",
+                            request.metadata.get("interaction_index", 0),
+                        )
+                    ),
+                    "repair_guidance_included": bool(
+                        request.metadata.get("validation_repair", False)
+                    ),
+                    "prompt_definition_hash": payload["prompt"].definition_hash,
+                    "prompt_content_hash": payload["prompt"].instance_hash,
+                },
             )
 
     def record_interaction(self, **payload: Any) -> None:
@@ -839,6 +872,12 @@ class _RoundTickingObserver:
             **payload, budget_status=self.guard.checkpoint_state()
         )
         self.progress.round_tick(self.episode_label, payload.get("round_index"))
+
+    def record_semantic_initialization(self, **payload: Any) -> None:
+        self.recorder.record_semantic_initialization(**payload)
+
+    def record_semantic_round_start(self, **payload: Any) -> None:
+        self.recorder.record_semantic_round_start(**payload)
 
     def record_trajectory(self, **payload: Any) -> None:
         self.recorder.record_trajectory(**payload)
@@ -1000,7 +1039,13 @@ class _CellPromptSampler:
         return cell_dir / ".resume" / episode_id / "prompt_candidates.json.gz"
 
     def capture(
-        self, cell_dir: Path, episode_id: str, round_index: int, markdown: str
+        self,
+        cell_dir: Path,
+        episode_id: str,
+        round_index: int,
+        markdown: str,
+        *,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         if self.count == 0:
             return
@@ -1013,8 +1058,56 @@ class _CellPromptSampler:
                         candidates = list(json.load(stream))
                 except (OSError, ValueError, TypeError):
                     candidates = []
-            item = {"round_index": int(round_index), "markdown": markdown}
-            if len(candidates) < self.count:
+            item = {
+                "round_index": int(round_index),
+                "markdown": markdown,
+                **dict(metadata or {}),
+            }
+            if self.count == 3 and item.get("rounds"):
+                rounds = int(item["rounds"])
+                targets = {
+                    "beginning": 0,
+                    "middle": (rounds - 1) // 2,
+                    "end": rounds - 1,
+                }
+                labels = [
+                    label for label, target in targets.items() if target == round_index
+                ]
+                if not labels:
+                    return
+                item["sample_point"] = labels[0]
+                previous = next(
+                    (
+                        value
+                        for value in candidates
+                        if value.get("sample_point") == item["sample_point"]
+                    ),
+                    None,
+                )
+                ordering = (
+                    int(item.get("update_index", 0)),
+                    str(item.get("agent_id", "")),
+                )
+                if previous is not None and ordering > (
+                    int(previous.get("update_index", 0)),
+                    str(previous.get("agent_id", "")),
+                ):
+                    return
+                candidates = [
+                    value
+                    for value in candidates
+                    if value.get("sample_point") != item["sample_point"]
+                ]
+                candidates.append(item)
+                candidates.sort(
+                    key=lambda value: (
+                        ("beginning", "middle", "end").index(value["sample_point"]),
+                        int(value.get("update_index", 0)),
+                        str(value.get("agent_id", "")),
+                    )
+                )
+                candidates = candidates[:3]
+            elif len(candidates) < self.count:
                 candidates.append(item)
             elif self.count == 1:
                 # A single example is deliberately the initial prompt shape.
@@ -1026,7 +1119,7 @@ class _CellPromptSampler:
             path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_name(path.name + ".tmp")
             with gzip.open(temporary, "wt", encoding="utf-8") as stream:
-                json.dump(candidates, stream, ensure_ascii=False)
+                json.dump(candidates, stream, ensure_ascii=False, default=str)
             temporary.replace(path)
 
     def render(
@@ -1034,21 +1127,54 @@ class _CellPromptSampler:
     ) -> Path | None:
         if self.count == 0:
             return None
-        for episode_id in sorted(completed_episode_ids):
-            path = self._path(cell_dir, episode_id)
-            if not path.is_file():
-                continue
-            with gzip.open(path, "rt", encoding="utf-8") as stream:
-                candidates = list(json.load(stream))[: self.count]
-            if not candidates:
-                continue
+        selected: list[dict[str, Any]] = []
+        if self.count == 3:
+            for label in ("beginning", "middle", "end"):
+                for episode_id in sorted(completed_episode_ids):
+                    path = self._path(cell_dir, episode_id)
+                    if not path.is_file():
+                        continue
+                    with gzip.open(path, "rt", encoding="utf-8") as stream:
+                        candidates = list(json.load(stream))
+                    match = next(
+                        (
+                            item
+                            for item in candidates
+                            if item.get("sample_point") == label
+                        ),
+                        None,
+                    )
+                    if match is not None:
+                        selected.append({**match, "episode_id": episode_id})
+                        break
+        else:
+            for episode_id in sorted(completed_episode_ids):
+                path = self._path(cell_dir, episode_id)
+                if not path.is_file():
+                    continue
+                with gzip.open(path, "rt", encoding="utf-8") as stream:
+                    candidates = list(json.load(stream))[: self.count]
+                if candidates:
+                    selected = [
+                        {**item, "episode_id": episode_id} for item in candidates
+                    ]
+                    break
+        if selected:
             sections = [
                 "# Prompt examples",
                 "",
-                f"Deterministically selected from completed episode `{episode_id}`.",
+                "Deterministically selected from completed episode(s): "
+                + ", ".join(
+                    f"`{episode_id}`"
+                    for episode_id in dict.fromkeys(
+                        str(item["episode_id"]) for item in selected
+                    )
+                )
+                + ".",
                 "",
             ]
-            for index, item in enumerate(candidates, start=1):
+            samples = []
+            for index, item in enumerate(selected[: self.count], start=1):
                 sections.extend(
                     [
                         f"## Example {index} (round {item['round_index']})",
@@ -1057,8 +1183,20 @@ class _CellPromptSampler:
                         "",
                     ]
                 )
+                samples.append(
+                    {key: value for key, value in item.items() if key not in {"rounds"}}
+                )
             destination = cell_dir / "prompt_examples.md"
             _write(destination, "\n".join(sections).rstrip() + "\n")
+            payload = {
+                "schema_version": 1,
+                "sample_count": len(samples),
+                "samples": samples,
+            }
+            encoded = (
+                json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+            )
+            _write(cell_dir / "dashboard_prompt_examples.json", encoded)
             return destination
         return None
 
@@ -1126,6 +1264,12 @@ def _partition_resume_tasks(
             else:
                 scheduled.append(task)
                 continue
+            if task.config.storage.retention_policy.semantic_dashboard:
+                validate_semantic_stream(
+                    (task.cell_dir or task.episode_dir)
+                    / "round_records"
+                    / task.episode_id
+                )
             resumed.append(
                 EpisodeOutcome(
                     task.episode_id,
@@ -1221,6 +1365,20 @@ class _ResultsOnlyFinalizer:
             if self._sampler is not None:
                 self._sampler.render(cell_dir, [item.episode_id for item in identities])
             summary = merge_episode_artifacts(cell_dir, identities, remove_shards=True)
+            prompt_artifact = cell_dir / "dashboard_prompt_examples.json"
+            if prompt_artifact.is_file():
+                summary = {
+                    **summary,
+                    "dashboard_prompt_examples": {
+                        "path": prompt_artifact.name,
+                        "sha256": file_sha256(prompt_artifact),
+                        "schema_version": 1,
+                    },
+                }
+                _write(
+                    cell_dir / "cell_complete.json",
+                    json.dumps(summary, sort_keys=True, indent=2) + "\n",
+                )
             episodes_dir = cell_dir / "data" / "episodes"
             if episodes_dir.is_dir():
                 shutil.rmtree(episodes_dir)
@@ -1423,11 +1581,51 @@ async def _execute_episode(
             prompt_sampler=prompt_sampler if prompt_scope == "cell" else None,
             prompt_cell_dir=prompt_cell_dir,
             prompt_episode_id=prompt_episode_id,
+            prompt_context={
+                "cell_id": (
+                    scientific_identity.cell_id
+                    if scientific_identity is not None
+                    else prompt_cell_dir.name
+                ),
+                "source_config": episode_config.experiment.name,
+                "rounds": int(
+                    episode_config.game.options.get(
+                        "rounds", episode_config.game.horizon
+                    )
+                ),
+                "condition": episode_config.experiment.metadata.get("arm"),
+                "controller_role": episode_config.control.mechanism,
+                "game_parameters": {
+                    "population_size": episode_config.game.population_size,
+                    "social_group_size": episode_config.game.options.get(
+                        "social_group_size"
+                    ),
+                    "epistemic_persistence": episode_config.game.options.get(
+                        "epistemic_persistence"
+                    ),
+                    "vote_visibility": episode_config.game.options.get(
+                        "vote_visibility"
+                    ),
+                    # ``game.options`` hands out read-only mappingproxy views.
+                    # ``json.dump`` refuses one, and this value is copied into
+                    # every retained prompt example, so leaving it unconverted
+                    # kills the episode at its first prompt capture.
+                    "board": dict(episode_config.game.options.get("board") or {}),
+                },
+                "prompt_schema_version": episode_config.prompt.schema_version,
+                "prompt_template_version": episode_config.prompt.prompt_version,
+                "provider": episode_config.llm_provider.type,
+                "model": episode_config.llm_provider.model,
+            },
         )
         try:
             result = await runtime(observer)
         except Exception as exc:
-            recorder.event("run_failed", error_type=type(exc).__name__, error=str(exc))
+            recorder.event(
+                "run_failed",
+                error_type=type(exc).__name__,
+                **({} if retention_policy.semantic_dashboard else {"error": str(exc)}),
+            )
             recorder.finalize(
                 status="failed", budget_status=guard.checkpoint_state(), error=exc
             )
@@ -1667,10 +1865,28 @@ async def _run_episode_task(
                 task.seed,
                 "failed",
                 error_type=type(exc).__name__,
-                error=str(exc),
+                error=(
+                    None
+                    if task.config.storage.retention_policy.semantic_dashboard
+                    else str(exc)
+                ),
                 cell_id=task.cell_id,
             )
-            LOGGER.error("episode %s failed: %s: %s", label, type(exc).__name__, exc)
+            if task.config.storage.retention_policy.semantic_dashboard:
+                # Lean retention deliberately drops ``str(exc)``: an exception
+                # message can quote a raw provider response, which this profile
+                # must not keep.  The crash site carries no provider text, so
+                # log that instead of leaving only a bare exception name.
+                LOGGER.error(
+                    "episode %s failed: %s at %s",
+                    label,
+                    type(exc).__name__,
+                    _crash_site(exc),
+                )
+            else:
+                LOGGER.error(
+                    "episode %s failed: %s: %s", label, type(exc).__name__, exc
+                )
         finally:
             _TIMING_EPISODE.reset(timing_token)
         outcome = _timed(outcome)
@@ -1841,6 +2057,11 @@ async def run_experiment(
     )
 
     game = create_game(config.game)
+    if config.game.type == "relational_imitation_round_feedback":
+        controller = create_control(config.control)
+        validator = getattr(controller, "validate_truthful_report_task", None)
+        if validator is not None:
+            validator(game.load_task(config.game), config.execution.seed)
     plan = game.call_plan(config.game)
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)
@@ -2342,7 +2563,10 @@ async def run_experiment_grid(
             for raw_index, raw_seed in planned.items():
                 index = int(raw_index)
                 seed = int(raw_seed)
-                if index < 0 or index >= cells_by_id[cell_id].config.execution.repetitions:
+                if (
+                    index < 0
+                    or index >= cells_by_id[cell_id].config.execution.repetitions
+                ):
                     raise ValueError(
                         f"episode plan repetition {index} is outside the target range "
                         f"for {cell_id}"

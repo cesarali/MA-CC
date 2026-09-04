@@ -74,6 +74,7 @@ from .controller import (
     DIRECT_RECOMMENDATION,
     RECOMMENDATION_ONLY,
     SILENT,
+    TRUTHFUL_STRATEGIC_REPORT,
     TIMING_DAWN_ONLY,
     TIMING_MICROSCOPIC,
 )
@@ -96,6 +97,7 @@ from .state import (
     ACTIVE_FACT_IDS,
     FOCAL_UPDATE,
     MESSAGE_DIRECTIVE,
+    MESSAGE_REPORT,
     SOCIAL_MODE_BOARD,
     SOCIAL_MODE_PEER,
     BlackboardMessage,
@@ -510,6 +512,37 @@ def _append_controller_request(
     ), message
 
 
+def _append_controller_report(
+    state: RelationalGameState,
+    *,
+    target: str,
+    fact_id: str,
+    round_index: int,
+    lifetime_rounds: int,
+) -> tuple[RelationalGameState, BlackboardMessage]:
+    """Publish canonical evidence through the same REPORT schema peers use."""
+
+    canonical_text = state.controller_report_text(fact_id)
+    board = state.blackboard
+    message = BlackboardMessage(
+        message_id=f"m{len(board.messages) + 1:06d}",
+        author_id=CONTROL_SOURCE_ID,
+        message_type=MESSAGE_REPORT,
+        text=canonical_text,
+        vote=target,
+        shared_fact_id=fact_id,
+        reply_to=None,
+        round_created=round_index,
+        micro_step_created=state.turn,
+        expires_after_round=round_index + lifetime_rounds - 1,
+        author_kind="controller",
+    )
+    board = board.append(message)
+    return replace(
+        state, data={**dict(state.data), "blackboard": board.to_list()}
+    ), message
+
+
 def _descends_from_controller(
     state: RelationalGameState, message: BlackboardMessage
 ) -> bool:
@@ -679,18 +712,29 @@ async def run_relational_imitation_round_feedback_game(
         raise ValueError(
             "coordination_request requires game.options.social_mode: board"
         )
+    if (
+        rules.social_mode == SOCIAL_MODE_PEER
+        and actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+    ):
+        raise ValueError(
+            "truthful_strategic_report requires game.options.social_mode: board"
+        )
     dawn_blackboard = (
         rules.social_mode == SOCIAL_MODE_BOARD
-        and actuation_mode == COORDINATION_REQUEST
+        and actuation_mode in {COORDINATION_REQUEST, TRUTHFUL_STRATEGIC_REPORT}
         and controller_timing == TIMING_DAWN_ONLY
     )
     evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
     state = game.initialize(config.game, config.execution.seed)
+    task = game.load_task(config.game)
+    truthful_validator = getattr(
+        resolved_control, "validate_truthful_report_task", None
+    )
+    if truthful_validator is not None:
+        truthful_validator(task, config.execution.seed)
     resolver = getattr(resolved_control, "resolve_fact_id", None)
-    if resolver is not None:
-        controller_fact_id = resolver(
-            game.load_task(config.game), config.execution.seed
-        )
+    if resolver is not None and actuation_mode != TRUTHFUL_STRATEGIC_REPORT:
+        controller_fact_id = resolver(task, config.execution.seed)
 
     _notify(
         observer,
@@ -745,16 +789,16 @@ async def run_relational_imitation_round_feedback_game(
         initialization_artifact_hash=initialization_artifact_hash,
         physical_initial_state_hash=physical_initial_state_hash,
     )
+    _notify(observer, "record_semantic_initialization", state=initial_state.to_dict())
 
     interactions: list[RelationalInteractionRecord] = []
     round_records: list[RelationalRoundRecord] = []
-    retain_result_history = bool(
-        getattr(observer, "retain_result_history", True)
-    )
+    retain_result_history = bool(getattr(observer, "retain_result_history", True))
     logical_decisions = len(initial_decisions)
     validation_attempts = sum(
         decision.validation_attempts for decision in initial_decisions
     )
+    selected_report_rounds: dict[str, list[int]] = {}
     for round_index in range(0 if rules.initialization_only else rules.rounds):
         if state.terminated:
             break
@@ -881,10 +925,15 @@ async def run_relational_imitation_round_feedback_game(
         round_controller_readers: set[str] = set()
         round_controller_exposure_count = 0
         round_controller_exposed_updates = 0
+        round_controller_repeat_exposures = 0
         round_eligible_message_counts: list[int] = []
         round_eligible_directive_counts: list[int] = []
+        round_eligible_controller_report_counts: list[int] = []
         round_message_read_count = 0
         round_lineage_events: list[dict[str, Any]] = []
+        round_controller_report_adoptions = 0
+        round_controller_report_off_target_exposures = 0
+        round_controller_report_selection: list[dict[str, Any]] = []
 
         # Dawn is one atomic board perturbation. Every directive exists before
         # the first focal decision and the controller performs no daytime work.
@@ -894,21 +943,86 @@ async def run_relational_imitation_round_feedback_game(
             and target is not None
             and resolved_control is not None
         ):
-            directive_text = getattr(resolved_control, "coordination_request_text")(
-                target,
-                dict(round_signal.observation).get("sampled_opinion_counts", {}),
-                state.answer_display_texts,
-            )
-            for _ in range(intervention_budget):
-                state, controller_post = _append_controller_request(
-                    state,
-                    target=target,
-                    text=directive_text,
-                    round_index=round_index,
-                    lifetime_rounds=rules.board_message_lifetime_rounds,
+            if actuation_mode == TRUTHFUL_STRATEGIC_REPORT:
+                live_fact_counts = Counter(
+                    message.shared_fact_id
+                    for message in state.blackboard.live_messages(round_index)
+                    if message.message_type == MESSAGE_REPORT
+                    and message.shared_fact_id is not None
                 )
-                round_controller_post_ids.append(controller_post.message_id)
-                round_created_message_ids.append(controller_post.message_id)
+                selections = getattr(resolved_control, "select_truthful_reports")(
+                    task,
+                    episode_seed=config.execution.seed,
+                    round_index=round_index,
+                    live_fact_counts=live_fact_counts,
+                    selected_rounds=selected_report_rounds,
+                )
+                if len(selections) != intervention_budget:
+                    raise ValueError(
+                        "truthful strategic selector did not return exactly b reports"
+                    )
+                for selection in selections:
+                    state, controller_post = _append_controller_report(
+                        state,
+                        target=target,
+                        fact_id=selection.fact_id,
+                        round_index=round_index,
+                        lifetime_rounds=rules.board_message_lifetime_rounds,
+                    )
+                    selected_report_rounds.setdefault(selection.fact_id, []).append(
+                        round_index
+                    )
+                    round_controller_report_selection.append(selection.to_dict())
+                    round_controller_post_ids.append(controller_post.message_id)
+                    round_created_message_ids.append(controller_post.message_id)
+            else:
+                directive_text = getattr(resolved_control, "coordination_request_text")(
+                    target,
+                    dict(round_signal.observation).get("sampled_opinion_counts", {}),
+                    state.answer_display_texts,
+                )
+                for _ in range(intervention_budget):
+                    state, controller_post = _append_controller_request(
+                        state,
+                        target=target,
+                        text=directive_text,
+                        round_index=round_index,
+                        lifetime_rounds=rules.board_message_lifetime_rounds,
+                    )
+                    round_controller_post_ids.append(controller_post.message_id)
+                    round_created_message_ids.append(controller_post.message_id)
+
+        _notify(
+            observer,
+            "record_semantic_round_start",
+            round_index=round_index,
+            state=state.to_dict(),
+            expired_message_ids=list(night_expired_message_ids),
+            deactivated_pairs=[
+                {"agent_id": agent_id, "fact_id": fact_id}
+                for agent_id, fact_id in deactivated
+            ],
+            controller={
+                "enabled": round_signal is not None,
+                "action": action,
+                "target": target,
+                "probability": probability,
+                "sensor": None
+                if round_signal is None
+                else dict(round_signal.observation),
+                "directive_ids": list(round_controller_post_ids),
+                "post_ids": list(round_controller_post_ids),
+                "report_ids": [
+                    message.message_id
+                    for message in state.blackboard.messages
+                    if message.message_id in set(round_controller_post_ids)
+                    and message.message_type == MESSAGE_REPORT
+                ],
+                "selected_fact_ids": [
+                    row["fact_id"] for row in round_controller_report_selection
+                ],
+            },
+        )
 
         for within_round_index in range(rules.n_agents):
             controlled_slot = within_round_index in controlled_set
@@ -988,8 +1102,16 @@ async def run_relational_imitation_round_feedback_game(
                     and message.author_kind == "controller"
                     for message in eligible_messages
                 )
+                eligible_controller_reports = sum(
+                    message.message_type == MESSAGE_REPORT
+                    and message.author_kind == "controller"
+                    for message in eligible_messages
+                )
                 round_eligible_message_counts.append(len(eligible_messages))
                 round_eligible_directive_counts.append(eligible_directives)
+                round_eligible_controller_report_counts.append(
+                    eligible_controller_reports
+                )
                 sampled_messages = state.blackboard.sample_live(
                     round_index,
                     max(0, ordinary_limit),
@@ -1072,10 +1194,19 @@ async def run_relational_imitation_round_feedback_game(
                 for source in social_sources
                 if source.get("author_kind") == "controller"
             ]
+            sampled_controller_report_ids = [
+                str(source["message_id"])
+                for source in social_sources
+                if source.get("author_kind") == "controller"
+                and source.get("message_type") == MESSAGE_REPORT
+            ]
             if sampled_controller_ids:
                 round_controller_exposure_count += len(sampled_controller_ids)
                 round_controller_exposed_updates += 1
                 round_controller_readers.add(str(focal))
+                round_controller_repeat_exposures += max(
+                    0, len(sampled_controller_ids) - 1
+                )
             board_fields = {
                 "sampled_message_ids": [
                     source.get("message_id") for source in social_sources
@@ -1102,6 +1233,7 @@ async def run_relational_imitation_round_feedback_game(
                 if rules.social_mode == SOCIAL_MODE_BOARD
                 else [],
                 "sampled_controller_message_ids": sampled_controller_ids,
+                "sampled_controller_report_ids": sampled_controller_report_ids,
                 "board_size_before": board_before,
                 "eligible_board_message_count": (
                     len(eligible_messages)
@@ -1109,14 +1241,17 @@ async def run_relational_imitation_round_feedback_game(
                     else 0
                 ),
                 "eligible_directive_count": (
-                    eligible_directives
-                    if rules.social_mode == SOCIAL_MODE_BOARD
-                    else 0
+                    eligible_directives if rules.social_mode == SOCIAL_MODE_BOARD else 0
                 ),
                 "eligible_directive_share": (
                     eligible_directives / len(eligible_messages)
                     if rules.social_mode == SOCIAL_MODE_BOARD and eligible_messages
                     else 0.0
+                ),
+                "eligible_controller_report_count": (
+                    eligible_controller_reports
+                    if rules.social_mode == SOCIAL_MODE_BOARD
+                    else 0
                 ),
                 "controller_message_posted": controller_post is not None,
                 "controller_message_id": (
@@ -1147,6 +1282,11 @@ async def run_relational_imitation_round_feedback_game(
                 board_fields=board_fields,
             )
             event = transition.event or {}
+            if sampled_controller_report_ids and target is not None:
+                if event.get("vote_before") != target:
+                    round_controller_report_off_target_exposures += 1
+                    if event.get("vote_after") == target:
+                        round_controller_report_adoptions += 1
             acquired_ids = set(event.get("new_peer_fact_ids", ()))
             refreshed_ids = set(event.get("reactivated_peer_fact_ids", ()))
             for source in social_sources:
@@ -1339,6 +1479,9 @@ async def run_relational_imitation_round_feedback_game(
         surviving_message_count = len(state.blackboard.live_messages(round_index + 1))
         eligible_message_opportunities = sum(round_eligible_message_counts)
         eligible_directive_opportunities = sum(round_eligible_directive_counts)
+        eligible_controller_report_opportunities = sum(
+            round_eligible_controller_report_counts
+        )
         round_event = {
             "episode_id": f"{state.task['task_id']}-{state.data['seed']}",
             "round_index": round_index,
@@ -1383,9 +1526,7 @@ async def run_relational_imitation_round_feedback_game(
             "n_k_plus_1": _count_vector(after_obs["occupation_counts"], options)[
                 options.index(analysis_target)
             ],
-            "Y_k": sensor_counts[target_index]
-            if round_signal is not None
-            else None,
+            "Y_k": sensor_counts[target_index] if round_signal is not None else None,
             "P_U1_given_Y": probability,
             "U_k": controller_sampled_u,
             "controller_sensor_Y": controller_sensor_y,
@@ -1398,6 +1539,12 @@ async def run_relational_imitation_round_feedback_game(
             "controller_message_mode": message_mode,
             "controller_actuation_mode": actuation_mode,
             "controller_timing": controller_timing,
+            "controller_report_cooldown_rounds": getattr(
+                resolved_control, "controller_report_cooldown_rounds", None
+            ),
+            "controller_report_selection_strategy": getattr(
+                resolved_control, "controller_report_selection_strategy", None
+            ),
             "protocol": (
                 "night_dawn_autonomous_day_v1" if dawn_blackboard else "legacy"
             ),
@@ -1589,12 +1736,43 @@ async def run_relational_imitation_round_feedback_game(
             "directive_count": message_type_counts.get("DIRECTIVE", 0),
             "controller_posts": len(round_controller_post_ids),
             "controller_post_ids": list(round_controller_post_ids),
+            "controller_reports_requested": (
+                intervention_budget
+                if action == ADVOCATE_TARGET
+                and actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else 0
+            ),
+            "controller_reports_admitted": (
+                len(round_controller_post_ids)
+                if actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else 0
+            ),
+            "controller_report_ids": (
+                list(round_controller_post_ids)
+                if actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else []
+            ),
+            "controller_report_fact_ids": [
+                row["fact_id"] for row in round_controller_report_selection
+            ],
+            "controller_report_selection": round_controller_report_selection,
             "controller_message_exposures": round_controller_exposure_count,
+            "controller_report_exposures": (
+                controller_exposures
+                if actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else 0
+            ),
+            "controller_report_repeat_exposures": round_controller_repeat_exposures,
             "directive_exposed_focal_updates": round_controller_exposed_updates,
             "realized_directive_exposure_fraction": (
                 round_controller_exposed_updates / rules.n_agents
             ),
             "controller_unique_readers": len(round_controller_readers),
+            "controller_report_unique_readers": (
+                len(round_controller_readers)
+                if actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else 0
+            ),
             "controller_direct_replies": direct_replies,
             "directive_report_reply_count": direct_report_replies,
             "directive_evidence_report_count": direct_evidence_report_replies,
@@ -1602,6 +1780,47 @@ async def run_relational_imitation_round_feedback_game(
             "total_eligible_board_message_reads": round_message_read_count,
             "eligible_message_opportunities": eligible_message_opportunities,
             "eligible_directive_opportunities": eligible_directive_opportunities,
+            "eligible_controller_report_opportunities": (
+                eligible_controller_report_opportunities
+            ),
+            "controller_report_share_among_eligible_messages": (
+                eligible_controller_report_opportunities
+                / eligible_message_opportunities
+                if eligible_message_opportunities
+                else 0.0
+            ),
+            "controller_report_read_share": (
+                controller_exposures / round_message_read_count
+                if round_message_read_count
+                else 0.0
+            ),
+            "controller_report_fact_acquisitions": (
+                new_controller_facts
+                if actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else 0
+            ),
+            "controller_report_fact_reactivations": (
+                reactivated_controller_facts
+                if actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                else 0
+            ),
+            "controller_report_off_target_exposures": (
+                round_controller_report_off_target_exposures
+            ),
+            "controller_report_target_adoptions": round_controller_report_adoptions,
+            "controller_report_target_adoption_rate": (
+                round_controller_report_adoptions
+                / round_controller_report_off_target_exposures
+                if round_controller_report_off_target_exposures
+                else None
+            ),
+            "peer_report_exposures": peer_exposures,
+            "peer_report_exposures_with_controller_actuation": (
+                peer_exposures if action == ADVOCATE_TARGET else 0
+            ),
+            "peer_report_exposures_without_controller_actuation": (
+                peer_exposures if action != ADVOCATE_TARGET else 0
+            ),
             "directive_share_among_eligible_messages": (
                 eligible_directive_opportunities / eligible_message_opportunities
                 if eligible_message_opportunities

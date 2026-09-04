@@ -34,7 +34,6 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     DECISION_BASIS_INITIAL,
     DECISION_BASIS_SOCIAL_NONE_VISIBLE,
     EVIDENCE_HEADER,
-    MANDATORY_VOTE_INSTRUCTION,
     MAX_REASON_CHARACTERS,
     NO_KNOWN_FACTS,
     SOCIAL_ENVIRONMENT,
@@ -586,6 +585,27 @@ def test_shared_fact_repair_guidance_is_strict_and_contract_scoped(malformed):
     assert '"f2", "none"' in guidance
     assert "complete JSON object" in guidance
     assert "f1" not in guidance and "f3" not in guidance
+
+
+def test_generic_relational_repair_guidance_does_not_use_fragile_slots_super():
+    contract = RelationalBallotContract(
+        allowed_values=LETTERS,
+        options={"fact_ids": ("f2",), "relations": ("NORTH",)},
+    )
+    result = contract.validate(
+        json.dumps(
+            {
+                "vote": "A",
+                "reason": "x" * (MAX_REASON_CHARACTERS + 1),
+                "shared_fact_id": "none",
+            }
+        )
+    )
+
+    assert not result.is_valid
+    guidance = contract.repair_guidance(result.issues)
+    assert "response.reason" in guidance
+    assert "complete response again" in guidance
 
 
 def test_malformed_ballot_is_corrected_inside_the_same_decision():
@@ -1685,7 +1705,7 @@ def test_prompt_snapshot():
         "\n"
         "{\n"
         '  "vote": "<A | B | C>",\n'
-        '  "reason": "<private reason; at most 600 characters>",\n'
+        f'  "reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
         f'  "shared_fact_id": "<{citable}>"\n'
         "}"
     )
@@ -1704,8 +1724,9 @@ def test_mandatory_vote_instruction_is_a_system_message():
         message.content for message in compiled.messages if message.role.value != "system"
     )
 
-    assert MANDATORY_VOTE_INSTRUCTION in system_text
-    assert MANDATORY_VOTE_INSTRUCTION not in non_system_text
+    instruction = "Exactly one of these answers is correct. Vote by its letter."
+    assert instruction in system_text
+    assert instruction not in non_system_text
 
 
 def test_a_rendered_source_is_identity_vote_and_evidence_and_never_its_reason():

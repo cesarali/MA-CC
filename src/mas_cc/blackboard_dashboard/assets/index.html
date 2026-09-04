@@ -12,11 +12,71 @@
       <p class="eyebrow">MA-CC / RELATIONAL REASONING</p>
       <h1>Blackboard Observatory</h1>
     </div>
-    <div class="status"><span id="status-dot"></span><span id="status-text">connecting</span></div>
+    <div class="header-actions">
+      <button id="manual-refresh" class="theme-toggle" type="button">Refresh</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch color theme">Dark theme</button>
+      <div class="status"><span id="status-dot"></span><span id="status-text">connecting</span></div>
+    </div>
   </header>
 
+  <nav id="breadcrumbs" class="breadcrumbs" hidden></nav>
+
+  <section id="study-shell" hidden>
+    <section class="controls panel study-filters">
+      <label>Experiment block <select id="filter-block"><option value="">All</option></select></label>
+      <label>Controller condition <select id="filter-controller"><option value="">All</option></select></label>
+      <label>ρ (evidence persistence) <select id="filter-rho"><option value="">All</option></select></label>
+      <label>Cell status <select id="filter-status"><option value="">All</option></select></label>
+      <label>Sort <select id="cell-sort"><option value="identity">Identity</option><option value="status">Status</option><option value="progress">Progress</option></select></label>
+      <span id="study-refreshed"></span>
+    </section>
+    <main>
+      <section id="study-view">
+        <div id="study-cards" class="cards"></div>
+        <article class="panel"><h2>Scientific cells</h2><div class="table-scroll"><table id="cell-table"></table></div></article>
+        <article class="panel analysis-panel"><details id="study-analysis"><summary>Analysis, reports, plots, and downloads</summary><div id="analysis-content"><span class="unavailable">Open to load the analysis catalog.</span></div></details></article>
+      </section>
+      <section id="cell-view" hidden>
+        <div id="cell-cards" class="cards"></div>
+        <article class="panel">
+          <h2>Scientific parameters</h2>
+          <div id="primary-parameters" class="primary-parameters"></div>
+          <details id="all-parameters"><summary>All resolved parameters</summary><div id="cell-parameters" class="parameter-table"></div></details>
+        </article>
+        <nav id="cell-tabs" class="cell-tabs">
+          <button class="active" data-cell-view="cell-episodes">Episodes</button>
+          <button data-cell-view="cell-trajectories">Trajectories</button>
+          <button data-cell-view="cell-statistics">Statistics</button>
+          <button data-cell-view="cell-prompts">Prompt examples</button>
+        </nav>
+        <section id="cell-episodes" class="cell-subview">
+          <article class="panel"><h2>Episodes</h2><div class="table-scroll"><table id="episode-table"></table></div></article>
+        </section>
+        <section id="cell-trajectories" class="cell-subview" hidden>
+          <article class="panel">
+            <h2>Vote trajectories</h2>
+            <p id="mean-label" class="meta"></p>
+            <div id="trajectory-controls" class="trajectory-controls"></div>
+            <div id="cell-votes"></div>
+          </article>
+        </section>
+        <section id="cell-statistics" class="cell-subview" hidden>
+          <article class="panel"><h2>Cell outcome statistics</h2><div id="cell-statistics-content"></div></article>
+        </section>
+        <section id="cell-prompts" class="cell-subview" hidden>
+          <article class="panel"><h2>Prompt examples</h2><div id="cell-prompts-content"><span class="unavailable">Open this panel to load retained examples.</span></div></article>
+        </section>
+      </section>
+    </main>
+  </section>
+
+  <section id="episode-shell">
   <section class="controls panel">
-    <label>Round <select id="round"></select></label>
+    <span id="episode-nav" hidden><button id="previous-episode">← Previous episode</button> <button id="next-episode">Next episode →</button></span>
+    <label class="round-control">Round
+      <input id="round" type="range" min="0" max="0" value="0">
+      <output id="round-value">1</output>
+    </label>
     <label class="step-control">Microscopic update
       <input id="step" type="range" min="1" value="1">
       <output id="step-value">1</output>
@@ -28,6 +88,7 @@
 
   <nav id="tabs">
     <button class="active" data-view="overview">Overview</button>
+    <button data-view="episode-trajectory">Trajectory</button>
     <button data-view="blackboard">Blackboard</button>
     <button data-view="coverage">Coverage</button>
     <button data-view="agent-view">Agent</button>
@@ -41,6 +102,15 @@
         <article class="panel"><h2>Population</h2><div id="vote-bars"></div></article>
         <article class="panel"><h2>Latest activity</h2><div id="activity"></div></article>
       </div>
+      <article class="panel"><h2>Controller funnel and saturation diagnostics</h2><div id="episode-statistics"></div></article>
+    </section>
+
+    <section id="episode-trajectory" class="view">
+      <article class="panel">
+        <h2>Episode vote trajectory</h2>
+        <p class="meta">Microscopic-update time series for this episode. The marker follows the selected replay cursor.</p>
+        <div id="episode-votes"></div>
+      </article>
     </section>
 
     <section id="blackboard" class="view">
@@ -78,6 +148,7 @@
       <article class="panel"><h2>Round controller</h2><div id="controller-state"></div></article>
     </section>
   </main>
+  </section>
 
   <footer>Read-only projection · state shown after the selected update · ←/→ navigate · Shift+←/→ change round</footer>
   <script id="dashboard-data" type="application/json"></script>

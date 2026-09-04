@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from typing import TypeAlias
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .data import BlackboardRunReader
+from .study_data import BlackboardStudyReader, is_study_root
+
+
+DashboardReader: TypeAlias = BlackboardRunReader | BlackboardStudyReader
 
 
 def _asset(name: str) -> bytes:
@@ -19,7 +25,7 @@ def _json(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
 
 
-def make_handler(reader: BlackboardRunReader):
+def make_handler(reader: DashboardReader):
     class DashboardHandler(BaseHTTPRequestHandler):
         server_version = "MASCCBlackboard/1"
 
@@ -36,6 +42,19 @@ def make_handler(reader: BlackboardRunReader):
             self.end_headers()
             self.wfile.write(body)
 
+        def _send_file(self, path: Path) -> None:
+            body = path.read_bytes()
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            )
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
             parsed = urlparse(self.path)
             try:
@@ -48,13 +67,114 @@ def make_handler(reader: BlackboardRunReader):
                 if parsed.path == "/style.css":
                     self._send(200, "text/css; charset=utf-8", _asset("style.css"))
                     return
-                if parsed.path == "/api/status":
+                if isinstance(reader, BlackboardStudyReader):
+                    if parsed.path == "/api/study":
+                        self._send(200, "application/json", _json(reader.study()))
+                        return
+                    if parsed.path == "/api/study/cells":
+                        self._send(200, "application/json", _json(reader.cells()))
+                        return
+                    if parsed.path == "/api/study/analysis":
+                        self._send(
+                            200, "application/json", _json(reader.analysis_catalog())
+                        )
+                        return
+                    if parsed.path == "/api/study/analysis/download":
+                        identifier = parse_qs(parsed.query).get("id", [""])[0]
+                        self._send_file(reader.analysis_file(identifier))
+                        return
+                    prefix = "/api/study/cell/"
+                    if parsed.path.startswith(prefix):
+                        token = unquote(parsed.path.removeprefix(prefix))
+                        prompts = token.endswith("/prompts")
+                        votes = token.endswith("/votes")
+                        if prompts:
+                            token = token.removesuffix("/prompts")
+                        elif votes:
+                            token = token.removesuffix("/votes")
+                        payload = (
+                            reader.prompt_examples(token)
+                            if prompts
+                            else reader.votes(token)
+                            if votes
+                            else reader.cell(token)
+                        )
+                        self._send(200, "application/json", _json(payload))
+                        return
+                    episode_prefix = "/api/study/episode/"
+                    if parsed.path.startswith(episode_prefix) and parsed.path.endswith(
+                        "/status"
+                    ):
+                        token = unquote(
+                            parsed.path.removeprefix(episode_prefix).removesuffix(
+                                "/status"
+                            )
+                        )
+                        self._send(
+                            200, "application/json", _json(reader.episode_status(token))
+                        )
+                        return
+                    if parsed.path.startswith(episode_prefix):
+                        remainder = parsed.path.removeprefix(episode_prefix)
+                        token, separator, action = remainder.rpartition("/")
+                        if separator and (
+                            action in {"detail", "timeline", "snapshot"}
+                            or action.startswith("prompt-")
+                        ):
+                            episode_reader = reader.episode_reader(unquote(token))
+                            if action == "detail":
+                                timeline = episode_reader.timeline()
+                                edge = timeline["available_cursors"][-1] if timeline["available_cursors"] else None
+                                payload = {
+                                    "schema_version": 1,
+                                    "timeline": timeline,
+                                    "snapshot": episode_reader.snapshot(
+                                        edge["round_index"] if edge else None,
+                                        edge["step"] if edge else None,
+                                    ),
+                                    "statistics": episode_reader.statistics(),
+                                }
+                            elif action == "timeline":
+                                payload = episode_reader.timeline()
+                            elif action.startswith("prompt-"):
+                                prompt_id = action.removeprefix("prompt-")
+                                if not prompt_id.isdigit():
+                                    raise ValueError(
+                                        "prompt identifier must be a non-negative integer"
+                                    )
+                                payload = episode_reader.prompt(int(prompt_id))
+                            else:
+                                query = parse_qs(parsed.query)
+                                round_index = (
+                                    int(query["round"][0]) if "round" in query else None
+                                )
+                                step = (
+                                    int(query["step"][0]) if "step" in query else None
+                                )
+                                agent = query.get("agent", [None])[0]
+                                payload = episode_reader.snapshot(
+                                    round_index, step, agent
+                                )
+                            self._send(200, "application/json", _json(payload))
+                            return
+                    if parsed.path.startswith("/api/"):
+                        self._send(
+                            404, "application/json", _json({"error": "not found"})
+                        )
+                        return
+                if parsed.path == "/api/status" and isinstance(
+                    reader, BlackboardRunReader
+                ):
                     self._send(200, "application/json", _json(reader.status()))
                     return
-                if parsed.path == "/api/timeline":
+                if parsed.path == "/api/timeline" and isinstance(
+                    reader, BlackboardRunReader
+                ):
                     self._send(200, "application/json", _json(reader.timeline()))
                     return
-                if parsed.path == "/api/snapshot":
+                if parsed.path == "/api/snapshot" and isinstance(
+                    reader, BlackboardRunReader
+                ):
                     query = parse_qs(parsed.query)
                     round_index = int(query["round"][0]) if "round" in query else None
                     step = int(query["step"][0]) if "step" in query else None
@@ -65,7 +185,9 @@ def make_handler(reader: BlackboardRunReader):
                         _json(reader.snapshot(round_index, step, agent)),
                     )
                     return
-                if parsed.path.startswith("/api/prompt/"):
+                if parsed.path.startswith("/api/prompt/") and isinstance(
+                    reader, BlackboardRunReader
+                ):
                     token = parsed.path.removeprefix("/api/prompt/")
                     if not token.isdigit():
                         raise ValueError(
@@ -92,14 +214,22 @@ def serve_dashboard(
     host: str = "127.0.0.1",
     port: int = 8765,
 ) -> None:
-    reader = BlackboardRunReader(run_dir, episode_id)
+    source = Path(run_dir).expanduser().resolve()
+    reader: DashboardReader = (
+        BlackboardStudyReader(source)
+        if is_study_root(source)
+        else BlackboardRunReader(source, episode_id)
+    )
     if host not in {"127.0.0.1", "localhost", "::1"}:
         raise ValueError(
             "dashboard must bind to localhost; use an SSH tunnel for remote viewing"
         )
     server = ThreadingHTTPServer((host, port), make_handler(reader))
     print(f"Blackboard dashboard: http://{host}:{server.server_port}")
-    print(f"Episode: {reader.episode_dir}")
+    if isinstance(reader, BlackboardStudyReader):
+        print(f"Study: {reader.study_dir}")
+    else:
+        print(f"Episode: {reader.episode_dir}")
     try:
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
