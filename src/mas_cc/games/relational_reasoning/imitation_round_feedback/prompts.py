@@ -55,7 +55,7 @@ PROMPT_FAMILY = "relational_public_ballot"
 BOARD_PROMPT_FAMILY = "relational_blackboard_ballot"
 PROMPT_VERSION = 1
 BOARD_PROMPT_VERSION = 3
-BOARD_PROMPT_VERSIONS = (2, BOARD_PROMPT_VERSION)
+BOARD_PROMPT_VERSIONS = (2, 3, 4)
 
 VOTE_VISIBILITIES = ("public", "hidden")
 IMPLEMENTED_VOTE_VISIBILITIES = ("public",)
@@ -379,6 +379,22 @@ BOARD_DECISION_INSTRUCTION_V3 = (
     "ID in reply_to. Use null when the message is not a reply. A REPORT may cite\n"
     "only a fact listed under YOUR VERIFIED EVIDENCE. Do not invent evidence or\n"
     "identifiers. Your private reason is never copied into public_message."
+)
+
+BOARD_DECISION_INSTRUCTION_NO_REQUEST_V4 = (
+    "DECISION\n\n"
+    "Vote for the option best supported by the information available to you.\n"
+    "Write a brief private reason: a few sentences, and at most\n"
+    f"{MAX_REASON_CHARACTERS} characters. For public_message choose exactly one type:\n"
+    "- REPORT shares information, an answer, a conclusion, or a correction. It may\n"
+    "  attach one exact evidence identifier. When discussing an allocation in the\n"
+    "  public text, describe the allocation itself rather than using option letters\n"
+    "  A/B/C; your vote is transmitted separately.\n"
+    "- NONE posts nothing; use null for text, shared_fact_id, and reply_to.\n\n"
+    "REPORT may reply to any visible message by putting that message ID in reply_to.\n"
+    "Use null when the message is not a reply. A REPORT may cite only a fact listed\n"
+    "under YOUR VERIFIED EVIDENCE. Do not invent evidence or identifiers. Your\n"
+    "private reason is never copied into public_message."
 )
 
 NO_KNOWN_FACTS = (
@@ -1166,10 +1182,18 @@ class BlackboardBallotContract(RelationalBallotContract):
     def visible_message_ids(self) -> tuple[str, ...]:
         return tuple(str(item) for item in self.options.get("visible_message_ids", ()))
 
+    @property
+    def allowed_message_types(self) -> tuple[str, ...]:
+        return tuple(
+            str(item)
+            for item in self.options.get("allowed_message_types", BOARD_ACTION_TYPES)
+        )
+
     def instruction(self) -> str:
         options = " | ".join(self.allowed_values)
         citable = " | ".join((*self.fact_ids, NO_FACT))
         visible = " | ".join(self.visible_message_ids) or "none"
+        message_types = " | ".join(self.allowed_message_types)
         return (
             f"{BOARD_DECISION_INSTRUCTION}\n\n"
             f"Visible message IDs: {visible}\n\n"
@@ -1178,7 +1202,7 @@ class BlackboardBallotContract(RelationalBallotContract):
             f'  "vote": "<{options}>",\n'
             f'  "private_reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
             '  "public_message": {\n'
-            '    "type": "<REQUEST | REPORT | NONE>",\n'
+            f'    "type": "<{message_types}>",\n'
             '    "text": "<public text or null>",\n'
             f'    "shared_fact_id": "<{citable}> or null,\n'
             '    "reply_to": "<visible message ID or null>"\n'
@@ -1244,11 +1268,11 @@ class BlackboardBallotContract(RelationalBallotContract):
                 )
             )
         message_type = public.get("type")
-        if message_type not in BOARD_ACTION_TYPES:
+        if message_type not in self.allowed_message_types:
             return ValidationResult.failure(
                 ValidationIssue(
                     "response.public_message.type",
-                    f"must be one of {list(BOARD_ACTION_TYPES)}",
+                    f"must be one of {list(self.allowed_message_types)}",
                     message_type,
                 )
             )
@@ -1347,15 +1371,21 @@ class BlackboardBallotContractV3(BlackboardBallotContract):
         options = " | ".join(self.allowed_values)
         citable = " | ".join((*self.fact_ids, NO_FACT))
         visible = " | ".join(self.visible_message_ids) or "none"
+        message_types = " | ".join(self.allowed_message_types)
+        instruction = (
+            BOARD_DECISION_INSTRUCTION_V3
+            if "REQUEST" in self.allowed_message_types
+            else BOARD_DECISION_INSTRUCTION_NO_REQUEST_V4
+        )
         return (
-            f"{BOARD_DECISION_INSTRUCTION_V3}\n\n"
+            f"{instruction}\n\n"
             f"Visible message IDs: {visible}\n\n"
             "Return only valid JSON:\n\n"
             "{\n"
             f'  "vote": "<{options}>",\n'
             f'  "private_reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
             '  "public_message": {\n'
-            '    "type": "<REQUEST | REPORT | NONE>",\n'
+            f'    "type": "<{message_types}>",\n'
             '    "text": "<public text or null>",\n'
             f'    "shared_fact_id": "<{citable}> or null,\n'
             '    "reply_to": "<visible message ID or null>"\n'
@@ -1435,6 +1465,7 @@ def relational_blackboard_ballot_prompt(
     receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
     version: int = BOARD_PROMPT_VERSION,
+    allow_participant_requests: bool = True,
 ) -> BlackboardBallotPrompt:
     """Prompt family for finite-memory public-board updates."""
 
@@ -1442,6 +1473,10 @@ def relational_blackboard_ballot_prompt(
         raise ValueError(
             f"relational blackboard prompt version must be one of "
             f"{list(BOARD_PROMPT_VERSIONS)}"
+        )
+    if version < 4 and not allow_participant_requests:
+        raise ValueError(
+            "disabling participant REQUEST requires blackboard prompt version 4"
         )
 
     if version >= 3:
@@ -1481,6 +1516,17 @@ def relational_blackboard_ballot_prompt(
                 "fact_ids": tuple(fact_ids),
                 "relations": tuple(relations),
                 "visible_message_ids": tuple(visible_message_ids),
+                **(
+                    {
+                        "allowed_message_types": (
+                            BOARD_ACTION_TYPES
+                            if allow_participant_requests
+                            else ("REPORT", "NONE")
+                        )
+                    }
+                    if version >= 4
+                    else {}
+                ),
             },
         ),
     )
@@ -1594,6 +1640,7 @@ def build_relational_blackboard_prompt(
     social_context: bool = False,
     answer_display_texts: Mapping[str, str] | None = None,
     version: int = BOARD_PROMPT_VERSION,
+    allow_participant_requests: bool = True,
 ) -> BlackboardBallotPrompt:
     """Bind one board update while keeping the private reason out of public text."""
 
@@ -1606,6 +1653,7 @@ def build_relational_blackboard_prompt(
         receiver_epistemic_disposition=receiver_epistemic_disposition,
         social_distrust=social_distrust,
         version=version,
+        allow_participant_requests=allow_participant_requests,
     ).bind(
         identity=identity,
         decision_basis=(

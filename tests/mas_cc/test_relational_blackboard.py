@@ -23,6 +23,12 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     TIMING_DAWN_ONLY,
     RelationalRoundBudgetedControl,
 )
+from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
+    CommunicationMode,
+    ControllerCommunicationContext,
+    allowed_communication_modes,
+    choose_communication_mode,
+)
 from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
     adapt_relational_round_record,
 )
@@ -257,6 +263,91 @@ def test_request_cannot_attach_evidence_and_report_can():
     assert contract.validate(json.dumps(request)).valid
 
 
+def test_blackboard_v4_can_remove_participant_request_from_prompt_and_schema():
+    prompt = build_relational_blackboard_prompt(
+        identity="Agent 2",
+        question="Which allocation is best?",
+        option_letters={"A": "ALLOCATION_0", "B": "ALLOCATION_1"},
+        known_facts=(),
+        fact_ids=(),
+        current_vote=None,
+        version=4,
+        allow_participant_requests=False,
+    )
+    rendered = "\n\n".join(
+        message.content for message in prompt.compile(RegexTokenCounter()).messages
+    )
+    request = json.dumps(
+        {
+            "vote": "A",
+            "private_reason": "private",
+            "public_message": {
+                "type": "REQUEST",
+                "text": "Who has evidence?",
+                "shared_fact_id": None,
+                "reply_to": None,
+            },
+        }
+    )
+
+    assert "REQUEST" not in rendered
+    assert '"type": "<REPORT | NONE>"' in rendered
+    assert not prompt.response_contract.validate(request).valid
+
+
+def test_adaptive_allowed_modes_follow_capability_switches_and_always_include_report():
+    context = ControllerCommunicationContext(
+        round_index=0,
+        target="ALLOCATION_2",
+        sampled_opinion_counts={},
+        live_message_type_counts={},
+    )
+    for allow_requests in (False, True):
+        for allow_directives in (False, True):
+            allowed = allowed_communication_modes(
+                allow_requests=allow_requests,
+                allow_directives=allow_directives,
+            )
+            assert CommunicationMode.REPORT in allowed
+            assert (CommunicationMode.REQUEST in allowed) == allow_requests
+            assert (CommunicationMode.DIRECTIVE in allowed) == allow_directives
+            for seed in range(20):
+                choice = choose_communication_mode(
+                    context, allowed, __import__("random").Random(seed)
+                )
+                assert choice.mode in allowed
+
+
+def test_controller_request_is_factless_and_participant_directive_is_rejected():
+    request = BlackboardMessage(
+        message_id="m-request",
+        author_id="control-source",
+        author_kind="controller",
+        message_type="REQUEST",
+        text="Does anyone have evidence about pipeline ability?",
+        vote="ALLOCATION_2",
+        shared_fact_id=None,
+        reply_to=None,
+        round_created=0,
+        micro_step_created=0,
+        expires_after_round=0,
+    )
+    assert request.message_type == "REQUEST"
+    with pytest.raises(ValueError, match="agent messages"):
+        BlackboardMessage(
+            message_id="m-directive",
+            author_id="agent_001",
+            message_type="DIRECTIVE",
+            text="Focus on pipeline ability.",
+            vote="ALLOCATION_2",
+            shared_fact_id=None,
+            reply_to=None,
+            round_created=0,
+            micro_step_created=0,
+            expires_after_round=0,
+        )
+
+
 def _rendered_blackboard_prompt(*, version, text="So I stick with C.", shared=None):
     return build_relational_blackboard_prompt(
         identity="Agent 2",
@@ -421,11 +512,12 @@ def test_blackboard_v3_rejects_a_letter_as_authoritative_message_vote():
         )
 
 
-def test_blackboard_prompt_factory_supports_only_historical_and_current_versions():
+def test_blackboard_prompt_factory_supports_historical_and_current_versions():
     assert relational_blackboard_ballot_prompt(version=2).version == 2
     assert relational_blackboard_ballot_prompt(version=3).version == 3
+    assert relational_blackboard_ballot_prompt(version=4).version == 4
     with pytest.raises(ValueError, match="must be one of"):
-        relational_blackboard_ballot_prompt(version=4)
+        relational_blackboard_ballot_prompt(version=5)
 
 
 def test_invalid_blackboard_fact_repair_requires_null_without_coercion():

@@ -11,15 +11,21 @@ from pathlib import Path
 import pytest
 
 from mas_cc.config import load_run_config
+from mas_cc.control import RoundControlSignal
 from mas_cc.games import create_game
 from mas_cc.games.relational_reasoning.data import load_musr_team_allocation_task
 from mas_cc.games.relational_reasoning.imitation_round_feedback.controller import (
+    ADAPTIVE_COMMUNICATION,
     RECOMMENDATION_ONLY,
     SCHEDULE_ALWAYS,
     SCHEDULE_NEVER,
     TIMING_DAWN_ONLY,
     TRUTHFUL_STRATEGIC_REPORT,
     RelationalRoundBudgetedControl,
+)
+from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
+    CommunicationChoice,
+    CommunicationMode,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
     supporting_fact_coverage,
@@ -137,6 +143,34 @@ def _truthful_provider(config, prompts):
         )
 
     return MockLLMProvider(config.llm_provider, response_factory=factory)
+
+
+def _adaptive_config(*, rounds=1, schedule=SCHEDULE_ALWAYS):
+    config = _truthful_config(rounds=rounds, budget=3, schedule=schedule)
+    return replace(
+        config,
+        game=replace(
+            config.game,
+            options={
+                **dict(config.game.options),
+                "prompt_version": 4,
+                "board": {
+                    **dict(config.game.options["board"]),
+                    "allow_participant_requests": True,
+                },
+            },
+        ),
+        prompt=replace(config.prompt, prompt_version=4),
+        control=replace(
+            config.control,
+            options={
+                **dict(config.control.options),
+                "controller_actuation_mode": ADAPTIVE_COMMUNICATION,
+                "allow_controller_requests": True,
+                "allow_controller_directives": True,
+            },
+        ),
+    )
 
 
 def test_validated_musr_task_and_n12_distribution_load_exactly():
@@ -385,4 +419,200 @@ def test_truthful_report_no_op_posts_nothing():
     assert all(
         message.author_kind != "controller"
         for message in result.final_state.blackboard.messages
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_posts"),
+    [
+        (CommunicationMode.REPORT, 3),
+        (CommunicationMode.REQUEST, 1),
+        (CommunicationMode.DIRECTIVE, 1),
+    ],
+)
+def test_adaptive_act_dispatches_exactly_one_allowed_strategy(
+    monkeypatch, mode, expected_posts
+):
+    config = _adaptive_config()
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+    seen_allowed = []
+
+    def choose(_context, allowed, _rng):
+        seen_allowed.append(tuple(allowed))
+        assert mode in allowed
+        return CommunicationChoice(mode=mode, reason="test")
+
+    monkeypatch.setattr(
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.runtime."
+        "choose_communication_mode",
+        choose,
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _truthful_provider(config, []),
+            control=control,
+        )
+    )
+    event = result.rounds[0].event
+    controller_messages = [
+        message
+        for message in result.final_state.blackboard.messages
+        if message.author_kind == "controller"
+    ]
+
+    assert event["U_k"] == 1
+    assert event["chosen_message_mode"] == mode.value
+    assert event["actual_controller_posts"] == expected_posts
+    assert len(controller_messages) == expected_posts
+    assert {message.message_type for message in controller_messages} == {mode.value}
+    assert seen_allowed == [
+        (
+            CommunicationMode.REPORT,
+            CommunicationMode.REQUEST,
+            CommunicationMode.DIRECTIVE,
+        )
+    ]
+    if mode != CommunicationMode.REPORT:
+        assert all(message.shared_fact_id is None for message in controller_messages)
+
+
+def test_adaptive_no_op_is_silent_and_does_not_invoke_chooser(monkeypatch):
+    config = _adaptive_config(schedule=SCHEDULE_NEVER)
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("adaptive chooser ran for U=0")
+
+    monkeypatch.setattr(
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.runtime."
+        "choose_communication_mode",
+        forbidden,
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _truthful_provider(config, []),
+            control=control,
+        )
+    )
+    event = result.rounds[0].event
+
+    assert event["U_k"] == 0
+    assert event["chosen_message_mode"] is None
+    assert event["actual_controller_posts"] == 0
+    assert event["allowed_message_modes"] == ["REPORT", "REQUEST", "DIRECTIVE"]
+
+
+def test_adaptive_disabled_directive_never_reaches_chooser(monkeypatch):
+    config = _adaptive_config()
+    config = replace(
+        config,
+        control=replace(
+            config.control,
+            options={
+                **dict(config.control.options),
+                "allow_controller_directives": False,
+            },
+        ),
+    )
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+
+    def choose(_context, allowed, _rng):
+        assert CommunicationMode.DIRECTIVE not in allowed
+        return CommunicationChoice(mode=CommunicationMode.REQUEST, reason="test")
+
+    monkeypatch.setattr(
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.runtime."
+        "choose_communication_mode",
+        choose,
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _truthful_provider(config, []),
+            control=control,
+        )
+    )
+
+    assert result.rounds[0].event["allowed_message_modes"] == ["REPORT", "REQUEST"]
+    assert result.rounds[0].event["chosen_message_mode"] == "REQUEST"
+
+
+def test_fake_provider_four_round_adaptive_sequence(monkeypatch):
+    config = _adaptive_config(rounds=4)
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+    modes = iter(
+        (
+            CommunicationMode.REPORT,
+            CommunicationMode.REQUEST,
+            CommunicationMode.DIRECTIVE,
+        )
+    )
+
+    def scripted_round_signal(self, *, round_index, state, rng):
+        action = "NO_OP" if round_index == 0 else "ADVOCATE_Z"
+        target = self.resolved_target_for_task(
+            create_game(config.game).load_task(config.game), config.execution.seed
+        )
+        counts = {option: 0 for option in state.data["task"]["possible_answers"]}
+        return RoundControlSignal(
+            action=action,
+            target=target,
+            observation={
+                "sampled_agent_ids": [],
+                "sampled_opinions": [],
+                "sampled_opinion_counts": counts,
+                "sample_size": 0,
+            },
+            metadata={
+                "policy": "scripted_fake_smoke",
+                "advocacy_probability": 0.0 if round_index == 0 else 1.0,
+                "threshold": self.threshold,
+                "beta": self.beta,
+            },
+        )
+
+    def scripted_choice(_context, allowed, _rng):
+        mode = next(modes)
+        assert mode in allowed
+        return CommunicationChoice(mode=mode, reason="scripted_fake_smoke")
+
+    monkeypatch.setattr(
+        RelationalRoundBudgetedControl, "round_signal", scripted_round_signal
+    )
+    monkeypatch.setattr(
+        "mas_cc.games.relational_reasoning.imitation_round_feedback.runtime."
+        "choose_communication_mode",
+        scripted_choice,
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _truthful_provider(config, []),
+            control=control,
+        )
+    )
+
+    assert [row.event["U_k"] for row in result.rounds] == [0, 1, 1, 1]
+    assert [row.event["chosen_message_mode"] for row in result.rounds] == [
+        None,
+        "REPORT",
+        "REQUEST",
+        "DIRECTIVE",
+    ]
+    assert [row.event["actual_controller_posts"] for row in result.rounds] == [
+        0,
+        3,
+        1,
+        1,
+    ]
+    assert all(
+        len(row.event["population_state_before"]) == 12
+        and len(row.event["population_state_after"]) == 12
+        for row in result.rounds
     )

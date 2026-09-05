@@ -1,6 +1,7 @@
 """Relational reasoning imitation with one controller decision per round."""
 
 from .controller import (
+    ADAPTIVE_COMMUNICATION,
     CONTROLLER_ACTUATION_MODES,
     COORDINATION_REQUEST,
     DIRECT_RECOMMENDATION,
@@ -19,6 +20,13 @@ from .controller import (
     StrategicReportSelection,
     RelationalRoundBudgetedControl,
     create_relational_round_budgeted_control,
+)
+from .adaptive_communication import (
+    CommunicationChoice,
+    CommunicationMode,
+    ControllerCommunicationContext,
+    allowed_communication_modes,
+    choose_communication_mode,
 )
 from .game import RelationalImitationRoundFeedbackGame
 from .metrics import knowledge_observables, supporting_fact_coverage
@@ -71,6 +79,7 @@ from .state import (
 )
 
 __all__ = [
+    "ADAPTIVE_COMMUNICATION",
     "ACTIVE_FACT_IDS",
     "BOARD_MESSAGE_TYPES",
     "BOARD_PROMPT_FAMILY",
@@ -78,6 +87,9 @@ __all__ = [
     "BOARD_PROMPT_VERSIONS",
     "BlackboardMessage",
     "BlackboardState",
+    "CommunicationChoice",
+    "CommunicationMode",
+    "ControllerCommunicationContext",
     "CONTROLLER_ACTUATION_MODES",
     "COORDINATION_REQUEST",
     "CONTROL_SOURCE_ID",
@@ -114,11 +126,13 @@ __all__ = [
     "RelationalRules",
     "RelationalTransition",
     "agent_label",
+    "allowed_communication_modes",
     "apply_epistemic_persistence",
     "build_relational_ballot_prompt",
     "build_relational_blackboard_prompt",
     "build_social_sources",
     "control_label",
+    "choose_communication_mode",
     "create_relational_round_budgeted_control",
     "epistemic_framing",
     "knowledge_observables",

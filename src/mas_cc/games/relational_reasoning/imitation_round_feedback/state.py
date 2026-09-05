@@ -87,7 +87,7 @@ MESSAGE_NONE = "NONE"
 MESSAGE_DIRECTIVE = "DIRECTIVE"
 ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
 ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
-CONTROLLER_MESSAGE_TYPES = (MESSAGE_DIRECTIVE, MESSAGE_REPORT)
+CONTROLLER_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT, MESSAGE_DIRECTIVE)
 BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
 LEGACY_BOARD_MESSAGE_TYPES = (
     "CLAIM",
@@ -544,6 +544,7 @@ class RelationalRules:
     board_message_lifetime_rounds: int
     board_exclude_self_authored: bool
     board_allow_no_post: bool
+    allow_participant_requests: bool
     dynamics_mode: str
     task_family: str
     task_dataset_dir: str
@@ -608,12 +609,17 @@ class RelationalRules:
         )
         exclude_self = board.get("exclude_self_authored", True)
         allow_no_post = board.get("allow_no_post", True)
+        allow_participant_requests = board.get("allow_participant_requests", True)
         if not isinstance(exclude_self, bool):
             raise ValueError(
                 "game.options.board.exclude_self_authored must be a boolean"
             )
         if not isinstance(allow_no_post, bool):
             raise ValueError("game.options.board.allow_no_post must be a boolean")
+        if not isinstance(allow_participant_requests, bool):
+            raise ValueError(
+                "game.options.board.allow_participant_requests must be a boolean"
+            )
 
         mode = str(options.get("dynamics_mode", "reasoning"))
         if mode not in DYNAMICS_MODES:
@@ -768,6 +774,11 @@ class RelationalRules:
                 f"game.options.prompt_version must be one of "
                 f"{list(supported_prompt_versions)}"
             )
+        if not allow_participant_requests and prompt_version < 4:
+            raise ValueError(
+                "game.options.board.allow_participant_requests: false requires "
+                "game.options.prompt_version: 4"
+            )
 
         initialization = _mapping(
             options.get("initialization"), "game.options.initialization"
@@ -854,6 +865,7 @@ class RelationalRules:
             board_message_lifetime_rounds=lifetime,
             board_exclude_self_authored=exclude_self,
             board_allow_no_post=allow_no_post,
+            allow_participant_requests=allow_participant_requests,
             dynamics_mode=mode,
             task_family=task_family,
             task_dataset_dir=str(dataset_dir),

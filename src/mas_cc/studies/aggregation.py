@@ -1809,6 +1809,21 @@ def _blackboard_diagnostic_table(
         if column not in source:
             source[column] = math.nan
         source[column] = pd.to_numeric(source[column], errors="coerce")
+    chosen = source.get(
+        "chosen_message_mode", pd.Series(index=source.index, dtype="object")
+    )
+    source["act_report_round"] = (chosen == "REPORT").astype(int)
+    source["act_request_round"] = (chosen == "REQUEST").astype(int)
+    source["act_directive_round"] = (chosen == "DIRECTIVE").astype(int)
+    source["report_mode_posts"] = source["controller_posts"].where(
+        chosen == "REPORT", 0
+    )
+    source["request_mode_posts"] = source["controller_posts"].where(
+        chosen == "REQUEST", 0
+    )
+    source["directive_mode_posts"] = source["controller_posts"].where(
+        chosen == "DIRECTIVE", 0
+    )
     grouped = source.groupby("cell_id", dropna=False)
     result = grouped.agg(
         rounds=("cell_id", "size"),
@@ -1872,7 +1887,21 @@ def _blackboard_diagnostic_table(
             "peer_report_exposures_without_controller_actuation",
             "sum",
         ),
+        act_report_rounds=("act_report_round", "sum"),
+        act_request_rounds=("act_request_round", "sum"),
+        act_directive_rounds=("act_directive_round", "sum"),
+        report_mode_posts=("report_mode_posts", "sum"),
+        request_mode_posts=("request_mode_posts", "sum"),
+        directive_mode_posts=("directive_mode_posts", "sum"),
     ).reset_index()
+    act_rounds = (
+        result["act_report_rounds"]
+        + result["act_request_rounds"]
+        + result["act_directive_rounds"]
+    ).replace(0, np.nan)
+    result["fraction_act_report"] = result["act_report_rounds"] / act_rounds
+    result["fraction_act_request"] = result["act_request_rounds"] / act_rounds
+    result["fraction_act_directive"] = result["act_directive_rounds"] / act_rounds
     result["refresh_events"] = result["peer_refreshes"] + result["controller_refreshes"]
     denominator = result["eligible_message_opportunities"].replace(0, np.nan)
     result["eligible_directive_fraction"] = (

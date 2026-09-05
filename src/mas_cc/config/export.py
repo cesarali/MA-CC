@@ -22,16 +22,32 @@ def resolved_config_yaml(config: RunConfig) -> str:
         from mas_cc.games.registry import create_default_prompt_registry
 
         registry = create_default_prompt_registry()
-        try:
-            prompt = registry.get(
-                config.prompt.prompt_family, config.prompt.prompt_version
+        if (
+            config.prompt.prompt_family == "relational_blackboard_ballot"
+            and config.prompt.prompt_version >= 4
+        ):
+            from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
+                relational_blackboard_ballot_prompt,
             )
-        except ValueError:
-            from mas_cc.games.registry import register_game_prompt_factories
 
-            prompt = register_game_prompt_factories(registry).get(
-                config.prompt.prompt_family, config.prompt.prompt_version
+            board = config.game.options.get("board", {})
+            prompt = relational_blackboard_ballot_prompt(
+                version=config.prompt.prompt_version,
+                allow_participant_requests=bool(
+                    board.get("allow_participant_requests", True)
+                ),
             )
+        else:
+            try:
+                prompt = registry.get(
+                    config.prompt.prompt_family, config.prompt.prompt_version
+                )
+            except ValueError:
+                from mas_cc.games.registry import register_game_prompt_factories
+
+                prompt = register_game_prompt_factories(registry).get(
+                    config.prompt.prompt_family, config.prompt.prompt_version
+                )
         values["prompt"]["resolved_block_manifest"] = [
             {
                 "order": index,

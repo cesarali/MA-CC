@@ -45,7 +45,7 @@ is measuring what one message does.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, ClassVar
 import hashlib
 import math
@@ -64,6 +64,10 @@ from ...hidden_bench.imitation_round_feedback.controller import (
     RoundSoftTargetBudgetedControl,
 )
 from ..data import RelationalTask
+from .adaptive_communication import (
+    COMMUNICATION_POLICY,
+    COMMUNICATION_POLICY_VERSION,
+)
 
 RECOMMENDATION_ONLY = "recommendation_only"
 RECOMMENDATION_PLUS_FACT = "recommendation_plus_fact"
@@ -82,10 +86,12 @@ CONTROLLER_EVIDENCE_STRATEGIES = (EVIDENCE_NEUTRAL, EVIDENCE_STRATEGIC)
 DIRECT_RECOMMENDATION = "direct_recommendation"
 COORDINATION_REQUEST = "coordination_request"
 TRUTHFUL_STRATEGIC_REPORT = "truthful_strategic_report"
+ADAPTIVE_COMMUNICATION = "adaptive_communication"
 CONTROLLER_ACTUATION_MODES = (
     DIRECT_RECOMMENDATION,
     COORDINATION_REQUEST,
     TRUTHFUL_STRATEGIC_REPORT,
+    ADAPTIVE_COMMUNICATION,
 )
 
 STRATEGIC_REPORT_SELECTION_V1 = "target_preserving_v1"
@@ -162,6 +168,10 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     controller_timing: str = TIMING_MICROSCOPIC
     controller_report_cooldown_rounds: int = 1
     controller_report_selection_strategy: str = STRATEGIC_REPORT_SELECTION_V1
+    allow_controller_requests: bool = True
+    allow_controller_directives: bool = True
+    controller_communication_policy: str = COMMUNICATION_POLICY
+    controller_communication_policy_version: int = COMMUNICATION_POLICY_VERSION
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -316,12 +326,41 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             "either allocation, report it."
         )
 
+    def coordination_directive_text(
+        self,
+        target: str,
+        sampled_opinion_counts: Mapping[str, Any],
+        answer_display_texts: Mapping[str, str] | None = None,
+    ) -> str:
+        """Coordinate comparison work without presenting a fact or asking a question."""
+
+        rivals = {
+            str(option): int(count)
+            for option, count in sampled_opinion_counts.items()
+            if str(option) != target
+        }
+        rival = max(sorted(rivals), key=rivals.get) if rivals else None
+        target_text = (answer_display_texts or {}).get(target, target)
+        if rival is None:
+            return (
+                f"Please compare the available evidence for and against {target_text} "
+                "before deciding."
+            )
+        rival_text = (answer_display_texts or {}).get(rival, rival)
+        return (
+            f"Please compare the evidence for {target_text} and {rival_text}, "
+            "including both ability and cooperation evidence, before deciding."
+        )
+
     def validate_truthful_report_task(
         self, task: RelationalTask, episode_seed: int = 0
     ) -> None:
         """Fail before provider use unless the task has a valid frozen pool."""
 
-        if self.controller_actuation_mode != TRUTHFUL_STRATEGIC_REPORT:
+        if self.controller_actuation_mode not in {
+            TRUTHFUL_STRATEGIC_REPORT,
+            ADAPTIVE_COMMUNICATION,
+        }:
             return
         target = self.resolved_target_for_task(task, episode_seed)
         if task.task_family != "musr_team_allocation":
@@ -363,7 +402,10 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         """Rank true frozen facts without consuming the action-policy RNG stream."""
 
         self.validate_truthful_report_task(task, episode_seed)
-        if self.controller_actuation_mode != TRUTHFUL_STRATEGIC_REPORT:
+        if self.controller_actuation_mode not in {
+            TRUTHFUL_STRATEGIC_REPORT,
+            ADAPTIVE_COMMUNICATION,
+        }:
             return ()
         classes = task.controller_fact_classes or {}
         base_scores = task.controller_fact_scores or {}
@@ -415,6 +457,35 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 selected, start=1
             )
         )
+
+    def select_adaptive_truthful_reports(
+        self,
+        task: RelationalTask,
+        *,
+        episode_seed: int,
+        round_index: int,
+        live_fact_counts: Mapping[str, int],
+        selected_rounds: Mapping[str, Sequence[int]],
+    ) -> tuple[StrategicReportSelection, ...]:
+        """Return at most b useful reports without repeating prior controller facts."""
+
+        selected = replace(
+            self, intervention_budget=len(task.controller_reportable_fact_ids)
+        ).select_truthful_reports(
+            task,
+            episode_seed=episode_seed,
+            round_index=round_index,
+            live_fact_counts=live_fact_counts,
+            selected_rounds=selected_rounds,
+        )
+        useful = tuple(
+            row
+            for row in selected
+            if row.fact_id not in selected_rounds
+            and row.novel_on_live_board
+            and row.cooldown_eligible
+        )
+        return useful[: self.intervention_budget]
 
     @classmethod
     def _extra_from_options(
@@ -505,15 +576,68 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         if timing == TIMING_DAWN_ONLY and actuation_mode not in {
             COORDINATION_REQUEST,
             TRUTHFUL_STRATEGIC_REPORT,
+            ADAPTIVE_COMMUNICATION,
         }:
             issues.append(
                 ValidationIssue(
                     "control.options.controller_timing",
                     "dawn_only requires controller_actuation_mode "
-                    "'coordination_request' or 'truthful_strategic_report'",
+                    "'coordination_request', 'truthful_strategic_report', or "
+                    "'adaptive_communication'",
                 )
             )
         values["controller_timing"] = str(timing)
+
+        allow_requests = options.get("allow_controller_requests", True)
+        if not isinstance(allow_requests, bool):
+            issues.append(
+                ValidationIssue(
+                    "control.options.allow_controller_requests",
+                    "must be a boolean",
+                )
+            )
+            allow_requests = True
+        values["allow_controller_requests"] = allow_requests
+
+        allow_directives = options.get("allow_controller_directives", True)
+        if not isinstance(allow_directives, bool):
+            issues.append(
+                ValidationIssue(
+                    "control.options.allow_controller_directives",
+                    "must be a boolean",
+                )
+            )
+            allow_directives = True
+        values["allow_controller_directives"] = allow_directives
+
+        communication_policy = options.get(
+            "controller_communication_policy", COMMUNICATION_POLICY
+        )
+        if communication_policy != COMMUNICATION_POLICY:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_communication_policy",
+                    f"must be {COMMUNICATION_POLICY!r}",
+                )
+            )
+            communication_policy = COMMUNICATION_POLICY
+        values["controller_communication_policy"] = str(communication_policy)
+
+        communication_policy_version = options.get(
+            "controller_communication_policy_version",
+            COMMUNICATION_POLICY_VERSION,
+        )
+        if communication_policy_version != COMMUNICATION_POLICY_VERSION:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_communication_policy_version",
+                    f"must be {COMMUNICATION_POLICY_VERSION}",
+                )
+            )
+            communication_policy_version = COMMUNICATION_POLICY_VERSION
+        values["controller_communication_policy_version"] = int(
+            communication_policy_version
+        )
 
         selector = options.get("controller_fact_selector")
         if selector is not None and selector not in FACT_SELECTORS:
@@ -626,6 +750,29 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                         "message_mode must be recommendation_only",
                     )
                 )
+        if actuation_mode == ADAPTIVE_COMMUNICATION:
+            if isinstance(budget, int) and not isinstance(budget, bool) and budget == 0:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.intervention_budget",
+                        "adaptive_communication requires at least one communication slot",
+                    )
+                )
+            if timing != TIMING_DAWN_ONLY:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.controller_timing",
+                        "adaptive_communication requires dawn_only timing",
+                    )
+                )
+            if mode != RECOMMENDATION_ONLY:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.message_mode",
+                        "adaptive_communication uses typed board messages; "
+                        "message_mode must be recommendation_only",
+                    )
+                )
         return values
 
 
@@ -634,6 +781,7 @@ def create_relational_round_budgeted_control(config: ControlConfig) -> Control:
 
 
 __all__ = [
+    "ADAPTIVE_COMMUNICATION",
     "CONTROLLER_ACTUATION_MODES",
     "CONTROLLER_TIMINGS",
     "COORDINATION_REQUEST",

@@ -65,6 +65,7 @@ def _record(
         "occupation_counts_before": list(before),
         "occupation_counts_after": list(after),
         "controller_action": action,
+        "U_k": (None if action is None else int(action == ADVOCATE_TARGET)),
         "controller_advocate_probability": None if action is None else probability,
         "sensor_count_vector": None if action is None else [6, 3, 3],
         "sensor_target_share": None if action is None else 0.25,
@@ -104,6 +105,24 @@ def test_an_uncontrolled_record_falls_back_to_the_correct_answer():
     row = adapt_relational_round_record(_record(episode="e0", index=0, action=None))
     assert row.target_before == row.truth_before
     assert row.U_k is None
+
+
+def test_explicit_binary_u_is_authoritative_and_message_mode_is_secondary():
+    record = _record(episode="e0", index=0, action=ADVOCATE_TARGET)
+    record["chosen_message_mode"] = "REQUEST"
+    row = adapt_relational_round_record(record)
+
+    assert row.U_k == ADVOCATE_TARGET
+    assert row.event["U_k"] == 1
+    assert row.event["chosen_message_mode"] == "REQUEST"
+
+    inconsistent = dict(record, U_k=0)
+    with pytest.raises(ValueError, match="disagrees"):
+        adapt_relational_round_record(inconsistent)
+
+    non_binary = dict(record, U_k=2)
+    with pytest.raises(ValueError, match="exactly 0 or 1"):
+        adapt_relational_round_record(non_binary)
 
 
 def test_epistemic_bins_are_coarse_and_bounded():

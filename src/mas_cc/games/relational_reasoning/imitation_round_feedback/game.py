@@ -337,6 +337,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 social_context=True,
                 answer_display_texts=state.answer_display_texts,
                 version=rules.prompt_version,
+                allow_participant_requests=rules.allow_participant_requests,
             )
             if rules.social_mode == SOCIAL_MODE_BOARD and stage == FOCAL_UPDATE
             else build_relational_ballot_prompt(
@@ -529,11 +530,15 @@ class RelationalImitationRoundFeedbackGame(Game):
                 )
             public = action.metadata.get("public_message")
             public_type = public.get("type") if isinstance(public, Mapping) else None
-            if public_type not in {MESSAGE_REQUEST, MESSAGE_REPORT, MESSAGE_NONE}:
+            allowed_public_types = {MESSAGE_REPORT, MESSAGE_NONE}
+            if rules.allow_participant_requests:
+                allowed_public_types.add(MESSAGE_REQUEST)
+            if public_type not in allowed_public_types:
                 issues.append(
                     ValidationIssue(
                         "action.public_message.type",
-                        "ordinary agents may use REQUEST, REPORT, or NONE only",
+                        "ordinary agents may use only "
+                        + ", ".join(sorted(allowed_public_types)),
                     )
                 )
             if public_type in {MESSAGE_REQUEST, MESSAGE_NONE} and shared is not None:

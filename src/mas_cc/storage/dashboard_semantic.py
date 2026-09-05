@@ -358,6 +358,7 @@ class SemanticDashboardWriter:
             "controller_message_id",
             "controller_message_directly_exposed",
             "controller_actuation_mode",
+            "chosen_controller_message_mode",
             "possible_answers",
             "correct_answer",
             "board_size_before",
