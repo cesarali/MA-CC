@@ -127,6 +127,10 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             "game.options.board.exclude_self_authored",
             "board_exclude_self_authored",
         ),
+        (
+            "game.options.board.allow_participant_requests",
+            "allow_participant_requests",
+        ),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
@@ -143,6 +147,22 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         (
             "control.options.controller_actuation_mode",
             "controller_actuation_mode",
+        ),
+        (
+            "control.options.allow_controller_requests",
+            "allow_controller_requests",
+        ),
+        (
+            "control.options.allow_controller_directives",
+            "allow_controller_directives",
+        ),
+        (
+            "control.options.controller_communication_policy",
+            "controller_communication_policy",
+        ),
+        (
+            "control.options.controller_communication_policy_version",
+            "controller_communication_policy_version",
         ),
         (
             "control.options.controller_report_cooldown_rounds",

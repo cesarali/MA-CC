@@ -380,7 +380,8 @@ class BlackboardRunReader:
                         "sensor"
                     ),
                     "controller_post_ids": (start.get("controller") or {}).get(
-                        "directive_ids", []
+                        "post_ids",
+                        (start.get("controller") or {}).get("directive_ids", []),
                     ),
                     "protocol": header.get("protocol_version"),
                 }
