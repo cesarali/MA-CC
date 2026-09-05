@@ -46,6 +46,13 @@ TRUTHFUL_DESIGN = (
 TRUTHFUL_DESIGN_SHA256 = (
     "3c730e0dcc9c88129d4ec842a7110471d1fee831b5f6b9d1106a54149df9b89c"
 )
+TRUTH_ALIGNED_DESIGN = (
+    "configs/runs/relational_reasoning/blackboard_game/artifacts/"
+    "task_001_truth_aligned_controller.json"
+)
+TRUTH_ALIGNED_DESIGN_SHA256 = (
+    "be955283c9fd85ccf3f9786744311d50855203e4294518249815a7b29c904436"
+)
 
 
 def _musr_config():
@@ -271,6 +278,34 @@ def test_truthful_controller_design_is_symbolically_valid_and_has_24_reports():
     assert len(set(task.controller_reportable_fact_ids)) == 24
     assert set(task.controller_reportable_fact_ids).issubset(task.facts)
     assert task.decisive_fact_ids
+
+
+def test_truth_aligned_controller_design_is_symbolically_valid():
+    task = load_musr_team_allocation_task(
+        "results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks",
+        "task_001",
+        population_size=24,
+        initial_information_path=(
+            "configs/runs/relational_reasoning/blackboard_game/artifacts/"
+            "task_001_F9_N24.json"
+        ),
+        initial_information_sha256=(
+            "a0bd717bcca2f67f73e4aa981f292f9974f541949bf4fd2843cec47e281de45f"
+        ),
+        truthful_controller_design_path=TRUTH_ALIGNED_DESIGN,
+        truthful_controller_design_sha256=TRUTH_ALIGNED_DESIGN_SHA256,
+    )
+    control = RelationalRoundBudgetedControl.from_options(
+        {
+            **dict(_truthful_config(budget=21).control.options),
+            "target": "correct",
+        }
+    )
+
+    assert task.controller_target == task.correct_relation == "ALLOCATION_0"
+    assert len(task.controller_reportable_fact_ids) == 27
+    assert task.decisive_fact_ids
+    control.validate_truthful_report_task(task, 0)
 
 
 def test_truthful_report_selection_rotates_deterministically_with_cooldown():

@@ -337,8 +337,6 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 f"controller target {target!r} does not match task-declared target "
                 f"{task.controller_target!r}"
             )
-        if target == task.correct_relation:
-            raise ValueError("truthful strategic controller target must be false")
         pool = task.controller_reportable_fact_ids
         if self.intervention_budget > len(pool):
             raise ValueError(

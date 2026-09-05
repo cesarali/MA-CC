@@ -232,6 +232,99 @@ def test_cell_bundles_share_an_array_allocation_without_changing_cell_outputs(tm
     assert plan.cpus_per_task == 8
 
 
+@pytest.mark.parametrize(
+    ("folder", "prefix", "q", "provider", "model", "throttle", "concurrency"),
+    [
+        (
+            "blackboard_truthful_reports_q3_deepinfra",
+            "q3",
+            3,
+            "deepinfra",
+            "deepseek-ai/DeepSeek-V4-Flash",
+            5,
+            100,
+        ),
+        (
+            "blackboard_truthful_reports_q1_potsdam",
+            "q1",
+            1,
+            "university",
+            "gwdg/openai-gpt-oss-120b",
+            3,
+            60,
+        ),
+    ],
+)
+def test_prompt_v3_truthful_report_studies_are_matched_and_launch_bounded(
+    folder, prefix, q, provider, model, throttle, concurrency
+):
+    root = Path("configs/runs/relational_reasoning/blackboard_game") / folder
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, "/tmp/test-truthful-reports", git_commit="test")
+    entries = build_cell_execution_entries(spec, submissions)
+    shard_count = max(entry.array_index for entry in entries) + 1
+    plan = plan_cell_execution(spec, shard_count)
+    arms = {
+        name: load_run_config_or_grid(root / f"{prefix}_{name}.yaml")
+        for name in ("no_control", "truth_control", "false_control")
+    }
+
+    assert [entry.expected_cell_count for entry in submissions] == [5, 35, 35]
+    assert [entry.expected_episode_count for entry in submissions] == [50, 350, 350]
+    assert len(entries) == 75
+    assert shard_count == 38
+    assert plan.array_throttle == throttle
+    assert plan.total_request_concurrency == concurrency
+    assert plan.total_episode_slots == concurrency
+
+    for arm in arms.values():
+        assert {cell.config.prompt.prompt_version for cell in arm.cells} == {3}
+        assert {cell.config.game.options["prompt_version"] for cell in arm.cells} == {3}
+        assert {cell.config.game.options["social_group_size"] for cell in arm.cells} == {q}
+        assert {cell.config.llm_provider.type for cell in arm.cells} == {provider}
+        assert {cell.config.llm_provider.model for cell in arm.cells} == {model}
+        assert {cell.config.execution.repetitions for cell in arm.cells} == {10}
+
+    expected_rho = [0.7, 0.775, 0.85, 0.925, 1.0]
+    expected_b = [3, 6, 9, 12, 15, 18, 21]
+    assert [list(axis.values) for axis in arms["no_control"].axes] == [expected_rho]
+    for name in ("truth_control", "false_control"):
+        assert [list(axis.values) for axis in arms[name].axes] == [expected_rho, expected_b]
+        assert {
+            cell.config.control.options["controller_actuation_mode"]
+            for cell in arms[name].cells
+        } == {"truthful_strategic_report"}
+    assert {cell.config.control.options["target"] for cell in arms["truth_control"].cells} == {"correct"}
+    assert {cell.config.control.options["target"] for cell in arms["false_control"].cells} == {"ALLOCATION_1"}
+
+
+def test_prompt_v3_truth_and_false_arms_share_initialization_compatibility():
+    from mas_cc.core import Seed
+    from mas_cc.games import create_game
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization import (
+        initialization_compatibility_key,
+    )
+
+    root = Path(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "blackboard_truthful_reports_q3_deepinfra"
+    )
+    configs = [
+        load_run_config_or_grid(root / name).cells[0].config
+        for name in ("q3_no_control.yaml", "q3_truth_control.yaml", "q3_false_control.yaml")
+    ]
+    episode_seed = int(Seed(configs[0].execution.seed).derive("episode:0"))
+
+    assert len(
+        {
+            initialization_compatibility_key(
+                create_game(config.game), config, episode_seed
+            )
+            for config in configs
+        }
+    ) == 1
+
+
 def test_cell_worker_runs_every_cell_in_selected_bundle(tmp_path, monkeypatch):
     config = Path(
         "configs/runs/relational_reasoning/blackboard_game/"

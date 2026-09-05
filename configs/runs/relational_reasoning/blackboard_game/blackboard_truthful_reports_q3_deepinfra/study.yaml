@@ -1,0 +1,27 @@
+study: {name: musr_blackboard_truthful_reports_q3_deepinfra}
+configs:
+  - q3_no_control.yaml
+  - q3_truth_control.yaml
+  - q3_false_control.yaml
+execution:
+  mode: auto
+  cells_per_shard: 2
+  target_rpm: 1000
+  assumed_latency_seconds: 6.0
+  max_active_nodes: 5
+  throttle: 5
+  cpus_per_task: 8
+  memory: 12G
+  time_limit: "06:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_truthful_reports_q3_deepinfra
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 100
+    minimum_concurrency: 10
+    maximum_concurrency: 100
+    target_rpm: 1000
+    retry_max_elapsed_seconds: 300
+analysis: {recipe: analysis.yaml}
