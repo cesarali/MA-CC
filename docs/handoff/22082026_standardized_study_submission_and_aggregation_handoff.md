@@ -292,18 +292,28 @@ Successful or explicitly partial aggregation writes:
 
 ```text
 analysis/tables/
-    cells.csv
-    episodes.csv
-    rounds.csv
-    micro_slots.csv
-    primary_estimates.csv
-    information_estimates.csv
-    support_diagnostics.csv
-    derived_observables.csv
+    cells.parquet
+    episodes.parquet
+    rounds.parquet
+    micro_slots.parquet
+    primary_estimates.parquet
+    information_estimates.parquet
+    support_diagnostics.parquet
+    derived_observables.parquet
 ```
 
-CSV is authoritative for new packages. Legacy Parquet remains readable for
-reaggregation, but new analysis does not emit Parquet by default.
+Compressed Parquet is authoritative for new packages. Legacy CSV remains
+readable for reaggregation, but new analysis does not emit CSV mirrors.
+
+Existing standardized CSV handoffs can be migrated in place without provider
+calls or estimator recomputation:
+
+```bash
+mas-cc study compact-analysis --study-dir <study-result-root>
+```
+
+The command stages and verifies every Parquet table before removing the CSV
+table sources, updates `analysis_manifest.json`, and rebuilds the analysis ZIP.
 
 ### Cells
 
@@ -409,7 +419,7 @@ records exist. Their exposure/transition counts and probabilities are added to
 
 ## 11. Long-format outputs and support
 
-`primary_estimates.csv` is the union of information estimates and requested
+`primary_estimates.parquet` is the union of information estimates and requested
 auxiliary primary estimators. Its stable leading columns include:
 
 ```text
@@ -443,8 +453,8 @@ The information `analysis_hash` includes:
 - bootstrap/null/confidence/seed settings.
 
 No persistent estimator cache is retained. An unchanged second aggregation
-recomputes from `cells.csv`, `episodes.csv`, `rounds.csv`, and `micro_slots.csv`
-(or their legacy Parquet equivalents). In-memory or invocation-local computation is
+recomputes from `cells.parquet`, `episodes.parquet`, `rounds.parquet`, and
+`micro_slots.parquet` (or their legacy CSV equivalents). In-memory or invocation-local computation is
 allowed, but successful aggregation removes it. Analysis hashes and calculation
 settings remain recorded in `analysis_manifest.json`. If the original run trees
 are no longer present, `study aggregate` uses these retained canonical tables

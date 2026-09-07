@@ -1,19 +1,18 @@
 """Canonical scientific-table I/O.
 
-New analysis products are portable CSV.  Parquet remains a read-only legacy
-format so retained older archives can still be reaggregated.
+New analysis products use compressed Parquet. CSV remains a read-only legacy
+format so retained older archives can still be reaggregated and compacted.
 """
 
 from __future__ import annotations
 
 import json
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-CANONICAL_TABLE_FORMAT = "csv"
+CANONICAL_TABLE_FORMAT = "parquet"
 
 
 def _csv_value(value: Any) -> Any:
@@ -38,32 +37,26 @@ def csv_safe(frame: pd.DataFrame) -> pd.DataFrame:
 def write_scientific_table(
     tables_dir: str | Path, name: str, frame: pd.DataFrame
 ) -> Path:
-    """Write and verify one canonical CSV scientific table."""
+    """Write and verify one compressed canonical Parquet scientific table."""
 
     directory = Path(tables_dir)
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / f"{name}.csv"
+    destination = directory / f"{name}.parquet"
     safe = csv_safe(frame)
-    serialized = safe.to_csv(index=False, float_format="%.17g", lineterminator="\n")
-    destination.write_text(serialized, encoding="utf-8")
+    safe.to_parquet(destination, index=False, engine="pyarrow", compression="zstd")
 
-    # A writer regression must be discovered at creation time, not after an
-    # archive has been handed off.  Parse the actual bytes and compare every
-    # scalar/null after pandas' normal CSV inference.
-    if len(safe.columns):
-        restored = pd.read_csv(destination, dtype=str, keep_default_na=False)
-        expected = pd.read_csv(StringIO(serialized), dtype=str, keep_default_na=False)
-        assert list(restored.columns) == list(safe.columns)
-        assert len(restored) == len(safe)
-        assert restored.equals(expected)
+    # Discover writer/schema regressions at creation time, before packaging.
+    restored = pd.read_parquet(destination, engine="pyarrow")
+    assert list(restored.columns) == list(safe.columns)
+    assert len(restored) == len(safe)
     return destination
 
 
 def retained_table_path(tables_dir: str | Path, name: str) -> Path | None:
-    """Prefer canonical CSV, then accept a legacy Parquet table."""
+    """Prefer canonical Parquet, then accept a legacy CSV table."""
 
     directory = Path(tables_dir)
-    for suffix in (".csv", ".parquet"):
+    for suffix in (".parquet", ".csv"):
         candidate = directory / f"{name}{suffix}"
         if candidate.is_file():
             return candidate

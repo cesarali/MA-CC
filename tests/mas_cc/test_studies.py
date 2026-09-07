@@ -19,6 +19,7 @@ from mas_cc.analysis.effective_affinity import effective_affinity_analysis
 from mas_cc.config import GridSpec, load_run_config, load_run_config_or_grid
 from mas_cc.experiments import run_experiment_sync
 from mas_cc.studies.aggregation import aggregate_study
+from mas_cc.studies.compaction import compact_study_analysis
 from mas_cc.studies.aggregation import (
     _conditioning_json,
     _derived,
@@ -608,11 +609,13 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert cell_worker_main([str(execution_manifest), "1"]) == 0
     summary = aggregate_study(study_dir)
     assert summary["complete"] is True
-    cells = pd.read_csv(study_dir / "analysis" / "tables" / "cells.csv")
+    cells = pd.read_parquet(study_dir / "analysis" / "tables" / "cells.parquet")
     assert len(cells) == 2
     assert set(cells["source_cell_id"]) == {"cell-0000", "cell-0001"}
     analysis = study_dir / "analysis"
-    information = pd.read_csv(analysis / "tables" / "information_estimates.csv")
+    information = pd.read_parquet(
+        analysis / "tables" / "information_estimates.parquet"
+    )
     assert set(information["null_permutations"]) == {1}
     assert set(information["bootstrap_resamples"]) == {1}
     assert information["null_type"].notna().all()
@@ -623,21 +626,21 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert not (analysis / "cache").exists()
     assert not (analysis / "cell_cache").exists()
     assert not list(analysis.rglob("*.pickle"))
-    assert not list((analysis / "tables").glob("*.parquet"))
+    assert not list((analysis / "tables").glob("*.csv"))
     with zipfile.ZipFile(summary["archive"]) as archive:
         names = set(archive.namelist())
     assert {
         "analysis_manifest.json",
         "validation.json",
         "validation.md",
-        "tables/cells.csv",
-        "tables/episodes.csv",
-        "tables/rounds.csv",
-        "tables/micro_slots.csv",
-        "tables/primary_estimates.csv",
-        "tables/information_estimates.csv",
-        "tables/support_diagnostics.csv",
-        "tables/derived_observables.csv",
+        "tables/cells.parquet",
+        "tables/episodes.parquet",
+        "tables/rounds.parquet",
+        "tables/micro_slots.parquet",
+        "tables/primary_estimates.parquet",
+        "tables/information_estimates.parquet",
+        "tables/support_diagnostics.parquet",
+        "tables/derived_observables.parquet",
         "reports/summary.md",
         "reports/methods.md",
         "provenance/study_manifest.json",
@@ -645,9 +648,7 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     } <= names
     assert not any("cache/" in name or name.endswith(".pickle") for name in names)
     assert not any(name.endswith("information_nulls.parquet") for name in names)
-    assert not any(
-        name.startswith("tables/") and name.endswith(".parquet") for name in names
-    )
+    assert not any(name.startswith("tables/") and name.endswith(".csv") for name in names)
 
     manifest = json.loads((analysis / "analysis_manifest.json").read_text())
     assert manifest["resampling"] == {
@@ -659,15 +660,15 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert manifest["retention_contract"]["persistent_analysis_cache"] is False
     assert manifest["retention_contract"]["individual_null_draws"] is False
     assert manifest["retention_contract"]["individual_bootstrap_draws"] is False
-    assert manifest["retention_contract"]["canonical_table_format"] == "csv"
-    assert manifest["retention_contract"]["csv_tables"] is True
-    assert manifest["retention_contract"]["parquet_tables"] is False
+    assert manifest["retention_contract"]["canonical_table_format"] == "parquet"
+    assert manifest["retention_contract"]["csv_tables"] is False
+    assert manifest["retention_contract"]["parquet_tables"] is True
 
     before = information.sort_values(["cell_id", "metric"]).reset_index(drop=True)
     for entry in submissions:
         shutil.rmtree(entry.output_dir)
     aggregate_study(study_dir)
-    after = pd.read_csv(analysis / "tables" / "information_estimates.csv")
+    after = pd.read_parquet(analysis / "tables" / "information_estimates.parquet")
     after = after.sort_values(["cell_id", "metric"]).reset_index(drop=True)
     pd.testing.assert_frame_equal(before, after)
 
@@ -694,23 +695,25 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
     second = aggregate_study(study_dir)
     assert first["complete"] is True
     expected = {
-        "cells.csv",
-        "episodes.csv",
-        "rounds.csv",
-        "micro_slots.csv",
-        "primary_estimates.csv",
-        "information_estimates.csv",
-        "support_diagnostics.csv",
-        "derived_observables.csv",
+        "cells.parquet",
+        "episodes.parquet",
+        "rounds.parquet",
+        "micro_slots.parquet",
+        "primary_estimates.parquet",
+        "information_estimates.parquet",
+        "support_diagnostics.parquet",
+        "derived_observables.parquet",
     }
     tables = study_dir / "analysis" / "tables"
-    assert expected <= {path.name for path in tables.glob("*.csv")}
-    assert not list(tables.glob("*.parquet"))
-    cell_table = pd.read_csv(tables / "cells.csv")
+    assert expected <= {path.name for path in tables.glob("*.parquet")}
+    assert not list(tables.glob("*.csv"))
+    cell_table = pd.read_parquet(tables / "cells.parquet")
     assert len(cell_table) == 1
     assert cell_table.iloc[0]["cell_id"] == "config-0000/run"
-    assert len(pd.read_csv(tables / "episodes.csv")) == 1
-    assert set(pd.read_csv(tables / "rounds.csv")["cell_id"]) == {"config-0000/run"}
+    assert len(pd.read_parquet(tables / "episodes.parquet")) == 1
+    assert set(pd.read_parquet(tables / "rounds.parquet")["cell_id"]) == {
+        "config-0000/run"
+    }
     assert Path(first["archive"]).is_file()
     assert Path(second["archive"]).is_file()
     assert not (study_dir / "analysis" / "cache").exists()
@@ -729,7 +732,7 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
     assert validation["valid"] is False
 
 
-def test_scientific_table_csv_round_trip_and_legacy_parquet_read(tmp_path):
+def test_scientific_table_parquet_round_trip_and_legacy_csv_read(tmp_path):
     frame = pd.DataFrame(
         {
             "cell_id": ["cell-1", "cell-2"],
@@ -739,16 +742,60 @@ def test_scientific_table_csv_round_trip_and_legacy_parquet_read(tmp_path):
             "nested": [{"rho": 0.7, "states": [1, 2]}, None],
         }
     )
-    csv_path = write_scientific_table(tmp_path, "fidelity", frame)
-    restored = pd.read_csv(csv_path)
+    parquet_path = write_scientific_table(tmp_path, "fidelity", frame)
+    restored = pd.read_parquet(parquet_path)
     assert list(restored.columns) == list(frame.columns)
     assert restored.loc[0, "estimate"] == pytest.approx(0.125)
     assert math.isnan(restored.loc[1, "estimate"])
     assert json.loads(restored.loc[0, "nested"]) == {"rho": 0.7, "states": [1, 2]}
 
-    legacy = tmp_path / "legacy.parquet"
-    frame.to_parquet(legacy, index=False, engine="pyarrow")
-    pd.testing.assert_frame_equal(read_scientific_table(legacy), frame)
+    legacy = tmp_path / "legacy.csv"
+    frame.drop(columns="nested").to_csv(legacy, index=False)
+    pd.testing.assert_frame_equal(
+        read_scientific_table(legacy), frame.drop(columns="nested"), check_dtype=False
+    )
+
+
+def test_compact_existing_csv_analysis_preserves_values_and_rebuilds_zip(tmp_path):
+    study = tmp_path / "legacy-study"
+    analysis = study / "analysis"
+    tables = analysis / "tables"
+    tables.mkdir(parents=True)
+    original = pd.DataFrame(
+        {"cell_id": ["cell-1", "cell-2"], "estimate": [0.125, 0.75]}
+    )
+    original.to_csv(tables / "information_estimates.csv", index=False)
+    (analysis / "analysis_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "study_id": "legacy-study",
+                "retention_contract": {
+                    "canonical_table_format": "csv",
+                    "csv_tables": True,
+                    "parquet_tables": False,
+                },
+                "tables": ["information_estimates.csv"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (analysis / "validation.json").write_text("{}\n", encoding="utf-8")
+    (analysis / "validation.md").write_text("valid\n", encoding="utf-8")
+
+    summary = compact_study_analysis(study)
+
+    destination = tables / "information_estimates.parquet"
+    assert destination.is_file()
+    assert not (tables / "information_estimates.csv").exists()
+    pd.testing.assert_frame_equal(pd.read_parquet(destination), original)
+    manifest = json.loads((analysis / "analysis_manifest.json").read_text())
+    assert manifest["retention_contract"]["canonical_table_format"] == "parquet"
+    assert manifest["retention_contract"]["csv_tables"] is False
+    assert manifest["tables"] == ["information_estimates.parquet"]
+    with zipfile.ZipFile(summary["archive"]) as archive:
+        assert "tables/information_estimates.parquet" in archive.namelist()
+        assert not any(name.endswith(".csv") for name in archive.namelist())
 
 
 def test_canonical_record_selection_excludes_incomplete_and_retry_prefixes():
@@ -1025,9 +1072,11 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
     aggregate_study(study_dir)
 
     tables = study_dir / "analysis" / "tables"
-    primary = pd.read_csv(tables / "primary_estimates.csv")
-    derived = pd.read_csv(tables / "derived_observables.csv")
-    diagnostics = pd.read_csv(tables / "thermodynamic_efficiency_diagnostics.csv")
+    primary = pd.read_parquet(tables / "primary_estimates.parquet")
+    derived = pd.read_parquet(tables / "derived_observables.parquet")
+    diagnostics = pd.read_parquet(
+        tables / "thermodynamic_efficiency_diagnostics.parquet"
+    )
     assert len(diagnostics) == 2
     assert diagnostics["cell_id"].nunique() == 2
     assert {

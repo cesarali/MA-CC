@@ -164,10 +164,12 @@ renders plots, and packages the handoff.
 The standardized study analysis package contains canonical scientific data,
 compact estimator summaries, support diagnostics, plots, reports, validation,
 and provenance. Bootstrap/permutation draws and analysis caches are transient
-computational intermediates and are not retained. CSV is the canonical table
-format for new analysis packages; Parquet remains supported as a legacy input
-only. Do not package source run trees or execution artifacts. Reaggregation
-recomputes from the retained canonical CSV observations (or legacy Parquet).
+computational intermediates and are not retained. Compressed Parquet is the
+canonical table format for analysis packages; CSV remains supported as a
+legacy input only. Do not package source run trees or execution artifacts.
+Reaggregation recomputes from the retained canonical Parquet observations.
+Use `mas-cc study compact-analysis --study-dir <study>` to migrate an existing
+CSV analysis handoff without rerunning estimators or provider calls.
 
 ## Aggregate and extend analysis
 
@@ -184,7 +186,7 @@ For a new efficiency, phase diagram, or plot that existing raw records support:
 
 1. add a derived observable and/or analysis recipe entry;
 2. rerun `study aggregate`;
-3. recompute from retained canonical CSV observations (or legacy Parquet);
+3. recompute from retained canonical Parquet observations (or legacy CSV);
 4. do not rerun LLM calls.
 
 Rerun LLM calls only when the requested result genuinely needs raw fields or
