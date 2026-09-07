@@ -9,8 +9,14 @@ from pathlib import Path
 
 
 def main() -> int:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else "results/studies/musr_truthful_selective_isolated_oss_01")
-    manifest = json.loads((root / "preparation/checksum_manifest.json").read_text(encoding="utf-8"))
+    root = Path(
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "results/studies/musr_truthful_selective_isolated_oss_01"
+    )
+    manifest = json.loads(
+        (root / "preparation/checksum_manifest.json").read_text(encoding="utf-8")
+    )
     failures = []
     for relative, expected in manifest.items():
         path = root / relative
@@ -20,7 +26,13 @@ def main() -> int:
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         if actual != expected:
             failures.append(f"hash mismatch: {relative}")
-    rows = sum(1 for line in (root / "preparation/evaluation_manifest.jsonl").read_text(encoding="utf-8").splitlines() if line.strip())
+    rows = sum(
+        1
+        for line in (root / "preparation/evaluation_manifest.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    )
     if rows != 10_818:
         failures.append(f"manifest rows: {rows} != 10818")
     if failures:

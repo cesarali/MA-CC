@@ -84,7 +84,11 @@ def run_configured_probe(
         config = load_isolated_config(config_path)
         if mode == "preflight":
             root, payload = prepare(config, output_dir)
-            return bool(payload["passed"]), root / "preparation/offline_test_report.md", "MuSR isolated OSS package prepared"
+            return (
+                bool(payload["passed"]),
+                root / "preparation/offline_test_report.md",
+                "MuSR isolated OSS package prepared",
+            )
         if mode == "analyze":
             result = analyze(config, output_dir)
             return True, Path(result["report"]), "MuSR isolated OSS report written"
@@ -98,7 +102,11 @@ def run_configured_probe(
             )
         )
         ok = result["completed"] == result["planned"] and not result["stopped"]
-        return ok, Path(output_dir or config.output_dir), "MuSR isolated OSS execution finished"
+        return (
+            ok,
+            Path(output_dir or config.output_dir),
+            "MuSR isolated OSS execution finished",
+        )
     if probe_name == "musr_truthful_selective":
         from mas_cc.probes.musr_truthful_selective import (
             analyze,

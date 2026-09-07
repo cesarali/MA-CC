@@ -118,7 +118,9 @@ def load_isolated_config(path: str | Path) -> IsolatedOSSConfig:
     budget = _map(raw.get("budget"), "budget")
     planning = _map(raw.get("planning", {}), "planning")
     calibration_root = Path(str(source["calibration_root"]))
-    revision = Path(str(source.get("revision_manifest", "analysis/task_revision_manifest.json")))
+    revision = Path(
+        str(source.get("revision_manifest", "analysis/task_revision_manifest.json"))
+    )
     if not revision.is_absolute():
         revision = calibration_root / revision
     provider = LLMProviderConfig(
@@ -137,7 +139,9 @@ def load_isolated_config(path: str | Path) -> IsolatedOSSConfig:
         source_path=str(source_path),
         calibration_root=calibration_root,
         revision_manifest=revision,
-        expected_tasks={str(k): int(v) for k, v in _map(source.get("tasks"), "source.tasks").items()},
+        expected_tasks={
+            str(k): int(v) for k, v in _map(source.get("tasks"), "source.tasks").items()
+        },
         budgets=tuple(int(value) for value in evaluation.get("budgets", (3, 6, 9, 12))),
         random_replicates=int(evaluation.get("random_replicates", 5)),
         answer_orders=6,
@@ -145,8 +149,13 @@ def load_isolated_config(path: str | Path) -> IsolatedOSSConfig:
         prompt_variant=str(evaluation.get("prompt_variant", "P2")),
         seed=int(evaluation.get("seed", 20260907)),
         provider=provider,
-        smoke=ExecutionProfile(int(smoke.get("concurrency", 4)), int(smoke.get("requests_per_minute", 60))),
-        cluster=ExecutionProfile(int(cluster.get("concurrency", 30)), int(cluster.get("requests_per_minute", 300))),
+        smoke=ExecutionProfile(
+            int(smoke.get("concurrency", 4)), int(smoke.get("requests_per_minute", 60))
+        ),
+        cluster=ExecutionProfile(
+            int(cluster.get("concurrency", 30)),
+            int(cluster.get("requests_per_minute", 300)),
+        ),
         invalid_response_retries=int(profiles.get("invalid_response_retries", 1)),
         output_dir=Path(str(storage["output_dir"])),
         max_logical_calls=int(budget["max_logical_calls"]),
@@ -160,18 +169,33 @@ def load_isolated_config(path: str | Path) -> IsolatedOSSConfig:
     if config.expected_tasks != {"task_001": 42, "task_002": 237, "task_003": 130}:
         raise ValueError("isolated evaluation requires approved candidates 42/237/130")
     if config.budgets != (3, 6, 9, 12) or config.random_replicates != 5:
-        raise ValueError("isolated design requires budgets 3/6/9/12 and five random packets")
+        raise ValueError(
+            "isolated design requires budgets 3/6/9/12 and five random packets"
+        )
     if config.assignment_population != 24 or config.answer_orders != 6:
         raise ValueError("isolated design requires N=24 and all six answer orders")
     if (provider.type, provider.model, provider.temperature) != (
-        "university", "gwdg/openai-gpt-oss-120b", 1.0
+        "university",
+        "gwdg/openai-gpt-oss-120b",
+        1.0,
     ):
-        raise ValueError("provider must be frozen university gwdg/openai-gpt-oss-120b at temperature 1.0")
+        raise ValueError(
+            "provider must be frozen university gwdg/openai-gpt-oss-120b at temperature 1.0"
+        )
     if config.logical_calls != 10_818 or config.max_logical_calls != 10_818:
-        raise ValueError("isolated full manifest must contain exactly 10,818 logical calls")
-    if config.max_provider_attempts < config.logical_calls * (config.invalid_response_retries + 1):
+        raise ValueError(
+            "isolated full manifest must contain exactly 10,818 logical calls"
+        )
+    if config.max_provider_attempts < config.logical_calls * (
+        config.invalid_response_retries + 1
+    ):
         raise ValueError("provider-attempt cap is below schema retry ceiling")
     return config
 
 
-__all__ = ["ExecutionProfile", "IsolatedOSSConfig", "PROBE_NAME", "load_isolated_config"]
+__all__ = [
+    "ExecutionProfile",
+    "IsolatedOSSConfig",
+    "PROBE_NAME",
+    "load_isolated_config",
+]

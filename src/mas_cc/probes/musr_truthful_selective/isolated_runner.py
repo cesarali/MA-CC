@@ -13,7 +13,11 @@ from typing import Any, Mapping
 
 import yaml
 
-from mas_cc.musr_team_allocation_generator.io_utils import sha256_file, sha256_object, write_json_atomic
+from mas_cc.musr_team_allocation_generator.io_utils import (
+    sha256_file,
+    sha256_object,
+    write_json_atomic,
+)
 
 from .isolated_analysis import aggregate
 from .isolated_config import IsolatedOSSConfig
@@ -24,9 +28,17 @@ from .isolated_prompting import render_isolated
 
 def _git() -> dict[str, Any]:
     try:
-        commit = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
-        diff = subprocess.run(["git", "diff", "--binary", "HEAD"], check=True, capture_output=True).stdout
-        return {"commit": commit, "dirty": bool(diff), "working_tree_patch_sha256": hashlib.sha256(diff).hexdigest()}
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+        diff = subprocess.run(
+            ["git", "diff", "--binary", "HEAD"], check=True, capture_output=True
+        ).stdout
+        return {
+            "commit": commit,
+            "dirty": bool(diff),
+            "working_tree_patch_sha256": hashlib.sha256(diff).hexdigest(),
+        }
     except (OSError, subprocess.CalledProcessError):
         return {"commit": None, "dirty": None, "working_tree_patch_sha256": None}
 
@@ -56,16 +68,35 @@ def _checksum_tree(root: Path, paths: list[Path]) -> dict[str, str]:
     }
 
 
-def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[Path, dict[str, Any]]:
+def prepare(
+    config: IsolatedOSSConfig, output_dir: Path | None = None
+) -> tuple[Path, dict[str, Any]]:
     root = Path(output_dir or config.output_dir)
     prep = root / "preparation"
     prep.mkdir(parents=True, exist_ok=True)
     tasks = load_selected_tasks(config)
     manifest = build_manifest(config, tasks)
-    rendered = {row.request_id: render_isolated(tasks[row.task_id], row, prompt_variant=config.prompt_variant) for row in manifest}
-    forbidden = ("strategic", "random", "controller", "false target", "gold answer", "candidate_scores", "skill_matrix", "cooperation_matrix", "symbolic")
+    rendered = {
+        row.request_id: render_isolated(
+            tasks[row.task_id], row, prompt_variant=config.prompt_variant
+        )
+        for row in manifest
+    }
+    forbidden = (
+        "strategic",
+        "random",
+        "controller",
+        "false target",
+        "gold answer",
+        "candidate_scores",
+        "skill_matrix",
+        "cooperation_matrix",
+        "symbolic",
+    )
     for request in manifest:
-        visible = "\n".join(message.content for message in rendered[request.request_id].messages).casefold()
+        visible = "\n".join(
+            message.content for message in rendered[request.request_id].messages
+        ).casefold()
         if any(term in visible for term in forbidden):
             raise RuntimeError(f"forbidden metadata leaked into {request.request_id}")
     manifest_rows = [
@@ -84,12 +115,18 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
         prompt_by_hash.setdefault(prompt.instance_hash, prompt.to_dict())
     _write_jsonl(
         prep / "prompt_archive.jsonl",
-        ({"prompt_instance_hash": key, **value} for key, value in sorted(prompt_by_hash.items())),
+        (
+            {"prompt_instance_hash": key, **value}
+            for key, value in sorted(prompt_by_hash.items())
+        ),
     )
     write_json_atomic(prep / "smoke_request_ids.json", list(smoke_ids(manifest)))
-    (prep / "resolved_config.yaml").write_text(yaml.safe_dump(config.to_dict(), sort_keys=False), encoding="utf-8")
+    (prep / "resolved_config.yaml").write_text(
+        yaml.safe_dump(config.to_dict(), sort_keys=False), encoding="utf-8"
+    )
     _copy_frozen_tasks(config, prep / "frozen_tasks")
-    git = _git(); write_json_atomic(prep / "source_commit.json", git)
+    git = _git()
+    write_json_atomic(prep / "source_commit.json", git)
     counts = {
         condition: sum(row.condition == condition for row in manifest)
         for condition in ("full", "private", "strategic", "random")
@@ -102,7 +139,10 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
         output_rate = float(pricing.get("output", 0))
         cost = {
             "amount": total_input / 1_000_000 * input_rate
-            + len(manifest) * config.provider.max_output_tokens / 1_000_000 * output_rate,
+            + len(manifest)
+            * config.provider.max_output_tokens
+            / 1_000_000
+            * output_rate,
             "unit": config.accounting_unit,
             "source": "frozen config offline_pricing_per_million_tokens",
             "interpretation": "conservative output-token ceiling, not predicted spend",
@@ -124,7 +164,8 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
         "provider_attempt_ceiling": config.max_provider_attempts,
         "estimated_input_tokens": total_input,
         "output_token_ceiling": len(manifest) * config.provider.max_output_tokens,
-        "cost": cost or "not estimated locally; query current provider pricing on cluster before launch",
+        "cost": cost
+        or "not estimated locally; query current provider pricing on cluster before launch",
         "duration": {
             name: {
                 "assumed_seconds": (
@@ -139,9 +180,19 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
         "output_dir": str(root),
     }
     write_json_atomic(prep / "preflight.json", preflight)
-    identity = sha256_object({"config": config.to_dict(), "manifest": manifest_rows, "git": git})
+    identity = sha256_object(
+        {"config": config.to_dict(), "manifest": manifest_rows, "git": git}
+    )
     (prep / "preflight_id.txt").write_text(identity + "\n", encoding="utf-8")
-    checksums = _checksum_tree(root, [path for path in prep.rglob("*") if path.is_file() and path.name not in {"checksum_manifest.json", "transfer_bundle.tar.gz"}])
+    checksums = _checksum_tree(
+        root,
+        [
+            path
+            for path in prep.rglob("*")
+            if path.is_file()
+            and path.name not in {"checksum_manifest.json", "transfer_bundle.tar.gz"}
+        ],
+    )
     write_json_atomic(prep / "checksum_manifest.json", checksums)
     handoff = {
         "schema_version": 1,
@@ -156,7 +207,11 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
             "resume": f"mas-cc probe run --config {config.source_path} --output-dir {root} --approve-preflight {prep / 'preflight_id.txt'} --request-set full --execution-profile cluster",
             "analyze": f"mas-cc probe analyze --config {config.source_path} --output-dir {root}",
         },
-        "cluster": {"conda": "/home/ojedamarin/.local/share/miniforge3/bin/conda", "generic_job": "scripts/Potsdam/SLURM/run_probe.job", "gpu_required": False},
+        "cluster": {
+            "conda": "/home/ojedamarin/.local/share/miniforge3/bin/conda",
+            "generic_job": "scripts/Potsdam/SLURM/run_probe.job",
+            "gpu_required": False,
+        },
         "cluster_result_root": "/work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_truthful_selective_isolated_oss_01",
     }
     write_json_atomic(prep / "cluster_handoff.json", handoff)
@@ -168,7 +223,16 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
     # Recompute checksums after all metadata files exist.
     write_json_atomic(
         prep / "checksum_manifest.json",
-        _checksum_tree(root, [path for path in prep.rglob("*") if path.is_file() and path.name not in {"checksum_manifest.json", "transfer_bundle.tar.gz"}]),
+        _checksum_tree(
+            root,
+            [
+                path
+                for path in prep.rglob("*")
+                if path.is_file()
+                and path.name
+                not in {"checksum_manifest.json", "transfer_bundle.tar.gz"}
+            ],
+        ),
     )
     bundle = prep / "transfer_bundle.tar.gz"
     with tarfile.open(bundle, "w:gz") as archive:
@@ -180,12 +244,49 @@ def prepare(config: IsolatedOSSConfig, output_dir: Path | None = None) -> tuple[
 
 def _load_manifest(root: Path):
     from .isolated_design import IsolatedRequest
+
     rows = []
-    for line in (root / "preparation/evaluation_manifest.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in (
+        (root / "preparation/evaluation_manifest.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ):
         raw = json.loads(line)
-        rows.append(IsolatedRequest(
-            request_id=raw["request_id"], paired_unit_id=raw["paired_unit_id"], task_id=raw["task_id"], candidate_id=int(raw["candidate_id"]), task_artifact_sha256=raw["task_artifact_sha256"], assignment_sha256=raw["assignment_sha256"], condition=raw["condition"], budget=raw.get("budget"), agent_id=raw.get("agent_id"), answer_order_id=raw["answer_order_id"], option_mapping=dict(raw["semantic_option_mapping"]), private_fact_ids=tuple(raw["private_fact_ids"]), report_fact_ids=tuple(raw["report_fact_ids"]), evidence_ids=tuple(raw["evidence_ids"]), random_replicate=raw.get("random_replicate"), random_seed=raw.get("random_seed"), unique_visible_fact_count=int(raw["unique_visible_fact_count"]), private_report_overlap_count=int(raw["private_report_overlap_count"]), latent_coverage_count=int(raw["latent_coverage_count"]), predicate_family_count=int(raw["predicate_family_count"]), compatible_worlds_prefix_only=raw.get("compatible_worlds_prefix_only"), compatible_worlds_private_plus_reports=raw.get("compatible_worlds_private_plus_reports"), compatible_world_reduction_prefix_only=raw.get("compatible_world_reduction_prefix_only"), compatible_world_reduction_private_plus_reports=raw.get("compatible_world_reduction_private_plus_reports"), report_character_count=int(raw.get("report_character_count", 0)),
-        ))
+        rows.append(
+            IsolatedRequest(
+                request_id=raw["request_id"],
+                paired_unit_id=raw["paired_unit_id"],
+                task_id=raw["task_id"],
+                candidate_id=int(raw["candidate_id"]),
+                task_artifact_sha256=raw["task_artifact_sha256"],
+                assignment_sha256=raw["assignment_sha256"],
+                condition=raw["condition"],
+                budget=raw.get("budget"),
+                agent_id=raw.get("agent_id"),
+                answer_order_id=raw["answer_order_id"],
+                option_mapping=dict(raw["semantic_option_mapping"]),
+                private_fact_ids=tuple(raw["private_fact_ids"]),
+                report_fact_ids=tuple(raw["report_fact_ids"]),
+                evidence_ids=tuple(raw["evidence_ids"]),
+                random_replicate=raw.get("random_replicate"),
+                random_seed=raw.get("random_seed"),
+                unique_visible_fact_count=int(raw["unique_visible_fact_count"]),
+                private_report_overlap_count=int(raw["private_report_overlap_count"]),
+                latent_coverage_count=int(raw["latent_coverage_count"]),
+                predicate_family_count=int(raw["predicate_family_count"]),
+                compatible_worlds_prefix_only=raw.get("compatible_worlds_prefix_only"),
+                compatible_worlds_private_plus_reports=raw.get(
+                    "compatible_worlds_private_plus_reports"
+                ),
+                compatible_world_reduction_prefix_only=raw.get(
+                    "compatible_world_reduction_prefix_only"
+                ),
+                compatible_world_reduction_private_plus_reports=raw.get(
+                    "compatible_world_reduction_private_plus_reports"
+                ),
+                report_character_count=int(raw.get("report_character_count", 0)),
+            )
+        )
     return tuple(rows)
 
 
@@ -198,22 +299,43 @@ async def run(
     execution_profile: str = "cluster",
 ) -> dict[str, Any]:
     root = Path(output_dir or config.output_dir)
-    approved = Path(approve_preflight).read_text(encoding="utf-8").strip() if approve_preflight else ""
-    expected = (root / "preparation/preflight_id.txt").read_text(encoding="utf-8").strip()
+    approved = (
+        Path(approve_preflight).read_text(encoding="utf-8").strip()
+        if approve_preflight
+        else ""
+    )
+    expected = (
+        (root / "preparation/preflight_id.txt").read_text(encoding="utf-8").strip()
+    )
     if approved != expected:
         raise RuntimeError("isolated OSS run requires matching preflight approval")
     tasks = load_selected_tasks(config)
     manifest = _load_manifest(root)
     if request_set == "smoke":
-        ids = set(json.loads((root / "preparation/smoke_request_ids.json").read_text(encoding="utf-8")))
+        ids = set(
+            json.loads(
+                (root / "preparation/smoke_request_ids.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        )
         manifest = tuple(row for row in manifest if row.request_id in ids)
     elif request_set != "full":
         raise ValueError("request_set must be smoke or full")
-    prompts = {row.request_id: render_isolated(tasks[row.task_id], row, prompt_variant=config.prompt_variant) for row in manifest}
-    return await execute(config, tasks, manifest, prompts, root, execution_profile=execution_profile)
+    prompts = {
+        row.request_id: render_isolated(
+            tasks[row.task_id], row, prompt_variant=config.prompt_variant
+        )
+        for row in manifest
+    }
+    return await execute(
+        config, tasks, manifest, prompts, root, execution_profile=execution_profile
+    )
 
 
-def analyze(config: IsolatedOSSConfig, output_dir: Path | None = None) -> dict[str, Any]:
+def analyze(
+    config: IsolatedOSSConfig, output_dir: Path | None = None
+) -> dict[str, Any]:
     return aggregate(Path(output_dir or config.output_dir))
 
 

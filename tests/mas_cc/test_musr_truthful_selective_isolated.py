@@ -15,7 +15,10 @@ from mas_cc.probes.musr_truthful_selective.isolated_design import (
     smoke_ids,
 )
 from mas_cc.probes.musr_truthful_selective.isolated_execution import completed_ids
-from mas_cc.probes.musr_truthful_selective.isolated_prompting import parse_isolated, render_isolated
+from mas_cc.probes.musr_truthful_selective.isolated_prompting import (
+    parse_isolated,
+    render_isolated,
+)
 
 CONFIG = Path("configs/probes/musr_truthful_selective_isolated_oss_01.yaml")
 
@@ -32,7 +35,10 @@ def test_manifest_has_exact_frozen_design_and_counts():
     assert all(len(task.agent_ids) == 24 for task in tasks.values())
     assert len(rows) == 10_818
     assert Counter(row.condition for row in rows) == {
-        "full": 18, "private": 432, "strategic": 1728, "random": 8640
+        "full": 18,
+        "private": 432,
+        "strategic": 1728,
+        "random": 8640,
     }
     assert len(smoke_ids(rows)) == 4
     assert all(len(row.task_artifact_sha256) == 64 for row in rows)
@@ -44,16 +50,28 @@ def test_orders_and_random_packets_are_exact_and_nested():
     for task in tasks.values():
         orders = answer_orders(task)
         assert len(orders) == 6
-        assert {tuple(mapping.values()) for _, mapping in orders} == set(__import__("itertools").permutations(task.semantic_answers))
+        assert {tuple(mapping.values()) for _, mapping in orders} == set(
+            __import__("itertools").permutations(task.semantic_answers)
+        )
         first = random_permutations(config, task)
         second = random_permutations(config, task)
         assert first == second
         for _, permutation in first:
-            assert len(permutation) == len(set(permutation)) == len(task.controller_reportable_fact_ids)
+            assert (
+                len(permutation)
+                == len(set(permutation))
+                == len(task.controller_reportable_fact_ids)
+            )
             assert set(permutation) == set(task.controller_reportable_fact_ids)
     strategic = [row for row in rows if row.condition == "strategic"]
     for task_id in tasks:
-        sample = {row.budget: row for row in strategic if row.task_id == task_id and row.agent_id == "agent_001" and row.answer_order_id == "order_012"}
+        sample = {
+            row.budget: row
+            for row in strategic
+            if row.task_id == task_id
+            and row.agent_id == "agent_001"
+            and row.answer_order_id == "order_012"
+        }
         assert sample[3].report_fact_ids == sample[6].report_fact_ids[:3]
         assert sample[6].report_fact_ids == sample[9].report_fact_ids[:6]
         assert sample[9].report_fact_ids == sample[12].report_fact_ids[:9]
@@ -62,12 +80,36 @@ def test_orders_and_random_packets_are_exact_and_nested():
 def test_prompt_and_parser_are_counterbalanced_without_metadata_leakage():
     config, tasks, rows = plan()
     for row in rows[::1000]:
-        prompt = render_isolated(tasks[row.task_id], row, prompt_variant=config.prompt_variant)
+        prompt = render_isolated(
+            tasks[row.task_id], row, prompt_variant=config.prompt_variant
+        )
         text = "\n".join(message.content for message in prompt.messages).casefold()
-        assert not any(word in text for word in ("strategic", "random", "controller", "false target", "gold answer", "symbolic"))
+        assert not any(
+            word in text
+            for word in (
+                "strategic",
+                "random",
+                "controller",
+                "false target",
+                "gold answer",
+                "symbolic",
+            )
+        )
         semantic = tasks[row.task_id].correct_relation
-        letter = next(key for key, value in row.option_mapping.items() if value == semantic)
-        parsed = parse_isolated(tasks[row.task_id], row, json.dumps({"vote": letter, "reason": "Evidence supports this choice.", "shared_fact_id": None}))
+        letter = next(
+            key for key, value in row.option_mapping.items() if value == semantic
+        )
+        parsed = parse_isolated(
+            tasks[row.task_id],
+            row,
+            json.dumps(
+                {
+                    "vote": letter,
+                    "reason": "Evidence supports this choice.",
+                    "shared_fact_id": None,
+                }
+            ),
+        )
         assert parsed["semantic_answer"] == semantic
         assert parsed["gold_selected"] is True
 
@@ -77,7 +119,11 @@ def test_overlap_is_preserved_and_symbolic_metrics_are_separate():
     overlap = [row for row in rows if row.private_report_overlap_count]
     assert overlap
     assert all(len(row.report_fact_ids) == row.budget for row in overlap)
-    assert any(row.compatible_worlds_prefix_only != row.compatible_worlds_private_plus_reports for row in rows if row.report_fact_ids)
+    assert any(
+        row.compatible_worlds_prefix_only != row.compatible_worlds_private_plus_reports
+        for row in rows
+        if row.report_fact_ids
+    )
 
 
 def test_resume_and_missingness_do_not_turn_failures_into_other(tmp_path: Path):
@@ -85,13 +131,33 @@ def test_resume_and_missingness_do_not_turn_failures_into_other(tmp_path: Path):
     selected = rows[:4]
     prep = tmp_path / "preparation"
     prep.mkdir(parents=True)
-    (prep / "evaluation_manifest.jsonl").write_text("".join(json.dumps(row.to_dict()) + "\n" for row in selected), encoding="utf-8")
+    (prep / "evaluation_manifest.jsonl").write_text(
+        "".join(json.dumps(row.to_dict()) + "\n" for row in selected), encoding="utf-8"
+    )
     checkpoint = tmp_path / "checkpoints"
     checkpoint.mkdir()
     completed = selected[0]
-    (checkpoint / f"{completed.request_id}.json").write_text(json.dumps({"status": "completed", "parsed": {"parse_success": True, "semantic_answer": tasks[completed.task_id].correct_relation, "gold_selected": True, "false_target_selected": False, "other_selected": False}, "attempts": []}), encoding="utf-8")
+    (checkpoint / f"{completed.request_id}.json").write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "parsed": {
+                    "parse_success": True,
+                    "semantic_answer": tasks[completed.task_id].correct_relation,
+                    "gold_selected": True,
+                    "false_target_selected": False,
+                    "other_selected": False,
+                },
+                "attempts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
     failed = selected[1]
-    (checkpoint / f"{failed.request_id}.json").write_text(json.dumps({"status": "failed", "parsed": None, "attempts": []}), encoding="utf-8")
+    (checkpoint / f"{failed.request_id}.json").write_text(
+        json.dumps({"status": "failed", "parsed": None, "attempts": []}),
+        encoding="utf-8",
+    )
     assert completed_ids(tmp_path) == {completed.request_id}
     result = aggregate(tmp_path)
     request_rows = (tmp_path / "analysis/request_table.csv").read_text(encoding="utf-8")

@@ -10,8 +10,13 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from mas_cc.core import Seed
-from mas_cc.games.relational_reasoning.data import RelationalTask, load_musr_team_allocation_task
-from mas_cc.musr_team_allocation_generator.ambiguity import TeamAllocationCompletionIndex
+from mas_cc.games.relational_reasoning.data import (
+    RelationalTask,
+    load_musr_team_allocation_task,
+)
+from mas_cc.musr_team_allocation_generator.ambiguity import (
+    TeamAllocationCompletionIndex,
+)
 from mas_cc.musr_team_allocation_generator.io_utils import sha256_object
 from mas_cc.musr_team_allocation_generator.symbolic_facts import CanonicalFact
 
@@ -102,7 +107,8 @@ def load_selected_tasks(config: IsolatedOSSConfig) -> dict[str, RelationalTask]:
 def answer_orders(task: RelationalTask) -> tuple[tuple[str, Mapping[str, str]], ...]:
     return tuple(
         (
-            "order_" + "".join(str(task.semantic_answers.index(value)) for value in permutation),
+            "order_"
+            + "".join(str(task.semantic_answers.index(value)) for value in permutation),
             dict(zip("ABC", permutation, strict=True)),
         )
         for permutation in itertools.permutations(task.semantic_answers)
@@ -125,7 +131,9 @@ def random_permutations(
 def _fact_map(root: Path) -> dict[str, CanonicalFact]:
     return {
         str(row["fact_id"]): CanonicalFact.from_dict(row)
-        for row in json.loads((root / "facts/all_true_facts.json").read_text(encoding="utf-8"))
+        for row in json.loads(
+            (root / "facts/all_true_facts.json").read_text(encoding="utf-8")
+        )
     }
 
 
@@ -206,9 +214,15 @@ def _request(
         predicate_family_count=len(families),
         compatible_worlds_prefix_only=prefix_worlds,
         compatible_worlds_private_plus_reports=combined_worlds,
-        compatible_world_reduction_prefix_only=(None if prefix_worlds is None else baseline_worlds - prefix_worlds),
-        compatible_world_reduction_private_plus_reports=(None if combined_worlds is None else baseline_worlds - combined_worlds),
-        report_character_count=sum(len(str(canonical[fact_id])) for fact_id in report_ids),
+        compatible_world_reduction_prefix_only=(
+            None if prefix_worlds is None else baseline_worlds - prefix_worlds
+        ),
+        compatible_world_reduction_private_plus_reports=(
+            None if combined_worlds is None else baseline_worlds - combined_worlds
+        ),
+        report_character_count=sum(
+            len(str(canonical[fact_id])) for fact_id in report_ids
+        ),
     )
 
 
@@ -314,7 +328,9 @@ def build_manifest(
                                 assignment_sha256=assignment_sha256,
                             )
                         )
-    if len(requests) != config.logical_calls or len({row.request_id for row in requests}) != len(requests):
+    if len(requests) != config.logical_calls or len(
+        {row.request_id for row in requests}
+    ) != len(requests):
         raise RuntimeError("isolated evaluation manifest count or identity mismatch")
     return tuple(requests)
 

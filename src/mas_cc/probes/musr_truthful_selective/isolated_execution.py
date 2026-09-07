@@ -26,7 +26,10 @@ from mas_cc.llm_runtime.providers import (
     create_llm_provider,
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
-from mas_cc.musr_team_allocation_generator.io_utils import sha256_object, write_json_atomic
+from mas_cc.musr_team_allocation_generator.io_utils import (
+    sha256_object,
+    write_json_atomic,
+)
 
 from .isolated_config import IsolatedOSSConfig
 from .isolated_design import IsolatedRequest
@@ -37,7 +40,8 @@ def append(path: Path, row: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(dict(row), sort_keys=True, ensure_ascii=False) + "\n")
-        stream.flush(); os.fsync(stream.fileno())
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 @contextmanager
@@ -75,24 +79,37 @@ async def execute(
 ) -> dict[str, Any]:
     profile = config.profile(execution_profile)
     finished = completed_ids(root)
-    outstanding = [request for request in requests if request.request_id not in finished]
-    quote = UniversityPricingSource(config.provider).fetch(config.provider.type, config.provider.model)
+    outstanding = [
+        request for request in requests if request.request_id not in finished
+    ]
+    quote = UniversityPricingSource(config.provider).fetch(
+        config.provider.type, config.provider.model
+    )
     if quote.status != "known" or quote.pricing is None:
         raise RuntimeError(f"live pricing does not permit launch: {quote.status}")
     max_cost = MonetaryAmount(
-        config.max_cost, config.accounting_unit, "isolated OSS config",
-        config.provider.type, config.provider.model,
-        "MuSR isolated OSS evaluation", quote.retrieved_at, "isolated-oss-v1",
+        config.max_cost,
+        config.accounting_unit,
+        "isolated OSS config",
+        config.provider.type,
+        config.provider.model,
+        "MuSR isolated OSS evaluation",
+        quote.retrieved_at,
+        "isolated-oss-v1",
     )
     limits = BudgetLimits(
-        max_cost=max_cost, max_requests=config.max_provider_attempts,
-        max_input_tokens=config.max_input_tokens, max_output_tokens=config.max_output_tokens,
+        max_cost=max_cost,
+        max_requests=config.max_provider_attempts,
+        max_input_tokens=config.max_input_tokens,
+        max_output_tokens=config.max_output_tokens,
     )
     guard = RuntimeBudgetGuard(
         limits,
         expectation=BudgetExpectation(
             requests=len(requests) * (config.invalid_response_retries + 1),
-            input_tokens=sum(prompts[row.request_id].token_estimate for row in requests),
+            input_tokens=sum(
+                prompts[row.request_id].token_estimate for row in requests
+            ),
             output_tokens=len(requests) * config.provider.max_output_tokens,
         ),
     )
@@ -115,8 +132,12 @@ async def execute(
     raw = create_llm_provider(config.provider, request_coordinator=coordinator)
     counter = RegexTokenCounter()
     provider = BudgetGuardedProvider(
-        raw, guard, quote.pricing,
-        input_token_estimator=lambda request: sum(counter.count_tokens(message.content) for message in request.messages),
+        raw,
+        guard,
+        quote.pricing,
+        input_token_estimator=lambda request: sum(
+            counter.count_tokens(message.content) for message in request.messages
+        ),
     )
     semaphore = asyncio.Semaphore(profile.concurrency)
     stop = asyncio.Event()
@@ -135,36 +156,68 @@ async def execute(
                     messages=messages,
                     temperature=config.provider.temperature,
                     max_output_tokens=config.provider.max_output_tokens,
-                    seed=int(Seed(config.seed).derive(f"provider:{item.request_id}:{attempt}")),
-                    metadata={"probe": "musr_truthful_selective_isolated", "request_id": item.request_id, "attempt": attempt + 1},
+                    seed=int(
+                        Seed(config.seed).derive(
+                            f"provider:{item.request_id}:{attempt}"
+                        )
+                    ),
+                    metadata={
+                        "probe": "musr_truthful_selective_isolated",
+                        "request_id": item.request_id,
+                        "attempt": attempt + 1,
+                    },
                 )
                 async with semaphore:
                     response = await provider.complete(completion)
                 parsed = parse_isolated(tasks[item.task_id], item, response.content)
                 attempt_row = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "request_id": item.request_id, "attempt": attempt + 1,
-                    "request": completion.to_dict(), "response": response.to_dict(),
-                    "raw_response": response.content, "parsed": parsed,
+                    "request_id": item.request_id,
+                    "attempt": attempt + 1,
+                    "request": completion.to_dict(),
+                    "response": response.to_dict(),
+                    "raw_response": response.content,
+                    "parsed": parsed,
                 }
-                attempts.append(attempt_row); append(root / "attempts/attempt_ledger.jsonl", attempt_row)
+                attempts.append(attempt_row)
+                append(root / "attempts/attempt_ledger.jsonl", attempt_row)
                 if parsed["parse_success"]:
-                    terminal_status = "completed"; break
+                    terminal_status = "completed"
+                    break
                 if attempt < config.invalid_response_retries:
-                    messages = (*prompt.messages, Message(MessageRole.USER, prompt.response_contract.repair_guidance(())))
+                    messages = (
+                        *prompt.messages,
+                        Message(
+                            MessageRole.USER,
+                            prompt.response_contract.repair_guidance(()),
+                        ),
+                    )
         except Exception as exc:
             terminal_status = "failed"
-            append(root / "attempts/attempt_ledger.jsonl", {
-                "timestamp": datetime.now(timezone.utc).isoformat(), "request_id": item.request_id,
-                "attempt": len(attempts) + 1, "provider_error": f"{type(exc).__name__}: {exc}",
-            })
+            append(
+                root / "attempts/attempt_ledger.jsonl",
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "request_id": item.request_id,
+                    "attempt": len(attempts) + 1,
+                    "provider_error": f"{type(exc).__name__}: {exc}",
+                },
+            )
             if getattr(exc, "retryable", True) is False:
                 stop.set()
-        write_json_atomic(root / f"checkpoints/{item.request_id}.json", {
-            "schema_version": 1, "status": terminal_status, **item.to_dict(),
-            "prompt_instance_hash": prompt.instance_hash, "attempts": attempts,
-            "parsed": parsed if terminal_status in {"completed", "invalid"} else None,
-        })
+        write_json_atomic(
+            root / f"checkpoints/{item.request_id}.json",
+            {
+                "schema_version": 1,
+                "status": terminal_status,
+                **item.to_dict(),
+                "prompt_instance_hash": prompt.instance_hash,
+                "attempts": attempts,
+                "parsed": parsed
+                if terminal_status in {"completed", "invalid"}
+                else None,
+            },
+        )
 
     with run_lock(root):
         try:
@@ -172,9 +225,12 @@ async def execute(
         finally:
             provider.close()
     return {
-        "planned": len(requests), "previously_completed": len(finished),
-        "attempted_now": len(outstanding), "completed": len(completed_ids(root)),
-        "stopped": stop.is_set(), "budget": guard.status(),
+        "planned": len(requests),
+        "previously_completed": len(finished),
+        "attempted_now": len(outstanding),
+        "completed": len(completed_ids(root)),
+        "stopped": stop.is_set(),
+        "budget": guard.status(),
         "coordinator": coordinator.snapshot(),
     }
 

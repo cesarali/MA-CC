@@ -37,8 +37,14 @@ class IsolatedPrompt:
         }
 
 
-def render_isolated(task: RelationalTask, request: IsolatedRequest, *, prompt_variant: str = "P2") -> IsolatedPrompt:
-    identity = "Agent 1" if request.agent_id is None else f"Agent {int(request.agent_id.rsplit('_', 1)[1])}"
+def render_isolated(
+    task: RelationalTask, request: IsolatedRequest, *, prompt_variant: str = "P2"
+) -> IsolatedPrompt:
+    identity = (
+        "Agent 1"
+        if request.agent_id is None
+        else f"Agent {int(request.agent_id.rsplit('_', 1)[1])}"
+    )
     private_lines = tuple(
         render_own_fact(fact_id, task.fact_text(fact_id))
         for fact_id in request.private_fact_ids
@@ -74,17 +80,26 @@ def render_isolated(task: RelationalTask, request: IsolatedRequest, *, prompt_va
     )
 
 
-def parse_isolated(task: RelationalTask, request: IsolatedRequest, content: str) -> dict[str, Any]:
+def parse_isolated(
+    task: RelationalTask, request: IsolatedRequest, content: str
+) -> dict[str, Any]:
     try:
         ballot = parse_relational_ballot(
             content, tuple(request.option_mapping), request.option_mapping
         )
-        if ballot.vote is None or ballot.reason is None or not ballot.shared_fact_present:
+        if (
+            ballot.vote is None
+            or ballot.reason is None
+            or not ballot.shared_fact_present
+        ):
             raise ValueError("response lacks a valid vote, reason, or shared_fact_id")
         answer = request.option_mapping.get(ballot.vote, ballot.vote)
         if answer not in task.semantic_answers:
             raise ValueError("vote does not resolve to a semantic allocation")
-        if ballot.shared_fact_id is not None and ballot.shared_fact_id not in request.evidence_ids:
+        if (
+            ballot.shared_fact_id is not None
+            and ballot.shared_fact_id not in request.evidence_ids
+        ):
             raise ValueError("shared_fact_id is unavailable")
         return {
             "parse_success": True,
@@ -92,7 +107,8 @@ def parse_isolated(task: RelationalTask, request: IsolatedRequest, content: str)
             "semantic_answer": answer,
             "gold_selected": answer == task.correct_relation,
             "false_target_selected": answer == task.controller_target,
-            "other_selected": answer not in {task.correct_relation, task.controller_target},
+            "other_selected": answer
+            not in {task.correct_relation, task.controller_target},
             "reason": ballot.reason,
             "shared_fact_id": ballot.shared_fact_id,
             "parse_error": None,
