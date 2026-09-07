@@ -38,6 +38,15 @@ from .isolated_design import IsolatedRequest
 from .isolated_prompting import IsolatedPrompt, parse_isolated
 
 
+def _pricing_identity(pricing: Any) -> dict[str, Any]:
+    """Identify effective rates without binding resume to retrieval time."""
+
+    value = pricing.to_dict()
+    for field in ("retrieved_at", "version", "source", "unit_source"):
+        value.pop(field, None)
+    return value
+
+
 def append(path: Path, row: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as stream:
@@ -189,7 +198,7 @@ async def _execute_locked(
             output_tokens=len(requests) * config.provider.max_output_tokens,
         ),
     )
-    pricing_hash = sha256_object(quote.to_dict())
+    pricing_hash = sha256_object(_pricing_identity(quote.pricing))
     budget_hash = sha256_object(limits.compatibility_identity())
     store = AtomicBudgetStateStore(
         root / "runtime/budget_state.json",
