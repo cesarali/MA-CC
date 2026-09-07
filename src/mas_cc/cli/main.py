@@ -558,6 +558,18 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             help="preflight_id.txt required by real-provider probes",
         )
+        sub.add_argument(
+            "--request-set",
+            choices=("smoke", "full"),
+            default="full",
+            help="frozen request subset for probes that support staged execution",
+        )
+        sub.add_argument(
+            "--execution-profile",
+            choices=("smoke", "cluster"),
+            default="cluster",
+            help="concurrency/rate profile for probes that support staged execution",
+        )
 
     inspect = commands.add_parser(
         "inspect", help="produce stable phase inspection artifacts"
@@ -1106,6 +1118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.output_dir,
                 mode=args.probe_command,
                 approve_preflight=args.approve_preflight,
+                request_set=args.request_set,
+                execution_profile=args.execution_profile,
             )
         except (
             ConfigurationError,
