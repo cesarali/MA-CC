@@ -27,7 +27,7 @@ provider:
   max_output_tokens: 4096
   timeout_seconds: 180
   max_retries: 2
-  request_concurrency: 30
+  request_concurrency: 60
   options:
     estimated_latency_seconds: 10.0
 
@@ -36,8 +36,8 @@ execution_profiles:
     concurrency: 4
     requests_per_minute: 60
   cluster:
-    concurrency: 30
-    requests_per_minute: 300
+    concurrency: 60
+    requests_per_minute: 600
   invalid_response_retries: 1
 
 storage:

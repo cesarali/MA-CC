@@ -494,19 +494,22 @@ Produce:
 
 ```text
 analysis/tables/
-    cells.csv
-    episodes.csv
-    rounds.csv
-    micro_slots.csv
+    cells.parquet
+    episodes.parquet
+    rounds.parquet
+    micro_slots.parquet
 
-    primary_estimates.csv
-    information_estimates.csv
-    support_diagnostics.csv
-    derived_observables.csv
+    primary_estimates.parquet
+    information_estimates.parquet
+    support_diagnostics.parquet
+    derived_observables.parquet
 ```
 
-CSV is authoritative for new analysis output. Readers retain support for
-legacy Parquet archives, but new aggregation does not emit Parquet by default.
+Compressed Parquet is authoritative for new analysis output. Readers retain
+support for legacy CSV archives, but new aggregation does not emit CSV mirrors.
+Existing CSV handoffs are migrated with `mas-cc study compact-analysis
+--study-dir <study-result-root>`; migration does not recompute estimators or
+make provider calls.
 
 ### 12.1 `cells.parquet`
 
@@ -685,7 +688,7 @@ A new efficiency must not trigger a new CMI implementation.
 
 ## 15. Long-format estimator schema
 
-Suggested `primary_estimates.csv`:
+Suggested `primary_estimates.parquet`:
 
 ```text
 study_id
@@ -878,14 +881,14 @@ analysis/
     analysis_manifest.json
 
     tables/
-        cells.csv
-        episodes.csv
-        rounds.csv
-        micro_slots.csv
-        primary_estimates.csv
-        information_estimates.csv
-        support_diagnostics.csv
-        derived_observables.csv
+        cells.parquet
+        episodes.parquet
+        rounds.parquet
+        micro_slots.parquet
+        primary_estimates.parquet
+        information_estimates.parquet
+        support_diagnostics.parquet
+        derived_observables.parquet
 
     plots/
         <configured plots>

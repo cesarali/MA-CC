@@ -6,7 +6,7 @@ This launch uses the frozen package prepared locally. It does not regenerate Ter
 
 Repository:
 
-`/home/ojedamarin/LanguageGames/MA-CC`
+`/home/ojedamarin/Projects/LanguageGames/MA-CC`
 
 Required result root:
 
@@ -38,7 +38,7 @@ Inspect job completion and the four atomic checkpoint files. A scientific answer
 
 Use exactly the same command to resume. Completed smoke and full request IDs are skipped. Do not launch two writers against the same result root.
 
-The default cluster profile starts at 30 in-flight requests and 300 requests per minute. Reduce these before launch if other jobs share a lower current quota. Do not increase them without checking the current provider limit.
+The cluster profile starts at 60 in-flight requests and 600 requests per minute. This matches the successfully completed Potsdam run on 2026-09-06 and remains below the live 2,000 RPM account limit observed during the 2026-09-07 preflight. Reduce these values before launch if other jobs are sharing the account.
 
 ## Aggregate
 

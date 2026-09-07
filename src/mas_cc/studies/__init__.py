@@ -1,6 +1,7 @@
 """Study-level submission and aggregation over ordinary MA-CC runs."""
 
 from .aggregation import aggregate_study
+from .compaction import compact_study_analysis
 from .extension import extend_study, index_existing_study, plan_extension
 from .manifest import StudySpec, discover_study
 from .initialization import materialize_study_initializations
@@ -12,6 +13,7 @@ __all__ = [
     "StudyPreflightResult",
     "SubmissionResult",
     "aggregate_study",
+    "compact_study_analysis",
     "discover_study",
     "extend_study",
     "index_existing_study",

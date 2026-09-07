@@ -1,0 +1,27 @@
+study: {name: musr_blackboard_truthful_reports_q1_potsdam}
+configs:
+  - q1_no_control.yaml
+  - q1_truth_control.yaml
+  - q1_false_control.yaml
+execution:
+  mode: auto
+  cells_per_shard: 2
+  target_rpm: 600
+  assumed_latency_seconds: 6.0
+  max_active_nodes: 3
+  throttle: 3
+  cpus_per_task: 8
+  memory: 12G
+  time_limit: "08:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/musr_blackboard_truthful_reports_q1_potsdam
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 60
+    minimum_concurrency: 4
+    maximum_concurrency: 60
+    target_rpm: 600
+    retry_max_elapsed_seconds: 300
+analysis: {recipe: analysis.yaml}

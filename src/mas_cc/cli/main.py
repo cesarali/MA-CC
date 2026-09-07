@@ -285,6 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="produce explicitly incomplete exploratory output despite validation failures",
     )
+    study_compact = study_commands.add_parser(
+        "compact-analysis",
+        help="convert an existing standardized analysis handoff to lean Parquet",
+    )
+    study_compact.add_argument("--study-dir", type=Path, required=True)
 
     synthetic = commands.add_parser(
         "synthetic",
@@ -867,6 +872,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{summary['archive']}"
         )
         return 0 if summary["complete"] else 1
+    if args.command == "study" and args.study_command == "compact-analysis":
+        from mas_cc.studies import compact_study_analysis
+
+        try:
+            summary = compact_study_analysis(args.study_dir)
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study {summary['study_id']} compacted: "
+            f"{summary['converted_tables']} table(s), {summary['archive']}"
+        )
+        print(
+            f"  before: {summary['before_bytes']} bytes; "
+            f"after: {summary['after_bytes']} bytes"
+        )
+        return 0
     if args.command == "study" and args.study_command == "index-existing":
         from mas_cc.studies import index_existing_study
 

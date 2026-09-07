@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import json
 import os
+import socket
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,16 +50,20 @@ def append(path: Path, row: Mapping[str, Any]) -> None:
 def run_lock(root: Path):
     lock = root / "runtime/run.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError as exc:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(descriptor)
         raise RuntimeError(f"another writer holds {lock}") from exc
     try:
-        os.write(descriptor, f"{os.getpid()}\n".encode())
-        os.close(descriptor)
+        os.ftruncate(descriptor, 0)
+        os.write(descriptor, f"{socket.gethostname()}:{os.getpid()}\n".encode())
+        os.fsync(descriptor)
         yield
     finally:
-        lock.unlink(missing_ok=True)
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def completed_ids(root: Path) -> set[str]:
@@ -66,6 +72,51 @@ def completed_ids(root: Path) -> set[str]:
         for path in (root / "checkpoints").glob("*.json")
         if json.loads(path.read_text(encoding="utf-8")).get("status") == "completed"
     }
+
+
+def _execution_identity(
+    config: IsolatedOSSConfig, item: IsolatedRequest, prompt: IsolatedPrompt
+) -> str:
+    """Bind reusable output to every setting that can change its answer."""
+
+    return sha256_object(
+        {
+            "request": item.to_dict(),
+            "prompt_instance_hash": prompt.instance_hash,
+            "provider": {
+                "type": config.provider.type,
+                "model": config.provider.model,
+                "temperature": config.provider.temperature,
+                "max_output_tokens": config.provider.max_output_tokens,
+                "response_format": config.provider.options.get("response_format"),
+            },
+            "seed": config.seed,
+        }
+    )
+
+
+def _compatible_completed_ids(
+    root: Path,
+    config: IsolatedOSSConfig,
+    requests: Sequence[IsolatedRequest],
+    prompts: Mapping[str, IsolatedPrompt],
+) -> set[str]:
+    finished: set[str] = set()
+    for item in requests:
+        path = root / f"checkpoints/{item.request_id}.json"
+        if not path.is_file():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("status") != "completed":
+            continue
+        expected = _execution_identity(config, item, prompts[item.request_id])
+        if payload.get("execution_identity_hash") != expected:
+            raise RuntimeError(
+                f"incompatible completed checkpoint for {item.request_id}; "
+                "use the original frozen manifest/model/prompt or a new result root"
+            )
+        finished.add(item.request_id)
+    return finished
 
 
 async def execute(
@@ -78,7 +129,32 @@ async def execute(
     execution_profile: str,
 ) -> dict[str, Any]:
     profile = config.profile(execution_profile)
-    finished = completed_ids(root)
+    if config.provider.request_concurrency < profile.concurrency:
+        raise RuntimeError(
+            "provider request_concurrency is below the selected execution profile"
+        )
+    with run_lock(root):
+        return await _execute_locked(
+            config,
+            tasks,
+            requests,
+            prompts,
+            root,
+            execution_profile=execution_profile,
+        )
+
+
+async def _execute_locked(
+    config: IsolatedOSSConfig,
+    tasks: Mapping[str, Any],
+    requests: Sequence[IsolatedRequest],
+    prompts: Mapping[str, IsolatedPrompt],
+    root: Path,
+    *,
+    execution_profile: str,
+) -> dict[str, Any]:
+    profile = config.profile(execution_profile)
+    finished = _compatible_completed_ids(root, config, requests, prompts)
     outstanding = [
         request for request in requests if request.request_id not in finished
     ]
@@ -128,8 +204,19 @@ async def execute(
         maximum_concurrency=profile.concurrency,
         target_rpm=profile.requests_per_minute,
     )
-    coordinator = SharedProviderCoordinator(root / "runtime/provider-control", load)
+    coordinator = SharedProviderCoordinator(
+        root / "runtime/provider-control" / execution_profile, load
+    )
     raw = create_llm_provider(config.provider, request_coordinator=coordinator)
+    try:
+        advertised = await raw.discover_models()
+        if config.provider.model not in advertised:
+            raise RuntimeError(
+                f"configured model {config.provider.model!r} is not advertised"
+            )
+    except BaseException:
+        raw.close()
+        raise
     counter = RegexTokenCounter()
     provider = BudgetGuardedProvider(
         raw,
@@ -168,6 +255,8 @@ async def execute(
                     },
                 )
                 async with semaphore:
+                    if stop.is_set():
+                        return
                     response = await provider.complete(completion)
                 parsed = parse_isolated(tasks[item.task_id], item, response.content)
                 attempt_row = {
@@ -212,6 +301,7 @@ async def execute(
                 "status": terminal_status,
                 **item.to_dict(),
                 "prompt_instance_hash": prompt.instance_hash,
+                "execution_identity_hash": _execution_identity(config, item, prompt),
                 "attempts": attempts,
                 "parsed": parsed
                 if terminal_status in {"completed", "invalid"}
@@ -219,16 +309,15 @@ async def execute(
             },
         )
 
-    with run_lock(root):
-        try:
-            await asyncio.gather(*(one(item) for item in outstanding))
-        finally:
-            provider.close()
+    try:
+        await asyncio.gather(*(one(item) for item in outstanding))
+    finally:
+        provider.close()
     return {
         "planned": len(requests),
         "previously_completed": len(finished),
         "attempted_now": len(outstanding),
-        "completed": len(completed_ids(root)),
+        "completed": len(_compatible_completed_ids(root, config, requests, prompts)),
         "stopped": stop.is_set(),
         "budget": guard.status(),
         "coordinator": coordinator.snapshot(),

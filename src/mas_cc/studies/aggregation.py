@@ -3594,15 +3594,15 @@ def aggregate_study(
         "resampling": settings,
         "retention_contract": {
             "canonical_table_format": CANONICAL_TABLE_FORMAT,
-            "csv_tables": True,
-            "parquet_tables": False,
+            "csv_tables": False,
+            "parquet_tables": True,
             "compact_estimator_summaries": True,
             "persistent_analysis_cache": False,
             "individual_null_draws": False,
             "individual_bootstrap_draws": False,
         },
         "plots": plots,
-        "tables": sorted(path.name for path in tables_dir.glob("*.csv")),
+        "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
         "derived_semantics": _derived_semantics(derived),
     }
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)
