@@ -24,4 +24,18 @@ The cluster agent must:
 7. submit with `mas-cc study submit --config-dir configs/runs/relational_reasoning/blackboard_game/astra_task003_false_control_30x30`;
 8. monitor the returned SLURM job and aggregate strictly after all cells seal.
 
+Strict aggregation now also produces the Phase 2 propensity-weighted response
+at lags 1–3, propensity/support diagnostics, communication funnel, operational
+response-per-cost summaries, response-cost frontier, and their plots. These are
+computed offline from canonical Parquet records and make no provider calls.
+
+```bash
+/home/ojedamarin/.local/share/miniforge3/bin/conda run -n MA-CC --live-stream \
+  mas-cc study aggregate \
+  --study-dir /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/astra_task003_false_control_30x30
+```
+
+Check `analysis/validation.json` first, then the Phase 2 tables under
+`analysis/tables/` and the lag/frontier plots under `analysis/plots/`.
+
 Use the generic study launcher. Do not create a study-specific SLURM job.
