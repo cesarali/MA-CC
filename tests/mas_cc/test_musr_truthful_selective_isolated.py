@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import json
+import asyncio
 import hashlib
+import json
 from collections import Counter
 from pathlib import Path
+
+import pytest
 
 from mas_cc.probes.musr_truthful_selective.isolated_analysis import aggregate
 from mas_cc.probes.musr_truthful_selective.isolated_config import load_isolated_config
@@ -14,7 +17,13 @@ from mas_cc.probes.musr_truthful_selective.isolated_design import (
     random_permutations,
     smoke_ids,
 )
-from mas_cc.probes.musr_truthful_selective.isolated_execution import completed_ids
+from mas_cc.probes.musr_truthful_selective.isolated_execution import (
+    _compatible_completed_ids,
+    _execution_identity,
+    completed_ids,
+    execute,
+    run_lock,
+)
 from mas_cc.probes.musr_truthful_selective.isolated_prompting import (
     parse_isolated,
     render_isolated,
@@ -31,6 +40,8 @@ def plan():
 
 def test_manifest_has_exact_frozen_design_and_counts():
     config, tasks, rows = plan()
+    assert config.provider.request_concurrency == 60
+    assert (config.cluster.concurrency, config.cluster.requests_per_minute) == (60, 600)
     assert config.expected_tasks == {"task_001": 42, "task_002": 237, "task_003": 130}
     assert all(len(task.agent_ids) == 24 for task in tasks.values())
     assert len(rows) == 10_818
@@ -173,3 +184,70 @@ def test_checksum_manifest_detects_tampering(tmp_path: Path):
     assert hashlib.sha256(payload.read_bytes()).hexdigest() == expected
     payload.write_text('{"value": 2}\n', encoding="utf-8")
     assert hashlib.sha256(payload.read_bytes()).hexdigest() != expected
+
+
+def test_resume_rejects_incompatible_checkpoint_and_lock_recovers(tmp_path: Path):
+    config, tasks, rows = plan()
+    item = rows[0]
+    prompt = render_isolated(
+        tasks[item.task_id], item, prompt_variant=config.prompt_variant
+    )
+    checkpoint = tmp_path / f"checkpoints/{item.request_id}.json"
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "execution_identity_hash": _execution_identity(config, item, prompt),
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert _compatible_completed_ids(
+        tmp_path, config, (item,), {item.request_id: prompt}
+    ) == {item.request_id}
+    checkpoint.write_text(
+        json.dumps({"status": "completed", "execution_identity_hash": "wrong"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="incompatible completed checkpoint"):
+        _compatible_completed_ids(tmp_path, config, (item,), {item.request_id: prompt})
+
+    stale_marker = tmp_path / "runtime/run.lock"
+    stale_marker.parent.mkdir(parents=True)
+    stale_marker.write_text("dead-worker\n", encoding="utf-8")
+    with run_lock(tmp_path):
+        with pytest.raises(RuntimeError, match="another writer"):
+            with run_lock(tmp_path):
+                pass
+    with run_lock(tmp_path):
+        pass
+
+
+def test_execute_holds_lock_before_provider_setup(tmp_path: Path, monkeypatch):
+    config, tasks, rows = plan()
+    item = rows[0]
+    prompt = render_isolated(
+        tasks[item.task_id], item, prompt_variant=config.prompt_variant
+    )
+
+    async def fake_execute_locked(*args, **kwargs):
+        with pytest.raises(RuntimeError, match="another writer"):
+            with run_lock(tmp_path):
+                pass
+        return {"locked": True}
+
+    monkeypatch.setattr(
+        "mas_cc.probes.musr_truthful_selective.isolated_execution._execute_locked",
+        fake_execute_locked,
+    )
+    assert asyncio.run(
+        execute(
+            config,
+            tasks,
+            (item,),
+            {item.request_id: prompt},
+            tmp_path,
+            execution_profile="smoke",
+        )
+    ) == {"locked": True}
