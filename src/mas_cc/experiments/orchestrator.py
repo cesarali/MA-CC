@@ -2062,7 +2062,9 @@ async def run_experiment(
         validator = getattr(controller, "validate_truthful_report_task", None)
         if validator is not None:
             validator(game.load_task(config.game), config.execution.seed)
-    plan = game.call_plan(config.game)
+    from mas_cc.planning import call_plan_for_run
+
+    plan = call_plan_for_run(game, config)
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)
 
@@ -2676,7 +2678,9 @@ async def run_experiment_grid(
         _write(cell_dir / "resolved_config.yaml", resolved_config_yaml(cell.config))
         _write(cell_dir / "overrides.json", _json(cell.to_dict()))
         episodes_dir = cell_dir / "data" / "episodes"
-        plan = game.call_plan(cell.config.game)
+        from mas_cc.planning import call_plan_for_run
+
+        plan = call_plan_for_run(game, cell.config)
         planned_episodes = normalized_episode_plan.get(cell.cell_id)
         if planned_episodes is None:
             planned_episodes = {

@@ -1,0 +1,22 @@
+version: 1
+theoretical_reference: none
+
+estimators:
+  - propensity_weighted_causal_response
+
+derived:
+  - communication_response_efficiency
+
+blackboard_phase2_outputs:
+  enabled: true
+  strata:
+    - target_semantics
+    - controller_communication_policy
+    - intervention_budget
+
+resampling:
+  bootstrap_resamples: 100
+  null_permutations: 0
+  confidence: 0.95
+  seed: 20260907
+
