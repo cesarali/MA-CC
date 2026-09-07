@@ -61,25 +61,41 @@ Change the round order so that the controller receives a read-only snapshot of t
 
 Old messages must inform the controller without being delivered for an extra round.
 
-## 1.3 Make both controller decisions adaptive
+## 1.3 Add optional LLM-selected communication
 
-The controller input should contain:
+Keep the existing coded stochastic policy for the binary intervention gate. It continues to sample $U$ and record the exact probability $e_t$ without modification. When $U=0$, post nothing and make no controller LLM call. When $U=1$, make one LLM call to select REPORT, REQUEST, or DIRECTIVE and its permitted content.
+
+The LLM controller input contains only:
 
 - current sampled votes and answer counts;
 - previous-day message types and contents allowed by the controller’s information rules;
-- which controller facts were previously posted;
-- available report facts;
-- target arm and current round.
+- the target allocation;
+- the configured budget;
+- eligible canonical fact IDs and their canonical text;
+- its own public posting history;
+- the current round.
 
 Exposure, acquisition, and retention are researcher diagnostics, not automatically controller-visible information. If a controller variant receives any of them as feedback, treat that as an explicit expansion of its sensing access. Configure, label, and record that variant separately rather than silently adding those fields to the ordinary controller view.
 
-Current votes should influence both the probability of acting and the communication mode/content chosen after acting. Private agent reasoning and private evidence remain hidden.
+Private agent reasoning, private evidence, acquisitions, retention, and other researcher-only diagnostics remain hidden. Use the configured gameplay provider for the controller call.
 
-Record the exact controller-visible input snapshot, chosen output, and action probability so every decision can be reproduced. Keep researcher-only diagnostics in separate fields.
+Use this controller instruction:
+
+> Your objective is to increase support for the target allocation through truthful communication. Review the sampled votes and previous public discussion. Choose REPORT to supply useful verified evidence, REQUEST to ask participants for relevant evidence, or DIRECTIVE to focus a comparison. Choose what best serves the target in the present context. You may select only supplied eligible fact IDs; never invent or alter verified evidence. Return the required structured decision.
+
+For REPORT, the LLM may choose between 1 and $b$ distinct eligible fact IDs. Code renders their canonical text; the LLM may not invent or rewrite evidence. REQUEST and DIRECTIVE each create one message through the existing structured-response and validation contract. Keep the ordinary public controller identity `Agent 25`.
+
+Use the existing bounded structured-response retries. If they fail, invoke a documented algorithmic fallback under exactly the same visibility and fact-eligibility restrictions. The existing algorithmic chooser remains available as a normal configured controller option for comparison.
+
+The fallback uses its own reproducible random stream, derived separately from the episode and round. It must never consume or perturb the random stream used to sample $U$. Record the fallback seed or stream identity and the selected fallback result.
+
+Record the exact controller-visible prompt/input, structured output, eligible pool, chosen mode, selected fact IDs, actual posts, retry outcomes, fallback status, fallback random-stream identity, action probability, and controller token usage. Keep researcher-only diagnostics in separate fields.
+
+Retain $U$ as the originally assigned binary action even when the LLM decision, validation, fallback, or delivery fails. Record decision validity and realized delivery separately.
 
 ## 1.4 Allow truthful repetition
 
-Remove the rule that permanently forbids reuse of a selected controller fact.
+Remove the rule that permanently forbids reuse of a selected controller fact. Enforce eligibility in code, not in the LLM.
 
 A true fact may be reposted when, for example:
 
@@ -88,12 +104,11 @@ A true fact may be reposted when, for example:
 - it was seen but not acquired or retained;
 - its earlier influence has decayed.
 
-Repetition must not be automatic or unlimited. Add configurable controls such as:
+Use these initial limits:
 
-- maximum repetitions per fact;
-- minimum rounds between repeats;
-- optional penalty for repeated facts;
-- preference for unseen or weakly delivered facts when otherwise comparable.
+- at most three total posts per fact per episode;
+- one complete intervening round before the same fact may be reused;
+- distinct fact IDs within one REPORT action.
 
 Record fact identity, prior post count, reason for reuse, and realized delivery. A repeated post remains a real communication cost even if it adds no new evidence.
 
@@ -117,9 +132,16 @@ Add focused tests for:
 - previous-day messages are visible to the chooser before expiration;
 - old messages are not delivered for a second day;
 - current votes can change mode/content selection;
+- no controller LLM call occurs when $U=0$;
+- exactly one controller LLM decision call occurs when $U=1$, apart from bounded schema retries;
 - private evidence and private prose never enter the controller view;
+- acquisitions, retention, and researcher-only diagnostics never enter the ordinary controller view;
+- REPORT output can select only eligible supplied fact IDs and canonical rendering cannot be altered;
 - truthful facts can repeat within configured limits;
 - repetition state survives resume and is deterministic under the same seed;
+- fallback randomness is reproducible and does not change binary intervention samples;
+- failed decision or delivery does not rewrite the assigned value of $U$;
+- controller prompt, response, retries, fallback, and token usage are retained;
 - zero-post REPORT rounds and realized post counts are recorded correctly;
 - existing non-adaptive controllers remain unchanged unless explicitly configured.
 
@@ -159,7 +181,7 @@ where:
 
 If the action policy uses previous-board history as well as sampled votes, that history is part of $I_t$. The logged $e_t$ must be the probability produced by that exact policy from that exact controller-visible information—not a probability reconstructed from sampled votes alone.
 
-Averaging this quantity estimates the intervention-versus-silence effect over histories encountered by the randomized policy, under the implemented randomization assumptions.
+Averaging this quantity estimates **activation of the LLM communication policy, including its fallback, versus silence** over histories encountered by the randomized binary policy, under the implemented randomization assumptions.
 
 Give this estimator a separate name such as **propensity-weighted causal response**. Do not silently replace susceptibility $\chi$, information-response efficiency, $T_\pi$, or thermodynamic efficiency.
 

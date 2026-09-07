@@ -65,8 +65,11 @@ from ...hidden_bench.imitation_round_feedback.controller import (
 )
 from ..data import RelationalTask
 from .adaptive_communication import (
+    COMMUNICATION_POLICIES,
     COMMUNICATION_POLICY,
     COMMUNICATION_POLICY_VERSION,
+    LLM_COMMUNICATION_POLICY,
+    LLM_COMMUNICATION_POLICY_VERSION,
 )
 
 RECOMMENDATION_ONLY = "recommendation_only"
@@ -143,6 +146,9 @@ class StrategicReportSelection:
     novel_on_live_board: bool
     cooldown_eligible: bool
     rank: int
+    prior_post_count: int = 0
+    last_post_round: int | None = None
+    repeated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -152,6 +158,9 @@ class StrategicReportSelection:
             "novel_on_live_board": self.novel_on_live_board,
             "cooldown_eligible": self.cooldown_eligible,
             "rank": self.rank,
+            "prior_post_count": self.prior_post_count,
+            "last_post_round": self.last_post_round,
+            "repeated": self.repeated,
         }
 
 
@@ -172,6 +181,9 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     allow_controller_directives: bool = True
     controller_communication_policy: str = COMMUNICATION_POLICY
     controller_communication_policy_version: int = COMMUNICATION_POLICY_VERSION
+    controller_communication_fallback_policy: str = COMMUNICATION_POLICY
+    controller_communication_max_retries: int = 2
+    controller_report_max_posts_per_fact: int = 3
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -450,6 +462,15 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 novel_on_live_board=novel,
                 cooldown_eligible=cooldown_eligible,
                 rank=rank,
+                prior_post_count=len(
+                    tuple(int(value) for value in selected_rounds.get(fact_id, ()))
+                ),
+                last_post_round=(
+                    None
+                    if not selected_rounds.get(fact_id)
+                    else max(int(value) for value in selected_rounds[fact_id])
+                ),
+                repeated=bool(selected_rounds.get(fact_id)),
             )
             for rank, (_, fact_id, score, novel, cooldown_eligible) in enumerate(
                 selected, start=1
@@ -465,7 +486,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         live_fact_counts: Mapping[str, int],
         selected_rounds: Mapping[str, Sequence[int]],
     ) -> tuple[StrategicReportSelection, ...]:
-        """Return at most b useful reports without repeating prior controller facts."""
+        """Return at most b useful reports under bounded repetition and cooldown."""
 
         selected = replace(
             self, intervention_budget=len(task.controller_reportable_fact_ids)
@@ -479,9 +500,12 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         useful = tuple(
             row
             for row in selected
-            if row.fact_id not in selected_rounds
-            and row.novel_on_live_board
-            and row.cooldown_eligible
+            if row.prior_post_count < self.controller_report_max_posts_per_fact
+            and (
+                row.last_post_round is None
+                or round_index - row.last_post_round
+                > self.controller_report_cooldown_rounds
+            )
         )
         return useful[: self.intervention_budget]
 
@@ -611,31 +635,79 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         communication_policy = options.get(
             "controller_communication_policy", COMMUNICATION_POLICY
         )
-        if communication_policy != COMMUNICATION_POLICY:
+        if communication_policy not in COMMUNICATION_POLICIES:
             issues.append(
                 ValidationIssue(
                     "control.options.controller_communication_policy",
-                    f"must be {COMMUNICATION_POLICY!r}",
+                    f"must be one of {list(COMMUNICATION_POLICIES)}",
                 )
             )
             communication_policy = COMMUNICATION_POLICY
         values["controller_communication_policy"] = str(communication_policy)
 
+        expected_policy_version = (
+            LLM_COMMUNICATION_POLICY_VERSION
+            if communication_policy == LLM_COMMUNICATION_POLICY
+            else COMMUNICATION_POLICY_VERSION
+        )
         communication_policy_version = options.get(
             "controller_communication_policy_version",
-            COMMUNICATION_POLICY_VERSION,
+            expected_policy_version,
         )
-        if communication_policy_version != COMMUNICATION_POLICY_VERSION:
+        if communication_policy_version != expected_policy_version:
             issues.append(
                 ValidationIssue(
                     "control.options.controller_communication_policy_version",
-                    f"must be {COMMUNICATION_POLICY_VERSION}",
+                    f"must be {expected_policy_version} for {communication_policy!r}",
                 )
             )
-            communication_policy_version = COMMUNICATION_POLICY_VERSION
+            communication_policy_version = expected_policy_version
         values["controller_communication_policy_version"] = int(
             communication_policy_version
         )
+
+        fallback_policy = options.get(
+            "controller_communication_fallback_policy", COMMUNICATION_POLICY
+        )
+        if fallback_policy != COMMUNICATION_POLICY:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_communication_fallback_policy",
+                    f"must be {COMMUNICATION_POLICY!r}",
+                )
+            )
+            fallback_policy = COMMUNICATION_POLICY
+        values["controller_communication_fallback_policy"] = str(fallback_policy)
+
+        communication_retries = options.get("controller_communication_max_retries", 2)
+        if (
+            isinstance(communication_retries, bool)
+            or not isinstance(communication_retries, int)
+            or communication_retries < 0
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_communication_max_retries",
+                    "must be a non-negative integer",
+                )
+            )
+            communication_retries = 2
+        values["controller_communication_max_retries"] = communication_retries
+
+        max_posts = options.get("controller_report_max_posts_per_fact", 3)
+        if (
+            isinstance(max_posts, bool)
+            or not isinstance(max_posts, int)
+            or max_posts < 1
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_report_max_posts_per_fact",
+                    "must be a positive integer",
+                )
+            )
+            max_posts = 3
+        values["controller_report_max_posts_per_fact"] = max_posts
 
         selector = options.get("controller_fact_selector")
         if selector is not None and selector not in FACT_SELECTORS:

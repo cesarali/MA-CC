@@ -711,6 +711,7 @@ class RunRecorder:
                     "round_index",
                     "within_round_index",
                     "microscopic_event_index",
+                    "focal_agent_id",
                     "round_controller_action",
                     "round_controller_target",
                     "round_controller_advocate_probability",

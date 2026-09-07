@@ -24,8 +24,12 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     RelationalRoundBudgetedControl,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
+    LLM_COMMUNICATION_POLICY,
     CommunicationChoice,
     CommunicationMode,
+    ControllerCommunicationContext,
+    ControllerVisibleFact,
+    parse_llm_communication_choice,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
     supporting_fact_coverage,
@@ -59,6 +63,7 @@ TRUTH_ALIGNED_DESIGN = (
 TRUTH_ALIGNED_DESIGN_SHA256 = (
     "be955283c9fd85ccf3f9786744311d50855203e4294518249815a7b29c904436"
 )
+SELECTIVE_DATASET = "results/studies/musr_truthful_selective_task_calibration_01/tasks"
 
 
 def _musr_config():
@@ -178,6 +183,63 @@ def _adaptive_config(*, rounds=1, schedule=SCHEDULE_ALWAYS):
             },
         ),
     )
+
+
+def _llm_adaptive_task3_config(*, rounds=2, schedule=SCHEDULE_ALWAYS):
+    config = _adaptive_config(rounds=rounds, schedule=schedule)
+    options = {
+        **dict(config.game.options),
+        "task_dataset_dir": SELECTIVE_DATASET,
+        "task_id": "task_003",
+        "n_agents": 24,
+        "initialization": {
+            "mode": "explicit",
+            "initial_votes": [
+                "ALLOCATION_0",
+                "ALLOCATION_1",
+                "ALLOCATION_2",
+            ]
+            * 8,
+        },
+    }
+    options.pop("truthful_controller_design", None)
+    control_options = {
+        **dict(config.control.options),
+        "target": "ALLOCATION_2",
+        "controller_communication_policy": LLM_COMMUNICATION_POLICY,
+        "controller_communication_policy_version": 1,
+        "controller_communication_fallback_policy": "contextual_weighted_v1",
+        "controller_communication_max_retries": 1,
+        "controller_report_max_posts_per_fact": 3,
+    }
+    return replace(
+        config,
+        game=replace(config.game, population_size=24, horizon=rounds, options=options),
+        control=replace(config.control, options=control_options),
+    )
+
+
+def _llm_controller_provider(config, controller_outputs, captured):
+    outputs = iter(controller_outputs)
+
+    def factory(request):
+        if request.metadata.get("decision_stage") == "controller_communication":
+            captured.append(request)
+            return next(outputs)
+        return json.dumps(
+            {
+                "vote": "A",
+                "private_reason": "private",
+                "public_message": {
+                    "type": "NONE",
+                    "text": None,
+                    "shared_fact_id": None,
+                    "reply_to": None,
+                },
+            }
+        )
+
+    return MockLLMProvider(config.llm_provider, response_factory=factory)
 
 
 def test_validated_musr_task_and_n12_distribution_load_exactly():
@@ -312,6 +374,19 @@ def test_truthful_controller_design_is_symbolically_valid_and_has_24_reports():
     assert len(set(task.controller_reportable_fact_ids)) == 24
     assert set(task.controller_reportable_fact_ids).issubset(task.facts)
     assert task.decisive_fact_ids
+
+
+def test_selective_task3_candidate_130_loads_from_frozen_local_assets():
+    task = load_musr_team_allocation_task(
+        SELECTIVE_DATASET, "task_003", population_size=24
+    )
+
+    assert task.task_id == "task_003"
+    assert task.correct_relation == "ALLOCATION_0"
+    assert task.controller_target == "ALLOCATION_2"
+    assert len(task.agent_ids) == 24
+    assert len(task.controller_reportable_fact_ids) == 24
+    assert task.controller_reportable_fact_ids[0] == "cf_x01_le_x03"
 
 
 def test_truth_aligned_controller_design_is_symbolically_valid():
@@ -650,4 +725,169 @@ def test_fake_provider_four_round_adaptive_sequence(monkeypatch):
         len(row.event["population_state_before"]) == 12
         and len(row.event["population_state_after"]) == 12
         for row in result.rounds
+    )
+
+
+def test_llm_controller_sees_previous_board_and_uses_canonical_fact_text():
+    config = _llm_adaptive_task3_config(rounds=2)
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+    task = create_game(config.game).load_task(config.game)
+    fact_id = task.controller_reportable_fact_ids[0]
+    captured = []
+    provider = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "REPORT",
+                    "fact_ids": [fact_id],
+                    "text": None,
+                    "reason": "evidence",
+                }
+            ),
+            json.dumps(
+                {"mode": "REQUEST", "fact_ids": [], "text": None, "reason": "ask"}
+            ),
+        ],
+        captured,
+    )
+
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game), config, provider, control=control
+        )
+    )
+
+    first, second = (row.event for row in result.rounds)
+    assert len(captured) == 2
+    assert first["controller_communication_choice_source"] == "llm"
+    assert first["selected_fact_ids"] == [fact_id]
+    first_post = next(
+        message
+        for message in result.final_state.blackboard.messages
+        if message.author_kind == "controller" and message.round_created == 0
+    )
+    assert first_post.text == task.controller_report_texts[fact_id]
+    assert (
+        second["controller_visible_input"]["previous_board_messages"][0]["message_id"]
+        == first_post.message_id
+    )
+    assert second["night_expired_message_ids"] == [first_post.message_id]
+    assert "active_fact" not in json.dumps(second["controller_visible_input"])
+    assert second["controller_llm_total_tokens"] > 0
+
+
+def test_llm_controller_is_not_called_for_binary_silence():
+    config = _llm_adaptive_task3_config(rounds=1, schedule=SCHEDULE_NEVER)
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+    captured = []
+    provider = _llm_controller_provider(config, [], captured)
+
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game), config, provider, control=control
+        )
+    )
+
+    assert captured == []
+    assert result.rounds[0].event["U_k"] == 0
+    assert result.rounds[0].event["controller_llm_attempts"] == []
+
+
+def test_llm_choice_rejects_ineligible_and_duplicate_report_facts():
+    context = ControllerCommunicationContext(
+        round_index=2,
+        target="ALLOCATION_2",
+        sampled_opinion_counts={"ALLOCATION_2": 2},
+        live_message_type_counts={},
+        eligible_facts=(ControllerVisibleFact("fact-1", "Verified.", 0, None),),
+        budget=2,
+    )
+
+    with pytest.raises(ValueError, match="outside the eligible pool"):
+        parse_llm_communication_choice(
+            '{"mode":"REPORT","fact_ids":["invented"],"text":null,"reason":"x"}',
+            context=context,
+            allowed_modes=(CommunicationMode.REPORT,),
+        )
+    with pytest.raises(ValueError, match="distinct"):
+        parse_llm_communication_choice(
+            '{"mode":"REPORT","fact_ids":["fact-1","fact-1"],"text":null,"reason":"x"}',
+            context=context,
+            allowed_modes=(CommunicationMode.REPORT,),
+        )
+
+
+def test_llm_failure_uses_reproducible_isolated_fallback():
+    config = _llm_adaptive_task3_config(rounds=2)
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+
+    def run_once():
+        captured = []
+        provider = _llm_controller_provider(config, ["not json"] * 4, captured)
+        result = asyncio.run(
+            run_relational_imitation_round_feedback_game(
+                create_game(config.game), config, provider, control=control
+            )
+        )
+        return result, captured
+
+    first, first_requests = run_once()
+    second, second_requests = run_once()
+
+    assert len(first_requests) == len(second_requests) == 4
+    first_rows = [row.event for row in first.rounds]
+    second_rows = [row.event for row in second.rounds]
+    assert all(row["controller_llm_fallback_used"] for row in first_rows)
+    assert [row["controller_fallback_seed"] for row in first_rows] == [
+        row["controller_fallback_seed"] for row in second_rows
+    ]
+    assert [row["chosen_message_mode"] for row in first_rows] == [
+        row["chosen_message_mode"] for row in second_rows
+    ]
+    assert [row["controller_sensor_Y"] for row in first_rows] == [
+        row["controller_sensor_Y"] for row in second_rows
+    ]
+
+
+def test_adaptive_fact_repetition_obeys_cooldown_and_three_post_limit():
+    config = _llm_adaptive_task3_config(rounds=1)
+    task = create_game(config.game).load_task(config.game)
+    control = RelationalRoundBudgetedControl.from_options(config.control.options)
+    fact_id = task.controller_reportable_fact_ids[0]
+    exhausted_others = {
+        other: [0, 2, 4]
+        for other in task.controller_reportable_fact_ids
+        if other != fact_id
+    }
+
+    assert any(
+        row.fact_id == fact_id
+        for row in control.select_adaptive_truthful_reports(
+            task,
+            episode_seed=1,
+            round_index=2,
+            live_fact_counts={},
+            selected_rounds={**exhausted_others, fact_id: [0]},
+        )
+    )
+    assert all(
+        row.fact_id != fact_id
+        for row in control.select_adaptive_truthful_reports(
+            task,
+            episode_seed=1,
+            round_index=1,
+            live_fact_counts={},
+            selected_rounds={fact_id: [0]},
+        )
+    )
+    assert all(
+        row.fact_id != fact_id
+        for row in control.select_adaptive_truthful_reports(
+            task,
+            episode_seed=1,
+            round_index=6,
+            live_fact_counts={},
+            selected_rounds={fact_id: [0, 2, 4]},
+        )
     )

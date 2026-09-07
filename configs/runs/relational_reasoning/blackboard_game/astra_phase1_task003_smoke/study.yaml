@@ -1,0 +1,17 @@
+study: {name: astra_phase1_task003_smoke}
+configs: [silence.yaml, algorithmic_controller.yaml, llm_controller.yaml]
+execution:
+  mode: auto
+  cells_per_shard: 1
+  target_rpm: 60
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 2
+  memory: 8G
+  time_limit: "02:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/astra_phase1_task003_smoke
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control: {mode: shared_adaptive, initial_concurrency: 2, minimum_concurrency: 1, maximum_concurrency: 2, target_rpm: 60, retry_max_elapsed_seconds: 300}

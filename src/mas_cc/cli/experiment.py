@@ -25,6 +25,7 @@ from mas_cc.llm_runtime.providers import PricingQuote
 from mas_cc.planning import (
     ExperimentPreflightEstimate,
     GridPreflightEstimate,
+    call_plan_for_run,
     static_experiment_preflight,
     static_grid_preflight,
 )
@@ -123,7 +124,7 @@ def _run_single_preflight(
         validator = getattr(controller, "validate_truthful_report_task", None)
         if validator is not None:
             validator(game.load_task(config.game), config.execution.seed)
-    plan = game.call_plan(config.game)
+    plan = call_plan_for_run(game, config)
     quote = _quote(config)
     system_budget, run_budget = _budgets(config, quote)
 

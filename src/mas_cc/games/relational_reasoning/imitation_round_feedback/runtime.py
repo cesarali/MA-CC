@@ -58,7 +58,12 @@ from mas_cc.control import (
 )
 from mas_cc.core import Seed
 from mas_cc.games.protocols import AgentState, DecisionRequest, Game, GameState
-from mas_cc.llm_runtime.prompts import CompiledPrompt, RegexTokenCounter, TokenCounter
+from mas_cc.llm_runtime.prompts import (
+    CompiledPrompt,
+    RegexTokenCounter,
+    ResponseContract,
+    TokenCounter,
+)
 from mas_cc.llm_runtime.providers import LLMProvider
 from mas_cc.runtime import (
     DecisionLoopExhausted,
@@ -70,10 +75,15 @@ from mas_cc.storage import canonical_hash
 from ...hidden_bench.imitation.controller import ADVOCATE_TARGET, NO_OP
 from ...hidden_bench.imitation.metrics import population_observables
 from .adaptive_communication import (
+    COMMUNICATION_POLICY,
+    LLM_COMMUNICATION_POLICY,
     CommunicationMode,
     ControllerCommunicationContext,
+    ControllerVisibleFact,
+    ControllerVisibleMessage,
     allowed_communication_modes,
     choose_communication_mode,
+    choose_llm_communication,
 )
 from .controller import (
     ADAPTIVE_COMMUNICATION,
@@ -870,8 +880,14 @@ async def run_relational_imitation_round_feedback_game(
         )
 
         # Frozen dawn-board protocol: the vote sensor and U draw happen first;
-        # then the previous day's public board expires and private active memory
-        # persists into the new day. Historical evidence is never touched.
+        # snapshot the previous public day for the communication chooser, then
+        # expire it before participant delivery. Historical evidence is never
+        # touched and old messages cannot be sampled for another day.
+        previous_board_messages = (
+            state.blackboard.live_messages(round_index - 1)
+            if dawn_blackboard and round_index > 0
+            else ()
+        )
         _, night_expired_message_ids = state.blackboard.expire(round_index - 1)
         persistence_seed: int | None = None
         deactivated: tuple[tuple[str, str], ...] = ()
@@ -969,6 +985,12 @@ async def run_relational_imitation_round_feedback_game(
         round_controller_report_selection: list[dict[str, Any]] = []
         allowed_controller_modes: tuple[CommunicationMode, ...] = ()
         communication_choice = None
+        controller_communication_context: ControllerCommunicationContext | None = None
+        controller_llm_attempts: list[dict[str, Any]] = []
+        controller_llm_fallback_used = False
+        controller_fallback_seed: int | None = None
+        controller_llm_input_tokens = 0
+        controller_llm_output_tokens = 0
         executed_communication_mode: CommunicationMode | None = None
         request_topic: str | None = None
         directive_topic: str | None = None
@@ -998,25 +1020,205 @@ async def run_relational_imitation_round_feedback_game(
                 "sampled_opinion_counts", {}
             )
             live_counts = Counter(
-                message.message_type
-                for message in state.blackboard.live_messages(round_index)
+                message.message_type for message in previous_board_messages
             )
-            communication_choice = choose_communication_mode(
-                ControllerCommunicationContext(
-                    round_index=round_index,
-                    target=target,
-                    sampled_opinion_counts={
-                        str(key): int(value)
-                        for key, value in dict(sampled_counts).items()
-                    },
-                    live_message_type_counts=dict(live_counts),
-                    previous_modes=tuple(previous_communication_modes),
+            all_ranked = replace(
+                resolved_control,
+                intervention_budget=len(task.controller_reportable_fact_ids),
+            ).select_truthful_reports(
+                task,
+                episode_seed=config.execution.seed,
+                round_index=round_index,
+                live_fact_counts=Counter(
+                    message.shared_fact_id
+                    for message in previous_board_messages
+                    if message.message_type == MESSAGE_REPORT
+                    and message.shared_fact_id is not None
                 ),
-                allowed_controller_modes,
-                root.derive(
-                    f"relational-controller-communication:{round_index}"
-                ).create_random(),
+                selected_rounds=selected_report_rounds,
             )
+            eligible_ranked = tuple(
+                row
+                for row in all_ranked
+                if row.prior_post_count
+                < int(
+                    getattr(
+                        resolved_control,
+                        "controller_report_max_posts_per_fact",
+                        3,
+                    )
+                )
+                and (
+                    row.last_post_round is None
+                    or round_index - row.last_post_round
+                    > int(
+                        getattr(
+                            resolved_control,
+                            "controller_report_cooldown_rounds",
+                            1,
+                        )
+                    )
+                )
+            )
+            controller_communication_context = ControllerCommunicationContext(
+                round_index=round_index,
+                target=target,
+                sampled_opinion_counts={
+                    str(key): int(value) for key, value in dict(sampled_counts).items()
+                },
+                live_message_type_counts=dict(live_counts),
+                previous_modes=tuple(previous_communication_modes),
+                sampled_votes=tuple(
+                    str(value)
+                    for value in dict(round_signal.observation).get(
+                        "sampled_opinions", ()
+                    )
+                ),
+                previous_board_messages=tuple(
+                    ControllerVisibleMessage(
+                        message_id=message.message_id,
+                        author=(
+                            control_label(rules.n_agents)
+                            if message.author_kind == "controller"
+                            else agent_label(message.author_id)
+                        ),
+                        message_type=message.message_type,
+                        text=message.text,
+                        vote=message.vote,
+                        shared_fact_id=message.shared_fact_id,
+                        reply_to=message.reply_to,
+                        round_created=message.round_created,
+                    )
+                    for message in previous_board_messages
+                ),
+                eligible_facts=tuple(
+                    ControllerVisibleFact(
+                        fact_id=row.fact_id,
+                        text=(
+                            task.fact_text(row.fact_id)
+                            if task.controller_report_texts is None
+                            else task.controller_report_texts[row.fact_id]
+                        ),
+                        prior_post_count=row.prior_post_count,
+                        last_post_round=row.last_post_round,
+                    )
+                    for row in eligible_ranked
+                ),
+                posting_history=tuple(
+                    {
+                        "message_id": message.message_id,
+                        "message_type": message.message_type,
+                        "fact_id": message.shared_fact_id,
+                        "round_created": message.round_created,
+                    }
+                    for message in state.blackboard.messages
+                    if message.author_kind == "controller"
+                ),
+                budget=intervention_budget,
+            )
+            communication_policy = str(
+                getattr(
+                    resolved_control,
+                    "controller_communication_policy",
+                    COMMUNICATION_POLICY,
+                )
+            )
+            if communication_policy == LLM_COMMUNICATION_POLICY:
+                llm_result = await choose_llm_communication(
+                    provider=provider,
+                    context=controller_communication_context,
+                    allowed_modes=allowed_controller_modes,
+                    temperature=config.llm_provider.temperature,
+                    max_output_tokens=config.llm_provider.max_output_tokens,
+                    max_retries=int(
+                        getattr(
+                            resolved_control,
+                            "controller_communication_max_retries",
+                            2,
+                        )
+                    ),
+                    seed_for_attempt=lambda attempt_index: int(
+                        root.derive(
+                            "relational-controller-communication-llm:"
+                            f"{round_index}:{attempt_index + 1}"
+                        )
+                    ),
+                )
+                controller_llm_attempts = [
+                    attempt.to_dict() for attempt in llm_result.attempts
+                ]
+                for attempt in llm_result.attempts:
+                    messages_payload = [
+                        message.to_dict() for message in attempt.request.messages
+                    ]
+                    prompt_hash = canonical_hash(messages_payload)
+                    audit_prompt = CompiledPrompt(
+                        family="relational_controller_communication",
+                        version=1,
+                        definition_hash=canonical_hash(
+                            {
+                                "family": "relational_controller_communication",
+                                "version": 1,
+                            }
+                        ),
+                        instance_hash=prompt_hash,
+                        blocks=(),
+                        omitted_blocks=(),
+                        messages=attempt.request.messages,
+                        response_contract=ResponseContract(
+                            "relational_controller_communication"
+                        ),
+                        tokenizer_name=None,
+                        message_token_counts=(),
+                    )
+                    if attempt.response is not None:
+                        controller_llm_input_tokens += (
+                            attempt.response.usage.input_tokens or 0
+                        )
+                        controller_llm_output_tokens += (
+                            attempt.response.usage.output_tokens or 0
+                        )
+                    _notify(
+                        observer,
+                        "record_attempt",
+                        round_index=round_index,
+                        game_id=game.spec.game_type,
+                        request=attempt.request,
+                        prompt=audit_prompt,
+                        response=attempt.response,
+                        attempt=attempt.attempt,
+                        valid=attempt.valid,
+                        validation_error=attempt.validation_error,
+                        validation_issues=(),
+                        provider_error=(
+                            None
+                            if attempt.provider_error is None
+                            else RuntimeError(attempt.provider_error)
+                        ),
+                        observation=controller_communication_context.to_dict(),
+                    )
+                logical_decisions += 1
+                validation_attempts += len(llm_result.attempts)
+                communication_choice = llm_result.choice
+                if communication_choice is None:
+                    controller_llm_fallback_used = True
+                    fallback_stream = root.derive(
+                        f"relational-controller-communication-fallback:{round_index}"
+                    )
+                    controller_fallback_seed = int(fallback_stream)
+                    communication_choice = choose_communication_mode(
+                        controller_communication_context,
+                        allowed_controller_modes,
+                        fallback_stream.create_random(),
+                    )
+            else:
+                communication_choice = choose_communication_mode(
+                    controller_communication_context,
+                    allowed_controller_modes,
+                    root.derive(
+                        f"relational-controller-communication:{round_index}"
+                    ).create_random(),
+                )
             previous_communication_modes.append(communication_choice.mode)
 
         # Dawn is one atomic board perturbation. Every directive exists before
@@ -1047,13 +1249,20 @@ async def run_relational_imitation_round_feedback_game(
                     if actuation_mode == ADAPTIVE_COMMUNICATION
                     else "select_truthful_reports"
                 )
-                selections = getattr(resolved_control, selector_name)(
-                    task,
-                    episode_seed=config.execution.seed,
-                    round_index=round_index,
-                    live_fact_counts=live_fact_counts,
-                    selected_rounds=selected_report_rounds,
-                )
+                if communication_choice is not None and communication_choice.fact_ids:
+                    ranked_by_id = {row.fact_id: row for row in eligible_ranked}
+                    selections = tuple(
+                        ranked_by_id[fact_id]
+                        for fact_id in communication_choice.fact_ids
+                    )
+                else:
+                    selections = getattr(resolved_control, selector_name)(
+                        task,
+                        episode_seed=config.execution.seed,
+                        round_index=round_index,
+                        live_fact_counts=live_fact_counts,
+                        selected_rounds=selected_report_rounds,
+                    )
                 if (
                     actuation_mode == TRUTHFUL_STRATEGIC_REPORT
                     and len(selections) != intervention_budget
@@ -1083,10 +1292,17 @@ async def run_relational_imitation_round_feedback_game(
                     if actuation_mode == ADAPTIVE_COMMUNICATION
                     else "coordination_request_text"
                 )
-                coordination_text = getattr(resolved_control, text_method)(
-                    target,
-                    dict(round_signal.observation).get("sampled_opinion_counts", {}),
-                    state.answer_display_texts,
+                coordination_text = (
+                    communication_choice.text
+                    if communication_choice is not None
+                    and communication_choice.text is not None
+                    else getattr(resolved_control, text_method)(
+                        target,
+                        dict(round_signal.observation).get(
+                            "sampled_opinion_counts", {}
+                        ),
+                        state.answer_display_texts,
+                    )
                 )
                 message_type = (
                     MESSAGE_REQUEST
@@ -1161,6 +1377,16 @@ async def run_relational_imitation_round_feedback_game(
                 ),
                 "requested_b": intervention_budget,
                 "actual_posts": len(round_controller_post_ids),
+                "communication_choice_source": (
+                    None
+                    if communication_choice is None
+                    else "algorithmic_fallback"
+                    if controller_llm_fallback_used
+                    else "llm"
+                    if communication_choice.policy == LLM_COMMUNICATION_POLICY
+                    else "algorithmic"
+                ),
+                "llm_fallback_used": controller_llm_fallback_used,
             },
         )
 
@@ -1700,6 +1926,42 @@ async def run_relational_imitation_round_feedback_game(
             ),
             "communication_choice_reason": (
                 None if communication_choice is None else communication_choice.reason
+            ),
+            "controller_visible_input": (
+                None
+                if controller_communication_context is None
+                else controller_communication_context.to_dict()
+            ),
+            "controller_visible_input_hash": (
+                None
+                if controller_communication_context is None
+                else canonical_hash(controller_communication_context.to_dict())
+            ),
+            "controller_communication_choice": (
+                None if communication_choice is None else communication_choice.to_dict()
+            ),
+            "controller_communication_choice_source": (
+                None
+                if communication_choice is None
+                else "algorithmic_fallback"
+                if controller_llm_fallback_used
+                else "llm"
+                if communication_choice.policy == LLM_COMMUNICATION_POLICY
+                else "algorithmic"
+            ),
+            "controller_llm_attempts": controller_llm_attempts,
+            "controller_llm_fallback_used": controller_llm_fallback_used,
+            "controller_fallback_seed": controller_fallback_seed,
+            "controller_llm_input_tokens": controller_llm_input_tokens,
+            "controller_llm_output_tokens": controller_llm_output_tokens,
+            "controller_llm_total_tokens": (
+                controller_llm_input_tokens + controller_llm_output_tokens
+            ),
+            "controller_decision_valid": (
+                communication_choice is not None
+                if action == ADVOCATE_TARGET
+                and actuation_mode == ADAPTIVE_COMMUNICATION
+                else None
             ),
             "communication_policy": (
                 getattr(resolved_control, "controller_communication_policy", None)
