@@ -116,6 +116,8 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
         ("game.options.task_id", "task_id"),
         ("game.options.task_family", "task_family"),
         ("game.population_size", "population_size"),
+        ("game.horizon", "horizon"),
+        ("game.options.rounds", "population_rounds"),
         ("game.options.social_group_size", "social_group_size"),
         ("game.options.social_mode", "social_mode"),
         ("game.options.board.sampling", "board_sampling"),

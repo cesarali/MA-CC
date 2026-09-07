@@ -24,7 +24,7 @@ A **study** is a collection of related experiment configurations. An **experimen
 
 The aggregation stage is offline. It reads completed files and does not call a large language model (LLM).
 
-## 2. Important correction to the proposed command description
+## 2. Current command and table format
 
 The current repository implements:
 
@@ -40,21 +40,13 @@ mas-cc study aggregate \
   --allow-incomplete
 ```
 
-The current repository does **not** implement:
+Current study aggregation writes compressed **Parquet** tables. Historical CSV
+handoffs remain readable for reaggregation. A conversion-only migration is
+available and makes no provider calls or estimator recomputations:
 
-```text
-mas-cc study compact-analysis
+```bash
+mas-cc study compact-analysis --study-dir <study-result-root>
 ```
-
-There is also an important format correction:
-
-- Current study aggregation writes new analysis tables as **CSV** files.
-- CSV means comma-separated values, a portable text table format.
-- Existing historical Parquet analysis tables remain readable.
-- Run-level compact scientific observations still use `scientific_events.parquet`.
-- Parquet means a compressed typed columnar table format.
-
-Therefore, “study aggregation emits compressed Parquet tables” is not the current code contract. If direct Parquet analysis output and a conversion-only `study compact-analysis` command are desired, they still need to be implemented.
 
 A different existing command is:
 
@@ -122,7 +114,8 @@ Important supporting modules are:
 | `src/mas_cc/studies/discovery.py` | Finds submitted runs and scientific cells |
 | `src/mas_cc/studies/canonical.py` | Builds canonical cells, episodes, rounds, and micro-slot tables |
 | `src/mas_cc/studies/validation.py` | Checks completeness, identities, schemas, seals, and hashes |
-| `src/mas_cc/studies/table_io.py` | Reads legacy CSV/Parquet tables and writes verified canonical CSV |
+| `src/mas_cc/studies/table_io.py` | Reads legacy CSV/Parquet tables and writes verified compressed Parquet |
+| `src/mas_cc/analysis/causal_response.py` | Propensity-weighted causal response, communication funnel, efficiency, and frontier |
 | `src/mas_cc/studies/aggregation.py` | Runs estimators, derives quantities, plots, reports, and packages |
 | `src/mas_cc/studies/episode_endpoints.py` | Builds configured episode-level outcome classifications |
 | `src/mas_cc/games/hidden_bench/imitation_round_feedback/analysis.py` | Established round-level information and response estimator engine |
@@ -233,6 +226,17 @@ A results-only study is intended for scientific analysis, not complete provider 
 
 Use a fuller storage profile when later questions require those artifacts.
 
+For new blackboard runs, compact micro-slot retention includes focal agent
+identity and stable sampled message/fact identities. Controller decision token
+usage is recorded separately from public communication. Even with those
+additions, compact packages do not yet identify whether the same reader saw the
+same message or fact in an earlier round, and they do not provide a clean
+controller-public-message token count. Consequently they cannot recover true
+episode-wide unique readership, repeated reader-evidence exposure, or exact
+public-message token cost. Provider input/output totals must not be substituted
+for public communication cost because they include other prompt and response
+material.
+
 ## 7. Aggregation stages
 
 `aggregate_study()` performs the following stages.
@@ -256,10 +260,10 @@ The command records how many incomplete and superseded retry rows were excluded.
 The aggregator constructs four study-wide tables:
 
 ```text
-cells.csv
-episodes.csv
-rounds.csv
-micro_slots.csv
+    cells.parquet
+    episodes.parquet
+    rounds.parquet
+    micro_slots.parquet
 ```
 
 These tables join all discovered runs while preserving source provenance.
@@ -330,7 +334,7 @@ No LLM calls occur in any of these aggregation stages.
 
 These are the observation layer from which later analysis is reconstructed.
 
-### 8.1 `cells.csv`
+### 8.1 `cells.parquet`
 
 One row represents one scientific cell.
 
@@ -345,7 +349,7 @@ Stable content includes:
 
 All grid overrides are retained. Unambiguous leaf-name aliases are added for convenient plotting.
 
-### 8.2 `episodes.csv`
+### 8.2 `episodes.parquet`
 
 One row represents one realized episode.
 
@@ -362,7 +366,7 @@ Stable content includes:
 
 This is mainly an episode index and execution outcome table. It is not normally the main table of population dynamics.
 
-### 8.3 `rounds.csv`
+### 8.3 `rounds.parquet`
 
 One row represents one retained population round.
 
@@ -389,7 +393,7 @@ All available game-specific round fields are retained after those columns. Depen
 
 This is the principal input for mutual information, conditional mutual information, entropy, response, state occupancy, and endpoint analyses.
 
-### 8.4 `micro_slots.csv`
+### 8.4 `micro_slots.parquet`
 
 One row represents one retained microscopic update.
 
@@ -422,6 +426,7 @@ estimators:
   - cell_current
   - effective_affinity
   - kinetic_compliance
+  - propensity_weighted_causal_response
 
 resampling:
   bootstrap_resamples: 1000
@@ -437,6 +442,11 @@ derived:
   - affinity_weighted_current_nats
   - thermodynamic_control_expenditure_nats
   - eta_th
+  - communication_response_efficiency
+
+blackboard_phase2_outputs:
+  enabled: true
+  strata: [target_semantics, controller_communication_policy, intervention_budget]
 
 plots:
   target_information:
@@ -505,11 +515,101 @@ A **current** is a directed net change accumulated over time. MA-CC distinguishe
 
 These require microscopic transition support. They can be unavailable even when round-level outcomes are present.
 
+### 10.8 Propensity-weighted causal response
+
+For an eligible randomized controller round, the estimator is
+
+```text
+[U_t/e_t - (1-U_t)/(1-e_t)] * (x_(t+h) - x_t),  h in {1, 2, 3}
+```
+
+`U_t` is the assigned binary intervention, `e_t` is the exact probability
+logged by the policy from its complete visible information, and `x` is the
+share supporting that arm's controller target. Truthful and false-target arms
+therefore retain their own target orientation. Probabilities must be strictly
+between zero and one, round identities must be unique and ordered within an
+episode, and lag lookup never crosses an episode boundary. Missing lags remain
+missing and are counted.
+
+When requested, aggregation writes:
+
+```text
+causal_response_round_inputs.parquet
+causal_response_effects.parquet
+causal_response_support.parquet
+```
+
+The retained-field mapping is:
+
+| Quantity | Canonical round fields |
+|---|---|
+| assigned action | `U_k` (fallback `controller_sampled_U`) |
+| exact propensity | `P_U1_given_Y` (fallback `controller_probability_U1_given_Y`) |
+| target orientation | `analysis_target`, `possible_answers` |
+| target shares | `occupation_counts_before/after` or validated controller-target shares |
+| episode/round identity | `cell_id`, `episode_id`, `round_index` |
+| shared block | `physical_initial_state_hash`, then initialization repetition as fallback |
+
+The effect table is cell-level and long by lag. The support table records
+action/silence counts, the empirical propensity distribution, missing-lag and
+incomplete-episode counts, and the number of shared-initialization blocks.
+Confidence intervals resample complete shared-initialization blocks, keeping
+matched cells together. Execution order and shard boundaries are not analysis
+coordinates.
+
+Communication mode and actual post count are post-treatment outcomes. The
+causal estimator is never directly conditioned on them; a recipe that requests
+either as a causal stratum is rejected. Mode breakdowns are emitted only as
+explicitly non-causal descriptive summaries.
+
+### 10.9 Communication funnel and operational efficiency
+
+The round-level funnel links the assigned action to actual controller posts,
+message exposures, distinct readers in that round, new controller-fact
+acquisitions, controller-fact reactivations, and immediate/delayed response:
+
+```text
+communication_funnel.parquet
+communication_efficiency.parquet
+response_cost_frontier.parquet
+communication_mode_descriptive_response.parquet
+```
+
+Compact micro-slot records are used to audit exposure, reader, acquisition,
+and reactivation totals when available. `controller_unique_readers` is labelled
+as a per-round count and must not be interpreted as episode-wide unique reach.
+New acquisitions and reactivations remain separate.
+
+| Funnel stage | Retained field |
+|---|---|
+| actual posts | `actual_controller_posts` / `controller_posts` |
+| exposures | `controller_message_exposures` |
+| per-round readers | `controller_unique_readers` |
+| new evidence | `new_controller_facts` |
+| reactivated evidence | `reactivated_controller_fact_count` |
+| micro audit identities | `focal_agent_id`, sampled controller message IDs, new/reactivated controller fact IDs |
+
+For each configured cell and cost measure, causal response and the
+propensity-weighted expected cost under policy activation are estimated
+separately. Only then is the secondary aggregate response-per-cost ratio
+formed. A zero cost denominator produces a missing ratio and an explicit zero
+denominator flag; it is never coerced to zero. Sensing cost is not combined
+with posting cost.
+
+The response-cost frontier is the best supported observed causal response at
+or below each communication cost. It carries response uncertainty and the
+number of initialization blocks. It is an operational control-efficiency
+summary, not thermodynamic efficiency.
+
 ## 11. Bootstrap confidence intervals
 
 A **bootstrap confidence interval** measures sampling uncertainty by repeatedly resampling observed units and recalculating the estimate.
 
-The study estimator uses whole episodes as the resampling unit. It does not independently resample rounds from the same episode, because those rounds are dependent.
+The established information estimator uses whole episodes as the resampling
+unit. It does not independently resample rounds from the same episode, because
+those rounds are dependent. The causal-response family uses the stronger
+shared-initialization block as its unit, retaining every complete matched
+episode/cell inside a sampled block.
 
 Compact estimator rows retain:
 
@@ -554,7 +654,7 @@ A positive raw plug-in MI or CMI estimate should be interpreted beside its null 
 
 A numerical estimate is not automatically well supported.
 
-`support_diagnostics.csv` can contain:
+`support_diagnostics.parquet` can contain:
 
 - number of observations and episodes;
 - number of observed actions;
@@ -578,7 +678,7 @@ Every scientific interpretation should read the estimate and support row togethe
 
 These four estimator-layer tables are always written, although they may be empty when nothing applicable was requested:
 
-### `primary_estimates.csv`
+### `primary_estimates.parquet`
 
 Union of the primary estimator rows. Stable fields include:
 
@@ -610,15 +710,15 @@ analysis_hash
 
 It may also contain current, affinity, compliance, and state-local estimates.
 
-### `information_estimates.csv`
+### `information_estimates.parquet`
 
 The information and response rows returned by the established round-feedback estimator.
 
-### `support_diagnostics.csv`
+### `support_diagnostics.parquet`
 
 The corresponding action-overlap, state-support, sparsity, and sample-size diagnostics.
 
-### `derived_observables.csv`
+### `derived_observables.parquet`
 
 Quantities constructed from primary estimates and retained observations. The table records dependencies, units, support, and analysis identity.
 
@@ -659,32 +759,32 @@ Configured factorial contrasts are descriptive matched differences between level
 Depending on the game and recipe, aggregation may also produce:
 
 ```text
-episode_endpoints.csv
-episode_endpoint_summary.csv
-phi_conditioning_comparison.csv
-initialization_diagnostics.csv
-matched_initialization_audit.csv
-state_local_phase_maps.csv
-state_occupancy_binned.csv
-state_occupancy.csv
-rho_aggregated_state_local_maps.csv
-rho_aggregated_state_occupancy.csv
-rho_aggregated_descriptive_summary.csv
-thermodynamic_efficiency_diagnostics.csv
-single_affinity_theory_comparison.csv
+episode_endpoints.parquet
+episode_endpoint_summary.parquet
+phi_conditioning_comparison.parquet
+initialization_diagnostics.parquet
+matched_initialization_audit.parquet
+state_local_phase_maps.parquet
+state_occupancy_binned.parquet
+state_occupancy.parquet
+rho_aggregated_state_local_maps.parquet
+rho_aggregated_state_occupancy.parquet
+rho_aggregated_descriptive_summary.parquet
+thermodynamic_efficiency_diagnostics.parquet
+single_affinity_theory_comparison.parquet
 ```
 
 For blackboard studies, `blackboard_population_outputs: true` can add:
 
 ```text
-blackboard_diagnostics.csv
-cell_summary.csv
-state_resolved_x_b.csv
-sensing_information.csv
-transfer_information.csv
-susceptibility.csv
-efficiencies.csv
-rho_b_summary.csv
+blackboard_diagnostics.parquet
+cell_summary.parquet
+state_resolved_x_b.parquet
+sensing_information.parquet
+transfer_information.parquet
+susceptibility.parquet
+efficiencies.parquet
+rho_b_summary.parquet
 ```
 
 These names describe optional views. They are not guaranteed for every game.
@@ -829,9 +929,9 @@ The retention contract currently declares:
 
 ```json
 {
-  "canonical_table_format": "csv",
-  "csv_tables": true,
-  "parquet_tables": false,
+  "canonical_table_format": "parquet",
+  "csv_tables": false,
+  "parquet_tables": true,
   "compact_estimator_summaries": true,
   "persistent_analysis_cache": false,
   "individual_null_draws": false,
@@ -900,7 +1000,7 @@ rounds
 micro_slots
 ```
 
-The reader prefers CSV and accepts legacy Parquet.
+The reader prefers Parquet and accepts legacy CSV.
 
 The command then recalculates configured estimators, derived quantities, plots, reports, and the ZIP. It does not call an LLM.
 
@@ -910,7 +1010,7 @@ Example:
 mas-cc study aggregate --study-dir <study-result-root>
 ```
 
-This is reaggregation, not conversion-only packaging. Bootstrap and null calculations can run again. There is no persistent estimator cache in the current contract.
+This is reaggregation, not conversion-only packaging. Bootstrap and null calculations can run again. There is no persistent estimator cache in the current contract. Use `study compact-analysis` only to migrate an existing legacy analysis handoff to Parquet without recomputing estimators.
 
 ## 25. Run compaction is a different operation
 
@@ -963,12 +1063,12 @@ A practical review order is:
 1. `validation.md` for completeness and errors.
 2. `analysis_manifest.json` for formats, estimator settings, hashes, and package contents.
 3. `analysis_recipe.yaml` for intended estimates and plots.
-4. `tables/cells.csv` for scientific coordinates and cell completion.
-5. `tables/episodes.csv` for episode identities and outcomes.
-6. `tables/support_diagnostics.csv` before interpreting information estimates.
-7. `tables/primary_estimates.csv` for point estimates, intervals, and null summaries.
-8. `tables/derived_observables.csv` for quantities built from primary estimates.
-9. `tables/rounds.csv` and `tables/micro_slots.csv` when a result needs to be independently reconstructed.
+4. `tables/cells.parquet` for scientific coordinates and cell completion.
+5. `tables/episodes.parquet` for episode identities and outcomes.
+6. `tables/support_diagnostics.parquet` before interpreting information estimates.
+7. `tables/primary_estimates.parquet` for point estimates, intervals, and null summaries.
+8. `tables/derived_observables.parquet` for quantities built from primary estimates.
+9. `tables/rounds.parquet` and `tables/micro_slots.parquet` when a result needs to be independently reconstructed.
 10. `reports/methods.md` for exact semantics and units.
 11. `plots/` for visual summaries only after checking their source tables.
 12. `provenance/` to recover the submitted design.
@@ -986,7 +1086,7 @@ Before calling an aggregation deliverable complete, verify:
 [ ] cell, episode, round, and micro-slot identities are not duplicated
 [ ] retained artifact and config hashes pass
 [ ] one scientific schema version is present
-[ ] canonical CSV tables are readable
+[ ] canonical Parquet tables are readable
 [ ] estimator rows record units and support status
 [ ] bootstrap and null counts match analysis.yaml
 [ ] unsupported estimates remain explicitly unsupported
@@ -1005,4 +1105,4 @@ A complete MA-CC study package contains two distinct layers:
 
 The standard command is `mas-cc study aggregate`. It performs validation, normalization, estimator calculation, derivation, plotting, reporting, and ZIP packaging entirely offline.
 
-Current new analysis tables are CSV, not Parquet. Historical Parquet tables remain readable. There is currently no `mas-cc study compact-analysis` command; rerunning `study aggregate` recalculates the analysis from retained canonical tables, while `experiment compact` is the separate command for converting an older run to results-only storage.
+Current analysis tables are compressed Parquet. Historical CSV tables remain readable. `study compact-analysis` migrates a legacy analysis handoff without estimator recomputation, while rerunning `study aggregate` recalculates analysis from retained canonical tables. `experiment compact` remains the separate command for converting an older run to results-only storage.

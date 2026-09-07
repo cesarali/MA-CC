@@ -15,3 +15,4 @@ execution:
   results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/astra_phase1_task003_smoke
   require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
   provider_load_control: {mode: shared_adaptive, initial_concurrency: 2, minimum_concurrency: 1, maximum_concurrency: 2, target_rpm: 60, retry_max_elapsed_seconds: 300}
+analysis: {recipe: analysis.yaml}
