@@ -59,6 +59,8 @@ def run_configured_probe(
     *,
     mode: str = "run",
     approve_preflight: Path | None = None,
+    request_set: str = "full",
+    execution_profile: str = "cluster",
     stream: Any = sys.stderr,
 ) -> tuple[bool, Path, str]:
     """Dispatch one probe config while preserving the legacy default."""
@@ -69,6 +71,34 @@ def run_configured_probe(
         if isinstance(raw, dict)
         else "controller_retention"
     )
+    if probe_name == "musr_truthful_selective_isolated":
+        from mas_cc.probes.musr_truthful_selective.isolated_config import (
+            load_isolated_config,
+        )
+        from mas_cc.probes.musr_truthful_selective.isolated_runner import (
+            analyze,
+            prepare,
+            run,
+        )
+
+        config = load_isolated_config(config_path)
+        if mode == "preflight":
+            root, payload = prepare(config, output_dir)
+            return bool(payload["passed"]), root / "preparation/offline_test_report.md", "MuSR isolated OSS package prepared"
+        if mode == "analyze":
+            result = analyze(config, output_dir)
+            return True, Path(result["report"]), "MuSR isolated OSS report written"
+        result = __import__("asyncio").run(
+            run(
+                config,
+                output_dir,
+                approve_preflight=approve_preflight,
+                request_set=request_set,
+                execution_profile=execution_profile,
+            )
+        )
+        ok = result["completed"] == result["planned"] and not result["stopped"]
+        return ok, Path(output_dir or config.output_dir), "MuSR isolated OSS execution finished"
     if probe_name == "musr_truthful_selective":
         from mas_cc.probes.musr_truthful_selective import (
             analyze,

@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo "usage: run_probe.job PROBE_CONFIG OUTPUT_DIR [PREFLIGHT_APPROVAL]" >&2
+if [[ $# -lt 2 || $# -gt 5 ]]; then
+  echo "usage: run_probe.job PROBE_CONFIG OUTPUT_DIR [PREFLIGHT_APPROVAL] [REQUEST_SET] [EXECUTION_PROFILE]" >&2
   exit 2
 fi
 
@@ -13,6 +13,8 @@ readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
 readonly PROBE_CONFIG=$1
 readonly OUTPUT_DIR=$2
 readonly PREFLIGHT_APPROVAL=${3:-}
+readonly REQUEST_SET=${4:-full}
+readonly EXECUTION_PROFILE=${5:-cluster}
 
 command=(
   "$CONDA_EXE" run -n MA-CC --live-stream
@@ -21,4 +23,5 @@ command=(
 if [[ -n "$PREFLIGHT_APPROVAL" ]]; then
   command+=(--approve-preflight "$PREFLIGHT_APPROVAL")
 fi
+command+=(--request-set "$REQUEST_SET" --execution-profile "$EXECUTION_PROFILE")
 exec "${command[@]}"
