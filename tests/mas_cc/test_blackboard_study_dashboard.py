@@ -403,9 +403,7 @@ def test_study_index_cache_invalidates_when_cell_marker_changes(tmp_path: Path):
     first = reader.study()
     assert first["episode_outcomes"]["failed"] == 1
 
-    summary = reader.resolved_paths(
-        "config-0000~cell-0000"
-    ).cell_summary_path
+    summary = reader.resolved_paths("config-0000~cell-0000").cell_summary_path
     summary.write_text(json.dumps({"failures": []}), encoding="utf-8")
     second = reader.study()
     assert second["episode_outcomes"]["failed"] == 0
@@ -425,7 +423,9 @@ def test_three_prompt_samples_are_capped_and_fall_back_by_episode(tmp_path: Path
     sampler = _CellPromptSampler(3)
     common = {"rounds": 5, "agent_id": "agent_001", "update_index": 0}
     sampler.capture(cell, "episode-0000", 0, "beginning zero", metadata=common)
-    sampler.capture(cell, "episode-0000", 0, "later request", metadata={**common, "update_index": 2})
+    sampler.capture(
+        cell, "episode-0000", 0, "later request", metadata={**common, "update_index": 2}
+    )
     for round_index, label in ((0, "beginning one"), (2, "middle"), (4, "end")):
         sampler.capture(
             cell,
@@ -557,6 +557,14 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     assert "Update ${update}:" in script
     assert 'id="round" type="range"' in html
     assert 'id="round-value"' in html
+    assert "Inspect participant" in html
+    assert "All participants" in script
+    assert 'id="controller-messages"' in html
+    assert 'id="communication-bars"' in html
+    assert 'id="controller-events"' in html
+    assert "blackboardAuthorFilter" in script
+    assert "controllerRound" in script
+    assert "descriptive, not causal" in html
 
 
 def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):

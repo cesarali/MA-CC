@@ -244,6 +244,97 @@ def test_semantic_stream_reconstructs_supported_dashboard_without_private_data(
     ]
 
 
+def test_communication_and_controller_statistics_use_retained_event_order(
+    tmp_path: Path,
+):
+    episode = (
+        tmp_path / "run" / "cells" / "cell-0000" / "round_records" / "cell-0000-0000"
+    )
+    writer = _writer(episode)
+    initial = _state()
+    writer.initialization(initial)
+    controller_message = {
+        "message_id": "controller-1",
+        "author_id": "controller",
+        "author_kind": "controller",
+        "message_type": "DIRECTIVE",
+        "text": "Exact retained controller instruction",
+        "vote": "B",
+        "shared_fact_id": "f9",
+        "reply_to": "m0",
+        "round_created": 0,
+        "micro_step_created": 0,
+        "expires_after_round": 0,
+    }
+    dawn = _state()
+    dawn["blackboard"] = [controller_message]
+    writer.round_start(
+        round_index=0,
+        state=dawn,
+        expired_message_ids=[],
+        deactivated_pairs=[],
+        controller={
+            "enabled": True,
+            "action": "ADVOCATE_Z",
+            "target": "B",
+            "post_ids": ["controller-1"],
+            "directive_ids": ["controller-1"],
+            "selected_fact_ids": ["f9"],
+            "chosen_message_mode": "DIRECTIVE",
+            "requested_b": 3,
+            "actual_posts": 1,
+            "communication_choice_source": "fallback",
+            "llm_fallback_used": True,
+        },
+    )
+    first = _update(0, "agent_001", ["A", "B"], ["B", "B"])
+    first["new_message"] = None
+    first["sampled_controller_message_ids"] = ["controller-1"]
+    first["focal_vote_before"] = "A"
+    first["focal_vote_after"] = "B"
+    first["controller_target"] = "B"
+    second = _update(1, "agent_002", ["B", "B"], ["B", "B"])
+    second["sampled_controller_message_ids"] = ["controller-1"]
+    second["focal_vote_before"] = "B"
+    second["focal_vote_after"] = "B"
+    second["controller_target"] = "B"
+    writer.update(first)
+    writer.update(second)
+    final = _state()
+    final["agents"][0]["committed_action"] = "B"
+    final["blackboard"] = [controller_message, second["new_message"]]
+    writer.round_end(round_index=0, state=final)
+    writer.finalize("completed")
+
+    reader = BlackboardRunReader(tmp_path / "run", "cell-0000-0000")
+    communication = reader.communication()
+    assert communication["totals_by_scope"]["controller"] == {
+        "REPORT": 0,
+        "REQUEST": 0,
+        "DIRECTIVE": 1,
+        "replies": 1,
+        "no_message_actions": 0,
+        "total_messages": 1,
+    }
+    assert communication["totals_by_scope"]["participants"]["REPORT"] == 1
+    assert communication["totals_by_scope"]["participants"]["no_message_actions"] == 1
+
+    controller = reader.controller_timeline()
+    assert controller["summary"]["requested_posts"] == 3
+    assert controller["summary"]["realized_posts"] == 1
+    assert controller["summary"]["llm_fallback_count"] == 1
+    assert controller["rounds"][0]["exposed_agents"] == 2
+    assert controller["rounds"][0]["next_votes_moved_to_target"] == 1
+    assert controller["rounds"][0]["message_types"] == ["DIRECTIVE"]
+    assert controller["rounds"][0]["posts"][0]["text"] == (
+        "Exact retained controller instruction"
+    )
+    snapshot = reader.snapshot(0, 2)
+    retained = {message["message_id"]: message for message in snapshot["blackboard"]}
+    assert retained["controller-1"]["live"] is True
+    assert reader.timeline()["time_series"][0]["controller_markers"] == ["DIRECTIVE"]
+
+
 def test_live_partial_tail_and_completed_corruption_rules(tmp_path: Path):
     episode = _semantic_episode(tmp_path, complete=False)
     stream = episode / "dashboard_semantic.jsonl"

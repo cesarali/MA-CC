@@ -81,7 +81,7 @@
       <input id="step" type="range" min="1" value="1">
       <output id="step-value">1</output>
     </label>
-    <label>Agent <select id="agent"></select></label>
+    <label>Inspect participant <select id="agent"></select></label>
     <label class="follow"><input id="follow" type="checkbox" checked> Follow live edge</label>
     <span id="refreshed"></span>
   </section>
@@ -103,6 +103,14 @@
         <article class="panel"><h2>Latest activity</h2><div id="activity"></div></article>
       </div>
       <article class="panel"><h2>Controller funnel and saturation diagnostics</h2><div id="episode-statistics"></div></article>
+      <article class="panel">
+        <h2>Communication by round</h2>
+        <p class="meta">Authored messages and no-message actions. The participant selector filters these communication counts only.</p>
+        <div id="communication-bars"></div>
+        <div id="communication-totals" class="cards"></div>
+        <h3>Author-category totals</h3>
+        <div id="author-category-totals"></div>
+      </article>
     </section>
 
     <section id="episode-trajectory" class="view">
@@ -115,6 +123,10 @@
 
     <section id="blackboard" class="view">
       <div class="panel toolbar">
+        <span class="segmented" role="group" aria-label="Blackboard author filter">
+          <button id="all-messages" class="active" type="button">All messages</button>
+          <button id="controller-messages" type="button">Controller messages</button>
+        </span>
         <label><input class="message-filter" type="checkbox" value="REQUEST" checked> REQUEST</label>
         <label><input class="message-filter" type="checkbox" value="REPORT" checked> REPORT</label>
         <label><input class="message-filter" type="checkbox" value="DIRECTIVE" checked> DIRECTIVE</label>
@@ -145,7 +157,10 @@
     </section>
 
     <section id="controller" class="view">
-      <article class="panel"><h2>Round controller</h2><div id="controller-state"></div></article>
+      <div id="controller-summary" class="cards"></div>
+      <article class="panel"><h2>Controller event strip</h2><p class="meta">Select a round to inspect its exact retained controller posts.</p><div id="controller-events"></div></article>
+      <article class="panel"><h2>Per-round actuation and exposure</h2><div id="controller-round-bars"></div><p class="meta">Vote movement means the next recorded exposed update changed from a non-target vote to the target. It is descriptive, not causal.</p></article>
+      <article class="panel"><h2>Selected round controller</h2><div id="controller-event-messages"></div><div id="controller-state"></div></article>
     </section>
   </main>
   </section>

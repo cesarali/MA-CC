@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null };
+  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, participantScope: 'all', blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
@@ -146,7 +146,7 @@
     if (state.selectedTrajectories.size) params.set('trajectories', [...state.selectedTrajectories].join(','));
     const activeTab = document.querySelector('#tabs button.active')?.dataset.view;
     if (state.episodeId && activeTab) params.set('episodeTab', activeTab);
-    if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); params.set('agent', $('agent').value); params.set('follow', $('follow').checked ? '1' : '0'); }
+    if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); params.set('participant', $('agent').value); params.set('blackboard', state.blackboardAuthorFilter); params.set('controllerRound', state.selectedControllerRound ?? ''); params.set('follow', $('follow').checked ? '1' : '0'); }
     if ($('filter-rho').value) params.set('rho', $('filter-rho').value);
     history.replaceState({}, '', `#${params}`);
   }
@@ -247,18 +247,53 @@
     round.value = indices.some(index => String(index) === previousRound) ? previousRound : round.max;
     $('round-value').value = Number(round.value) + 1;
     const agent = $('agent');
-    const previousAgent = agent.value;
-    agent.replaceChildren(...timeline.agents.map(id => new Option(id.replace('agent_', 'Agent '), id)));
-    if (timeline.agents.includes(previousAgent)) agent.value = previousAgent;
+    const previousAgent = agent.value || state.participantScope;
+    const scopes = timeline.communication?.participant_scopes || [
+      {id: 'all', label: 'All participants'},
+      {id: 'participants', label: 'Participants only'},
+      {id: 'controller', label: 'Controller only'},
+      ...timeline.agents.map(id => ({id: `agent:${id}`, label: id.replace('agent_', 'Agent ')}))
+    ];
+    agent.replaceChildren(...scopes.map(scope => new Option(scope.label, scope.id)));
+    agent.value = scopes.some(scope => scope.id === previousAgent) ? previousAgent : 'all';
+    state.participantScope = agent.value;
     updateStepRange();
     renderEpisodeTrajectory(timeline);
+    renderCommunication();
   }
 
   function renderEpisodeTrajectory(timeline) {
     const points = timeline.time_series || [];
     const cursor = state.snapshot?.cursor?.global_update_index;
     const marker = cursor == null ? '' : `<p class="meta">Selected update: ${Number(cursor) + 1}</p>`;
-    $('episode-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth share</span><span class="target-line">Controller-target share</span><span>│ controller post</span></div>${marker}<h3>Truth</h3>${sparkline(points, 'truth_share', 900, 180)}<h3>Controller target</h3>${sparkline(points, 'controller_target_share', 900, 180)}`;
+    const shares = points.map((point, index) => {
+      if (point.truth_share == null) return `<div class="share-row"><span>U${index+1}</span><i class="unavailable">Unavailable</i></div>`;
+      const truth = 100 * Number(point.truth_share), target = point.truth_and_target_same ? 0 : 100 * Number(point.controller_target_share || 0), other = Math.max(0, 100 - truth - target);
+      const markers = (point.controller_markers || []).map(type => `<b class="event-dot ${esc(type)}" title="Controller ${esc(type)}"></b>`).join('');
+      return `<div class="share-row"><span>U${index+1}</span><div class="share-bar" title="truth ${truth.toFixed(1)}% · target ${target.toFixed(1)}% · other ${other.toFixed(1)}%"><i class="share-truth" style="width:${truth}%"></i><i class="share-target" style="width:${target}%"></i><i class="share-other" style="width:${other}%"></i></div>${markers}</div>`;
+    }).join('');
+    $('episode-votes').innerHTML = `<div class="plot-legend"><span class="truth-line">Truth share</span><span class="target-line">Controller target</span><span class="other-line">Other</span><span>Markers: grey NO_OP · blue report · orange request · red directive</span></div>${marker}<div class="population-shares">${shares || '<span class="unavailable">Population shares unavailable.</span>'}</div>`;
+  }
+
+  function renderCommunication() {
+    const communication = state.timeline?.communication;
+    if (!communication?.available) {
+      $('communication-bars').innerHTML = '<span class="unavailable">Communication data unavailable.</span>';
+      $('communication-totals').innerHTML = '';
+      $('author-category-totals').innerHTML = '';
+      return;
+    }
+    const scope = state.participantScope || 'all';
+    const keys = ['REPORT', 'REQUEST', 'DIRECTIVE', 'replies', 'no_message_actions'];
+    const maxima = Math.max(1, ...communication.counts_by_round.map(row => keys.reduce((sum, key) => sum + (row.scopes[scope]?.[key] || 0), 0)));
+    $('communication-bars').innerHTML = communication.counts_by_round.map(row => {
+      const counts = row.scopes[scope] || {};
+      const segments = keys.map(key => `<i class="comm-${key}" style="width:${100*(counts[key] || 0)/maxima}%" title="${esc(key)}: ${counts[key] || 0}"></i>`).join('');
+      return `<div class="comm-row"><span>Round ${Number(row.round_index)+1}</span><div class="comm-bar">${segments}</div><b>${keys.reduce((sum,key) => sum + (counts[key] || 0), 0)}</b></div>`;
+    }).join('');
+    const totals = communication.totals_by_scope[scope] || {};
+    $('communication-totals').innerHTML = keys.map(key => `<div class="card"><span>${esc(key.replaceAll('_', ' '))}</span><strong>${totals[key] ?? 0}</strong></div>`).join('');
+    $('author-category-totals').innerHTML = ['participants','controller'].map(category => { const values = communication.totals_by_author_category[category] || {}; return `<div class="category-total"><b>${esc(category)}</b>${['total_messages','REPORT','REQUEST','DIRECTIVE','replies'].map(key => `<span>${esc(key)}: <strong>${values[key] ?? 0}</strong></span>`).join('')}<span>per observed round: <strong>${values.messages_per_observed_round == null ? 'Unavailable' : Number(values.messages_per_observed_round).toFixed(2)}</strong></span></div>`; }).join('');
   }
 
   function updateStepRange() {
@@ -298,9 +333,9 @@
   function renderMessages(snapshot) {
     const enabled = new Set([...document.querySelectorAll('.message-filter:checked')].map(node => node.value));
     const showExpired = $('expired').checked;
-    const messages = snapshot.blackboard.filter(message => enabled.has(message.message_type) && (showExpired || message.live));
+    const messages = snapshot.blackboard.filter(message => enabled.has(message.message_type) && (showExpired || message.live) && (state.blackboardAuthorFilter !== 'controller' || message.author_kind === 'controller' || message.author_id === 'controller'));
     $('messages').innerHTML = messages.length ? messages.map(message => `<article class="message ${esc(message.message_type)} ${message.live ? '' : 'expired'} ${message.new_at_cursor ? 'new' : ''}" data-agent="${esc(message.author_id)}"><div class="message-head"><span class="badge">${esc(message.message_type)}</span><strong>${esc(message.author_id)}</strong><span class="meta">${esc(message.message_id)} · round ${Number(message.round_created)+1} · expires ${Number(message.expires_after_round)+1}</span></div><p>${esc(message.text)}</p><div class="meta">evidence: ${esc(message.shared_fact_id || 'none')} · reply: ${esc(message.reply_to || 'none')} · ${message.live ? 'LIVE' : 'EXPIRED'}</div></article>`).join('') : '<div class="panel">No matching messages at this cursor.</div>';
-    document.querySelectorAll('.message[data-agent]').forEach(node => node.addEventListener('click', () => selectAgent(node.dataset.agent)));
+    document.querySelectorAll('.message[data-agent]').forEach(node => node.addEventListener('click', () => { if (node.dataset.agent !== 'controller') selectAgent(node.dataset.agent); }));
   }
 
   function renderCoverage(snapshot) {
@@ -329,6 +364,26 @@
 
   function renderController(snapshot) {
     const c = snapshot.controller;
+    const timeline = state.timeline?.controller_timeline;
+    if (timeline?.available) {
+      const s = timeline.summary;
+      $('controller-summary').innerHTML = [
+        ['Rounds observed', s.rounds_observed], ['ADVOCATE_Z', `${s.advocate_count} (${(100*s.advocate_fraction).toFixed(1)}%)`], ['NO_OP', `${s.no_op_count} (${(100*s.no_op_fraction).toFixed(1)}%)`],
+        ['Reports / requests / directives', `${s.reports} / ${s.requests} / ${s.directives}`], ['Total posts', s.total_posts], ['Requested b / realized', `${unavailable(s.requested_posts)} / ${unavailable(s.realized_posts)}`],
+        ['LLM fallback', s.llm_fallback_count], ['Recorded / direct exposures', `${s.recorded_exposure_events} / ${s.direct_exposure_events}`]
+      ].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+      const selected = state.selectedControllerRound ?? timeline.rounds[0]?.round_index;
+      state.selectedControllerRound = selected;
+      $('controller-events').innerHTML = timeline.rounds.map(row => `<button class="controller-event ${(row.message_types[0] || 'NO_OP')} ${Number(row.round_index) === Number(selected) ? 'selected' : ''}" data-controller-round="${row.round_index}" title="${esc(row.action || 'Unavailable')}">R${Number(row.round_index)+1}<small>${esc(row.message_types.join('/') || row.action || 'Unavailable')}</small></button>`).join('');
+      const max = Math.max(1, ...timeline.rounds.flatMap(row => [row.realized_posts || 0, row.exposed_agents || 0, row.next_votes_moved_to_target || 0]));
+      $('controller-round-bars').innerHTML = timeline.rounds.map(row => `<div class="controller-bar-row"><b>R${Number(row.round_index)+1}</b>${[['posts',row.realized_posts],['exposed agents',row.exposed_agents],['moved to target',row.next_votes_moved_to_target]].map(([label,value]) => `<span>${esc(label)}</span><div class="metric-bar"><i class="${label === 'moved to target' ? 'descriptive' : ''}" style="width:${value == null ? 0 : 100*value/max}%"></i></div><strong>${esc(unavailable(value))}</strong>`).join('')}</div>`).join('');
+      const selectedRow = timeline.rounds.find(row => Number(row.round_index) === Number(selected));
+      $('controller-event-messages').innerHTML = selectedRow?.posts?.length ? selectedRow.posts.map(message => `<article class="message ${esc(message.message_type)}"><div class="message-head"><span class="badge">${esc(message.message_type)}</span><strong>controller</strong><span class="meta">${esc(message.message_id)} · round ${Number(message.round_created)+1}</span></div><p>${esc(message.text)}</p><div class="meta">fact: ${esc(message.shared_fact_id || 'none')} · reply: ${esc(message.reply_to || 'none')}</div></article>`).join('') : '<p class="unavailable">No retained controller post for this round.</p>';
+      document.querySelectorAll('[data-controller-round]').forEach(button => button.addEventListener('click', () => { state.selectedControllerRound = Number(button.dataset.controllerRound); renderController(state.snapshot); updateHash(); }));
+    } else {
+      $('controller-summary').innerHTML = '<div class="card"><span>Controller</span><strong>Unavailable</strong></div>';
+      $('controller-events').innerHTML = $('controller-round-bars').innerHTML = $('controller-event-messages').innerHTML = '<span class="unavailable">No controller records retained.</span>';
+    }
     $('controller-state').innerHTML = kv('Enabled', c.enabled) + kv('Action', c.action || '—') + kv('Target', c.target || '—') + kv('Intervention probability', c.probability ?? '—') + kv('Sampled action', c.sampled_action ?? '—') + kv('Controlled positions', c.controlled_positions || []) + kv('Post IDs', c.post_ids || []) + kv('Report fact IDs', c.report_fact_ids || []) + kv('Direct replies', c.direct_replies ?? '—') + kv('Unique readers', c.unique_readers ?? '—') + '<h2 style="margin-top:20px">Sensor observation</h2><pre>' + esc(json(c.sensor)) + '</pre>';
   }
 
@@ -341,7 +396,7 @@
       $('matrix').innerHTML = '';
       return;
     }
-    renderOverview(snapshot); renderMessages(snapshot); renderCoverage(snapshot); renderAgent(snapshot); renderController(snapshot);
+    renderOverview(snapshot); renderMessages(snapshot); renderCoverage(snapshot); renderAgent(snapshot); renderController(snapshot); renderCommunication();
     const stats = state.timeline?.statistics || {};
     $('episode-statistics').innerHTML = `<div class="funnel">${[['Opportunities', stats.controller_opportunities], ['ADVOCATE', stats.controller_advocate_rounds], ['Posts admitted', stats.controller_posts], ['Exposures', stats.controller_message_exposures], ['Unique readers', stats.controller_unique_readers], ['Fact changes', (stats.controller_report_fact_acquisitions ?? 0) + (stats.controller_report_fact_reactivations ?? 0)], ['Target adoptions', stats.controller_report_target_adoptions]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 'Unavailable')}</strong></div>`).join('')}</div>${kv('Microscopic updates', stats.microscopic_updates ?? 'Unavailable')}${kv('NO_OP rounds', stats.controller_no_op_rounds ?? 'Unavailable')}${kv('Board peak / mean occupancy', stats.board_peak_occupancy == null ? 'Unavailable' : `${stats.board_peak_occupancy} / ${Number(stats.board_mean_occupancy).toFixed(2)}`)}${kv('Fact acquisitions / reactivations', `${stats.fact_acquisitions ?? 'Unavailable'} / ${stats.fact_reactivations ?? 'Unavailable'}`)}${kv('Validation repairs', stats.validation_repairs ?? 'Unavailable')}<p class="meta">${esc(stats.actuation_semantics || 'Unsupported by retained records')}</p>`;
     if (state.timeline) renderEpisodeTrajectory(state.timeline);
@@ -365,8 +420,11 @@
         const edge = timeline.available_cursors.at(-1);
         if (edge) { $('round').value = edge.round_index; updateStepRange(); $('step').value = edge.step; $('step-value').value = edge.step; }
       }
-      const query = new URLSearchParams({round: $('round').value, step: $('step').value, agent: $('agent').value});
-      render(await get(`${prefix}/snapshot?${query}`));
+      const selectedAgent = $('agent').value.startsWith('agent:') ? $('agent').value.slice(6) : '';
+      const query = new URLSearchParams({round: $('round').value, step: $('step').value, agent: selectedAgent});
+      const snapshot = await get(`${prefix}/snapshot?${query}`);
+      render(snapshot);
+      if (state.episodeId) state.episodeCache.set(state.episodeId, {timeline, snapshot});
     } catch (error) {
       $('status-text').textContent = `error · ${error.message}`;
     } finally { state.busy = false; }
@@ -374,7 +432,8 @@
 
   function selectAgent(agent) {
     if (!agent) return;
-    $('agent').value = agent;
+    $('agent').value = `agent:${agent}`;
+    state.participantScope = $('agent').value;
     document.querySelector('[data-view="agent-view"]').click();
     refresh();
   }
@@ -386,9 +445,11 @@
   }));
   $('round').addEventListener('input', () => { $('follow').checked = false; $('round-value').value = Number($('round').value) + 1; updateStepRange(); updateHash(); refresh(); });
   $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; updateHash(); refresh(); });
-  $('agent').addEventListener('change', () => { updateHash(); refresh(); });
+  $('agent').addEventListener('change', () => { state.participantScope = $('agent').value; renderCommunication(); updateHash(); refresh(); });
   $('follow').addEventListener('change', () => { updateHash(); refresh(true); });
   $('expired').addEventListener('change', () => renderMessages(state.snapshot));
+  $('all-messages').addEventListener('click', () => { state.blackboardAuthorFilter = 'all'; $('all-messages').classList.add('active'); $('controller-messages').classList.remove('active'); renderMessages(state.snapshot); updateHash(); });
+  $('controller-messages').addEventListener('click', () => { state.blackboardAuthorFilter = 'controller'; $('controller-messages').classList.add('active'); $('all-messages').classList.remove('active'); renderMessages(state.snapshot); updateHash(); });
   $('memory-mode').addEventListener('change', () => renderCoverage(state.snapshot));
   document.querySelectorAll('.message-filter').forEach(node => node.addEventListener('change', () => renderMessages(state.snapshot)));
   document.addEventListener('keydown', event => {
@@ -412,12 +473,18 @@
       if (restored.get('cell')) await openCell(restored.get('cell'));
       $('all-parameters').open = restored.get('parameters') === 'open';
       if (restored.get('episode')) {
+        state.participantScope = restored.get('participant') || 'all';
+        state.blackboardAuthorFilter = restored.get('blackboard') === 'controller' ? 'controller' : 'all';
+        state.selectedControllerRound = restored.get('controllerRound') === null || restored.get('controllerRound') === '' ? null : Number(restored.get('controllerRound'));
+        $('all-messages').classList.toggle('active', state.blackboardAuthorFilter === 'all');
+        $('controller-messages').classList.toggle('active', state.blackboardAuthorFilter === 'controller');
         $('follow').checked = restored.get('follow') !== '0';
         await openEpisode(restored.get('episode'));
         if (!$('follow').checked) {
           $('round').value = restored.get('round') || $('round').value; updateStepRange();
           $('step').value = restored.get('step') || $('step').value; $('step-value').value = $('step').value;
-          $('agent').value = restored.get('agent') || $('agent').value;
+          $('agent').value = restored.get('participant') || $('agent').value;
+          state.participantScope = $('agent').value;
           await refresh(false);
         }
         document.querySelector(`[data-view="${restored.get('episodeTab') || 'overview'}"]`)?.click();
