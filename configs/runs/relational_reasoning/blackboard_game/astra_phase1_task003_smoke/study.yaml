@@ -4,7 +4,7 @@ execution:
   mode: auto
   cells_per_shard: 1
   target_rpm: 60
-  assumed_latency_seconds: 10.0
+  assumed_latency_seconds: 6.0
   max_active_nodes: 1
   throttle: 1
   cpus_per_task: 2

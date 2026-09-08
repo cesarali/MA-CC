@@ -65,8 +65,11 @@ class ProviderLoadControlConfig:
     minimum_concurrency: int = 4
     maximum_concurrency: int = 144
     target_rpm: int = 900
-    lease_seconds: float = 30.0
-    heartbeat_seconds: float = 5.0
+    # Remote generations commonly last tens of seconds.  A longer lease with
+    # a less frequent heartbeat keeps active calls protected while avoiding a
+    # shared-filesystem write storm at high cross-node concurrency.
+    lease_seconds: float = 90.0
+    heartbeat_seconds: float = 20.0
     transaction_retry_attempts: int = 6
     transaction_backoff_initial_seconds: float = 0.05
     transaction_backoff_max_seconds: float = 2.0
@@ -101,7 +104,7 @@ class ProviderLoadControlConfig:
             raise ValueError(
                 "execution.provider_load_control.mode must be 'off' or 'shared_adaptive'"
             )
-        lease = _num(v, "lease_seconds", 30, 1)
+        lease = _num(v, "lease_seconds", 90, 1)
         c = cls(
             mode=mode,
             initial_concurrency=_int(v, "initial_concurrency", 144, 1),
@@ -109,7 +112,7 @@ class ProviderLoadControlConfig:
             maximum_concurrency=_int(v, "maximum_concurrency", 144, 1),
             target_rpm=_int(v, "target_rpm", 900, 1),
             lease_seconds=lease,
-            heartbeat_seconds=_num(v, "heartbeat_seconds", min(5.0, lease / 3), 0.1),
+            heartbeat_seconds=_num(v, "heartbeat_seconds", min(20.0, lease / 3), 0.1),
             transaction_retry_attempts=_int(v, "transaction_retry_attempts", 6, 1),
             transaction_backoff_initial_seconds=_num(
                 v, "transaction_backoff_initial_seconds", 0.05, 0.001

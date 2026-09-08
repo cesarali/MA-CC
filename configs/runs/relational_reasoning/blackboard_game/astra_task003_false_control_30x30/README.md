@@ -6,7 +6,7 @@ Design:
 
 - one false-control arm;
 - MuSR task 003, candidate 130;
-- `gwdg/openai-gpt-oss-120b` for participants and controller;
+- DeepInfra `deepseek-ai/DeepSeek-V4-Flash` for participants and controller;
 - 30 population rounds and 30 repetitions;
 - persistence values: 0.70, 0.775, 0.85, 0.925, 1.00;
 - report budgets: 3, 6, 9, 12;
@@ -39,3 +39,6 @@ Check `analysis/validation.json` first, then the Phase 2 tables under
 `analysis/tables/` and the lag/frontier plots under `analysis/plots/`.
 
 Use the generic study launcher. Do not create a study-specific SLURM job.
+
+The full DeepInfra launch ceiling is 100 concurrent episode/provider requests
+across five active single-cell shards, targeting approximately 1,000 RPM.
