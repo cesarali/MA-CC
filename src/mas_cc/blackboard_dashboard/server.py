@@ -11,10 +11,31 @@ from typing import TypeAlias
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .data import BlackboardRunReader
-from .study_data import BlackboardStudyReader, is_study_root
+from .study_data import BlackboardStudyReader, is_direct_grid_root, is_study_root
 
 
 DashboardReader: TypeAlias = BlackboardRunReader | BlackboardStudyReader
+
+
+def resolve_dashboard_collection(path: str | Path) -> Path:
+    """Resolve one exact or uniquely nested study/direct-grid collection."""
+
+    root = Path(path).expanduser().resolve()
+    if is_study_root(root) or is_direct_grid_root(root):
+        return root
+    candidates = {
+        candidate.resolve()
+        for candidate in root.glob("*/*/*")
+        if candidate.is_dir()
+        and (is_study_root(candidate) or is_direct_grid_root(candidate))
+    }
+    if not candidates:
+        return root
+    if len(candidates) > 1:
+        raise ValueError(
+            f"multiple dashboard collections found beneath {root}; pass the exact run root"
+        )
+    return next(iter(candidates))
 
 
 def _asset(name: str) -> bytes:
@@ -50,7 +71,9 @@ def make_handler(reader: DashboardReader):
                 mimetypes.guess_type(path.name)[0] or "application/octet-stream",
             )
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+            self.send_header(
+                "Content-Disposition", f'attachment; filename="{path.name}"'
+            )
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
@@ -124,7 +147,11 @@ def make_handler(reader: DashboardReader):
                             episode_reader = reader.episode_reader(unquote(token))
                             if action == "detail":
                                 timeline = episode_reader.timeline()
-                                edge = timeline["available_cursors"][-1] if timeline["available_cursors"] else None
+                                edge = (
+                                    timeline["available_cursors"][-1]
+                                    if timeline["available_cursors"]
+                                    else None
+                                )
                                 payload = {
                                     "schema_version": 1,
                                     "timeline": timeline,
@@ -214,10 +241,10 @@ def serve_dashboard(
     host: str = "127.0.0.1",
     port: int = 8765,
 ) -> None:
-    source = Path(run_dir).expanduser().resolve()
+    source = resolve_dashboard_collection(run_dir)
     reader: DashboardReader = (
         BlackboardStudyReader(source)
-        if is_study_root(source)
+        if is_study_root(source) or is_direct_grid_root(source)
         else BlackboardRunReader(source, episode_id)
     )
     if host not in {"127.0.0.1", "localhost", "::1"}:
@@ -227,7 +254,7 @@ def serve_dashboard(
     server = ThreadingHTTPServer((host, port), make_handler(reader))
     print(f"Blackboard dashboard: http://{host}:{server.server_port}")
     if isinstance(reader, BlackboardStudyReader):
-        print(f"Study: {reader.study_dir}")
+        print(f"Collection: {reader.study_dir}")
     else:
         print(f"Episode: {reader.episode_dir}")
     try:

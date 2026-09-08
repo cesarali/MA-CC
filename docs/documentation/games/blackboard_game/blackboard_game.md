@@ -12,6 +12,11 @@ study families differ. The ASTRA study adds an LLM-selected controller: after
 the existing coded act-or-remain-silent decision, a large language model (LLM)
 chooses how the controller communicates.
 
+For a metric-by-metric tutorial for the ASTRA study, including every configured
+conditional mutual information (CMI), both eta efficiency families, and the new
+causal communication outputs, see
+[`astra_task003_false_control_metrics.md`](../../metrics/astra_task003_false_control_metrics.md).
+
 The **blackboard** is a temporary public message board. Agents do not talk to a
 fixed neighbor. At each update, one agent reads a small random sample of the
 messages that are currently live, decides how to vote, and may add one new
@@ -148,7 +153,7 @@ with this design:
 | task | MuSR Team Allocation `task_003`, candidate 130 |
 | correct answer | `ALLOCATION_0` |
 | false controller target | `ALLOCATION_2` |
-| model | `gwdg/openai-gpt-oss-120b` |
+| model | DeepInfra `deepseek-ai/DeepSeek-V4-Flash` |
 | population | 24 |
 | rounds | 30 |
 | participant updates per episode | 720 |

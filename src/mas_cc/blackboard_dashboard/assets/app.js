@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, participantScope: 'all', blackboardAuthorFilter: 'all', selectedControllerRound: null };
+  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
@@ -146,7 +146,7 @@
     if (state.selectedTrajectories.size) params.set('trajectories', [...state.selectedTrajectories].join(','));
     const activeTab = document.querySelector('#tabs button.active')?.dataset.view;
     if (state.episodeId && activeTab) params.set('episodeTab', activeTab);
-    if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); params.set('participant', $('agent').value); params.set('blackboard', state.blackboardAuthorFilter); params.set('controllerRound', state.selectedControllerRound ?? ''); params.set('follow', $('follow').checked ? '1' : '0'); }
+    if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); if (state.selectedAgent) params.set('agent', state.selectedAgent); params.set('blackboard', state.blackboardAuthorFilter); params.set('controllerRound', state.selectedControllerRound ?? ''); params.set('follow', $('follow').checked ? '1' : '0'); }
     if ($('filter-rho').value) params.set('rho', $('filter-rho').value);
     history.replaceState({}, '', `#${params}`);
   }
@@ -169,11 +169,19 @@
     $('cell-statistics-content').innerHTML = `<div class="cards">${[['Completed', stats.completed_episodes], ['Truth wins', `${stats.truth_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Target wins', `${stats.controller_target_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Ties', winners.tie ?? 0], ['Other wins', winners.other ?? 0]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}</div><h3>Controller funnel across repetitions</h3><div class="funnel">${[['Opportunities', funnel.controller_opportunities], ['ADVOCATE', funnel.controller_advocate_rounds], ['Posts admitted', funnel.controller_posts], ['Exposures', funnel.controller_message_exposures], ['Unique readers', funnel.controller_unique_readers], ['Fact changes', (funnel.controller_report_fact_acquisitions ?? 0) + (funnel.controller_report_fact_reactivations ?? 0)], ['Target adoptions', funnel.controller_report_target_adoptions]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 0)}</strong></div>`).join('')}</div><p class="meta">Blackboard posts use ordinary sampling. Report mode adds true canonical evidence without hidden priority.</p><div class="grid two"><div><h3>Final truth share (n=${truth.n ?? 0})</h3>${kv('Mean', truth.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', truth.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', truth.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', truth.q1 == null ? 'Unavailable' : `${truth.q1.toFixed(3)}–${truth.q3.toFixed(3)}`)}</div><div><h3>Final controller-target share (n=${target.n ?? 0})</h3>${kv('Mean', target.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', target.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', target.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', target.q1 == null ? 'Unavailable' : `${target.q1.toFixed(3)}–${target.q3.toFixed(3)}`)}</div></div>`;
     $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
     $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Durable outcome</th><th>Live activity</th><th>Progress</th><th>Controller funnel</th><th>Last update / elapsed</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => { const s = episode.statistics || {}; return `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.durable_status)}${episode.status_reason ? `<br><span class="meta">${esc(episode.status_reason)}</span>` : ''}</td><td>${statusBadge(episode.activity_status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${s.controller_opportunities == null ? '<span class="unavailable">Unavailable</span>' : `${s.controller_opportunities} → ${s.controller_advocate_rounds} → ${s.controller_posts} → ${s.controller_message_exposures}<br><span class="meta">opportunity → ADVOCATE → post → exposure</span>`}</td><td>${episode.last_update_at ? esc(new Date(episode.last_update_at).toLocaleTimeString()) : episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect episode</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">${esc(episode.detail_reason)}</span>`}</td></tr>`; }).join('')}</tbody>`;
-    if (!state.selectedTrajectories.size) cell.episodes.forEach(episode => { if (cell.vote_series[episode.qualified_id]?.points.length) state.selectedTrajectories.add(episode.qualified_id); });
+    const availableTrajectories = new Set(availableTrajectoryIds(cell));
+    state.selectedTrajectories = new Set([...state.selectedTrajectories].filter(id => availableTrajectories.has(id)));
+    if (!state.selectedTrajectories.size) availableTrajectories.forEach(id => state.selectedTrajectories.add(id));
     $('trajectory-controls').innerHTML = cell.episodes.filter(episode => cell.vote_series[episode.qualified_id]?.points.length).map(episode => `<label><input type="checkbox" data-trajectory="${esc(episode.qualified_id)}" ${state.selectedTrajectories.has(episode.qualified_id) ? 'checked' : ''}> repetition ${episode.repetition_index} <button class="trajectory-inspect" data-episode="${esc(episode.qualified_id)}" ${episode.detail_available ? '' : 'disabled'}>Inspect</button></label>`).join('');
     renderTrajectories(); setCellTab(state.cellTab);
     document.querySelectorAll('.open-episode,.trajectory-inspect').forEach(button => button.addEventListener('click', () => openEpisode(button.dataset.episode)));
     document.querySelectorAll('[data-trajectory]').forEach(input => input.addEventListener('change', () => { input.checked ? state.selectedTrajectories.add(input.dataset.trajectory) : state.selectedTrajectories.delete(input.dataset.trajectory); renderTrajectories(); updateHash(); }));
+  }
+
+  function availableTrajectoryIds(cell = state.cell) {
+    return (cell?.episodes || [])
+      .filter(episode => cell.vote_series[episode.qualified_id]?.points.length)
+      .map(episode => episode.qualified_id);
   }
 
   function renderTrajectories() {
@@ -206,19 +214,20 @@
     state.episodeId = id; showShell('episode'); renderBreadcrumbs(state.cell, id);
     $('episode-nav').hidden = false;
     updateHash();
-    const cached = state.episodeCache.get(id);
-    if (cached) {
-      state.episodeCache.delete(id); state.episodeCache.set(id, cached);
-      populateTimeline(cached.timeline); render(cached.snapshot);
-      return;
-    }
     $('status-text').textContent = 'Loading episode detail…';
     try {
       const detail = await get(`/api/study/episode/${encodeURIComponent(id)}/detail`);
       if (state.episodeId !== id || state.navigationVersion !== navigationVersion || state.mode !== 'episode') return;
       state.episodeCache.set(id, detail);
       while (state.episodeCache.size > 8) state.episodeCache.delete(state.episodeCache.keys().next().value);
-      populateTimeline(detail.timeline); render(detail.snapshot);
+      populateTimeline(detail.timeline);
+      if (detail.snapshot.cursor) {
+        $('round').value = detail.snapshot.cursor.round_index;
+        updateStepRange();
+        $('step').value = detail.snapshot.cursor.step;
+        $('step-value').value = detail.snapshot.cursor.step;
+      }
+      render(detail.snapshot);
     } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
   }
 
@@ -246,17 +255,7 @@
     round.max = indices.length ? Math.max(...indices) : 0;
     round.value = indices.some(index => String(index) === previousRound) ? previousRound : round.max;
     $('round-value').value = Number(round.value) + 1;
-    const agent = $('agent');
-    const previousAgent = agent.value || state.participantScope;
-    const scopes = timeline.communication?.participant_scopes || [
-      {id: 'all', label: 'All participants'},
-      {id: 'participants', label: 'Participants only'},
-      {id: 'controller', label: 'Controller only'},
-      ...timeline.agents.map(id => ({id: `agent:${id}`, label: id.replace('agent_', 'Agent ')}))
-    ];
-    agent.replaceChildren(...scopes.map(scope => new Option(scope.label, scope.id)));
-    agent.value = scopes.some(scope => scope.id === previousAgent) ? previousAgent : 'all';
-    state.participantScope = agent.value;
+    if (!timeline.agents.includes(state.selectedAgent)) state.selectedAgent = timeline.agents[0] || null;
     updateStepRange();
     renderEpisodeTrajectory(timeline);
     renderCommunication();
@@ -283,7 +282,7 @@
       $('author-category-totals').innerHTML = '';
       return;
     }
-    const scope = state.participantScope || 'all';
+    const scope = 'all';
     const keys = ['REPORT', 'REQUEST', 'DIRECTIVE', 'replies', 'no_message_actions'];
     const maxima = Math.max(1, ...communication.counts_by_round.map(row => keys.reduce((sum, key) => sum + (row.scopes[scope]?.[key] || 0), 0)));
     $('communication-bars').innerHTML = communication.counts_by_round.map(row => {
@@ -403,37 +402,39 @@
   }
 
   async function refresh(forceEdge = false) {
-    if (state.busy) return;
+    const refreshVersion = ++state.refreshVersion;
     state.busy = true;
     try {
       if (state.staticMode) {
         const key = `round:${$('round').value}:${$('step').value}`;
         const base = state.staticBundle.snapshots[key];
         if (!base) throw new Error('No exported snapshot exists at this cursor');
-        render({...base, agent: state.staticBundle.agents[key][$('agent').value]});
+        const selectedAgent = state.selectedAgent || state.timeline.agents[0];
+        render({...base, agent: state.staticBundle.agents[key][selectedAgent]});
         return;
       }
       const prefix = state.study && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
       const timeline = await get(`${prefix}/timeline`);
+      if (refreshVersion !== state.refreshVersion) return;
       populateTimeline(timeline);
       if ($('follow').checked || forceEdge) {
         const edge = timeline.available_cursors.at(-1);
         if (edge) { $('round').value = edge.round_index; updateStepRange(); $('step').value = edge.step; $('step-value').value = edge.step; }
       }
-      const selectedAgent = $('agent').value.startsWith('agent:') ? $('agent').value.slice(6) : '';
+      const selectedAgent = state.selectedAgent || '';
       const query = new URLSearchParams({round: $('round').value, step: $('step').value, agent: selectedAgent});
       const snapshot = await get(`${prefix}/snapshot?${query}`);
+      if (refreshVersion !== state.refreshVersion) return;
       render(snapshot);
       if (state.episodeId) state.episodeCache.set(state.episodeId, {timeline, snapshot});
     } catch (error) {
       $('status-text').textContent = `error · ${error.message}`;
-    } finally { state.busy = false; }
+    } finally { if (refreshVersion === state.refreshVersion) state.busy = false; }
   }
 
   function selectAgent(agent) {
     if (!agent) return;
-    $('agent').value = `agent:${agent}`;
-    state.participantScope = $('agent').value;
+    state.selectedAgent = agent;
     document.querySelector('[data-view="agent-view"]').click();
     refresh();
   }
@@ -445,7 +446,6 @@
   }));
   $('round').addEventListener('input', () => { $('follow').checked = false; $('round-value').value = Number($('round').value) + 1; updateStepRange(); updateHash(); refresh(); });
   $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; updateHash(); refresh(); });
-  $('agent').addEventListener('change', () => { state.participantScope = $('agent').value; renderCommunication(); updateHash(); refresh(); });
   $('follow').addEventListener('change', () => { updateHash(); refresh(true); });
   $('expired').addEventListener('change', () => renderMessages(state.snapshot));
   $('all-messages').addEventListener('click', () => { state.blackboardAuthorFilter = 'all'; $('all-messages').classList.add('active'); $('controller-messages').classList.remove('active'); renderMessages(state.snapshot); updateHash(); });
@@ -473,7 +473,7 @@
       if (restored.get('cell')) await openCell(restored.get('cell'));
       $('all-parameters').open = restored.get('parameters') === 'open';
       if (restored.get('episode')) {
-        state.participantScope = restored.get('participant') || 'all';
+        state.selectedAgent = restored.get('agent') || (restored.get('participant') || '').replace(/^agent:/, '') || null;
         state.blackboardAuthorFilter = restored.get('blackboard') === 'controller' ? 'controller' : 'all';
         state.selectedControllerRound = restored.get('controllerRound') === null || restored.get('controllerRound') === '' ? null : Number(restored.get('controllerRound'));
         $('all-messages').classList.toggle('active', state.blackboardAuthorFilter === 'all');
@@ -483,8 +483,6 @@
         if (!$('follow').checked) {
           $('round').value = restored.get('round') || $('round').value; updateStepRange();
           $('step').value = restored.get('step') || $('step').value; $('step-value').value = $('step').value;
-          $('agent').value = restored.get('participant') || $('agent').value;
-          state.participantScope = $('agent').value;
           await refresh(false);
         }
         document.querySelector(`[data-view="${restored.get('episodeTab') || 'overview'}"]`)?.click();
@@ -528,6 +526,12 @@
     } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
   });
   $('all-parameters').addEventListener('toggle', updateHash);
+  $('show-all-trajectories').addEventListener('click', () => {
+    availableTrajectoryIds().forEach(id => state.selectedTrajectories.add(id));
+    document.querySelectorAll('[data-trajectory]').forEach(input => { input.checked = state.selectedTrajectories.has(input.dataset.trajectory); });
+    renderTrajectories();
+    updateHash();
+  });
   $('previous-episode').addEventListener('click', () => adjacentEpisode(-1));
   $('next-episode').addEventListener('click', () => adjacentEpisode(1));
   $('manual-refresh').addEventListener('click', refreshCurrentView);

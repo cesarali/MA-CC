@@ -1243,22 +1243,19 @@ class BlackboardRunReader:
         for message in messages_by_id.values():
             created_global = int(message.get("micro_step_created") or 0)
             created_round = int(message.get("round_created") or 0)
-            if created_round > target_round or (
-                created_round == target_round and created_global > target_step
-            ):
+            if created_round > target_round or created_global > target_global + 1:
                 continue
             expires = int(message.get("expires_after_round") or created_round)
             messages.append(
                 {
                     **message,
                     "live": created_round <= target_round <= expires,
-                    "new_at_cursor": (
-                        created_round == target_round and created_global == target_step
-                    ),
+                    "new_at_cursor": created_global == target_global + 1,
                 }
             )
         messages.sort(
             key=lambda item: (
+                int(item.get("round_created") or 0),
                 int(item.get("micro_step_created") or 0),
                 str(item.get("message_id")),
             )

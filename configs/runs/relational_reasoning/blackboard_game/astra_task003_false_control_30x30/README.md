@@ -29,6 +29,10 @@ at lags 1–3, propensity/support diagnostics, communication funnel, operational
 response-per-cost summaries, response-cost frontier, and their plots. These are
 computed offline from canonical Parquet records and make no provider calls.
 
+For the complete metric inventory, formulas, output tables, and a suggested
+reading order, see
+[`docs/documentation/metrics/astra_task003_false_control_metrics.md`](../../../../../docs/documentation/metrics/astra_task003_false_control_metrics.md).
+
 ```bash
 /home/ojedamarin/.local/share/miniforge3/bin/conda run -n MA-CC --live-stream \
   mas-cc study aggregate \

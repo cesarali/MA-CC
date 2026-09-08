@@ -132,7 +132,6 @@ def _live_runs(
     return tuple(roots.values())
 
 
-
 def _live_prompt_samples(resume_root: Path) -> list[dict[str, Any]]:
     """Prompt examples for a cell that has not been rendered yet.
 
@@ -159,9 +158,7 @@ def _live_prompt_samples(resume_root: Path) -> list[dict[str, Any]]:
             if not isinstance(item, Mapping):
                 continue
             sample = {
-                key: value
-                for key, value in item.items()
-                if key not in {"rounds"}
+                key: value for key, value in item.items() if key not in {"rounds"}
             }
             sample["episode_id"] = episode_id
             point = item.get("sample_point")
@@ -170,9 +167,7 @@ def _live_prompt_samples(resume_root: Path) -> list[dict[str, Any]]:
             else:
                 extra.append(sample)
     ordered = [
-        by_point[point]
-        for point in ("beginning", "middle", "end")
-        if point in by_point
+        by_point[point] for point in ("beginning", "middle", "end") if point in by_point
     ]
     return (ordered + extra)[:3]
 
@@ -242,6 +237,32 @@ def is_study_root(path: str | Path) -> bool:
         (root / "execution_manifest.csv").is_file()
         or (root / "submission_manifest.csv").is_file()
     )
+
+
+def is_direct_grid_root(path: str | Path) -> bool:
+    """Return whether *path* is a prepared direct grid experiment root."""
+
+    root = Path(path).expanduser().resolve()
+    cells_root = root / "cells"
+    if not cells_root.is_dir():
+        return False
+    seen: set[str] = set()
+    found = False
+    for cell_root in sorted(cells_root.iterdir()):
+        if not cell_root.is_dir():
+            continue
+        config = _safe_yaml(cell_root / "resolved_config.yaml")
+        overrides = _safe_json(cell_root / "overrides.json")
+        if config is None or not overrides:
+            continue
+        cell_id = str(overrides.get("cell_id", ""))
+        if cell_id != cell_root.name or cell_id in seen:
+            return False
+        if _nested(config, "game.type") != "relational_imitation_round_feedback":
+            return False
+        seen.add(cell_id)
+        found = True
+    return found
 
 
 def _nested(mapping: Mapping[str, Any], dotted: str) -> Any:
@@ -546,27 +567,50 @@ class BlackboardStudyReader:
 
     def __init__(self, study_dir: str | Path, *, scheduler: bool = True) -> None:
         self.study_dir = Path(study_dir).expanduser().resolve()
-        if not is_study_root(self.study_dir):
-            raise ValueError(f"not a standardized study root: {self.study_dir}")
-        self.manifest = _safe_json(
-            self.study_dir / "study_manifest.json", required=True
+        self.source_kind = (
+            "standardized_study"
+            if is_study_root(self.study_dir)
+            else "direct_grid"
+            if is_direct_grid_root(self.study_dir)
+            else "unsupported"
         )
-        schema = int(self.manifest.get("schema_version", 0))
-        if schema != 1:
-            raise ValueError(f"unsupported study manifest schema version: {schema}")
-        submission_path = self.study_dir / "submission_manifest.csv"
-        if not submission_path.is_file():
-            raise ValueError(f"required study artifact is missing: {submission_path}")
-        self.submissions = read_submission_manifest(submission_path)
-        self.executions = (
-            read_execution_manifest(self.study_dir / "execution_manifest.csv")
-            if (self.study_dir / "execution_manifest.csv").is_file()
-            else ()
-        )
-        self.submission = _safe_json(self.study_dir / "submission.json")
+        if self.source_kind == "unsupported":
+            raise ValueError(
+                f"not a standardized study root or direct grid root: {self.study_dir}"
+            )
+        if self.source_kind == "standardized_study":
+            self.manifest = _safe_json(
+                self.study_dir / "study_manifest.json", required=True
+            )
+            schema = int(self.manifest.get("schema_version", 0))
+            if schema != 1:
+                raise ValueError(f"unsupported study manifest schema version: {schema}")
+            submission_path = self.study_dir / "submission_manifest.csv"
+            if not submission_path.is_file():
+                raise ValueError(
+                    f"required study artifact is missing: {submission_path}"
+                )
+            self.submissions = read_submission_manifest(submission_path)
+            self.executions = (
+                read_execution_manifest(self.study_dir / "execution_manifest.csv")
+                if (self.study_dir / "execution_manifest.csv").is_file()
+                else ()
+            )
+            self.submission = _safe_json(self.study_dir / "submission.json")
+        else:
+            self.submissions = ()
+            self.executions = ()
+            self.submission = {}
+            self.manifest = {
+                "schema_version": 1,
+                "study_id": self.study_dir.name,
+                "expected_config_count": 1,
+            }
         self._extension_target: Mapping[str, Any] | None = None
-        targets = sorted(
-            self.study_dir.glob("extensions/extension-*/target_manifest.json")
+        targets = (
+            sorted(self.study_dir.glob("extensions/extension-*/target_manifest.json"))
+            if self.source_kind == "standardized_study"
+            else []
         )
         if targets:
             latest_target_path = targets[-1]
@@ -618,8 +662,68 @@ class BlackboardStudyReader:
         self._episode_readers: OrderedDict[str, BlackboardRunReader] = OrderedDict()
         self._episode_reader_limit = 8
         self._index_cells: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
-        self._cells = self._build_cells()
+        self._cells = (
+            self._build_direct_grid_cells()
+            if self.source_kind == "direct_grid"
+            else self._build_cells()
+        )
+        if self.source_kind == "direct_grid":
+            self.manifest.update(
+                {
+                    "expected_cell_count": len(self._cells),
+                    "expected_episode_count": sum(
+                        cell.expected_episodes for cell in self._cells
+                    ),
+                }
+            )
         self._cell_map = {cell.qualified_id: cell for cell in self._cells}
+
+    def _build_direct_grid_cells(self) -> tuple[CellDescriptor, ...]:
+        """Build dashboard cells from a direct grid's prepared cell folders."""
+
+        descriptors = []
+        for cell_root in sorted((self.study_dir / "cells").iterdir()):
+            if not cell_root.is_dir():
+                continue
+            config = _safe_yaml(cell_root / "resolved_config.yaml")
+            override_record = _safe_json(cell_root / "overrides.json")
+            if config is None or not override_record:
+                continue
+            local_id = str(override_record.get("cell_id"))
+            overrides = override_record.get("overrides", {})
+            if not isinstance(overrides, Mapping):
+                overrides = {}
+            qualified = f"config-0000~{local_id}"
+            experiment_name = str(
+                _nested(config, "experiment.name") or self.study_dir.parent.name
+            )
+            descriptors.append(
+                CellDescriptor(
+                    qualified_id=qualified,
+                    config_index=0,
+                    config_name=experiment_name,
+                    cell_id=local_id,
+                    path=str(cell_root),
+                    expected_episodes=int(
+                        _nested(config, "execution.repetitions") or 0
+                    ),
+                    parameters=_parameters(config, overrides),
+                    scheduler_array_index=None,
+                )
+            )
+            self._resolved_configs[qualified] = config
+            self._paths[qualified] = ResolvedDashboardCellPaths(
+                shard_root=None,
+                run_root=self.study_dir,
+                cell_root=cell_root,
+                full_episodes_root=cell_root / "data" / "episodes",
+                round_records_root=cell_root / "round_records",
+                resume_root=cell_root / ".resume",
+                cell_summary_path=cell_root / "cell_summary.json",
+                cell_seal_path=cell_root / "cell_complete.json",
+                scientific_table_path=cell_root / "scientific_events.parquet",
+            )
+        return tuple(descriptors)
 
     def _build_cells(self) -> tuple[CellDescriptor, ...]:
         if self._extension_target is not None:
@@ -1529,6 +1633,18 @@ class BlackboardStudyReader:
         }
 
     def analysis_catalog(self) -> dict[str, Any]:
+        if self.source_kind == "direct_grid":
+            return {
+                "schema_version": 1,
+                "available": False,
+                "status": "unsupported",
+                "reason": (
+                    "This is a direct grid run. The dashboard shows live cell and "
+                    "episode statistics, but standardized study analysis requires "
+                    "a submitted study root."
+                ),
+                "artifacts": [],
+            }
         root = self.study_dir / "analysis"
         validation_path = root / "validation.json"
         if not validation_path.is_file():
@@ -1677,5 +1793,6 @@ __all__ = [
     "SchedulerSnapshot",
     "StudyDescriptor",
     "VoteSeries",
+    "is_direct_grid_root",
     "is_study_root",
 ]

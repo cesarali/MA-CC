@@ -56,6 +56,7 @@
           <article class="panel">
             <h2>Vote trajectories</h2>
             <p id="mean-label" class="meta"></p>
+            <div class="trajectory-actions"><button id="show-all-trajectories" type="button">Show all available trajectories</button></div>
             <div id="trajectory-controls" class="trajectory-controls"></div>
             <div id="cell-votes"></div>
           </article>
@@ -81,7 +82,6 @@
       <input id="step" type="range" min="1" value="1">
       <output id="step-value">1</output>
     </label>
-    <label>Inspect participant <select id="agent"></select></label>
     <label class="follow"><input id="follow" type="checkbox" checked> Follow live edge</label>
     <span id="refreshed"></span>
   </section>

@@ -12,11 +12,15 @@ from urllib.request import ProxyHandler, build_opener
 import pytest
 import yaml
 
-from mas_cc.blackboard_dashboard.server import make_handler
+from mas_cc.blackboard_dashboard.server import (
+    make_handler,
+    resolve_dashboard_collection,
+)
 from mas_cc.blackboard_dashboard.data import BlackboardRunReader
 from mas_cc.blackboard_dashboard.study_data import (
     BlackboardStudyReader,
     _SchedulerReader,
+    is_direct_grid_root,
     is_study_root,
 )
 from mas_cc.studies.execution import ExecutionEntry, write_execution_manifest
@@ -184,6 +188,79 @@ def _study(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return root
+
+
+def _direct_grid(tmp_path: Path) -> Path:
+    root = tmp_path / "game" / "experiment" / "direct-grid-run"
+    for index, (rho, budget) in enumerate(((0.70, 2), (0.70, 4), (0.85, 2), (0.85, 4))):
+        cell_id = f"cell-{index:04d}"
+        cell = root / "cells" / cell_id
+        cell.mkdir(parents=True)
+        config = {
+            "schema_version": 1,
+            "game": {
+                "type": "relational_imitation_round_feedback",
+                "population_size": 4,
+                "options": {
+                    "epistemic_persistence": rho,
+                    "task_id": "task_003",
+                },
+            },
+            "control": {
+                "mechanism": "relational_round_budgeted",
+                "options": {"intervention_budget": budget, "target": "B"},
+            },
+            "execution": {"seed": 17, "repetitions": 3},
+            "experiment": {
+                "name": "direct-grid-dashboard",
+                "metadata": {"arm": "false_control", "ground_truth": "A"},
+            },
+            "storage": {"artifact_profile": "dashboard_semantic"},
+        }
+        (cell / "resolved_config.yaml").write_text(
+            yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
+        )
+        (cell / "overrides.json").write_text(
+            json.dumps(
+                {
+                    "cell_id": cell_id,
+                    "index": index,
+                    "overrides": {
+                        "game.options.epistemic_persistence": rho,
+                        "control.options.intervention_budget": budget,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+    return root
+
+
+def test_direct_grid_is_exposed_as_full_dashboard_collection(tmp_path: Path):
+    root = _direct_grid(tmp_path)
+    assert not is_study_root(root)
+    assert is_direct_grid_root(root)
+    assert resolve_dashboard_collection(tmp_path) == root
+
+    reader = BlackboardStudyReader(root, scheduler=False)
+    summary = reader.study()
+    assert summary["expected_config_count"] == 1
+    assert summary["expected_cell_count"] == 4
+    assert summary["expected_episode_count"] == 12
+    assert summary["discovered_cell_count"] == 4
+    assert len(summary["cells"]) == 4
+    assert sum(cell["expected_episodes"] for cell in summary["cells"]) == 12
+    assert [cell["parameters"]["rho"] for cell in summary["cells"]] == [
+        0.70,
+        0.70,
+        0.85,
+        0.85,
+    ]
+    assert [cell["parameters"]["b"] for cell in summary["cells"]] == [2, 4, 2, 4]
+    cell = reader.cell("config-0000~cell-0000")
+    assert len(cell["episodes"]) == 3
+    assert cell["scheduler"] is None
+    assert reader.analysis_catalog()["status"] == "unsupported"
 
 
 def test_study_discovery_status_parameters_and_votes(tmp_path: Path):
@@ -557,14 +634,19 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     assert "Update ${update}:" in script
     assert 'id="round" type="range"' in html
     assert 'id="round-value"' in html
-    assert "Inspect participant" in html
-    assert "All participants" in script
+    assert "Inspect participant" not in html
+    assert 'id="agent"' not in html
     assert 'id="controller-messages"' in html
     assert 'id="communication-bars"' in html
     assert 'id="controller-events"' in html
     assert "blackboardAuthorFilter" in script
+    assert "selectedAgent" in script
     assert "controllerRound" in script
     assert "descriptive, not causal" in html
+    assert 'id="show-all-trajectories"' in html
+    assert "Show all available trajectories" in html
+    assert "availableTrajectoryIds" in script
+    assert "refreshVersion" in script
 
 
 def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):

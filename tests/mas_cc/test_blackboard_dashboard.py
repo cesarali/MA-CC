@@ -136,6 +136,125 @@ def test_snapshot_reconstructs_cursor_board_coverage_and_agent(tmp_path: Path):
     assert final["blackboard"][1]["reply_to"] == "m1"
 
 
+def test_multiround_messages_use_episode_global_creation_cursor(tmp_path: Path):
+    run = _run(tmp_path)
+    episode = run / "data" / "episodes" / "episode-0000"
+    trajectory = [
+        json.loads(line)
+        for line in (episode / "trajectory.jsonl").read_text().splitlines()
+    ]
+    round_two_message = {
+        "message_id": "m3",
+        "author_id": "agent_001",
+        "author_kind": "agent",
+        "message_type": "REPORT",
+        "text": "round two participant message",
+        "shared_fact_id": "f1",
+        "reply_to": None,
+        "round_created": 1,
+        "micro_step_created": 3,
+        "expires_after_round": 1,
+    }
+    trajectory.append(
+        {
+            "interaction_id": "interaction-0003",
+            "event": {
+                "round_index": 1,
+                "within_round_index": 0,
+                "global_update_index": 2,
+                "interaction_index": 3,
+                "focal_agent_id": "agent_001",
+                "population_state_after": ["A", "A"],
+                "focal_active_fact_ids_after": ["f1"],
+                "focal_known_fact_ids_after": ["f1"],
+                "new_message": round_two_message,
+                "new_message_type": "REPORT",
+                "correct_answer": "A",
+            },
+        }
+    )
+    (episode / "trajectory.jsonl").write_text(
+        "".join(_line(row) for row in trajectory), encoding="utf-8"
+    )
+    first_round = json.loads((episode / "round_trajectory.jsonl").read_text())
+    second_round = {**first_round, "round_index": 1}
+    (episode / "round_trajectory.jsonl").write_text(
+        _line(first_round) + _line(second_round), encoding="utf-8"
+    )
+    checkpoint = json.loads((episode / ".checkpoints" / "checkpoint.json").read_text())
+    checkpoint["state"]["blackboard"].append(round_two_message)
+    (episode / ".checkpoints" / "checkpoint.json").write_text(
+        json.dumps(checkpoint), encoding="utf-8"
+    )
+
+    snapshot = BlackboardRunReader(run).snapshot(1, 1)
+    messages = {message["message_id"]: message for message in snapshot["blackboard"]}
+    assert "m3" in messages
+    assert messages["m3"]["new_at_cursor"] is True
+
+
+def test_dawn_controller_message_is_visible_at_first_update_of_later_round(
+    tmp_path: Path,
+):
+    run = _run(tmp_path)
+    episode = run / "data" / "episodes" / "episode-0000"
+    trajectory = [
+        json.loads(line)
+        for line in (episode / "trajectory.jsonl").read_text().splitlines()
+    ]
+    trajectory.append(
+        {
+            "interaction_id": "interaction-0003",
+            "event": {
+                "round_index": 1,
+                "within_round_index": 0,
+                "global_update_index": 2,
+                "interaction_index": 3,
+                "focal_agent_id": "agent_001",
+                "population_state_after": ["A", "A"],
+                "focal_active_fact_ids_after": ["f1"],
+                "focal_known_fact_ids_after": ["f1"],
+                "correct_answer": "A",
+            },
+        }
+    )
+    (episode / "trajectory.jsonl").write_text(
+        "".join(_line(row) for row in trajectory), encoding="utf-8"
+    )
+    controller_message = {
+        "message_id": "controller-r2",
+        "author_id": "controller",
+        "author_kind": "controller",
+        "message_type": "DIRECTIVE",
+        "text": "round two dawn message",
+        "shared_fact_id": "f1",
+        "reply_to": None,
+        "round_created": 1,
+        "micro_step_created": 2,
+        "expires_after_round": 1,
+    }
+    first_round = json.loads((episode / "round_trajectory.jsonl").read_text())
+    second_round = {
+        **first_round,
+        "round_index": 1,
+        "controller_action": "ADVOCATE_Z",
+        "controller_post_ids": ["controller-r2"],
+    }
+    (episode / "round_trajectory.jsonl").write_text(
+        _line(first_round) + _line(second_round), encoding="utf-8"
+    )
+    checkpoint = json.loads((episode / ".checkpoints" / "checkpoint.json").read_text())
+    checkpoint["state"]["blackboard"].append(controller_message)
+    (episode / ".checkpoints" / "checkpoint.json").write_text(
+        json.dumps(checkpoint), encoding="utf-8"
+    )
+
+    snapshot = BlackboardRunReader(run).snapshot(1, 1)
+    messages = {message["message_id"]: message for message in snapshot["blackboard"]}
+    assert messages["controller-r2"]["text"] == "round two dawn message"
+    assert messages["controller-r2"]["new_at_cursor"] is False
+
+
 def test_dashboard_http_api_and_export(tmp_path: Path):
     run = _run(tmp_path)
     reader = BlackboardRunReader(run)
