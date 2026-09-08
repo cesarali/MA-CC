@@ -1,14 +1,13 @@
 llm_provider:
-  type: university
-  model: gwdg/openai-gpt-oss-120b
-  credentials_env: POTSDAM_API_KEY
-  base_url_env: BASE_POTSDAM_LLM_URL
+  type: deepinfra
+  model: deepseek-ai/DeepSeek-V4-Flash
+  credentials_env: DEEPINFRA_API_KEY
   timeout_seconds: 180
   max_retries: 2
   request_concurrency: 2
   temperature: 1.0
   max_output_tokens: 512
-  options: {estimated_latency_seconds: 10.0}
+  options: {estimated_latency_seconds: 6.0}
 prompt: {schema_version: 2, prompt_family: relational_blackboard_ballot, prompt_version: 4, response_contract: {type: relational_blackboard_ballot, allowed_values: [A, B, C]}}
 game:
   type: relational_imitation_round_feedback
@@ -58,8 +57,8 @@ control:
     controller_report_max_posts_per_fact: 3
     controller_report_selection_strategy: target_preserving_v1
 execution: {seed: 20260907, repetitions: 1, parallelism: 1, fail_fast: true}
-pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: true}
-budget: {accounting_unit: proxy_accounting_unit, system_max_cost_per_run: null, max_cost_per_run: 20.0, max_provider_requests: 240, max_input_tokens: 3000000, max_output_tokens: 500000, allow_unbounded_paid_requests: false}
+pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: false}
+budget: {accounting_unit: USD, system_max_cost_per_run: 20.0, max_cost_per_run: 20.0, max_provider_requests: 240, max_input_tokens: 3000000, max_output_tokens: 500000, allow_unbounded_paid_requests: false}
 logging: {level: INFO, console: true, audit: true, comet: false}
 storage: {output_dir: results, format: jsonl, artifact_profile: full, checkpoint_mode: episode, overwrite: false}
 analysis: {enabled: false, estimators: []}

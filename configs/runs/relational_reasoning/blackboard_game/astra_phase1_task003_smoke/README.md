@@ -1,6 +1,6 @@
 # ASTRA Phase 1 task-003 smoke
 
-This is a small matched live smoke. It compares silence, the existing algorithmic communication chooser, and the optional LLM communication chooser. All arms use the same MuSR task, gameplay model, participant prompt, decoding settings, root seed, and paired initialization artifact.
+This is a small matched DeepInfra live smoke. It compares silence, the existing algorithmic communication chooser, and the optional LLM communication chooser. All arms use `deepseek-ai/DeepSeek-V4-Flash`, the same MuSR task, participant prompt, decoding settings, root seed, and paired initialization artifact.
 
 The smoke is operational. Do not interpret one episode per arm as a scientific effect estimate, and do not launch a full study from this folder.
 

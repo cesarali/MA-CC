@@ -140,6 +140,16 @@ class _HeartbeatCoordinator(_CountingCoordinator):
         return True
 
 
+class _RenewFailingCoordinator(_HeartbeatCoordinator):
+    root = "/simulated/provider-control"
+    node_id = "test-node"
+    worker_id = "test-worker"
+
+    async def renew(self, lease, **kwargs):
+        self.renewals += 1
+        raise RuntimeError("simulated transient coordinator lock timeout")
+
+
 def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata():
     body = {
         "id": "req-1",
@@ -282,6 +292,35 @@ def test_slow_http_attempt_is_renewed_and_released():
         session=session,
         request_coordinator=coordinator,
     )
+    assert asyncio.run(provider.complete(_request())).content == "A"
+    assert coordinator.renewals >= 1
+    assert len(coordinator.outcomes) == 1
+
+
+def test_heartbeat_renewal_failure_does_not_destroy_valid_response():
+    body = {
+        "id": "req-valid-despite-renewal-timeout",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _RenewFailingCoordinator()
+    session = _Session([_Response(200, body)])
+    original_post = session.post
+
+    def slow_post(*args, **kwargs):
+        time.sleep(0.04)
+        return original_post(*args, **kwargs)
+
+    session.post = slow_post
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY"
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+        request_coordinator=coordinator,
+    )
+
     assert asyncio.run(provider.complete(_request())).content == "A"
     assert coordinator.renewals >= 1
     assert len(coordinator.outcomes) == 1
