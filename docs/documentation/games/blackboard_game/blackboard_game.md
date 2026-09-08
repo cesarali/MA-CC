@@ -3,11 +3,14 @@
 This document is a tutorial for the public-blackboard game used by:
 
 - [`blackboard_truthful_reports_q3_deepinfra`](../../../../configs/runs/relational_reasoning/blackboard_game/blackboard_truthful_reports_q3_deepinfra/README.md);
-- [`blackboard_adaptive_communication_q3_deepinfra`](../../../../configs/runs/relational_reasoning/blackboard_game/blackboard_adaptive_communication_q3_deepinfra/README.md).
+- [`blackboard_adaptive_communication_q3_deepinfra`](../../../../configs/runs/relational_reasoning/blackboard_game/blackboard_adaptive_communication_q3_deepinfra/README.md);
+- [`astra_task003_false_control_30x30`](../../../../configs/runs/relational_reasoning/blackboard_game/astra_task003_false_control_30x30/README.md).
 
 It explains what the agents are solving, how a round works, what the controller
-can do, how messages and evidence move through the blackboard, and how the two
-study families differ.
+can do, how messages and evidence move through the blackboard, and how the
+study families differ. The ASTRA study adds an LLM-selected controller: after
+the existing coded act-or-remain-silent decision, a large language model (LLM)
+chooses how the controller communicates.
 
 The **blackboard** is a temporary public message board. Agents do not talk to a
 fixed neighbor. At each update, one agent reads a small random sample of the
@@ -27,7 +30,8 @@ The authoritative runtime is split across:
 - [`controller.py`](../../../../src/mas_cc/games/relational_reasoning/imitation_round_feedback/controller.py),
   which senses votes, selects the binary action, and creates controller messages;
 - [`adaptive_communication.py`](../../../../src/mas_cc/games/relational_reasoning/imitation_round_feedback/adaptive_communication.py),
-  which chooses `REPORT`, `REQUEST`, or `DIRECTIVE` after the controller acts.
+  which chooses `REPORT`, `REQUEST`, or `DIRECTIVE` after the controller acts,
+  either through coded weights or through a validated LLM request.
 
 ## 1. The game in one example
 
@@ -60,14 +64,15 @@ to remain silent or act. If it acts, it can publish verified evidence, request
 specific evidence, or direct attention toward a comparison, depending on the
 configured controller mode.
 
-A complete episode has ten population rounds. Each round has 24 sequential
-agent updates. The game does not stop early at consensus.
+The older DeepInfra studies have ten population rounds. The ASTRA task-003
+study has 30. Each round has 24 sequential agent updates. These studies do not
+stop early at consensus.
 
 ## 2. The three clocks
 
 It helps to separate three time scales.
 
-1. **Episode:** one complete ten-round game.
+1. **Episode:** one complete game, with 10 or 30 rounds in the studies here.
 2. **Population round:** one controller decision followed by 24 agent updates.
 3. **Microscopic update:** one randomly selected focal agent reads up to three
    messages and submits one ballot.
@@ -79,23 +84,24 @@ another agent may not update at all.
 
 ```mermaid
 flowchart TD
-    E[Episode: 10 rounds] --> R[One population round]
+  E[Episode: configured rounds] --> R[One population round]
     R --> S[Controller samples votes and chooses U]
-    S --> N[Old messages expire and active evidence persists]
+  S --> N[Copy prior board, expire it, and apply persistence]
     N --> D[Controller posts at dawn if U = 1]
     D --> M[24 sequential microscopic updates]
     M --> O[Record the round outcome]
     O --> R
 ```
 
-## 3. Fixed design of these two studies
+## 3. Study designs
 
-Both folders use the same core design.
+All three folders use the same core blackboard design, but the ASTRA study is
+larger and uses the new LLM communication policy.
 
 | Setting | Config value | Plain meaning |
 |---|---:|---|
 | `population_size`, $N$ | 24 | Number of ordinary agents |
-| `rounds` | 10 | Population rounds per episode |
+| `rounds` | 10 or 30 | Population rounds per episode |
 | daytime positions | 24 | Sequential update opportunities per round |
 | `social_group_size`, $q$ | 3 | Maximum board messages shown per update |
 | `sensor_sample_size`, $q_c$ | 12 | Votes sampled by the controller |
@@ -107,11 +113,11 @@ Both folders use the same core design.
 | participant requests | allowed | Agents may choose `REQUEST` |
 | persistence, $\rho$ | 0.70 to 1.00 | Chance each active fact remains usable at a round boundary |
 | controlled budget, $b$ | 3 to 21 | Controller message allowance on an active round |
-| repetitions | 10 | Episodes per scientific cell |
-| model | `deepseek-ai/DeepSeek-V4-Flash` | Language model used for agent decisions |
+| repetitions | 10 or 30 | Episodes per scientific cell |
+| model | study-specific | Language model used for participant and, in ASTRA, controller decisions |
 
 A **scientific cell** is one fixed combination of experimental settings. Each
-study has:
+older DeepInfra study has:
 
 - 5 no-control cells, one for each persistence value;
 - 35 truth-control cells, from 5 persistence values times 7 budgets;
@@ -130,6 +136,32 @@ The false controller does not fabricate evidence. It selectively publishes
 true facts that leave its preferred answer plausible under partial information.
 This is **selective disclosure**: choosing which true facts to reveal while
 omitting other true facts that would weaken the preferred conclusion.
+
+### 3.1 ASTRA task-003 false-control study
+
+The ASTRA folder contains one false-control config,
+[`false_control_llm.yaml`](../../../../configs/runs/relational_reasoning/blackboard_game/astra_task003_false_control_30x30/false_control_llm.yaml),
+with this design:
+
+| Setting | Value |
+|---|---:|
+| task | MuSR Team Allocation `task_003`, candidate 130 |
+| correct answer | `ALLOCATION_0` |
+| false controller target | `ALLOCATION_2` |
+| model | `gwdg/openai-gpt-oss-120b` |
+| population | 24 |
+| rounds | 30 |
+| participant updates per episode | 720 |
+| repetitions per cell | 30 |
+| persistence values | 0.70, 0.775, 0.85, 0.925, 1.00 |
+| budgets | 3, 6, 9, 12 |
+| cells | 20 |
+| planned episodes | 600 |
+
+The same model serves two roles. It returns a participant ballot at every
+daytime update. On an active controller round, it also makes one structured
+controller communication decision. These are separate prompts and separately
+validated decisions.
 
 ## 4. Frozen task and initial information
 
@@ -159,6 +191,13 @@ The truthful-report and adaptive studies use different initialization
 artifact directories and different prompt versions. They are therefore useful
 parallel studies, but not a perfectly matched one-variable comparison between
 controller modes.
+
+ASTRA uses its own frozen task-003 files and requires 30 previously created
+paired initialization artifacts. Its controller pool contains 24 canonical
+true facts. The task loader checks the task's internal fingerprint and verifies
+the canonical facts against the hidden symbolic task state. The three
+SHA-256 fingerprints in the config metadata are provenance records; the study
+operator must separately verify them before launch.
 
 ## 5. What each agent remembers
 
@@ -241,12 +280,14 @@ and `DIRECTIVE` are ways to realize $U_k=1$; they do not replace it.
 
 After sensing and sampling $U_k$, the runtime:
 
-1. marks the previous round's messages as expired;
-2. applies epistemic persistence to each agent's active evidence;
-3. leaves historical evidence unchanged.
+1. copies the previous round's live public messages for the adaptive controller;
+2. marks those messages as expired for participant delivery;
+3. applies epistemic persistence to each agent's active evidence;
+4. leaves historical evidence unchanged.
 
 Expired messages remain in stored history for audit, but they can no longer be
-sampled.
+sampled. The copied view lets the controller reason about yesterday's public
+discussion without extending any message's lifetime by another round.
 
 ### 6.4 Post the controller's dawn messages
 
@@ -346,7 +387,19 @@ Here $b$ is a maximum communication allowance, not always the realized number
 of posts. A request or directive is posted once instead of being duplicated to
 fill the budget.
 
-### 8.1 How the adaptive mode is chosen
+The repository supports two adaptive policies:
+
+| Policy | How the choice is made |
+|---|---|
+| `contextual_weighted_v1` | Seeded code draws from context-dependent mode weights |
+| `llm_structured_v1` | An LLM returns a validated mode and, for `REPORT`, eligible fact IDs |
+
+The policy runs only after the binary gate returns $U_k=1$. It never decides
+whether the controller acts. Its random seeds are separate from the vote
+sensor and binary action stream, so communication selection cannot change
+later sensor samples or gate draws.
+
+### 8.1 Coded weighted policy
 
 The allowed modes always include `REPORT`. The two feature switches add
 `REQUEST` and `DIRECTIVE`. The seeded chooser gives them these weights:
@@ -358,37 +411,90 @@ DIRECTIVE = 1.0 + min(3, number of live REPORT messages)
                 + 0.5 * number of live DIRECTIVE messages
 ```
 
-A weighted random draw chooses one mode. The chooser uses an independent random
-stream so choosing a communication form does not change later controller
-sensor samples or binary actions.
+A weighted random draw chooses one mode.
 
 The context object also records round number, target, sampled votes, and prior
 modes. Policy version 1 does not currently use those values in its weight
 formula. It uses the live message-type counts and the allowed-mode switches.
 
-There is an important consequence in these exact configs. Messages live for
-one round, and old messages expire before dawn posting. The live board is
-normally empty when the adaptive choice is made. The normal weights are then:
+The counts come from the copied previous-day board. They are not necessarily
+zero. The messages expire before participant delivery, but their message types
+still inform this controller decision. If the previous board is empty, the
+weights are `REPORT: 2`, `REQUEST: 4`, and `DIRECTIVE: 1`, giving probabilities
+$2/7$, $4/7$, and $1/7$ when all three modes are allowed.
 
-```text
-REPORT: 2    REQUEST: 4    DIRECTIVE: 1
+### 8.2 LLM-structured policy used by ASTRA
+
+ASTRA configures:
+
+```yaml
+controller_communication_policy: llm_structured_v1
+controller_communication_fallback_policy: contextual_weighted_v1
+controller_communication_max_retries: 2
 ```
 
-The nominal choice probabilities are consequently $2/7$, $4/7$, and $1/7$.
-The policy is structurally contextual, but this one-round-lifetime protocol
-normally presents it with the same empty live-board context at dawn.
+On an active round, the controller LLM receives only permitted public and
+controller information:
 
-### 8.2 Adaptive `REPORT`
+1. round index and false target;
+2. the 12 sampled votes and their counts;
+3. yesterday's public board messages;
+4. each currently eligible canonical fact, including its exact text, previous
+   controller post count, and last post round;
+5. the controller's previous public posting history;
+6. the current budget and allowed modes.
 
-The adaptive report selector returns at most $b$ useful facts. A candidate must
-be new to the controller's prior report history, absent from the live board,
-and cooldown-eligible. Unlike report-only mode, adaptive reporting never
-repeats a fact previously selected by the controller.
+It does not receive private reasons, agent active or historical evidence sets,
+evidence-acquisition diagnostics, future outcomes, or analysis results.
 
-The pool is finite. A late `REPORT` round can therefore produce fewer than $b$
-posts, including zero. The runtime does not add filler messages.
+The instruction asks the model to increase support for the target through
+truthful communication. The required response is:
 
-### 8.3 Adaptive `REQUEST`
+```json
+{
+  "mode": "REPORT|REQUEST|DIRECTIVE",
+  "fact_ids": [],
+  "text": null,
+  "reason": "why this mode fits the public context"
+}
+```
+
+The LLM selects a mode and, for `REPORT`, fact identifiers. It does **not**
+write the public evidence, request, or directive. `text` must be `null`.
+Runtime code renders canonical report text or a fixed context-specific request
+or directive. This prevents the controller LLM from inventing evidence or
+placing unrestricted prose on the board.
+
+For `REPORT`, validation requires 1 through $b$ distinct identifiers, all from
+the supplied eligible pool. For `REQUEST` or `DIRECTIVE`, `fact_ids` must be
+empty. Unknown fields, malformed JSON, forbidden modes, repeated IDs, excessive
+IDs, ineligible IDs, and non-null text are rejected.
+
+ASTRA permits two repairs after the first response, for at most three
+controller schema attempts. A failed response is followed by a short repair
+instruction describing the error. A provider error ends this schema loop after
+the provider adapter has performed its own transport retries. If no valid
+decision remains, the seeded `contextual_weighted_v1` policy chooses the mode.
+Fallback therefore preserves the episode rather than inventing an LLM result.
+
+No controller LLM call occurs when $U_k=0$. Every $U_k=1$ round creates one
+logical controller decision even if validation requires several provider
+attempts or ends in fallback.
+
+### 8.3 Adaptive `REPORT`
+
+Under the coded policy, the adaptive selector chooses up to $b$ eligible facts.
+Under `llm_structured_v1`, the LLM explicitly chooses between 1 and $b$ supplied
+eligible facts. In both cases, runtime posts each fact's exact canonical text.
+
+Adaptive facts may repeat across rounds. ASTRA allows each fact to be posted
+at most three times and configures a one-round cooldown. Concretely, a fact
+posted in round 0 is ineligible in round 1 and eligible again in round 2. Fact
+IDs must remain distinct within one `REPORT` decision. The coded selector can
+return fewer than $b$ when eligibility is limited; the LLM can deliberately
+select fewer than $b$. The runtime never adds filler reports.
+
+### 8.4 Adaptive `REQUEST`
 
 A request names the target allocation and, when the sensed votes identify one,
 the strongest rival. For example:
@@ -402,7 +508,7 @@ allocation, report it.
 It has `message_type: REQUEST` and `shared_fact_id: null`. It asks other agents
 to supply information but transfers no verified fact by itself.
 
-### 8.4 Adaptive `DIRECTIVE`
+### 8.5 Adaptive `DIRECTIVE`
 
 A directive coordinates attention. For example:
 
@@ -566,7 +672,8 @@ An ordinary agent may cite only an identifier in its active verified evidence.
 An agent cannot reply to an unseen message merely because that message exists
 in stored board history.
 
-Ordinary agents can post `REQUEST`, `REPORT`, or `NONE` in both study families.
+Ordinary agents can post `REQUEST`, `REPORT`, or `NONE` in the adaptive study
+families described here.
 They cannot post `DIRECTIVE`. Prompt version 4 makes participant requests
 configurable, but these adaptive configs explicitly enable them.
 
@@ -651,9 +758,11 @@ truth controller's target.
 2. Its action probability is
    $\sigma(4(0.5-2/12))\approx0.79$.
 3. The seeded draw returns `ADVOCATE_Z`.
-4. In adaptive mode, the communication draw returns `REPORT`.
-5. With $b=3$, the controller selects three unused verified cards and posts
-   three reports at dawn.
+4. In coded adaptive mode, the communication draw returns `REPORT`. Under the
+  ASTRA policy, the controller LLM could instead return a valid `REPORT`
+  decision containing selected eligible fact IDs.
+5. With $b=3$, the controller selects between one and three eligible verified
+  cards and posts their canonical text at dawn.
 6. The first focal agent samples three of those reports, receives their facts,
    votes, and posts a request.
 7. A later focal agent samples the request and two reports. It receives only
@@ -696,14 +805,20 @@ A model ballot is invalid if, for example:
 - an attached fact is not in that agent's active evidence.
 
 The configs allow four retries after the first response, for at most five
-attempts. A repair prompt explains the contract error. If an evidence
-identifier is invalid, the repair guidance requires `shared_fact_id: null`; it
-does not substitute another identifier.
+participant ballot attempts. A repair prompt explains the contract error. If
+an evidence identifier is invalid, the repair guidance requires
+`shared_fact_id: null`; it does not substitute another identifier.
 
 If all attempts fail, the episode raises an error. The runtime does not invent
 a default vote, automatically retain the old vote, or convert the ballot to
 `NONE`. `fail_fast: false` lets other experiment work continue; it does not
 create a successful result for the failed episode.
+
+The ASTRA controller decision has its own validation loop: two retries after
+the first response, hence at most three attempts. Exhausting that loop does not
+fail the episode. It activates the separately seeded coded fallback described
+in Section 8.2. The recorded result distinguishes a valid LLM choice from a
+fallback choice.
 
 ## 15. What is recorded
 
@@ -715,9 +830,12 @@ dashboard_semantic_complete.json
 ```
 
 The completion file seals the row count and SHA-256 fingerprint. The retained
-stream is sufficient to reconstruct votes, board messages, evidence movement,
-controller choices, microscopic exposures, and validation summaries without
-calling the model again.
+stream reconstructs the visible game evolution: votes, board messages,
+evidence movement, controller choices, microscopic exposures, and validation
+summaries. Detailed controller forensics—including the complete prompt, raw
+response, per-attempt error, token usage, and fallback seed—live in the round
+trajectory and audit records rather than being fully duplicated in the lean
+semantic stream.
 
 After standardized study aggregation, the main tables include:
 
@@ -741,11 +859,20 @@ Important direct round fields include:
 n_k, n_k_plus_1, Y_k, U_k, P_U1_given_Y
 controller_action, chosen_message_mode, requested_b
 actual_controller_posts, controller_post_ids, selected_fact_ids
+controller_communication_context, controller_llm_attempts
+controller_llm_fallback_used, controller_fallback_seed
+controller_llm_input_tokens, controller_llm_output_tokens
 controller_message_exposures, controller_unique_readers
 new_controller_facts, reactivated_controller_fact_count
 truth_vote_share_before, truth_vote_share
 controller_target_share_before, controller_target_share
 ```
+
+The controller context is stored with the previous-board snapshot and a stable
+hash. Each LLM attempt records its request, raw response when present,
+validation or provider error, and usage. This makes fallback frequency and
+controller cost auditable without confusing controller decisions with the 720
+participant decisions in an ASTRA episode.
 
 ## 16. Reading the scientific results
 
@@ -806,8 +933,10 @@ Evidence measures distinguish:
    changes exact evidence state.
 5. **The false controller is truthful at the fact level.** Its manipulation is
    selective disclosure, not fabrication.
-6. **The controller sees votes, not private knowledge.** Its adaptive chooser
-   cannot inspect hidden evidence or reasons.
+6. **The controller cannot see private knowledge.** The binary gate sees only
+  sampled votes. The adaptive LLM additionally sees prior public messages,
+  eligible canonical facts, and controller posting history, but never agent
+  evidence sets or private reasons.
 7. **Letters are temporary.** Analyze semantic IDs such as `ALLOCATION_0`, not
    presentation letters such as `A`.
 8. **Expired does not mean deleted.** Expired messages remain in the audit
@@ -822,6 +951,15 @@ Evidence measures distinguish:
 12. **Mode-specific outcome differences are observational.** A randomized mode
     study is needed for causal claims about `REPORT` versus `REQUEST` versus
     `DIRECTIVE`.
+13. **The binary gate is still coded.** In ASTRA, the LLM chooses communication
+    only after `ADVOCATE_Z`; it does not choose $U_k$.
+14. **Yesterday's board is context, not a second delivery.** The controller can
+    inspect the copied previous board, while agents cannot sample its expired
+    messages again.
+15. **LLM output is not public prose.** The controller model selects a mode and
+    eligible fact IDs; code renders every public controller message.
+16. **Controller and participant retries differ.** ASTRA permits three total
+    controller schema attempts and five total participant ballot attempts.
 
 ## 18. Configuration map
 
@@ -832,7 +970,7 @@ game:
   population_size: 24
   options:
     task_family: musr_team_allocation
-    rounds: 10
+    rounds: 10                       # 30 in ASTRA
     social_group_size: 3
     social_mode: board
     board:
@@ -850,7 +988,7 @@ game:
 control:
   mechanism: relational_round_budgeted
   options:
-    target: correct                 # or ALLOCATION_1
+    target: correct                 # ALLOCATION_1 in old false arm; ALLOCATION_2 in ASTRA
     sensor_sample_size: 12
     policy: soft_target
     threshold: 0.50
@@ -878,8 +1016,31 @@ controller_communication_policy: contextual_weighted_v1
 controller_communication_policy_version: 1
 ```
 
+The ASTRA LLM-controlled family uses:
+
+```yaml
+controller_actuation_mode: adaptive_communication
+allow_controller_requests: true
+allow_controller_directives: true
+controller_communication_policy: llm_structured_v1
+controller_communication_policy_version: 1
+controller_communication_fallback_policy: contextual_weighted_v1
+controller_communication_max_retries: 2
+controller_report_cooldown_rounds: 1
+controller_report_max_posts_per_fact: 3
+controller_report_selection_strategy: target_preserving_v1
+```
+
 The values shown in the individual config are base values. The `grid` replaces
 persistence and, for controlled arms, budget with all planned values.
+
+For ASTRA, the grid is:
+
+```yaml
+grid:
+  game.options.epistemic_persistence: [0.70, 0.775, 0.85, 0.925, 1.00]
+  control.options.intervention_budget: [3, 6, 9, 12]
+```
 
 ## 19. Short mental model
 
@@ -892,7 +1053,8 @@ A temporary board carries typed public messages.
 Reading a verified REPORT can move exact evidence.
 REQUEST asks for evidence; DIRECTIVE coordinates attention.
 The controller first makes a binary act-or-stay-silent choice.
-Only then does its configured mode decide what to post.
+Only then does its configured coded or LLM policy decide what to post.
+The LLM can select a mode and canonical facts, but code writes the public text.
 Agents sample the board rather than receiving a broadcast.
 Active evidence can fade between rounds, but historical provenance remains.
 The study measures how these processes change evidence and votes over time.
