@@ -2604,6 +2604,8 @@ def _blackboard_phase2_requested(recipe: Mapping[str, Any]) -> bool:
         requested.intersection(
             {
                 "propensity_weighted_causal_response",
+                "propensity_weighted_available_susceptibility",
+                "available_mass_weighted_causal_susceptibility",
                 "communication_response_efficiency",
             }
         )
@@ -2781,6 +2783,157 @@ def _render_causal_communication_plots(
         axis.legend(fontsize=6)
         figure.tight_layout()
         path = destination / "response_cost_frontier.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    state_local = tables.get(
+        "available_causal_susceptibility_state_local", pd.DataFrame()
+    )
+    summary = tables.get("available_causal_susceptibility_summary", pd.DataFrame())
+    persistence = next(
+        (
+            name
+            for name in ("epistemic_persistence", "persistence")
+            if name in state_local.columns
+        ),
+        None,
+    )
+    budget = next(
+        (
+            name
+            for name in ("intervention_budget", "budget")
+            if name in state_local.columns
+        ),
+        None,
+    )
+    available = state_local[
+        state_local.get(
+            "support_status", pd.Series("unsupported", index=state_local.index)
+        ).isin(["adequate", "limited"])
+        & pd.to_numeric(
+            state_local.get("estimate", pd.Series(dtype=float)), errors="coerce"
+        ).notna()
+    ]
+    if not available.empty and persistence and budget:
+        persistence_values = sorted(available[persistence].dropna().unique())
+        figure, axes = plt.subplots(
+            1,
+            len(persistence_values),
+            squeeze=False,
+            figsize=(5 * len(persistence_values), 4),
+        )
+        for axis, persistence_value in zip(axes.flat, persistence_values, strict=True):
+            panel = available[available[persistence] == persistence_value]
+            pivot = panel.pivot_table(
+                index="target_fraction_bin_center",
+                columns=budget,
+                values="estimate",
+                aggfunc="mean",
+            ).sort_index()
+            image = axis.imshow(
+                pivot.to_numpy(dtype=float), aspect="auto", origin="lower"
+            )
+            axis.set_xticks(range(len(pivot.columns)), labels=map(str, pivot.columns))
+            axis.set_yticks(
+                range(len(pivot.index)), labels=[f"{x:.3g}" for x in pivot.index]
+            )
+            axis.set(
+                xlabel=budget,
+                ylabel="pre-intervention target share x",
+                title=f"{persistence}={persistence_value}",
+            )
+            figure.colorbar(image, ax=axis, label="available causal susceptibility")
+        figure.tight_layout()
+        path = destination / "available_causal_susceptibility_x_b_by_rho.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+        visited_bins = sorted(available["target_fraction_bin_index"].unique())
+        representative_bins = (
+            visited_bins
+            if len(visited_bins) <= 4
+            else [
+                visited_bins[index]
+                for index in np.linspace(0, len(visited_bins) - 1, 4).astype(int)
+            ]
+        )
+        representative = available[
+            available["target_fraction_bin_index"].isin(representative_bins)
+        ]
+        figure, axes = plt.subplots(
+            1,
+            len(persistence_values),
+            squeeze=False,
+            figsize=(5 * len(persistence_values), 4),
+        )
+        for axis, persistence_value in zip(axes.flat, persistence_values, strict=True):
+            panel = representative[representative[persistence] == persistence_value]
+            for bin_index, group in panel.groupby(
+                "target_fraction_bin_index", sort=True
+            ):
+                values = (
+                    group.groupby(budget, dropna=False)["estimate"].mean().sort_index()
+                )
+                axis.plot(
+                    values.index,
+                    values.values,
+                    marker="o",
+                    label=f"x-bin {bin_index}",
+                )
+            axis.axhline(0, color="black", linewidth=0.8)
+            axis.set(
+                xlabel=budget,
+                ylabel="available causal susceptibility",
+                title=f"{persistence}={persistence_value}",
+            )
+            axis.legend(fontsize=7)
+        figure.tight_layout()
+        path = destination / "available_causal_susceptibility_vs_budget.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    summary_persistence = next(
+        (
+            name
+            for name in ("epistemic_persistence", "persistence")
+            if name in summary.columns
+        ),
+        None,
+    )
+    summary_budget = next(
+        (name for name in ("intervention_budget", "budget") if name in summary.columns),
+        None,
+    )
+    supported_summary = summary[
+        summary.get(
+            "support_status", pd.Series("unsupported", index=summary.index)
+        ).isin(["adequate", "limited"])
+        & pd.to_numeric(
+            summary.get("estimate", pd.Series(dtype=float)), errors="coerce"
+        ).notna()
+    ]
+    if not supported_summary.empty and summary_persistence and summary_budget:
+        pivot = supported_summary.pivot_table(
+            index=summary_persistence,
+            columns=summary_budget,
+            values="estimate",
+            aggfunc="mean",
+        ).sort_index()
+        figure, axis = plt.subplots(figsize=(7, 4.5))
+        image = axis.imshow(pivot.to_numpy(dtype=float), aspect="auto", origin="lower")
+        axis.set_xticks(range(len(pivot.columns)), labels=map(str, pivot.columns))
+        axis.set_yticks(range(len(pivot.index)), labels=map(str, pivot.index))
+        axis.set(
+            xlabel=summary_budget,
+            ylabel=summary_persistence,
+            title="Available-mass-weighted causal susceptibility",
+        )
+        figure.colorbar(image, ax=axis, label="causal response per available mass")
+        figure.tight_layout()
+        path = destination / "available_causal_susceptibility_cell_summary.png"
         figure.savefig(path, dpi=150)
         plt.close(figure)
         paths.append(str(path))
@@ -3608,6 +3761,19 @@ def aggregate_study(
                 },
             }
         )
+        available_hash = canonical_hash(
+            {
+                "scientific_input_identity": input_identity,
+                "estimator": "available_causal_susceptibility_v1",
+                "lag": 1,
+                "state_bins": 8,
+                "settings": {
+                    "bootstrap_resamples": settings["bootstrap_resamples"],
+                    "confidence": settings["confidence"],
+                    "seed": settings["seed"],
+                },
+            }
+        )
         causal_outputs = analyze_causal_communication(
             canonical["rounds"],
             canonical["cells"],
@@ -3616,9 +3782,15 @@ def aggregate_study(
             confidence=float(settings["confidence"]),
             seed=int(settings["seed"]),
         )
-        for frame in causal_outputs.values():
+        available_tables = {
+            "available_causal_susceptibility_state_local",
+            "available_causal_susceptibility_summary",
+        }
+        for name, frame in causal_outputs.items():
             if not frame.empty:
-                frame["analysis_hash"] = causal_hash
+                frame["analysis_hash"] = (
+                    available_hash if name in available_tables else causal_hash
+                )
         outputs.update(causal_outputs)
         causal_inputs = causal_outputs["causal_response_round_inputs"]
         funnel = causal_outputs["communication_funnel"]
@@ -3629,11 +3801,26 @@ def aggregate_study(
             "round_ordering_valid": True,
             "round_input_rows": int(len(causal_inputs)),
             "effect_rows": int(len(causal_outputs["causal_response_effects"])),
+            "available_state_local_rows": int(
+                len(causal_outputs["available_causal_susceptibility_state_local"])
+            ),
+            "available_summary_rows": int(
+                len(causal_outputs["available_causal_susceptibility_summary"])
+            ),
+            "saturated_rounds_excluded": int(
+                (
+                    causal_inputs.get("x_t", pd.Series(dtype=float)).eq(1.0)
+                    & causal_inputs.get(
+                        "lag_1_available", pd.Series(False, index=causal_inputs.index)
+                    ).fillna(False)
+                    & causal_inputs.get(
+                        "episode_complete", pd.Series(False, index=causal_inputs.index)
+                    ).fillna(False)
+                ).sum()
+            ),
             "missing_lag_counts": {
                 f"h{lag}": int(
-                    causal_inputs.get(
-                        f"lag_{lag}_available", pd.Series(dtype=bool)
-                    )
+                    causal_inputs.get(f"lag_{lag}_available", pd.Series(dtype=bool))
                     .eq(False)
                     .sum()
                 )
@@ -3652,9 +3839,7 @@ def aggregate_study(
                 else 0
             ),
             "micro_slot_communication_audit_rows": int(
-                funnel.get(
-                    "micro_slot_audit_available", pd.Series(dtype=bool)
-                )
+                funnel.get("micro_slot_audit_available", pd.Series(dtype=bool))
                 .fillna(False)
                 .sum()
             ),
@@ -3786,6 +3971,8 @@ def aggregate_study(
                 f"- Single-affinity theory comparison rows: {len(theory_comparison)}",
                 "- Propensity-weighted causal-response rows: "
                 f"{len(outputs.get('causal_response_effects', ()))}",
+                "- Available causal-susceptibility cell summaries: "
+                f"{len(outputs.get('available_causal_susceptibility_summary', ()))}",
                 "- Communication-funnel rows: "
                 f"{len(outputs.get('communication_funnel', ()))}",
                 "",
@@ -3807,6 +3994,12 @@ def aggregate_study(
                 "shared-initialization blocks. Communication mode and realized "
                 "posts are excluded from causal conditioning because they are "
                 "post-treatment outcomes.",
+                "Available causal susceptibility divides each immediate round "
+                "contribution by its pre-intervention available target mass, "
+                "1-x. Saturated rounds remain undefined and are reported as "
+                "excluded. The preferred cell summary divides summed causal "
+                "response by summed available mass, recomputing that ratio "
+                "inside every shared-initialization-block bootstrap draw.",
                 "Communication efficiency estimates causal response and IPW "
                 "expected activation cost separately before forming aggregate "
                 "ratios. Zero cost denominators remain missing. Reader counts are "

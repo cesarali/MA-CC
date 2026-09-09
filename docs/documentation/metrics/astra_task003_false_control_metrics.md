@@ -598,7 +598,47 @@ lags, incomplete episodes, initialization blocks, and propensity quantiles.
 Near-zero or near-one propensities produce large weights and can make estimates
 unstable even when both actions occurred.
 
-### 10.2 Communication funnel
+### 10.2 Available causal susceptibility
+
+Available causal susceptibility is an **offline derived analysis**, meaning it
+is calculated from saved canonical rounds and does not rerun the simulation or
+call a model provider. For the immediate response, it divides each round's
+propensity-weighted causal contribution by the population share that was still
+available to move toward the controller target before treatment:
+
+$$
+\psi^{\mathrm{avail}}_{k,1}
+=
+\frac{\psi_{k,1}}{1-x_k},
+\qquad x_k<1.
+$$
+
+Here $1-x_k$ is pre-intervention available target-convertible population mass.
+The state-local table, `available_causal_susceptibility_state_local.parquet`,
+averages these exact round-level values within the existing eight $x$ bins. It
+does not divide by a bin center.
+
+At $x_k=1$, no population mass remains available. The value is therefore
+undefined, remains missing (`NaN`), and is counted in
+`n_saturated_excluded`. It is never set to zero or clipped.
+
+The preferred one-number-per-cell result is in
+`available_causal_susceptibility_summary.parquet`:
+
+$$
+\chi_{\mathrm{avail}}^{\mathrm{mass}}
+=
+\frac{\sum_k \psi_{k,1}}{\sum_k(1-x_k)}.
+$$
+
+This ratio of sums gives less leverage to individual nearly saturated rounds
+than the average of $\psi_{k,1}/(1-x_k)$. The numerator and denominator are
+recalculated together inside every shared-initialization-block bootstrap draw.
+This is a susceptibility normalization. It does not redefine
+`round_target_susceptibility`, $T_\pi$, $\eta_{IR}$, or thermodynamic
+efficiency.
+
+### 10.3 Communication funnel
 
 `communication_funnel.parquet` follows each randomized round through:
 
@@ -624,7 +664,7 @@ When detailed microscopic records are present, their message, reader, new-fact,
 and reactivated-fact identities audit the round totals. A disagreement causes
 aggregation to fail rather than silently accepting two versions.
 
-### 10.3 Expected activation cost
+### 10.4 Expected activation cost
 
 For a communication cost $C_k$, the estimated expected cost under activation
 is
@@ -637,7 +677,7 @@ $$
 
 This calculation is repeated for each of the five cost fields above.
 
-### 10.4 Operational response per cost
+### 10.5 Operational response per cost
 
 `communication_efficiency.parquet` reports
 
@@ -654,7 +694,7 @@ is never changed to zero.
 This is an operational communication-efficiency measure. It is not
 $\eta_{IR}$ and not thermodynamic $\eta_{th}$.
 
-### 10.5 Response-cost frontier
+### 10.6 Response-cost frontier
 
 `response_cost_frontier.parquet` sorts supported cells by observed expected
 cost. A point is on the frontier when its causal response is larger than every
@@ -663,7 +703,7 @@ supported response observed at an equal or lower cost.
 The frontier describes the best observed trade-off in this study. It is not an
 optimization proof and does not predict untested budgets.
 
-### 10.6 Communication mode summary
+### 10.7 Communication mode summary
 
 `communication_mode_descriptive_response.parquet` reports mean observed
 response after `REPORT`, `REQUEST`, or `DIRECTIVE` choices.
@@ -810,11 +850,15 @@ After strict aggregation, start with:
    current, affinity audit fields, and $\eta_{th}$ validity.
 6. `analysis/tables/causal_response_effects.parquet` — compare causal response
    across lags, persistence values, and budgets.
-7. `analysis/tables/communication_efficiency.parquet` — compare response with
+7. `analysis/tables/available_causal_susceptibility_summary.parquet` — compare
+   the stable immediate response per available target-convertible mass.
+8. `analysis/tables/available_causal_susceptibility_state_local.parquet` —
+   inspect how that normalization changes across the eight target-share bins.
+9. `analysis/tables/communication_efficiency.parquet` — compare response with
    posts, exposures, readers, acquisitions, and reactivations.
-8. `analysis/tables/blackboard_diagnostics.parquet` — explain which board
+10. `analysis/tables/blackboard_diagnostics.parquet` — explain which board
    mechanisms produced those costs.
-9. `analysis/tables/response_cost_frontier.parquet` — inspect the supported
+11. `analysis/tables/response_cost_frontier.parquet` — inspect the supported
    observed response-cost trade-off.
 
 A practical reading sequence for one cell is:

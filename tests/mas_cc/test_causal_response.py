@@ -9,6 +9,7 @@ from mas_cc.analysis.causal_response import (
     analyze_causal_communication,
     build_causal_response_inputs,
     build_communication_funnel,
+    estimate_available_causal_susceptibility,
     estimate_causal_response,
 )
 from mas_cc.studies.aggregation import _blackboard_phase2_requested
@@ -27,6 +28,7 @@ def _round(
     *,
     target: str = "false",
     block: str | None = None,
+    propensity: float = 0.5,
 ) -> dict:
     return {
         "study_id": "study",
@@ -35,7 +37,7 @@ def _round(
         "episode_id": episode,
         "round_index": round_index,
         "U_k": action,
-        "P_U1_given_Y": 0.5,
+        "P_U1_given_Y": propensity,
         "controller_target_share_before": before,
         "controller_target_share": after,
         "physical_initial_state_hash": block or episode,
@@ -61,10 +63,86 @@ def test_propensity_weighted_example_recovers_known_effect_and_weights():
     )
     inputs = build_causal_response_inputs(rounds)
     assert inputs.loc[inputs["U_t"] == 1, "ipw_contrast_weight"].tolist() == [2.0, 2.0]
-    assert inputs.loc[inputs["U_t"] == 0, "ipw_contrast_weight"].tolist() == [-2.0, -2.0]
+    assert inputs.loc[inputs["U_t"] == 0, "ipw_contrast_weight"].tolist() == [
+        -2.0,
+        -2.0,
+    ]
     effects, support, _ = estimate_causal_response(inputs, bootstrap_resamples=0)
     assert effects.loc[effects["lag"] == 1, "estimate"].item() == pytest.approx(0.1)
     assert support.loc[support["lag"] == 1, "support_status"].item() == "adequate"
+
+
+def test_available_susceptibility_uses_logged_propensity_and_exact_row_mass():
+    rounds = pd.DataFrame(
+        [
+            _round("c", "e-0", 0, 1, 0.26, 0.36, propensity=0.25),
+            _round("c", "e-1", 0, 0, 0.36, 0.31, propensity=0.75),
+        ]
+    )
+    inputs = build_causal_response_inputs(rounds)
+    _, _, draws = estimate_causal_response(inputs, bootstrap_resamples=0)
+    state_local, summary = estimate_available_causal_susceptibility(
+        inputs, draws, bootstrap_resamples=0
+    )
+    expected_local = ((0.1 / 0.25) / 0.74 + (0.05 / 0.25) / 0.64) / 2
+    row = state_local.query("target_fraction_bin_index == 2").iloc[0]
+    assert row["estimate"] == pytest.approx(expected_local)
+    assert row["estimate"] != pytest.approx(((0.4 + 0.2) / 2) / (1 - 0.3125))
+    assert row["propensity_min"] == pytest.approx(0.25)
+    assert row["propensity_max"] == pytest.approx(0.75)
+    assert summary.iloc[0]["estimate"] == pytest.approx((0.4 + 0.2) / (0.74 + 0.64))
+
+
+def test_available_susceptibility_excludes_and_reports_saturation():
+    rounds = pd.DataFrame(
+        [
+            _round("c", "e-0", 0, 1, 1.0, 1.0),
+            _round("c", "e-1", 0, 1, 0.25, 0.5),
+            _round("c", "e-2", 0, 0, 0.25, 0.25),
+        ]
+    )
+    inputs = build_causal_response_inputs(rounds)
+    _, _, draws = estimate_causal_response(inputs, bootstrap_resamples=0)
+    state_local, summary = estimate_available_causal_susceptibility(
+        inputs, draws, bootstrap_resamples=0
+    )
+    assert (
+        state_local.query("target_fraction_bin_index == 7").iloc[0][
+            "n_saturated_excluded"
+        ]
+        == 1
+    )
+    assert math.isnan(
+        state_local.query("target_fraction_bin_index == 7").iloc[0]["estimate"]
+    )
+    assert summary.iloc[0]["n_saturated_excluded"] == 1
+    assert summary.iloc[0]["n_rounds"] == 2
+
+
+def test_available_summary_bootstrap_recomputes_ratio_within_block_draws():
+    rounds = pd.DataFrame(
+        [
+            _round("c", "e-0", 0, 1, 0.0, 0.5, block="wide"),
+            _round("c", "e-1", 0, 0, 0.75, 0.75, block="narrow"),
+        ]
+    )
+    inputs = build_causal_response_inputs(rounds)
+    _, _, draws = estimate_causal_response(inputs, bootstrap_resamples=20, seed=4)
+    _, summary = estimate_available_causal_susceptibility(
+        inputs, draws, bootstrap_resamples=20, confidence=0.8
+    )
+    ratios = []
+    for draw in draws:
+        eligible = draw[draw["lag_1_available"] & draw["x_t"].lt(1.0)]
+        ratios.append(
+            eligible["causal_response_h1"].sum() / (1.0 - eligible["x_t"]).sum()
+        )
+    assert summary.iloc[0]["ci_low"] == pytest.approx(
+        float(pd.Series(ratios).quantile(0.1))
+    )
+    assert summary.iloc[0]["ci_high"] == pytest.approx(
+        float(pd.Series(ratios).quantile(0.9))
+    )
 
 
 def test_target_orientation_and_lags_are_episode_local_and_row_order_invariant():
@@ -105,11 +183,17 @@ def test_missing_round_is_reported_and_shared_initialization_blocks_stay_intact(
         ]
     )
     inputs = build_causal_response_inputs(rounds, cells)
-    effects, support, draws = estimate_causal_response(inputs, bootstrap_resamples=8, seed=7)
+    effects, support, draws = estimate_causal_response(
+        inputs, bootstrap_resamples=8, seed=7
+    )
     assert set(support["incomplete_episode_count"]) == {1}
     assert set(effects.loc[effects["lag"].isin([1, 2]), "n_episodes"]) == {1}
     for draw in draws:
-        counts = draw.groupby(["initialization_block_id", "cell_id"]).size().unstack(fill_value=0)
+        counts = (
+            draw.groupby(["initialization_block_id", "cell_id"])
+            .size()
+            .unstack(fill_value=0)
+        )
         assert (counts["a"] == counts["b"]).all()
 
 
@@ -161,9 +245,11 @@ def test_communication_funnel_audits_micro_counts_and_zero_cost_is_missing():
         micro,
         bootstrap_resamples=0,
     )
-    reactivation = outputs["communication_efficiency"].query(
-        "cost_metric == 'reactivated_controller_facts' and lag == 1"
-    ).iloc[0]
+    reactivation = (
+        outputs["communication_efficiency"]
+        .query("cost_metric == 'reactivated_controller_facts' and lag == 1")
+        .iloc[0]
+    )
     assert math.isnan(reactivation["response_per_expected_cost"])
     assert bool(reactivation["zero_denominator"])
 
@@ -254,6 +340,7 @@ resampling: {bootstrap_resamples: 4, null_permutations: 0, confidence: 0.9, seed
                 "target_semantics": "false",
                 "controller_communication_policy": "llm_structured_v1",
                 "intervention_budget": 1,
+                "epistemic_persistence": 0.8,
                 "horizon": 1,
             }
         ]
@@ -339,6 +426,8 @@ resampling: {bootstrap_resamples: 4, null_permutations: 0, confidence: 0.9, seed
         "causal_response_round_inputs.parquet",
         "causal_response_effects.parquet",
         "causal_response_support.parquet",
+        "available_causal_susceptibility_state_local.parquet",
+        "available_causal_susceptibility_summary.parquet",
         "communication_funnel.parquet",
         "communication_efficiency.parquet",
         "response_cost_frontier.parquet",
@@ -348,6 +437,9 @@ resampling: {bootstrap_resamples: 4, null_permutations: 0, confidence: 0.9, seed
         names = set(archive.namelist())
     assert {f"tables/{name}" for name in expected}.issubset(names)
     assert "plots/causal_response_by_lag.png" in names
+    assert "plots/available_causal_susceptibility_x_b_by_rho.png" in names
+    assert "plots/available_causal_susceptibility_vs_budget.png" in names
+    assert "plots/available_causal_susceptibility_cell_summary.png" in names
     validation = json.loads((analysis / "validation.json").read_text())
     assert validation["causal_response"]["provider_calls"] == 0
     stable_paths = [

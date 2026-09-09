@@ -21,6 +21,7 @@ import pandas as pd
 
 
 ESTIMATOR_VERSION = "propensity_weighted_causal_response_v1"
+AVAILABLE_SUSCEPTIBILITY_VERSION = "available_causal_susceptibility_v1"
 DEFAULT_LAGS = (1, 2, 3)
 FORBIDDEN_CAUSAL_STRATA = frozenset(
     {
@@ -90,12 +91,16 @@ def _target_share(frame: pd.DataFrame, *, before: bool) -> pd.Series:
     if comparable.any() and not np.allclose(
         direct.loc[comparable], derived.loc[comparable], rtol=0, atol=1e-12
     ):
-        raise ValueError("recorded target share disagrees with analysis_target orientation")
+        raise ValueError(
+            "recorded target share disagrees with analysis_target orientation"
+        )
     direct.loc[direct.isna()] = derived.loc[direct.isna()]
     return direct
 
 
-def _expected_rounds(group: pd.DataFrame, cell_row: Mapping[str, Any] | None) -> tuple[int, ...]:
+def _expected_rounds(
+    group: pd.DataFrame, cell_row: Mapping[str, Any] | None
+) -> tuple[int, ...]:
     if cell_row is not None:
         for field in ("population_rounds", "horizon"):
             raw = cell_row.get(field)
@@ -130,7 +135,9 @@ def build_causal_response_inputs(
         raise ValueError("causal-response lags must be positive integers")
 
     source = rounds.copy()
-    source["round_index"] = pd.to_numeric(source["round_index"], errors="raise").astype(int)
+    source["round_index"] = pd.to_numeric(source["round_index"], errors="raise").astype(
+        int
+    )
     if (source["round_index"] < 0).any():
         raise ValueError("causal-response round indices must be non-negative")
     source["U_t"] = _numeric(source, ("U_k", "controller_sampled_U"))
@@ -160,7 +167,10 @@ def build_causal_response_inputs(
     source["x_after"] = _target_share(source, before=False)
     if source[["x_t", "x_after"]].isna().any().any():
         raise ValueError("causal-response target-oriented shares are missing")
-    if not source["x_t"].between(0, 1).all() or not source["x_after"].between(0, 1).all():
+    if (
+        not source["x_t"].between(0, 1).all()
+        or not source["x_after"].between(0, 1).all()
+    ):
         raise ValueError("causal-response target shares must lie in [0, 1]")
     source["ipw_contrast_weight"] = np.where(
         source["U_t"] == 1,
@@ -180,7 +190,9 @@ def build_causal_response_inputs(
             actual = tuple(sorted(int(value) for value in episode["round_index"]))
             completeness[(str(cell_id), str(episode_id))] = actual == expected
 
-    source = source.sort_values(["cell_id", "episode_id", "round_index"]).reset_index(drop=True)
+    source = source.sort_values(["cell_id", "episode_id", "round_index"]).reset_index(
+        drop=True
+    )
     source["episode_complete"] = [
         completeness[(str(row.cell_id), str(row.episode_id))]
         for row in source.itertuples()
@@ -197,12 +209,16 @@ def build_causal_response_inputs(
     )
 
     lookup = {
-        (str(row.cell_id), str(row.episode_id), int(row.round_index)): float(row.x_after)
+        (str(row.cell_id), str(row.episode_id), int(row.round_index)): float(
+            row.x_after
+        )
         for row in source.itertuples()
     }
     for lag in requested_lags:
         outcomes = [
-            lookup.get((str(row.cell_id), str(row.episode_id), int(row.round_index) + lag - 1))
+            lookup.get(
+                (str(row.cell_id), str(row.episode_id), int(row.round_index) + lag - 1)
+            )
             for row in source.itertuples()
         ]
         source[f"x_t_plus_{lag}"] = outcomes
@@ -235,7 +251,10 @@ def _bootstrap_draws(
     }
     return [
         pd.concat(
-            [by_block[block] for block in rng.choice(blocks, size=len(blocks), replace=True)],
+            [
+                by_block[block]
+                for block in rng.choice(blocks, size=len(blocks), replace=True)
+            ],
             ignore_index=True,
         )
         for _ in range(resamples)
@@ -243,7 +262,9 @@ def _bootstrap_draws(
 
 
 def _interval(values: Sequence[float], confidence: float) -> tuple[float, float]:
-    finite = np.asarray([value for value in values if math.isfinite(value)], dtype=float)
+    finite = np.asarray(
+        [value for value in values if math.isfinite(value)], dtype=float
+    )
     if not len(finite):
         return math.nan, math.nan
     alpha = (1.0 - confidence) / 2.0
@@ -288,7 +309,9 @@ def estimate_causal_response(
                 "cell_id": cell_id,
                 "lag": lag,
                 "n_observations": int(len(eligible)),
-                "n_episodes": int(cell.loc[cell[field].notna(), "episode_id"].nunique()),
+                "n_episodes": int(
+                    cell.loc[cell[field].notna(), "episode_id"].nunique()
+                ),
                 "n_initialization_blocks": int(
                     cell.loc[cell[field].notna(), "initialization_block_id"].nunique()
                 ),
@@ -334,7 +357,159 @@ def estimate_causal_response(
     return pd.DataFrame(effect_rows), pd.DataFrame(support_rows), draws
 
 
-def _micro_audit(funnel: pd.DataFrame, micro_slots: pd.DataFrame | None) -> pd.DataFrame:
+def _available_support(group: pd.DataFrame) -> dict[str, Any]:
+    """Return audit fields for rows contributing to an available-mass estimate."""
+
+    action = int((group["U_t"] == 1).sum())
+    silence = int((group["U_t"] == 0).sum())
+    return {
+        "n_rounds": int(len(group)),
+        "n_episodes": int(group["episode_id"].nunique()),
+        "n_initialization_blocks": int(group["initialization_block_id"].nunique()),
+        "n_action": action,
+        "n_silence": silence,
+        "support_status": _support_status(action, silence),
+        "propensity_min": float(group["e_t"].min()) if len(group) else math.nan,
+        "propensity_q05": float(group["e_t"].quantile(0.05))
+        if len(group)
+        else math.nan,
+        "propensity_median": float(group["e_t"].median()) if len(group) else math.nan,
+        "propensity_q95": float(group["e_t"].quantile(0.95))
+        if len(group)
+        else math.nan,
+        "propensity_max": float(group["e_t"].max()) if len(group) else math.nan,
+        "available_mass": float(group["available_mass"].sum()) if len(group) else 0.0,
+    }
+
+
+def _with_available_susceptibility(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add transient availability fields without changing retained round inputs."""
+
+    result = frame.copy()
+    result["available_mass"] = 1.0 - result["x_t"]
+    result["saturated"] = result["x_t"] == 1.0
+    result["available_susceptibility_defined"] = (
+        result["lag_1_available"] & ~result["saturated"]
+    )
+    result["available_causal_susceptibility_h1"] = np.where(
+        result["available_susceptibility_defined"],
+        result["causal_response_h1"] / result["available_mass"],
+        math.nan,
+    )
+    result["target_fraction_bin_index"] = np.minimum(
+        np.floor(8.0 * result["x_t"]).astype(int), 7
+    )
+    return result
+
+
+def estimate_available_causal_susceptibility(
+    inputs: pd.DataFrame,
+    draws: Sequence[pd.DataFrame],
+    *,
+    bins: int = 8,
+    bootstrap_resamples: int = 1000,
+    confidence: float = 0.95,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Estimate immediate causal response per pre-treatment available mass.
+
+    The state-local table averages each round's normalized contribution.  The
+    cell summary instead divides the sum of causal contributions by the sum of
+    available mass, including that ratio calculation inside every bootstrap
+    replicate. Saturated rows are reported but never assigned a finite value.
+    """
+
+    if inputs.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    if not {"causal_response_h1", "lag_1_available", "x_t"}.issubset(inputs.columns):
+        raise ValueError(
+            "available susceptibility requires the immediate causal response"
+        )
+    if bins != 8:
+        raise ValueError("available susceptibility uses the fixed eight-bin convention")
+
+    complete = _with_available_susceptibility(inputs[inputs["episode_complete"]])
+    available_draws = [_with_available_susceptibility(draw) for draw in draws]
+    state_rows: list[dict[str, Any]] = []
+    summary_rows: list[dict[str, Any]] = []
+    common_estimator = {
+        "estimator_version": AVAILABLE_SUSCEPTIBILITY_VERSION,
+        "confidence": confidence,
+        "bootstrap_resamples": bootstrap_resamples,
+        "bootstrap_unit": "shared_initialization_block",
+        "units": "target_share_response_per_available_target_mass",
+    }
+    for cell_id, cell in complete.groupby("cell_id", sort=True):
+        saturated_cell = cell[cell["saturated"] & cell["lag_1_available"]]
+        eligible_cell = cell[cell["available_susceptibility_defined"]]
+        for bin_index in range(bins):
+            in_bin = cell["target_fraction_bin_index"] == bin_index
+            eligible = cell[in_bin & cell["available_susceptibility_defined"]]
+            saturated = cell[in_bin & cell["saturated"] & cell["lag_1_available"]]
+            draw_estimates: list[float] = []
+            for draw in available_draws:
+                subset = draw[
+                    (draw["cell_id"] == cell_id)
+                    & (draw["target_fraction_bin_index"] == bin_index)
+                    & draw["available_susceptibility_defined"]
+                ]
+                values = subset["available_causal_susceptibility_h1"].dropna()
+                draw_estimates.append(float(values.mean()) if len(values) else math.nan)
+            ci_low, ci_high = _interval(draw_estimates, confidence)
+            values = eligible["available_causal_susceptibility_h1"].dropna()
+            state_rows.append(
+                {
+                    "cell_id": cell_id,
+                    "x_bin": bin_index,
+                    "target_fraction_bin_index": bin_index,
+                    "target_fraction_bin_lower": bin_index / bins,
+                    "target_fraction_bin_upper": (bin_index + 1) / bins,
+                    "target_fraction_bin_center": (bin_index + 0.5) / bins,
+                    "target_fraction_bin_count": bins,
+                    "metric": "propensity_weighted_available_susceptibility",
+                    "estimator_name": "propensity_weighted_available_susceptibility",
+                    "estimate": float(values.mean()) if len(values) else math.nan,
+                    "ci_low": ci_low,
+                    "ci_high": ci_high,
+                    "n_saturated_excluded": int(len(saturated)),
+                    **_available_support(eligible),
+                    **common_estimator,
+                }
+            )
+
+        draw_ratios: list[float] = []
+        for draw in available_draws:
+            subset = draw[
+                (draw["cell_id"] == cell_id) & draw["available_susceptibility_defined"]
+            ]
+            denominator = float(subset["available_mass"].sum())
+            draw_ratios.append(
+                float(subset["causal_response_h1"].sum()) / denominator
+                if denominator > 0
+                else math.nan
+            )
+        ci_low, ci_high = _interval(draw_ratios, confidence)
+        denominator = float(eligible_cell["available_mass"].sum())
+        numerator = float(eligible_cell["causal_response_h1"].sum())
+        summary_rows.append(
+            {
+                "cell_id": cell_id,
+                "metric": "available_mass_weighted_causal_susceptibility",
+                "estimator_name": "available_mass_weighted_causal_susceptibility",
+                "estimate": numerator / denominator if denominator > 0 else math.nan,
+                "ci_low": ci_low,
+                "ci_high": ci_high,
+                "causal_response_sum": numerator,
+                "n_saturated_excluded": int(len(saturated_cell)),
+                **_available_support(eligible_cell),
+                **common_estimator,
+            }
+        )
+    return pd.DataFrame(state_rows), pd.DataFrame(summary_rows)
+
+
+def _micro_audit(
+    funnel: pd.DataFrame, micro_slots: pd.DataFrame | None
+) -> pd.DataFrame:
     if micro_slots is None or micro_slots.empty:
         funnel["micro_slot_audit_available"] = False
         return funnel
@@ -373,7 +548,9 @@ def _micro_audit(funnel: pd.DataFrame, micro_slots: pd.DataFrame | None) -> pd.D
             lambda values: sum(len(value) for value in values),
         ),
     ).reset_index()
-    result = funnel.merge(audit, on=["cell_id", "episode_id", "round_index"], how="left")
+    result = funnel.merge(
+        audit, on=["cell_id", "episode_id", "round_index"], how="left"
+    )
     checks = [
         ("exposures", "micro_controller_exposures"),
         ("new_controller_facts", "micro_new_controller_facts"),
@@ -388,7 +565,9 @@ def _micro_audit(funnel: pd.DataFrame, micro_slots: pd.DataFrame | None) -> pd.D
             != pd.to_numeric(result[micro_field], errors="coerce")
         )
         if mismatch.any():
-            raise ValueError(f"round communication count disagrees with micro slots: {round_field}")
+            raise ValueError(
+                f"round communication count disagrees with micro slots: {round_field}"
+            )
     return result
 
 
@@ -429,11 +608,15 @@ def build_communication_funnel(
     ].copy()
     funnel["controller_action"] = inputs["U_t"].astype(int)
     for label, source in COST_FIELDS.items():
-        alternatives = (source, "controller_posts") if label == "actual_posts" else (source,)
+        alternatives = (
+            (source, "controller_posts") if label == "actual_posts" else (source,)
+        )
         funnel[label] = _numeric(inputs, alternatives).fillna(0.0)
     silent_cost = funnel["U_t"] == 0
     if (funnel.loc[silent_cost, list(COST_FIELDS)].fillna(0) != 0).any().any():
-        raise ValueError("silent randomized rounds cannot have controller communication cost")
+        raise ValueError(
+            "silent randomized rounds cannot have controller communication cost"
+        )
     funnel["unique_reader_scope"] = "per_round_not_episode_wide"
     for lag in DEFAULT_LAGS:
         for prefix in ("delta_x", "causal_response"):
@@ -460,10 +643,14 @@ def communication_efficiency(
         cell_id, lag = effect["cell_id"], int(effect["lag"])
         cell = complete[complete["cell_id"] == cell_id]
         for metric, source in COST_FIELDS.items():
-            alternatives = (source, "controller_posts") if metric == "actual_posts" else (source,)
+            alternatives = (
+                (source, "controller_posts") if metric == "actual_posts" else (source,)
+            )
             cost = _numeric(cell, alternatives).fillna(0.0)
             contribution = cell["U_t"] * cost / cell["e_t"]
-            expected_cost = float(contribution.mean()) if len(contribution) else math.nan
+            expected_cost = (
+                float(contribution.mean()) if len(contribution) else math.nan
+            )
             draw_costs: list[float] = []
             draw_ratios: list[float] = []
             response_field = f"causal_response_h{lag}"
@@ -475,7 +662,9 @@ def communication_efficiency(
                 draw_cost = float((subset["U_t"] * draw_source / subset["e_t"]).mean())
                 draw_response = float(subset[response_field].dropna().mean())
                 draw_costs.append(draw_cost)
-                draw_ratios.append(draw_response / draw_cost if draw_cost > 0 else math.nan)
+                draw_ratios.append(
+                    draw_response / draw_cost if draw_cost > 0 else math.nan
+                )
             cost_low, cost_high = _interval(draw_costs, confidence)
             ratio_low, ratio_high = _interval(draw_ratios, confidence)
             rows.append(
@@ -549,7 +738,9 @@ def descriptive_mode_response(inputs: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     acted = inputs[(inputs["U_t"] == 1) & inputs["chosen_message_mode"].notna()]
     rows: list[dict[str, Any]] = []
-    for (cell_id, mode), group in acted.groupby(["cell_id", "chosen_message_mode"], sort=True):
+    for (cell_id, mode), group in acted.groupby(
+        ["cell_id", "chosen_message_mode"], sort=True
+    ):
         for lag in DEFAULT_LAGS:
             values = group[f"delta_x_h{lag}"].dropna()
             rows.append(
@@ -557,7 +748,9 @@ def descriptive_mode_response(inputs: pd.DataFrame) -> pd.DataFrame:
                     "cell_id": cell_id,
                     "communication_mode": mode,
                     "lag": lag,
-                    "mean_observed_response": float(values.mean()) if len(values) else math.nan,
+                    "mean_observed_response": float(values.mean())
+                    if len(values)
+                    else math.nan,
                     "n_observations": int(len(values)),
                     "causal": False,
                     "interpretation": "descriptive post-treatment mode breakdown",
@@ -581,7 +774,9 @@ def analyze_causal_communication(
     attach = lambda frame: (
         frame
         if frame.empty or coordinates.empty or "cell_id" not in frame
-        else frame.merge(coordinates, on="cell_id", how="left", suffixes=("", "_coordinate"))
+        else frame.merge(
+            coordinates, on="cell_id", how="left", suffixes=("", "_coordinate")
+        )
     )
     inputs = attach(build_causal_response_inputs(rounds, cells))
     effects, support, draws = estimate_causal_response(
@@ -590,10 +785,26 @@ def analyze_causal_communication(
         confidence=confidence,
         seed=seed,
     )
+    available_state_local, available_summary = estimate_available_causal_susceptibility(
+        inputs,
+        draws,
+        bootstrap_resamples=bootstrap_resamples,
+        confidence=confidence,
+    )
     funnel = build_communication_funnel(inputs, micro_slots)
     efficiency = communication_efficiency(inputs, effects, draws, confidence=confidence)
-    effects, support, funnel, efficiency = map(
-        attach, (effects, support, funnel, efficiency)
+    effects, support, available_state_local, available_summary, funnel, efficiency = (
+        map(
+            attach,
+            (
+                effects,
+                support,
+                available_state_local,
+                available_summary,
+                funnel,
+                efficiency,
+            ),
+        )
     )
     frontier = response_cost_frontier(efficiency)
     modes = attach(descriptive_mode_response(inputs))
@@ -601,6 +812,8 @@ def analyze_causal_communication(
         "causal_response_round_inputs": inputs,
         "causal_response_effects": effects,
         "causal_response_support": support,
+        "available_causal_susceptibility_state_local": available_state_local,
+        "available_causal_susceptibility_summary": available_summary,
         "communication_funnel": funnel,
         "communication_efficiency": efficiency,
         "response_cost_frontier": frontier,
@@ -609,6 +822,7 @@ def analyze_causal_communication(
 
 
 __all__ = [
+    "AVAILABLE_SUSCEPTIBILITY_VERSION",
     "DEFAULT_LAGS",
     "ESTIMATOR_VERSION",
     "FORBIDDEN_CAUSAL_STRATA",
@@ -618,5 +832,6 @@ __all__ = [
     "communication_efficiency",
     "descriptive_mode_response",
     "estimate_causal_response",
+    "estimate_available_causal_susceptibility",
     "response_cost_frontier",
 ]
