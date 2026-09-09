@@ -562,7 +562,41 @@ causal estimator is never directly conditioned on them; a recipe that requests
 either as a causal stratum is rejected. Mode breakdowns are emitted only as
 explicitly non-causal descriptive summaries.
 
-### 10.9 Communication funnel and operational efficiency
+### 10.9 Available causal susceptibility
+
+This offline derived analysis normalizes the immediate propensity-weighted
+causal response by the pre-intervention target-convertible population mass:
+
+```text
+psi_available_t = causal_response_h1 / (1 - x_t), for x_t < 1
+```
+
+Each row uses its exact logged $x_t$ before bin averaging. The eight-bin rule
+remains `min(floor(8*x_t), 7)`; no bin center is used as a denominator. At
+$x_t=1$, the quantity is undefined, remains `NaN`, and is counted rather than
+coerced to zero.
+
+Aggregation writes:
+
+```text
+available_causal_susceptibility_state_local.parquet
+available_causal_susceptibility_summary.parquet
+```
+
+The first table contains the mean round-normalized score by scientific cell
+and target-share bin. The second contains the preferred stable cell summary:
+
+```text
+sum(causal_response_h1) / sum(1 - x_t)
+```
+
+Both tables report contributing rounds, excluded saturated rounds, action and
+silence counts, propensity support, available mass, and identified shared
+initialization blocks. The ratio is recomputed from its numerator and
+denominator inside every bootstrap replicate. This metric does not redefine
+ordinary susceptibility, `T_pi`, `eta_ir`, or thermodynamic efficiency.
+
+### 10.10 Communication funnel and operational efficiency
 
 The round-level funnel links the assigned action to actual controller posts,
 message exposures, distinct readers in that round, new controller-fact
@@ -626,6 +660,11 @@ n_episodes
 Individual bootstrap draws are not retained in the final package.
 
 For nonlinear derived quantities, the complete quantity is recalculated inside each bootstrap replicate when supported by that derived pipeline. Separate confidence intervals are not combined algebraically.
+
+For available causal susceptibility, the resampling unit is the complete
+shared-initialization block. Every matched cell and episode in a sampled block
+travels together. The available-mass-weighted summary recalculates both sums
+and their ratio inside each replicate.
 
 ## 12. Null summaries
 
