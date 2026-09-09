@@ -1,0 +1,62 @@
+llm_provider: {type: deepinfra, model: deepseek-ai/DeepSeek-V4-Flash, credentials_env: DEEPINFRA_API_KEY, timeout_seconds: 180, max_retries: 2, request_concurrency: 20, temperature: 1.0, max_output_tokens: 512, options: {estimated_latency_seconds: 6.0}}
+prompt: {schema_version: 2, prompt_family: relational_blackboard_ballot, prompt_version: 4, response_contract: {type: relational_blackboard_ballot, allowed_values: [A, B, C]}}
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 30
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_truthful_selective_task_calibration_01/tasks
+    task_id: task_003
+    dynamics_mode: reasoning
+    rounds: 30
+    social_group_size: 3
+    social_mode: board
+    board: {sampling: uniform, message_lifetime_rounds: 1, exclude_self_authored: true, allow_no_post: true, allow_participant_requests: true}
+    epistemic_persistence: 0.70
+    vote_visibility: public
+    prompt_version: 4
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 4
+    expected_validation_failure_rate: 0.15
+    initialization: {mode: paired_local_vote, artifact_dir: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/astra_task003_false_control_30x30_initializations, require_artifact: true}
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+    controller_actuation_mode: adaptive_communication
+    controller_timing: dawn_only
+    allow_controller_requests: true
+    allow_controller_directives: true
+    controller_communication_policy: llm_structured_v1
+    controller_communication_policy_version: 1
+    controller_communication_fallback_policy: contextual_weighted_v1
+    controller_communication_max_retries: 2
+    controller_report_cooldown_rounds: 1
+    controller_report_max_posts_per_fact: 3
+    controller_report_selection_strategy: target_preserving_v1
+execution: {seed: 20260907, repetitions: 30, parallelism: 20, fail_fast: false}
+pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: false}
+budget: {accounting_unit: USD, system_max_cost_per_run: 1000.0, max_cost_per_run: 1000.0, max_provider_requests: 3000000, max_input_tokens: 2000000000, max_output_tokens: 1500000000, allow_unbounded_paid_requests: false}
+logging: {level: INFO, console: true, audit: true, comet: true, options: {comet_project: mas-cc, prompt_examples: {count: 3, scope: cell}}}
+storage: {output_dir: results, format: jsonl, artifact_profile: dashboard_semantic, checkpoint_mode: episode, overwrite: false}
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+observability: {schema_version: 1, comet: {writer: master_only, heartbeat_seconds: 20, progress_metrics: [episodes_done], grid_image_every_n_episodes: 1, sweep_experiment: true, cell_reporting: master, metric_plots: true}}
+experiment:
+  name: astra-task003-false-control-30x30
+  description: Matching-rho high-budget extension of the task-003 false-target population study.
+  tags: [astra, musr, blackboard, task003, false-control, llm-controller, extension]
+  metadata: {study: astra_task003_false_control_30x30, arm: false_control, task_id: task_003, candidate_id: 130, task_file_sha256: 1ec61ccc9578e2bcbd6a027035231dcd1ee39d44892d95b8b6ae2e9f18fdfbdb, private_assignment_sha256: aad3e64f7a713534667e04984c9911423b94c96381ec9b8ff21f90714aaea0a4, controller_pool_sha256: b90a3267c26212194e916777795db0751008d8802d45e35a67088fb8a0ce49d0, ground_truth: ALLOCATION_0, controller_target: ALLOCATION_2, controller_target_is_truth: false, target_semantics: false, population_size: 24, population_rounds: 30, social_group_size: 3, sensor_sample_size: 12, beta: 4.0, theta: 0.5, repetitions: 30, common_random_numbers_across_grid: true, paired_initialization_across_grid: true}
+grid:
+  game.options.epistemic_persistence: [0.70, 0.85, 1.00]
+  control.options.intervention_budget: [18, 24]

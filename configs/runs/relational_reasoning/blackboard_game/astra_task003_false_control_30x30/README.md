@@ -44,5 +44,5 @@ Check `analysis/validation.json` first, then the Phase 2 tables under
 
 Use the generic study launcher. Do not create a study-specific SLURM job.
 
-The full DeepInfra launch ceiling is 100 concurrent episode/provider requests
-across five active single-cell shards, targeting approximately 1,000 RPM.
+The resumed DeepInfra launch ceiling is 180 concurrent episode/provider requests
+across nine active single-cell shards, with a 1,000 RPM safety ceiling.
