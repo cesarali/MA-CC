@@ -327,7 +327,7 @@ Do not reconstruct token cost from provider input/output token totals. Those tot
 
 Update:
 
-`docs/documentation/games/blackboard_game/07092026_standard_study_simulation_aggregation_and_analysis_contract.md`
+`docs/documentation/metrics/study_aggregation_contract.md`
 
 to document:
 
