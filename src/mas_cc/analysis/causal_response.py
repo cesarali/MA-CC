@@ -14,7 +14,8 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
-from typing import Any, Mapping, Sequence
+from collections.abc import Iterator
+from typing import Any, Mapping, Sequence, overload
 
 import numpy as np
 import pandas as pd
@@ -238,27 +239,118 @@ def _support_status(action: int, silence: int) -> str:
     return "adequate"
 
 
-def _bootstrap_draws(
-    complete: pd.DataFrame, *, resamples: int, seed: int
-) -> list[pd.DataFrame]:
-    if resamples <= 0 or complete.empty:
-        return []
-    blocks = sorted(complete["initialization_block_id"].astype(str).unique())
-    rng = np.random.default_rng(seed)
-    by_block = {
-        block: complete[complete["initialization_block_id"].astype(str) == block]
-        for block in blocks
-    }
-    return [
-        pd.concat(
-            [
-                by_block[block]
-                for block in rng.choice(blocks, size=len(blocks), replace=True)
-            ],
+class _BootstrapPlan(Sequence[pd.DataFrame]):
+    """Compact matched-block bootstrap plan.
+
+    Production estimators consume the block-count matrix directly.  The
+    sequence interface remains available for small diagnostics/tests, but a
+    draw is materialized only when it is explicitly requested.
+    """
+
+    def __init__(self, complete: pd.DataFrame, *, resamples: int, seed: int):
+        self.complete = complete
+        self.blocks = tuple(
+            sorted(complete["initialization_block_id"].astype(str).unique())
+        )
+        self._by_block = {
+            block: complete[
+                complete["initialization_block_id"].astype(str) == block
+            ]
+            for block in self.blocks
+        }
+        rng = np.random.default_rng(seed)
+        selections = [
+            tuple(rng.choice(self.blocks, size=len(self.blocks), replace=True))
+            for _ in range(max(0, resamples))
+        ]
+        block_index = {block: index for index, block in enumerate(self.blocks)}
+        self._weights = np.zeros((len(selections), len(self.blocks)), dtype=np.int16)
+        for draw_index, selection in enumerate(selections):
+            for block in selection:
+                self._weights[draw_index, block_index[str(block)]] += 1
+        self._selections = tuple(selections)
+
+    def __len__(self) -> int:
+        return len(self._selections)
+
+    @overload
+    def __getitem__(self, index: int) -> pd.DataFrame: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[pd.DataFrame]: ...
+
+    def __getitem__(self, index: int | slice) -> pd.DataFrame | list[pd.DataFrame]:
+        if isinstance(index, slice):
+            return [self[position] for position in range(*index.indices(len(self)))]
+        selection = self._selections[index]
+        return pd.concat(
+            [self._by_block[str(block)] for block in selection],
             ignore_index=True,
         )
-        for _ in range(resamples)
-    ]
+
+    def __iter__(self) -> Iterator[pd.DataFrame]:
+        for index in range(len(self)):
+            yield self[index]
+
+    def _block_totals(
+        self, values: pd.Series, mask: pd.Series | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
+        aligned = pd.to_numeric(values.reindex(self.complete.index), errors="coerce")
+        eligible = aligned.notna()
+        if mask is not None:
+            eligible &= mask.reindex(self.complete.index, fill_value=False).astype(bool)
+        working = pd.DataFrame(
+            {
+                "block": self.complete["initialization_block_id"].astype(str),
+                "value": aligned,
+            },
+            index=self.complete.index,
+        ).loc[eligible]
+        grouped = working.groupby("block", sort=False)["value"].agg(["sum", "count"])
+        sums = grouped["sum"].reindex(self.blocks, fill_value=0.0).to_numpy(float)
+        counts = grouped["count"].reindex(self.blocks, fill_value=0).to_numpy(float)
+        return sums, counts
+
+    def means(
+        self, values: pd.Series, *, mask: pd.Series | None = None
+    ) -> np.ndarray:
+        if not len(self):
+            return np.asarray([], dtype=float)
+        sums, counts = self._block_totals(values, mask)
+        numerators = self._weights @ sums
+        denominators = self._weights @ counts
+        return np.divide(
+            numerators,
+            denominators,
+            out=np.full(len(self), np.nan, dtype=float),
+            where=denominators > 0,
+        )
+
+    def ratios(
+        self,
+        numerators: pd.Series,
+        denominators: pd.Series,
+        *,
+        mask: pd.Series | None = None,
+    ) -> np.ndarray:
+        if not len(self):
+            return np.asarray([], dtype=float)
+        numerator_sums, _ = self._block_totals(numerators, mask)
+        denominator_sums, _ = self._block_totals(denominators, mask)
+        draw_numerators = self._weights @ numerator_sums
+        draw_denominators = self._weights @ denominator_sums
+        return np.divide(
+            draw_numerators,
+            draw_denominators,
+            out=np.full(len(self), np.nan, dtype=float),
+            where=draw_denominators > 0,
+        )
+
+
+def _bootstrap_draws(
+    complete: pd.DataFrame, *, resamples: int, seed: int
+) -> _BootstrapPlan:
+    return _BootstrapPlan(complete, resamples=resamples, seed=seed)
 
 
 def _interval(values: Sequence[float], confidence: float) -> tuple[float, float]:
@@ -278,7 +370,7 @@ def estimate_causal_response(
     bootstrap_resamples: int = 1000,
     confidence: float = 0.95,
     seed: int = 1,
-) -> tuple[pd.DataFrame, pd.DataFrame, list[pd.DataFrame]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, Sequence[pd.DataFrame]]:
     """Return cell effects, support diagnostics, and transient block draws."""
 
     if inputs.empty:
@@ -299,10 +391,9 @@ def estimate_causal_response(
         for lag in sorted({int(value) for value in lags}):
             field = f"causal_response_h{lag}"
             eligible = cell[field].dropna()
-            estimates = []
-            for draw in draws:
-                values = draw.loc[draw["cell_id"] == cell_id, field].dropna()
-                estimates.append(float(values.mean()) if len(values) else math.nan)
+            estimates = draws.means(
+                complete[field], mask=complete["cell_id"] == cell_id
+            )
             ci_low, ci_high = _interval(estimates, confidence)
             status = _support_status(action, silence)
             common = {
@@ -428,7 +519,6 @@ def estimate_available_causal_susceptibility(
         raise ValueError("available susceptibility uses the fixed eight-bin convention")
 
     complete = _with_available_susceptibility(inputs[inputs["episode_complete"]])
-    available_draws = [_with_available_susceptibility(draw) for draw in draws]
     state_rows: list[dict[str, Any]] = []
     summary_rows: list[dict[str, Any]] = []
     common_estimator = {
@@ -445,15 +535,28 @@ def estimate_available_causal_susceptibility(
             in_bin = cell["target_fraction_bin_index"] == bin_index
             eligible = cell[in_bin & cell["available_susceptibility_defined"]]
             saturated = cell[in_bin & cell["saturated"] & cell["lag_1_available"]]
-            draw_estimates: list[float] = []
-            for draw in available_draws:
-                subset = draw[
-                    (draw["cell_id"] == cell_id)
-                    & (draw["target_fraction_bin_index"] == bin_index)
-                    & draw["available_susceptibility_defined"]
-                ]
-                values = subset["available_causal_susceptibility_h1"].dropna()
-                draw_estimates.append(float(values.mean()) if len(values) else math.nan)
+            draw_mask = (
+                (complete["cell_id"] == cell_id)
+                & (complete["target_fraction_bin_index"] == bin_index)
+                & complete["available_susceptibility_defined"]
+            )
+            if isinstance(draws, _BootstrapPlan):
+                draw_estimates = draws.means(
+                    complete["available_causal_susceptibility_h1"], mask=draw_mask
+                )
+            else:
+                draw_estimates = []
+                for draw in draws:
+                    available_draw = _with_available_susceptibility(draw)
+                    subset = available_draw[
+                        (available_draw["cell_id"] == cell_id)
+                        & (available_draw["target_fraction_bin_index"] == bin_index)
+                        & available_draw["available_susceptibility_defined"]
+                    ]
+                    values = subset["available_causal_susceptibility_h1"].dropna()
+                    draw_estimates.append(
+                        float(values.mean()) if len(values) else math.nan
+                    )
             ci_low, ci_high = _interval(draw_estimates, confidence)
             values = eligible["available_causal_susceptibility_h1"].dropna()
             state_rows.append(
@@ -476,17 +579,30 @@ def estimate_available_causal_susceptibility(
                 }
             )
 
-        draw_ratios: list[float] = []
-        for draw in available_draws:
-            subset = draw[
-                (draw["cell_id"] == cell_id) & draw["available_susceptibility_defined"]
-            ]
-            denominator = float(subset["available_mass"].sum())
-            draw_ratios.append(
-                float(subset["causal_response_h1"].sum()) / denominator
-                if denominator > 0
-                else math.nan
+        draw_mask = (
+            (complete["cell_id"] == cell_id)
+            & complete["available_susceptibility_defined"]
+        )
+        if isinstance(draws, _BootstrapPlan):
+            draw_ratios = draws.ratios(
+                complete["causal_response_h1"],
+                complete["available_mass"],
+                mask=draw_mask,
             )
+        else:
+            draw_ratios = []
+            for draw in draws:
+                available_draw = _with_available_susceptibility(draw)
+                subset = available_draw[
+                    (available_draw["cell_id"] == cell_id)
+                    & available_draw["available_susceptibility_defined"]
+                ]
+                denominator = float(subset["available_mass"].sum())
+                draw_ratios.append(
+                    float(subset["causal_response_h1"].sum()) / denominator
+                    if denominator > 0
+                    else math.nan
+                )
         ci_low, ci_high = _interval(draw_ratios, confidence)
         denominator = float(eligible_cell["available_mass"].sum())
         numerator = float(eligible_cell["causal_response_h1"].sum())
@@ -651,20 +767,40 @@ def communication_efficiency(
             expected_cost = (
                 float(contribution.mean()) if len(contribution) else math.nan
             )
-            draw_costs: list[float] = []
-            draw_ratios: list[float] = []
             response_field = f"causal_response_h{lag}"
-            for draw in draws:
-                subset = draw[draw["cell_id"] == cell_id]
-                if subset.empty:
-                    continue
-                draw_source = _numeric(subset, alternatives).fillna(0.0)
-                draw_cost = float((subset["U_t"] * draw_source / subset["e_t"]).mean())
-                draw_response = float(subset[response_field].dropna().mean())
-                draw_costs.append(draw_cost)
-                draw_ratios.append(
-                    draw_response / draw_cost if draw_cost > 0 else math.nan
+            if isinstance(draws, _BootstrapPlan):
+                complete_draws = draws.complete
+                draw_mask = complete_draws["cell_id"] == cell_id
+                draw_source = _numeric(complete_draws, alternatives).fillna(0.0)
+                draw_contribution = (
+                    complete_draws["U_t"] * draw_source / complete_draws["e_t"]
                 )
+                draw_costs = draws.means(draw_contribution, mask=draw_mask)
+                draw_responses = draws.means(
+                    complete_draws[response_field], mask=draw_mask
+                )
+                draw_ratios = np.divide(
+                    draw_responses,
+                    draw_costs,
+                    out=np.full(len(draws), np.nan, dtype=float),
+                    where=draw_costs > 0,
+                )
+            else:
+                draw_costs = []
+                draw_ratios = []
+                for draw in draws:
+                    subset = draw[draw["cell_id"] == cell_id]
+                    if subset.empty:
+                        continue
+                    draw_source = _numeric(subset, alternatives).fillna(0.0)
+                    draw_cost = float(
+                        (subset["U_t"] * draw_source / subset["e_t"]).mean()
+                    )
+                    draw_response = float(subset[response_field].dropna().mean())
+                    draw_costs.append(draw_cost)
+                    draw_ratios.append(
+                        draw_response / draw_cost if draw_cost > 0 else math.nan
+                    )
             cost_low, cost_high = _interval(draw_costs, confidence)
             ratio_low, ratio_high = _interval(draw_ratios, confidence)
             rows.append(
