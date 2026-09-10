@@ -1,5 +1,5 @@
 study: {name: astra_task003_false_control_30x30}
-configs: [false_control_llm.yaml]
+configs: [false_control_llm.yaml, false_control_high_budget_llm.yaml]
 execution:
   mode: auto
   cells_per_shard: 1
