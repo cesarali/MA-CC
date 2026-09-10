@@ -2612,6 +2612,51 @@ def _blackboard_phase2_requested(recipe: Mapping[str, Any]) -> bool:
     )
 
 
+def _epistemic_phase_settings(
+    recipe: Mapping[str, Any], recipe_path: Path | None
+) -> dict[str, Any] | None:
+    """Validate and normalize the optional symbolic epistemic analysis recipe."""
+
+    configured = recipe.get("blackboard_epistemic_phase_outputs", False)
+    if configured is False or configured is None:
+        return None
+    if configured is True:
+        configured = {}
+    if not isinstance(configured, Mapping):
+        raise ValueError("blackboard_epistemic_phase_outputs must be a mapping")
+    if not bool(configured.get("enabled", True)):
+        return None
+    dataset = configured.get("task_dataset_dir")
+    if not isinstance(dataset, (str, Path)) or not str(dataset).strip():
+        raise ValueError(
+            "blackboard_epistemic_phase_outputs.task_dataset_dir is required"
+        )
+    from mas_cc.analysis.epistemic_phase import resolve_task_dataset
+
+    result = {
+        "task_dataset_dir": resolve_task_dataset(dataset, recipe_path=recipe_path),
+        "robustness_draws": int(configured.get("robustness_draws", 500)),
+        "reference_persistence": float(configured.get("reference_persistence", 0.85)),
+        "x_bins": int(configured.get("x_bins", 8)),
+        "phi_bands": int(configured.get("phi_bands", 3)),
+        "capture_threshold": float(configured.get("capture_threshold", 0.75)),
+        "capture_consecutive_rounds": int(
+            configured.get("capture_consecutive_rounds", 3)
+        ),
+    }
+    if result["robustness_draws"] < 1:
+        raise ValueError("epistemic robustness_draws must be positive")
+    if result["x_bins"] < 1 or result["phi_bands"] < 1:
+        raise ValueError("epistemic x_bins and phi_bands must be positive")
+    if not 0 <= result["reference_persistence"] <= 1:
+        raise ValueError("epistemic reference_persistence must lie in [0, 1]")
+    if not 0 <= result["capture_threshold"] <= 1:
+        raise ValueError("epistemic capture_threshold must lie in [0, 1]")
+    if result["capture_consecutive_rounds"] < 1:
+        raise ValueError("epistemic capture_consecutive_rounds must be positive")
+    return result
+
+
 def _render_causal_communication_plots(
     tables: Mapping[str, pd.DataFrame], destination: Path
 ) -> list[str]:
@@ -3433,6 +3478,7 @@ def aggregate_study(
     else:
         entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
+    epistemic_settings = _epistemic_phase_settings(recipe, recipe_path)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
     theoretical_reference = recipe.get(
@@ -3746,6 +3792,7 @@ def aggregate_study(
         "derived_observables": derived,
     }
     causal_hash: str | None = None
+    epistemic_hash: str | None = None
     if _blackboard_phase2_requested(recipe):
         from mas_cc.analysis.causal_response import analyze_causal_communication
 
@@ -3846,6 +3893,61 @@ def aggregate_study(
             "provider_calls": 0,
         }
         _write_json(analysis_dir / "validation.json", validation)
+    if epistemic_settings is not None:
+        from mas_cc.analysis.epistemic_phase import (
+            ANALYSIS_VERSION as epistemic_version,
+            analyze_epistemic_phase_diagrams,
+        )
+
+        epistemic_hash = canonical_hash(
+            {
+                "scientific_input_identity": input_identity,
+                "estimator": epistemic_version,
+                "settings": {
+                    **{
+                        key: str(value) if isinstance(value, Path) else value
+                        for key, value in epistemic_settings.items()
+                    },
+                    "bootstrap_resamples": settings["bootstrap_resamples"],
+                    "confidence": settings["confidence"],
+                    "seed": settings["seed"],
+                },
+            }
+        )
+        epistemic_outputs = analyze_epistemic_phase_diagrams(
+            canonical["rounds"],
+            canonical["cells"],
+            **epistemic_settings,
+            bootstrap_resamples=int(settings["bootstrap_resamples"]),
+            confidence=float(settings["confidence"]),
+            seed=int(settings["seed"]),
+        )
+        for frame in epistemic_outputs.values():
+            if not frame.empty:
+                frame["analysis_hash"] = epistemic_hash
+        outputs.update(epistemic_outputs)
+        states = epistemic_outputs["epistemic_round_timeseries"]
+        validation["epistemic_phase"] = {
+            "analysis_version": epistemic_version,
+            "exact_pre_intervention_boundary": True,
+            "evidence_scope": "union_of_participant_active_inventories",
+            "solver_failure_count": int(
+                states.get("solver_status", pd.Series(dtype=str)).ne("valid").sum()
+            ),
+            "round_state_rows": int(len(states)),
+            "task_count": int(states.get("task_id", pd.Series(dtype=str)).nunique()),
+            "joint_drift_rows": int(len(epistemic_outputs["epistemic_joint_drift"])),
+            "modulation_rows": int(len(epistemic_outputs["epistemic_modulation"])),
+            "capture_episode_rows": int(
+                len(epistemic_outputs["epistemic_capture_timing"])
+            ),
+            "robustness_draws_per_solvable_state": epistemic_settings[
+                "robustness_draws"
+            ],
+            "reference_persistence": epistemic_settings["reference_persistence"],
+            "provider_calls": 0,
+        }
+        _write_json(analysis_dir / "validation.json", validation)
     phi_comparison = _phi_conditioning_comparison(primary)
     if not phi_comparison.empty:
         outputs["phi_conditioning_comparison"] = _attach_coordinates(
@@ -3939,6 +4041,10 @@ def aggregate_study(
         plots.extend(
             _render_causal_communication_plots(plot_tables, analysis_dir / "plots")
         )
+    if epistemic_settings is not None:
+        from mas_cc.analysis.epistemic_phase import render_epistemic_phase_plots
+
+        plots.extend(render_epistemic_phase_plots(plot_tables, analysis_dir / "plots"))
     if (
         not episode_endpoints.empty
         and str((endpoint_recipe or {}).get("classifier", ""))
@@ -3975,6 +4081,10 @@ def aggregate_study(
                 f"{len(outputs.get('available_causal_susceptibility_summary', ()))}",
                 "- Communication-funnel rows: "
                 f"{len(outputs.get('communication_funnel', ()))}",
+                "- Epistemic round time-series rows: "
+                f"{len(outputs.get('epistemic_round_timeseries', ()))}",
+                "- Epistemic joint-drift rows: "
+                f"{len(outputs.get('epistemic_joint_drift', ()))}",
                 "",
             ]
         ),
@@ -4005,6 +4115,20 @@ def aggregate_study(
                 "ratios. Zero cost denominators remain missing. Reader counts are "
                 "per round, not episode-wide; sensing and public-posting costs "
                 "remain separate.",
+                "Symbolic epistemic analysis reconstructs the active participant "
+                "inventories at the post-forgetting, pre-intervention-delivery "
+                "boundary. Exact finite-world enumeration determines whether the "
+                "gold answer is unique for the population union and for each "
+                "agent. The scope excludes controller-private facts, inactive "
+                "historical facts, and unacquired board content. An unsolvable "
+                "state means current evidence is insufficient; it does not mean "
+                "the truth cannot be guessed or recovered later.",
+                "One-boundary robustness independently thins each active "
+                "agent-fact occurrence, then reruns the symbolic solver. Joint "
+                "drift and causal susceptibility reuse the recorded randomized "
+                "gate propensity and group only on pre-action state. These "
+                "finite-horizon regime maps are descriptive or randomized-effect "
+                "summaries; smooth colors do not establish a phase transition.",
                 "",
                 f"Analysis hash: `{analysis_hash}`.",
                 "",
@@ -4083,12 +4207,18 @@ def aggregate_study(
         "derived_hash": derived_hash,
         "auxiliary_analysis_hash": auxiliary_hash,
         "causal_response_hash": causal_hash,
+        "epistemic_phase_hash": epistemic_hash,
         "theory": dict(theory_provenance),
         "theoretical_reference": theoretical_reference,
         "estimator_engine": "mas_cc.games.hidden_bench.imitation_round_feedback.analysis.round_information_analysis",
         "causal_response_estimator_engine": (
             "mas_cc.analysis.causal_response.analyze_causal_communication"
             if causal_hash is not None
+            else None
+        ),
+        "epistemic_phase_engine": (
+            "mas_cc.analysis.epistemic_phase.analyze_epistemic_phase_diagrams"
+            if epistemic_hash is not None
             else None
         ),
         "requested_statistics": list(statistics),
