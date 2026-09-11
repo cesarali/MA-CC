@@ -699,6 +699,10 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
         "episodes.parquet",
         "rounds.parquet",
         "micro_slots.parquet",
+        "available_round_prefixes.parquet",
+        "available_micro_slot_prefixes.parquet",
+        "interrupted_episode_diagnostics.parquet",
+        "interrupted_episode_summary.parquet",
         "primary_estimates.parquet",
         "information_estimates.parquet",
         "support_diagnostics.parquet",
@@ -799,7 +803,10 @@ def test_compact_existing_csv_analysis_preserves_values_and_rebuilds_zip(tmp_pat
 
 
 def test_canonical_record_selection_excludes_incomplete_and_retry_prefixes():
-    from mas_cc.studies.canonical import _completed_unique_records
+    from mas_cc.studies.canonical import (
+        _completed_unique_records,
+        _incomplete_unique_records,
+    )
 
     episodes = [
         {"episode_id": "complete", "status": "completed"},
@@ -829,6 +836,109 @@ def test_canonical_record_selection_excludes_incomplete_and_retry_prefixes():
         "superseded_retry_records": 2,
         "retained_records": 3,
     }
+    prefixes = _incomplete_unique_records(
+        rows, episodes, coordinate_columns=("round_index",)
+    )
+    assert [(row["episode_id"], row["round_index"], row["value"]) for row in prefixes] == [
+        ("failed", 0, "partial")
+    ]
+    assert prefixes[0]["episode_status"] == "failed"
+
+
+def test_partial_canonical_tables_retain_censored_prefix_separately(tmp_path):
+    from mas_cc.studies.canonical import build_canonical_tables
+
+    cell_path = tmp_path / "cell-0000"
+    resume = cell_path / ".resume" / "cell-0000-0000"
+    records = cell_path / "round_records" / "cell-0000-0000"
+    resume.mkdir(parents=True)
+    records.mkdir(parents=True)
+    (resume / "manifest.json").write_text(
+        json.dumps(
+            {
+                "episode_id": "cell-0000-0000",
+                "cell_id": "cell-0000",
+                "seed": 7,
+                "status": "failed",
+                "error_type": "RelationalDecisionFailed",
+                "scientific_schema_version": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (resume / "failure_checkpoint.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "created_at": "2026-09-10T00:00:00Z",
+                "runtime": {
+                    "schema_version": 1,
+                    "interruption_type": "validation_exhausted",
+                    "failed_call": {
+                        "stage": "focal_update",
+                        "agent_id": "agent_003",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (records / "round_trajectory.jsonl").write_text(
+        json.dumps(
+            {
+                "episode_id": "cell-0000-0000",
+                "round_index": 2,
+                "target_share": 0.5,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (records / "micro_slot_trajectory.jsonl").write_text(
+        json.dumps(
+            {
+                "episode_id": "cell-0000-0000",
+                "round_index": 2,
+                "within_round_index": 4,
+                "target_share": 0.5,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    entry = SimpleNamespace(
+        source_extension_index=0,
+        source_submission_attempt=0,
+        array_index=0,
+        config_hash="config-hash",
+    )
+    run = SimpleNamespace(entry=entry, run_id="run", path=cell_path.parent)
+    cell = SimpleNamespace(
+        run=run,
+        path=cell_path,
+        cell_key="config-0000/cell-0000",
+        local_cell_id="cell-0000",
+        overrides={},
+        resolved_config={
+            "execution": {"repetitions": 1},
+            "game": {"type": "relational_imitation_round_feedback"},
+        },
+    )
+
+    tables, _ = build_canonical_tables("partial-study", (cell,))
+
+    assert tables["rounds"].empty
+    assert tables["micro_slots"].empty
+    assert len(tables["available_round_prefixes"]) == 1
+    assert len(tables["available_micro_slot_prefixes"]) == 1
+    diagnostic = tables["interrupted_episode_diagnostics"].iloc[0]
+    assert diagnostic["censoring_type"] == "validation_exhausted"
+    assert diagnostic["checkpoint_available"]
+    assert diagnostic["last_complete_round_index"] == 2
+    assert diagnostic["last_complete_micro_slot_index"] == 4
+    assert tables["interrupted_episode_summary"].iloc[0][
+        "interrupted_episodes"
+    ] == 1
 
 
 def test_effective_affinity_reuses_transition_rate_definition():

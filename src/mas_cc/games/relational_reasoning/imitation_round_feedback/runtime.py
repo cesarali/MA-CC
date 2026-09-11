@@ -56,15 +56,15 @@ from mas_cc.control import (
     NoneControl,
     RoundControlSignal,
 )
-from mas_cc.core import Seed
-from mas_cc.games.protocols import AgentState, DecisionRequest, Game, GameState
+from mas_cc.core import AgentId, Seed
+from mas_cc.games.protocols import Action, AgentState, DecisionRequest, Game, GameState
 from mas_cc.llm_runtime.prompts import (
     CompiledPrompt,
     RegexTokenCounter,
     ResponseContract,
     TokenCounter,
 )
-from mas_cc.llm_runtime.providers import LLMProvider
+from mas_cc.llm_runtime.providers import LLMProvider, ProviderError
 from mas_cc.runtime import (
     DecisionLoopExhausted,
     ValidationAttempt,
@@ -137,10 +137,152 @@ class RelationalDecisionFailed(RuntimeError):
     """Every validation attempt for one logical decision failed."""
 
 
+class RecoveryCheckpointError(RuntimeError):
+    """A saved logical-decision ledger cannot safely replay this episode."""
+
+
 def _notify(observer: Any | None, method: str, *args: Any, **payload: Any) -> None:
     callback = getattr(observer, method, None) if observer is not None else None
     if callback is not None:
         callback(*args, **payload)
+
+
+def _query(observer: Any | None, method: str) -> Any:
+    callback = getattr(observer, method, None) if observer is not None else None
+    return None if callback is None else callback()
+
+
+class _RecoveryLedger:
+    """Transient validated choices used to continue after provider exhaustion.
+
+    Replaying these choices from the episode seed reconstructs the game state
+    without another provider call. Prompts and raw provider responses are
+    deliberately not checkpointed; the already-validated action is retained
+    because it is part of the scientific trajectory.
+    """
+
+    schema_version = 1
+
+    def __init__(self, observer: Any | None) -> None:
+        self._observer = observer
+        payload = _query(observer, "load_failure_checkpoint")
+        runtime = {} if payload is None else dict(payload)
+        if runtime and int(runtime.get("schema_version", -1)) != self.schema_version:
+            raise RecoveryCheckpointError("unsupported provider failure checkpoint")
+        self._decisions = {
+            str(key): dict(value)
+            for key, value in dict(runtime.get("decisions", {})).items()
+        }
+        self._controller_choices = {
+            str(key): dict(value)
+            for key, value in dict(runtime.get("controller_choices", {})).items()
+        }
+
+    @staticmethod
+    def _decision_key(logical: DecisionRequest) -> str:
+        return canonical_hash(
+            {
+                "interaction_id": str(logical.interaction_id),
+                "stage": logical.stage,
+                "agent_id": str(logical.agent_id),
+            }
+        )
+
+    def replay_decision(
+        self,
+        *,
+        game: Game,
+        logical: DecisionRequest,
+        state: RelationalGameState,
+        config: RunConfig,
+        prompt: CompiledPrompt,
+    ) -> RelationalDecision | None:
+        entry = self._decisions.get(self._decision_key(logical))
+        if entry is None:
+            return None
+        expected = {
+            "interaction_id": str(logical.interaction_id),
+            "stage": logical.stage,
+            "agent_id": str(logical.agent_id),
+            "prompt_definition_hash": prompt.definition_hash,
+            "prompt_instance_hash": prompt.instance_hash,
+        }
+        if any(entry.get(key) != value for key, value in expected.items()):
+            raise RecoveryCheckpointError(
+                "saved decision identity or prompt hash does not match replay"
+            )
+        saved_action = dict(entry["action"])
+        action = Action(
+            agent_id=AgentId(str(saved_action["agent_id"])),
+            value=str(saved_action["value"]),
+            stage=str(saved_action.get("stage", logical.stage)),
+            metadata=dict(saved_action.get("metadata", {})),
+        )
+        game.validate_action(state, logical, action, config.game).raise_for_errors(
+            context=f"{game.spec.game_type} recovery action"
+        )
+        return RelationalDecision(
+            request=logical,
+            action=action,
+            compiled_prompt=prompt,
+            attempts=(),
+            recorded_validation_attempts=int(entry["validation_attempts"]),
+        )
+
+    def record_decision(
+        self,
+        logical: DecisionRequest,
+        prompt: CompiledPrompt,
+        decision: RelationalDecision,
+    ) -> None:
+        self._decisions[self._decision_key(logical)] = {
+            "interaction_id": str(logical.interaction_id),
+            "stage": logical.stage,
+            "agent_id": str(logical.agent_id),
+            "prompt_definition_hash": prompt.definition_hash,
+            "prompt_instance_hash": prompt.instance_hash,
+            "action": decision.action.to_dict(),
+            "validation_attempts": decision.validation_attempts,
+        }
+
+    @staticmethod
+    def controller_key(context: ControllerCommunicationContext) -> str:
+        return str(context.round_index)
+
+    def replay_controller(
+        self, context: ControllerCommunicationContext
+    ) -> Mapping[str, Any] | None:
+        entry = self._controller_choices.get(self.controller_key(context))
+        if entry is not None and entry.get("context_hash") != canonical_hash(
+            context.to_dict()
+        ):
+            raise RecoveryCheckpointError(
+                "saved controller communication context does not match replay"
+            )
+        return entry
+
+    def record_controller(
+        self, context: ControllerCommunicationContext, payload: Mapping[str, Any]
+    ) -> None:
+        self._controller_choices[self.controller_key(context)] = {
+            **dict(payload),
+            "context_hash": canonical_hash(context.to_dict()),
+        }
+
+    def checkpoint(
+        self, failed_call: Mapping[str, Any], *, interruption_type: str
+    ) -> None:
+        _notify(
+            self._observer,
+            "record_failure_checkpoint",
+            runtime={
+                "schema_version": self.schema_version,
+                "interruption_type": interruption_type,
+                "decisions": self._decisions,
+                "controller_choices": self._controller_choices,
+                "failed_call": dict(failed_call),
+            },
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,10 +293,15 @@ class RelationalDecision:
     action: Any
     compiled_prompt: CompiledPrompt
     attempts: tuple[ValidationAttempt, ...]
+    recorded_validation_attempts: int | None = None
 
     @property
     def validation_attempts(self) -> int:
-        return len(self.attempts)
+        return (
+            len(self.attempts)
+            if self.recorded_validation_attempts is None
+            else self.recorded_validation_attempts
+        )
 
     @property
     def prompt_definition_hash(self) -> str:
@@ -235,10 +382,16 @@ async def _execute_decision(
     token_counter: TokenCounter,
     root_seed: Seed,
     observer: Any | None,
+    recovery: _RecoveryLedger,
 ) -> RelationalDecision:
     """Run one logical decision through the shared ask/validate/retry loop."""
 
     prompt = logical.prompt.compile(token_counter)
+    replayed = recovery.replay_decision(
+        game=game, logical=logical, state=state, config=config, prompt=prompt
+    )
+    if replayed is not None:
+        return replayed
 
     def _seed_for_attempt(attempt_index: int) -> int:
         return int(
@@ -298,20 +451,45 @@ async def _execute_decision(
             metadata_for_attempt=_metadata_for_attempt,
             on_attempt=_on_attempt,
         )
+    except ProviderError:
+        recovery.checkpoint(
+            {
+                "interaction_id": str(logical.interaction_id),
+                "stage": logical.stage,
+                "agent_id": str(logical.agent_id),
+                "prompt_definition_hash": prompt.definition_hash,
+                "prompt_instance_hash": prompt.instance_hash,
+            },
+            interruption_type="provider_error",
+        )
+        raise
     except DecisionLoopExhausted as exc:
         # Never swallowed into a default vote: a ballot that failed to parse and
         # is silently counted as a wrong answer would corrupt every downstream
         # number without leaving a trace.
+        recovery.checkpoint(
+            {
+                "interaction_id": str(logical.interaction_id),
+                "stage": logical.stage,
+                "agent_id": str(logical.agent_id),
+                "prompt_definition_hash": prompt.definition_hash,
+                "prompt_instance_hash": prompt.instance_hash,
+                "validation_attempts": int(logical.retry_bound) + 1,
+            },
+            interruption_type="validation_exhausted",
+        )
         raise RelationalDecisionFailed(
             f"no valid {logical.stage} action from {logical.agent_id}: {exc}"
         ) from exc
 
-    return RelationalDecision(
+    result = RelationalDecision(
         request=logical,
         action=decision.action,
         compiled_prompt=prompt,
         attempts=decision.attempts,
     )
+    recovery.record_decision(logical, prompt, result)
+    return result
 
 
 def _controller_view(state: RelationalGameState) -> GameState:
@@ -718,6 +896,7 @@ async def run_relational_imitation_round_feedback_game(
 
     counter = token_counter or RegexTokenCounter()
     root = Seed(config.execution.seed)
+    recovery = _RecoveryLedger(observer)
     participant_rng = root.derive("relational-focal-and-peer-selection").create_random()
     sensor_rng = root.derive("relational-controller-sensor-policy").create_random()
     replacement_rng = root.derive(
@@ -807,7 +986,15 @@ async def run_relational_imitation_round_feedback_game(
             await asyncio.gather(
                 *(
                     _execute_decision(
-                        game, request, state, config, provider, counter, root, observer
+                        game,
+                        request,
+                        state,
+                        config,
+                        provider,
+                        counter,
+                        root,
+                        observer,
+                        recovery,
                     )
                     for request in requests
                 )
@@ -1124,92 +1311,143 @@ async def run_relational_imitation_round_feedback_game(
                 )
             )
             if communication_policy == LLM_COMMUNICATION_POLICY:
-                llm_result = await choose_llm_communication(
-                    provider=provider,
-                    context=controller_communication_context,
-                    allowed_modes=allowed_controller_modes,
-                    temperature=config.llm_provider.temperature,
-                    max_output_tokens=config.llm_provider.max_output_tokens,
-                    max_retries=int(
-                        getattr(
-                            resolved_control,
-                            "controller_communication_max_retries",
-                            2,
-                        )
-                    ),
-                    seed_for_attempt=lambda attempt_index: int(
-                        root.derive(
-                            "relational-controller-communication-llm:"
-                            f"{round_index}:{attempt_index + 1}"
-                        )
-                    ),
+                saved_controller = recovery.replay_controller(
+                    controller_communication_context
                 )
-                controller_llm_attempts = [
-                    attempt.to_dict() for attempt in llm_result.attempts
-                ]
-                for attempt in llm_result.attempts:
-                    messages_payload = [
-                        message.to_dict() for message in attempt.request.messages
+                if saved_controller is not None:
+                    saved_choice = dict(saved_controller["choice"])
+                    communication_choice = CommunicationChoice(
+                        mode=CommunicationMode(str(saved_choice["mode"])),
+                        reason=str(saved_choice["reason"]),
+                        policy=str(saved_choice["policy"]),
+                        policy_version=int(saved_choice["policy_version"]),
+                        fact_ids=tuple(str(value) for value in saved_choice["fact_ids"]),
+                        text=saved_choice.get("text"),
+                    )
+                    controller_llm_attempts = [
+                        dict(value)
+                        for value in saved_controller.get("attempt_summaries", [])
                     ]
-                    prompt_hash = canonical_hash(messages_payload)
-                    audit_prompt = CompiledPrompt(
-                        family="relational_controller_communication",
-                        version=1,
-                        definition_hash=canonical_hash(
-                            {
-                                "family": "relational_controller_communication",
-                                "version": 1,
-                            }
-                        ),
-                        instance_hash=prompt_hash,
-                        blocks=(),
-                        omitted_blocks=(),
-                        messages=attempt.request.messages,
-                        response_contract=ResponseContract(
-                            "relational_controller_communication"
-                        ),
-                        tokenizer_name=None,
-                        message_token_counts=(),
+                    controller_llm_fallback_used = bool(
+                        saved_controller["fallback_used"]
                     )
-                    if attempt.response is not None:
-                        controller_llm_input_tokens += (
-                            attempt.response.usage.input_tokens or 0
+                    controller_fallback_seed = saved_controller.get("fallback_seed")
+                    controller_llm_input_tokens = int(saved_controller["input_tokens"])
+                    controller_llm_output_tokens = int(
+                        saved_controller["output_tokens"]
+                    )
+                    attempt_count = int(saved_controller["validation_attempts"])
+                    logical_decisions += 1
+                    validation_attempts += attempt_count
+                else:
+                    llm_result = await choose_llm_communication(
+                        provider=provider,
+                        context=controller_communication_context,
+                        allowed_modes=allowed_controller_modes,
+                        temperature=config.llm_provider.temperature,
+                        max_output_tokens=config.llm_provider.max_output_tokens,
+                        max_retries=int(
+                            getattr(
+                                resolved_control,
+                                "controller_communication_max_retries",
+                                2,
+                            )
+                        ),
+                        seed_for_attempt=lambda attempt_index: int(
+                            root.derive(
+                                "relational-controller-communication-llm:"
+                                f"{round_index}:{attempt_index + 1}"
+                            )
+                        ),
+                    )
+                    controller_llm_attempts = [
+                        attempt.to_dict() for attempt in llm_result.attempts
+                    ]
+                    for attempt in llm_result.attempts:
+                        messages_payload = [
+                            message.to_dict() for message in attempt.request.messages
+                        ]
+                        prompt_hash = canonical_hash(messages_payload)
+                        audit_prompt = CompiledPrompt(
+                            family="relational_controller_communication",
+                            version=1,
+                            definition_hash=canonical_hash(
+                                {
+                                    "family": "relational_controller_communication",
+                                    "version": 1,
+                                }
+                            ),
+                            instance_hash=prompt_hash,
+                            blocks=(),
+                            omitted_blocks=(),
+                            messages=attempt.request.messages,
+                            response_contract=ResponseContract(
+                                "relational_controller_communication"
+                            ),
+                            tokenizer_name=None,
+                            message_token_counts=(),
                         )
-                        controller_llm_output_tokens += (
-                            attempt.response.usage.output_tokens or 0
+                        if attempt.response is not None:
+                            controller_llm_input_tokens += (
+                                attempt.response.usage.input_tokens or 0
+                            )
+                            controller_llm_output_tokens += (
+                                attempt.response.usage.output_tokens or 0
+                            )
+                        _notify(
+                            observer,
+                            "record_attempt",
+                            round_index=round_index,
+                            game_id=game.spec.game_type,
+                            request=attempt.request,
+                            prompt=audit_prompt,
+                            response=attempt.response,
+                            attempt=attempt.attempt,
+                            valid=attempt.valid,
+                            validation_error=attempt.validation_error,
+                            validation_issues=(),
+                            provider_error=(
+                                None
+                                if attempt.provider_error is None
+                                else RuntimeError(attempt.provider_error)
+                            ),
+                            observation=controller_communication_context.to_dict(),
                         )
-                    _notify(
-                        observer,
-                        "record_attempt",
-                        round_index=round_index,
-                        game_id=game.spec.game_type,
-                        request=attempt.request,
-                        prompt=audit_prompt,
-                        response=attempt.response,
-                        attempt=attempt.attempt,
-                        valid=attempt.valid,
-                        validation_error=attempt.validation_error,
-                        validation_issues=(),
-                        provider_error=(
-                            None
-                            if attempt.provider_error is None
-                            else RuntimeError(attempt.provider_error)
-                        ),
-                        observation=controller_communication_context.to_dict(),
-                    )
-                logical_decisions += 1
-                validation_attempts += len(llm_result.attempts)
-                communication_choice = llm_result.choice
-                if communication_choice is None:
-                    controller_llm_fallback_used = True
-                    fallback_stream = root.derive(
-                        f"relational-controller-communication-fallback:{round_index}"
-                    )
-                    controller_fallback_seed = int(fallback_stream)
-                    communication_choice = choose_communication_mode(
+                    logical_decisions += 1
+                    validation_attempts += len(llm_result.attempts)
+                    communication_choice = llm_result.choice
+                    if communication_choice is None:
+                        controller_llm_fallback_used = True
+                        fallback_stream = root.derive(
+                            f"relational-controller-communication-fallback:{round_index}"
+                        )
+                        controller_fallback_seed = int(fallback_stream)
+                        communication_choice = choose_communication_mode(
+                            controller_communication_context,
+                            allowed_controller_modes,
+                            fallback_stream.create_random(),
+                        )
+                    recovery.record_controller(
                         controller_communication_context,
-                        allowed_controller_modes,
-                        fallback_stream.create_random(),
+                        {
+                            "choice": communication_choice.to_dict(),
+                            "validation_attempts": len(llm_result.attempts),
+                            "attempt_summaries": [
+                                {
+                                    "attempt": attempt.attempt,
+                                    "valid": attempt.valid,
+                                    "validation_failed": (
+                                        attempt.validation_error is not None
+                                    ),
+                                    "provider_failed": attempt.provider_error is not None,
+                                }
+                                for attempt in llm_result.attempts
+                            ],
+                            "fallback_used": controller_llm_fallback_used,
+                            "fallback_seed": controller_fallback_seed,
+                            "input_tokens": controller_llm_input_tokens,
+                            "output_tokens": controller_llm_output_tokens,
+                        },
                     )
             else:
                 communication_choice = choose_communication_mode(
@@ -1509,7 +1747,15 @@ async def run_relational_imitation_round_feedback_game(
                 social_sources = tuple(sources)
             request = game.ballot_request(state, focal, social_sources, config.game)
             update = await _execute_decision(
-                game, request, state, config, provider, counter, root, observer
+                game,
+                request,
+                state,
+                config,
+                provider,
+                counter,
+                root,
+                observer,
+                recovery,
             )
             logical_decisions += 1
             validation_attempts += update.validation_attempts

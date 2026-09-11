@@ -812,6 +812,15 @@ class _RoundTickingObserver:
     def event(self, event_type: str, **payload: Any) -> None:
         self.recorder.event(event_type, **payload)
 
+    def load_failure_checkpoint(self) -> Mapping[str, Any] | None:
+        return self.recorder.load_failure_checkpoint()
+
+    def record_failure_checkpoint(self, *, runtime: Mapping[str, Any]) -> None:
+        self.recorder.record_failure_checkpoint(
+            runtime=runtime,
+            budget_status=self.guard.checkpoint_state(),
+        )
+
     def record_attempt(self, **payload: Any) -> None:
         self.recorder.record_attempt(**payload, budget_status=self.guard.status())
         round_index = payload.get("round_index")

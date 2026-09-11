@@ -3543,7 +3543,8 @@ def aggregate_study(
         validation["canonical_record_selection"] = selection
         if excluded:
             validation.setdefault("warnings", []).append(
-                f"excluded {excluded} trajectory records from incomplete episodes"
+                f"excluded {excluded} trajectory records from completed-only "
+                "estimator inputs; valid interrupted prefixes are retained separately"
             )
         if superseded:
             validation.setdefault("warnings", []).append(
@@ -4231,6 +4232,8 @@ def aggregate_study(
             "persistent_analysis_cache": False,
             "individual_null_draws": False,
             "individual_bootstrap_draws": False,
+            "completed_episode_estimators_only": True,
+            "censored_interrupted_prefixes": True,
         },
         "plots": plots,
         "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),

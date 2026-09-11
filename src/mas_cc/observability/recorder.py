@@ -72,6 +72,25 @@ def _jsonl(path: Path, row: Mapping[str, Any]) -> None:
         stream.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
 
 
+def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as stream:
+        json.dump(payload, stream, indent=2, sort_keys=True, ensure_ascii=False)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    try:
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        pass
+
+
 class CometMetricSink:
     """Lazy Comet bridge that never receives prompt content or arbitrary metadata."""
 
@@ -275,6 +294,10 @@ class RunRecorder:
         self._audit_path = self.output_dir / "audit_traces.jsonl"
         self._blocks_path = self.output_dir / "prompt_block_traces.jsonl"
         self._trajectory_path = self.output_dir / "trajectory.jsonl"
+        self._failure_checkpoint_path = self.output_dir / "failure_checkpoint.json"
+        self._legacy_failure_checkpoint_path = (
+            self.output_dir / "provider_failure_checkpoint.json"
+        )
         self._malformed_path = self.output_dir / "runtime" / "malformed_responses.jsonl"
         self._malformed_rows = 0
         if self.retention_policy.compact_scientific:
@@ -294,6 +317,44 @@ class RunRecorder:
             self._micro_slot_trajectory_path = (
                 self.output_dir / "micro_slot_trajectory.jsonl"
             )
+        self._failure_checkpoint: dict[str, Any] | None = None
+        checkpoint_source = next(
+            (
+                path
+                for path in (
+                    self._failure_checkpoint_path,
+                    self._legacy_failure_checkpoint_path,
+                )
+                if path.is_file()
+            ),
+            None,
+        )
+        if checkpoint_source is not None:
+            self._failure_checkpoint = json.loads(
+                checkpoint_source.read_text(encoding="utf-8")
+            )
+            if int(self._failure_checkpoint.get("schema_version", -1)) != 1:
+                raise ValueError("unsupported provider failure checkpoint schema")
+            expected_identity = self._failure_checkpoint_identity()
+            if self._failure_checkpoint.get("identity") != expected_identity:
+                raise ValueError(
+                    "provider failure checkpoint does not match this episode/config"
+                )
+            saved_usage = dict(self._failure_checkpoint.get("episode_usage", {}))
+            self._episode_usage = {
+                key: int(saved_usage.get(key, 0))
+                for key in ("requests", "input_tokens", "output_tokens")
+            }
+            # Replay deterministically rebuilds these append-only views.  They
+            # must start empty or a resumed episode would duplicate rows.
+            for path in (
+                self._round_trajectory_path,
+                self._micro_slot_trajectory_path,
+                self._round_trajectory_path.parent / "dashboard_semantic.jsonl",
+                self._round_trajectory_path.parent
+                / "dashboard_semantic_complete.json",
+            ):
+                path.unlink(missing_ok=True)
         self._semantic_writer = None
         if self.retention_policy.semantic_dashboard:
             assert self.scientific_identity is not None
@@ -356,6 +417,45 @@ class RunRecorder:
             self.output_dir / "metrics" / "production_probability.csv"
         )
         self._streaming_metrics_header_written = False
+
+    def _failure_checkpoint_identity(self) -> dict[str, Any]:
+        identity: dict[str, Any] = {
+            "run_id": self.run_id,
+            "resolved_config_hash": self.config_hash,
+        }
+        if self.scientific_identity is not None:
+            identity.update(
+                cell_id=self.scientific_identity.cell_id,
+                episode_id=self.scientific_identity.episode_id,
+                episode_seed=self.scientific_identity.episode_seed,
+                scientific_resolved_config_hash=(
+                    self.scientific_identity.resolved_config_hash
+                ),
+            )
+        return identity
+
+    def load_failure_checkpoint(self) -> Mapping[str, Any] | None:
+        if self._failure_checkpoint is None:
+            return None
+        return dict(self._failure_checkpoint.get("runtime", {}))
+
+    def record_failure_checkpoint(
+        self,
+        *,
+        runtime: Mapping[str, Any],
+        budget_status: Mapping[str, Any] | None = None,
+    ) -> None:
+        payload = {
+            "schema_version": 1,
+            "created_at": _now(),
+            "identity": self._failure_checkpoint_identity(),
+            "runtime": dict(runtime),
+            "episode_usage": dict(self._episode_usage),
+            "budget_status": None if budget_status is None else dict(budget_status),
+        }
+        _atomic_json(self._failure_checkpoint_path, payload)
+        self._legacy_failure_checkpoint_path.unlink(missing_ok=True)
+        self._failure_checkpoint = payload
 
     def event(self, event_type: str, **payload: Any) -> None:
         row = {
@@ -1059,6 +1159,9 @@ class RunRecorder:
                 if self._semantic_writer is None
                 else self._semantic_writer.finalize("completed")
             )
+            self._failure_checkpoint_path.unlink(missing_ok=True)
+            self._legacy_failure_checkpoint_path.unlink(missing_ok=True)
+            self._failure_checkpoint = None
             return {
                 "audit": self.selector.summary(),
                 "comet": comet,
@@ -1102,6 +1205,10 @@ class RunRecorder:
         (self.output_dir / "comet_summary.json").write_text(
             json.dumps(comet, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        if status == "completed":
+            self._failure_checkpoint_path.unlink(missing_ok=True)
+            self._legacy_failure_checkpoint_path.unlink(missing_ok=True)
+            self._failure_checkpoint = None
         return {
             "audit": self.selector.summary(),
             "comet": comet,

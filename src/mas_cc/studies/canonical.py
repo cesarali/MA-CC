@@ -55,6 +55,16 @@ TABLE_SCHEMAS: Mapping[str, tuple[str, ...]] = {
         "started_at",
         "finished_at",
         "termination_reason",
+        "error_type",
+        "censoring_type",
+        "checkpoint_available",
+        "checkpoint_created_at",
+        "failed_stage",
+        "failed_agent_id",
+        "last_complete_round_index",
+        "last_complete_micro_slot_index",
+        "prefix_round_rows",
+        "prefix_micro_slot_rows",
         "scientific_schema_version",
     ),
     "rounds": (
@@ -91,6 +101,59 @@ TABLE_SCHEMAS: Mapping[str, tuple[str, ...]] = {
         "round_index",
         "micro_slot_index",
         "record_source",
+    ),
+    "available_round_prefixes": (
+        "study_id",
+        "source_run_id",
+        "cell_id",
+        "episode_id",
+        "round_index",
+        "episode_status",
+        "censoring_type",
+        "checkpoint_available",
+        "record_source",
+    ),
+    "available_micro_slot_prefixes": (
+        "study_id",
+        "source_run_id",
+        "cell_id",
+        "episode_id",
+        "round_index",
+        "micro_slot_index",
+        "episode_status",
+        "censoring_type",
+        "checkpoint_available",
+        "record_source",
+    ),
+    "interrupted_episode_diagnostics": (
+        "study_id",
+        "source_run_id",
+        "cell_id",
+        "episode_id",
+        "episode_status",
+        "error_type",
+        "censoring_type",
+        "checkpoint_available",
+        "checkpoint_created_at",
+        "failed_stage",
+        "failed_agent_id",
+        "last_complete_round_index",
+        "last_complete_micro_slot_index",
+        "prefix_round_rows",
+        "prefix_micro_slot_rows",
+    ),
+    "interrupted_episode_summary": (
+        "study_id",
+        "source_run_id",
+        "cell_id",
+        "error_type",
+        "censoring_type",
+        "interrupted_episodes",
+        "checkpointed_episodes",
+        "episodes_with_round_prefix",
+        "episodes_with_micro_slot_prefix",
+        "mean_last_complete_round_index",
+        "max_last_complete_round_index",
     ),
 }
 
@@ -269,23 +332,61 @@ def _episode_rows(
                     "scientific_schema_version": first.get("schema_version"),
                 }
             )
-        return rows
-
-    # Full-profile runs retain one manifest per episode rather than a compact table.
-    for path in sorted((cell.path / "data" / "episodes").glob("*/manifest.json")):
+    # Failed compact episodes have no scientific Parquet shard, but their
+    # manifest and failure checkpoint remain under `.resume`.  Include those
+    # rows so partial aggregation can expose their valid, explicitly censored
+    # trajectory prefixes without admitting them to completed-only estimators.
+    represented = {str(row["episode_id"]) for row in rows}
+    manifest_paths = sorted(
+        {
+            *cell.path.glob("data/episodes/*/manifest.json"),
+            *cell.path.glob(".resume/*/manifest.json"),
+        }
+    )
+    for path in manifest_paths:
         payload = json.loads(path.read_text(encoding="utf-8"))
+        episode_id = str(payload.get("episode_id", path.parent.name))
+        if episode_id in represented:
+            continue
+        checkpoint_path = next(
+            (
+                candidate
+                for candidate in (
+                    path.parent / "failure_checkpoint.json",
+                    path.parent / "provider_failure_checkpoint.json",
+                )
+                if candidate.is_file()
+            ),
+            None,
+        )
+        checkpoint: Mapping[str, Any] = {}
+        runtime: Mapping[str, Any] = {}
+        failed_call: Mapping[str, Any] = {}
+        if checkpoint_path is not None:
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            runtime = dict(checkpoint.get("runtime", {}))
+            failed_call = dict(runtime.get("failed_call", {}))
+        error_type = payload.get("error_type")
+        censoring_type = runtime.get("interruption_type")
+        if censoring_type is None and error_type == "ProviderError":
+            censoring_type = "provider_error"
+        elif censoring_type is None and error_type in {
+            "RelationalDecisionFailed",
+            "DecisionLoopExhausted",
+        }:
+            censoring_type = "validation_exhausted"
         rows.append(
             {
                 **provenance,
-                "episode_id": str(payload.get("episode_id", path.parent.name)),
-                "source_episode_id": str(payload.get("episode_id", path.parent.name)),
+                "episode_id": episode_id,
+                "source_episode_id": episode_id,
                 "cell_key": cell.cell_key,
                 "repetition_index": _repetition_index(
-                    str(payload.get("episode_id", path.parent.name))
+                    episode_id
                 ),
                 "episode_key": _episode_key(
                     cell.cell_key,
-                    _repetition_index(str(payload.get("episode_id", path.parent.name))),
+                    _repetition_index(episode_id),
                 ),
                 "episode_seed": payload.get("seed"),
                 "status": str(payload.get("status", "unknown")),
@@ -296,9 +397,20 @@ def _episode_rows(
                 "started_at": payload.get("started_at"),
                 "finished_at": payload.get("finished_at"),
                 "termination_reason": payload.get("termination_reason"),
+                "error_type": error_type,
+                "censoring_type": censoring_type,
+                "checkpoint_available": checkpoint_path is not None,
+                "checkpoint_created_at": checkpoint.get("created_at"),
+                "failed_stage": failed_call.get("stage"),
+                "failed_agent_id": failed_call.get("agent_id"),
+                "last_complete_round_index": None,
+                "last_complete_micro_slot_index": None,
+                "prefix_round_rows": 0,
+                "prefix_micro_slot_rows": 0,
                 "scientific_schema_version": payload.get("scientific_schema_version"),
             }
         )
+        represented.add(episode_id)
     return rows
 
 
@@ -442,6 +554,46 @@ def _completed_unique_records(
     }
 
 
+def _incomplete_unique_records(
+    rows: list[dict[str, Any]],
+    episodes: list[dict[str, Any]],
+    *,
+    coordinate_columns: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    """Retain valid prefixes separately, with explicit censoring metadata."""
+
+    incomplete = {
+        str(row["episode_id"]): row
+        for row in episodes
+        if row.get("status") not in {"completed", "skipped_resumed"}
+    }
+    latest: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for original in rows:
+        row = dict(original)
+        event_episode_id = str(row.get("episode_id"))
+        storage_episode_id = str(row.pop("_storage_episode_id", ""))
+        episode_id = (
+            event_episode_id
+            if event_episode_id in incomplete
+            else storage_episode_id
+            if storage_episode_id in incomplete
+            else None
+        )
+        if episode_id is None:
+            continue
+        episode = incomplete[episode_id]
+        row.update(
+            episode_id=episode_id,
+            source_episode_id=episode_id,
+            episode_status=episode.get("status"),
+            censoring_type=episode.get("censoring_type"),
+            checkpoint_available=bool(episode.get("checkpoint_available", False)),
+        )
+        key = (episode_id,) + tuple(row.get(column) for column in coordinate_columns)
+        latest[key] = row
+    return list(latest.values())
+
+
 def build_canonical_tables(
     study_id: str, cells: tuple[DiscoveredCell, ...]
 ) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
@@ -449,6 +601,9 @@ def build_canonical_tables(
     episode_rows: list[dict[str, Any]] = []
     round_rows: list[dict[str, Any]] = []
     micro_rows: list[dict[str, Any]] = []
+    available_round_prefix_rows: list[dict[str, Any]] = []
+    available_micro_prefix_rows: list[dict[str, Any]] = []
+    interrupted_episode_rows: list[dict[str, Any]] = []
     frames: dict[str, pd.DataFrame] = {}
     record_selection = {
         "rounds": {
@@ -463,6 +618,8 @@ def build_canonical_tables(
             "superseded_retry_records": 0,
             "retained_records": 0,
         },
+        "available_round_prefixes": {"retained_records": 0},
+        "available_micro_slot_prefixes": {"retained_records": 0},
     }
     for cell in cells:
         frame = _scientific_frame(cell)
@@ -515,6 +672,15 @@ def build_canonical_tables(
             coordinate_columns=("round_index",),
         )
         round_rows.extend(selected_rounds)
+        prefix_rounds = _incomplete_unique_records(
+            rich_rounds,
+            episodes,
+            coordinate_columns=("round_index",),
+        )
+        available_round_prefix_rows.extend(prefix_rounds)
+        record_selection["available_round_prefixes"]["retained_records"] += len(
+            prefix_rounds
+        )
         for key, value in round_selection.items():
             record_selection["rounds"][key] += value
         # Micro-slot records live in different files per artifact profile:
@@ -540,14 +706,115 @@ def build_canonical_tables(
             coordinate_columns=("round_index", "micro_slot_index"),
         )
         micro_rows.extend(selected_micro_rows)
+        prefix_micro_rows = _incomplete_unique_records(
+            discovered_micro_rows,
+            episodes,
+            coordinate_columns=("round_index", "micro_slot_index"),
+        )
+        available_micro_prefix_rows.extend(prefix_micro_rows)
+        record_selection["available_micro_slot_prefixes"]["retained_records"] += len(
+            prefix_micro_rows
+        )
         for key, value in micro_selection.items():
             record_selection["micro_slots"][key] += value
+
+        prefix_rounds_by_episode: dict[str, list[dict[str, Any]]] = {}
+        for row in prefix_rounds:
+            prefix_rounds_by_episode.setdefault(str(row["episode_id"]), []).append(row)
+        prefix_micro_by_episode: dict[str, list[dict[str, Any]]] = {}
+        for row in prefix_micro_rows:
+            prefix_micro_by_episode.setdefault(str(row["episode_id"]), []).append(row)
+        for episode in episodes:
+            if episode.get("status") in {"completed", "skipped_resumed"}:
+                continue
+            episode_id = str(episode["episode_id"])
+            episode_rounds = prefix_rounds_by_episode.get(episode_id, [])
+            episode_micro = prefix_micro_by_episode.get(episode_id, [])
+            round_indices = [
+                int(row["round_index"])
+                for row in episode_rounds
+                if row.get("round_index") is not None
+            ]
+            micro_coordinates = [
+                (int(row["round_index"]), int(row["micro_slot_index"]))
+                for row in episode_micro
+                if row.get("round_index") is not None
+                and row.get("micro_slot_index") is not None
+            ]
+            episode["last_complete_round_index"] = (
+                max(round_indices) if round_indices else None
+            )
+            episode["last_complete_micro_slot_index"] = (
+                max(micro_coordinates)[1] if micro_coordinates else None
+            )
+            episode["prefix_round_rows"] = len(episode_rounds)
+            episode["prefix_micro_slot_rows"] = len(episode_micro)
+            interrupted_episode_rows.append(
+                {
+                    key: episode.get(key)
+                    for key in TABLE_SCHEMAS["interrupted_episode_diagnostics"]
+                }
+            )
+
+    interrupted_summary_rows: list[dict[str, Any]] = []
+    if interrupted_episode_rows:
+        interrupted_frame = pd.DataFrame(interrupted_episode_rows)
+        grouping = [
+            "study_id",
+            "source_run_id",
+            "cell_id",
+            "error_type",
+            "censoring_type",
+        ]
+        for keys, group in interrupted_frame.groupby(
+            grouping, sort=True, dropna=False
+        ):
+            last_rounds = pd.to_numeric(
+                group["last_complete_round_index"], errors="coerce"
+            ).dropna()
+            interrupted_summary_rows.append(
+                {
+                    **dict(zip(grouping, keys, strict=True)),
+                    "interrupted_episodes": int(len(group)),
+                    "checkpointed_episodes": int(
+                        group["checkpoint_available"].fillna(False).astype(bool).sum()
+                    ),
+                    "episodes_with_round_prefix": int(
+                        (group["prefix_round_rows"].fillna(0) > 0).sum()
+                    ),
+                    "episodes_with_micro_slot_prefix": int(
+                        (group["prefix_micro_slot_rows"].fillna(0) > 0).sum()
+                    ),
+                    "mean_last_complete_round_index": (
+                        None if last_rounds.empty else float(last_rounds.mean())
+                    ),
+                    "max_last_complete_round_index": (
+                        None if last_rounds.empty else int(last_rounds.max())
+                    ),
+                }
+            )
 
     tables = {
         "cells": _frame(cell_rows, TABLE_SCHEMAS["cells"]),
         "episodes": _frame(episode_rows, TABLE_SCHEMAS["episodes"]),
         "rounds": _frame(round_rows, TABLE_SCHEMAS["rounds"]),
         "micro_slots": _frame(micro_rows, TABLE_SCHEMAS["micro_slots"]),
+        "available_round_prefixes": _frame(
+            available_round_prefix_rows,
+            TABLE_SCHEMAS["available_round_prefixes"],
+        ),
+        "available_micro_slot_prefixes": _frame(
+            available_micro_prefix_rows,
+            TABLE_SCHEMAS["available_micro_slot_prefixes"],
+        ),
+        "interrupted_episode_diagnostics": _frame(
+            interrupted_episode_rows,
+            TABLE_SCHEMAS["interrupted_episode_diagnostics"],
+        ),
+        "interrupted_episode_summary": _frame(
+            interrupted_summary_rows,
+            TABLE_SCHEMAS["interrupted_episode_summary"],
+        ),
     }
     return tables, {
         "scientific_frames": frames,
