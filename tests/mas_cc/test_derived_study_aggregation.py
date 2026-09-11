@@ -182,6 +182,11 @@ def test_state_local_uses_observation_weights_and_target_coordinates():
     assert set(local["n_target_semantics_contributing"]) == {2}
     assert local["target_semantics"].isna().all()
     assert (local["n_observations"] > 0).all()
+    assert (local["bootstrap_resamples"] == 8).all()
+    assert local["ci_low"].notna().all()
+    assert local["ci_high"].notna().all()
+    assert set(local["n_rho_contributing"]) == {2}
+    assert set(local["rho_values_json"]) == {'["0.7", "1.0"]'}
 
 
 def test_order_and_scheduler_labels_do_not_change_results():
@@ -199,6 +204,21 @@ def test_order_and_scheduler_labels_do_not_change_results():
     cells["cell_id"] = cells["cell_id"].map(renamed)
     second = _run(shuffled, cells).study_metrics.sort_values("metric").reset_index(drop=True)
     pd.testing.assert_series_equal(first["estimate"], second["estimate"], check_names=False)
+
+
+def test_truth_false_labels_do_not_change_target_coordinate_pooling():
+    events = _cell_events("truth-rho1", 1) + _cell_events("false-rho2", 1)
+    first = _run(events).study_metrics.sort_values("metric").reset_index(drop=True)
+    swapped = _cells()
+    swapped["target_semantics"] = swapped["target_semantics"].map(
+        {"truth": False, False: "truth"}
+    )
+    second = _run(events, swapped).study_metrics.sort_values("metric").reset_index(
+        drop=True
+    )
+    pd.testing.assert_series_equal(
+        first["estimate"], second["estimate"], check_names=False
+    )
 
 
 def test_unsupported_cell_reduces_coverage_without_zero_fill():
@@ -232,3 +252,62 @@ def test_unaccounted_scientific_dimension_is_rejected():
     cells["model"] = ["a", "b"]
     with pytest.raises(ValueError, match="silently mix"):
         _run(_cell_events("truth-rho1", 1) + _cell_events("false-rho2", 2), cells)
+
+
+def test_state_local_grouping_cannot_silently_mix_a_scientific_dimension():
+    cells = _cells()
+    cells["model"] = ["a", "b"]
+    recipe = _recipe()
+    recipe["derived_study_aggregates"]["groupings"][0]["marginalize"].append("model")
+    with pytest.raises(ValueError, match="state-local aggregation would silently mix"):
+        derive_study_control_aggregates(
+            _cell_events("truth-rho1", 1) + _cell_events("false-rho2", 2),
+            cells,
+            recipe,
+            {
+                "bootstrap_resamples": 2,
+                "null_permutations": 2,
+                "confidence": 0.95,
+                "seed": 17,
+            },
+            "hash",
+        )
+
+
+def test_balanced_state_local_semantics_requires_both_supported_arms():
+    unsupported = [
+        replace(row, event={**row.event, "controller_action": NO_OP})
+        for row in _cell_events("false-rho2", 2)
+    ]
+    recipe = _recipe()
+    recipe["derived_study_aggregates"]["state_local"]["weighting"] = "balanced_cell"
+    result = derive_study_control_aggregates(
+        _cell_events("truth-rho1", 1) + unsupported,
+        _cells(),
+        recipe,
+        {
+            "bootstrap_resamples": 2,
+            "null_permutations": 2,
+            "confidence": 0.95,
+            "seed": 17,
+        },
+        "hash",
+    )
+    assert set(result.state_local_metrics["support_status"]) == {"unsupported"}
+    assert set(result.state_local_metrics["n_target_semantics_contributing"]) == {1}
+
+
+def test_state_local_reconstruction_is_exported_as_a_diagnostic():
+    result = _run(
+        _cell_events("truth-rho1", 1) + _cell_events("false-rho2", 2)
+    )
+    diagnostic = result.state_local_reconstruction
+    assert len(diagnostic) == 1
+    assert diagnostic.iloc[0].diagnostic_only
+    assert diagnostic.iloc[0].n_state_bins == 2
+    assert math.isfinite(diagnostic.iloc[0].state_local_reconstruction)
+    assert math.isfinite(diagnostic.iloc[0].whole_cell_aggregate)
+    assert diagnostic.iloc[0].difference == pytest.approx(
+        diagnostic.iloc[0].state_local_reconstruction
+        - diagnostic.iloc[0].whole_cell_aggregate
+    )

@@ -345,6 +345,7 @@ New packages write compressed Parquet tables under `analysis/tables/`:
 | `derived_observables.parquet` | Quantities calculated from primary estimates. |
 | `study_aggregated_metrics.parquet` | Balanced study summaries built after estimating each physical cell, with aggregate bootstrap intervals, aggregate permutation nulls, component values, and support coverage. |
 | `state_local_aggregated_metrics.parquet` | Observation-weighted descriptive state maps after explicitly selected study dimensions have been averaged. |
+| `state_local_reconstruction.parquet` | Diagnostic comparison between an occupancy-reweighted state-local transfer map and the independently aggregated whole-cell transfer estimate. |
 | `sample_size_stability.parquet` | Empirical checks of how estimates and their spread change as more complete episodes are used. |
 
 Recipes can add state-local, occupancy, causal-response, communication, initialization, endpoint,
@@ -537,7 +538,8 @@ $\Delta\bar T_\pi=\bar T_\pi-E[\bar T_{\pi,\mathrm{null}}]$, shown beside the ra
 
 Uncertainty uses a stratified whole-episode bootstrap. **Stratified** means complete episodes are
 sampled with replacement separately inside every physical cell. Each cell estimate is recomputed,
-and only then are the cell results combined. This keeps rounds from the same episode together.
+and only then are the cell results combined. State-local bin weights and efficiency ratios are also
+recomputed inside each draw. This keeps rounds from the same episode together.
 
 The two efficiencies are ratios of aggregated components, not averages of cell efficiencies:
 
@@ -562,6 +564,9 @@ Each aggregate reports cell coverage, episode and round counts, action-overlap d
 `adequate`, `limited`, or `unsupported` label. A small susceptibility and an imprecisely estimated
 susceptibility are different claims; the estimate and its interval remain separate. Thermodynamic
 efficiency `eta_th` is unchanged and stays unsupported when no calibrated affinity $h$ exists.
+The `state_local_reconstruction` table additionally reweights the local map over observed states and
+compares it with the independent whole-cell aggregate. Its discrepancy is a binning/support sanity
+check, not a requirement that the two estimators be numerically identical.
 
 The optional `sample_size_stability` output repeatedly subsamples complete episodes inside cells.
 It reports how spread, interval width, sign stability, and null-detection frequency change with the

@@ -3846,6 +3846,10 @@ def aggregate_study(
             )
         if not aggregate_outputs.stability.empty:
             outputs["sample_size_stability"] = aggregate_outputs.stability
+        if not aggregate_outputs.state_local_reconstruction.empty:
+            outputs["state_local_reconstruction"] = (
+                aggregate_outputs.state_local_reconstruction
+            )
     causal_hash: str | None = None
     epistemic_hash: str | None = None
     if _blackboard_phase2_requested(recipe):
