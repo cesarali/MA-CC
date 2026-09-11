@@ -1,0 +1,126 @@
+schema_version: 1
+
+# Replace both paths for the study being reported. The source can be either the
+# study root or its analysis/ directory.
+report:
+  id: example_state_budget_phase_report
+  title: MA-CC State-by-Budget Phase Report
+  source_analysis: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/<study-name>/analysis
+  output_dir: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/reports/<study-name>
+
+sections:
+  - id: validation
+    title: Validation and completeness
+    kind: validation_summary
+
+  - id: state_budget_phase_diagrams
+    title: State-by-budget phase diagrams
+    kind: state_budget_phase_suite
+
+    axes:
+      state: target_fraction_bin_center
+      budget: intervention_budget
+      state_domain: [0.0, 1.0]
+      minimum_state_bins: 8
+
+    # Every varying coordinate is retained. These names set the preferred panel
+    # order; any additional varying coordinate is added automatically when it is
+    # needed to keep one source row per plotted cell.
+    facets:
+      mode: auto
+      preferred:
+        - target_semantics
+        - epistemic_persistence
+        - social_group_size
+        - task_id
+        - beta
+        - threshold
+        - sensor_sample_size
+        - receiver_epistemic_disposition
+        - controller_evidence_strategy
+        - controller_actuation_mode
+        - controller_communication_policy
+
+    # Large studies are split across several figure pages rather than dropping
+    # rho, q, truth/false/no-control, task, or another varying coordinate.
+    max_panels_per_figure: 6
+
+    views:
+      - mode: resolved
+      - mode: aggregated
+
+    metrics:
+      - id: T_pi
+        label: T_pi [bits]
+        source: primary_estimates
+        metric: round_target_actuation_cmi
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: T_pi
+        color_scale: linear
+
+      - id: eta_IF
+        label: eta_IF
+        source: primary_estimates
+        metric: round_target_information_fraction
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_IF
+        color_scale: linear
+
+      - id: eta_IR
+        label: eta_IR
+        source: derived_observables
+        metric: eta_ir_state_local
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_IR
+        color_scale: linear
+
+      # Current aggregation normally provides eta_th only at whole-cell
+      # resolution. Until eta_th_state_local exists, both requested x-by-b views
+      # are retained as gray UNAVAILABLE panels rather than replaced by eta_IR.
+      - id: eta_th
+        label: eta_th
+        source: derived_observables
+        metric: eta_th_state_local
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_th
+        color_scale: linear
+
+      - id: occupancy
+        label: Round observations
+        source: state_occupancy_binned
+        value: n_observations
+        aggregation_source: rho_aggregated_state_occupancy
+        aggregation_value: n_observations
+        color_scale: linear
+
+      - id: susceptibility
+        label: Susceptibility chi
+        source: primary_estimates
+        metric: round_target_susceptibility
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: chi
+        color_scale: diverging
+
+      # This is a second display of the same canonical susceptibility, not a new
+      # estimator. Symmetric-log scaling preserves negative, zero, and positive
+      # values while revealing small and large magnitudes.
+      - id: susceptibility_symlog
+        label: Susceptibility chi [symmetric-log color scale]
+        source: primary_estimates
+        metric: round_target_susceptibility
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: chi
+        color_scale:
+          kind: symlog
+          linthresh: 0.001
+
+      # A genuinely different susceptibility can be added explicitly when the
+      # aggregation package contains it. Do not substitute it automatically:
+      #
+      # - id: available_causal_susceptibility
+      #   label: Available causal susceptibility
+      #   source: available_causal_susceptibility_state_local
+      #   metric: propensity_weighted_available_susceptibility
+      #   color_scale:
+      #     kind: symlog
+      #     linthresh: 0.001

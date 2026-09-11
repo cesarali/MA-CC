@@ -6,13 +6,16 @@ from .extension import extend_study, index_existing_study, plan_extension
 from .manifest import StudySpec, discover_study
 from .initialization import materialize_study_initializations
 from .preflight import StudyPreflightResult, run_study_preflight
+from .reporting import ReportResult, build_study_report
 from .submission import SubmissionResult, submit_study
 
 __all__ = [
     "StudySpec",
     "StudyPreflightResult",
     "SubmissionResult",
+    "ReportResult",
     "aggregate_study",
+    "build_study_report",
     "compact_study_analysis",
     "discover_study",
     "extend_study",
