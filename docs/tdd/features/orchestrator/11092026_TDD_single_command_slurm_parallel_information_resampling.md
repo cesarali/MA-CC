@@ -42,6 +42,10 @@ This work changes execution topology only.
   unchanged.
 - Canonical `cells`, `episodes`, `rounds`, and `micro_slots` tables remain the
   scientific source of truth.
+- Every phase-map, occupancy, descriptive-aggregation, and plot join uses the
+  persisted canonical scientific `cell_id`. A source-local label such as
+  `config-0000/cell-0003` remains provenance only and is never a canonical
+  scientific join key.
 - The final analysis layout, table schemas, plot names, reports, provenance,
   validation, and ZIP name remain unchanged.
 - Persistent analysis caches, individual null draws, and individual bootstrap
@@ -210,6 +214,80 @@ and SLURM backends must therefore be numerically equivalent within the already
 established tolerance (preferably byte-equivalent for deterministic tables
 after metadata normalization).
 
+### 4.6 Canonical cell identity in phase products
+
+The parallel finalizer must also repair an observed downstream identity bug.
+This changes no estimator mathematics. It fixes the join between existing
+valid state-local estimates and the structural study grid.
+
+In indexed or extended studies, canonical `cells.parquet`, canonical rounds,
+`primary_estimates.parquet`, and `derived_observables.parquet` use persisted
+scientific cell keys, commonly stable hashes. The current
+`_expected_cell_coordinates()` helper instead reconstructs labels such as:
+
+```text
+config-0000/cell-0003
+```
+
+`_state_local_phase_tables()` compares those reconstructed labels with the
+persisted canonical IDs. When the namespaces differ, every valid cell becomes
+`structural_cell_not_run`. The subsequent
+`_rho_aggregated_state_local_maps()` function then has no supported phase rows
+to summarize, even though state-local estimates exist.
+
+Build one authoritative expected-cell frame using the same canonical
+`cell_id` namespace as every retained scientific table. Prefer, in order:
+
+1. the persisted lineage/extension target-manifest `cell_key`;
+2. `DiscoveredCell.cell_key` after `_align_indexed_lineage_cells()`;
+3. the retained canonical `cells.parquet` row;
+4. a freshly derived `scientific_cell_key(protocol_fingerprint, overrides)`
+   only when no persisted key exists.
+
+Do not use config index plus local cell label as a canonical join key. Preserve
+those values separately as `source_config_index` and `source_cell_id`.
+
+The expected-cell frame must still contain planned cells that have not run. It
+must contain at least:
+
+```text
+canonical cell_id
+source_config_index
+source_cell_id
+scientific coordinates / overrides
+expected episode count
+canonical observations present
+```
+
+Finalization joins by canonical identity:
+
+```text
+expected canonical cells
+  LEFT JOIN occupancy by (cell_id, target_fraction_bin_index)
+  LEFT JOIN estimator rows by (cell_id, target_fraction_bin_index, metric)
+```
+
+Keep these status meanings:
+
+```text
+structural_cell_not_run
+  planned canonical cell has no retained canonical observations
+
+state_not_visited
+  retained canonical cell exists, but this state bin has zero observations
+
+insufficient_estimator_support
+  the state was visited, but no finite supported estimate exists
+
+adequate / limited
+  a finite estimate exists with that estimator support status
+```
+
+Rebuild `rho_aggregated_state_local_maps` and
+`rho_aggregated_state_occupancy` only from these corrected phase and occupancy
+rows. They remain descriptive observation-weighted summaries, never pooled
+MI/CMI estimators.
+
 ## 5. Scheduler orchestration
 
 Add a generic analysis launcher family under the existing Potsdam SLURM
@@ -325,9 +403,13 @@ No scheduler work should begin until this equivalence gate passes.
 1. Add generation-scoped staging and atomic fragment writes.
 2. Add strict fragment identity/hash validation.
 3. Refactor final table assembly to consume the compact group results.
-4. Keep all downstream observables, plots, reports, validation, and packaging
+4. Build the expected structural grid with canonical scientific cell keys and
+  repair state-local phase/occupancy joins before descriptive aggregation.
+5. Assert every estimator `cell_id` belongs to the canonical cell table and
+  every retained canonical cell maps to its planned grid coordinates.
+6. Keep all downstream observables, plots, reports, validation, and packaging
    on their existing paths.
-5. Clean staging after success.
+7. Clean staging after success.
 
 ### Phase 3: SLURM backend
 
@@ -369,7 +451,33 @@ No scheduler work should begin until this equivalence gate passes.
 - No cross-cell or cross-rho super-pool is introduced.
 - Partial aggregation retains the existing visibly incomplete semantics.
 
-### 9.3 Scheduler behavior
+### 9.3 Canonical identity and phase-map regression
+
+- Canonical cells, rounds, primary estimates, and derived rows use the same
+  `cell_id` namespace.
+- Indexed/extended studies use persisted target-manifest cell keys in the
+  expected structural grid.
+- Source-local labels remain provenance and are not phase-product join keys.
+- A retained cell with valid state-local estimates is never labelled
+  `structural_cell_not_run` because of an ID-format mismatch.
+- A genuinely planned but absent cell remains `structural_cell_not_run`.
+- A retained cell with zero occupancy in one bin is `state_not_visited` only
+  for that bin.
+- A visited bin without estimator overlap is
+  `insufficient_estimator_support`.
+- Valid `T_pi`, `chi`, `eta_IF`, and `eta_IR` rows survive into
+  `state_local_phase_maps` with their estimates and support statuses.
+- Occupancy rows equal direct canonical-round counts for each
+  `(cell_id, target_fraction_bin_index)`.
+- Rho-aggregated maps equal the documented observation-weighted calculation
+  over corrected supported phase rows.
+- Serial, local-process, and SLURM finalizers emit identical phase, occupancy,
+  and rho-aggregated tables.
+- Add a regression fixture with hashed canonical IDs and source labels such as
+  `config-NNNN/cell-NNNN`; it must reproduce the old all-gray failure before
+  the repair and pass afterward.
+
+### 9.4 Scheduler behavior
 
 - One CLI invocation submits one valid prepare/array/finalize dependency graph.
 - The finalizer cannot run after a failed prepare or array task.
@@ -378,7 +486,7 @@ No scheduler work should begin until this equivalence gate passes.
   seeds.
 - Potsdam jobs invoke the `MA-CC` environment and write logs beneath `/work`.
 
-### 9.4 Filesystem and package behavior
+### 9.5 Filesystem and package behavior
 
 - Concurrent workers only write their own group paths.
 - Fragment publication is atomic.
@@ -388,7 +496,7 @@ No scheduler work should begin until this equivalence gate passes.
 - Successful aggregation removes transient staging.
 - Reaggregation from retained canonical tables remains supported.
 
-### 9.5 End-to-end acceptance fixture
+### 9.6 End-to-end acceptance fixture
 
 For one deterministic multi-cell fixture:
 
@@ -397,7 +505,10 @@ For one deterministic multi-cell fixture:
 3. aggregate with the SLURM array path;
 4. compare normalized final analysis trees and ZIP inventories;
 5. assert established numerical tolerances for every scientific table;
-6. assert identical configured plots and reports are present.
+6. assert identical configured plots and reports are present;
+7. assert no supported completed phase surface is entirely gray because of a
+  canonical/source cell-ID mismatch;
+8. assert every nonzero occupancy bin traces to canonical round rows.
 
 ## 10. Resource acceptance criteria
 
@@ -428,11 +539,13 @@ This feature is complete when:
    generation in the same study root.
 5. The same physical groups, estimators, resampling counts, and seeds are used.
 6. Serial and distributed scientific results pass equivalence tests.
-7. The existing canonical analysis directory and ZIP delivery are preserved.
-8. Failed distributed aggregation cannot corrupt the last valid handoff.
-9. Temporary fragments and draws are absent after success and excluded from
+7. State-local phase, occupancy, and rho-aggregated descriptive tables join on
+  canonical scientific cell IDs and pass the identity regression.
+8. The existing canonical analysis directory and ZIP delivery are preserved.
+9. Failed distributed aggregation cannot corrupt the last valid handoff.
+10. Temporary fragments and draws are absent after success and excluded from
    every package.
-10. The implementation uses only generic study-analysis launchers.
+11. The implementation uses only generic study-analysis launchers.
 
 ## 12. Explicit non-goals
 
