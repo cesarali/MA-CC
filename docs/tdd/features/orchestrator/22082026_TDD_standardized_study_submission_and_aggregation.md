@@ -17,6 +17,13 @@ part of the output contract. Reaggregation recomputes from canonical Parquet
 observations—even when source run trees are unavailable—and retains only compact
 uncertainty and null summaries.
 
+Recoverable mid-episode interruptions retain their already validated trajectory
+prefix separately from completed scientific trajectories. Partial aggregation
+writes censored prefix and interruption-diagnostic tables, while established
+MI/CMI, bootstrap, final-state, and takeover estimators continue to consume only
+completed episodes. A later successful resume supersedes the prefix and cannot
+double-count it.
+
 ---
 
 ## 1. Objective

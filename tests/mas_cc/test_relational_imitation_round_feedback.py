@@ -67,6 +67,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
 )
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.llm_runtime.providers import ProviderError
 from mas_cc.observability import DetailedAuditPolicy
 from mas_cc.observability.recorder import RunRecorder
 
@@ -235,6 +236,72 @@ def _run(config, *, control=None, ballots=None):
         )
     )
     return result, ballots
+
+
+class _FailureRecoveryObserver:
+    def __init__(self) -> None:
+        self.runtime = None
+
+    def load_failure_checkpoint(self):
+        return self.runtime
+
+    def record_failure_checkpoint(self, *, runtime):
+        self.runtime = runtime
+
+
+class _FailOnceProvider:
+    def __init__(self, delegate, *, fail_at: int) -> None:
+        self.delegate = delegate
+        self.fail_at = fail_at
+        self.calls = 0
+
+    async def complete(self, request):
+        self.calls += 1
+        if self.calls == self.fail_at:
+            raise ProviderError(
+                "temporary upstream failure",
+                provider="test",
+                retryable=True,
+                status_code=500,
+            )
+        return await self.delegate.complete(request)
+
+
+def test_provider_failure_replays_validated_choices_and_resumes_at_missing_call():
+    config = _config(rounds=1, initialization={"mode": "uniform_random"})
+    ballots = _Ballots(votes=("A",))
+    observer = _FailureRecoveryObserver()
+    failing = _FailOnceProvider(ballots.provider(config.llm_provider), fail_at=6)
+
+    with pytest.raises(ProviderError):
+        asyncio.run(
+            run_relational_imitation_round_feedback_game(
+                create_game(config.game), config, failing, observer=observer
+            )
+        )
+
+    assert observer.runtime is not None
+    assert len(observer.runtime["decisions"]) == 5
+    resumed_ballots = _Ballots(votes=("A",))
+    # Keep this scripted provider's response index aligned with the five
+    # decisions reconstructed locally rather than sent again.
+    resumed_ballots.prompts = ["replayed"] * 5
+    resumed_provider = resumed_ballots.provider(config.llm_provider)
+    resumed = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game), config, resumed_provider, observer=observer
+        )
+    )
+    baseline, baseline_ballots = _run(
+        config, ballots=_Ballots(votes=("A",))
+    )
+
+    assert len(resumed_ballots.prompts) - 5 == config.game.population_size - 5
+    assert len(baseline_ballots.prompts) == config.game.population_size
+    assert resumed.final_state.to_dict() == baseline.final_state.to_dict()
+    assert [row.transition.event for row in resumed.interactions] == [
+        row.transition.event for row in baseline.interactions
+    ]
 
 
 def _with_persistence(config, value):
@@ -652,6 +719,28 @@ def test_three_corrections_exhaust_after_four_invalid_ballots():
         _run(config, ballots=ballots)
 
     assert len(ballots.prompts) == 4
+
+
+def test_validation_exhaustion_checkpoints_the_unresolved_decision():
+    config = _config(rounds=1)
+    options = {**dict(config.game.options), "invalid_response_retries": 0}
+    config = replace(config, game=replace(config.game, options=options))
+    observer = _FailureRecoveryObserver()
+
+    with pytest.raises(RelationalDecisionFailed):
+        asyncio.run(
+            run_relational_imitation_round_feedback_game(
+                create_game(config.game),
+                config,
+                _Ballots(share="hallucinate").provider(config.llm_provider),
+                observer=observer,
+            )
+        )
+
+    assert observer.runtime is not None
+    assert observer.runtime["interruption_type"] == "validation_exhausted"
+    assert observer.runtime["failed_call"]["stage"] == "focal_update"
+    assert observer.runtime["failed_call"]["validation_attempts"] == 1
 
 
 # ---- evidence honesty (§18) --------------------------------------------

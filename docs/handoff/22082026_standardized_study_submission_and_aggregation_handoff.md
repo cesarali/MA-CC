@@ -536,6 +536,15 @@ and provenance. Bootstrap/permutation draws and analysis caches are transient
 computational intermediates and are not retained. Source run trees, SLURM logs,
 checkpoint/resume files, and provider/request logs are not packaged.
 
+For an explicitly incomplete aggregation, recoverable interrupted episodes are
+represented by compact `interrupted_episode_diagnostics.parquet` and
+`interrupted_episode_summary.parquet` tables. Their valid prefixes are retained
+separately as `available_round_prefixes.parquet` and
+`available_micro_slot_prefixes.parquet`. These rows are censored observations,
+not inputs to the established completed-episode estimators. Provider failures
+and relational validation exhaustion share the same general failure-checkpoint
+contract; legacy `provider_failure_checkpoint.json` files remain readable.
+
 ## 15. Tests and verification performed
 
 Focused tests cover:

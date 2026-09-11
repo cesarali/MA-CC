@@ -9,6 +9,15 @@ blackboard_population_outputs: true
 blackboard_phase2_outputs:
   enabled: true
   strata: [target_semantics, controller_communication_policy, intervention_budget, epistemic_persistence]
+blackboard_epistemic_phase_outputs:
+  enabled: true
+  task_dataset_dir: results/studies/musr_truthful_selective_task_calibration_01/tasks
+  x_bins: 8
+  phi_bands: 3
+  robustness_draws: 500
+  reference_persistence: 0.85
+  capture_threshold: 0.75
+  capture_consecutive_rounds: 3
 plots:
   chi_x_b_by_rho: &phase {source: state_local_phase_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, series: target_semantics, kind: heatmap, color_scale: independent, status_column: phase_status}
   T_pi_x_b_by_rho: {<<: *phase, metric: T_pi}
