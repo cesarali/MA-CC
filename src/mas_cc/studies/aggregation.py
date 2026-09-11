@@ -3092,7 +3092,35 @@ def _render_plots(
                 for series_label, line_group in line_groups:
                     grouped_values = line_group.groupby(x, dropna=False)["estimate"]
                     values = grouped_values.mean().sort_index()
-                    if bool(spec.get("show_variability", False)):
+                    if (
+                        bool(spec.get("show_confidence_interval", False))
+                        and {
+                            str(spec.get("ci_low", "ci_low")),
+                            str(spec.get("ci_high", "ci_high")),
+                        }.issubset(line_group.columns)
+                    ):
+                        ci_low_column = str(spec.get("ci_low", "ci_low"))
+                        ci_high_column = str(spec.get("ci_high", "ci_high"))
+                        indexed = line_group.drop_duplicates(x).set_index(x).reindex(
+                            values.index
+                        )
+                        low = pd.to_numeric(indexed[ci_low_column], errors="coerce")
+                        high = pd.to_numeric(indexed[ci_high_column], errors="coerce")
+                        center = values.to_numpy(dtype=float)
+                        axis.errorbar(
+                            values.index,
+                            center,
+                            yerr=np.vstack(
+                                [
+                                    np.maximum(0.0, center - low.to_numpy(dtype=float)),
+                                    np.maximum(0.0, high.to_numpy(dtype=float) - center),
+                                ]
+                            ),
+                            marker="o",
+                            capsize=3,
+                            label=str(series_label),
+                        )
+                    elif bool(spec.get("show_variability", False)):
                         deviations = (
                             grouped_values.std().reindex(values.index).fillna(0)
                         )
@@ -3599,6 +3627,7 @@ def aggregate_study(
             "estimator_version": "round-feedback-v1",
             "statistics": statistics,
             "settings": settings,
+            "derived_study_aggregates": recipe.get("derived_study_aggregates"),
             "theoretical_reference": theoretical_reference,
             "theory_provenance": dict(theory_provenance),
         }
@@ -3689,6 +3718,10 @@ def aggregate_study(
 
     information = _attach_coordinates(information, canonical["cells"])
     support = _attach_coordinates(support, canonical["cells"])
+    if {"estimate", "null_mean"}.issubset(information.columns):
+        information["null_adjusted_estimate"] = pd.to_numeric(
+            information["estimate"], errors="coerce"
+        ) - pd.to_numeric(information["null_mean"], errors="coerce")
     auxiliary_hash = canonical_hash(
         {
             "scientific_input_identity": input_identity,
@@ -3792,6 +3825,27 @@ def aggregate_study(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    derived_aggregation_config = recipe.get("derived_study_aggregates", {})
+    if isinstance(derived_aggregation_config, Mapping) and bool(
+        derived_aggregation_config.get("enabled", False)
+    ):
+        from .derived_aggregation import derive_study_control_aggregates
+
+        aggregate_outputs = derive_study_control_aggregates(
+            events,
+            canonical["cells"],
+            recipe,
+            settings,
+            analysis_hash,
+        )
+        if not aggregate_outputs.study_metrics.empty:
+            outputs["study_aggregated_metrics"] = aggregate_outputs.study_metrics
+        if not aggregate_outputs.state_local_metrics.empty:
+            outputs["state_local_aggregated_metrics"] = (
+                aggregate_outputs.state_local_metrics
+            )
+        if not aggregate_outputs.stability.empty:
+            outputs["sample_size_stability"] = aggregate_outputs.stability
     causal_hash: str | None = None
     epistemic_hash: str | None = None
     if _blackboard_phase2_requested(recipe):

@@ -5,6 +5,47 @@ derived: [round_target_susceptibility, eta_ir, target_sensing_information_nats, 
 state_local: [x]
 state_local_x_bins: 8
 rho_aggregated_descriptive: true
+derived_study_aggregates:
+  enabled: true
+  metrics:
+    - round_target_actuation_cmi
+    - susceptibility_occupancy_weighted
+    - round_target_information_fraction
+    - eta_ir
+  groupings:
+    - name: rho_aggregated_by_budget_target
+      group_by: [intervention_budget, target_semantics]
+      marginalize: [epistemic_persistence]
+      weighting: balanced_cell
+    - name: target_aggregated_by_rho_budget
+      group_by: [epistemic_persistence, intervention_budget]
+      marginalize: [target_semantics]
+      weighting: balanced_cell
+    - name: fully_aggregated_by_budget
+      group_by: [intervention_budget]
+      marginalize: [epistemic_persistence, target_semantics]
+      weighting: balanced_cell
+  state_local:
+    enabled: true
+    weighting: n_observations
+    x_bins: 8
+    groupings:
+      - name: rho_aggregated_by_budget_target_x
+        group_by: [intervention_budget, target_semantics]
+        marginalize: [epistemic_persistence]
+      - name: target_aggregated_by_rho_budget_x
+        group_by: [epistemic_persistence, intervention_budget]
+        marginalize: [target_semantics]
+      - name: fully_aggregated_by_budget_x
+        group_by: [intervention_budget]
+        marginalize: [epistemic_persistence, target_semantics]
+  bootstrap: {unit: episode, stratify_by_physical_cell: true}
+  "null": {aggregate_permutation_draws: true}
+  sample_size_stability:
+    enabled: true
+    sample_sizes: [5, 10]
+    repetitions: 100
+    null_permutations: 100
 blackboard_population_outputs: true
 plots:
   chi_x_b_by_rho: &phase {source: state_local_phase_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, series: target_semantics, kind: heatmap, color_scale: independent, status_column: phase_status}
@@ -15,3 +56,20 @@ plots:
   realized_exposure_by_budget: {source: blackboard_diagnostics, value: realized_directive_exposure_fraction_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
   active_coverage_by_budget: {source: blackboard_diagnostics, value: active_latent_coverage_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
   historical_coverage_by_budget: {source: blackboard_diagnostics, value: historical_latent_coverage_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
+  study_T_pi_by_budget: {source: study_aggregated_metrics, metric: round_target_actuation_cmi, x: intervention_budget, kind: line, show_confidence_interval: true, filters: {aggregation_name: fully_aggregated_by_budget}}
+  study_T_pi_null_by_budget: {source: study_aggregated_metrics, metric: round_target_actuation_cmi, value: null_mean_bits, x: intervention_budget, kind: line, show_confidence_interval: true, ci_low: null_ci_low_bits, ci_high: null_ci_high_bits, filters: {aggregation_name: fully_aggregated_by_budget}}
+  study_T_pi_excess_by_budget: {source: study_aggregated_metrics, metric: round_target_actuation_cmi, value: null_adjusted_bits, x: intervention_budget, kind: line, show_confidence_interval: true, ci_low: null_adjusted_ci_low_bits, ci_high: null_adjusted_ci_high_bits, filters: {aggregation_name: fully_aggregated_by_budget}}
+  study_chi_by_budget: {source: study_aggregated_metrics, metric: susceptibility_occupancy_weighted, x: intervention_budget, kind: line, show_confidence_interval: true, filters: {aggregation_name: fully_aggregated_by_budget}}
+  study_eta_IF_by_budget: {source: study_aggregated_metrics, metric: round_target_information_fraction, x: intervention_budget, kind: line, show_confidence_interval: true, filters: {aggregation_name: fully_aggregated_by_budget}}
+  study_eta_IR_by_budget: {source: study_aggregated_metrics, metric: eta_ir, x: intervention_budget, kind: line, show_confidence_interval: true, filters: {aggregation_name: fully_aggregated_by_budget}}
+  whole_cell_T_pi_rho_budget: {source: primary_estimates, metric: round_target_actuation_cmi, x: intervention_budget, y: epistemic_persistence, series: target_semantics, kind: heatmap, status_column: support_status}
+  whole_cell_T_pi_excess_rho_budget: {source: primary_estimates, metric: round_target_actuation_cmi, value: null_adjusted_estimate, x: intervention_budget, y: epistemic_persistence, series: target_semantics, kind: heatmap, status_column: support_status}
+  aggregated_T_pi_x_budget: {source: state_local_aggregated_metrics, metric: round_target_actuation_cmi, x: intervention_budget, y: target_fraction_bin_center, facet: target_semantics, kind: heatmap, filters: {aggregation_name: rho_aggregated_by_budget_target_x}, status_column: support_status}
+  aggregated_chi_x_budget: {source: state_local_aggregated_metrics, metric: susceptibility_occupancy_weighted, x: intervention_budget, y: target_fraction_bin_center, facet: target_semantics, kind: heatmap, filters: {aggregation_name: rho_aggregated_by_budget_target_x}, status_column: support_status}
+  aggregated_eta_IF_x_budget: {source: state_local_aggregated_metrics, metric: round_target_information_fraction, x: intervention_budget, y: target_fraction_bin_center, facet: target_semantics, kind: heatmap, filters: {aggregation_name: rho_aggregated_by_budget_target_x}, status_column: support_status}
+  aggregated_eta_IR_x_budget: {source: state_local_aggregated_metrics, metric: eta_ir, x: intervention_budget, y: target_fraction_bin_center, facet: target_semantics, kind: heatmap, filters: {aggregation_name: rho_aggregated_by_budget_target_x}, status_column: support_status}
+  aggregated_support_x_budget: {source: state_local_aggregated_metrics, metric: round_target_actuation_cmi, value: n_observations, x: intervention_budget, y: target_fraction_bin_center, facet: target_semantics, kind: heatmap, filters: {aggregation_name: rho_aggregated_by_budget_target_x}, status_column: support_status}
+  stability_ci_width: {source: sample_size_stability, value: ci_width, x: sample_size, series: intervention_budget, facet: metric, kind: line}
+  stability_sd_excess: {source: sample_size_stability, value: sd_estimate, x: sample_size, series: intervention_budget, kind: line, filters: {metric: T_pi_minus_null}}
+  stability_sign: {source: sample_size_stability, value: sign_stability, x: sample_size, series: intervention_budget, kind: line, filters: {metric: T_pi_minus_null}}
+  stability_detection: {source: sample_size_stability, value: fraction_permutation_significant, x: sample_size, series: intervention_budget, kind: line, filters: {metric: T_pi_minus_null}}

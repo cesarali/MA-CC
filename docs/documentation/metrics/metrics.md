@@ -343,6 +343,9 @@ New packages write compressed Parquet tables under `analysis/tables/`:
 | `information_estimates.parquet` | Information estimates such as mutual information and conditional mutual information. |
 | `support_diagnostics.parquet` | Evidence showing whether enough states and both controller actions were observed. |
 | `derived_observables.parquet` | Quantities calculated from primary estimates. |
+| `study_aggregated_metrics.parquet` | Balanced study summaries built after estimating each physical cell, with aggregate bootstrap intervals, aggregate permutation nulls, component values, and support coverage. |
+| `state_local_aggregated_metrics.parquet` | Observation-weighted descriptive state maps after explicitly selected study dimensions have been averaged. |
+| `sample_size_stability.parquet` | Empirical checks of how estimates and their spread change as more complete episodes are used. |
 
 Recipes can add state-local, occupancy, causal-response, communication, initialization, endpoint,
 and blackboard diagnostic tables. The package also contains `validation.json`, `validation.md`, the
@@ -491,6 +494,78 @@ descriptive outputs rather than valid pre-action groups for a causal estimate.
 Blackboard recipes can also produce `blackboard_diagnostics.parquet`, `cell_summary.parquet`, phase
 maps, state-occupancy tables, initialization diagnostics, and other recipe-specific tables. These
 summarize the detailed retained fields; they are not additional live metric objects.
+
+### 7.4 Study-level aggregated control metrics
+
+A **physical cell** is one fixed experimental condition, such as one persistence, budget, and
+controller target. The estimators above are still calculated inside those cells first. Study-level
+aggregation is a later summary step; it does not replace or redefine a physical-cell estimate.
+
+The state-local transfer information $T_\pi(x,\rho,b,s)$ says where in state space controller
+information appears. It is detailed but can be sparse. The whole-cell
+`round_target_actuation_cmi` already holds the current target count fixed and then averages over the
+visited counts:
+
+$$
+T_\pi(\rho,b,s)=I(U;n'_Z\mid n_Z,\rho,b,s)
+=\sum_x p(x\mid\rho,b,s)T_\pi(x,\rho,b,s).
+$$
+
+Here, $U$ is the binary controller action and $n_Z$ is the number of agents supporting the
+controller's selected target. The whole-cell value therefore uses all supported visited states in
+one condition. Unsupported state-local bins remain unsupported rather than becoming zero.
+
+Recipes may then average physical-cell estimates over persistence $\rho$, target meaning $s$, or
+both. `balanced_cell` gives each designed condition equal weight. This is the headline study
+summary. `n_observations` weights a state-local map by how many observations supported each local
+estimate. It answers what happened across dynamics that actually visited that state and is marked
+`descriptive_only: true`. The two weightings answer different questions and are never silently
+mixed.
+
+Every aggregated transfer-information value is paired with an aggregated policy-randomization
+null. A **policy-randomization null** redraws the action from its recorded state-dependent action
+probability while leaving the retained trajectory otherwise fixed. Null replicate $r$ is first
+combined across cells,
+
+$$
+\bar T_{\pi,\mathrm{null}}^{(r)}=\sum_c w_cT_{\pi,\mathrm{null},c}^{(r)},
+$$
+
+and the aggregate permutation p-value is calculated from those combined draws. Cell p-values are
+never averaged. The main reported transfer result is
+$\Delta\bar T_\pi=\bar T_\pi-E[\bar T_{\pi,\mathrm{null}}]$, shown beside the raw estimate and null.
+
+Uncertainty uses a stratified whole-episode bootstrap. **Stratified** means complete episodes are
+sampled with replacement separately inside every physical cell. Each cell estimate is recomputed,
+and only then are the cell results combined. This keeps rounds from the same episode together.
+
+The two efficiencies are ratios of aggregated components, not averages of cell efficiencies:
+
+$$
+\bar\eta_{\rm IF}=\frac{\sum_cw_cT_{\pi,c}}
+{\sum_cw_cH_c(U\mid n_Z)},\qquad
+\bar\eta_{\rm IR}=\frac{\sum_cw_cB_{{\rm IR},c}}
+{\sum_cw_cT_{\pi,c}}.
+$$
+
+The numerator, denominator, and ratio are rebuilt inside every bootstrap replicate. The table
+exports both components so the calculation can be checked. No null-adjusted `eta_ir` is created,
+because a near-zero or negative adjusted denominator would be unstable without a separate theory.
+
+Truth-target and false-target cells may be combined only in controller-target coordinates. This
+uses `target_count_before`, `target_count_after`, `delta_p_ctrl`, and
+`round_target_actuation_cmi`. It measures controllability toward the selected target. It does not
+say that truth and false control have the same consequences for knowledge. Separate truth and false
+rows remain available. `round_truth_actuation_cmi` is never used for this pooled quantity.
+
+Each aggregate reports cell coverage, episode and round counts, action-overlap diagnostics, and an
+`adequate`, `limited`, or `unsupported` label. A small susceptibility and an imprecisely estimated
+susceptibility are different claims; the estimate and its interval remain separate. Thermodynamic
+efficiency `eta_th` is unchanged and stays unsupported when no calibrated affinity $h$ exists.
+
+The optional `sample_size_stability` output repeatedly subsamples complete episodes inside cells.
+It reports how spread, interval width, sign stability, and null-detection frequency change with the
+available episode count. This is an empirical stability check, not a prospective power calculation.
 
 ---
 
