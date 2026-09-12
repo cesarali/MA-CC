@@ -1,0 +1,108 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=23mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,microtype}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[colorlinks=true,urlcolor=blue]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\title{A solvable reference model for\\blackboard control susceptibility}
+\author{Technical note}
+\date{8 September 2026}
+\begin{document}
+\maketitle
+\vspace{-1.5em}
+\begin{abstract}
+We retain susceptibility as the difference between intervention and silence, but replace guaranteed controlled updates by sampled message exposure and allow autonomous dynamics in both branches. A mixture of two finite-compliance kernels remains analytically solvable. The result is exact under the assumptions below and a reference approximation to the full LLM blackboard game; it is not a fitted or validated account of the current experiments.
+\end{abstract}
+
+\section{State, exposure and assumptions}
+Let $n\in\{0,\ldots,N\}$ be the number of agents choosing a designated target and $x=n/N$. The target may be correct or incorrect. A round contains $M$ updates, each selecting one agent uniformly with replacement; typically $M=N$. The binary action $U$ activates the controller ($U=1$) or leaves it silent ($U=0$).
+
+During an active round, assume a fixed board with $B$ eligible peer messages and $b$ controller messages. Here $b$ is the number actually posted; it equals the allowance only when the controller fills its budget. Sampling $m=\min(q,B+b)$ messages uniformly without replacement gives
+\begin{equation}
+ w_b=\Pr(\text{at least one controller message})
+ =1-\frac{\binom{B}{m}}{\binom{B+b}{m}}.
+ \label{eq:exposure}
+\end{equation}
+Use $\binom{B}{m}=0$ for $m>B$. An empty sample has $w_b=0$. For $q\leq B$, simply set $m=q$. Sampling restarts at each update; messages are not consumed.
+
+The following assumptions make the count process close:
+\begin{enumerate}
+\setlength{\itemsep}{1pt}
+\item \textbf{Frozen environment.} Board composition and response parameters remain fixed within the round. New peer posts, changing evidence and memory effects are absorbed into a chosen initial regime, rather than modelled during the round.
+\item \textbf{Homogeneous response.} All agents have the same effective revision law in each exposure class. Exposure probability is independent of their current vote. $B$ is a common eligible count after exclusions; agent-specific eligibility is approximated by this common count.
+\item \textbf{Binary exposure suffices.} Response depends on whether at least one controller message was sampled, not separately on its identity, the number sampled or previous exposures.
+\item \textbf{Shared baseline.} An unexposed update follows the same law under intervention and silence. This neglects additional effects of displaced peer messages beyond the two response classes.
+\end{enumerate}
+The task, prompts, controller policy, $q$, and evidence regime are held fixed when interpreting these parameters. Truthfulness constrains the messages; it does not guarantee movement toward the correct answer.
+
+\newpage
+\section{Microscopic model and closed-form response}
+Write $K_{\gamma,p}$ for the original finite-compliance kernel:
+\begin{align}
+ K_{\gamma,p}(n,n+1)&=\gamma(1-n/N)p,\\
+ K_{\gamma,p}(n,n-1)&=\gamma(n/N)(1-p),\\
+ K_{\gamma,p}(n,n)&=1-K_{\gamma,p}(n,n+1)-K_{\gamma,p}(n,n-1).
+\end{align}
+Here $\gamma\in[0,1]$ is the probability of a revision opportunity; conditional on revision the new target indicator is Bernoulli$(p)$. A revision need not change the vote. The parameter $p$ is an effective preference, not the symbolic posterior probability of the target being correct.
+
+Let $K_0=K_{\gamma_0,p_0}$ describe baseline reasoning and peer influence. Let $K_1=K_{\gamma_1,p_1}$ describe updates exposed to controller content, including the other information available at that update. Then
+\begin{equation}
+ \overline K_b=(1-w_b)K_0+w_bK_1=K_{\gamma_b,p_b},
+\end{equation}
+where
+\begin{equation}
+ \gamma_b=(1-w_b)\gamma_0+w_b\gamma_1,\qquad
+ p_b=\frac{(1-w_b)\gamma_0p_0+w_b\gamma_1p_1}{\gamma_b}.
+ \label{eq:mix}
+\end{equation}
+When $\gamma_b=0$, the kernel is the identity and $p_b$ is immaterial. The round kernels are $Q_0=K_0^M$ and $Q_1=\overline K_b^{\,M}$: silence is generally not an identity operation.
+
+For $\mu_j=\mathbb E[x_j\mid x_0=x]$, the microscopic drift gives
+\begin{equation}
+ \mu_{j+1}=\left(1-\frac{\gamma}{N}\right)\mu_j+\frac{\gamma p}{N},
+ \qquad
+ F_M(x;\gamma,p)=p+(x-p)\left(1-\frac{\gamma}{N}\right)^M.
+\end{equation}
+Subtracting the two branches at the same starting state yields
+\begin{equation}
+\boxed{\begin{aligned}
+ \chi_b(x)&=\mathbb E[x_M\mid U=1,x]-\mathbb E[x_M\mid U=0,x]\\
+ &=p_b+(x-p_b)\left(1-\frac{\gamma_b}{N}\right)^M\\
+ &\quad-p_0-(x-p_0)\left(1-\frac{\gamma_0}{N}\right)^M.
+\end{aligned}}
+\label{eq:chi}
+\end{equation}
+These conditional expectations denote branches initialized in the same model state, not unmatched observational subsets. The result is in target-share units; multiply by $N$ for expected count displacement.
+
+\textbf{Equal compliance.} If $\gamma_0=\gamma_1=\gamma$, the expression simplifies to
+\begin{equation}
+ \boxed{\chi_b(x)=w_b(p_1-p_0)\left[1-(1-\gamma/N)^M\right].}
+\end{equation}
+The explicit $x$ dependence cancels because both branches relax at the same rate. In general, the slope is $(1-\gamma_b/N)^M-(1-\gamma_0/N)^M$. Thus this reference predicts an affine response in $x$ at fixed parameters, not arbitrary state dependence.
+
+\newpage
+\section{Interpretation, checks and scope}
+\textbf{What changed from the original model?} The observable is unchanged. The original isolated layer used $Q_0=I$, $Q_1=K_{\gamma,p}^{\,b}$, giving $(p-x)[1-(1-\gamma/N)^b]$. Here both branches evolve for $M$ updates, while message count affects exposure through $w_b$. The old expression is recovered by setting $\gamma_0=0$, guaranteeing exposure ($w_b=1$), and setting $M$ equal to the old number of controlled opportunities. This is a structural limiting case, not an identification of message count with update count.
+
+\textbf{Immediate checks.} Zero exposure gives $\chi_b=0$, and identical exposed and baseline kernels also give zero response. Increasing message count increases exposure, but this alone does not guarantee monotonically increasing susceptibility when the two revision rates differ. Under equal compliance, the sign is that of $p_1-p_0$, and the response saturates as $w_b\to1$. Stronger control toward an incorrect target means $p_1>p_0$ for that target, even if every report is true.
+
+\textbf{Numerical verification.} For $N=M=24$, $B=18$, $b=9$, $q=3$, and $(\gamma_0,p_0,\gamma_1,p_1)=(0.35,0.70,0.65,0.90)$, Eq.~\eqref{eq:exposure} gives $w_b=0.7210256410$. Comparing Eq.~\eqref{eq:chi} with explicit matrix powers of the two round kernels over every initial count gave maximum absolute error $1.1\times10^{-15}$. This checks the algebra, not empirical model adequacy.
+
+\textbf{A small empirical test.} Start with one task and evidence regime. Measure actual exposure and compare it with Eq.~\eqref{eq:exposure}. Estimate the two microscopic transition laws and test whether shared parameters predict held-out round responses across budgets and initial target shares. Paired intervention/silence continuations from identical complete states provide the cleanest comparison. Splits should keep shared initializations together. Observational exposed/unexposed fits describe the channel; they do not by themselves establish the causal effect of exposure. Avoid fitting a separate parameter set to every heatmap cell.
+
+\textbf{Where the approximation may fail.} Live board growth, self-exclusion, selective content, repeated facts and within-round acquisition can make exposure and response depend on the evolving state. REQUEST and DIRECTIVE may also use fewer posts than the allowance. Systematic departures should motivate a specific extension; a freely varying $p_b(x)$ would remove most of the predictive constraint. The current model makes no prediction for memory persistence over several rounds.
+
+\section{Limited connection to information and thermodynamics}
+The model supplies both next-state distributions, so the existing $T_\pi(x)=I(U;x_M\mid x)$ and response can be computed consistently. For action probability $a_x$ and information in bits, the general bound remains
+\begin{equation}
+ T_\pi(x)\geq \frac{2a_x(1-a_x)}{\ln 2}\,\chi_b(x)^2.
+\end{equation}
+For $0<p_b<1$, $\gamma_b>0$, the mixture kernel also has effective affinity $h_b=\log[p_b/(1-p_b)]$ and satisfies
+\begin{equation}
+ \log\frac{\overline K_b(n,n+1)}{\overline K_b(n+1,n)}
+ =\log\frac{N-n}{n+1}+h_b.
+\end{equation}
+This preserves the mathematical reversibility structure of the reference kernel. It does not isolate controller expenditure: baseline motion has its own affinity, and the mixture hides exposure channels. A feedback path accounting must be derived before reusing the original thermodynamic efficiency. For now, Eq.~\eqref{eq:chi} is the proposed solvable benchmark.
+\end{document}

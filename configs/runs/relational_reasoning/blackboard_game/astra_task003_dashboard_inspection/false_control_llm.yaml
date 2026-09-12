@@ -1,0 +1,142 @@
+# Small real-LLM dashboard inspection derived from astra_task003_false_control_30x30.
+# Cartesian grid: 2 persistence values x 2 controller budgets = 4 cells.
+# Workload: 4 cells x 3 repetitions = 12 episodes; each episode has 24 agents
+# and 4 population rounds. Local execution uses two episode workers.
+
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 2
+  temperature: 1.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 10.0}
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 4
+  response_contract: {type: relational_blackboard_ballot, allowed_values: [A, B, C]}
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 4
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_truthful_selective_task_calibration_01/tasks
+    task_id: task_003
+    dynamics_mode: reasoning
+    rounds: 4
+    social_group_size: 3
+    social_mode: board
+    board: {sampling: uniform, message_lifetime_rounds: 1, exclude_self_authored: true, allow_no_post: true, allow_participant_requests: true}
+    epistemic_persistence: 0.70
+    vote_visibility: public
+    prompt_version: 4
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.15
+    initialization: {mode: local_vote}
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 2
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+    controller_actuation_mode: adaptive_communication
+    controller_timing: dawn_only
+    allow_controller_requests: true
+    allow_controller_directives: true
+    controller_communication_policy: llm_structured_v1
+    controller_communication_policy_version: 1
+    controller_communication_fallback_policy: contextual_weighted_v1
+    controller_communication_max_retries: 2
+    controller_report_cooldown_rounds: 1
+    controller_report_max_posts_per_fact: 3
+    controller_report_selection_strategy: target_preserving_v1
+
+execution:
+  seed: 20260908
+  repetitions: 3
+  parallelism: 2
+  fail_fast: false
+
+pricing:
+  mode: live
+  max_age_seconds: 600
+  require_fresh_at_launch: true
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 250.0
+  max_cost_per_run: 250.0
+  max_provider_requests: 5000
+  max_input_tokens: 50000000
+  max_output_tokens: 10000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    prompt_examples: {count: 2, scope: cell}
+
+storage:
+  output_dir: results/local/astra_task003_dashboard_inspection
+  format: jsonl
+  artifact_profile: dashboard_semantic
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+observability:
+  schema_version: 1
+  comet: {sweep_experiment: false}
+
+experiment:
+  name: astra-task003-dashboard-inspection-n24
+  description: Four-cell real gpt-oss dashboard inspection run for task 003, using its required 24-agent assignment, four rounds, and three repetitions per cell.
+  tags: [astra, musr, blackboard, task003, false-control, dashboard-inspection, university, gpt-oss, local-launch]
+  metadata:
+    study: astra_task003_dashboard_inspection
+    arm: false_control
+    task_id: task_003
+    candidate_id: 130
+    task_file_sha256: 1ec61ccc9578e2bcbd6a027035231dcd1ee39d44892d95b8b6ae2e9f18fdfbdb
+    controller_pool_sha256: b90a3267c26212194e916777795db0751008d8802d45e35a67088fb8a0ce49d0
+    ground_truth: ALLOCATION_0
+    controller_target: ALLOCATION_2
+    controller_target_is_truth: false
+    target_semantics: false
+    population_size: 24
+    population_rounds: 4
+    social_group_size: 3
+    sensor_sample_size: 12
+    beta: 4.0
+    theta: 0.5
+    repetitions: 3
+    cells: 4
+    episodes: 12
+    common_random_numbers_across_grid: true
+
+# Exactly four scientific cells.
+grid:
+  game.options.epistemic_persistence: [0.70, 0.85]
+  control.options.intervention_budget: [2, 4]

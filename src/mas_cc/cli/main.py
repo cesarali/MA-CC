@@ -214,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="episode/run directory, or a standardized study root",
     )
     blackboard_source.add_argument(
-        "--study-dir", type=Path, help="standardized study result root"
+        "--study-dir", type=Path, help="standardized study or direct grid result root"
     )
     blackboard_dashboard.add_argument("--episode-id")
     blackboard_dashboard.add_argument("--host", default="127.0.0.1")
@@ -305,6 +305,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-incomplete",
         action="store_true",
         help="produce explicitly incomplete exploratory output despite validation failures",
+    )
+    study_compact = study_commands.add_parser(
+        "compact-analysis",
+        help="convert an existing standardized analysis handoff to lean Parquet",
+    )
+    study_compact.add_argument("--study-dir", type=Path, required=True)
+    study_report = study_commands.add_parser(
+        "report",
+        help="build Markdown, LaTeX, and PDF from an aggregated study package",
+    )
+    study_report.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="report.yaml selecting the source analysis, sections, metrics, and output",
     )
 
     synthetic = commands.add_parser(
@@ -573,6 +588,18 @@ def build_parser() -> argparse.ArgumentParser:
             "--approve-preflight",
             type=Path,
             help="preflight_id.txt required by real-provider probes",
+        )
+        sub.add_argument(
+            "--request-set",
+            choices=("smoke", "full"),
+            default="full",
+            help="frozen request subset for probes that support staged execution",
+        )
+        sub.add_argument(
+            "--execution-profile",
+            choices=("smoke", "cluster"),
+            default="cluster",
+            help="concurrency/rate profile for probes that support staged execution",
         )
 
     inspect = commands.add_parser(
@@ -900,6 +927,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{summary['archive']}"
         )
         return 0 if summary["complete"] else 1
+    if args.command == "study" and args.study_command == "compact-analysis":
+        from mas_cc.studies import compact_study_analysis
+
+        try:
+            summary = compact_study_analysis(args.study_dir)
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study {summary['study_id']} compacted: "
+            f"{summary['converted_tables']} table(s), {summary['archive']}"
+        )
+        print(
+            f"  before: {summary['before_bytes']} bytes; "
+            f"after: {summary['after_bytes']} bytes"
+        )
+        return 0
+    if args.command == "study" and args.study_command == "report":
+        from mas_cc.studies import build_study_report
+
+        try:
+            result = build_study_report(args.config)
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study report built ({'provisional' if result.provisional else 'complete'}): "
+            f"{result.pdf}"
+        )
+        return 0
     if args.command == "study" and args.study_command == "index-existing":
         from mas_cc.studies import index_existing_study
 
@@ -1129,6 +1186,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.output_dir,
                 mode=args.probe_command,
                 approve_preflight=args.approve_preflight,
+                request_set=args.request_set,
+                execution_profile=args.execution_profile,
             )
         except (
             ConfigurationError,

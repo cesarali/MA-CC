@@ -1,0 +1,99 @@
+llm_provider:
+  type: mock
+  model: deterministic-smoke
+  credentials_env: null
+  base_url_env: null
+  timeout_seconds: 30
+  max_retries: 0
+  request_concurrency: 1
+  temperature: 0.0
+  max_output_tokens: 256
+  options:
+    response: '{"vote":"A","private_reason":"private","public_message":{"type":"NONE","text":null,"shared_fact_id":null,"reply_to":null}}'
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 4
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 2
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_team_allocation_validation_01/tasks
+    task_id: task_002
+    truthful_controller_design:
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_002_truthful_controller.json
+      expected_file_sha256: 3c730e0dcc9c88129d4ec842a7110471d1fee831b5f6b9d1106a54149df9b89c
+    dynamics_mode: reasoning
+    rounds: 2
+    social_group_size: 4
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+      allow_participant_requests: true
+    epistemic_persistence: 0.74
+    vote_visibility: public
+    prompt_version: 4
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 0
+    expected_validation_failure_rate: 0.0
+    initialization:
+      mode: explicit
+      initial_votes: [ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2, ALLOCATION_0, ALLOCATION_1, ALLOCATION_2]
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_2
+    sensor_sample_size: 12
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 3
+    advocacy_schedule: always
+    message_mode: recommendation_only
+    controller_actuation_mode: adaptive_communication
+    controller_timing: dawn_only
+    allow_controller_requests: true
+    allow_controller_directives: true
+    controller_communication_policy: contextual_weighted_v1
+    controller_communication_policy_version: 1
+    controller_report_cooldown_rounds: 1
+    controller_report_selection_strategy: target_preserving_v1
+
+execution: {seed: 20260905, repetitions: 1, parallelism: 1, fail_fast: true}
+pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: true}
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: null
+  max_cost_per_run: null
+  max_provider_requests: 48
+  max_input_tokens: 1000000
+  max_output_tokens: 100000
+  allow_unbounded_paid_requests: true
+logging: {level: INFO, console: true, audit: true, comet: false}
+storage:
+  output_dir: results/smoke/musr_adaptive_communication_fake_smoke
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+analysis: {enabled: false, estimators: [], options: {}, comet_export: false}
+metrics: {enabled: true, comet_export: []}
+observability: {schema_version: 1, comet: {sweep_experiment: false}}
+experiment:
+  name: musr-adaptive-communication-fake-smoke
+  description: Small mock-provider smoke for binary adaptive controller communication.
+  tags: [musr, blackboard, adaptive-communication, smoke]
+  metadata: {task_id: task_002, ground_truth: ALLOCATION_0, controller_target: ALLOCATION_2, controller_target_is_truth: false}

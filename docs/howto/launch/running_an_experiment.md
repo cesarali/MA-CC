@@ -246,10 +246,13 @@ completed-manifest path. If you interrupt a run (Ctrl-C, a crash, a machine rest
 identical command, `run` (default `--resume`) skips every validated completed episode and executes
 only the rest. Pass `--no-resume` to ignore prior progress and re-run every episode from scratch.
 
-The checkpoint boundary is the **episode**, not the round. An episode that was in flight has no
-valid completed shard and restarts at round zero with its original derived seed. Historical
-`checkpoints: true` wrote a round snapshot, but the orchestrator never loaded that snapshot back
-into a game runtime; no prompt object or partial conversation is restored.
+The durable completion boundary is the **episode**, not the round. An episode interrupted by a
+process or machine failure has no valid completed shard and restarts at round zero with its
+original derived seed. The relational-reasoning runtime has one narrower recovery path for an
+exhausted provider retry window: it atomically retains its validated logical choices, then a safe
+retry deterministically reconstructs the episode without provider calls for those choices and
+continues at the first unresolved call. This transient `provider_failure_checkpoint.json` is
+deleted after the episode seals successfully. It contains no prompts or raw provider responses.
 
 ```bash
 # interrupted partway through episode 3 of 5 - re-running the same command:
@@ -262,8 +265,9 @@ conda run --live-stream -n MA-CC mas-cc experiment run \
 
 **In plain terms:** think of each episode's manifest as a stamp on that lab notebook page reading
 "experiment complete." Coming back to a stack of pages, you don't redo the ones already stamped —
-you only pick up where the stamps stop. A page that was started but never stamped (a crash mid-episode,
-or an earlier failure) is treated as not done, and gets redone.
+you only pick up where the stamps stop. A page interrupted by a crash is treated as not done and
+gets redone. For a recorded relational provider failure, its validated lines are replayed locally
+and model work resumes at the first blank line.
 
 ---
 

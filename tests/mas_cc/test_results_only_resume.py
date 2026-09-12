@@ -113,6 +113,83 @@ def test_unknown_storage_modes_fail_at_the_precise_field(field, value):
         parse_run_config(raw)
 
 
+def test_provider_failure_checkpoint_is_atomic_compatible_and_transient(tmp_path):
+    recorder = RunRecorder(
+        tmp_path,
+        run_id="episode-1",
+        resolved_config={"game": {"type": "test"}},
+        policy=DetailedAuditPolicy(),
+    )
+    recorder.record_failure_checkpoint(
+        runtime={"schema_version": 1, "decisions": {"one": {"value": "A"}}},
+        budget_status={"requests": 7},
+    )
+    checkpoint = tmp_path / "failure_checkpoint.json"
+    assert checkpoint.is_file()
+    assert not checkpoint.with_suffix(".json.tmp").exists()
+
+    (tmp_path / "round_trajectory.jsonl").write_text("old\n", encoding="utf-8")
+    resumed = RunRecorder(
+        tmp_path,
+        run_id="episode-1",
+        resolved_config={"game": {"type": "test"}},
+        policy=DetailedAuditPolicy(),
+    )
+    assert resumed.load_failure_checkpoint() == {
+        "schema_version": 1,
+        "decisions": {"one": {"value": "A"}},
+    }
+    assert not (tmp_path / "round_trajectory.jsonl").exists()
+
+    resumed.finalize(status="completed", budget_status={"requests": 7})
+    assert not checkpoint.exists()
+
+
+def test_provider_failure_checkpoint_refuses_changed_config(tmp_path):
+    recorder = RunRecorder(
+        tmp_path,
+        run_id="episode-1",
+        resolved_config={"rounds": 30},
+        policy=DetailedAuditPolicy(),
+    )
+    recorder.record_failure_checkpoint(runtime={"schema_version": 1})
+
+    with pytest.raises(ValueError, match="does not match"):
+        RunRecorder(
+            tmp_path,
+            run_id="episode-1",
+            resolved_config={"rounds": 31},
+            policy=DetailedAuditPolicy(),
+        )
+
+
+def test_legacy_provider_checkpoint_is_loaded_and_removed_after_completion(tmp_path):
+    recorder = RunRecorder(
+        tmp_path,
+        run_id="episode-1",
+        resolved_config={"rounds": 30},
+        policy=DetailedAuditPolicy(),
+    )
+    recorder.record_failure_checkpoint(
+        runtime={"schema_version": 1, "decisions": {"one": {"value": "A"}}}
+    )
+    generic = tmp_path / "failure_checkpoint.json"
+    legacy = tmp_path / "provider_failure_checkpoint.json"
+    generic.replace(legacy)
+
+    resumed = RunRecorder(
+        tmp_path,
+        run_id="episode-1",
+        resolved_config={"rounds": 30},
+        policy=DetailedAuditPolicy(),
+    )
+    assert resumed.load_failure_checkpoint()["decisions"] == {
+        "one": {"value": "A"}
+    }
+    resumed.finalize(status="completed", budget_status={})
+    assert not legacy.exists()
+
+
 def _event(before, after):
     options = ("A", "B", "C")
     return {

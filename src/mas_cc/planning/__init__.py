@@ -14,9 +14,18 @@ from .experiment_preflight import (
     apply_total_demand_budget_check,
     static_experiment_preflight,
 )
-from .game_preflight import GamePreflightEstimate, static_game_preflight
+from .game_preflight import (
+    GamePreflightEstimate,
+    call_plan_for_run,
+    static_game_preflight,
+)
 from .grid_preflight import GridPreflightEstimate, static_grid_preflight
-from .preflight import EstimateRange, MonetaryEstimateRange, PreflightEstimate, static_preflight
+from .preflight import (
+    EstimateRange,
+    MonetaryEstimateRange,
+    PreflightEstimate,
+    static_preflight,
+)
 from .token_estimation import TOKENIZER_NAME, estimate_input_tokens
 
 __all__ = [
@@ -25,6 +34,7 @@ __all__ = [
     "ExperimentPreflightEstimate",
     "GameCallPlan",
     "GamePreflightEstimate",
+    "call_plan_for_run",
     "GridPreflightEstimate",
     "InteractionCount",
     "PromptScenario",

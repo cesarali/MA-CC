@@ -20,6 +20,7 @@ from mas_cc.analysis.effective_affinity import effective_affinity_analysis
 from mas_cc.config import GridSpec, load_run_config, load_run_config_or_grid
 from mas_cc.experiments import run_experiment_sync
 from mas_cc.studies.aggregation import aggregate_study
+from mas_cc.studies.compaction import compact_study_analysis
 from mas_cc.studies.aggregation import (
     _conditioning_json,
     _derived,
@@ -493,6 +494,99 @@ def test_cell_bundles_share_an_array_allocation_without_changing_cell_outputs(tm
     assert plan.cpus_per_task == 8
 
 
+@pytest.mark.parametrize(
+    ("folder", "prefix", "q", "provider", "model", "throttle", "concurrency"),
+    [
+        (
+            "blackboard_truthful_reports_q3_deepinfra",
+            "q3",
+            3,
+            "deepinfra",
+            "deepseek-ai/DeepSeek-V4-Flash",
+            5,
+            100,
+        ),
+        (
+            "blackboard_truthful_reports_q1_potsdam",
+            "q1",
+            1,
+            "university",
+            "gwdg/openai-gpt-oss-120b",
+            3,
+            60,
+        ),
+    ],
+)
+def test_prompt_v3_truthful_report_studies_are_matched_and_launch_bounded(
+    folder, prefix, q, provider, model, throttle, concurrency
+):
+    root = Path("configs/runs/relational_reasoning/blackboard_game") / folder
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, "/tmp/test-truthful-reports", git_commit="test")
+    entries = build_cell_execution_entries(spec, submissions)
+    shard_count = max(entry.array_index for entry in entries) + 1
+    plan = plan_cell_execution(spec, shard_count)
+    arms = {
+        name: load_run_config_or_grid(root / f"{prefix}_{name}.yaml")
+        for name in ("no_control", "truth_control", "false_control")
+    }
+
+    assert [entry.expected_cell_count for entry in submissions] == [5, 35, 35]
+    assert [entry.expected_episode_count for entry in submissions] == [50, 350, 350]
+    assert len(entries) == 75
+    assert shard_count == 38
+    assert plan.array_throttle == throttle
+    assert plan.total_request_concurrency == concurrency
+    assert plan.total_episode_slots == concurrency
+
+    for arm in arms.values():
+        assert {cell.config.prompt.prompt_version for cell in arm.cells} == {3}
+        assert {cell.config.game.options["prompt_version"] for cell in arm.cells} == {3}
+        assert {cell.config.game.options["social_group_size"] for cell in arm.cells} == {q}
+        assert {cell.config.llm_provider.type for cell in arm.cells} == {provider}
+        assert {cell.config.llm_provider.model for cell in arm.cells} == {model}
+        assert {cell.config.execution.repetitions for cell in arm.cells} == {10}
+
+    expected_rho = [0.7, 0.775, 0.85, 0.925, 1.0]
+    expected_b = [3, 6, 9, 12, 15, 18, 21]
+    assert [list(axis.values) for axis in arms["no_control"].axes] == [expected_rho]
+    for name in ("truth_control", "false_control"):
+        assert [list(axis.values) for axis in arms[name].axes] == [expected_rho, expected_b]
+        assert {
+            cell.config.control.options["controller_actuation_mode"]
+            for cell in arms[name].cells
+        } == {"truthful_strategic_report"}
+    assert {cell.config.control.options["target"] for cell in arms["truth_control"].cells} == {"correct"}
+    assert {cell.config.control.options["target"] for cell in arms["false_control"].cells} == {"ALLOCATION_1"}
+
+
+def test_prompt_v3_truth_and_false_arms_share_initialization_compatibility():
+    from mas_cc.core import Seed
+    from mas_cc.games import create_game
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization import (
+        initialization_compatibility_key,
+    )
+
+    root = Path(
+        "configs/runs/relational_reasoning/blackboard_game/"
+        "blackboard_truthful_reports_q3_deepinfra"
+    )
+    configs = [
+        load_run_config_or_grid(root / name).cells[0].config
+        for name in ("q3_no_control.yaml", "q3_truth_control.yaml", "q3_false_control.yaml")
+    ]
+    episode_seed = int(Seed(configs[0].execution.seed).derive("episode:0"))
+
+    assert len(
+        {
+            initialization_compatibility_key(
+                create_game(config.game), config, episode_seed
+            )
+            for config in configs
+        }
+    ) == 1
+
+
 def test_cell_worker_runs_every_cell_in_selected_bundle(tmp_path, monkeypatch):
     config = Path(
         "configs/runs/relational_reasoning/blackboard_game/"
@@ -950,11 +1044,13 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert cell_worker_main([str(execution_manifest), "1"]) == 0
     summary = aggregate_study(study_dir)
     assert summary["complete"] is True
-    cells = pd.read_csv(study_dir / "analysis" / "tables" / "cells.csv")
+    cells = pd.read_parquet(study_dir / "analysis" / "tables" / "cells.parquet")
     assert len(cells) == 2
     assert set(cells["source_cell_id"]) == {"cell-0000", "cell-0001"}
     analysis = study_dir / "analysis"
-    information = pd.read_csv(analysis / "tables" / "information_estimates.csv")
+    information = pd.read_parquet(
+        analysis / "tables" / "information_estimates.parquet"
+    )
     assert set(information["null_permutations"]) == {1}
     assert set(information["bootstrap_resamples"]) == {1}
     assert information["null_type"].notna().all()
@@ -965,21 +1061,21 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert not (analysis / "cache").exists()
     assert not (analysis / "cell_cache").exists()
     assert not list(analysis.rglob("*.pickle"))
-    assert not list((analysis / "tables").glob("*.parquet"))
+    assert not list((analysis / "tables").glob("*.csv"))
     with zipfile.ZipFile(summary["archive"]) as archive:
         names = set(archive.namelist())
     assert {
         "analysis_manifest.json",
         "validation.json",
         "validation.md",
-        "tables/cells.csv",
-        "tables/episodes.csv",
-        "tables/rounds.csv",
-        "tables/micro_slots.csv",
-        "tables/primary_estimates.csv",
-        "tables/information_estimates.csv",
-        "tables/support_diagnostics.csv",
-        "tables/derived_observables.csv",
+        "tables/cells.parquet",
+        "tables/episodes.parquet",
+        "tables/rounds.parquet",
+        "tables/micro_slots.parquet",
+        "tables/primary_estimates.parquet",
+        "tables/information_estimates.parquet",
+        "tables/support_diagnostics.parquet",
+        "tables/derived_observables.parquet",
         "reports/summary.md",
         "reports/methods.md",
         "provenance/study_manifest.json",
@@ -987,9 +1083,7 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     } <= names
     assert not any("cache/" in name or name.endswith(".pickle") for name in names)
     assert not any(name.endswith("information_nulls.parquet") for name in names)
-    assert not any(
-        name.startswith("tables/") and name.endswith(".parquet") for name in names
-    )
+    assert not any(name.startswith("tables/") and name.endswith(".csv") for name in names)
 
     manifest = json.loads((analysis / "analysis_manifest.json").read_text())
     assert manifest["resampling"] == {
@@ -1001,15 +1095,15 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     assert manifest["retention_contract"]["persistent_analysis_cache"] is False
     assert manifest["retention_contract"]["individual_null_draws"] is False
     assert manifest["retention_contract"]["individual_bootstrap_draws"] is False
-    assert manifest["retention_contract"]["canonical_table_format"] == "csv"
-    assert manifest["retention_contract"]["csv_tables"] is True
-    assert manifest["retention_contract"]["parquet_tables"] is False
+    assert manifest["retention_contract"]["canonical_table_format"] == "parquet"
+    assert manifest["retention_contract"]["csv_tables"] is False
+    assert manifest["retention_contract"]["parquet_tables"] is True
 
     before = information.sort_values(["cell_id", "metric"]).reset_index(drop=True)
     for entry in submissions:
         shutil.rmtree(entry.output_dir)
     aggregate_study(study_dir)
-    after = pd.read_csv(analysis / "tables" / "information_estimates.csv")
+    after = pd.read_parquet(analysis / "tables" / "information_estimates.parquet")
     after = after.sort_values(["cell_id", "metric"]).reset_index(drop=True)
     pd.testing.assert_frame_equal(before, after)
 
@@ -1036,23 +1130,29 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
     second = aggregate_study(study_dir)
     assert first["complete"] is True
     expected = {
-        "cells.csv",
-        "episodes.csv",
-        "rounds.csv",
-        "micro_slots.csv",
-        "primary_estimates.csv",
-        "information_estimates.csv",
-        "support_diagnostics.csv",
-        "derived_observables.csv",
+        "cells.parquet",
+        "episodes.parquet",
+        "rounds.parquet",
+        "micro_slots.parquet",
+        "available_round_prefixes.parquet",
+        "available_micro_slot_prefixes.parquet",
+        "interrupted_episode_diagnostics.parquet",
+        "interrupted_episode_summary.parquet",
+        "primary_estimates.parquet",
+        "information_estimates.parquet",
+        "support_diagnostics.parquet",
+        "derived_observables.parquet",
     }
     tables = study_dir / "analysis" / "tables"
-    assert expected <= {path.name for path in tables.glob("*.csv")}
-    assert not list(tables.glob("*.parquet"))
-    cell_table = pd.read_csv(tables / "cells.csv")
+    assert expected <= {path.name for path in tables.glob("*.parquet")}
+    assert not list(tables.glob("*.csv"))
+    cell_table = pd.read_parquet(tables / "cells.parquet")
     assert len(cell_table) == 1
     assert cell_table.iloc[0]["cell_id"] == "config-0000/run"
-    assert len(pd.read_csv(tables / "episodes.csv")) == 1
-    assert set(pd.read_csv(tables / "rounds.csv")["cell_id"]) == {"config-0000/run"}
+    assert len(pd.read_parquet(tables / "episodes.parquet")) == 1
+    assert set(pd.read_parquet(tables / "rounds.parquet")["cell_id"]) == {
+        "config-0000/run"
+    }
     assert Path(first["archive"]).is_file()
     assert Path(second["archive"]).is_file()
     assert not (study_dir / "analysis" / "cache").exists()
@@ -1071,7 +1171,7 @@ def test_aggregate_writes_compact_canonical_package(tmp_path):
     assert validation["valid"] is False
 
 
-def test_scientific_table_csv_round_trip_and_legacy_parquet_read(tmp_path):
+def test_scientific_table_parquet_round_trip_and_legacy_csv_read(tmp_path):
     frame = pd.DataFrame(
         {
             "cell_id": ["cell-1", "cell-2"],
@@ -1081,20 +1181,67 @@ def test_scientific_table_csv_round_trip_and_legacy_parquet_read(tmp_path):
             "nested": [{"rho": 0.7, "states": [1, 2]}, None],
         }
     )
-    csv_path = write_scientific_table(tmp_path, "fidelity", frame)
-    restored = pd.read_csv(csv_path)
+    parquet_path = write_scientific_table(tmp_path, "fidelity", frame)
+    restored = pd.read_parquet(parquet_path)
     assert list(restored.columns) == list(frame.columns)
     assert restored.loc[0, "estimate"] == pytest.approx(0.125)
     assert math.isnan(restored.loc[1, "estimate"])
     assert json.loads(restored.loc[0, "nested"]) == {"rho": 0.7, "states": [1, 2]}
 
-    legacy = tmp_path / "legacy.parquet"
-    frame.to_parquet(legacy, index=False, engine="pyarrow")
-    pd.testing.assert_frame_equal(read_scientific_table(legacy), frame)
+    legacy = tmp_path / "legacy.csv"
+    frame.drop(columns="nested").to_csv(legacy, index=False)
+    pd.testing.assert_frame_equal(
+        read_scientific_table(legacy), frame.drop(columns="nested"), check_dtype=False
+    )
+
+
+def test_compact_existing_csv_analysis_preserves_values_and_rebuilds_zip(tmp_path):
+    study = tmp_path / "legacy-study"
+    analysis = study / "analysis"
+    tables = analysis / "tables"
+    tables.mkdir(parents=True)
+    original = pd.DataFrame(
+        {"cell_id": ["cell-1", "cell-2"], "estimate": [0.125, 0.75]}
+    )
+    original.to_csv(tables / "information_estimates.csv", index=False)
+    (analysis / "analysis_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "study_id": "legacy-study",
+                "retention_contract": {
+                    "canonical_table_format": "csv",
+                    "csv_tables": True,
+                    "parquet_tables": False,
+                },
+                "tables": ["information_estimates.csv"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (analysis / "validation.json").write_text("{}\n", encoding="utf-8")
+    (analysis / "validation.md").write_text("valid\n", encoding="utf-8")
+
+    summary = compact_study_analysis(study)
+
+    destination = tables / "information_estimates.parquet"
+    assert destination.is_file()
+    assert not (tables / "information_estimates.csv").exists()
+    pd.testing.assert_frame_equal(pd.read_parquet(destination), original)
+    manifest = json.loads((analysis / "analysis_manifest.json").read_text())
+    assert manifest["retention_contract"]["canonical_table_format"] == "parquet"
+    assert manifest["retention_contract"]["csv_tables"] is False
+    assert manifest["tables"] == ["information_estimates.parquet"]
+    with zipfile.ZipFile(summary["archive"]) as archive:
+        assert "tables/information_estimates.parquet" in archive.namelist()
+        assert not any(name.endswith(".csv") for name in archive.namelist())
 
 
 def test_canonical_record_selection_excludes_incomplete_and_retry_prefixes():
-    from mas_cc.studies.canonical import _completed_unique_records
+    from mas_cc.studies.canonical import (
+        _completed_unique_records,
+        _incomplete_unique_records,
+    )
 
     episodes = [
         {"episode_id": "complete", "status": "completed"},
@@ -1124,6 +1271,109 @@ def test_canonical_record_selection_excludes_incomplete_and_retry_prefixes():
         "superseded_retry_records": 2,
         "retained_records": 3,
     }
+    prefixes = _incomplete_unique_records(
+        rows, episodes, coordinate_columns=("round_index",)
+    )
+    assert [(row["episode_id"], row["round_index"], row["value"]) for row in prefixes] == [
+        ("failed", 0, "partial")
+    ]
+    assert prefixes[0]["episode_status"] == "failed"
+
+
+def test_partial_canonical_tables_retain_censored_prefix_separately(tmp_path):
+    from mas_cc.studies.canonical import build_canonical_tables
+
+    cell_path = tmp_path / "cell-0000"
+    resume = cell_path / ".resume" / "cell-0000-0000"
+    records = cell_path / "round_records" / "cell-0000-0000"
+    resume.mkdir(parents=True)
+    records.mkdir(parents=True)
+    (resume / "manifest.json").write_text(
+        json.dumps(
+            {
+                "episode_id": "cell-0000-0000",
+                "cell_id": "cell-0000",
+                "seed": 7,
+                "status": "failed",
+                "error_type": "RelationalDecisionFailed",
+                "scientific_schema_version": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (resume / "failure_checkpoint.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "created_at": "2026-09-10T00:00:00Z",
+                "runtime": {
+                    "schema_version": 1,
+                    "interruption_type": "validation_exhausted",
+                    "failed_call": {
+                        "stage": "focal_update",
+                        "agent_id": "agent_003",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (records / "round_trajectory.jsonl").write_text(
+        json.dumps(
+            {
+                "episode_id": "cell-0000-0000",
+                "round_index": 2,
+                "target_share": 0.5,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (records / "micro_slot_trajectory.jsonl").write_text(
+        json.dumps(
+            {
+                "episode_id": "cell-0000-0000",
+                "round_index": 2,
+                "within_round_index": 4,
+                "target_share": 0.5,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    entry = SimpleNamespace(
+        source_extension_index=0,
+        source_submission_attempt=0,
+        array_index=0,
+        config_hash="config-hash",
+    )
+    run = SimpleNamespace(entry=entry, run_id="run", path=cell_path.parent)
+    cell = SimpleNamespace(
+        run=run,
+        path=cell_path,
+        cell_key="config-0000/cell-0000",
+        local_cell_id="cell-0000",
+        overrides={},
+        resolved_config={
+            "execution": {"repetitions": 1},
+            "game": {"type": "relational_imitation_round_feedback"},
+        },
+    )
+
+    tables, _ = build_canonical_tables("partial-study", (cell,))
+
+    assert tables["rounds"].empty
+    assert tables["micro_slots"].empty
+    assert len(tables["available_round_prefixes"]) == 1
+    assert len(tables["available_micro_slot_prefixes"]) == 1
+    diagnostic = tables["interrupted_episode_diagnostics"].iloc[0]
+    assert diagnostic["censoring_type"] == "validation_exhausted"
+    assert diagnostic["checkpoint_available"]
+    assert diagnostic["last_complete_round_index"] == 2
+    assert diagnostic["last_complete_micro_slot_index"] == 4
+    assert tables["interrupted_episode_summary"].iloc[0][
+        "interrupted_episodes"
+    ] == 1
 
 
 def test_effective_affinity_reuses_transition_rate_definition():
@@ -1367,9 +1617,11 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
     aggregate_study(study_dir)
 
     tables = study_dir / "analysis" / "tables"
-    primary = pd.read_csv(tables / "primary_estimates.csv")
-    derived = pd.read_csv(tables / "derived_observables.csv")
-    diagnostics = pd.read_csv(tables / "thermodynamic_efficiency_diagnostics.csv")
+    primary = pd.read_parquet(tables / "primary_estimates.parquet")
+    derived = pd.read_parquet(tables / "derived_observables.parquet")
+    diagnostics = pd.read_parquet(
+        tables / "thermodynamic_efficiency_diagnostics.parquet"
+    )
     assert len(diagnostics) == 2
     assert diagnostics["cell_id"].nunique() == 2
     assert {

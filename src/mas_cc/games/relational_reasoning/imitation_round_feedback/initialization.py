@@ -21,7 +21,57 @@ from mas_cc.storage import canonical_hash, prompt_definition_hash
 
 from .state import INITIAL_VOTE, RelationalGameState
 
-INITIALIZATION_ARTIFACT_SCHEMA_VERSION = 1
+INITIALIZATION_ARTIFACT_SCHEMA_VERSION = 2
+
+_CONTROLLER_ONLY_TASK_FIELDS = frozenset(
+    {
+        "controller_target",
+        "controller_reportable_fact_ids",
+        "decisive_fact_ids",
+        "controller_fact_classes",
+        "controller_fact_scores",
+        "controller_report_texts",
+        "controller_design_path",
+    }
+)
+
+
+def _initial_vote_task_projection(task: Any) -> dict[str, Any]:
+    """Return only task fields capable of affecting an initial-vote prompt."""
+
+    raw = task.to_dict() if hasattr(task, "to_dict") else _thaw(task)
+    projection = {
+        key: value
+        for key, value in raw.items()
+        if key not in _CONTROLLER_ONLY_TASK_FIELDS
+    }
+    visible_fact_ids = {
+        str(fact_id)
+        for fact_ids in projection.get("agent_fact_ids", {}).values()
+        for fact_id in fact_ids
+    }
+    projection["fact_order"] = [
+        fact_id
+        for fact_id in projection.get("fact_order", ())
+        if fact_id in visible_fact_ids
+    ]
+    projection["facts"] = {
+        fact_id: fact
+        for fact_id, fact in projection.get("facts", {}).items()
+        if fact_id in visible_fact_ids
+    }
+    for name in ("supporting_fact_ids", "distractor_fact_ids"):
+        projection[name] = [
+            fact_id
+            for fact_id in projection.get(name, ())
+            if fact_id in visible_fact_ids
+        ]
+    if "supporting_fact_groups" in projection:
+        projection["supporting_fact_groups"] = {
+            group: [fact_id for fact_id in fact_ids if fact_id in visible_fact_ids]
+            for group, fact_ids in projection["supporting_fact_groups"].items()
+        }
+    return projection
 
 
 def paired_initialization_directory(config: RunConfig) -> Path | None:
@@ -75,6 +125,14 @@ def physical_initial_state_projection(state: RelationalGameState) -> dict[str, A
     }
 
 
+def _physical_initial_state_projection_v2(
+    state: RelationalGameState,
+) -> dict[str, Any]:
+    projection = physical_initial_state_projection(state)
+    projection["task"] = _initial_vote_task_projection(state.task)
+    return projection
+
+
 def initialization_compatibility_payload(
     game: Any, config: RunConfig, episode_seed: int
 ) -> dict[str, Any]:
@@ -89,7 +147,7 @@ def initialization_compatibility_payload(
         "game_version": game.spec.version,
         "episode_seed": int(episode_seed),
         "task_id": task.task_id,
-        "task_sha256": canonical_hash(task.to_dict()),
+        "task_sha256": canonical_hash(_initial_vote_task_projection(task)),
         "population_size": config.game.population_size,
         "receiver_epistemic_disposition": game.rules(
             config.game
@@ -116,6 +174,15 @@ def initialization_compatibility_key(
     )
 
 
+def _legacy_initialization_compatibility_key(
+    game: Any, config: RunConfig, episode_seed: int
+) -> str:
+    payload = initialization_compatibility_payload(game, config, episode_seed)
+    payload["schema_version"] = 1
+    payload["task_sha256"] = canonical_hash(game.load_task(config.game).to_dict())
+    return canonical_hash(payload)
+
+
 def artifact_from_actions(
     game: Any,
     config: RunConfig,
@@ -136,7 +203,7 @@ def artifact_from_actions(
                 + "; ".join(str(issue) for issue in validation.issues)
             )
     initialized = game.apply_initial_votes(shell, tuple(actions))
-    physical = physical_initial_state_projection(initialized)
+    physical = _physical_initial_state_projection_v2(initialized)
     body = {
         "schema_version": INITIALIZATION_ARTIFACT_SCHEMA_VERSION,
         "repetition_index": int(repetition_index),
@@ -166,9 +233,14 @@ def _action_from_dict(value: Mapping[str, Any]) -> Action:
 def validate_initialization_artifact(
     artifact: Mapping[str, Any], game: Any, config: RunConfig, episode_seed: int
 ) -> tuple[tuple[Action, ...], RelationalGameState]:
-    if artifact.get("schema_version") != INITIALIZATION_ARTIFACT_SCHEMA_VERSION:
+    schema_version = artifact.get("schema_version")
+    if schema_version not in {1, INITIALIZATION_ARTIFACT_SCHEMA_VERSION}:
         raise ValueError("paired initialization artifact schema is incompatible")
-    expected_key = initialization_compatibility_key(game, config, episode_seed)
+    expected_key = (
+        _legacy_initialization_compatibility_key(game, config, episode_seed)
+        if schema_version == 1
+        else initialization_compatibility_key(game, config, episode_seed)
+    )
     if artifact.get("compatibility_key") != expected_key:
         raise ValueError("paired initialization artifact compatibility key mismatch")
     body = {key: value for key, value in artifact.items() if key != "artifact_hash"}
@@ -192,7 +264,11 @@ def validate_initialization_artifact(
                 + "; ".join(str(issue) for issue in validation.issues)
             )
     initialized = game.apply_initial_votes(shell, actions)
-    physical = physical_initial_state_projection(initialized)
+    physical = (
+        physical_initial_state_projection(initialized)
+        if schema_version == 1
+        else _physical_initial_state_projection_v2(initialized)
+    )
     if artifact.get("physical_initial_state_hash") != canonical_hash(physical):
         raise ValueError("paired initialization physical-state hash mismatch")
     if artifact.get("physical_initial_state") != physical:

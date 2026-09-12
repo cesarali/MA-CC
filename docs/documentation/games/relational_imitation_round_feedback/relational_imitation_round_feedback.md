@@ -1,3 +1,66 @@
+• We have unusually rich epistemic time-series data—not merely final summaries.
+
+  For the current partial snapshot:
+
+  - 449 episodes
+  - 30 rounds per episode
+  - 13,470 round-level observations
+  - 24 microscopic agent updates per round
+  - 323,280 micro-slot observations
+  - Epistemic fields are present in 100% of retained round rows
+
+  At every round boundary, we retain:
+
+  - Exact active fact IDs for every agent
+  - Exact historically known fact IDs for every agent
+  - Individual population vote vectors
+  - Active full-proof share, (\phi_t)
+  - Active supporting-fact coverage, (\kappa_t)
+  - Historical (\phi_t) and (\kappa_t)
+  - Knowledge-stratum population counts
+  - Truth-vote counts within each knowledge stratum
+  - Fact acquisitions from peers and controller
+  - Fact reactivations
+  - Persistence-driven fact deactivations
+  - Sensed agents and selected facts
+  - Controller action, probability, reports, exposures and readership
+  - Blackboard message counts and expiry
+
+  At every microscopic agent update, we additionally retain:
+
+  - Focal agent identity
+  - Vote before and after
+  - Whether the update was controlled
+  - Messages sampled, including author/type/age
+  - Whether a controller message was directly observed
+  - New posts, replies, and shared fact IDs
+  - Controller-attributed fact acquisition/reactivation
+  - Microscopic changes in truth, controller-target, and ordering observables
+
+  Therefore, we can later calculate without rerunning the LLMs:
+
+  - Arbitrary round trajectories of active and historical knowledge
+  - Per-agent fact survival, loss, acquisition, and reactivation
+  - Proof ownership versus voting behaviour
+  - (P(\text{truth vote}\mid\text{active proof state}))
+  - Persistence and first-passage times
+  - Epistemic heterogeneity and polarization
+  - Longer-history CMI variants
+  - Lagged controller/peer exposure responses
+  - Epistemic-state-conditioned susceptibility and efficiency
+  - Correlations between blackboard exposure, knowledge, and voting
+
+  The main limitations are:
+
+  - We do not observe a private latent “belief” separate from an agent’s explicit fact inventory, vote, and response.
+  - Complete fact inventories are snapshots at round boundaries, not after every microscopic slot.
+  - Before-round exact inventories are reconstructed from the previous round’s after-state; round zero uses the retained initial state.
+  - Raw prompts and model responses are lightweight diagnostic artifacts, not complete canonical coverage for every agent interaction.
+
+  So for studying the population’s epistemic evolution at the round scale, the retained data are effectively complete. The biggest missing resolution is an exact full knowledge snapshot after every individual microscopic update.
+  
+
+
 # Relational imitation with round feedback
 
 This document describes the `relational_imitation_round_feedback` game and the

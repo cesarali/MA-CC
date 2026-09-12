@@ -98,8 +98,13 @@ INTERNAL_COLUMNS = (
     "final_metrics_json",
 )
 
-ALL_COLUMNS = (*IDENTITY_COLUMNS, *SCIENTIFIC_COLUMNS, *DIAGNOSTIC_COLUMNS,
-               *TERMINAL_COLUMNS, *INTERNAL_COLUMNS)
+ALL_COLUMNS = (
+    *IDENTITY_COLUMNS,
+    *SCIENTIFIC_COLUMNS,
+    *DIAGNOSTIC_COLUMNS,
+    *TERMINAL_COLUMNS,
+    *INTERNAL_COLUMNS,
+)
 
 
 def _now() -> str:
@@ -152,14 +157,30 @@ def prompt_definition_hash(config: Any) -> str:
     hashes: dict[str, str] = {}
     for family in families:
         try:
-            prompt = registry.get(family, config.prompt.prompt_version)
+            if (
+                family == "relational_blackboard_ballot"
+                and config.prompt.prompt_version >= 4
+            ):
+                from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
+                    relational_blackboard_ballot_prompt,
+                )
+
+                board = config.game.options.get("board", {})
+                prompt = relational_blackboard_ballot_prompt(
+                    version=config.prompt.prompt_version,
+                    allow_participant_requests=bool(
+                        board.get("allow_participant_requests", True)
+                    ),
+                )
+            else:
+                prompt = registry.get(family, config.prompt.prompt_version)
         except ValueError:
             continue
         hashes[f"{family}@{config.prompt.prompt_version}"] = prompt.definition_hash
     if not hashes:
-        hashes[
-            f"{config.prompt.prompt_family}@{config.prompt.prompt_version}"
-        ] = canonical_hash(config.prompt.to_dict())
+        hashes[f"{config.prompt.prompt_family}@{config.prompt.prompt_version}"] = (
+            canonical_hash(config.prompt.to_dict())
+        )
     return canonical_hash(hashes)
 
 
@@ -210,7 +231,9 @@ class ScientificIdentity:
         }
 
 
-def empty_compact_row(identity: ScientificIdentity, interaction_index: int) -> dict[str, Any]:
+def empty_compact_row(
+    identity: ScientificIdentity, interaction_index: int
+) -> dict[str, Any]:
     row = {column: None for column in ALL_COLUMNS}
     row.update(identity.row(interaction_index))
     return row
@@ -259,7 +282,9 @@ def compact_imitation_event(
 def _write_parquet_atomic(rows: Sequence[Mapping[str, Any]], destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + ".tmp")
-    frame = pd.DataFrame([{column: row.get(column) for column in ALL_COLUMNS} for row in rows])
+    frame = pd.DataFrame(
+        [{column: row.get(column) for column in ALL_COLUMNS} for row in rows]
+    )
     # Explicitly provide columns for deterministic empty/all-null fields.
     frame = frame.reindex(columns=ALL_COLUMNS)
     frame.to_parquet(temporary, index=False, engine="pyarrow")
@@ -290,7 +315,9 @@ def _identity_mismatch(frame: pd.DataFrame, identity: ScientificIdentity) -> str
     ):
         values = {_clean(value) for value in frame[column].tolist()}
         if values != {expected[column]}:
-            return f"{column} is {sorted(map(str, values))}, expected {expected[column]!r}"
+            return (
+                f"{column} is {sorted(map(str, values))}, expected {expected[column]!r}"
+            )
     return None
 
 
@@ -306,10 +333,14 @@ def validate_episode_artifact(
     try:
         frame = pd.read_parquet(source, engine="pyarrow")
     except Exception as exc:
-        raise ValueError(f"cannot read scientific artifact {source}: {type(exc).__name__}") from exc
+        raise ValueError(
+            f"cannot read scientific artifact {source}: {type(exc).__name__}"
+        ) from exc
     missing = [column for column in ALL_COLUMNS if column not in frame.columns]
     if missing:
-        raise ValueError(f"scientific artifact {source} is missing columns: {', '.join(missing)}")
+        raise ValueError(
+            f"scientific artifact {source} is missing columns: {', '.join(missing)}"
+        )
     return validate_episode_frame(
         frame,
         identity,
@@ -329,13 +360,19 @@ def validate_episode_frame(
 
     missing = [column for column in ALL_COLUMNS if column not in frame.columns]
     if missing:
-        raise ValueError(f"scientific artifact {source} is missing columns: {', '.join(missing)}")
+        raise ValueError(
+            f"scientific artifact {source} is missing columns: {', '.join(missing)}"
+        )
     frame = frame[frame["episode_id"].astype(str) == identity.episode_id].copy()
     if frame.empty:
-        raise ValueError(f"scientific artifact {source} has no rows for {identity.episode_id}")
+        raise ValueError(
+            f"scientific artifact {source} has no rows for {identity.episode_id}"
+        )
     mismatch = _identity_mismatch(frame, identity)
     if mismatch:
-        raise ValueError(f"incompatible episode checkpoint {identity.episode_id}: {mismatch}")
+        raise ValueError(
+            f"incompatible episode checkpoint {identity.episode_id}: {mismatch}"
+        )
     statuses = {str(value) for value in frame["status"].tolist()}
     if statuses != {"completed"}:
         raise ValueError(
@@ -343,10 +380,14 @@ def validate_episode_frame(
         )
     indices = sorted(int(value) for value in frame["interaction_index"].tolist())
     if indices != list(range(1, len(indices) + 1)):
-        raise ValueError(f"episode checkpoint {identity.episode_id} has non-contiguous interactions")
+        raise ValueError(
+            f"episode checkpoint {identity.episode_id} has non-contiguous interactions"
+        )
     recorded_counts = {int(value) for value in frame["interaction_count"].tolist()}
     if recorded_counts != {len(indices)}:
-        raise ValueError(f"episode checkpoint {identity.episode_id} row count does not match terminal metadata")
+        raise ValueError(
+            f"episode checkpoint {identity.episode_id} row count does not match terminal metadata"
+        )
     if expected_interactions is not None and len(indices) != expected_interactions:
         raise ValueError(
             f"episode checkpoint {identity.episode_id} has {len(indices)} interactions; "
@@ -362,7 +403,9 @@ def validate_cell_artifact(cell_dir: str | Path) -> pd.DataFrame:
     table = directory / "scientific_events.parquet"
     seal_path = directory / "cell_complete.json"
     if not table.is_file() or not seal_path.is_file():
-        raise ValueError(f"cell is not sealed with compact scientific data: {directory}")
+        raise ValueError(
+            f"cell is not sealed with compact scientific data: {directory}"
+        )
     try:
         seal = json.loads(seal_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -378,37 +421,50 @@ def validate_cell_artifact(cell_dir: str | Path) -> pd.DataFrame:
         raise ValueError(f"cannot read sealed scientific table {table}") from exc
     missing = [column for column in ALL_COLUMNS if column not in frame.columns]
     if missing:
-        raise ValueError(f"sealed scientific table is missing columns: {', '.join(missing)}")
+        raise ValueError(
+            f"sealed scientific table is missing columns: {', '.join(missing)}"
+        )
     if frame.empty or set(frame["schema_version"].astype(int)) != {
         SCIENTIFIC_SCHEMA_VERSION
     }:
         raise ValueError(f"sealed scientific table has an incompatible schema: {table}")
     if set(frame["status"].astype(str)) != {"completed"}:
-        raise ValueError(f"sealed scientific table contains non-completed rows: {table}")
+        raise ValueError(
+            f"sealed scientific table contains non-completed rows: {table}"
+        )
     episode_ids = set(frame["episode_id"].astype(str))
     sealed_episode_ids = seal.get("episode_ids", ())
     if not isinstance(sealed_episode_ids, (list, tuple)):
         raise ValueError(f"cell completion seal has invalid episode IDs: {seal_path}")
     if episode_ids != {str(item) for item in sealed_episode_ids}:
-        raise ValueError(f"sealed scientific table episode IDs do not match its seal: {table}")
+        raise ValueError(
+            f"sealed scientific table episode IDs do not match its seal: {table}"
+        )
     try:
         sealed_row_count = int(seal.get("row_count", -1))
         sealed_episode_count = int(seal.get("episode_count", -1))
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"cell completion seal has invalid counts: {seal_path}") from exc
+        raise ValueError(
+            f"cell completion seal has invalid counts: {seal_path}"
+        ) from exc
     if len(frame) != sealed_row_count or len(episode_ids) != sealed_episode_count:
-        raise ValueError(f"sealed scientific table row count does not match its seal: {table}")
+        raise ValueError(
+            f"sealed scientific table row count does not match its seal: {table}"
+        )
     if seal.get("scientific_schema_version") != SCIENTIFIC_SCHEMA_VERSION:
-        raise ValueError(f"cell completion seal has an incompatible scientific schema: {seal_path}")
+        raise ValueError(
+            f"cell completion seal has an incompatible scientific schema: {seal_path}"
+        )
     raw_counts = seal.get("episode_row_counts", {})
     if not isinstance(raw_counts, Mapping):
-        raise ValueError(f"cell completion seal has invalid episode counts: {seal_path}")
-    sealed_counts = {
-        str(key): int(value)
-        for key, value in raw_counts.items()
-    }
+        raise ValueError(
+            f"cell completion seal has invalid episode counts: {seal_path}"
+        )
+    sealed_counts = {str(key): int(value) for key, value in raw_counts.items()}
     if set(sealed_counts) != episode_ids:
-        raise ValueError(f"sealed scientific table episode counts are incomplete: {table}")
+        raise ValueError(
+            f"sealed scientific table episode counts are incomplete: {table}"
+        )
     for episode_id, group in frame.groupby("episode_id", sort=False):
         label = str(episode_id)
         indices = sorted(int(value) for value in group["interaction_index"].tolist())
@@ -440,7 +496,9 @@ def write_completed_episode(
     """Write, read back, validate, and publish one completed episode shard."""
 
     if not rows:
-        raise ValueError("a completed scientific episode must contain at least one interaction")
+        raise ValueError(
+            "a completed scientific episode must contain at least one interaction"
+        )
     finished_at = _now()
     terminal_rows: list[dict[str, Any]] = []
     for source in rows:
@@ -533,10 +591,14 @@ def merge_episode_artifacts(
     _write_parquet_atomic(rows, destination)
     verified = pd.read_parquet(destination, engine="pyarrow")
     expected_ids = {identity.episode_id for identity in identities}
-    if set(verified["episode_id"].astype(str)) != expected_ids or len(verified) != sum(row_counts.values()):
+    if set(verified["episode_id"].astype(str)) != expected_ids or len(verified) != sum(
+        row_counts.values()
+    ):
         raise ValueError("sealed scientific table failed episode/row-count validation")
     for identity in identities:
-        validate_episode_artifact(destination, identity, expected_interactions=row_counts[identity.episode_id])
+        validate_episode_artifact(
+            destination, identity, expected_interactions=row_counts[identity.episode_id]
+        )
     summary = {
         "schema_version": 1,
         "status": "completed",
@@ -550,7 +612,9 @@ def merge_episode_artifacts(
     }
     manifest = directory / "cell_complete.json"
     temporary_manifest = manifest.with_name(manifest.name + ".tmp")
-    temporary_manifest.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary_manifest.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     with temporary_manifest.open("rb") as stream:
         os.fsync(stream.fileno())
     # A malformed seal must never authorize cleanup of the resumable shards.
@@ -565,7 +629,9 @@ def merge_episode_artifacts(
     return summary
 
 
-def read_scientific_tables(root: str | Path, *, include_resume: bool = True) -> pd.DataFrame:
+def read_scientific_tables(
+    root: str | Path, *, include_resume: bool = True
+) -> pd.DataFrame:
     """Read compact final files (or partial shards) without duplicating rows."""
 
     source = Path(root)
@@ -608,7 +674,9 @@ def merge_cell_scientific_tables(root: str | Path) -> Path | None:
     )
     key_columns = ["cell_id", "episode_id", "interaction_index"]
     if merged.duplicated(key_columns).any():
-        raise ValueError("cell scientific tables contain duplicate interaction identities")
+        raise ValueError(
+            "cell scientific tables contain duplicate interaction identities"
+        )
     destination = directory / "scientific_events.parquet"
     _write_parquet_atomic(merged.to_dict(orient="records"), destination)
     verified = pd.read_parquet(destination, engine="pyarrow")
@@ -623,8 +691,12 @@ def compact_row_to_imitation_event(row: Mapping[str, Any]) -> Mapping[str, Any]:
     options = tuple(str(item) for item in row["possible_answers"])
     before_counts = tuple(int(item) for item in row["N_t"])
     after_counts = tuple(int(item) for item in row["N_t1"])
-    before_votes = [option for option, count in zip(options, before_counts) for _ in range(count)]
-    after_votes = [option for option, count in zip(options, after_counts) for _ in range(count)]
+    before_votes = [
+        option for option, count in zip(options, before_counts) for _ in range(count)
+    ]
+    after_votes = [
+        option for option, count in zip(options, after_counts) for _ in range(count)
+    ]
     sensor_raw = _clean(row.get("Y_t"))
     sensor = None if sensor_raw is None else tuple(int(item) for item in sensor_raw)
     event: dict[str, Any] = {
@@ -647,9 +719,7 @@ def compact_row_to_imitation_event(row: Mapping[str, Any]) -> Mapping[str, Any]:
         "controller_policy": _clean(row.get("controller_policy")),
         "dynamics_mode": _clean(row.get("dynamics_mode")),
         "sensor_sample_size": _clean(row.get("sensor_sample_size")),
-        "sensor_count_vector": (
-            {} if sensor is None else dict(zip(options, sensor))
-        ),
+        "sensor_count_vector": ({} if sensor is None else dict(zip(options, sensor))),
     }
     for column in DIAGNOSTIC_COLUMNS:
         if column not in event:
@@ -657,14 +727,20 @@ def compact_row_to_imitation_event(row: Mapping[str, Any]) -> Mapping[str, Any]:
     return event
 
 
-def iter_compact_imitation_events(root: str | Path) -> Iterable[tuple[Mapping[str, Any], str, str]]:
+def iter_compact_imitation_events(
+    root: str | Path,
+) -> Iterable[tuple[Mapping[str, Any], str, str]]:
     frame = read_scientific_tables(root)
-    for row in frame.sort_values(["cell_id", "episode_id", "interaction_index"]).to_dict(
-        orient="records"
-    ):
+    for row in frame.sort_values(
+        ["cell_id", "episode_id", "interaction_index"]
+    ).to_dict(orient="records"):
         if _clean(row.get("possible_answers")) is None:
             continue
-        yield compact_row_to_imitation_event(row), str(row["episode_id"]), str(row["cell_id"])
+        yield (
+            compact_row_to_imitation_event(row),
+            str(row["episode_id"]),
+            str(row["cell_id"]),
+        )
 
 
 __all__ = [

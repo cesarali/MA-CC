@@ -36,12 +36,8 @@ PERSISTENCE_LARGE_POPULATION_TRUTH_CONTRACT = (
 )
 MUSR_BLACKBOARD_POPULATION_01_CONTRACT = "musr_blackboard_population_01_v1"
 MUSR_BLACKBOARD_POPULATION_01_EXTENDED_CONTRACT = "musr_blackboard_population_01_v2"
-MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT = (
-    "musr_blackboard_false_q3_companion_v1"
-)
-MUSR_BLACKBOARD_POPULATION_SCOUT_R1_CONTRACT = (
-    "musr_blackboard_population_scout_r1_v1"
-)
+MUSR_BLACKBOARD_FALSE_Q3_COMPANION_CONTRACT = "musr_blackboard_false_q3_companion_v1"
+MUSR_BLACKBOARD_POPULATION_SCOUT_R1_CONTRACT = "musr_blackboard_population_scout_r1_v1"
 MUSR_BLACKBOARD_TASK_HASH = (
     "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750"
 )
@@ -1221,6 +1217,16 @@ def run_study_preflight(
         if estimate.launch_status != "permitted":
             raise ValueError(f"experiment preflight denied {path.name}")
 
+    if design.get("contract") is None:
+        design = {
+            **design,
+            "total_cells": sum(int(row.get("cell_count", 1)) for row in estimates),
+            "total_episodes": sum(
+                int(row.get("total_episode_count", row.get("episode_count", 0)))
+                for row in estimates
+            ),
+        }
+
     calls = {
         key: sum(int(row["total_provider_requests"][key]) for row in estimates)
         for key in ("lower", "expected", "conservative")
@@ -1272,47 +1278,49 @@ def run_study_preflight(
     (destination / "design_validation.json").write_text(
         json.dumps(design, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    lines = [
-        "# Study preflight",
-        "",
-        f"- Status: **{design['status'].upper()}**",
-    ]
-    if design["contract"] is not None:
+    lines = ["# Study preflight", "", f"- Status: **{design['status'].upper()}**"]
+    if design.get("contract") is None:
         lines.extend(
             [
-                f"- Population size: {design['population_size']}",
-                f"- q values: {design['q_values']}",
-                f"- L values: {design['L_values']}",
-                f"- Support redundancy: {design['support_redundancy']}",
-                f"- Sensor size q_c: {design['sensor_size']}",
-                *(
-                    [f"- rho values: {design['rho_values']}"]
-                    if "rho_values" in design
-                    else []
-                ),
-                f"- b values: {design['b_values']}",
-                f"- Target semantics: {design['target_semantics']}",
-                f"- Receiver dispositions: {design['receiver_dispositions']}",
-                f"- Evidence strategies: {design['evidence_strategies']}",
-                f"- Message modes: {design['message_modes']}",
-                f"- beta: {design['beta']}",
-                f"- theta: {design['theta']}",
-                f"- Schedule: {design['schedule']}",
-                f"- Frozen tasks: {design.get('number_of_frozen_tasks', design.get('frozen_tasks'))}",
-                f"- Repetitions: {design['repetitions']}",
-                f"- Structural regimes: {design['structural_regimes']} {design['resolved_regimes']}",
-                f"- Total episodes: {design['total_episodes']}",
-            ]
-        )
-    else:
-        lines.extend(
-            [
+                "- Scientific contract: none (ordinary study preflight)",
+                f"- Configurations: {len(spec.configs)}",
                 f"- Total cells: {design['total_cells']}",
                 f"- Total episodes: {design['total_episodes']}",
+                f"- Nominal provider calls: {calls['lower']}",
+                f"- Expected provider calls: {calls['expected']}",
+                f"- Conservative provider calls: {calls['conservative']}",
             ]
+        )
+        (destination / "report.md").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
+        return StudyPreflightResult(
+            spec.config_dir, destination, design, tuple(estimates)
         )
     lines.extend(
         [
+            f"- Population size: {design['population_size']}",
+            f"- q values: {design['q_values']}",
+            f"- L values: {design['L_values']}",
+            f"- Support redundancy: {design['support_redundancy']}",
+            f"- Sensor size q_c: {design['sensor_size']}",
+            *(
+                [f"- rho values: {design['rho_values']}"]
+                if "rho_values" in design
+                else []
+            ),
+            f"- b values: {design['b_values']}",
+            f"- Target semantics: {design['target_semantics']}",
+            f"- Receiver dispositions: {design['receiver_dispositions']}",
+            f"- Evidence strategies: {design['evidence_strategies']}",
+            f"- Message modes: {design['message_modes']}",
+            f"- beta: {design['beta']}",
+            f"- theta: {design['theta']}",
+            f"- Schedule: {design['schedule']}",
+            f"- Frozen tasks: {design.get('number_of_frozen_tasks', design.get('frozen_tasks'))}",
+            f"- Repetitions: {design['repetitions']}",
+            f"- Structural regimes: {design['structural_regimes']} {design['resolved_regimes']}",
+            f"- Total episodes: {design['total_episodes']}",
             f"- Nominal provider calls: {calls['lower']}",
             f"- Expected provider calls: {calls['expected']}",
             f"- Conservative provider calls: {calls['conservative']}",
@@ -1330,7 +1338,7 @@ def run_study_preflight(
             "",
         ]
     )
-    for task in design.get("tasks", ()):
+    for task in design["tasks"]:
         lines.append(
             f"- `{task['task_id']}`: truth `{task['ground_truth']}`, controller target "
             f"`{task['controller_target']}`, true strategic fact "

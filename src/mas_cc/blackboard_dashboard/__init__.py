@@ -2,12 +2,13 @@
 
 from .data import BlackboardRunReader
 from .server import export_dashboard, serve_dashboard
-from .study_data import BlackboardStudyReader, is_study_root
+from .study_data import BlackboardStudyReader, is_direct_grid_root, is_study_root
 
 __all__ = [
     "BlackboardRunReader",
     "BlackboardStudyReader",
     "export_dashboard",
+    "is_direct_grid_root",
     "is_study_root",
     "serve_dashboard",
 ]

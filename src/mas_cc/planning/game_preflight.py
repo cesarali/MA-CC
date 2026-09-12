@@ -15,10 +15,65 @@ from mas_cc.llm_runtime.providers import (
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
 
-from .call_graph import GameCallPlan, LogicalCallSpec
+from .call_graph import DecisionStagePlan, GameCallPlan, LogicalCallSpec, PromptScenario
 from .cost_estimation import estimate_cost
 from .preflight import EstimateRange, MonetaryEstimateRange, static_preflight
 from .token_estimation import estimate_input_tokens
+
+
+def call_plan_for_run(game: Any, config: Any) -> GameCallPlan:
+    """Return game demand plus optional post-action controller LLM demand."""
+
+    plan = game.call_plan(config.game)
+    options = dict(getattr(config.control, "options", {}))
+    if (
+        config.game.type != "relational_imitation_round_feedback"
+        or options.get("controller_actuation_mode") != "adaptive_communication"
+        or options.get("controller_communication_policy") != "llm_structured_v1"
+    ):
+        return plan
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
+        ControllerCommunicationPrompt,
+        LLM_CONTROLLER_INSTRUCTION,
+    )
+
+    rounds = int(config.game.options.get("rounds", config.game.horizon))
+    retries = int(options.get("controller_communication_max_retries", 2))
+    prompt = PromptScenario(
+        "controller_communication",
+        ControllerCommunicationPrompt(
+            LLM_CONTROLLER_INSTRUCTION
+            + "\n\nCONTROLLER INFORMATION\n"
+            + "A conservative maximum includes sampled votes, the previous public "
+            "board, the target, budget, all eligible canonical facts, and posting history."
+        ),
+        assumptions=(
+            "Conservative demand assumes the randomized binary gate activates in every round.",
+        ),
+    )
+    stage = DecisionStagePlan(
+        name="controller_communication",
+        requests_per_interaction=rounds,
+        retry_bound=retries,
+        expected_attempts_per_request=1.0,
+        concurrency_within_stage=1,
+        lower_prompt=prompt,
+        representative_prompt=prompt,
+        maximum_prompt=prompt,
+        prompt_scenarios=(prompt,),
+        assumptions=prompt.assumptions,
+    )
+    return GameCallPlan(
+        game_type=plan.game_type,
+        game_version=plan.game_version,
+        interactions=plan.interactions,
+        decision_stages=(*plan.decision_stages, stage),
+        stopping_condition_assumptions=plan.stopping_condition_assumptions,
+        metadata={
+            **dict(plan.metadata),
+            "controller_llm_calls_conservatively_included": True,
+        },
+    )
 
 
 def _sum_money(values: list[MonetaryAmount | None]) -> MonetaryAmount | None:
@@ -144,7 +199,11 @@ def static_game_preflight(
         # set of stage families after the loop instead of per stage.
         stage_families = {
             (scenario.bound_prompt.family, scenario.bound_prompt.version)
-            for scenario in (lower_scenario, stage.representative_prompt, stage.maximum_prompt)
+            for scenario in (
+                lower_scenario,
+                stage.representative_prompt,
+                stage.maximum_prompt,
+            )
         }
         if len(stage_families) != 1:
             raise ValueError(
@@ -153,7 +212,9 @@ def static_game_preflight(
             )
         priced_prompts.add(next(iter(stage_families)))
         lower_prompt = lower_scenario.bound_prompt.compile(counter)
-        representative_prompt = stage.representative_prompt.bound_prompt.compile(counter)
+        representative_prompt = stage.representative_prompt.bound_prompt.compile(
+            counter
+        )
         maximum_prompt = stage.maximum_prompt.bound_prompt.compile(counter)
         representative_request = CompletionRequest(
             representative_prompt.messages,

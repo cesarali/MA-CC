@@ -1,0 +1,25 @@
+study: {name: astra_task003_dashboard_inspection}
+configs: [false_control_llm.yaml]
+execution:
+  # This manifest also supports the generic Potsdam launcher, but the inspection
+  # config is intentionally small enough to run directly on a local machine.
+  mode: auto
+  cells_per_shard: 1
+  target_rpm: 12
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 2
+  memory: 8G
+  time_limit: "04:00:00"
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/astra_task003_dashboard_inspection
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 2
+    minimum_concurrency: 1
+    maximum_concurrency: 2
+    target_rpm: 12
+    retry_max_elapsed_seconds: 300

@@ -280,8 +280,22 @@ def adapt_relational_round_record(
         else int(sensor_vector[target_index])
     )
 
+    normalized_action = record.get("controller_action")
+    if "U_k" in record and record.get("U_k") is not None:
+        binary_u = record["U_k"]
+        if isinstance(binary_u, bool) or binary_u not in {0, 1}:
+            raise ValueError("relational round U_k must be exactly 0 or 1")
+        binary_action = ADVOCATE_TARGET if int(binary_u) == 1 else NO_OP
+        if normalized_action is not None and str(normalized_action) != binary_action:
+            raise ValueError("relational round U_k disagrees with controller_action")
+        normalized_action = binary_action
+
     event = {
         **dict(record),
+        # Shared estimators historically consume these action labels. Derive
+        # them from explicit binary U when present, rather than inferring U
+        # from the selected communication realization.
+        "controller_action": normalized_action,
         "target_count_before": before[target_index],
         "target_count_after": after[target_index],
         "truth_count_before": before[truth_index],

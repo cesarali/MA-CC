@@ -24,7 +24,6 @@ from mas_cc.musr_team_allocation_generator.evidence_generation import (
 )
 from mas_cc.musr_team_allocation_generator.evidence_generation import forbidden_phrases
 from mas_cc.musr_team_allocation_generator.io_utils import (
-    sha256_file,
     sha256_object,
     write_json_atomic,
 )

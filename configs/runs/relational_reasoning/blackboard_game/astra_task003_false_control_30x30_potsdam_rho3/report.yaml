@@ -1,0 +1,107 @@
+schema_version: 1
+
+report:
+  id: astra_task003_false_control_30x30_potsdam_rho3_report
+  title: Astra Task 003 False-Control 30x30 Persistence Study
+  source_analysis: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/astra_task003_false_control_30x30_potsdam_rho3/analysis
+  output_dir: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/reports/astra_task003_false_control_30x30_potsdam_rho3
+
+sections:
+  - id: validation
+    title: Validation and completeness
+    kind: validation_summary
+
+  - id: state_budget_phase_diagrams
+    title: State-by-budget phase diagrams
+    kind: state_budget_phase_suite
+
+    axes:
+      state: target_fraction_bin_center
+      budget: intervention_budget
+      state_domain: [0.0, 1.0]
+      minimum_state_bins: 8
+
+    facets:
+      mode: auto
+      preferred:
+        - target_semantics
+        - epistemic_persistence
+        - social_group_size
+        - task_id
+        - beta
+        - threshold
+        - sensor_sample_size
+        - receiver_epistemic_disposition
+        - controller_evidence_strategy
+        - controller_actuation_mode
+        - controller_communication_policy
+
+    max_panels_per_figure: 6
+    views: [resolved, aggregated]
+
+    metrics:
+      - id: T_pi
+        label: T_pi [bits]
+        source: primary_estimates
+        metric: round_target_actuation_cmi
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: T_pi
+        color_scale: linear
+
+      - id: eta_IF
+        label: eta_IF
+        source: primary_estimates
+        metric: round_target_information_fraction
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_IF
+        color_scale: linear
+
+      - id: eta_IR
+        label: eta_IR
+        source: derived_observables
+        metric: eta_ir_state_local
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_IR
+        color_scale: linear
+
+      - id: eta_th
+        label: eta_th
+        source: derived_observables
+        metric: eta_th_state_local
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_th
+        color_scale: linear
+
+      - id: occupancy
+        label: Round observations
+        source: state_occupancy_binned
+        value: n_observations
+        aggregation_source: rho_aggregated_state_occupancy
+        aggregation_value: n_observations
+        color_scale: linear
+
+      - id: susceptibility
+        label: Susceptibility chi
+        source: primary_estimates
+        metric: round_target_susceptibility
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: chi
+        color_scale: diverging
+
+      - id: susceptibility_symlog
+        label: Susceptibility chi [symmetric-log color scale]
+        source: primary_estimates
+        metric: round_target_susceptibility
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: chi
+        color_scale:
+          kind: symlog
+          linthresh: 0.001
+
+      - id: available_causal_susceptibility
+        label: Available causal susceptibility
+        source: available_causal_susceptibility_state_local
+        metric: propensity_weighted_available_susceptibility
+        color_scale:
+          kind: symlog
+          linthresh: 0.001

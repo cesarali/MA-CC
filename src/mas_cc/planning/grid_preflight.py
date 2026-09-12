@@ -43,9 +43,14 @@ def _add_money(values: Iterable[Any]) -> Any:
         if total.unit != value.unit:
             return None
         total = type(total)(
-            amount=total.amount + value.amount, unit=total.unit, unit_source=total.unit_source,
-            provider=total.provider, model=total.model, source=total.source,
-            retrieved_at=total.retrieved_at, version=total.version,
+            amount=total.amount + value.amount,
+            unit=total.unit,
+            unit_source=total.unit_source,
+            provider=total.provider,
+            model=total.model,
+            source=total.source,
+            retrieved_at=total.retrieved_at,
+            version=total.version,
         )
     return total
 
@@ -113,7 +118,10 @@ def static_grid_preflight(
 ) -> GridPreflightEstimate:
     """Price every cell independently (no per-cell budget check), then sum and check once."""
 
-    from mas_cc.games import create_game  # local: avoids a games<->planning import cycle
+    from mas_cc.games import (
+        create_game,
+    )  # local: avoids a games<->planning import cycle
+    from .game_preflight import call_plan_for_run
 
     provider_config: LLMProviderConfig = grid.base.llm_provider
     game = create_game(grid.base.game)
@@ -122,20 +130,26 @@ def static_grid_preflight(
     cells = grid.cells
     per_cell: list[ExperimentPreflightEstimate] = []
     for cell in cells:
-        plan = game.call_plan(cell.config.game)
+        plan = call_plan_for_run(game, cell.config)
         per_cell.append(
             static_experiment_preflight(
-                plan, cell.config.prompt, cell.config.llm_provider,
+                plan,
+                cell.config.prompt,
+                cell.config.llm_provider,
                 episode_count=cell.config.execution.repetitions,
                 concurrency=cell.config.execution.parallelism,
-                assumed_output_tokens=assumed_output_tokens or cell.config.llm_provider.max_output_tokens,
+                assumed_output_tokens=assumed_output_tokens
+                or cell.config.llm_provider.max_output_tokens,
                 pricing_quote=pricing_quote,
                 # No budget here - see module docstring; checked once, combined, below.
-                explicit_override=explicit_override, allow_stale_pricing=allow_stale_pricing,
+                explicit_override=explicit_override,
+                allow_stale_pricing=allow_stale_pricing,
             )
         )
 
-    total_requests = _add_ranges(estimate.total_provider_requests for estimate in per_cell)
+    total_requests = _add_ranges(
+        estimate.total_provider_requests for estimate in per_cell
+    )
     total_inputs = _add_ranges(estimate.total_input_tokens for estimate in per_cell)
     total_outputs = _add_ranges(estimate.total_output_tokens for estimate in per_cell)
     total_costs = MonetaryEstimateRange(
@@ -149,15 +163,22 @@ def static_grid_preflight(
         warnings.extend(estimate.warnings)
 
     launch_status, warnings = apply_total_demand_budget_check(
-        per_cell_status, warnings, total_costs, total_requests,
-        system_budget=system_budget, run_budget=run_budget, explicit_override=explicit_override,
+        per_cell_status,
+        warnings,
+        total_costs,
+        total_requests,
+        system_budget=system_budget,
+        run_budget=run_budget,
+        explicit_override=explicit_override,
     )
 
     total_episode_count = sum(cell.config.execution.repetitions for cell in cells)
     rough_runtime = estimate_runtime_seconds(
         provider_config.type,
         logical_calls=total_requests.expected,
-        request_concurrency=(1 if provider_config.type == "gemma_local" else effective_concurrency),
+        request_concurrency=(
+            1 if provider_config.type == "gemma_local" else effective_concurrency
+        ),
     )
 
     return GridPreflightEstimate(

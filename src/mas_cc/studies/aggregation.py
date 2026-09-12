@@ -217,6 +217,8 @@ def _requested_statistics(recipe: Mapping[str, Any]) -> tuple[str, ...]:
         "kinetic_compliance",
         "episode_current",
         "cell_current",
+        "propensity_weighted_causal_response",
+        "communication_response_efficiency",
     }
     return tuple(
         ESTIMATOR_ALIASES.get(str(name), str(name))
@@ -1809,6 +1811,21 @@ def _blackboard_diagnostic_table(
         if column not in source:
             source[column] = math.nan
         source[column] = pd.to_numeric(source[column], errors="coerce")
+    chosen = source.get(
+        "chosen_message_mode", pd.Series(index=source.index, dtype="object")
+    )
+    source["act_report_round"] = (chosen == "REPORT").astype(int)
+    source["act_request_round"] = (chosen == "REQUEST").astype(int)
+    source["act_directive_round"] = (chosen == "DIRECTIVE").astype(int)
+    source["report_mode_posts"] = source["controller_posts"].where(
+        chosen == "REPORT", 0
+    )
+    source["request_mode_posts"] = source["controller_posts"].where(
+        chosen == "REQUEST", 0
+    )
+    source["directive_mode_posts"] = source["controller_posts"].where(
+        chosen == "DIRECTIVE", 0
+    )
     grouped = source.groupby("cell_id", dropna=False)
     result = grouped.agg(
         rounds=("cell_id", "size"),
@@ -1872,7 +1889,21 @@ def _blackboard_diagnostic_table(
             "peer_report_exposures_without_controller_actuation",
             "sum",
         ),
+        act_report_rounds=("act_report_round", "sum"),
+        act_request_rounds=("act_request_round", "sum"),
+        act_directive_rounds=("act_directive_round", "sum"),
+        report_mode_posts=("report_mode_posts", "sum"),
+        request_mode_posts=("request_mode_posts", "sum"),
+        directive_mode_posts=("directive_mode_posts", "sum"),
     ).reset_index()
+    act_rounds = (
+        result["act_report_rounds"]
+        + result["act_request_rounds"]
+        + result["act_directive_rounds"]
+    ).replace(0, np.nan)
+    result["fraction_act_report"] = result["act_report_rounds"] / act_rounds
+    result["fraction_act_request"] = result["act_request_rounds"] / act_rounds
+    result["fraction_act_directive"] = result["act_directive_rounds"] / act_rounds
     result["refresh_events"] = result["peer_refreshes"] + result["controller_refreshes"]
     denominator = result["eligible_message_opportunities"].replace(0, np.nan)
     result["eligible_directive_fraction"] = (
@@ -2544,6 +2575,416 @@ def _value_label(metric: str, subset: pd.DataFrame) -> str:
     return metric if len(units) != 1 or not units[0] else f"{metric} [{units[0]}]"
 
 
+def _blackboard_phase2_requested(recipe: Mapping[str, Any]) -> bool:
+    """Whether the recipe opts into ASTRA Sections 2 and 3."""
+
+    configured = recipe.get("blackboard_phase2_outputs", False)
+    if isinstance(configured, Mapping):
+        enabled = bool(configured.get("enabled", True))
+        strata = configured.get("strata", ())
+        if isinstance(strata, (str, bytes)) or not isinstance(strata, Sequence):
+            raise ValueError("blackboard_phase2_outputs.strata must be a list")
+        from mas_cc.analysis.causal_response import FORBIDDEN_CAUSAL_STRATA
+
+        forbidden = sorted(set(map(str, strata)).intersection(FORBIDDEN_CAUSAL_STRATA))
+        if forbidden:
+            raise ValueError(
+                "causal response cannot be conditioned on post-treatment fields: "
+                + ", ".join(forbidden)
+            )
+    else:
+        enabled = bool(configured)
+    requested = {
+        str(value)
+        for section in (recipe.get("estimators", ()), recipe.get("derived", ()))
+        if isinstance(section, Sequence) and not isinstance(section, (str, bytes))
+        for value in section
+    }
+    return enabled or bool(
+        requested.intersection(
+            {
+                "propensity_weighted_causal_response",
+                "propensity_weighted_available_susceptibility",
+                "available_mass_weighted_causal_susceptibility",
+                "communication_response_efficiency",
+            }
+        )
+    )
+
+
+def _epistemic_phase_settings(
+    recipe: Mapping[str, Any], recipe_path: Path | None
+) -> dict[str, Any] | None:
+    """Validate and normalize the optional symbolic epistemic analysis recipe."""
+
+    configured = recipe.get("blackboard_epistemic_phase_outputs", False)
+    if configured is False or configured is None:
+        return None
+    if configured is True:
+        configured = {}
+    if not isinstance(configured, Mapping):
+        raise ValueError("blackboard_epistemic_phase_outputs must be a mapping")
+    if not bool(configured.get("enabled", True)):
+        return None
+    dataset = configured.get("task_dataset_dir")
+    if not isinstance(dataset, (str, Path)) or not str(dataset).strip():
+        raise ValueError(
+            "blackboard_epistemic_phase_outputs.task_dataset_dir is required"
+        )
+    from mas_cc.analysis.epistemic_phase import resolve_task_dataset
+
+    result = {
+        "task_dataset_dir": resolve_task_dataset(dataset, recipe_path=recipe_path),
+        "robustness_draws": int(configured.get("robustness_draws", 500)),
+        "reference_persistence": float(configured.get("reference_persistence", 0.85)),
+        "x_bins": int(configured.get("x_bins", 8)),
+        "phi_bands": int(configured.get("phi_bands", 3)),
+        "capture_threshold": float(configured.get("capture_threshold", 0.75)),
+        "capture_consecutive_rounds": int(
+            configured.get("capture_consecutive_rounds", 3)
+        ),
+    }
+    if result["robustness_draws"] < 1:
+        raise ValueError("epistemic robustness_draws must be positive")
+    if result["x_bins"] < 1 or result["phi_bands"] < 1:
+        raise ValueError("epistemic x_bins and phi_bands must be positive")
+    if not 0 <= result["reference_persistence"] <= 1:
+        raise ValueError("epistemic reference_persistence must lie in [0, 1]")
+    if not 0 <= result["capture_threshold"] <= 1:
+        raise ValueError("epistemic capture_threshold must lie in [0, 1]")
+    if result["capture_consecutive_rounds"] < 1:
+        raise ValueError("epistemic capture_consecutive_rounds must be positive")
+    return result
+
+
+def _render_causal_communication_plots(
+    tables: Mapping[str, pd.DataFrame], destination: Path
+) -> list[str]:
+    """Render the fixed ASTRA response/lag and response/cost views."""
+
+    effects = tables.get("causal_response_effects", pd.DataFrame())
+    efficiency = tables.get("communication_efficiency", pd.DataFrame())
+    frontier = tables.get("response_cost_frontier", pd.DataFrame())
+    if effects.empty:
+        return []
+    import matplotlib.pyplot as plt
+
+    destination.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+
+    def series_groups(frame: pd.DataFrame) -> Any:
+        columns = [
+            column
+            for column in (
+                "target_semantics",
+                "controller_communication_policy",
+                "cell_id",
+            )
+            if column in frame
+        ]
+        return (
+            frame.groupby(columns, dropna=False, sort=True)
+            if columns
+            else [("all", frame)]
+        )
+
+    supported = effects[
+        effects["support_status"].isin(["adequate", "limited"])
+        & pd.to_numeric(effects["estimate"], errors="coerce").notna()
+    ]
+    if not supported.empty:
+        figure, axis = plt.subplots(figsize=(7, 4.5))
+        for label, group in series_groups(supported):
+            group = group.sort_values("lag")
+            low = pd.to_numeric(group["ci_low"], errors="coerce")
+            high = pd.to_numeric(group["ci_high"], errors="coerce")
+            estimate = pd.to_numeric(group["estimate"], errors="coerce")
+            yerr = np.vstack(
+                [(estimate - low).clip(lower=0), (high - estimate).clip(lower=0)]
+            )
+            axis.errorbar(
+                group["lag"],
+                estimate,
+                yerr=yerr,
+                marker="o",
+                capsize=3,
+                label=str(label),
+            )
+        axis.axhline(0, color="black", linewidth=0.8)
+        axis.set(
+            xlabel="lag (rounds)",
+            ylabel="propensity-weighted target-share response",
+            title="Causal intervention response by lag",
+        )
+        axis.set_xticks(sorted(supported["lag"].unique()))
+        if len(list(series_groups(supported))) > 1:
+            axis.legend(fontsize=7)
+        figure.tight_layout()
+        path = destination / "causal_response_by_lag.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    if "intervention_budget" in supported and not supported.empty:
+        figure, axis = plt.subplots(figsize=(7, 4.5))
+        for label, group in supported.groupby(
+            [column for column in ("target_semantics", "lag") if column in supported],
+            dropna=False,
+            sort=True,
+        ):
+            ordered = group.sort_values("intervention_budget")
+            axis.plot(
+                ordered["intervention_budget"],
+                ordered["estimate"],
+                marker="o",
+                label=str(label),
+            )
+        axis.axhline(0, color="black", linewidth=0.8)
+        axis.set(
+            xlabel="nominal budget",
+            ylabel="causal target-share response",
+            title="Response versus nominal budget",
+        )
+        axis.legend(fontsize=7)
+        figure.tight_layout()
+        path = destination / "response_vs_nominal_budget.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    for cost_metric, filename in (
+        ("actual_posts", "response_vs_actual_posts.png"),
+        ("exposures", "response_vs_exposures.png"),
+        ("new_controller_facts", "response_vs_new_evidence.png"),
+    ):
+        subset = efficiency[
+            (efficiency["cost_metric"] == cost_metric)
+            & efficiency["support_status"].isin(["adequate", "limited"])
+            & pd.to_numeric(efficiency["estimate"], errors="coerce").notna()
+            & pd.to_numeric(
+                efficiency["expected_activation_cost"], errors="coerce"
+            ).notna()
+        ]
+        if subset.empty:
+            continue
+        figure, axis = plt.subplots(figsize=(7, 4.5))
+        for label, group in subset.groupby(
+            [column for column in ("target_semantics", "lag") if column in subset],
+            dropna=False,
+            sort=True,
+        ):
+            ordered = group.sort_values("expected_activation_cost")
+            axis.plot(
+                ordered["expected_activation_cost"],
+                ordered["estimate"],
+                marker="o",
+                label=str(label),
+            )
+        axis.axhline(0, color="black", linewidth=0.8)
+        axis.set(
+            xlabel=f"expected {cost_metric.replace('_', ' ')} under activation",
+            ylabel="causal target-share response",
+            title=f"Response versus {cost_metric.replace('_', ' ')}",
+        )
+        axis.legend(fontsize=7)
+        figure.tight_layout()
+        path = destination / filename
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    selected = (
+        frontier[
+            frontier.get(
+                "on_response_cost_frontier", pd.Series(False, index=frontier.index)
+            ).fillna(False)
+        ]
+        if not frontier.empty
+        else frontier
+    )
+    if not selected.empty:
+        figure, axis = plt.subplots(figsize=(7, 4.5))
+        for label, group in selected.groupby(
+            [
+                column
+                for column in ("target_semantics", "cost_metric", "lag")
+                if column in selected
+            ],
+            dropna=False,
+            sort=True,
+        ):
+            ordered = group.sort_values("expected_activation_cost")
+            axis.plot(
+                ordered["expected_activation_cost"],
+                ordered["frontier_response"],
+                marker="o",
+                label=str(label),
+            )
+        axis.set(
+            xlabel="expected communication cost under activation",
+            ylabel="best observed causal response",
+            title="Operational response-cost frontier",
+        )
+        axis.legend(fontsize=6)
+        figure.tight_layout()
+        path = destination / "response_cost_frontier.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    state_local = tables.get(
+        "available_causal_susceptibility_state_local", pd.DataFrame()
+    )
+    summary = tables.get("available_causal_susceptibility_summary", pd.DataFrame())
+    persistence = next(
+        (
+            name
+            for name in ("epistemic_persistence", "persistence")
+            if name in state_local.columns
+        ),
+        None,
+    )
+    budget = next(
+        (
+            name
+            for name in ("intervention_budget", "budget")
+            if name in state_local.columns
+        ),
+        None,
+    )
+    available = state_local[
+        state_local.get(
+            "support_status", pd.Series("unsupported", index=state_local.index)
+        ).isin(["adequate", "limited"])
+        & pd.to_numeric(
+            state_local.get("estimate", pd.Series(dtype=float)), errors="coerce"
+        ).notna()
+    ]
+    if not available.empty and persistence and budget:
+        persistence_values = sorted(available[persistence].dropna().unique())
+        figure, axes = plt.subplots(
+            1,
+            len(persistence_values),
+            squeeze=False,
+            figsize=(5 * len(persistence_values), 4),
+        )
+        for axis, persistence_value in zip(axes.flat, persistence_values, strict=True):
+            panel = available[available[persistence] == persistence_value]
+            pivot = panel.pivot_table(
+                index="target_fraction_bin_center",
+                columns=budget,
+                values="estimate",
+                aggfunc="mean",
+            ).sort_index()
+            image = axis.imshow(
+                pivot.to_numpy(dtype=float), aspect="auto", origin="lower"
+            )
+            axis.set_xticks(range(len(pivot.columns)), labels=map(str, pivot.columns))
+            axis.set_yticks(
+                range(len(pivot.index)), labels=[f"{x:.3g}" for x in pivot.index]
+            )
+            axis.set(
+                xlabel=budget,
+                ylabel="pre-intervention target share x",
+                title=f"{persistence}={persistence_value}",
+            )
+            figure.colorbar(image, ax=axis, label="available causal susceptibility")
+        figure.tight_layout()
+        path = destination / "available_causal_susceptibility_x_b_by_rho.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+        visited_bins = sorted(available["target_fraction_bin_index"].unique())
+        representative_bins = (
+            visited_bins
+            if len(visited_bins) <= 4
+            else [
+                visited_bins[index]
+                for index in np.linspace(0, len(visited_bins) - 1, 4).astype(int)
+            ]
+        )
+        representative = available[
+            available["target_fraction_bin_index"].isin(representative_bins)
+        ]
+        figure, axes = plt.subplots(
+            1,
+            len(persistence_values),
+            squeeze=False,
+            figsize=(5 * len(persistence_values), 4),
+        )
+        for axis, persistence_value in zip(axes.flat, persistence_values, strict=True):
+            panel = representative[representative[persistence] == persistence_value]
+            for bin_index, group in panel.groupby(
+                "target_fraction_bin_index", sort=True
+            ):
+                values = (
+                    group.groupby(budget, dropna=False)["estimate"].mean().sort_index()
+                )
+                axis.plot(
+                    values.index,
+                    values.values,
+                    marker="o",
+                    label=f"x-bin {bin_index}",
+                )
+            axis.axhline(0, color="black", linewidth=0.8)
+            axis.set(
+                xlabel=budget,
+                ylabel="available causal susceptibility",
+                title=f"{persistence}={persistence_value}",
+            )
+            axis.legend(fontsize=7)
+        figure.tight_layout()
+        path = destination / "available_causal_susceptibility_vs_budget.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+
+    summary_persistence = next(
+        (
+            name
+            for name in ("epistemic_persistence", "persistence")
+            if name in summary.columns
+        ),
+        None,
+    )
+    summary_budget = next(
+        (name for name in ("intervention_budget", "budget") if name in summary.columns),
+        None,
+    )
+    supported_summary = summary[
+        summary.get(
+            "support_status", pd.Series("unsupported", index=summary.index)
+        ).isin(["adequate", "limited"])
+        & pd.to_numeric(
+            summary.get("estimate", pd.Series(dtype=float)), errors="coerce"
+        ).notna()
+    ]
+    if not supported_summary.empty and summary_persistence and summary_budget:
+        pivot = supported_summary.pivot_table(
+            index=summary_persistence,
+            columns=summary_budget,
+            values="estimate",
+            aggfunc="mean",
+        ).sort_index()
+        figure, axis = plt.subplots(figsize=(7, 4.5))
+        image = axis.imshow(pivot.to_numpy(dtype=float), aspect="auto", origin="lower")
+        axis.set_xticks(range(len(pivot.columns)), labels=map(str, pivot.columns))
+        axis.set_yticks(range(len(pivot.index)), labels=map(str, pivot.index))
+        axis.set(
+            xlabel=summary_budget,
+            ylabel=summary_persistence,
+            title="Available-mass-weighted causal susceptibility",
+        )
+        figure.colorbar(image, ax=axis, label="causal response per available mass")
+        figure.tight_layout()
+        path = destination / "available_causal_susceptibility_cell_summary.png"
+        figure.savefig(path, dpi=150)
+        plt.close(figure)
+        paths.append(str(path))
+    return paths
+
+
 def _render_plots(
     recipe: Mapping[str, Any], tables: Mapping[str, pd.DataFrame], destination: Path
 ) -> list[str]:
@@ -2651,7 +3092,35 @@ def _render_plots(
                 for series_label, line_group in line_groups:
                     grouped_values = line_group.groupby(x, dropna=False)["estimate"]
                     values = grouped_values.mean().sort_index()
-                    if bool(spec.get("show_variability", False)):
+                    if (
+                        bool(spec.get("show_confidence_interval", False))
+                        and {
+                            str(spec.get("ci_low", "ci_low")),
+                            str(spec.get("ci_high", "ci_high")),
+                        }.issubset(line_group.columns)
+                    ):
+                        ci_low_column = str(spec.get("ci_low", "ci_low"))
+                        ci_high_column = str(spec.get("ci_high", "ci_high"))
+                        indexed = line_group.drop_duplicates(x).set_index(x).reindex(
+                            values.index
+                        )
+                        low = pd.to_numeric(indexed[ci_low_column], errors="coerce")
+                        high = pd.to_numeric(indexed[ci_high_column], errors="coerce")
+                        center = values.to_numpy(dtype=float)
+                        axis.errorbar(
+                            values.index,
+                            center,
+                            yerr=np.vstack(
+                                [
+                                    np.maximum(0.0, center - low.to_numpy(dtype=float)),
+                                    np.maximum(0.0, high.to_numpy(dtype=float) - center),
+                                ]
+                            ),
+                            marker="o",
+                            capsize=3,
+                            label=str(series_label),
+                        )
+                    elif bool(spec.get("show_variability", False)):
                         deviations = (
                             grouped_values.std().reindex(values.index).fillna(0)
                         )
@@ -3037,6 +3506,7 @@ def aggregate_study(
     else:
         entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
+    epistemic_settings = _epistemic_phase_settings(recipe, recipe_path)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
     theoretical_reference = recipe.get(
@@ -3101,7 +3571,8 @@ def aggregate_study(
         validation["canonical_record_selection"] = selection
         if excluded:
             validation.setdefault("warnings", []).append(
-                f"excluded {excluded} trajectory records from incomplete episodes"
+                f"excluded {excluded} trajectory records from completed-only "
+                "estimator inputs; valid interrupted prefixes are retained separately"
             )
         if superseded:
             validation.setdefault("warnings", []).append(
@@ -3156,6 +3627,7 @@ def aggregate_study(
             "estimator_version": "round-feedback-v1",
             "statistics": statistics,
             "settings": settings,
+            "derived_study_aggregates": recipe.get("derived_study_aggregates"),
             "theoretical_reference": theoretical_reference,
             "theory_provenance": dict(theory_provenance),
         }
@@ -3246,6 +3718,10 @@ def aggregate_study(
 
     information = _attach_coordinates(information, canonical["cells"])
     support = _attach_coordinates(support, canonical["cells"])
+    if {"estimate", "null_mean"}.issubset(information.columns):
+        information["null_adjusted_estimate"] = pd.to_numeric(
+            information["estimate"], errors="coerce"
+        ) - pd.to_numeric(information["null_mean"], errors="coerce")
     auxiliary_hash = canonical_hash(
         {
             "scientific_input_identity": input_identity,
@@ -3349,6 +3825,188 @@ def aggregate_study(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    derived_aggregation_config = recipe.get("derived_study_aggregates", {})
+    if isinstance(derived_aggregation_config, Mapping) and bool(
+        derived_aggregation_config.get("enabled", False)
+    ):
+        from .derived_aggregation import derive_study_control_aggregates
+
+        aggregate_outputs = derive_study_control_aggregates(
+            events,
+            canonical["cells"],
+            recipe,
+            settings,
+            analysis_hash,
+        )
+        if not aggregate_outputs.study_metrics.empty:
+            outputs["study_aggregated_metrics"] = aggregate_outputs.study_metrics
+        if not aggregate_outputs.state_local_metrics.empty:
+            outputs["state_local_aggregated_metrics"] = (
+                aggregate_outputs.state_local_metrics
+            )
+        if not aggregate_outputs.stability.empty:
+            outputs["sample_size_stability"] = aggregate_outputs.stability
+        if not aggregate_outputs.state_local_reconstruction.empty:
+            outputs["state_local_reconstruction"] = (
+                aggregate_outputs.state_local_reconstruction
+            )
+    causal_hash: str | None = None
+    epistemic_hash: str | None = None
+    if _blackboard_phase2_requested(recipe):
+        from mas_cc.analysis.causal_response import analyze_causal_communication
+
+        causal_hash = canonical_hash(
+            {
+                "scientific_input_identity": input_identity,
+                "estimator": "propensity_weighted_causal_response_v1",
+                "lags": [1, 2, 3],
+                "settings": {
+                    "bootstrap_resamples": settings["bootstrap_resamples"],
+                    "confidence": settings["confidence"],
+                    "seed": settings["seed"],
+                },
+            }
+        )
+        available_hash = canonical_hash(
+            {
+                "scientific_input_identity": input_identity,
+                "estimator": "available_causal_susceptibility_v1",
+                "lag": 1,
+                "state_bins": 8,
+                "settings": {
+                    "bootstrap_resamples": settings["bootstrap_resamples"],
+                    "confidence": settings["confidence"],
+                    "seed": settings["seed"],
+                },
+            }
+        )
+        causal_outputs = analyze_causal_communication(
+            canonical["rounds"],
+            canonical["cells"],
+            canonical["micro_slots"],
+            bootstrap_resamples=int(settings["bootstrap_resamples"]),
+            confidence=float(settings["confidence"]),
+            seed=int(settings["seed"]),
+        )
+        available_tables = {
+            "available_causal_susceptibility_state_local",
+            "available_causal_susceptibility_summary",
+        }
+        for name, frame in causal_outputs.items():
+            if not frame.empty:
+                frame["analysis_hash"] = (
+                    available_hash if name in available_tables else causal_hash
+                )
+        outputs.update(causal_outputs)
+        causal_inputs = causal_outputs["causal_response_round_inputs"]
+        funnel = causal_outputs["communication_funnel"]
+        validation["causal_response"] = {
+            "estimator_version": "propensity_weighted_causal_response_v1",
+            "probability_bounds_valid": True,
+            "target_orientation_valid": True,
+            "round_ordering_valid": True,
+            "round_input_rows": int(len(causal_inputs)),
+            "effect_rows": int(len(causal_outputs["causal_response_effects"])),
+            "available_state_local_rows": int(
+                len(causal_outputs["available_causal_susceptibility_state_local"])
+            ),
+            "available_summary_rows": int(
+                len(causal_outputs["available_causal_susceptibility_summary"])
+            ),
+            "saturated_rounds_excluded": int(
+                (
+                    causal_inputs.get("x_t", pd.Series(dtype=float)).eq(1.0)
+                    & causal_inputs.get(
+                        "lag_1_available", pd.Series(False, index=causal_inputs.index)
+                    ).fillna(False)
+                    & causal_inputs.get(
+                        "episode_complete", pd.Series(False, index=causal_inputs.index)
+                    ).fillna(False)
+                ).sum()
+            ),
+            "missing_lag_counts": {
+                f"h{lag}": int(
+                    causal_inputs.get(f"lag_{lag}_available", pd.Series(dtype=bool))
+                    .eq(False)
+                    .sum()
+                )
+                for lag in (1, 2, 3)
+            },
+            "incomplete_episode_count": int(
+                causal_inputs.loc[
+                    ~causal_inputs.get(
+                        "episode_complete", pd.Series(True, index=causal_inputs.index)
+                    ).fillna(False),
+                    ["cell_id", "episode_id"],
+                ]
+                .drop_duplicates()
+                .shape[0]
+                if not causal_inputs.empty
+                else 0
+            ),
+            "micro_slot_communication_audit_rows": int(
+                funnel.get("micro_slot_audit_available", pd.Series(dtype=bool))
+                .fillna(False)
+                .sum()
+            ),
+            "provider_calls": 0,
+        }
+        _write_json(analysis_dir / "validation.json", validation)
+    if epistemic_settings is not None:
+        from mas_cc.analysis.epistemic_phase import (
+            ANALYSIS_VERSION as epistemic_version,
+            analyze_epistemic_phase_diagrams,
+        )
+
+        epistemic_hash = canonical_hash(
+            {
+                "scientific_input_identity": input_identity,
+                "estimator": epistemic_version,
+                "settings": {
+                    **{
+                        key: str(value) if isinstance(value, Path) else value
+                        for key, value in epistemic_settings.items()
+                    },
+                    "bootstrap_resamples": settings["bootstrap_resamples"],
+                    "confidence": settings["confidence"],
+                    "seed": settings["seed"],
+                },
+            }
+        )
+        epistemic_outputs = analyze_epistemic_phase_diagrams(
+            canonical["rounds"],
+            canonical["cells"],
+            **epistemic_settings,
+            bootstrap_resamples=int(settings["bootstrap_resamples"]),
+            confidence=float(settings["confidence"]),
+            seed=int(settings["seed"]),
+        )
+        for frame in epistemic_outputs.values():
+            if not frame.empty:
+                frame["analysis_hash"] = epistemic_hash
+        outputs.update(epistemic_outputs)
+        states = epistemic_outputs["epistemic_round_timeseries"]
+        validation["epistemic_phase"] = {
+            "analysis_version": epistemic_version,
+            "exact_pre_intervention_boundary": True,
+            "evidence_scope": "union_of_participant_active_inventories",
+            "solver_failure_count": int(
+                states.get("solver_status", pd.Series(dtype=str)).ne("valid").sum()
+            ),
+            "round_state_rows": int(len(states)),
+            "task_count": int(states.get("task_id", pd.Series(dtype=str)).nunique()),
+            "joint_drift_rows": int(len(epistemic_outputs["epistemic_joint_drift"])),
+            "modulation_rows": int(len(epistemic_outputs["epistemic_modulation"])),
+            "capture_episode_rows": int(
+                len(epistemic_outputs["epistemic_capture_timing"])
+            ),
+            "robustness_draws_per_solvable_state": epistemic_settings[
+                "robustness_draws"
+            ],
+            "reference_persistence": epistemic_settings["reference_persistence"],
+            "provider_calls": 0,
+        }
+        _write_json(analysis_dir / "validation.json", validation)
     phi_comparison = _phi_conditioning_comparison(primary)
     if not phi_comparison.empty:
         outputs["phi_conditioning_comparison"] = _attach_coordinates(
@@ -3438,6 +4096,14 @@ def aggregate_study(
         **outputs,
     }
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
+    if _blackboard_phase2_requested(recipe):
+        plots.extend(
+            _render_causal_communication_plots(plot_tables, analysis_dir / "plots")
+        )
+    if epistemic_settings is not None:
+        from mas_cc.analysis.epistemic_phase import render_epistemic_phase_plots
+
+        plots.extend(render_epistemic_phase_plots(plot_tables, analysis_dir / "plots"))
     if (
         not episode_endpoints.empty
         and str((endpoint_recipe or {}).get("classifier", ""))
@@ -3468,6 +4134,16 @@ def aggregate_study(
                 f"- Primary estimates: {len(primary)}",
                 f"- Derived observables: {len(derived)}",
                 f"- Single-affinity theory comparison rows: {len(theory_comparison)}",
+                "- Propensity-weighted causal-response rows: "
+                f"{len(outputs.get('causal_response_effects', ()))}",
+                "- Available causal-susceptibility cell summaries: "
+                f"{len(outputs.get('available_causal_susceptibility_summary', ()))}",
+                "- Communication-funnel rows: "
+                f"{len(outputs.get('communication_funnel', ()))}",
+                "- Epistemic round time-series rows: "
+                f"{len(outputs.get('epistemic_round_timeseries', ()))}",
+                "- Epistemic joint-drift rows: "
+                f"{len(outputs.get('epistemic_joint_drift', ()))}",
                 "",
             ]
         ),
@@ -3481,6 +4157,37 @@ def aggregate_study(
                 "Scientific identities were recovered from resolved configs, cell overrides, and compact scientific records.",
                 "Information estimates use the repository's established direct-counting round-feedback estimator, whole-episode bootstrap, configured nulls, and support diagnostics.",
                 "Execution shards were reconstructed into scientific cells before per-cell estimation.",
+                "When requested, propensity-weighted causal response uses the exact "
+                "recorded binary-gate probability and target-oriented change at "
+                "lags one, two, and three. Confidence intervals resample complete "
+                "shared-initialization blocks. Communication mode and realized "
+                "posts are excluded from causal conditioning because they are "
+                "post-treatment outcomes.",
+                "Available causal susceptibility divides each immediate round "
+                "contribution by its pre-intervention available target mass, "
+                "1-x. Saturated rounds remain undefined and are reported as "
+                "excluded. The preferred cell summary divides summed causal "
+                "response by summed available mass, recomputing that ratio "
+                "inside every shared-initialization-block bootstrap draw.",
+                "Communication efficiency estimates causal response and IPW "
+                "expected activation cost separately before forming aggregate "
+                "ratios. Zero cost denominators remain missing. Reader counts are "
+                "per round, not episode-wide; sensing and public-posting costs "
+                "remain separate.",
+                "Symbolic epistemic analysis reconstructs the active participant "
+                "inventories at the post-forgetting, pre-intervention-delivery "
+                "boundary. Exact finite-world enumeration determines whether the "
+                "gold answer is unique for the population union and for each "
+                "agent. The scope excludes controller-private facts, inactive "
+                "historical facts, and unacquired board content. An unsolvable "
+                "state means current evidence is insufficient; it does not mean "
+                "the truth cannot be guessed or recovered later.",
+                "One-boundary robustness independently thins each active "
+                "agent-fact occurrence, then reruns the symbolic solver. Joint "
+                "drift and causal susceptibility reuse the recorded randomized "
+                "gate propensity and group only on pre-action state. These "
+                "finite-horizon regime maps are descriptive or randomized-effect "
+                "summaries; smooth colors do not establish a phase transition.",
                 "",
                 f"Analysis hash: `{analysis_hash}`.",
                 "",
@@ -3494,7 +4201,7 @@ def aggregate_study(
         state_lines = [
             "# Empirical state-space support",
             "",
-            "`state_occupancy.csv` is counted directly from retained round records before estimator support filtering.",
+            "`state_occupancy.parquet` is counted directly from retained round records before estimator support filtering.",
             "Absent target-count states are genuinely unvisited in the retained trajectories; they are not interpolated.",
             "A visited state may still be absent from a state-local estimator when it lacks both controller-action values or fails another estimator support requirement.",
             "This distinction is separate from missing structural `(rho,b)` cells, which strict validation rejects.",
@@ -3558,22 +4265,36 @@ def aggregate_study(
         "analysis_hash": analysis_hash,
         "derived_hash": derived_hash,
         "auxiliary_analysis_hash": auxiliary_hash,
+        "causal_response_hash": causal_hash,
+        "epistemic_phase_hash": epistemic_hash,
         "theory": dict(theory_provenance),
         "theoretical_reference": theoretical_reference,
         "estimator_engine": "mas_cc.games.hidden_bench.imitation_round_feedback.analysis.round_information_analysis",
+        "causal_response_estimator_engine": (
+            "mas_cc.analysis.causal_response.analyze_causal_communication"
+            if causal_hash is not None
+            else None
+        ),
+        "epistemic_phase_engine": (
+            "mas_cc.analysis.epistemic_phase.analyze_epistemic_phase_diagrams"
+            if epistemic_hash is not None
+            else None
+        ),
         "requested_statistics": list(statistics),
         "resampling": settings,
         "retention_contract": {
             "canonical_table_format": CANONICAL_TABLE_FORMAT,
-            "csv_tables": True,
-            "parquet_tables": False,
+            "csv_tables": False,
+            "parquet_tables": True,
             "compact_estimator_summaries": True,
             "persistent_analysis_cache": False,
             "individual_null_draws": False,
             "individual_bootstrap_draws": False,
+            "completed_episode_estimators_only": True,
+            "censored_interrupted_prefixes": True,
         },
         "plots": plots,
-        "tables": sorted(path.name for path in tables_dir.glob("*.csv")),
+        "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
         "derived_semantics": _derived_semantics(derived),
     }
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)

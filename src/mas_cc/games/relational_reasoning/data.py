@@ -829,9 +829,9 @@ def _load_truthful_controller_design(
         if isinstance(item, Mapping)
     }
     truth = str(base.get("gold_answer", ""))
-    if target not in option_ids or target == truth:
+    if target not in option_ids:
         raise RelationalTaskError(
-            "MuSR truthful-controller target must be a configured false option"
+            "MuSR truthful-controller target must be a configured option"
         )
     reportable = tuple(
         str(value)
@@ -948,12 +948,16 @@ def _validate_truthful_controller_ambiguity(
                 "MuSR controller-reportable subset does not preserve target viability"
             )
         decisive_metrics = metrics(decisive)
+        if decisive_metrics.probabilities[problem.gold_index] != 1.0:
+            raise RelationalTaskError(
+                "MuSR decisive subset must uniquely select truth"
+            )
         if (
-            decisive_metrics.probabilities[problem.gold_index] != 1.0
-            or decisive_metrics.probabilities[target_index] != 0.0
+            target_index != problem.gold_index
+            and decisive_metrics.probabilities[target_index] != 0.0
         ):
             raise RelationalTaskError(
-                "MuSR decisive subset must uniquely select truth and rule out target"
+                "MuSR decisive subset must rule out a false controller target"
             )
         complete_metrics = completion_index.metrics(vector, range(len(latent)))
         if complete_metrics.probabilities[problem.gold_index] != 1.0:
