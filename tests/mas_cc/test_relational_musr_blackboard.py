@@ -36,6 +36,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.llm_runtime.providers import ProviderError
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     run_relational_imitation_round_feedback_game,
 )
@@ -240,6 +241,35 @@ def _llm_controller_provider(config, controller_outputs, captured):
         )
 
     return MockLLMProvider(config.llm_provider, response_factory=factory)
+
+
+class _RecoveryObserver:
+    def __init__(self):
+        self.runtime = None
+
+    def load_failure_checkpoint(self):
+        return self.runtime
+
+    def record_failure_checkpoint(self, *, runtime):
+        self.runtime = runtime
+
+
+class _FailOnceProvider:
+    def __init__(self, delegate, *, fail_at):
+        self.delegate = delegate
+        self.fail_at = fail_at
+        self.calls = 0
+
+    async def complete(self, request):
+        self.calls += 1
+        if self.calls == self.fail_at:
+            raise ProviderError(
+                "temporary upstream failure",
+                provider="test",
+                retryable=True,
+                status_code=503,
+            )
+        return await self.delegate.complete(request)
 
 
 def test_validated_musr_task_and_n12_distribution_load_exactly():
@@ -775,6 +805,60 @@ def test_llm_controller_sees_previous_board_and_uses_canonical_fact_text():
     assert second["night_expired_message_ids"] == [first_post.message_id]
     assert "active_fact" not in json.dumps(second["controller_visible_input"])
     assert second["controller_llm_total_tokens"] > 0
+
+
+def test_provider_recovery_replays_saved_llm_controller_choice():
+    config = _llm_adaptive_task3_config(rounds=1)
+    task = create_game(config.game).load_task(config.game)
+    fact_id = task.controller_reportable_fact_ids[0]
+    observer = _RecoveryObserver()
+    first_controller_requests = []
+    delegate = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "REPORT",
+                    "fact_ids": [fact_id],
+                    "text": None,
+                    "reason": "evidence",
+                }
+            )
+        ],
+        first_controller_requests,
+    )
+
+    with pytest.raises(ProviderError):
+        asyncio.run(
+            run_relational_imitation_round_feedback_game(
+                create_game(config.game),
+                config,
+                _FailOnceProvider(delegate, fail_at=2),
+                control=RelationalRoundBudgetedControl.from_options(
+                    config.control.options
+                ),
+                observer=observer,
+            )
+        )
+
+    assert observer.runtime is not None
+    assert len(observer.runtime["controller_choices"]) == 1
+    assert len(first_controller_requests) == 1
+
+    replayed_controller_requests = []
+    resumed = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _llm_controller_provider(config, [], replayed_controller_requests),
+            control=RelationalRoundBudgetedControl.from_options(config.control.options),
+            observer=observer,
+        )
+    )
+
+    assert replayed_controller_requests == []
+    assert resumed.rounds[0].event["chosen_message_mode"] == "REPORT"
+    assert resumed.rounds[0].event["selected_fact_ids"] == [fact_id]
 
 
 def test_llm_controller_is_not_called_for_binary_silence():

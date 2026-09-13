@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Generic preparation, information-group, and finalization launcher.
+# Scientific mapping lives exclusively in the generated execution manifest.
+#SBATCH --job-name=mas-cc-analysis
+# Direct-submit fallback; the standardized submitter always overrides these.
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/analysis-%A_%a.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/analysis-%A_%a.err
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: run_study_analysis.job ROLE EXECUTION_MANIFEST" >&2
+  exit 2
+fi
+
+readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+exec "$CONDA_EXE" run -n MA-CC --live-stream \
+  python -m mas_cc.studies.analysis_worker "$1" "$2"
