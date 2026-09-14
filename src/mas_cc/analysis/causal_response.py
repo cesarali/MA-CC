@@ -15,7 +15,7 @@ import json
 import math
 from collections import Counter
 from collections.abc import Iterator
-from typing import Any, Mapping, Sequence, overload
+from typing import Any, Callable, Mapping, Sequence, overload
 
 import numpy as np
 import pandas as pd
@@ -196,7 +196,7 @@ def build_causal_response_inputs(
     )
     source["episode_complete"] = [
         completeness[(str(row.cell_id), str(row.episode_id))]
-        for row in source.itertuples()
+        for row in source[["cell_id", "episode_id"]].itertuples(index=False)
     ]
     source["initialization_block_id"] = _first_present(
         source, ("physical_initial_state_hash", "initialization_artifact_hash")
@@ -213,14 +213,18 @@ def build_causal_response_inputs(
         (str(row.cell_id), str(row.episode_id), int(row.round_index)): float(
             row.x_after
         )
-        for row in source.itertuples()
+        for row in source[
+            ["cell_id", "episode_id", "round_index", "x_after"]
+        ].itertuples(index=False)
     }
     for lag in requested_lags:
         outcomes = [
             lookup.get(
                 (str(row.cell_id), str(row.episode_id), int(row.round_index) + lag - 1)
             )
-            for row in source.itertuples()
+            for row in source[["cell_id", "episode_id", "round_index"]].itertuples(
+                index=False
+            )
         ]
         source[f"x_t_plus_{lag}"] = outcomes
         source[f"delta_x_h{lag}"] = source[f"x_t_plus_{lag}"] - source["x_t"]
@@ -633,7 +637,11 @@ def _micro_audit(
     if not required.issubset(micro_slots.columns):
         funnel["micro_slot_audit_available"] = False
         return funnel
-    micro = micro_slots.copy()
+    fields = required | {
+        "sampled_controller_message_ids", "new_controller_fact_ids",
+        "reactivated_controller_fact_ids", "focal_agent_id",
+    }
+    micro = micro_slots.loc[:, [name for name in micro_slots if name in fields]].copy()
     for field in (
         "sampled_controller_message_ids",
         "new_controller_fact_ids",
@@ -903,6 +911,7 @@ def analyze_causal_communication(
     bootstrap_resamples: int = 1000,
     confidence: float = 0.95,
     seed: int = 1,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Build every Section 2/3 table from canonical observations only."""
 
@@ -914,20 +923,30 @@ def analyze_causal_communication(
             coordinates, on="cell_id", how="left", suffixes=("", "_coordinate")
         )
     )
+
+    def report(substage: str) -> None:
+        if progress:
+            progress({"stage": "causal_response", "substage": substage})
+
+    report("causal_input_preparation")
     inputs = attach(build_causal_response_inputs(rounds, cells))
+    report("causal_bootstrap")
     effects, support, draws = estimate_causal_response(
         inputs,
         bootstrap_resamples=bootstrap_resamples,
         confidence=confidence,
         seed=seed,
     )
+    report("available_causal_susceptibility")
     available_state_local, available_summary = estimate_available_causal_susceptibility(
         inputs,
         draws,
         bootstrap_resamples=bootstrap_resamples,
         confidence=confidence,
     )
+    report("communication_funnel_and_micro_audit")
     funnel = build_communication_funnel(inputs, micro_slots)
+    report("communication_efficiency")
     efficiency = communication_efficiency(inputs, effects, draws, confidence=confidence)
     effects, support, available_state_local, available_summary, funnel, efficiency = (
         map(

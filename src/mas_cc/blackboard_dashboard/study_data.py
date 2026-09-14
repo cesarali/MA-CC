@@ -1758,18 +1758,22 @@ class BlackboardStudyReader:
         return {"schema_version": 1, **episode, "scheduler": payload["scheduler"]}
 
     def episode_reader(self, qualified_id: str) -> BlackboardRunReader:
-        status = self.episode_status(qualified_id)
-        if not status["detail_available"]:
-            raise ValueError(status["detail_reason"])
-        reader = self._episode_readers.get(qualified_id)
-        if reader is None:
+        with self._lock:
+            reader = self._episode_readers.get(qualified_id)
+            if reader is not None:
+                self._episode_readers.move_to_end(qualified_id)
+                return reader
+
+            status = self.episode_status(qualified_id)
+            if not status["detail_available"]:
+                raise ValueError(status["detail_reason"])
             paths = self._paths[status["cell_id"]]
             reader = BlackboardRunReader(paths.run_root, status["episode_id"])
             self._episode_readers[qualified_id] = reader
-        self._episode_readers.move_to_end(qualified_id)
-        while len(self._episode_readers) > self._episode_reader_limit:
-            self._episode_readers.popitem(last=False)
-        return reader
+            self._episode_readers.move_to_end(qualified_id)
+            while len(self._episode_readers) > self._episode_reader_limit:
+                self._episode_readers.popitem(last=False)
+            return reader
 
     def resolved_paths(self, qualified_id: str) -> ResolvedDashboardCellPaths:
         try:

@@ -222,9 +222,12 @@ def create_generation(root: Path, *, allow_incomplete: bool) -> tuple[Path, dict
     time_limit = str(policy.get("time_limit", "06:00:00"))
     prepare_memory = str(policy.get("prepare_memory", memory))
     prepare_time = str(policy.get("prepare_time_limit", "01:00:00"))
-    finalizer_memory = str(policy.get("finalizer_memory", memory))
+    finalizer_cpus = int(
+        policy.get("finalizer_cpus", min(4, max(1, len(canonical["cells"]))))
+    )
+    finalizer_memory = str(policy.get("finalizer_memory", policy.get("memory", "16G")))
     finalizer_time = str(policy.get("finalizer_time_limit", time_limit))
-    if throttle < 1 or cpus < 1:
+    if throttle < 1 or cpus < 1 or finalizer_cpus < 1:
         raise ValueError("analysis task throttle and CPUs per task must be positive")
     analysis_hash = canonical_hash(
         {
@@ -233,6 +236,7 @@ def create_generation(root: Path, *, allow_incomplete: bool) -> tuple[Path, dict
             "estimator_version": "round-feedback-v1",
             "statistics": statistics,
             "settings": settings,
+            "derived_study_aggregates": recipe.get("derived_study_aggregates"),
             "theoretical_reference": theoretical_reference,
             "theory_provenance": dict(theory_provenance),
         }
@@ -282,9 +286,9 @@ def create_generation(root: Path, *, allow_incomplete: bool) -> tuple[Path, dict
             "cpus_per_task": cpus,
             "memory_per_task": memory,
             "time_limit": time_limit,
-            "peak_cpus": min(throttle, len(groups)) * cpus,
+            "peak_cpus": max(finalizer_cpus, min(throttle, len(groups)) * cpus),
             "prepare": {"cpus": 1, "memory": prepare_memory, "time_limit": prepare_time},
-            "finalizer": {"cpus": 1, "memory": finalizer_memory, "time_limit": finalizer_time},
+            "finalizer": {"cpus": finalizer_cpus, "memory": finalizer_memory, "time_limit": finalizer_time},
         },
         "jobs": {"prepare": None, "array": None, "finalizer": None},
         "progress_path": str(generation / "progress.json"),
@@ -490,6 +494,8 @@ def finalize(manifest_path: Path) -> None:
         analysis_output_dir=final_dir,
         canonical_snapshot_dir=generation / "input",
         information_fragments_dir=generation / "groups",
+        information_fragments_analysis_hash=str(manifest["analysis_hash"]),
+        progress_path=Path(str(manifest["progress_path"])),
     )
     analysis_manifest_path = final_dir / "analysis_manifest.json"
     analysis_manifest = _read(analysis_manifest_path)
@@ -601,7 +607,7 @@ def submit_aggregation(
         [
             "sbatch",
             f"--dependency=afterok:{dependency}",
-            "--cpus-per-task=1",
+            f"--cpus-per-task={resources['finalizer']['cpus']}",
             f"--mem={resources['finalizer']['memory']}",
             f"--time={resources['finalizer']['time_limit']}",
             f"--output={logs}/finalize-%j.out",

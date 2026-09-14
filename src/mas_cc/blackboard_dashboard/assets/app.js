@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
+  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
@@ -25,8 +25,8 @@
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
   );
 
-  async function get(path) {
-    const response = await fetch(path, {cache: 'no-store'});
+  async function get(path, options = {}) {
+    const response = await fetch(path, {cache: 'no-store', ...options});
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || response.statusText);
     return payload;
@@ -209,6 +209,8 @@
   }
 
   async function openEpisode(id) {
+    cancelPendingRefresh();
+    state.refreshVersion += 1;
     state.navigationVersion += 1;
     const navigationVersion = state.navigationVersion;
     state.episodeId = id; showShell('episode'); renderBreadcrumbs(state.cell, id);
@@ -401,8 +403,29 @@
     if (state.timeline) renderEpisodeTrajectory(state.timeline);
   }
 
-  async function refresh(forceEdge = false) {
+  function cancelPendingRefresh() {
+    if (state.sliderTimer !== null) {
+      clearTimeout(state.sliderTimer);
+      state.sliderTimer = null;
+    }
+    state.refreshController?.abort();
+    state.refreshController = null;
+  }
+
+  function scheduleSnapshotRefresh() {
+    cancelPendingRefresh();
+    state.refreshVersion += 1;
+    state.sliderTimer = setTimeout(() => {
+      state.sliderTimer = null;
+      refresh(false, false);
+    }, 50);
+  }
+
+  async function refresh(forceEdge = false, refreshTimeline = true) {
+    cancelPendingRefresh();
     const refreshVersion = ++state.refreshVersion;
+    const controller = new AbortController();
+    state.refreshController = controller;
     state.busy = true;
     try {
       if (state.staticMode) {
@@ -414,29 +437,37 @@
         return;
       }
       const prefix = state.study && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
-      const timeline = await get(`${prefix}/timeline`);
-      if (refreshVersion !== state.refreshVersion) return;
-      populateTimeline(timeline);
+      let timeline = state.timeline;
+      if (refreshTimeline || !timeline) {
+        timeline = await get(`${prefix}/timeline`, {signal: controller.signal});
+        if (refreshVersion !== state.refreshVersion) return;
+        populateTimeline(timeline);
+      }
       if ($('follow').checked || forceEdge) {
         const edge = timeline.available_cursors.at(-1);
         if (edge) { $('round').value = edge.round_index; updateStepRange(); $('step').value = edge.step; $('step-value').value = edge.step; }
       }
       const selectedAgent = state.selectedAgent || '';
       const query = new URLSearchParams({round: $('round').value, step: $('step').value, agent: selectedAgent});
-      const snapshot = await get(`${prefix}/snapshot?${query}`);
+      const snapshot = await get(`${prefix}/snapshot?${query}`, {signal: controller.signal});
       if (refreshVersion !== state.refreshVersion) return;
       render(snapshot);
       if (state.episodeId) state.episodeCache.set(state.episodeId, {timeline, snapshot});
     } catch (error) {
-      $('status-text').textContent = `error · ${error.message}`;
-    } finally { if (refreshVersion === state.refreshVersion) state.busy = false; }
+      if (error.name !== 'AbortError') $('status-text').textContent = `error · ${error.message}`;
+    } finally {
+      if (refreshVersion === state.refreshVersion) {
+        state.busy = false;
+        if (state.refreshController === controller) state.refreshController = null;
+      }
+    }
   }
 
   function selectAgent(agent) {
     if (!agent) return;
     state.selectedAgent = agent;
     document.querySelector('[data-view="agent-view"]').click();
-    refresh();
+    refresh(false, false);
   }
 
   document.querySelectorAll('#tabs button').forEach(button => button.addEventListener('click', () => {
@@ -444,8 +475,8 @@
     button.classList.add('active'); $(button.dataset.view).classList.add('active');
     updateHash();
   }));
-  $('round').addEventListener('input', () => { $('follow').checked = false; $('round-value').value = Number($('round').value) + 1; updateStepRange(); updateHash(); refresh(); });
-  $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; updateHash(); refresh(); });
+  $('round').addEventListener('input', () => { $('follow').checked = false; $('round-value').value = Number($('round').value) + 1; updateStepRange(); updateHash(); scheduleSnapshotRefresh(); });
+  $('step').addEventListener('input', () => { $('follow').checked = false; $('step-value').value = $('step').value; updateHash(); scheduleSnapshotRefresh(); });
   $('follow').addEventListener('change', () => { updateHash(); refresh(true); });
   $('expired').addEventListener('change', () => renderMessages(state.snapshot));
   $('all-messages').addEventListener('click', () => { state.blackboardAuthorFilter = 'all'; $('all-messages').classList.add('active'); $('controller-messages').classList.remove('active'); renderMessages(state.snapshot); updateHash(); });
@@ -460,7 +491,7 @@
     const delta = event.key === 'ArrowRight' ? 1 : -1;
     if (event.shiftKey) { $('round').value = Math.max(+$('round').min, Math.min(+$('round').max, +$('round').value + delta)); $('round-value').value = Number($('round').value) + 1; updateStepRange(); }
     else $('step').value = Math.max(1, Math.min(+$('step').max, +$('step').value + delta));
-    $('step-value').value = $('step').value; refresh();
+    $('step-value').value = $('step').value; refresh(false, false);
   });
 
   async function startStudy(initialStudy = null) {
@@ -483,7 +514,7 @@
         if (!$('follow').checked) {
           $('round').value = restored.get('round') || $('round').value; updateStepRange();
           $('step').value = restored.get('step') || $('step').value; $('step-value').value = $('step').value;
-          await refresh(false);
+          await refresh(false, false);
         }
         document.querySelector(`[data-view="${restored.get('episodeTab') || 'overview'}"]`)?.click();
       }

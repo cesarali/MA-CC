@@ -11,6 +11,20 @@ from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import RoundEve
 from mas_cc.studies.derived_aggregation import derive_study_control_aggregates
 
 
+def test_paired_initializations_are_kept_together_for_efficiency_summaries():
+    events = _cell_events("truth-rho1", 1) + _cell_events("false-rho2", 1)
+    events = [replace(e, event={**e.event, "physical_initial_state_hash":
+                               e.episode_id.rsplit("/", 1)[-1]}) for e in events]
+    config = _recipe()
+    config["derived_study_aggregates"]["bootstrap"] = {"unit": "shared_initialization_block"}
+    settings = {"bootstrap_resamples": 8, "null_permutations": 3, "confidence": .95, "seed": 4}
+    out = derive_study_control_aggregates(events, _cells(), config, settings, "hash")
+    assert set(out.study_metrics.bootstrap_unit) == {"shared_initialization_block"}
+    assert set(out.state_local_metrics.bootstrap_unit) == {"shared_initialization_block"}
+    other = derive_study_control_aggregates(list(reversed(events)), _cells().iloc[::-1], config, settings, "hash")
+    pd.testing.assert_frame_equal(out.study_metrics, other.study_metrics)
+
+
 def _event(
     cell: str,
     episode: int,
