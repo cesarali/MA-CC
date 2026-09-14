@@ -86,6 +86,77 @@ def test_information_fragments_reproduce_the_in_process_group_result(tmp_path, m
     pd.testing.assert_frame_equal(expected[1], actual[1])
 
 
+def test_information_fragments_validate_generation_hash_and_publish_final_hash(
+    tmp_path, monkeypatch
+):
+    events = [
+        SimpleNamespace(cell_id="canonical-cell", episode_id="episode-0", U_k="ACT")
+    ]
+
+    monkeypatch.setattr(
+        "mas_cc.studies.aggregation._run_information_group",
+        lambda payload: (
+            [
+                {
+                    "statistic": "round_sensing_mi",
+                    "estimate": 0.25,
+                    "n_rounds": 1,
+                    "n_episodes": 1,
+                    "units": "bits",
+                }
+            ],
+            [],
+        ),
+    )
+    settings = {
+        "bootstrap_resamples": 0,
+        "null_permutations": 0,
+        "confidence": 0.95,
+        "seed": 11,
+    }
+    generation_hash = "generation-hash"
+    generated = _information_tables(
+        "study",
+        events,
+        ("round_sensing_mi",),
+        settings,
+        generation_hash,
+        {},
+    )
+    groups = tmp_path / "groups"
+    stem = hashlib.sha256(b"canonical-cell").hexdigest()
+    information_path = write_scientific_table(
+        groups, f"{stem}.information", generated[0]
+    )
+    support_path = write_scientific_table(groups, f"{stem}.support", generated[1])
+    (groups / f"{stem}.complete.json").write_text(
+        json.dumps(
+            {
+                "cell_id": "canonical-cell",
+                "group_hash": stem,
+                "seed": 11 + int(stem[:8], 16),
+                "information_sha256": file_sha256(information_path),
+                "support_sha256": file_sha256(support_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    information, support = _information_tables(
+        "study",
+        events,
+        ("round_sensing_mi",),
+        settings,
+        "final-hash",
+        {},
+        fragments_dir=groups,
+        fragments_analysis_hash=generation_hash,
+    )
+
+    assert set(information["analysis_hash"]) == {"final-hash"}
+    assert support.empty or set(support["analysis_hash"]) == {"final-hash"}
+
+
 def test_expected_phase_grid_prefers_persisted_canonical_cell_identity():
     config = Path(
         "configs/runs/relational_reasoning/first_population_studies/"
@@ -133,7 +204,7 @@ def test_one_submission_builds_prepare_array_finalize_dependencies(tmp_path, mon
             "memory_per_task": "8G",
             "time_limit": "06:00:00",
             "prepare": {"cpus": 1, "memory": "8G", "time_limit": "01:00:00"},
-            "finalizer": {"cpus": 1, "memory": "8G", "time_limit": "06:00:00"},
+            "finalizer": {"cpus": 4, "memory": "16G", "time_limit": "06:00:00"},
         },
         "jobs": {},
         "progress_path": str(generation / "progress.json"),
@@ -161,6 +232,7 @@ def test_one_submission_builds_prepare_array_finalize_dependencies(tmp_path, mon
     assert any(item == "--dependency=afterok:41" for item in calls[1])
     assert any(item == "--array=0,1%2" for item in calls[1])
     assert any(item == "--dependency=afterok:42" for item in calls[2])
+    assert "--cpus-per-task=4" in calls[2]
     assert result["jobs"] == {"prepare": "41", "array": "42", "finalizer": "43"}
     assert str(root / "logs" / "analysis-generation") in " ".join(calls[0])
 

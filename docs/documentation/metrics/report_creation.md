@@ -207,6 +207,12 @@ The report is a view over aggregation outputs. It should not become a second est
 
 The report builder can read legacy CSV tables, but compressed Parquet is the current canonical analysis format.
 
+For Task003, the rho report sources now use component-weighted efficiency
+ratios from the enabled derived suite. The additional causal and epistemic
+summary tables and their interpretation are listed in
+[`weighted_study_summaries.md`](weighted_study_summaries.md). Their existence
+does not add new section kinds to this report builder.
+
 ## 3. Division between aggregation and reporting
 
 The central rule is:

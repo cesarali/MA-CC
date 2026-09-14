@@ -647,6 +647,22 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     assert "Show all available trajectories" in html
     assert "availableTrajectoryIds" in script
     assert "refreshVersion" in script
+    assert "scheduleSnapshotRefresh" in script
+    assert "refresh(false, false)" in script
+
+
+def test_episode_reader_reuses_cached_reader_without_rebuilding_cell_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    reader = BlackboardStudyReader(_study(tmp_path), scheduler=False)
+    qualified_id = "config-0000~cell-0000~episode-0000"
+    cached = reader.episode_reader(qualified_id)
+
+    def unexpected_status_refresh(_qualified_id: str):
+        raise AssertionError("cached episode reader rebuilt cell status")
+
+    monkeypatch.setattr(reader, "episode_status", unexpected_status_refresh)
+    assert reader.episode_reader(qualified_id) is cached
 
 
 def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):

@@ -189,8 +189,19 @@ def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():
         seed=3,
         progress=progress.append,
     )
+    from mas_cc.analysis.causal_response import build_causal_response_inputs
+    reused = analyze_epistemic_phase_diagrams(
+        pd.DataFrame(rows), cells, task_dataset_dir=TASKS,
+        robustness_draws=2, reference_persistence=1.0,
+        bootstrap_resamples=4, confidence=0.9, seed=3,
+        causal_inputs=build_causal_response_inputs(pd.DataFrame(rows), cells),
+    )
+    for name, frame in outputs.items():
+        pd.testing.assert_frame_equal(frame, reused[name])
     assert {update["substage"] for update in progress} == {
         "load_symbolic_tasks",
+        "inventory_reconstruction",
+        "prepare_causal_inputs",
         "round_states",
         "parameter_and_occupancy",
         "joint_drift",

@@ -5,6 +5,25 @@ derived: [round_target_susceptibility, eta_ir, target_sensing_information_nats, 
 state_local: [x]
 state_local_x_bins: 8
 rho_aggregated_descriptive: true
+derived_study_aggregates:
+  enabled: true
+  metrics: [round_target_actuation_cmi, susceptibility_occupancy_weighted, round_target_information_fraction, eta_ir]
+  causal: true
+  epistemic: true
+  groupings:
+    - name: rho_aggregated_by_budget_target
+      group_by: [intervention_budget, target_semantics]
+      marginalize: [epistemic_persistence]
+      weighting: balanced_cell
+  bootstrap: {unit: shared_initialization_block}
+  state_local:
+    enabled: true
+    x_bins: 8
+    weighting: n_observations
+    groupings:
+      - name: rho_aggregated_by_budget_target_x
+        group_by: [intervention_budget, target_semantics]
+        marginalize: [epistemic_persistence]
 blackboard_population_outputs: true
 blackboard_phase2_outputs:
   enabled: true
@@ -19,6 +38,12 @@ blackboard_epistemic_phase_outputs:
   capture_threshold: 0.75
   capture_consecutive_rounds: 3
 plots:
+  causal_response_weighted_by_budget: {source: causal_response_aggregated_metrics, metric: propensity_weighted_causal_response, filters: {lag: 1}, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
+  available_susceptibility_weighted_by_budget: {source: causal_response_aggregated_metrics, metric: available_mass_weighted_causal_susceptibility, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
+  eta_IF_weighted_by_budget: {source: study_aggregated_metrics, metric: round_target_information_fraction, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
+  eta_IR_weighted_by_budget: {source: study_aggregated_metrics, metric: eta_ir, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
+  symbolic_solvability_weighted_by_budget: {source: epistemic_aggregated_metrics, metric: mean_symbolic_individual_solvability_share, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
+  collective_solvability_weighted_by_budget: {source: epistemic_aggregated_metrics, metric: fraction_rounds_collectively_solvable, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
   chi_x_b_by_rho: &phase {source: state_local_phase_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, series: target_semantics, kind: heatmap, color_scale: independent, status_column: phase_status}
   T_pi_x_b_by_rho: {<<: *phase, metric: T_pi}
   eta_IR_x_b_by_rho: {<<: *phase, metric: eta_IR}

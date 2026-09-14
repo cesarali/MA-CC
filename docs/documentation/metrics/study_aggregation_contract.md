@@ -257,6 +257,11 @@ analysis_hash
 
 Individual bootstrap and null draws are temporary and are not retained.
 
+Task003's enabled derived suite uses shared initialization blocks, stratified
+by observed cell membership, for cross-cell uncertainty. It adds weighted
+causal and epistemic tables and keeps report efficiency views on ratios of
+weighted components. See [weighted study summaries](weighted_study_summaries.md).
+
 ## 9. Plots, reports, provenance, and manifest
 
 A completed analysis normally contains:

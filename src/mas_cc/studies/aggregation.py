@@ -11,6 +11,7 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timezone
+from multiprocessing import get_context
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
@@ -25,6 +26,7 @@ from mas_cc.storage.scientific import compact_row_to_imitation_event
 
 from .canonical import build_canonical_tables
 from .discovery import DiscoveredCell, DiscoveredRun, discover_cells, discover_runs
+from .performance import active_profile, measured_aggregation
 from .submission import read_submission_manifest
 from .table_io import (
     CANONICAL_TABLE_FORMAT,
@@ -401,6 +403,14 @@ def _run_information_group(payload: tuple[Any, ...]) -> tuple[list[Any], list[An
 def _write_analysis_progress(
     path: Path, *, completed: int, total: int, active: str | None = None
 ) -> None:
+    profile = active_profile.get()
+    if profile is not None:
+        profile.update({
+            "stage": "information_resampling", "completed_groups": completed,
+            "total_groups": total, "remaining_groups": total - completed,
+            "active_group": active,
+        })
+        return
     _write_json(
         path,
         {
@@ -425,6 +435,7 @@ def _information_tables(
     progress_path: Path | None = None,
     workers: int = 1,
     fragments_dir: Path | None = None,
+    fragments_analysis_hash: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
         ROUND_ANALYSIS_STATISTICS,
@@ -470,14 +481,18 @@ def _information_tables(
                     raise ValueError(f"invalid information fragment: {path}")
             information_fragment = read_scientific_table(information_path)
             support_fragment = read_scientific_table(support_path)
+            expected_fragment_hash = fragments_analysis_hash or analysis_hash
             for fragment in (information_fragment, support_fragment):
                 if not fragment.empty and (
                     set(fragment["cell_id"].astype(str)) != {cell_id}
-                    or set(fragment["analysis_hash"].astype(str)) != {analysis_hash}
+                    or set(fragment["analysis_hash"].astype(str))
+                    != {expected_fragment_hash}
                 ):
                     raise ValueError(
                         f"information fragment scientific identity mismatch: {cell_id}"
                     )
+                if not fragment.empty:
+                    fragment["analysis_hash"] = analysis_hash
             information_fragments.append(information_fragment)
             support_fragments.append(support_fragment)
         information = (
@@ -538,7 +553,8 @@ def _information_tables(
                     )
         else:
             with ProcessPoolExecutor(
-                max_workers=max(1, min(workers, len(pending)))
+                max_workers=max(1, min(workers, len(pending))),
+                mp_context=get_context("spawn"),
             ) as pool:
                 futures = {
                     pool.submit(_run_information_group, payload): cell_id
@@ -1271,10 +1287,28 @@ def _micro_rows_by_cell(micro_slots: pd.DataFrame) -> dict[str, list[dict[str, A
     if micro_slots.empty:
         return {}
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in micro_slots.to_dict(orient="records"):
+    fields = {
+        "cell_id", "episode_id", "round_index", "analysis_target",
+        "controller_target", "round_controller_target", "round_controller_action",
+        "controller_action", "controlled_slot", "focal_opinion_before", "focal_opinion_after",
+    }
+    projected = micro_slots.loc[:, [name for name in micro_slots if name in fields]]
+    for row in projected.to_dict(orient="records"):
         cell_id = str(row.get("cell_id", "run"))
         grouped.setdefault(cell_id, []).append(row)
     return grouped
+
+
+def _single_affinity_cell(payload: tuple[Any, ...]) -> dict[str, Any]:
+    from mas_cc.analysis.single_affinity import single_affinity_analysis
+
+    rows, micro, settings, seed = payload
+    return single_affinity_analysis(
+        rows, micro,
+        bootstrap_resamples=int(settings["bootstrap_resamples"]),
+        confidence=float(settings["confidence"]),
+        seed=seed,
+    )
 
 
 def _single_affinity_by_cell(
@@ -1290,8 +1324,6 @@ def _single_affinity_by_cell(
     losing the correlations their intervals depend on.
     """
 
-    from mas_cc.analysis.single_affinity import single_affinity_analysis
-
     by_cell: dict[str, list[Any]] = {}
     for event in events:
         by_cell.setdefault(str(event.cell_id), []).append(event)
@@ -1303,7 +1335,7 @@ def _single_affinity_by_cell(
         )
         round_targets[(str(event.cell_id), local, int(event.round_index))] = event.event
 
-    result: dict[str, dict[str, Any]] = {}
+    prepared: dict[str, tuple[Any, ...]] = {}
     for index, (cell_id, rows) in enumerate(sorted(by_cell.items())):
         micro: list[dict[str, Any]] = []
         for row in micro_by_cell.get(cell_id, ()):
@@ -1323,16 +1355,44 @@ def _single_affinity_by_cell(
                     or round_event.get("controller_action"),
                 }
             )
-        bundle = single_affinity_analysis(
-            rows,
-            micro,
-            bootstrap_resamples=int(settings["bootstrap_resamples"]),
-            confidence=float(settings["confidence"]),
-            seed=int(settings["seed"]) + index,
-        )
+        prepared[cell_id] = (rows, micro, settings, int(settings["seed"]) + index)
+    workers = min(
+        len(prepared), max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
+    )
+    result: dict[str, dict[str, Any]] = {}
+    profile = active_profile.get()
+
+    def collect(cell_id: str, bundle: dict[str, Any]) -> None:
+        rows, micro, _, _ = prepared[cell_id]
         bundle["_rows"], bundle["_micro"] = rows, micro
         result[cell_id] = bundle
-    return result
+        if profile is not None:
+            profile.update({
+                "stage": "joint_efficiency_bootstrap", "active_group": cell_id,
+                "completed_groups": len(result), "total_groups": len(prepared),
+                "workers": workers,
+            })
+
+    if profile is not None:
+        profile.stage(
+            "joint_efficiency_bootstrap", completed_groups=0,
+            total_groups=len(prepared), workers=workers,
+        )
+    if workers <= 1:
+        for cell_id, payload in prepared.items():
+            collect(cell_id, _single_affinity_cell(payload))
+    else:
+        # Spawn avoids inheriting the finalizer heartbeat thread and BLAS state.
+        with ProcessPoolExecutor(
+            max_workers=workers, mp_context=get_context("spawn")
+        ) as pool:
+            pending = {
+                pool.submit(_single_affinity_cell, payload): cell_id
+                for cell_id, payload in prepared.items()
+            }
+            for future in as_completed(pending):
+                collect(pending[future], future.result())
+    return {cell_id: result[cell_id] for cell_id in sorted(result)}
 
 
 def _single_affinity_theory_comparison(
@@ -3571,7 +3631,11 @@ def _package(analysis_dir: Path, study_id: str) -> Path:
         if directory.is_dir():
             paths.extend(path for path in directory.rglob("*") if path.is_file())
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(paths):
+        # Write provenance last so its measurements include table/plot compression.
+        manifest_path = analysis_dir / "analysis_manifest.json"
+        for path in sorted(
+            paths, key=lambda path: (path == manifest_path, path)
+        ):
             relative = path.relative_to(analysis_dir)
             if (
                 "cache" in relative.parts
@@ -3580,11 +3644,18 @@ def _package(analysis_dir: Path, study_id: str) -> Path:
                 or path.name.endswith(":Zone.Identifier")
             ):
                 continue
+            profile = active_profile.get()
+            if path == manifest_path and profile is not None:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                manifest["performance"] = profile.snapshot()
+                _write_json(path, manifest)
             info = zipfile.ZipInfo(str(relative).replace("\\", "/"))
             info.date_time = (1980, 1, 1, 0, 0, 0)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
-            archive.writestr(info, path.read_bytes())
+            info.file_size = path.stat().st_size
+            with path.open("rb") as source, archive.open(info, "w") as target:
+                shutil.copyfileobj(source, target, length=1024 * 1024)
     temporary.replace(destination)
     return destination
 
@@ -3630,6 +3701,7 @@ def _scientific_identity(
     )
 
 
+@measured_aggregation
 def _aggregate_study_local(
     study_dir: str | Path,
     *,
@@ -3637,6 +3709,8 @@ def _aggregate_study_local(
     analysis_output_dir: Path | None = None,
     canonical_snapshot_dir: Path | None = None,
     information_fragments_dir: Path | None = None,
+    information_fragments_analysis_hash: str | None = None,
+    progress_path: Path | None = None,
 ) -> dict[str, Any]:
     """Create the complete canonical analysis package for one submitted study."""
 
@@ -3669,6 +3743,8 @@ def _aggregate_study_local(
     settings = _resampling(recipe)
 
     analysis_dir = analysis_output_dir or (root / "analysis")
+    profile = active_profile.get()
+    assert profile is not None
     retained_input_identity: str | None = None
     runs = discover_runs(entries)
     cells = discover_cells(runs)
@@ -3678,6 +3754,14 @@ def _aggregate_study_local(
         name: retained_table_path(analysis_dir / "tables", name)
         for name in ("cells", "episodes", "rounds", "micro_slots")
     }
+    retained_inputs = (
+        [Path(canonical_snapshot_dir) / f"{name}.parquet" for name in retained_paths]
+        if canonical_snapshot_dir is not None
+        else [path for path in retained_paths.values() if path is not None]
+    )
+    retained_input_bytes = sum(
+        path.stat().st_size for path in retained_inputs if path.is_file()
+    )
     if canonical_snapshot_dir is not None:
         snapshot = Path(canonical_snapshot_dir)
         canonical = {
@@ -3775,12 +3859,22 @@ def _aggregate_study_local(
             "study validation failed; inspect " + str(analysis_dir / "validation.json")
         )
 
+    profile.update({
+        "stage": "canonical_discovery_read",
+        "rows": {name: len(frame) for name, frame in canonical.items()},
+        "column_counts": {name: len(frame.columns) for name, frame in canonical.items()},
+        "retained_input_bytes": retained_input_bytes,
+    })
+    profile.stage(
+        "canonical_writing", rows={name: len(frame) for name, frame in canonical.items()}
+    )
     for name, frame in canonical.items():
         write_scientific_table(tables_dir, name, frame)
 
     input_identity = retained_input_identity or _scientific_identity(
         entries, cells, canonical
     )
+    profile.stage("event_preparation_and_endpoints")
     statistics = _requested_statistics(recipe)
     raw_estimators = recipe.get("estimators", ())
     requested_estimators = {str(name) for name in raw_estimators}
@@ -3864,6 +3958,7 @@ def _aggregate_study_local(
     source_run_ids.update(
         {f"config-{run.entry.array_index:04d}": run.run_id for run in runs}
     )
+    profile.stage("information_fragment_validation_merge")
     if statistics:
         information, support = _information_tables(
             study_id,
@@ -3875,6 +3970,7 @@ def _aggregate_study_local(
             progress_path=analysis_dir / "progress.json",
             workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
             fragments_dir=information_fragments_dir,
+            fragments_analysis_hash=information_fragments_analysis_hash,
         )
     else:
         information, support = _ingest_existing_information(
@@ -3904,6 +4000,7 @@ def _aggregate_study_local(
             "version": 1,
         }
     )
+    profile.stage("current_estimators")
     current_primary = _current_primary(
         study_id,
         events,
@@ -3912,6 +4009,7 @@ def _aggregate_study_local(
         auxiliary_hash,
         source_run_ids,
     )
+    profile.stage("affinity_estimators")
     affinity_primary, affinity_support = _affinity_primary(
         study_id,
         canonical["micro_slots"],
@@ -3921,6 +4019,7 @@ def _aggregate_study_local(
         auxiliary_hash,
         source_run_ids,
     )
+    profile.stage("state_local_estimators")
     state_local = _attach_coordinates(
         _state_local_primary(study_id, events, recipe, analysis_hash, source_run_ids),
         canonical["cells"],
@@ -3961,6 +4060,7 @@ def _aggregate_study_local(
             "theory_provenance": dict(theory_provenance),
         }
     )
+    profile.stage("derived_observables")
     derived, theory_comparison = _derived(
         study_id,
         derived_raw,
@@ -4014,11 +4114,20 @@ def _aggregate_study_local(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    profile.stage("derived_study_aggregates")
+    paired_summary_plan = None
     derived_aggregation_config = recipe.get("derived_study_aggregates", {})
     if isinstance(derived_aggregation_config, Mapping) and bool(
         derived_aggregation_config.get("enabled", False)
     ):
         from .derived_aggregation import derive_study_control_aggregates
+        from .weighted_summaries import PairedBootstrap
+
+        if derived_aggregation_config.get("bootstrap", {}).get("unit") == "shared_initialization_block":
+            paired_summary_plan = PairedBootstrap(
+                canonical["rounds"], resamples=int(settings["bootstrap_resamples"]),
+                seed=int(settings["seed"]),
+            )
 
         aggregate_outputs = derive_study_control_aggregates(
             events,
@@ -4026,6 +4135,7 @@ def _aggregate_study_local(
             recipe,
             settings,
             analysis_hash,
+            bootstrap_plan=paired_summary_plan,
         )
         if not aggregate_outputs.study_metrics.empty:
             outputs["study_aggregated_metrics"] = aggregate_outputs.study_metrics
@@ -4076,6 +4186,7 @@ def _aggregate_study_local(
             bootstrap_resamples=int(settings["bootstrap_resamples"]),
             confidence=float(settings["confidence"]),
             seed=int(settings["seed"]),
+            progress=profile.update,
         )
         available_tables = {
             "available_causal_susceptibility_state_local",
@@ -4166,12 +4277,11 @@ def _aggregate_study_local(
             canonical["rounds"],
             canonical["cells"],
             **epistemic_settings,
+            causal_inputs=outputs.get("causal_response_round_inputs"),
             bootstrap_resamples=int(settings["bootstrap_resamples"]),
             confidence=float(settings["confidence"]),
             seed=int(settings["seed"]),
-            progress=lambda update: _write_json(
-                analysis_dir / "progress.json", {**update, "updated_at": _now()}
-            ),
+            progress=profile.update,
         )
         for frame in epistemic_outputs.values():
             if not frame.empty:
@@ -4199,6 +4309,24 @@ def _aggregate_study_local(
             "provider_calls": 0,
         }
         _write_json(analysis_dir / "validation.json", validation)
+    if isinstance(derived_aggregation_config, Mapping) and derived_aggregation_config.get("enabled") and (
+        derived_aggregation_config.get("causal") or derived_aggregation_config.get("epistemic")
+    ):
+        from .weighted_summaries import PairedBootstrap, derive_blackboard_summaries
+
+        profile.stage("weighted_blackboard_summaries")
+        if paired_summary_plan is None:
+            paired_summary_plan = PairedBootstrap(
+                canonical["rounds"], resamples=int(settings["bootstrap_resamples"]),
+                seed=int(settings["seed"]),
+            )
+        outputs.update(derive_blackboard_summaries(
+            outputs, canonical["cells"], recipe, settings,
+            canonical_hash({"primary": analysis_hash, "causal": causal_hash,
+                            "epistemic": epistemic_hash, "version": "paired-summary-v1"}),
+            paired_summary_plan
+        ))
+    profile.stage("derived_state_maps")
     phi_comparison = _phi_conditioning_comparison(primary)
     if not phi_comparison.empty:
         outputs["phi_conditioning_comparison"] = _attach_coordinates(
@@ -4241,6 +4369,10 @@ def _aggregate_study_local(
         )
         if not rho_summary.empty:
             outputs["rho_aggregated_descriptive_summary"] = rho_summary
+    if isinstance(derived_aggregation_config, Mapping) and derived_aggregation_config.get("enabled", False) and recipe.get("rho_aggregated_descriptive", False):
+        from .weighted_summaries import weighted_rho_aliases
+
+        weighted_rho_aliases(outputs)
     if {
         "cell_id",
         "episode_id",
@@ -4266,6 +4398,9 @@ def _aggregate_study_local(
         outputs["single_affinity_theory_comparison"] = _attach_coordinates(
             theory_comparison, canonical["cells"]
         )
+    profile.stage(
+        "table_writing", rows={name: len(frame) for name, frame in outputs.items()}
+    )
     for name, frame in outputs.items():
         write_scientific_table(tables_dir, name, frame)
     if bool(recipe.get("blackboard_population_outputs", False)):
@@ -4289,6 +4424,7 @@ def _aggregate_study_local(
         "episode_endpoint_summary": episode_endpoint_summary,
         **outputs,
     }
+    profile.stage("plotting")
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
     if _blackboard_phase2_requested(recipe):
         plots.extend(
@@ -4310,6 +4446,7 @@ def _aggregate_study_local(
                 analysis_dir / "plots",
             )
         )
+    profile.stage("reports_and_provenance")
     reports = analysis_dir / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     counts = validation["counts"]
@@ -4491,6 +4628,8 @@ def _aggregate_study_local(
         "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
         "derived_semantics": _derived_semantics(derived),
     }
+    profile.stage("packaging")
+    analysis_manifest["performance"] = profile.snapshot()
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)
     (analysis_dir / "progress.json").unlink(missing_ok=True)
     archive = _package(analysis_dir, study_id)

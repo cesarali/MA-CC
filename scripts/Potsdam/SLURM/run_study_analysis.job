@@ -14,6 +14,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+cd /home/ojedamarin/Projects/LanguageGames/MA-CC
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1

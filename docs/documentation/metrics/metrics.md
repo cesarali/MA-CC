@@ -505,6 +505,10 @@ summarize the detailed retained fields; they are not additional live metric obje
 
 ### 7.4 Study-level aggregated control metrics
 
+The four Task003 recipes now enable causal and epistemic study summaries with
+a paired initialization bootstrap. Their precise weighting and output contract
+is in [`weighted_study_summaries.md`](weighted_study_summaries.md).
+
 A **physical cell** is one fixed experimental condition, such as one persistence, budget, and
 controller target. The estimators above are still calculated inside those cells first. Study-level
 aggregation is a later summary step; it does not replace or redefine a physical-cell estimate.
@@ -543,7 +547,7 @@ and the aggregate permutation p-value is calculated from those combined draws. C
 never averaged. The main reported transfer result is
 $\Delta\bar T_\pi=\bar T_\pi-E[\bar T_{\pi,\mathrm{null}}]$, shown beside the raw estimate and null.
 
-Uncertainty uses a stratified whole-episode bootstrap. **Stratified** means complete episodes are
+By default, uncertainty uses a stratified whole-episode bootstrap. **Stratified** means complete episodes are
 sampled with replacement separately inside every physical cell. Each cell estimate is recomputed,
 and only then are the cell results combined. State-local bin weights and efficiency ratios are also
 recomputed inside each draw. This keeps rounds from the same episode together.
@@ -578,6 +582,12 @@ check, not a requirement that the two estimators be numerically identical.
 The optional `sample_size_stability` output repeatedly subsamples complete episodes inside cells.
 It reports how spread, interval width, sign stability, and null-detection frequency change with the
 available episode count. This is an empirical stability check, not a prospective power calculation.
+
+Task003 selects `bootstrap.unit: shared_initialization_block` instead of
+independent cell draws. Shared initializations receive shared multiplicities;
+observed cell-membership strata preserve each cell's episode count. The new
+causal summaries use logged propensity scores, while `eta_ir` retains its
+original state-matched susceptibility. See the linked weighting contract above.
 
 ---
 

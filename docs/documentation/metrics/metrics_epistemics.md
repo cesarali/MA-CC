@@ -582,6 +582,11 @@ one pooled CMI estimate across heterogeneous cells.
 
 ### 9.4 Derived study aggregation
 
+The four current Task003 recipes additionally enable paired causal summaries
+and all ten equal-episode symbolic parameter summaries across persistence.
+See [`weighted_study_summaries.md`](weighted_study_summaries.md) for estimands,
+support rules, bootstrap pairing, and the quantities kept at cell level.
+
 `derived_study_aggregates` first estimates each physical cell, then combines estimates. It supports:
 
 - `round_target_actuation_cmi`;

@@ -98,3 +98,26 @@ def test_batches_are_bounded_and_replay_global_draws():
             .reindex(original_sizes.index, fill_value=0)
         )
         np.testing.assert_array_equal(weights, drawn_sizes / original_sizes)
+
+
+@pytest.mark.parametrize("batch_size", [1, 7, 31])
+def test_estimates_are_independent_of_draw_batch_size(monkeypatch, batch_size):
+    frame = observations()
+    frame["intercept"] = 1.0
+    x = frame[["intercept", "x", "phi", "round"]].to_numpy()
+    y = frame.other_score.to_numpy()
+    plan = _BlockBootstrap(frame, 137, 12)
+    expected_means = plan.means(frame, frame[["score", "other_score"]].to_numpy())
+    expected_regression = plan.regression(frame, x, y)
+    original = _BlockBootstrap.batches
+
+    def smaller_batches(self):
+        for batch in original(self):
+            for start in range(0, len(batch), batch_size):
+                yield batch[start:start + batch_size]
+
+    monkeypatch.setattr(_BlockBootstrap, "batches", smaller_batches)
+    np.testing.assert_allclose(plan.means(frame, frame[["score", "other_score"]].to_numpy()),
+                               expected_means, rtol=1e-12, atol=1e-14)
+    np.testing.assert_allclose(plan.regression(frame, x, y), expected_regression,
+                               rtol=1e-10, atol=1e-12)
