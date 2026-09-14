@@ -113,6 +113,7 @@ from .prompts import (
 )
 from .state import (
     ACTIVE_FACT_IDS,
+    BOARD_SAMPLING_FULL,
     FOCAL_UPDATE,
     MESSAGE_DIRECTIVE,
     MESSAGE_REQUEST,
@@ -1717,13 +1718,17 @@ async def run_relational_imitation_round_feedback_game(
                 round_eligible_controller_report_counts.append(
                     eligible_controller_reports
                 )
-                sampled_messages = state.blackboard.sample_live(
-                    round_index,
-                    max(0, ordinary_limit),
-                    board_rng,
-                    exclude_author_id=(
-                        str(focal) if rules.board_exclude_self_authored else None
-                    ),
+                sampled_messages = (
+                    eligible_messages
+                    if rules.board_sampling == BOARD_SAMPLING_FULL
+                    else state.blackboard.sample_live(
+                        round_index,
+                        max(0, ordinary_limit),
+                        board_rng,
+                        exclude_author_id=(
+                            str(focal) if rules.board_exclude_self_authored else None
+                        ),
+                    )
                 )
                 round_message_read_count += len(sampled_messages)
                 sources = [

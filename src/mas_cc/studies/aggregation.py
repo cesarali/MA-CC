@@ -3659,16 +3659,21 @@ def _aggregate_study_local(
     from mas_cc.analysis.blackboard_calibration import calibration_settings
 
     blackboard_settings = calibration_settings(recipe.get("blackboard_calibration_outputs"))
+    from mas_cc.analysis.blackboard_theory import theory_settings
+
+    blackboard_theory_settings = theory_settings(recipe.get("blackboard_theory_outputs"))
     epistemic_settings = _epistemic_phase_settings(recipe, recipe_path)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
     theoretical_reference = recipe.get(
         "theoretical_reference", "single_affinity_revised"
     )
-    if theoretical_reference not in {"single_affinity_revised", "none"}:
+    if theoretical_reference not in {"single_affinity_revised", "none", "calibrated_blackboard_finite_state_v1"}:
         raise ValueError(
-            "analysis theoretical_reference must be single_affinity_revised or none"
+            "analysis theoretical_reference must be single_affinity_revised, none, or calibrated_blackboard_finite_state_v1"
         )
+    if theoretical_reference == "calibrated_blackboard_finite_state_v1" and blackboard_theory_settings is None:
+        raise ValueError("calibrated blackboard reference requires blackboard_theory_outputs")
     settings = _resampling(recipe)
 
     analysis_dir = analysis_output_dir or (root / "analysis")
@@ -3800,7 +3805,7 @@ def _aggregate_study_local(
         }
     )
     events = _round_events_from_canonical(canonical["rounds"])
-    if theoretical_reference != "none" and any(
+    if theoretical_reference == "single_affinity_revised" and any(
         event.event.get("record_type") == "relational_imitation_round_feedback"
         and float(event.event.get("epistemic_persistence", 1.0)) < 1.0
         for event in events
@@ -3809,7 +3814,7 @@ def _aggregate_study_local(
             "analysis theoretical_reference must be none for finite epistemic "
             "persistence"
         )
-    if theoretical_reference != "none" and any(
+    if theoretical_reference == "single_affinity_revised" and any(
         event.event.get("record_type") == "relational_imitation_round_feedback"
         and event.event.get("social_mode", "peer") == "board"
         for event in events
@@ -4302,6 +4307,37 @@ def _aggregate_study_local(
             "provider_calls": 0,
         }
         _write_json(analysis_dir / "validation.json", validation)
+    blackboard_theory_hash = None
+    if blackboard_theory_settings is not None:
+        from mas_cc.analysis.blackboard_theory import VERSION as THEORY_VERSION, analyze_blackboard_theory
+
+        blackboard_theory_hash = canonical_hash({
+            "scientific_input_identity": input_identity,
+            "calibration_hash": blackboard_hash,
+            "model_version": THEORY_VERSION,
+            "settings": blackboard_theory_settings,
+            "resampling": settings,
+        })
+        theory_outputs = analyze_blackboard_theory(
+            outputs, canonical["rounds"], canonical["cells"],
+            settings=blackboard_theory_settings,
+            calibration_settings=blackboard_settings,
+            events=_round_events_from_canonical(canonical["rounds"]),
+            bootstrap_resamples=settings["bootstrap_resamples"],
+            confidence=settings["confidence"], seed=settings["seed"],
+            analysis_hash=blackboard_theory_hash, provisional=not validation["complete"],
+            progress=lambda update: _write_json(
+                analysis_dir / "progress.json", {**update, "updated_at": _now()}
+            ),
+        )
+        outputs.update(theory_outputs)
+        validation["blackboard_theory"] = {
+            "model_version": THEORY_VERSION, "analysis_hash": blackboard_theory_hash,
+            "provider_calls": 0,
+            "validation_rows": len(theory_outputs["theory_validation"]),
+            "comparison_rows": len(theory_outputs["theory_empirical_comparison"]),
+        }
+        _write_json(analysis_dir / "validation.json", validation)
     for name, frame in outputs.items():
         write_scientific_table(tables_dir, name, frame)
     if bool(recipe.get("blackboard_population_outputs", False)):
@@ -4422,6 +4458,15 @@ def _aggregate_study_local(
                 f"Analysis hash: `{analysis_hash}`.",
                 "",
                 *(SINGLE_AFFINITY_METHODS if not derived.empty else ()),
+                *([
+                    "",
+                    "Calibrated blackboard theory runs after empirical estimators and calibration. "
+                    "Prepared theory tables retain policy, split, masks, calibration dependencies, "
+                    "and unsupported model statuses. Exact model information has no empirical null offset. "
+                    "In-sample fitted references are not held-out predictions. Intervals refit retained "
+                    "shared-initialization blocks; exact summation itself introduces no Monte Carlo uncertainty.",
+                    "See tables/theory_model_manifest.parquet and tables/theory_validation.parquet.",
+                ] if blackboard_theory_settings is not None else []),
             ]
         ),
         encoding="utf-8",
@@ -4498,6 +4543,8 @@ def _aggregate_study_local(
         "causal_response_hash": causal_hash,
         "epistemic_phase_hash": epistemic_hash,
         "blackboard_calibration_hash": blackboard_hash,
+        "blackboard_theory_hash": blackboard_theory_hash,
+        "blackboard_theory_settings": blackboard_theory_settings,
         "blackboard_calibration_settings": blackboard_settings,
         "theory": dict(theory_provenance),
         "theoretical_reference": theoretical_reference,
