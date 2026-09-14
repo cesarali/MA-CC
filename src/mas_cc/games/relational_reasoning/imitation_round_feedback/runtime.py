@@ -77,6 +77,7 @@ from ...hidden_bench.imitation.metrics import population_observables
 from .adaptive_communication import (
     COMMUNICATION_POLICY,
     LLM_COMMUNICATION_POLICY,
+    CommunicationChoice,
     CommunicationMode,
     ControllerCommunicationContext,
     ControllerVisibleFact,

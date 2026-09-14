@@ -12,6 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -423,6 +424,7 @@ def _information_tables(
     *,
     progress_path: Path | None = None,
     workers: int = 1,
+    fragments_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
         ROUND_ANALYSIS_STATISTICS,
@@ -442,6 +444,66 @@ def _information_tables(
     grouped: dict[str, list[Any]] = {}
     for event in events:
         grouped.setdefault(str(event.cell_id), []).append(event)
+    if fragments_dir is not None:
+        information_fragments: list[pd.DataFrame] = []
+        support_fragments: list[pd.DataFrame] = []
+        for cell_id in sorted(grouped):
+            stem = hashlib.sha256(cell_id.encode("utf-8")).hexdigest()
+            complete_path = fragments_dir / f"{stem}.complete.json"
+            information_path = fragments_dir / f"{stem}.information.parquet"
+            support_path = fragments_dir / f"{stem}.support.parquet"
+            if not complete_path.is_file():
+                raise ValueError(f"missing information fragment completion: {cell_id}")
+            completion = json.loads(complete_path.read_text(encoding="utf-8"))
+            expected_seed = int(settings["seed"]) + int(stem[:8], 16)
+            if (
+                completion.get("cell_id") != cell_id
+                or completion.get("group_hash") != stem
+                or int(completion.get("seed", -1)) != expected_seed
+            ):
+                raise ValueError(f"information fragment identity mismatch: {cell_id}")
+            for path, key in (
+                (information_path, "information_sha256"),
+                (support_path, "support_sha256"),
+            ):
+                if not path.is_file() or file_sha256(path) != completion.get(key):
+                    raise ValueError(f"invalid information fragment: {path}")
+            information_fragment = read_scientific_table(information_path)
+            support_fragment = read_scientific_table(support_path)
+            for fragment in (information_fragment, support_fragment):
+                if not fragment.empty and (
+                    set(fragment["cell_id"].astype(str)) != {cell_id}
+                    or set(fragment["analysis_hash"].astype(str)) != {analysis_hash}
+                ):
+                    raise ValueError(
+                        f"information fragment scientific identity mismatch: {cell_id}"
+                    )
+            information_fragments.append(information_fragment)
+            support_fragments.append(support_fragment)
+        information = (
+            pd.concat(information_fragments, ignore_index=True, sort=False)
+            if information_fragments
+            else pd.DataFrame(columns=PRIMARY_COLUMNS)
+        )
+        support = (
+            pd.concat(support_fragments, ignore_index=True, sort=False)
+            if support_fragments
+            else pd.DataFrame()
+        )
+        information = information.sort_values(
+            [
+                column
+                for column in ("cell_id", "metric", "estimator_variant")
+                if column in information
+            ],
+            kind="stable",
+        ).reset_index(drop=True)
+        if not support.empty:
+            support = support.sort_values(
+                [column for column in ("cell_id", "metric") if column in support],
+                kind="stable",
+            ).reset_index(drop=True)
+        return information, support
     estimates: list[dict[str, Any]] = []
     support: list[dict[str, Any]] = []
     confidence = float(settings["confidence"])
@@ -458,16 +520,12 @@ def _information_tables(
     if progress_path is not None:
         _write_analysis_progress(progress_path, completed=done, total=total)
     if pending:
-        with ProcessPoolExecutor(
-            max_workers=max(1, min(workers, len(pending)))
-        ) as pool:
-            futures = {
-                pool.submit(_run_information_group, payload): cell_id
+        if workers == 1:
+            iterator = (
+                (cell_id, _run_information_group(payload))
                 for cell_id, payload in pending.items()
-            }
-            for future in as_completed(futures):
-                cell_id = futures[future]
-                value = future.result()
+            )
+            for cell_id, value in iterator:
                 completed_results[cell_id] = value
                 done += 1
                 print(
@@ -478,11 +536,33 @@ def _information_tables(
                     _write_analysis_progress(
                         progress_path, completed=done, total=total, active=cell_id
                     )
+        else:
+            with ProcessPoolExecutor(
+                max_workers=max(1, min(workers, len(pending)))
+            ) as pool:
+                futures = {
+                    pool.submit(_run_information_group, payload): cell_id
+                    for cell_id, payload in pending.items()
+                }
+                for future in as_completed(futures):
+                    cell_id = futures[future]
+                    value = future.result()
+                    completed_results[cell_id] = value
+                    done += 1
+                    print(
+                        f"[analysis] information groups {done}/{total}: {cell_id}",
+                        flush=True,
+                    )
+                    if progress_path is not None:
+                        _write_analysis_progress(
+                            progress_path, completed=done, total=total, active=cell_id
+                        )
 
     for cell_id, rows in ordered:
         result_rows, null_rows = completed_results[cell_id]
+        source_prefix = cell_id.split("/", 1)[0]
         source_run_id = source_run_ids.get(
-            cell_id.split("/", 1)[0], cell_id.split("/", 1)[0]
+            cell_id, source_run_ids.get(source_prefix, source_prefix)
         )
         null_by_metric: dict[str, list[float]] = {}
         for item in null_rows:
@@ -2002,19 +2082,77 @@ def _write_blackboard_population_views(
     )
 
 
-def _expected_cell_coordinates(entries: Sequence[Any]) -> list[dict[str, Any]]:
+def _expected_cell_coordinates(
+    entries: Sequence[Any],
+    canonical_cells: pd.DataFrame | None = None,
+    *,
+    discovered_cells: Sequence[DiscoveredCell] = (),
+    target_manifest: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Resolve the declared structural grid, including cells not yet run."""
+
+    from .identity import protocol_fingerprint, scientific_cell_key
+
+    persisted = {
+        (int(item["config_index"]), str(item["source_cell_id"])): str(item["cell_key"])
+        for item in (target_manifest or {}).get("cells", ())
+        if isinstance(item, Mapping)
+        and {"config_index", "source_cell_id", "cell_key"}.issubset(item)
+    }
+    discovered = {
+        (int(cell.run.entry.array_index), str(cell.local_cell_id)): str(cell.cell_key)
+        for cell in discovered_cells
+    }
+    retained: dict[tuple[int, str], str] = {}
+    if canonical_cells is not None and not canonical_cells.empty:
+        required = {"cell_id", "source_config_index", "source_cell_id"}
+        if required.issubset(canonical_cells.columns):
+            retained = {
+                (int(row["source_config_index"]), str(row["source_cell_id"])): str(
+                    row["cell_id"]
+                )
+                for row in canonical_cells.to_dict(orient="records")
+            }
 
     rows: list[dict[str, Any]] = []
     for entry in entries:
         source = load_run_config_or_grid(entry.config_path)
-        cells = source.cells if isinstance(source, GridSpec) else ()
-        if not cells:
-            continue
+        cells = (
+            source.cells
+            if isinstance(source, GridSpec)
+            else (
+                SimpleNamespace(
+                    cell_id="run", overrides={}, config=source
+                ),
+            )
+        )
         for cell in cells:
             config = cell.config
+            local_key = (int(entry.array_index), str(cell.cell_id))
+            canonical_id = (
+                persisted.get(local_key)
+                or discovered.get(local_key)
+                or retained.get(local_key)
+            )
+            if canonical_id is None:
+                swept_paths = (
+                    tuple(axis.path for axis in source.axes)
+                    if isinstance(source, GridSpec)
+                    else ()
+                )
+                canonical_id = scientific_cell_key(
+                    protocol_fingerprint(
+                        config.to_dict(), swept_paths=swept_paths
+                    ),
+                    cell.overrides,
+                )
             record = {
-                "cell_id": f"config-{entry.array_index:04d}/{cell.cell_id}",
+                "cell_id": canonical_id,
+                "source_config_index": int(entry.array_index),
+                "source_cell_id": str(cell.cell_id),
+                "expected_episode_count": int(config.execution.repetitions),
+                "canonical_observations_present": canonical_id
+                in set(retained.values()),
                 **dict(cell.overrides),
             }
             for path, value in cell.overrides.items():
@@ -2054,12 +2192,19 @@ def _state_local_phase_tables(
     events: Sequence[Any],
     *,
     bins: int | None,
+    discovered_cells: Sequence[DiscoveredCell] = (),
+    target_manifest: Mapping[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Complete binned phase grids with explicit absence/support semantics."""
 
     if bins is None:
         return pd.DataFrame(), pd.DataFrame()
-    expected = _expected_cell_coordinates(entries)
+    expected = _expected_cell_coordinates(
+        entries,
+        cells,
+        discovered_cells=discovered_cells,
+        target_manifest=target_manifest,
+    )
     found = set(cells.get("cell_id", pd.Series(dtype=str)).astype(str))
     occupancy_counts: dict[tuple[str, int], int] = {}
     occupancy_episodes: dict[tuple[str, int], set[str]] = {}
@@ -3485,8 +3630,13 @@ def _scientific_identity(
     )
 
 
-def aggregate_study(
-    study_dir: str | Path, *, allow_incomplete: bool = False
+def _aggregate_study_local(
+    study_dir: str | Path,
+    *,
+    allow_incomplete: bool = False,
+    analysis_output_dir: Path | None = None,
+    canonical_snapshot_dir: Path | None = None,
+    information_fragments_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Create the complete canonical analysis package for one submitted study."""
 
@@ -3518,7 +3668,7 @@ def aggregate_study(
         )
     settings = _resampling(recipe)
 
-    analysis_dir = root / "analysis"
+    analysis_dir = analysis_output_dir or (root / "analysis")
     retained_input_identity: str | None = None
     runs = discover_runs(entries)
     cells = discover_cells(runs)
@@ -3528,7 +3678,21 @@ def aggregate_study(
         name: retained_table_path(analysis_dir / "tables", name)
         for name in ("cells", "episodes", "rounds", "micro_slots")
     }
-    if cells:
+    if canonical_snapshot_dir is not None:
+        snapshot = Path(canonical_snapshot_dir)
+        canonical = {
+            name: read_scientific_table(snapshot / f"{name}.parquet")
+            for name in ("cells", "episodes", "rounds", "micro_slots")
+        }
+        validation = json.loads(
+            (snapshot / "validation.json").read_text(encoding="utf-8")
+        )
+        snapshot_manifest = json.loads(
+            (snapshot.parent / "execution_manifest.json").read_text(encoding="utf-8")
+        )
+        retained_input_identity = str(snapshot_manifest["scientific_input_identity"])
+        canonical_metadata = {}
+    elif cells:
         canonical, canonical_metadata = build_canonical_tables(study_id, cells)
         if target_manifest is not None:
             from .extension import consolidate_extension_tables
@@ -3710,6 +3874,7 @@ def aggregate_study(
             source_run_ids,
             progress_path=analysis_dir / "progress.json",
             workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
+            fragments_dir=information_fragments_dir,
         )
     else:
         information, support = _ingest_existing_information(
@@ -3818,6 +3983,30 @@ def aggregate_study(
     contrasts = _factorial_contrasts(primary, derived, derived_raw, derived_hash)
     if not contrasts.empty:
         derived = pd.concat([derived, contrasts], ignore_index=True, sort=False)
+
+    canonical_cell_ids = set(
+        canonical["cells"].get("cell_id", pd.Series(dtype=str)).dropna().astype(str)
+    )
+    for label, frame in (
+        ("information estimates", information),
+        ("support diagnostics", support),
+        ("primary estimates", primary),
+        ("derived observables", derived),
+    ):
+        if frame.empty or "cell_id" not in frame:
+            continue
+        scientific_rows = frame
+        if label == "derived observables" and "contrast_type" in frame:
+            scientific_rows = frame[frame["contrast_type"].isna()]
+        unknown_cell_ids = (
+            set(scientific_rows["cell_id"].dropna().astype(str))
+            - canonical_cell_ids
+        )
+        if unknown_cell_ids:
+            raise ValueError(
+                f"{label} contain non-canonical cell_id values: "
+                + ", ".join(sorted(unknown_cell_ids))
+            )
 
     outputs = {
         "primary_estimates": primary,
@@ -4031,6 +4220,8 @@ def aggregate_study(
         derived,
         events,
         bins=state_bins,
+        discovered_cells=cells,
+        target_manifest=target_manifest,
     )
     if not phase_maps.empty:
         outputs["state_local_phase_maps"] = phase_maps
@@ -4314,9 +4505,42 @@ def aggregate_study(
     }
 
 
+def aggregate_study(
+    study_dir: str | Path,
+    *,
+    allow_incomplete: bool = False,
+    backend: str = "auto",
+) -> dict[str, Any]:
+    """Aggregate locally or submit the internal detached SLURM graph."""
+
+    if backend not in {"auto", "local", "slurm"}:
+        raise ValueError("aggregation backend must be auto, local, or slurm")
+    already_allocated = bool(os.environ.get("SLURM_JOB_ID"))
+    potsdam_runtime = Path(
+        "/home/ojedamarin/.local/share/miniforge3/bin/conda"
+    ).is_file()
+    use_slurm = backend == "slurm" or (
+        backend == "auto"
+        and not already_allocated
+        and "PYTEST_CURRENT_TEST" not in os.environ
+        and potsdam_runtime
+        and shutil.which("sbatch") is not None
+    )
+    if use_slurm:
+        from .analysis_slurm import submit_aggregation
+
+        return submit_aggregation(
+            study_dir, allow_incomplete=allow_incomplete
+        )
+    return _aggregate_study_local(
+        study_dir, allow_incomplete=allow_incomplete
+    )
+
+
 __all__ = [
     "DERIVED_COLUMNS",
     "ESTIMATOR_ALIASES",
     "SINGLE_AFFINITY_DERIVED",
+    "_aggregate_study_local",
     "aggregate_study",
 ]

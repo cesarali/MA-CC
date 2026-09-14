@@ -31,6 +31,14 @@ with a credential-free import check for `mas_cc`, `pandas`, and `pyarrow`.
 Ensure the SLURM job inherits or explicitly invokes this same `MA-CC`
 environment; the login shell's system Python is not a valid fallback.
 
+On Potsdam only, distinguish the runtime working directory from the output
+root. Scientific results and SLURM logs belong under `/work`, while the generic
+Potsdam launchers must explicitly establish
+`/home/ojedamarin/Projects/LanguageGames/MA-CC` as the runtime working
+directory so repository-local provider configuration, including `.env`, is
+found independently of the directory from which `sbatch` was invoked. Do not
+apply this absolute path or environment-loading convention outside Potsdam.
+
 Outside Potsdam, use the existing environment and setup conventions of the
 local checkout. Do not require the Potsdam environment name or absolute Conda
 path on a developer's local machine.

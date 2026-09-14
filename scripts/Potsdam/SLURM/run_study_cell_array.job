@@ -15,6 +15,12 @@ if [[ $# -ne 1 ]]; then
 fi
 
 readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly REPOSITORY_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+
+# Potsdam workers may be submitted from /work, but provider configuration is
+# resolved relative to this checkout (including its local .env).  Do not rely
+# on sbatch inheriting the caller's working directory.
+cd "$REPOSITORY_ROOT"
 
 exec "$CONDA_EXE" run -n MA-CC --live-stream \
   python -m mas_cc.studies.cell_worker "$1"

@@ -285,6 +285,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="produce explicitly incomplete exploratory output despite validation failures",
     )
+    study_aggregate.add_argument(
+        "--backend",
+        choices=("auto", "local", "slurm"),
+        default="auto",
+        help="execution backend (auto selects detached SLURM on Potsdam)",
+    )
     study_compact = study_commands.add_parser(
         "compact-analysis",
         help="convert an existing standardized analysis handoff to lean Parquet",
@@ -871,11 +877,26 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         try:
             summary = aggregate_study(
-                args.study_dir, allow_incomplete=args.allow_incomplete
+                args.study_dir,
+                allow_incomplete=args.allow_incomplete,
+                backend=args.backend,
             )
         except (ConfigurationError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        if summary.get("submitted"):
+            jobs = summary["jobs"]
+            print(
+                f"Study {summary['study_id']} aggregation generation "
+                f"{summary['generation_id']} submitted: prepare {jobs['prepare']}, "
+                f"array {jobs['array'] or 'not needed'}, finalizer {jobs['finalizer']}"
+            )
+            print(
+                f"  {summary['groups']} information group(s), "
+                f"{summary['pending_groups']} pending; progress: {summary['progress']}"
+            )
+            print(f"  Final archive: {summary['archive']}")
+            return 0
         print(
             f"Study {summary['study_id']} aggregated "
             f"({'complete' if summary['complete'] else 'incomplete'}): "

@@ -383,10 +383,16 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             raise ValueError(
                 f"task {task.task_id!r} has no frozen truthful-controller design"
             )
-        if target != task.controller_target:
+        # A frozen adversarial pool is also scientifically valid for the
+        # ground-truth counterpart: every report remains a true task fact and
+        # the decisive subset proves the ground truth.  Keep rejecting every
+        # other target mismatch so a controller cannot silently reuse this
+        # pool for an unsupported third option.
+        if target not in {task.controller_target, task.correct_relation}:
             raise ValueError(
                 f"controller target {target!r} does not match task-declared target "
-                f"{task.controller_target!r}"
+                f"{task.controller_target!r} or ground truth "
+                f"{task.correct_relation!r}"
             )
         pool = task.controller_reportable_fact_ids
         if self.intervention_budget > len(pool):

@@ -26,6 +26,15 @@ calls. Before submitting a real Potsdam job, verify that the resolved `MA-CC`
 Python imports `mas_cc`, `pandas`, and `pyarrow` from the expected
 environment/repository.
 
+Potsdam SLURM submission working directories and scientific output roots are
+separate concerns. Results and SLURM logs must remain under `/work`, but the
+generic Potsdam launchers establish
+`/home/ojedamarin/Projects/LanguageGames/MA-CC` as their runtime working
+directory so repository-local provider configuration (including `.env`) is
+resolved consistently. Do not rely on the directory from which `sbatch` was
+called. This rule is Potsdam-specific and must not be copied into local or
+other deployment instructions.
+
 Outside Potsdam, use the local machine's existing project environment and
 setup instructions. Local agents must not look for, require, or reproduce the
 Potsdam-specific absolute Conda path.
