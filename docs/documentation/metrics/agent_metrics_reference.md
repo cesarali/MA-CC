@@ -342,3 +342,13 @@ while reconciling this documentation.
 | Study / cross-cell aggregation | `src/mas_cc/studies/{aggregation,canonical,validation,derived_aggregation,table_io}.py` | `tests/mas_cc/test_studies.py`, `test_derived_study_aggregation.py` |
 | Detached analysis | `src/mas_cc/studies/{analysis_slurm,analysis_worker}.py` | `tests/mas_cc/test_analysis_slurm.py` |
 | Reporting / CLI | `src/mas_cc/studies/reporting.py`, `src/mas_cc/cli/main.py` | `tests/mas_cc/test_study_reporting.py` |
+
+## Calibrated blackboard finite-state reference
+
+The opt-in `blackboard_theory_outputs` aggregation stage runs after empirical
+estimation and blackboard calibration. See
+[Calibrated blackboard theoretical metrics](blackboard_theoretical_metrics.md)
+for recipe settings, exact empirical contracts, split/bootstrap provenance,
+forward predictions, output tables, and unsupported dependencies. Its reference
+identifier is `calibrated_blackboard_finite_state_v1`; enabling it does not enable
+legacy single-affinity references for board or forgetting regimes.

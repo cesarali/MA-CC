@@ -13,7 +13,8 @@ The game has two social modes:
 
 * **peer mode** samples `q` current peer ballots. This is the legacy behavior.
 * **board mode** samples up to `q` live public messages from a finite-memory
-  blackboard. It never adds peer samples as a fallback.
+  blackboard by default, or shows all eligible live messages with
+  `board.sampling: full`. It never adds peer samples as a fallback.
 
 `q` always means the maximum number of social observations in one focal
 update. Only the observation type changes.
@@ -244,10 +245,20 @@ and `CORRECTION`. `REPLY` and `CORRECTION` must point to a message that the
 focal agent actually saw. Each focal update may append at most one message, or
 none. The private `reason` is never copied into that public message.
 
-Sampling is uniform without replacement. It samples messages, not authors, so
+By default (`board.sampling: uniform`), sampling is uniform without replacement. It samples messages, not authors, so
 two different messages from one author may both be seen. Self-authored messages
 are excluded by default. If fewer than `q` messages are eligible, the agent sees
 only the available number. An empty board means no social input.
+
+Set `game.options.board.sampling: full` to show every currently live, eligible
+message to each focal agent, in posting order (effectively `q = infinity`).
+`social_group_size` remains a positive integer for configuration compatibility,
+but does not limit board visibility in this mode. Expiration and
+`exclude_self_authored` still apply; expired history is never included.
+Direct recommendations accompany the full board without removing a message.
+Uniform mode retains its existing recommendation slot replacement behavior.
+Full visibility can increase prompt size as the live board grows. Round records
+retain `board_sampling`, and `board_sample_size` records actual board reads.
 
 `message_lifetime_rounds: 1` means a message created in round `r` remains
 readable for the rest of round `r` and is expired before sampling in round
@@ -451,6 +462,7 @@ control:
 | `game.options.rounds` | population rounds; the elementary horizon is `rounds × N` |
 | `game.options.social_group_size` | `q`, the number of visible social slots |
 | `game.options.social_mode` | `peer` for current peer ballots, or `board` for finite-memory public messages |
+| `game.options.board.sampling` | `uniform` (default) samples up to `q`; `full` shows all live eligible messages in posting order |
 | `game.options.board.message_lifetime_rounds` | how many round indices a message remains readable; `1` clears each round's messages at its boundary |
 | `game.options.dynamics_mode` | only `reasoning` is implemented; `classical` is refused explicitly |
 | `game.options.vote_visibility` | only `public` is implemented; `hidden` is reserved |

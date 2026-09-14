@@ -66,7 +66,10 @@ CONFIG = (
 )
 
 
-def _config(*, rounds=1, q=1, lifetime=1, prompt_version=2):
+def _config(
+    *, rounds=1, q=1, lifetime=1, prompt_version=2,
+    sampling="uniform", exclude_self=True,
+):
     config = load_run_config(CONFIG, environment={})
     options = {
         **dict(config.game.options),
@@ -75,9 +78,9 @@ def _config(*, rounds=1, q=1, lifetime=1, prompt_version=2):
         "social_mode": "board",
         "prompt_version": prompt_version,
         "board": {
-            "sampling": "uniform",
+            "sampling": sampling,
             "message_lifetime_rounds": lifetime,
-            "exclude_self_authored": True,
+            "exclude_self_authored": exclude_self,
             "allow_no_post": True,
         },
     }
@@ -1125,3 +1128,42 @@ def test_pilot_artifact_builder_writes_complete_inspection_bundle(tmp_path):
         / "relational_imitation_round_feedback_analysis"
         / "round_information_estimates.csv"
     ).is_file()
+
+
+@pytest.mark.parametrize("exclude_self", [True, False])
+@pytest.mark.parametrize("lifetime", [1, 2])
+def test_full_board_reads_every_eligible_message(exclude_self, lifetime):
+    config = _config(rounds=2, q=1, sampling="full", lifetime=lifetime,
+                     exclude_self=exclude_self)
+    result, _ = _run(config)
+    events = [item.transition.event for item in result.interactions]
+    assert events[0]["board_sample_size"] == 0
+    assert max(event["board_sample_size"] for event in events) > 1
+    for event in events:
+        assert event["board_sample_size"] == event["eligible_board_message_count"]
+        assert len(event["sampled_message_ids"]) == event["board_sample_size"]
+        assert len(set(event["sampled_message_ids"])) == event["board_sample_size"]
+    assert all(record.event["board_sampling"] == "full" for record in result.rounds)
+    n = result.final_state.data["rules"]["n_agents"]
+    first_round_ids = {
+        message.message_id for message in result.final_state.blackboard.messages
+        if message.round_created == 0
+    }
+    second_round_ids = {
+        mid for event in events[n:] for mid in event["sampled_message_ids"]
+    }
+    assert bool(first_round_ids & second_round_ids) == (lifetime == 2)
+    if not exclude_self and lifetime == 2:
+        assert events[n]["board_sample_size"] == n
+
+
+@pytest.mark.parametrize("mode", [DIRECT_RECOMMENDATION, COORDINATION_REQUEST])
+def test_full_board_preserves_all_messages_with_controller(mode):
+    config = _config(q=1, sampling="full")
+    result, _ = _run(config, control=_control(config, mode))
+    events = [item.transition.event for item in result.interactions]
+    for event in events:
+        assert event["board_sample_size"] == event["eligible_board_message_count"]
+        extra = int(mode == DIRECT_RECOMMENDATION and event["controlled_slot"])
+        assert event["q_effective"] == event["board_sample_size"] + extra
+    assert any(event["board_sample_size"] > 1 for event in events)
