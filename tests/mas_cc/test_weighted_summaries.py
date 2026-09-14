@@ -134,7 +134,8 @@ def test_singleton_completion_strata_are_flagged():
     assert set(out.support_status) == {"limited"}
 
 
-def test_report_alias_uses_new_ratio_and_preserves_empty_bins():
+@pytest.mark.parametrize("legacy_label", ["false", False, "False"])
+def test_report_alias_uses_new_ratio_and_preserves_empty_bins(legacy_label, tmp_path):
     from mas_cc.studies.weighted_summaries import weighted_rho_aliases
 
     outputs = {
@@ -144,12 +145,17 @@ def test_report_alias_uses_new_ratio_and_preserves_empty_bins():
             "support_status": "adequate", "marginalized_dimensions": '["epistemic_persistence"]',
             "component_numerator": .1, "component_denominator": .5}]),
         "rho_aggregated_state_local_maps": pd.DataFrame([
-            {"intervention_budget": 3, "target_semantics": "false", "target_fraction_bin_index": i,
+            {"intervention_budget": 3, "target_semantics": legacy_label, "target_fraction_bin_index": i,
              "metric": "eta_IR", "estimate": .9, "phase_status": "adequate"} for i in (0, 2)])}
     weighted_rho_aliases(outputs)
     result = outputs["rho_aggregated_state_local_maps"].set_index("target_fraction_bin_index")
     assert result.loc[2, "estimate"] == .2
     assert np.isnan(result.loc[0, "estimate"])
+    assert len(result) == 2
+    assert set(result.target_semantics) == {"false"}
+    from mas_cc.studies.table_io import write_scientific_table
+    path = write_scientific_table(tmp_path, "rho_alias", result.reset_index())
+    pd.testing.assert_frame_equal(pd.read_parquet(path), result.reset_index())
 
 
 def test_full_offline_aggregation_exports_weighted_tables_and_zip(tmp_path):
@@ -168,6 +174,7 @@ def test_full_offline_aggregation_exports_weighted_tables_and_zip(tmp_path):
     config.update(recipe())
     config["derived_study_aggregates"]["bootstrap"] = {"unit": "shared_initialization_block"}
     config["blackboard_phase2_outputs"] = True
+    config["rho_aggregated_descriptive"] = True
     config["resampling"]["bootstrap_resamples"] = 4
     from pathlib import Path
     anchor = Path(__file__).resolve().parents[2] / "configs/runs/relational_reasoning/blackboard_game/astra_task003_false_control_30x30_potsdam_rho3/analysis.yaml"
@@ -175,7 +182,7 @@ def test_full_offline_aggregation_exports_weighted_tables_and_zip(tmp_path):
                        if "weighted_by_budget" in k}
     config_path.write_text(yaml.safe_dump(config))
     cells = pd.read_parquet(tables / "cells.parquet")
-    cells["target_semantics"] = "false"
+    cells["target_semantics"] = False
     write_scientific_table(tables, "cells", cells)
     result = aggregate_study(study)
     expected = {"causal_response_aggregated_metrics", "causal_state_local_aggregated_metrics",

@@ -277,11 +277,26 @@ def weighted_rho_aliases(outputs):
 Legacy descriptive tables used means of efficiency ratios. Once the new
 derived suite is enabled, its rows are authoritative for matching rho views.
 """
+    from .derived_aggregation import _normalize_semantics
+
+    def semantic_labels(frame):
+        if "target_semantics" not in frame:
+            return frame
+        frame = frame.copy()
+        # YAML false/true may be booleans in legacy descriptive outputs,
+        # while the derived engine uses canonical string labels. Normalize
+        # before matching coordinates, not just at the Parquet boundary:
+        # otherwise equivalent cells become duplicate/missing report rows.
+        frame["target_semantics"] = frame["target_semantics"].map(
+            lambda value: value if pd.isna(value) else _normalize_semantics(value)
+        )
+        return frame
+
     labels = {"round_target_actuation_cmi": "T_pi", "susceptibility_occupancy_weighted": "chi",
               "round_target_information_fraction": "eta_IF", "eta_ir": "eta_IR"}
     for source, target in (("study_aggregated_metrics", "rho_aggregated_descriptive_summary"),
                            ("state_local_aggregated_metrics", "rho_aggregated_state_local_maps")):
-        new = outputs.get(source, pd.DataFrame())
+        new = semantic_labels(outputs.get(source, pd.DataFrame()))
         if new.empty:
             continue
         new = new[new["marginalized_dimensions"].map(json.loads).map(lambda v: v == ["epistemic_persistence"])].copy()
@@ -291,7 +306,7 @@ derived suite is enabled, its rows are authoritative for matching rho views.
         new["metric"] = new["metric"].map(labels)
         new = new[new["metric"].notna()]
         new["phase_status"] = new["support_status"].replace({"unsupported": "insufficient_estimator_support"})
-        old = outputs.get(target, pd.DataFrame())
+        old = semantic_labels(outputs.get(target, pd.DataFrame()))
         # Preserve the expected empty state grid, but never retain an old
         # efficiency value or interval when its new estimate is unsupported.
         if not old.empty:
