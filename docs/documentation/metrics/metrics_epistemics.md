@@ -1,5 +1,7 @@
 # Epistemic metrics and plots for the relational blackboard game
 
+Agent entry point: [Metrics and aggregation master reference](README.md).
+
 This is the detailed epistemic companion to [`metrics.md`](metrics.md). It covers only the current
 relational blackboard family:
 
@@ -612,8 +614,10 @@ Enable this family with:
 ```yaml
 blackboard_epistemic_phase_outputs:
   enabled: true
+  task_dataset_dir: <path-to-frozen-task-dataset>  # required
 ```
 
+The dataset must remain resolvable when reaggregating from canonical tables.
 The analysis uses an exact finite-world solver for MuSR team-allocation tasks. It makes no language
 model calls.
 
@@ -1107,3 +1111,13 @@ An implemented table or plot is not guaranteed to appear unless the recipe reque
 For the complete blackboard metric catalogue, see [`metrics.md`](metrics.md). For validation,
 canonical-table, packaging, and reaggregation rules, see
 [`study_aggregation_contract.md`](study_aggregation_contract.md).
+
+## Blackboard microscopic calibration
+
+See [Offline blackboard calibration](blackboard_calibration.md) for the versioned
+source-field audit, recipe, support and held-out reference-prediction contract.
+Exposure is post-treatment: exposed/unexposed response rates are descriptive
+calibrations, not causal effects of reading. Model preference is not observed
+target share; compliance is not the observed switch fraction. Silent rounds may
+still expose old controller posts. Missing exposure stays unknown, and available
+model susceptibility is undefined at full target saturation.

@@ -1,5 +1,7 @@
 # Creating reports from standardized MA-CC analysis packages
 
+Agent entry point: [Metrics and aggregation master reference](README.md).
+
 This page explains how we turn the output of `mas-cc study aggregate` into a readable scientific report.
 
 The implemented report command is:
@@ -57,6 +59,10 @@ Use `--allow-incomplete` only for an explicitly provisional analysis:
   --allow-incomplete
 ```
 
+On Potsdam, the default aggregation backend can return after submitting detached analysis jobs.
+Wait for the finalizer to publish the package before building the report; use `--backend local`
+when synchronous execution is intended.
+
 An incomplete aggregation can still produce a package. It remains marked invalid and incomplete, and the report repeats that warning.
 
 ### Step 2: inspect the aggregation package
@@ -82,7 +88,7 @@ Read these files first:
 2. `analysis_manifest.json`: table list, estimator settings, hashes, and package status.
 3. `analysis_recipe.yaml`: requested estimators, resampling, derived quantities, and aggregation plots.
 
-The report builder accepts either the study root or its `analysis/` directory through `report.source_analysis`.
+The report builder accepts either the study root or its `analysis/` directory through `report.source_analysis`. Extract an analysis ZIP first; a ZIP path is not a supported direct input.
 
 ### Step 3: copy the report example
 

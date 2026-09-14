@@ -1858,6 +1858,20 @@ async def run_relational_imitation_round_feedback_game(
                     if rules.social_mode == SOCIAL_MODE_BOARD
                     else 0
                 ),
+                "eligible_controller_message_count": (
+                    sum(message.author_kind == "controller" for message in eligible_messages)
+                    if rules.social_mode == SOCIAL_MODE_BOARD else None
+                ),
+                "eligible_peer_message_count": (
+                    sum(message.author_kind != "controller" for message in eligible_messages)
+                    if rules.social_mode == SOCIAL_MODE_BOARD else None
+                ),
+                "board_sample_size": (
+                    len(sampled_messages) if rules.social_mode == SOCIAL_MODE_BOARD else None
+                ),
+                "focal_selection_rule": (
+                    "uniform_with_replacement" if rules.social_mode == SOCIAL_MODE_BOARD else None
+                ),
                 "eligible_directive_count": (
                     eligible_directives if rules.social_mode == SOCIAL_MODE_BOARD else 0
                 ),
@@ -2110,6 +2124,7 @@ async def run_relational_imitation_round_feedback_game(
             "reasoning_depth": state.task["reasoning_depth"],
             "K": len(options),
             "N": rules.n_agents,
+            "actual_update_count": rules.n_agents,
             "dynamics_mode": rules.dynamics_mode,
             "social_group_size": rules.social_group_size,
             "social_mode": rules.social_mode,

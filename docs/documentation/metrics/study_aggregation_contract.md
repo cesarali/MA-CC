@@ -1,5 +1,7 @@
 # Study aggregation and analysis-package contract
 
+Agent entry point: [Metrics and aggregation master reference](README.md).
+
 This document defines how a completed MA-CC study is validated, aggregated, and packaged. It is the
 operational companion to [`metrics.md`](metrics.md), which explains the scientific meaning of the
 relational blackboard metrics and estimators.
@@ -38,6 +40,13 @@ Aggregate a complete study:
 ```text
 mas-cc study aggregate --study-dir <study-result-root>
 ```
+
+Backend selection is `--backend auto|local|slurm` (default `auto`). Outside an existing SLURM
+allocation, `auto` selects detached SLURM on a detected Potsdam runtime with `sbatch`; otherwise
+it runs locally. `local` forces synchronous analysis. The detached backend submits a prepare job,
+information-group array, and finalizer, and returns job IDs and a progress path. Exit code 0 at
+submission means accepted submission, not completed analysis. Inspect job completion and the
+published package. The exit-code rules below describe local execution.
 
 Produce an explicitly provisional package from incomplete data:
 
@@ -255,7 +264,10 @@ n_observations, n_episodes, units, support_status
 analysis_hash
 ```
 
-Individual bootstrap and null draws are temporary and are not retained.
+Individual bootstrap and null draws are temporary and are not retained in the final package.
+Detached SLURM execution uses resumable inputs and group fragments under
+`analysis/.work/<generation>/` until successful publication; these are execution intermediates,
+not a persistent final-package estimator cache.
 
 ## 9. Plots, reports, provenance, and manifest
 
@@ -296,9 +308,12 @@ When all four canonical observation tables and validation metadata remain availa
 mas-cc study aggregate --study-dir <study-result-root>
 ```
 
-can recalculate estimates, derived quantities, plots, reports, and the ZIP without source run trees
+can recalculate supported estimates, derived quantities, plots, reports, and the ZIP without source run trees
 or provider calls. Bootstrap and null calculations run again because no persistent estimator cache
 is part of the current contract.
+
+Symbolic epistemic reaggregation additionally requires the frozen task dataset specified by
+`blackboard_epistemic_phase_outputs.task_dataset_dir`; the four tables do not replace that dataset.
 
 Use `study compact-analysis` only for format migration without estimator recomputation.
 
