@@ -177,6 +177,7 @@ def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():
             }
         ]
     )
+    progress = []
     outputs = analyze_epistemic_phase_diagrams(
         pd.DataFrame(rows),
         cells,
@@ -186,7 +187,22 @@ def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():
         bootstrap_resamples=4,
         confidence=0.9,
         seed=3,
+        progress=progress.append,
     )
+    assert {update["substage"] for update in progress} == {
+        "load_symbolic_tasks",
+        "round_states",
+        "parameter_and_occupancy",
+        "joint_drift",
+        "susceptibility_surface",
+        "modulation_regression",
+        "capture_timing",
+    }
+    assert all(update["stage"] == "epistemic_phase" for update in progress)
+    assert all(update["elapsed_seconds"] >= 0 for update in progress)
+    for stage in {update["substage"] for update in progress}:
+        last = [update for update in progress if update["substage"] == stage][-1]
+        assert last["completed_groups"] == last["total_groups"]
     assert set(outputs) == {
         "epistemic_round_timeseries",
         "epistemic_parameter_summary",

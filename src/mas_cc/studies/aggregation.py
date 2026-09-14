@@ -3980,6 +3980,9 @@ def aggregate_study(
             bootstrap_resamples=int(settings["bootstrap_resamples"]),
             confidence=float(settings["confidence"]),
             seed=int(settings["seed"]),
+            progress=lambda update: _write_json(
+                analysis_dir / "progress.json", {**update, "updated_at": _now()}
+            ),
         )
         for frame in epistemic_outputs.values():
             if not frame.empty:

@@ -4,6 +4,9 @@ This document defines how a completed MA-CC study is validated, aggregated, and 
 operational companion to [`metrics.md`](metrics.md), which explains the scientific meaning of the
 relational blackboard metrics and estimators.
 
+Detailed evidence-state, symbolic-solvability, epistemically conditioned estimator, and epistemic
+plot definitions are in [`metrics_epistemics.md`](metrics_epistemics.md).
+
 The aggregation stage is offline. It reads retained observations and makes no large language model
 (LLM) or provider calls.
 

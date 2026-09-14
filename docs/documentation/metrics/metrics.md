@@ -19,6 +19,10 @@ The settings around this core can vary. For example, an experiment may change po
 epistemic persistence, controller policy, communication mode, budget, model, or number of rounds.
 This page therefore describes the family in general rather than one config.
 
+For the detailed evidence-state definitions, epistemically conditioned estimators, symbolic
+solvability analysis, and epistemic plots, see
+[`metrics_epistemics.md`](metrics_epistemics.md).
+
 The central pipeline is:
 
 ```text
@@ -167,6 +171,9 @@ Additional tables separate different questions:
 These are finite-horizon regime maps. Smooth colors do not by themselves establish a phase
 transition. They are also kept separate from the existing `eta_IR` efficiency calculation because
 that quantity would need a consistent new derivation before accepting these responses.
+
+The complete formulas, retained fields, support rules, table catalogue, and plot guide are in
+[`metrics_epistemics.md`](metrics_epistemics.md).
 
 ---
 
