@@ -362,6 +362,11 @@ class SemanticDashboardWriter:
             "possible_answers",
             "correct_answer",
             "board_size_before",
+            "eligible_board_message_count",
+            "eligible_controller_message_count",
+            "eligible_peer_message_count",
+            "board_sample_size",
+            "focal_selection_rule",
             "board_size_after",
         )
         retained = {key: event.get(key) for key in fields}

@@ -1,6 +1,6 @@
 theoretical_reference: none
 estimators: [round_sensing_mi, round_sensor_mae, round_sensor_mse, round_controller_action_entropy, round_controller_action_entropy_given_population, round_population_actuation_cmi, round_target_actuation_cmi, round_truth_actuation_cmi, round_target_information_fraction, round_target_susceptibility, round_target_signed_response_share, round_target_signed_actuation, round_truth_signed_actuation, round_memory_target_actuation_cmi, round_epistemic_target_actuation_cmi, round_phi_target_actuation_cmi, round_kappa_target_actuation_cmi, round_conditioning_state_count, round_dual_action_state_fraction, round_dual_action_event_fraction, round_single_action_slice_fraction, round_singleton_fraction, propensity_weighted_causal_response]
-resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 20260907}
+resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 1}
 derived: [round_target_susceptibility, eta_ir, target_sensing_information_nats, communication_response_efficiency]
 state_local: [x]
 state_local_x_bins: 8
@@ -25,6 +25,14 @@ derived_study_aggregates:
         group_by: [intervention_budget, target_semantics]
         marginalize: [epistemic_persistence]
 blackboard_population_outputs: true
+blackboard_calibration_outputs:
+  enabled: true
+  active_parameter_variants:
+    - direct_active
+    - mixture_common_weight
+    - mixture_start_vote_weighted
+  model_predictions:
+    enabled: false
 blackboard_phase2_outputs:
   enabled: true
   strata: [target_semantics, controller_communication_policy, intervention_budget, epistemic_persistence]

@@ -1,5 +1,7 @@
 # Metrics and analysis for the relational blackboard game
 
+Agent entry point: [Metrics and aggregation master reference](README.md).
+
 This page covers only the current blackboard experiment family:
 
 ```yaml
@@ -621,6 +623,10 @@ estimate.
 ```text
 mas-cc study aggregate --study-dir <study-result-root>
 ```
+
+The default backend can submit detached SLURM analysis on Potsdam; submission success is not
+package completion. Use `--backend local` for synchronous execution and see the
+[aggregation contract](study_aggregation_contract.md) for backend and exit-code details.
 
 Use `--allow-incomplete` only for intentionally provisional analysis. Strict aggregation is required
 for a final result.

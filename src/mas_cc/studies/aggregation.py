@@ -3730,6 +3730,9 @@ def _aggregate_study_local(
     else:
         entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
+    from mas_cc.analysis.blackboard_calibration import calibration_settings
+
+    blackboard_settings = calibration_settings(recipe.get("blackboard_calibration_outputs"))
     epistemic_settings = _epistemic_phase_settings(recipe, recipe_path)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
@@ -4398,6 +4401,38 @@ def _aggregate_study_local(
         outputs["single_affinity_theory_comparison"] = _attach_coordinates(
             theory_comparison, canonical["cells"]
         )
+    blackboard_hash = None
+    if blackboard_settings is not None:
+        from mas_cc.analysis.blackboard_calibration import VERSION, analyze_blackboard_calibration
+
+        profile.stage("blackboard_calibration")
+        blackboard_hash = canonical_hash({
+            "scientific_input_identity": input_identity,
+            "estimator_version": VERSION,
+            "settings": blackboard_settings,
+            "resampling": settings,
+        })
+        calibration_outputs = analyze_blackboard_calibration(
+            canonical["micro_slots"], canonical["rounds"], canonical["episodes"],
+            canonical["cells"], settings=blackboard_settings,
+            bootstrap_resamples=settings["bootstrap_resamples"],
+            confidence=settings["confidence"], seed=settings["seed"],
+            analysis_hash=blackboard_hash, provisional=not validation["complete"],
+            progress=profile.update,
+        )
+        outputs.update(calibration_outputs)
+        calibration_estimates = calibration_outputs["blackboard_calibration_estimates"]
+        primary = pd.concat([primary, calibration_estimates], ignore_index=True, sort=False)
+        outputs["primary_estimates"] = primary
+        validation["blackboard_calibration"] = {
+            "estimator_version": VERSION, "analysis_hash": blackboard_hash,
+            "completed_canonical_episodes_only": True,
+            "input_rows": len(calibration_outputs["blackboard_calibration_inputs"]),
+            "estimate_rows": len(calibration_estimates),
+            "prediction_rows": len(calibration_outputs["blackboard_model_predictions"]),
+            "provider_calls": 0,
+        }
+        _write_json(analysis_dir / "validation.json", validation)
     profile.stage(
         "table_writing", rows={name: len(frame) for name, frame in outputs.items()}
     )
@@ -4598,6 +4633,8 @@ def _aggregate_study_local(
         "auxiliary_analysis_hash": auxiliary_hash,
         "causal_response_hash": causal_hash,
         "epistemic_phase_hash": epistemic_hash,
+        "blackboard_calibration_hash": blackboard_hash,
+        "blackboard_calibration_settings": blackboard_settings,
         "theory": dict(theory_provenance),
         "theoretical_reference": theoretical_reference,
         "estimator_engine": "mas_cc.games.hidden_bench.imitation_round_feedback.analysis.round_information_analysis",
