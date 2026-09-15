@@ -1,6 +1,13 @@
 # ASTRA task-003 no-controller baseline (30x30_potsdam_rho3)
 
-Prepared only; no simulation or SLURM job has been launched.
+Submitted on 2026-09-14 as simulation array **1877946** (three cell tasks).
+Automatic aggregation trigger **1877950** waits for `afterok:1877946`.
+The trigger invokes `mas-cc study aggregate --backend slurm` only after the
+simulation succeeds, so canonical inputs are not frozen prematurely. It then
+submits the generic prepare / information-array / finalizer analysis jobs.
+Strict completeness validation remains enabled; no `--allow-incomplete` is used.
+If the simulation fails and needs a new recovery job, the dependency must be
+reviewed and reattached or resubmitted; this trigger does not automate recovery.
 
 Matched to the existing false-control and truth-control studies for this
 provider: same task-003, model, prompts, population of 24, 30 rounds, 30
@@ -34,6 +41,12 @@ requested; experiment launch checks passed.
 Report:
 `/work/ojedamarin/Projects/LanguageGames/MA-CC/results/preflight/astra_task003_no_control_30x30_potsdam_rho3_20260914/report.md`.
 
-Submission requires separate authorization. Recheck pricing, provider load
-shared with any other running studies, initialization availability, and the
-execution plan before launch.
+Launch was explicitly authorized. Fresh preflight, credentials/environment,
+all 30 initialization artifacts, and the three-shard execution plan were
+verified before submission. No other user jobs were queued at that check.
+Launch preflight: `/work/ojedamarin/Projects/LanguageGames/MA-CC/results/preflight/no_control_potsdam_launch_NIlRz2/report/`.
+The matching-config and calibration test suite passed (22 tests), and an
+additional no-controller fixture check confirmed empty causal inputs,
+supported passive calibration, and unsupported active-controller channels.
+For future submissions, recheck pricing, shared provider load, initialization
+availability, and the execution plan.
