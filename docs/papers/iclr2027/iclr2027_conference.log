@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.8.21)  15 SEP 2026 16:25
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.8.21)  15 SEP 2026 16:31
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -897,42 +897,39 @@ Package microtype Info: Loading generic protrusion settings for font family
 Underfull \vbox (badness 5217) has occurred while \output is active []
 
  [6]
-[7] [8]) (./sections/results.tex [9]
-<figures/fig_susceptibility_empirical_theory.png, id=282, 911.5875pt x 311.7465
+[7] [8] [9]) (./sections/results.tex [10]
+<figures/fig_susceptibility_empirical_theory.png, id=294, 911.5875pt x 311.7465
 pt>
 File: figures/fig_susceptibility_empirical_theory.png Graphic file (type png)
 <use figures/fig_susceptibility_empirical_theory.png>
 Package pdftex.def Info: figures/fig_susceptibility_empirical_theory.png  used 
 on input line 55.
 (pdftex.def)             Requested size: 325.9406pt x 111.46754pt.
- [10 <./figures/fig_susceptibility_empirical_theory.png>]
-<figures/fig_state_local_landscapes.png, id=295, 1768.6075pt x 1313.90875pt>
+<figures/fig_state_local_landscapes.png, id=300, 1768.6075pt x 1313.90875pt>
 File: figures/fig_state_local_landscapes.png Graphic file (type png)
 <use figures/fig_state_local_landscapes.png>
 Package pdftex.def Info: figures/fig_state_local_landscapes.png  used on input 
 line 97.
 (pdftex.def)             Requested size: 317.9892pt x 236.23274pt.
-<figures/fig_beta_theory.png, id=298, 957.249pt x 407.0115pt>
+ [11 <./figures/fig_susceptibility_empirical_theory.png>]
+<figures/fig_beta_theory.png, id=311, 957.249pt x 407.0115pt>
 File: figures/fig_beta_theory.png Graphic file (type png)
 <use figures/fig_beta_theory.png>
 Package pdftex.def Info: figures/fig_beta_theory.png  used on input line 125.
 (pdftex.def)             Requested size: 325.9406pt x 138.58702pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [11 <./figures/fig_state_local_landscapes.png (PNG copy)>] [12 <./figures/fig_
-beta_theory.png>]
-<figures/fig_efficiencies_all.png, id=316, 2602.72375pt x 596.2275pt>
+ [12 <./figures/fig_state_local_landscapes.png (PNG copy)>]
+<figures/fig_efficiencies_all.png, id=323, 2602.72375pt x 596.2275pt>
 File: figures/fig_efficiencies_all.png Graphic file (type png)
 <use figures/fig_efficiencies_all.png>
 Package pdftex.def Info: figures/fig_efficiencies_all.png  used on input line 2
 19.
 (pdftex.def)             Requested size: 325.9406pt x 74.66472pt.
-) (./sections/conclusion.tex) (./iclr2027_conference.bbl [13 <./figures/fig_eff
-iciencies_all.png (PNG copy)>]) (./sections/appendix.tex
-(./sections/information_response_bound_appendix.tex [14] [15] [16])
-(./sections/thermodynamic_efficiency_derivation_appendix.tex [17] [18] [19])
-(./sections/relational_prompt_appendix.tex
+
+[13 <./figures/fig_beta_theory.png>]) (./sections/conclusion.tex)
+(./iclr2027_conference.bbl [14 <./figures/fig_efficiencies_all.png (PNG copy)>]
+) (./sections/appendix.tex (./sections/information_response_bound_appendix.tex
+[15] [16] [17]) (./sections/thermodynamic_efficiency_derivation_appendix.tex
+[18] [19] [20]) (./sections/relational_prompt_appendix.tex
 LaTeX Font Info:    Trying to load font information for OMS+pcr on input line 1
 31.
 
@@ -941,18 +938,12 @@ File: omspcr.fd
 )
 LaTeX Font Info:    Font shape `OMS/pcr/m/n' in size <9> not available
 (Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 131.
- [20]
-Underfull \vbox (badness 4132) has occurred while \output is active []
-
- [21]
-Underfull \vbox (badness 1205) has occurred while \output is active []
-
- [22]
-[23])) (./sections/controlled_susceptibility_study.tex
+ [21] [22] [23]))
+(./sections/controlled_susceptibility_study.tex
 (./sections/state_matched_response_appendix_bundle/appendix_state_matched_respo
-nse.tex
+nse.tex [24]
 <sections/state_matched_response_appendix_bundle/figures/state_matched_response
-.pdf, id=463, 370.34926pt x 232.5005pt>
+.pdf, id=475, 370.34926pt x 232.5005pt>
 File: sections/state_matched_response_appendix_bundle/figures/state_matched_res
 ponse.pdf Graphic file (type pdf)
 <use sections/state_matched_response_appendix_bundle/figures/state_matched_resp
@@ -960,25 +951,25 @@ onse.pdf>
 Package pdftex.def Info: sections/state_matched_response_appendix_bundle/figure
 s/state_matched_response.pdf  used on input line 24.
 (pdftex.def)             Requested size: 397.48499pt x 249.53581pt.
-) (./sections/21082026_empirical_effective_affinity.tex [24]))
-(./sections/appendix_D_resource_constrained_control_design.tex [25 <./sections/
-state_matched_response_appendix_bundle/figures/state_matched_response.pdf>]
-[26] [27]) [28] (./iclr2027_conference.aux)
+) (./sections/21082026_empirical_effective_affinity.tex [25 <./sections/state_m
+atched_response_appendix_bundle/figures/state_matched_response.pdf>])) (./secti
+ons/appendix_D_resource_constrained_control_design.tex [26]
+[27]) [28] (./iclr2027_conference.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
 Package rerunfilecheck Info: File `iclr2027_conference.out' has not changed.
-(rerunfilecheck)             Checksum: 3F920174F2612978678DF0CE971093AD;10119.
+(rerunfilecheck)             Checksum: 2200C3CF01AF379BBD9F9046C0C12533;10135.
  ) 
 Here is how much of TeX's memory you used:
- 29241 strings out of 476106
- 562690 string characters out of 5793933
- 1949975 words of memory out of 5000000
- 50202 multiletter control sequences out of 15000+600000
- 601714 words of font info for 295 fonts, out of 8000000 for 9000
+ 29265 strings out of 476106
+ 563079 string characters out of 5793933
+ 1946975 words of memory out of 5000000
+ 50210 multiletter control sequences out of 15000+600000
+ 602232 words of font info for 301 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
- 101i,15n,107p,1282b,952s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 101i,15n,107p,1282b,1044s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texli
@@ -997,10 +988,10 @@ live/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-di
 st/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/share/texlive/texmf-dist/fonts/typ
 e1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/ut
 mr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on iclr2027_conference.pdf (28 pages, 1223604 bytes).
+Output written on iclr2027_conference.pdf (28 pages, 1227963 bytes).
 PDF statistics:
- 706 PDF objects out of 1000 (max. 8388607)
- 572 compressed objects within 6 object streams
- 218 named destinations out of 1000 (max. 500000)
+ 715 PDF objects out of 1000 (max. 8388607)
+ 581 compressed objects within 6 object streams
+ 225 named destinations out of 1000 (max. 500000)
  57174 words of extra memory for PDF output out of 61914 (max. 10000000)
 

@@ -40,36 +40,101 @@ count when fewer messages are posted. Thus $q_c,\theta,\beta$ govern the
 posting decision, while $B,b,q$ govern exposure. For positive $q$, exposure
 saturates as $b$ grows.
 
-\subsection{Two response classes and exact round kernels}
+\subsection{From one agent update to a full feedback round}
 
-An update with compliance $\gamma\in[0,1]$ and conditional target preference
-$p\in[0,1]$ follows
+\paragraph{One update: willingness to revise and preference after revision.}
+At each microscopic update, one agent is selected uniformly from the $N$
+agents. We describe its response using two probabilities. The parameter
+$\gamma\in[0,1]$, called \emph{kinetic compliance}, is the probability that
+the agent revises its vote. Conditional on revising, $p\in[0,1]$ is the
+probability that it selects the controller target $Z$; with probability
+$1-p$ it selects a non-target alternative. With probability $1-\gamma$,
+it keeps its current vote. Revision here means making a new choice, which
+can agree with the old one. Thus $\gamma$ is not the probability of an
+observed vote change. For example, $\gamma=0.4$ and $p=0.8$ mean a
+$40\%$ chance of making a new choice and, conditional on that choice, an
+$80\%$ chance of selecting $Z$.
+
+\paragraph{A kernel is a table of transition probabilities.}
+Write $K_{\gamma,p}(m\mid n)$ for the probability that this single update
+leaves $m$ target supporters, given $n$ initially. The symbol $K$ denotes
+this transition table, or \emph{kernel}; the subscripts specify which
+revision probabilities it uses. Only one agent updates, so the count can
+increase by one, decrease by one, or stay fixed:
 \begin{align}
 K_{\gamma,p}(n+1\mid n)&=\gamma(1-n/N)p,\\
 K_{\gamma,p}(n-1\mid n)&=\gamma(n/N)(1-p),\\
 K_{\gamma,p}(n\mid n)&=1-K_{\gamma,p}(n+1\mid n)-K_{\gamma,p}(n-1\mid n).
 \label{eq:single_affinity_kernel}
 \end{align}
-A revision opportunity can leave the vote unchanged. Let
-$K_0=K_{\gamma_0,p_0}$ describe unexposed updates and
-$K_1=K_{\gamma_1,p_1}$ exposed updates. Marginalizing exposure gives the exact
-closure
+For the first line, the selected agent must be a non-supporter, an event
+of probability $1-n/N$, then revise with probability $\gamma$, and choose
+$Z$ with probability $p$. The second line reverses this reasoning: a
+supporter is selected, revises, and chooses a non-target alternative.
+The last line collects all ways to leave the supporter count unchanged.
+
+\paragraph{Two response classes: without and with exposure.}
+An agent may respond differently when its sampled messages include
+controller content. We therefore use the same transition rule with two
+parameter pairs:
+\[
+K_0=K_{\gamma_0,p_0},\qquad K_1=K_{\gamma_1,p_1}.
+\]
+The subscript $0$ means \emph{no controller message was sampled}:
+$\gamma_0$ is the baseline revision probability and $p_0$ is the baseline
+probability of choosing $Z$ after revision. The subscript $1$ means
+\emph{at least one controller message was sampled}: $\gamma_1$ and $p_1$
+are the corresponding exposed-response probabilities. These are effective
+behavioral parameters, not message counts. Exposure may change willingness
+to revise, preference for the target, or both. In particular, $p_0$ need
+not be zero: peer messages can support $Z$ without controller exposure.
+
+\paragraph{An active controller does not expose every update.}
+When the controller posts $b$ messages, a focal update sees controller
+content with probability $w_b$ from Eq.~\eqref{eq:blackboard_exposure}.
+It therefore follows $K_1$ with probability $w_b$ and $K_0$ otherwise.
+The resulting single-update kernel is their probability-weighted mixture,
+\begin{equation}
+K_b=(1-w_b)K_0+w_bK_1=K_{\gamma_b,p_b}.
+\end{equation}
+Here the subscript $b$ refers to the number of posted messages, whereas
+$0$ and $1$ above label exposure classes. The mixture has the same form as
+the original rule, with effective parameters
 \begin{align}
-K_b&=(1-w_b)K_0+w_bK_1=K_{\gamma_b,p_b},\\
-\gamma_b&=(1-w_b)\gamma_0+w_b\gamma_1,\qquad
-p_b=\frac{(1-w_b)\gamma_0p_0+w_b\gamma_1p_1}{\gamma_b}.
+\gamma_b&=(1-w_b)\gamma_0+w_b\gamma_1,\\
+p_b&=\frac{(1-w_b)\gamma_0p_0+w_b\gamma_1p_1}{\gamma_b}.
 \label{eq:blackboard_mixture}
 \end{align}
-When $\gamma_b=0$, $K_b$ is the identity and $p_b$ is immaterial. The silent
-and active \emph{round} kernels are
+The first expression is the overall probability of revision. The numerator
+of the second is the probability of revising and choosing $Z$; dividing by
+$\gamma_b$ gives the preference conditional on revision. Thus $p_b$ weights
+each exposure class by how often it produces revision, not just how often
+it is encountered. If $\gamma_b=0$, no revision occurs, $K_b$ leaves every
+state unchanged, and $p_b$ is unnecessary.
+
+\paragraph{From one update to a round.}
+The kernels $K$ describe one agent update. We use $Q$ for the transition
+table of a full round containing $M$ successive updates. Repeating the
+same update rule $M$ times gives a matrix power:
 \begin{equation}
-\boxed{Q_0=K_0^M,\qquad Q_1=K_b^M,}\qquad
-Q_\pi(m\mid n)=(1-a_n)Q_0(m\mid n)+a_nQ_1(m\mid n).
+\boxed{Q_0=K_0^M,\qquad Q_1=K_b^M.}
 \label{eq:controlled_layer_kernels}
 \end{equation}
-These powers assume a frozen board, homogeneous response parameters, binary
-exposure, and a shared unexposed baseline across branches. In particular,
-$Q_0$ generally evolves the population even when the controller is silent.
+For $Q$, the subscript labels the \emph{controller action}: $Q_0$ is the
+silent-round kernel and $Q_1$ the active-round kernel. An active round uses
+$K_b$, not $K_1$, because individual updates may still miss the controller
+messages. A silent round uses $K_0$ throughout, but can still change votes
+through baseline social interaction. Finally, before the controller action
+is known, the round kernel averages over its posting probability $a_n$:
+\begin{equation}
+Q_\pi(m\mid n)=(1-a_n)Q_0(m\mid n)+a_nQ_1(m\mid n).
+\end{equation}
+Thus the notation follows three steps: $K_0,K_1$ specify responses to
+exposure; $K_b$ averages over whether exposure occurs; and $Q_0,Q_1,Q_\pi$
+describe full rounds, first conditional on the controller action and then
+averaged over the policy. The matrix-power construction assumes a frozen
+board, common response parameters across agents and updates, and the same
+unexposed baseline in both controller branches.
 
 \subsection{Raw and availability-normalized susceptibility}
 \label{sec:control-susceptibility}

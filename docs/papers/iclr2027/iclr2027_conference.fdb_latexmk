@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex iclr2027_conference"] 1789482356.80431 "iclr2027_conference.aux" "iclr2027_conference.bbl" "iclr2027_conference" 1789482357.97196 0
+["bibtex iclr2027_conference"] 1789482717.12214 "iclr2027_conference.aux" "iclr2027_conference.bbl" "iclr2027_conference" 1789482718.25657 0
   "./iclr2027_conference.bib" 1789462623.34358 2964 adcef1ed37fb1c97eb0d3fdc55030fba ""
   "./iclr2027_conference.bst" 1750852748 26973 af983813ca1a1414954dbceae7baa2a1 ""
-  "iclr2027_conference.aux" 1789482357.87475 26163 73d9aaac58eff175fb9f746bbd750c1a "pdflatex"
+  "iclr2027_conference.aux" 1789482718.15849 26834 6956e72f38bdc68ae6a48e682810148a "pdflatex"
   (generated)
   "iclr2027_conference.bbl"
   "iclr2027_conference.blg"
   (rewritten before read)
-["pdflatex"] 1789482356.82129 "iclr2027_conference.tex" "iclr2027_conference.pdf" "iclr2027_conference" 1789482357.97212 0
+["pdflatex"] 1789482717.13967 "iclr2027_conference.tex" "iclr2027_conference.pdf" "iclr2027_conference" 1789482718.25676 0
   "/etc/texmf/web2c/texmf.cnf" 1755788686.08642 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -241,15 +241,15 @@
   "figures/fig_efficiencies_all.png" 1787729902 252378 8f743d18e7ecb9273baf09ba65ca7014 ""
   "figures/fig_state_local_landscapes.png" 1787723692 221271 1a0a63e2985fc8bd283ac2ac79f4c32f ""
   "figures/fig_susceptibility_empirical_theory.png" 1787723322 212563 cabe3016432342b97fc131f3caf0f2ec ""
-  "iclr2027_conference.aux" 1789482357.87475 26163 73d9aaac58eff175fb9f746bbd750c1a "pdflatex"
-  "iclr2027_conference.bbl" 1789482356.81797 1865 9500252cd57b6cd39c0fb7a82e711b8f "bibtex iclr2027_conference"
-  "iclr2027_conference.out" 1789482357.87475 10119 3f920174f2612978678df0ce971093ad "pdflatex"
+  "iclr2027_conference.aux" 1789482718.15849 26834 6956e72f38bdc68ae6a48e682810148a "pdflatex"
+  "iclr2027_conference.bbl" 1789482717.1362 1865 9500252cd57b6cd39c0fb7a82e711b8f "bibtex iclr2027_conference"
+  "iclr2027_conference.out" 1789482718.15849 10135 2200c3cf01af379bbd9f9046c0c12533 "pdflatex"
   "iclr2027_conference.sty" 1785233888 9025 1b4bb9c2e12c712c56f4eb1232b88dd6 ""
   "iclr2027_conference.tex" 1787328090 1323 8aa5c114206cd1d202c5960ff990b7da ""
   "math_commands.tex" 1750852748 12284 a71653715108dc62b66e3a0bde0307d8 ""
   "natbib.sty" 1750852748 45154 40088ce024445d7ee2bca59e704cdd01 ""
   "sections/21082026_empirical_effective_affinity.tex" 1787723552 2993 712181d6bc39f7845e12ff2a436525f9 ""
-  "sections/21082026_feedback_control_efficiency_theory.tex" 1789482315.83476 11065 82933422ac1de2665ab16e6fe7e5f95b ""
+  "sections/21082026_feedback_control_efficiency_theory.tex" 1789482715.72788 14981 bd9b66cb4a6ce88e8bda3a28f13dfbcd ""
   "sections/21082026_methods_data_generation_and_game.tex" 1789480749.15474 9629 31ec82ac0f77dbfb8d38e4173ac88d7b ""
   "sections/abstract.tex" 1787729840 2150 1c98ef78dd30f57a51e2ede6374e37d4 ""
   "sections/appendix.tex" 1787729698 230 2894ab1da06a71dcbe5c80b8119e4a97 ""
