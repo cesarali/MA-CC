@@ -1,12 +1,12 @@
 schema_version: 1
 
 report:
-  id: astra_task003_false_control_30x30_potsdam_rho3_report
-  title: Astra Task 003 False-Control 30x30 Potsdam Persistence Study
-  # Paths resolve relative to this YAML. This extended analysis is produced by
-  # scripts/analysis/add_state_local_causal_response.py from the extracted ZIP.
-  source_analysis: ../../../../../results/aggregation_results/astra_task003_false_control_30x30_potsdam_rho3_causal_state_analysis
-  output_dir: ../../../../../results/reports/astra_task003_false_control_30x30_potsdam_rho3
+  id: astra_task003_false_control_q12_deepinfra_rho3_report
+  title: Astra Task 003 False-Control q=12 DeepInfra Persistence Study
+  # Paths resolve relative to this YAML. Extract the matching analysis ZIP
+  # from results/aggregation_results/ into the source directory below first.
+  source_analysis: ../../../../../results/aggregation_results/astra_task003_false_control_q12_deepinfra_rho3_analysis
+  output_dir: ../../../../../results/reports/astra_task003_false_control_q12_deepinfra_rho3
   # The builder reads validation.json and labels incomplete data provisional.
 
 sections:
@@ -44,45 +44,6 @@ sections:
         metric: eta_ir
         aggregation_source: study_aggregated_metrics
         aggregation_metric: eta_ir
-
-  - id: available_susceptibility_budget
-    title: Available susceptibility vs budget
-    kind: budget_curve_suite
-    views: [resolved, aggregated]
-    metrics:
-      - id: available_susceptibility_budget
-        label: Available-mass-weighted causal susceptibility
-        source: available_causal_susceptibility_summary
-        metric: available_mass_weighted_causal_susceptibility
-        aggregation_source: causal_response_aggregated_metrics
-        aggregation_metric: available_mass_weighted_causal_susceptibility
-
-  - id: lagged_causal_response
-    title: Causal response at lags 1, 2, and 3
-    kind: budget_curve_suite
-    views: [resolved, aggregated]
-    metrics:
-      - id: causal_response_lag_1
-        label: Causal response at lag 1 rounds
-        source: causal_response_effects
-        metric: propensity_weighted_causal_response
-        aggregation_source: causal_response_aggregated_metrics
-        aggregation_metric: propensity_weighted_causal_response
-        filters: {lag: 1}
-      - id: causal_response_lag_2
-        label: Causal response at lag 2 rounds
-        source: causal_response_effects
-        metric: propensity_weighted_causal_response
-        aggregation_source: causal_response_aggregated_metrics
-        aggregation_metric: propensity_weighted_causal_response
-        filters: {lag: 2}
-      - id: causal_response_lag_3
-        label: Causal response at lag 3 rounds
-        source: causal_response_effects
-        metric: propensity_weighted_causal_response
-        aggregation_source: causal_response_aggregated_metrics
-        aggregation_metric: propensity_weighted_causal_response
-        filters: {lag: 3}
 
   - id: epistemic_budget_curves
     title: Epistemic metrics vs budget
@@ -218,12 +179,6 @@ sections:
           kind: symlog
           linthresh: 0.001
 
-      - id: available_causal_susceptibility_linear
-        label: Available causal susceptibility (linear colors)
-        source: available_causal_susceptibility_state_local
-        metric: propensity_weighted_available_susceptibility
-        color_scale: diverging
-
       - id: available_causal_susceptibility
         label: Available causal susceptibility
         source: available_causal_susceptibility_state_local
@@ -231,68 +186,6 @@ sections:
         color_scale:
           kind: symlog
           linthresh: 0.001
-
-  - id: propensity_weighted_x_budget_maps
-    title: Propensity-weighted causal response by target state and budget
-    kind: state_budget_phase_suite
-    axes:
-      state: target_fraction_bin_center
-      budget: intervention_budget
-      state_domain: [0.0, 1.0]
-      minimum_state_bins: 8
-    views: [resolved]
-    metrics:
-      - id: propensity_response_x_b_lag_1_linear
-        label: Propensity-weighted causal response (lag 1, linear)
-        source: causal_response_state_local_lag_1
-        metric: propensity_weighted_causal_response
-        color_scale: diverging
-      - id: propensity_response_x_b_lag_1_symlog
-        label: Propensity-weighted causal response (lag 1, symlog)
-        source: causal_response_state_local_lag_1
-        metric: propensity_weighted_causal_response
-        color_scale: {kind: symlog, linthresh: 0.001}
-      - id: propensity_response_x_b_lag_2_linear
-        label: Propensity-weighted causal response (lag 2, linear)
-        source: causal_response_state_local_lag_2
-        metric: propensity_weighted_causal_response
-        color_scale: diverging
-      - id: propensity_response_x_b_lag_2_symlog
-        label: Propensity-weighted causal response (lag 2, symlog)
-        source: causal_response_state_local_lag_2
-        metric: propensity_weighted_causal_response
-        color_scale: {kind: symlog, linthresh: 0.001}
-      - id: propensity_response_x_b_lag_3_linear
-        label: Propensity-weighted causal response (lag 3, linear)
-        source: causal_response_state_local_lag_3
-        metric: propensity_weighted_causal_response
-        color_scale: diverging
-      - id: propensity_response_x_b_lag_3_symlog
-        label: Propensity-weighted causal response (lag 3, symlog)
-        source: causal_response_state_local_lag_3
-        metric: propensity_weighted_causal_response
-        color_scale: {kind: symlog, linthresh: 0.001}
-
-  - id: epistemic_phase_maps
-    title: Target share and individual solvability phase diagrams
-    kind: epistemic_phase_suite
-    # Axes use the x_bins and phi_bands retained in analysis_recipe.yaml.
-    metrics:
-      - id: causal_susceptibility
-        label: Causal susceptibility
-        source: epistemic_causal_susceptibility
-        value: causal_susceptibility
-        filters: {surface_kind: raw_binned}
-      - id: target_drift_contrast
-        label: Target-share change (activation minus silence)
-        source: epistemic_joint_drift
-        value: delta_x
-        filters: {branch: contrast}
-      - id: solvability_drift_contrast
-        label: Solvability change (activation minus silence)
-        source: epistemic_joint_drift
-        value: delta_phi_star
-        filters: {branch: contrast}
 
   - id: episode_examples
     title: Illustrative episode trajectories

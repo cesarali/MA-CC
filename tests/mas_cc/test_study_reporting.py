@@ -248,3 +248,73 @@ def test_report_never_averages_duplicate_plot_coordinates(tmp_path):
     ]
     assert tpi[0]["status"] == "unavailable"
     assert "share report coordinates" in tpi[0]["reason"]
+
+
+def test_budget_curves_use_cell_rows_and_preserve_gaps(tmp_path):
+    from mas_cc.studies.reporting import AnalysisPackage, SourceLedger, _render_budget_metric
+    analysis = _analysis_package(tmp_path)
+    rows = pd.DataFrame([
+        dict(metric='T', intervention_budget=b, epistemic_persistence=0.7,
+             target_fraction_bin_index=bin_index, estimate=value,
+             ci_low=0.1, ci_high=0.5, support_status=status)
+        for b, bin_index, value, status in [
+            (3, None, 0.2, 'adequate'), (6, None, 0.4, 'unsupported'),
+            (3, 0, 99.0, 'adequate')]
+    ])
+    write_scientific_table(analysis / 'tables', 'budget_estimates', rows)
+    figures = tmp_path / 'figures'
+    figures.mkdir()
+    ledger = SourceLedger()
+    spec = dict(id='T', source='budget_estimates', metric='T')
+    result = _render_budget_metric(AnalysisPackage(analysis), spec, {}, mode='resolved', figures_dir=figures, ledger=ledger)
+    assert result.displayed_values == 1
+    assert result.figures[0].exists()
+    assert [e['rendered_value'] for e in ledger.entries if e['field'] == 'estimate'] == [0.2]
+    assert {e['field'] for e in ledger.entries} == {'intervention_budget', 'estimate', 'ci_low', 'ci_high'}
+    write_scientific_table(analysis / 'tables', 'budget_estimates', pd.concat([rows, rows.iloc[[0]]], ignore_index=True))
+    with pytest.raises(ValueError, match='duplicate budget coordinates'):
+        _render_budget_metric(AnalysisPackage(analysis), spec, {}, mode='resolved', figures_dir=figures, ledger=SourceLedger())
+
+
+def test_episode_examples_select_ids_not_outcomes(tmp_path):
+    from mas_cc.studies.reporting import AnalysisPackage, SourceLedger, _render_episode_examples
+    analysis = _analysis_package(tmp_path)
+    rows = pd.DataFrame([
+        dict(cell_id='cell', episode_id=episode, round_index=r,
+             intervention_budget=6, epistemic_persistence=0.7, observable=value)
+        for episode, value in [('z', 0.0), ('a', 1.0)] for r in [2, 1]
+    ])
+    write_scientific_table(analysis / 'tables', 'trajectories', rows)
+    figures = tmp_path / 'figures'
+    figures.mkdir()
+    section = dict(source='trajectories', group_by=['intervention_budget', 'epistemic_persistence'], metrics=[dict(value='observable')])
+    ledger = SourceLedger()
+    results = _render_episode_examples(AnalysisPackage(analysis), section, figures_dir=figures, ledger=ledger)
+    assert len(results) == 1
+    assert results[0].displayed_values == 2
+    selected = json.loads((tmp_path / 'episode_examples.json').read_text())
+    assert selected['examples'][0]['episode_id'] == 'a'
+    assert [e['rendered_value'] for e in ledger.entries if e['field'] == 'round_index'] == [1, 2]
+    write_scientific_table(analysis / 'tables', 'trajectories', pd.concat([rows, rows.iloc[[0]]], ignore_index=True))
+    with pytest.raises(ValueError, match='duplicate episode-round'):
+        _render_episode_examples(AnalysisPackage(analysis), section, figures_dir=figures, ledger=SourceLedger())
+
+
+def test_epistemic_maps_preserve_support_and_reject_duplicates(tmp_path):
+    from mas_cc.studies.reporting import AnalysisPackage, SourceLedger, _render_epistemic_maps
+    analysis = _analysis_package(tmp_path)
+    (analysis / 'analysis_recipe.yaml').write_text('blackboard_epistemic_phase_outputs: {x_bins: 8, phi_bands: 3}\n')
+    cells = pd.DataFrame([dict(cell_id='c', intervention_budget=6, epistemic_persistence=0.7)])
+    write_scientific_table(analysis / 'tables', 'cells', cells)
+    rows = pd.DataFrame([dict(cell_id='c', x_bin=0, phi_star_band=0, value=0.2, support_status='adequate'), dict(cell_id='c', x_bin=1, phi_star_band=0, value=99., support_status='unsupported')])
+    write_scientific_table(analysis / 'tables', 'maps', rows)
+    figures = tmp_path / 'figures'
+    figures.mkdir()
+    section = dict(metrics=[dict(id='test', label='Test', source='maps', value='value')])
+    ledger = SourceLedger()
+    results = _render_epistemic_maps(AnalysisPackage(analysis), section, figures_dir=figures, ledger=ledger)
+    assert results[0].displayed_values == 1
+    assert ledger.entries[0]['rendered_value'] == 0.2
+    write_scientific_table(analysis / 'tables', 'maps', pd.concat([rows, rows.iloc[[0]]], ignore_index=True))
+    with pytest.raises(ValueError, match='duplicate epistemic phase'):
+        _render_epistemic_maps(AnalysisPackage(analysis), section, figures_dir=figures, ledger=SourceLedger())

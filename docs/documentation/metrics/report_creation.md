@@ -119,11 +119,12 @@ The output directory must not be inside the source `analysis/` package. This pre
 
 ### Step 4: select report sections and metrics
 
-The first implementation supports two section kinds:
+The implementation supports three section kinds:
 
 ```text
 validation_summary
 state_budget_phase_suite
+budget_curve_suite
 ```
 
 `validation_summary` reports study completeness. `state_budget_phase_suite` renders state-by-budget heatmaps from existing aggregation rows.
@@ -668,6 +669,71 @@ Before delivering a report, check:
 
 ## 14. Current scope
 
-The current report builder is intentionally narrow. It supports validation summaries and adaptive state-by-budget phase suites. It does not yet implement every section listed in the broader report protocol, such as arbitrary outcome tables, line plots, or free-form narrative templates.
+The current report builder is intentionally narrow. It supports validation summaries, budget curves, and adaptive state-by-budget phase suites. It does not yet implement every section listed in the broader report protocol, such as arbitrary outcome tables or free-form narrative templates.
 
 Add new generic section kinds to `src/mas_cc/studies/reporting.py` when several studies need the same presentation. Keep study-specific scientific calculations in aggregation, not in the report builder.
+
+### Budget curves
+
+The `budget_curve_suite` section plots existing whole-cell estimates against
+`x: intervention_budget`. It accepts the same metric source and `views` fields
+as the phase suite. Use `aggregation_source: study_aggregated_metrics` for
+study-level curves. State-bin rows are excluded; varying scientific conditions
+become separate curves. Duplicate curve/budget coordinates are rejected rather
+than averaged. Optional metric `filters` select exact source column values.
+Only adequate or limited finite estimates are shown; unsupported points remain
+gaps. Vertical bars show stored `ci_low` and `ci_high` where available.
+
+See the Task003 q12 false-control study's `report.yaml` for T_pi,
+occupancy-weighted susceptibility, eta_IF, and eta_IR examples. These curves
+appear before the phase diagrams when their section is listed first.
+
+### Epistemic summaries and episode examples
+
+Epistemic budget curves can read `epistemic_aggregated_metrics` using the
+`budget_curve_suite` section. The Task003 q12 report requests all ten retained
+summary metrics, with their stored confidence intervals.
+
+The `episode_timeseries` section reads a retained round table through `source`.
+Configure `filters` as column-to-list mappings, `group_by` as scientific
+coordinates, `episodes_per_group` (default 1), and `metrics` with `value`,
+`label`, and optional `ylim`. Within each group, examples are selected by
+sorted cell/episode ID, independently of outcomes. Duplicate episode-round
+coordinates fail validation. `episode_examples.json` records the exact selected
+identities. These examples are illustrative, not a representative sample.
+For the epistemic table, pre-intervention epistemic quantities and post-round
+vote shares must be labeled with their respective measurement boundaries.
+
+### Epistemic phase diagrams
+
+`epistemic_phase_suite` reshapes retained `x_bin` / `phi_star_band` rows into
+heatmaps of target vote share against symbolic individual solvability.
+Each metric specifies `source`, `value`, `label`, `id`, and optional exact
+`filters`. The grid dimensions come from the source analysis recipe's
+`blackboard_epistemic_phase_outputs` settings. Panels preserve scientific cell
+identity and show budget and persistence. A common symmetric color scale is
+used across all panels of each metric; missing or unsupported bins remain gray.
+Duplicate cell/bin rows are rejected. The 30x30 Potsdam report includes causal
+susceptibility and activation-minus-silence changes in vote share and solvability.
+
+### State-local propensity-weighted causal response
+
+To extend a retained analysis package with x-by-budget response maps, use:
+
+```bash
+python scripts/analysis/add_state_local_causal_response.py \
+  --source <extracted-analysis> --output <separate-extended-analysis>
+```
+
+This calls the existing `estimate_causal_response` on completed, lag-eligible
+observations within each initial-target-state bin, for lags 1–3. It preserves
+canonical cell IDs and uses the source recipe's bin and bootstrap settings.
+Shared initialization blocks are resampled within each selected subset.
+The source package is preserved; additional estimates, support tables, and
+hashed extension provenance are written to a separate package. No provider
+calls are made. Point `report.source_analysis` at that extended package and
+use `causal_response_state_local_lag_1` (or `_2`, `_3`) as the phase source,
+with metric `propensity_weighted_causal_response`. These are unnormalized
+causal-response estimates, distinct from available-mass susceptibility and
+`round_target_susceptibility`. No persistence-aggregated phase estimate is
+created by this extension.

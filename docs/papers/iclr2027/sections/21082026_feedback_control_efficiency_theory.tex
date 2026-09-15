@@ -1,319 +1,250 @@
-% ======================================================================
-% Paper section: Efficiency of feedback control
-% Single-affinity finite-compliance theory; main text contains only the
-% definitions and key results. Detailed derivations are in Appendix A.
-% ======================================================================
-
+% Section 5 only. Reference: blackboard_feedback_report.tex in
+% docs/theory/blackboard_theory/blackboard_feedback_report_with_available_susceptibility_source.zip
 \section{Efficiency of Feedback Control}
 \label{sec:feedback_efficiency}
 
-We study one finite feedback cycle of the coarse population coordinate rather
-than assigning an energetic thermodynamics to the complete language-model
-system. Let $n_k\in\{0,\ldots,N\}$ be the number of agents supporting the
-controller target $Z$ before cycle $k$, and let $x_k=n_k/N$. The causal order is
-\[
-n_k\longrightarrow Y_k\longrightarrow U_k\longrightarrow n_{k+1},
-\]
-where $Y_k$ is a finite sensor sample and $U_k\in\{0,1\}$ denotes NoOp or
-advocacy. The theory separates three questions: how strongly advocacy moves the
-population, how efficiently action-dependent information is converted into
-coherent mean motion, and how efficiently the finite-time thermodynamic budget
-is converted into directed current.
+We use a solvable blackboard reference to separate sensing, message exposure,
+and behavioral response. Let $n_k\in\{0,\ldots,N\}$ count supporters of the
+controller target $Z$ before round $k$, and write $x_k=n_k/N$. One feedback
+cycle has causal order $n_k\to Y_k\to U_k\to n_{k+1}$, where $U_k=0$ denotes
+silence and $U_k=1$ active posting. Both branches contain $M$ population
+updates, usually $M=N$. Posting $b$ messages changes the chance of exposure;
+it does not guarantee $b$ controlled revisions. The results below are exact
+for the reference kernels, rather than a fitted description or an energetic
+thermodynamics of the full language-model system.
 
-\subsection{Finite-information feedback controller}
+\subsection{Sensing, posting, and sampled exposure}
 
-The controller observes $q_c$ agents without replacement. If $Y_k$ is the
-number of sampled agents supporting $Z$, then
-\begin{equation}
-S(y\mid n)
-= P(Y_k=y\mid n_k=n)
-=
-\frac{\binom{n}{y}\binom{N-n}{q_c-y}}{\binom{N}{q_c}}.
-\label{eq:sensor_kernel_single_affinity}
-\end{equation}
-The feedback policy is
-\begin{equation}
-\pi(1\mid y)
-=\sigma\!\left[\beta\left(\theta-\frac{y}{q_c}\right)\right],
-\qquad
-\sigma(z)=\frac{1}{1+e^{-z}},
-\label{eq:feedback_policy_single_affinity}
-\end{equation}
-so the advocacy probability conditional on the true population state is
-\begin{equation}
-a_n
-\equiv P(U_k=1\mid n_k=n)
-=\sum_y S(y\mid n)\pi(1\mid y).
-\label{eq:advocacy_probability_single_affinity}
-\end{equation}
-Thus $q_c$, $\theta$, and $\beta$ determine when the controller acts.
-
-\subsection{Single-affinity finite-compliance actuation}
-
-A controlled microscopic opportunity is described by one directional affinity
-$h$ and one kinetic compliance $\gamma\in[0,1]$. Writing $p_h=\sigma(h)$, the
-count kernel is
+The controller senses $q_c$ agents without replacement. For $Y=y$ sampled
+target supporters, the sensor and soft feedback policy are
 \begin{align}
-K_{h,\gamma}(n+1\mid n)
-&=\gamma\frac{N-n}{N}p_h,\\
-K_{h,\gamma}(n-1\mid n)
-&=\gamma\frac{n}{N}(1-p_h),\\
-K_{h,\gamma}(n\mid n)
-&=1-K_{h,\gamma}(n+1\mid n)-K_{h,\gamma}(n-1\mid n).
+S(y\mid n)&=\frac{\binom{n}{y}\binom{N-n}{q_c-y}}{\binom{N}{q_c}},
+\label{eq:sensor_kernel_single_affinity}\\
+\pi(1\mid y)&=\sigma\!\left[\beta\left(\theta-\frac{y}{q_c}\right)\right],
+\qquad \sigma(z)=(1+e^{-z})^{-1},
+\label{eq:feedback_policy_single_affinity}\\
+a_n&=P(U=1\mid n)=\sum_y S(y\mid n)\pi(1\mid y).
+\label{eq:advocacy_probability_single_affinity}
+\end{align}
+Suppose the frozen eligible board contains $B$ peer messages and, when active,
+$b$ controller messages. Each focal update samples $s=\min(q,B+b)$ messages
+uniformly without replacement. Its probability of seeing at least one
+controller message is
+\begin{equation}
+\boxed{w_b=1-\frac{\binom{B}{s}}{\binom{B+b}{s}}.}
+\label{eq:blackboard_exposure}
+\end{equation}
+Here $\binom{B}{s}=0$ when $s>B$. The theory uses the number of messages
+\emph{actually posted}; a nominal budget must be replaced by the realized
+count when fewer messages are posted. Thus $q_c,\theta,\beta$ govern the
+posting decision, while $B,b,q$ govern exposure. For positive $q$, exposure
+saturates as $b$ grows.
+
+\subsection{Two response classes and exact round kernels}
+
+An update with compliance $\gamma\in[0,1]$ and conditional target preference
+$p\in[0,1]$ follows
+\begin{align}
+K_{\gamma,p}(n+1\mid n)&=\gamma(1-n/N)p,\\
+K_{\gamma,p}(n-1\mid n)&=\gamma(n/N)(1-p),\\
+K_{\gamma,p}(n\mid n)&=1-K_{\gamma,p}(n+1\mid n)-K_{\gamma,p}(n-1\mid n).
 \label{eq:single_affinity_kernel}
 \end{align}
-The affinity $h$ determines the preferred direction conditional on revision;
-$\gamma$ determines how readily a controlled opportunity produces any revision.
-No second opposing affinity is introduced.
-
-\subsection{Control susceptibility and exact response}
-\label{sec:control-susceptibility}
-
-Conditional on the same initial state $x$, define the controller-induced
-susceptibility
+A revision opportunity can leave the vote unchanged. Let
+$K_0=K_{\gamma_0,p_0}$ describe unexposed updates and
+$K_1=K_{\gamma_1,p_1}$ exposed updates. Marginalizing exposure gives the exact
+closure
+\begin{align}
+K_b&=(1-w_b)K_0+w_bK_1=K_{\gamma_b,p_b},\\
+\gamma_b&=(1-w_b)\gamma_0+w_b\gamma_1,\qquad
+p_b=\frac{(1-w_b)\gamma_0p_0+w_b\gamma_1p_1}{\gamma_b}.
+\label{eq:blackboard_mixture}
+\end{align}
+When $\gamma_b=0$, $K_b$ is the identity and $p_b$ is immaterial. The silent
+and active \emph{round} kernels are
 \begin{equation}
-\boxed{
-\chi(x)
-\equiv
-\mathbb{E}[x'\mid U=1,x]-\mathbb{E}[x'\mid U=0,x].}
-\label{eq:control-susceptibility}
-\end{equation}
-For the finite-compliance $q=1$ controlled layer, $b$ controlled opportunities
-give the exact response
-\begin{equation}
-\boxed{
-\chi_{h,\gamma}(x)
-=[\sigma(h)-x]\Lambda_{b,\gamma},
-\qquad
-\Lambda_{b,\gamma}
-=1-\left(1-\frac{\gamma}{N}\right)^b.}
-\label{eq:chi_finite_bias}
-\end{equation}
-Hence the zero-response set point is $x^\star=\sigma(h)$, while $\gamma$ only
-rescales the response amplitude. Ordinary $q=1$ voter updates are conditionally
-mean-neutral and therefore do not alter this advocacy-versus-NoOp mean response.
-
-\begin{table}[t]
-\centering
-\caption{Roles of the feedback-control quantities in the single-affinity theory.}
-\label{tab:feedback_parameters}
-\begin{tabular}{cl}
-\toprule
-Symbol & Role \\
-\midrule
-$q_c$ & number of agents sensed before the round \\
-$\theta$ & feedback threshold \\
-$\beta$ & feedback-policy gain \\
-$b$ & controlled microscopic opportunities when active \\
-$h$ & directional affinity of the controlled revision channel \\
-$\gamma$ & kinetic compliance of a controlled opportunity \\
-$a_n$ & probability of advocacy at population state $n$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Information--response efficiency}
-
-For the isolated controlled layer define
-\begin{equation}
-Q_0(m\mid n)=\delta_{mn},
-\qquad
-Q_1(m\mid n)=K_{h,\gamma}^{\,b}(m\mid n),
+\boxed{Q_0=K_0^M,\qquad Q_1=K_b^M,}\qquad
+Q_\pi(m\mid n)=(1-a_n)Q_0(m\mid n)+a_nQ_1(m\mid n).
 \label{eq:controlled_layer_kernels}
 \end{equation}
-and
+These powers assume a frozen board, homogeneous response parameters, binary
+exposure, and a shared unexposed baseline across branches. In particular,
+$Q_0$ generally evolves the population even when the controller is silent.
+
+\subsection{Raw and availability-normalized susceptibility}
+\label{sec:control-susceptibility}
+
+At a common initial state, the primary response observable is
 \begin{equation}
-Q_\pi(m\mid n)
-=(1-a_n)Q_0(m\mid n)+a_nQ_1(m\mid n).
-\label{eq:policy_mixture_kernel}
+\boxed{\chi_b(x)=\mathbb{E}[x'\mid U=1,x]-\mathbb{E}[x'\mid U=0,x].}
+\label{eq:control-susceptibility}
 \end{equation}
-The exact state-local action-to-population information is
+The one-update mean obeys
+$\mathbb{E}[x_{j+1}\mid x_j]=(1-\gamma/N)x_j+\gamma p/N$.
+Consequently the exact round mean and susceptibility are
 \begin{align}
-T_\pi(n)
-&\equiv I(U_k;n_{k+1}\mid n_k=n) \\
-&=
-\sum_{u\in\{0,1\}}P(u\mid n)
-\sum_m Q_u(m\mid n)
+F_M(x;\gamma,p)&=p+(x-p)(1-\gamma/N)^M,\\
+\chi_b(x)&=F_M(x;\gamma_b,p_b)-F_M(x;\gamma_0,p_0)\nonumber\\
+&=p_b(1-r_b)-p_0(1-r_0)+(r_b-r_0)x,
+\label{eq:chi_finite_bias}
+\end{align}
+where $r_b=(1-\gamma_b/N)^M$ and $r_0=(1-\gamma_0/N)^M$.
+The reference predicts an affine dependence on initial target share, with
+budget entering through exposure. If $r_b\ne r_0$, the zero-response point is
+$x_b^*=[p_0(1-r_0)-p_b(1-r_b)]/(r_b-r_0)$; it need not lie in $[0,1]$.
+When $\gamma_0=\gamma_1=\gamma$, the state dependence cancels:
+\begin{equation}
+\chi_b(x)=w_b(p_1-p_0)\left[1-(1-\gamma/N)^M\right].
+\label{eq:blackboard_equal_compliance}
+\end{equation}
+Exposure and compliance therefore impose distinct limits: being seen more
+often and changing behavior after exposure are separate mechanisms.
+
+To express the same branch contrast relative to the remaining non-target
+population, define
+\begin{equation}
+\boxed{\chi_{b,\mathrm{avail}}(x)=\frac{\chi_b(x)}{1-x},\qquad x<1.}
+\label{eq:blackboard_available_susceptibility}
+\end{equation}
+The saturated state $x=1$ is excluded. This diagnostic can be negative or
+exceed one: the contrast includes differential retention of existing target
+supporters as well as additional adoption. It is neither a conversion
+probability nor a bounded efficiency. For occupancy $p(n)$, the corresponding
+available-mass-weighted summary is
+\begin{equation}
+\overline{\chi}_{\mathrm{avail}}[p]
+=\frac{\sum_{n=0}^{N-1}p(n)\chi_b(n/N)}
+{\sum_{n=0}^{N-1}p(n)(1-n/N)},
+\label{eq:blackboard_available_summary}
+\end{equation}
+when the denominator is positive. Both sums exclude saturation; this ratio
+avoids an unweighted average of potentially large near-saturation ratios.
+
+\subsection{Action information and information--response efficiency}
+
+The exact state-local action-to-population information is the weighted
+Jensen--Shannon divergence of the two evolving round kernels:
+\begin{equation}
+T_\pi(n)=I(U;n'\mid n)
+=\sum_u P(u\mid n)\sum_m Q_u(m\mid n)
 \log_2\frac{Q_u(m\mid n)}{Q_\pi(m\mid n)}.
 \label{eq:action-population-information}
-\end{align}
-Pinsker's inequality yields
+\end{equation}
+With $H_2(a)=-a\log_2a-(1-a)\log_2(1-a)$,
+$0\le T_\pi(n)\le H_2(a_n)$. Thus the action-information fraction is
 \begin{equation}
-T_\pi(n)
-\ge
-\frac{2a_n(1-a_n)}{\ln 2}\,
-\chi_{h,\gamma}(n/N)^2,
+\eta_{\mathrm{IF}}(n)=\frac{T_\pi(n)}{H_2(a_n)}\in[0,1],
+\label{eq:blackboard_eta_if}
+\end{equation}
+when $H_2(a_n)>0$. It measures how much conditional action uncertainty is
+visible in the next state, rather than directional motion.
+
+Because $x'\in[0,1]$, Pinsker's inequality gives
+\begin{equation}
+T_\pi(n)\ge B_{\mathrm{IR}}(n)
+\equiv\frac{2a_n(1-a_n)}{\ln2}\chi_b(n/N)^2.
 \label{eq:information-response-bound}
 \end{equation}
-which motivates the bounded information--response efficiency
+The bounded information--response efficiency is therefore
 \begin{equation}
-\boxed{
-\eta_{\mathrm{IR}}(n)
-=
-\frac{2a_n(1-a_n)\chi_{h,\gamma}(n/N)^2}
-{(\ln 2)T_\pi(n)}
-\le 1.}
+\boxed{\eta_{\mathrm{IR}}(n)
+=\frac{2a_n(1-a_n)\chi_b(n/N)^2}{(\ln2)T_\pi(n)}\le1,}
 \label{eq:eta_ir}
 \end{equation}
-It measures how much of the action-dependent change in the full next-state
-distribution is expressed as coherent mean target motion. The derivation is in
-Appendix~\ref{app:information_response_bound}.
+for $T_\pi(n)>0$. This bound uses the \emph{raw} susceptibility, not its
+availability-normalized counterpart, and does not require $Q_0$ to be the
+identity. An informative action channel can have little mean response if
+its effect is mainly on fluctuations or higher moments.
 
-\paragraph{Finite-horizon aggregation.}
-The efficiency above is defined locally at a fixed population state. In a
-nonstationary experiment, the state occupancy changes from cycle to cycle. Let
-\begin{equation}
-B_{\mathrm{IR}}(n)
-\equiv
-\frac{2a_n(1-a_n)}{\ln 2}\,
-\chi_{h,\gamma}(n/N)^2
-\label{eq:ir_response_term}
-\end{equation}
-denote the state-local Pinsker response term. For a finite horizon of $H$
-feedback cycles, we define the experiment-level information--response
-efficiency by accumulating the state-weighted numerator and denominator before
-forming the ratio:
-\begin{equation}
-\boxed{
-\eta_{\mathrm{IR}}^{(H)}
-=
-\frac{
-\sum_{k=0}^{H-1}\sum_n p_k(n)B_{\mathrm{IR}}(n)
-}{
-\sum_{k=0}^{H-1}\sum_n p_k(n)T_\pi(n)
-}.}
-\label{eq:eta_ir_finite_horizon}
-\end{equation}
-Because $B_{\mathrm{IR}}(n)\le T_\pi(n)$ state by state, the finite-horizon
-ratio remains bounded, $0\le\eta_{\mathrm{IR}}^{(H)}\le1$. This quantity is
-distinct from an arithmetic average of the state-local ratios
-$\eta_{\mathrm{IR}}(n)$: it measures the fraction of the total
-action-dependent information transmitted over the evaluation horizon that is
-expressed through the response lower bound.
-
-\subsection{Finite-time thermodynamic efficiency}
+\subsection{Excess current and finite-time path accounting}
 \label{sec:thermodynamic_efficiency}
 
-The single affinity also gives a closed finite-time thermodynamic accounting.
-Let $p_k(n)=P(n_k=n)$ and define the coarse system entropy
+Let $p_k(n)$ denote the pre-round ensemble and
+$\mu_u(n)=\mathbb{E}[n'-n\mid n,U=u]$. Controller-excess current subtracts the
+silent counterfactual:
 \begin{equation}
-S_{\mathrm{sys}}[p]
-=-\sum_n p(n)\ln p(n)
-+\sum_n p(n)\ln\binom{N}{n}.
-\label{eq:system_entropy_functional}
-\end{equation}
-The mean target-directed controlled current is
-\begin{equation}
-\boxed{
-J_{c,k}
-=N\Lambda_{b,\gamma}
-\sum_n p_k(n)a_n
-\left[\sigma(h)-\frac{n}{N}\right].}
+\boxed{J_{c,k}^{\mathrm{ex}}
+=\sum_n p_k(n)a_n[\mu_1(n)-\mu_0(n)]
+=N\sum_n p_k(n)a_n\chi_b(n/N).}
 \label{eq:mean_controlled_current_single_affinity}
 \end{equation}
-Let $I_{\mathrm{sens},k}\equiv I(n_k;Y_k)$ denote the information acquired by
-the sensor. Comparing the forward feedback path measure with its finite-time
-reverse reference gives the exact identity
+Equivalently, $J_{c,k}^{\mathrm{ex}}=J_{\mathrm{tot},k}-J_{\mathrm{sil},k}$,
+where $J_{\mathrm{tot},k}=\sum_np_k(n)[(1-a_n)\mu_0(n)+a_n\mu_1(n)]$
+and $J_{\mathrm{sil},k}=\sum_np_k(n)\mu_0(n)$.
+
+For interior preferences, define $h_0=\ln[p_0/(1-p_0)]$ and
+$h_b=\ln[p_b/(1-p_b)]$, with $h_u=h_0$ under silence and $h_u=h_b$
+under active posting. On supported transitions, weighted reversibility gives
 \begin{equation}
-\boxed{
-\Delta S_{\mathrm{sys},k}
-+hJ_{c,k}
-+I_{\mathrm{sens},k}
-=
-\Sigma_k
-=
-D_{\mathrm{KL}}\!\left(P_F^{(k)}\Vert P_R^{(k)}\right)
-\ge 0.}
+\ln\frac{Q_u(m\mid n)}{Q_u(n\mid m)}
+=\ln\binom{N}{m}-\ln\binom{N}{n}+h_u(m-n).
+\label{eq:blackboard_branch_ratio}
+\end{equation}
+Let $p_{Y,k}(y)=\sum_np_k(n)S(y\mid n)$ and let $p_{k+1}$ be the ensemble
+propagated by $Q_\pi$. The forward and reverse-reference path measures are
+\begin{align}
+P_F(n,y,u,m)&=p_k(n)S(y\mid n)\pi(u\mid y)Q_u(m\mid n),\\
+P_R(m,y,u,n)&=p_{k+1}(m)p_{Y,k}(y)\pi(u\mid y)Q_u(n\mid m).
+\end{align}
+Their log ratio yields the exact finite-time identity
+\begin{equation}
+\boxed{\Sigma_k=D_{\mathrm{KL}}(P_F\Vert P_R)
+=\Delta S_{\mathrm{sys},k}+I(n_k;Y_k)+\mathcal{A}_k\ge0,}
 \label{eq:finite_time_second_law}
 \end{equation}
-All terms in Eq.~(\ref{eq:finite_time_second_law}) use natural logarithms and
-are therefore measured in nats. The transient boundary term
-$\Delta S_{\mathrm{sys},k}$ is retained explicitly; no stationarity assumption
-is required.
+where all terms use natural logarithms and
+\begin{align}
+S_{\mathrm{sys}}[p]&=-\sum_n p(n)\ln p(n)
++\sum_n p(n)\ln\binom{N}{n},
+\label{eq:system_entropy_functional}\\
+\mathcal{A}_k&=\sum_n p_k(n)
+\left[(1-a_n)h_0\mu_0(n)+a_n h_b\mu_1(n)\right].
+\label{eq:blackboard_affinity_flow}
+\end{align}
+The entropy change is retained; stationarity is not assumed.
 
-For target-directed operation, $hJ_{c,k}\ge0$. Removing the transient storage
-term from the path irreversibility leaves the generalized finite-time control
-expenditure
+For $\mathcal{A}_k\ge0$ and positive denominator, the bounded
+\emph{total path-transport fraction} is
 \begin{equation}
-C_{\mathrm{th},k}
-\equiv
-\Sigma_k-\Delta S_{\mathrm{sys},k}
-=
-hJ_{c,k}+I_{\mathrm{sens},k}.
-\label{eq:thermodynamic_control_expenditure}
+\eta_{\mathrm{path},k}
+=\frac{\mathcal{A}_k}{\Sigma_k-\Delta S_{\mathrm{sys},k}}
+=\frac{\mathcal{A}_k}{\mathcal{A}_k+I(n_k;Y_k)}\in[0,1].
+\label{eq:blackboard_eta_path}
 \end{equation}
-We therefore define the thermodynamic control efficiency as the fraction of
-this non-storage expenditure expressed as affinity-weighted directed current:
+It includes autonomous baseline transport and is not a controller-only
+thermodynamic efficiency. Indeed, with
+$J_{\mathrm{adv},k}=\sum_np_k(n)a_n\mu_1(n)$,
 \begin{equation}
-\boxed{
-\eta_{\mathrm{th},k}
-\equiv
-\frac{hJ_{c,k}}{\Sigma_k-\Delta S_{\mathrm{sys},k}}
-=
-\frac{hJ_{c,k}}{hJ_{c,k}+I_{\mathrm{sens},k}}
-\le 1.}
+\mathcal{A}_k-h_0J_{\mathrm{sil},k}
+=h_0J_{c,k}^{\mathrm{ex}}+(h_b-h_0)J_{\mathrm{adv},k}.
+\end{equation}
+This excess-affinity diagnostic need not be nonnegative and is not itself a
+second-law-bounded expenditure. A sufficient attribution condition is a
+neutral baseline affinity, $p_0=1/2$ or $h_0=0$. Only under this additional
+condition does the path fraction become
+\begin{equation}
+\eta_{\mathrm{th},k}^{(h_0=0)}
+=\frac{h_bJ_{\mathrm{adv},k}}
+{h_bJ_{\mathrm{adv},k}+I(n_k;Y_k)}\in[0,1],
 \label{eq:eta_th}
 \end{equation}
-For $hJ_{c,k}\ge0$ and $C_{\mathrm{th},k}>0$,
-$0\le\eta_{\mathrm{th},k}\le1$. At stationarity,
-$\Delta S_{\mathrm{sys},k}=0$ and the same result reduces to
-$\eta_{\mathrm{th}}=hJ_c/\Sigma$.
+provided $h_bJ_{\mathrm{adv},k}\ge0$ and the denominator is positive.
+Neutral affinity does not imply zero silent drift. In general, the pair
+$(J_{c,k}^{\mathrm{ex}},\Sigma_k)$ describes excess steering versus total coarse
+path irreversibility without assigning baseline transport to the controller.
 
-\paragraph{Finite-horizon aggregation.}
-The quantities above are defined for one feedback cycle because the population
-distribution $p_k(n)$ generally changes with $k$. For an experiment of $H$
-feedback cycles, summing Eq.~(\ref{eq:finite_time_second_law}) gives
-\begin{equation}
-S_{\mathrm{sys}}[p_H]-S_{\mathrm{sys}}[p_0]
-+h\sum_{k=0}^{H-1}J_{c,k}
-+\sum_{k=0}^{H-1}I_{\mathrm{sens},k}
-=\sum_{k=0}^{H-1}\Sigma_k,
-\label{eq:finite_horizon_second_law}
-\end{equation}
-where the system-entropy increments telescope. The corresponding finite-horizon
-non-storage expenditure is
-\begin{equation}
-C_{\mathrm{th}}^{(H)}
-=h\sum_{k=0}^{H-1}J_{c,k}
-+\sum_{k=0}^{H-1}I_{\mathrm{sens},k},
-\label{eq:finite_horizon_expenditure}
-\end{equation}
-and the finite-horizon thermodynamic efficiency is
-\begin{equation}
-\boxed{
-\eta_{\mathrm{th}}^{(H)}
-=
-\frac{h\sum_{k=0}^{H-1}J_{c,k}}
-{h\sum_{k=0}^{H-1}J_{c,k}
-+\sum_{k=0}^{H-1}I_{\mathrm{sens},k}}.}
-\label{eq:eta_th_finite_horizon}
-\end{equation}
-Thus the experiment-level efficiency is a ratio of accumulated directed
-current to accumulated non-storage expenditure, rather than the arithmetic
-mean $H^{-1}\sum_k\eta_{\mathrm{th},k}$. This distinction is essential in the
-nonstationary regime because the control expenditure can vary substantially
-across cycles. Thus additional sensing lowers
-thermodynamic efficiency whenever it increases acquired information without a
-commensurate increase in directed current, whereas stronger effective actuation
-raises the efficiency when it increases $hJ_c$ faster than the sensing term.
-The transition-ratio and path-measure calculation leading to
-Eqs.~(\ref{eq:finite_time_second_law})--(\ref{eq:eta_th}) is given in
-Appendix~\ref{app:thermodynamic_efficiency_derivation}.
-
-\begin{table}[t]
-\centering
-\caption{The two bounded efficiencies used in the feedback-control theory.}
-\label{tab:two_efficiencies}
-\begin{tabular}{p{0.16\linewidth}p{0.31\linewidth}p{0.42\linewidth}}
-\toprule
-Quantity & Ratio & Interpretation \\
-\midrule
-$\eta_{\mathrm{IR}}$
-& coherent mean response / action information
-& how efficiently action-dependent distributional change becomes mean motion \\
-$\eta_{\mathrm{th}}$
-& $hJ_c/(hJ_c+I_{\mathrm{sens}})$
-& how efficiently the finite-time non-storage control expenditure becomes directed current \\
-\bottomrule
-\end{tabular}
-\end{table}
+\paragraph{Empirical scope.}
+Exposure frequency and exposed/unexposed transition rates can test the
+reference. If $p_{+,r}$ and $p_{-,r}$ are conditional target-entry and exit
+probabilities in response class $r$, then
+$\gamma_r=p_{+,r}+p_{-,r}$ and
+$p_r=p_{+,r}/(p_{+,r}+p_{-,r})$ when the denominator is nonzero.
+Shared parameters should predict held-out budgets and states; observational
+exposure classes alone do not establish a causal effect. Paired active and
+silent continuations should match the complete state, including board contents
+and epistemic information. Board growth, self-exclusion, message content, and
+heterogeneous epistemic state can violate the frozen, homogeneous reference.
+Such departures call for explicit conditioning or time-dependent kernels.
+The safe bounded information quantities are $\eta_{\mathrm{IF}}$ and
+$\eta_{\mathrm{IR}}$; controller-specific thermodynamic attribution requires
+additional assumptions.
