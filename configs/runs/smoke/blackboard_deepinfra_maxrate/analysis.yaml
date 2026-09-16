@@ -1,0 +1,5 @@
+# theoretical_reference must be none: this study sets
+# game.options.epistemic_persistence: 0.74, and aggregation rejects any theory
+# reference other than none for finite epistemic persistence
+# (aggregation.py:3636).
+theoretical_reference: none

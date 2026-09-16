@@ -1,0 +1,27 @@
+study: {name: blackboard_deepinfra_maxrate}
+configs: [blackboard_maxrate.yaml]
+execution:
+  mode: auto
+  # The DeepInfra account allows 200 outstanding requests and 1,100,000
+  # tokens/minute per model. 200 concurrent at ~4s observed latency is roughly
+  # 3,000 RPM, so that is the ceiling this study aims at. The work is I/O bound
+  # (DeepInfra runs the model), so a single node saturates it; adding nodes
+  # would only split the same account-wide 200 slots.
+  target_rpm: 3000
+  assumed_latency_seconds: 4.0
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 4
+  memory: 4G
+  time_limit: "00:30:00"
+  partition: main
+  qos: normal
+  results_root: /shared/MA-CC-results/blackboard_deepinfra_maxrate
+  require_results_under: /shared/MA-CC-results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 100
+    minimum_concurrency: 10
+    maximum_concurrency: 200
+    target_rpm: 3000
+    retry_max_elapsed_seconds: 300
