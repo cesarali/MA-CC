@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Generic Cesar cell-array launcher. The generated plan supplies resources.
+#SBATCH --job-name=mas-cc-study
+#SBATCH --partition=main
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+# Cesar runs no accounting database, so it has no account or QoS to request.
+# Direct-submit fallback; `mas-cc study submit` normally overrides both paths.
+#SBATCH --output=/shared/MA-CC-results/logs/slurm-%A_%a.out
+#SBATCH --error=/shared/MA-CC-results/logs/slurm-%A_%a.err
+
+set -euo pipefail
+# SLURM copies the batch script into /var/spool/slurmd, so BASH_SOURCE does not
+# point into the repository for a queued job. `mas-cc study submit` therefore
+# passes the repository root as the working directory (--chdir). It cannot use
+# --export=ALL,CESAR_REPO_ROOT=... the way the Amarel adapter does, because on
+# this cluster any explicit VAR=value in --export hangs the batch job forever.
+# Order: explicit variable, working directory, script location, known default.
+for candidate in \
+  "${CESAR_REPO_ROOT:-}" \
+  "${PWD}" \
+  "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd -L)" \
+  "${CESAR_DEFAULT_REPO_ROOT:-/shared/MA-CC}"
+do
+  if [[ -n "${candidate}" && -r "${candidate}/scripts/Cesar/SLURM/_common.sh" ]]; then
+    export CESAR_REPO_ROOT="${candidate}"
+    source "${candidate}/scripts/Cesar/SLURM/_common.sh"
+    break
+  fi
+done
+if [[ -z "${CESAR_REPO_ROOT:-}" ]]; then
+  echo "error: cannot locate scripts/Cesar/SLURM/_common.sh; set CESAR_REPO_ROOT" >&2
+  exit 2
+fi
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: run_study_cell_array.job EXECUTION_MANIFEST" >&2
+  exit 2
+fi
+
+export MAS_CC_EXECUTION_SITE=cesar
+cesar_prepare_runtime
+export PYTHONPATH="${CESAR_REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+CESAR_PYTHON_EXE="$(cesar_resolve_python)"
+readonly CESAR_PYTHON_EXE
+
+exec "${CESAR_PYTHON_EXE}" -m mas_cc.studies.cell_worker "$1"

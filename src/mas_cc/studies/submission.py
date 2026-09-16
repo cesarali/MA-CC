@@ -19,6 +19,7 @@ from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.storage import canonical_hash
 
 from .manifest import StudySpec, discover_study
+from .runtime import EXECUTION_SITES
 
 
 SUBMISSION_COLUMNS = (
@@ -38,6 +39,20 @@ AMAREL_PARTITION = "main"
 AMAREL_QOS = "normal"
 AMAREL_MAX_WALLTIME_SECONDS = 72 * 60 * 60
 AMAREL_RESULTS_ROOT = "/scratch/df630/MA-CC-results"
+
+# Cesar is the private SLURM-on-Kubernetes cluster. It has one shared NFS mount
+# and no per-user scratch, so results and the checked-out repository both live
+# under /shared.
+CESAR_PARTITION = "main"
+CESAR_RESULTS_ROOT = "/shared/MA-CC-results"
+
+# NERSC has no folder here because its studies go through `mas-cc study prepare`
+# plus scripts/nersc/, never through this sbatch path.
+_SITE_JOB_SCRIPT_FOLDERS = {
+    "amarel": "scripts/Amarel/SLURM",
+    "cesar": "scripts/Cesar/SLURM",
+    "potsdam": "scripts/Potsdam/SLURM",
+}
 
 
 def _now() -> str:
@@ -83,7 +98,7 @@ def _absolute_path(path: str | Path, *, preserve_symlinks: bool = False) -> Path
 
 def _default_job_script(execution_site: str, *, cell_array: bool) -> Path:
     filename = "run_study_cell_array.job" if cell_array else "run_config_array.job"
-    folder = "scripts/Amarel/SLURM" if execution_site == "amarel" else "scripts/Potsdam/SLURM"
+    folder = _SITE_JOB_SCRIPT_FOLDERS.get(execution_site, "scripts/Potsdam/SLURM")
     return Path(folder) / filename
 
 
@@ -332,8 +347,11 @@ def submit_study(
             "`mas-cc study prepare` followed by `scripts/nersc/run_study.sh` "
             "so the allocation uses --qos=interactive"
         )
-    if execution_site not in {"potsdam", "nersc", "amarel"}:
-        raise ValueError("execution_site must be 'potsdam', 'nersc', or 'amarel'")
+    if execution_site not in EXECUTION_SITES:
+        raise ValueError(
+            "execution_site must be one of "
+            + ", ".join(repr(site) for site in EXECUTION_SITES)
+        )
     spec = discover_study(config_dir)
     from .preflight import validate_study_preflight_contract
 
@@ -345,18 +363,30 @@ def submit_study(
         os.environ.get("AMAREL_RESULTS_ROOT", AMAREL_RESULTS_ROOT),
         preserve_symlinks=execution_site == "amarel",
     )
+    cesar_results_root = _absolute_path(
+        os.environ.get("CESAR_RESULTS_ROOT", CESAR_RESULTS_ROOT)
+    )
     if execution_site == "amarel" and results_dir is None:
         configured_results = amarel_results_root / spec.name
+    # Cesar keeps everything on one shared NFS mount. A study config checked in
+    # for Potsdam or Amarel carries an absolute results_root for that site,
+    # which does not exist here, so pin the Cesar root instead of inheriting it.
+    if execution_site == "cesar" and results_dir is None:
+        configured_results = cesar_results_root / spec.name
     study_dir = _absolute_path(
         results_dir or configured_results or (Path("results") / spec.name),
         preserve_symlinks=execution_site == "amarel",
     )
+    site_required_root = {
+        "amarel": amarel_results_root,
+        "cesar": cesar_results_root,
+    }.get(execution_site)
     required_results_under = (
         require_results_under
         if require_results_under is not None
         else (
-            amarel_results_root
-            if execution_site == "amarel"
+            site_required_root
+            if site_required_root is not None
             else spec.execution.get("require_results_under")
         )
     )
@@ -371,7 +401,7 @@ def submit_study(
             raise ValueError(
                 f"study results must be stored under {required_root}, got {study_dir}"
             ) from exc
-        if require_results_under is not None or execution_site == "amarel":
+        if require_results_under is not None or site_required_root is not None:
             spec = replace(
                 spec,
                 execution={
@@ -475,6 +505,19 @@ def submit_study(
                 f"--chdir={script.parents[3]}",
                 f"--export=ALL,AMAREL_REPO_ROOT={script.parents[3]}",
             )
+        elif execution_site == "cesar":
+            # SLURM copies the batch script into /var/spool/slurmd, so the job
+            # cannot find _common.sh relative to itself. Amarel solves this with
+            # --export=ALL,VAR=..., but on this cluster any explicit VAR=value
+            # in --export makes the batch job hang forever without ever opening
+            # its output file (--export=ALL alone is fine). So pass the
+            # repository root through --chdir instead and let the job script
+            # resolve it from its working directory.
+            scheduler_options = (
+                f"--partition={plan.partition}",
+                f"--qos={plan.qos}",
+                f"--chdir={script.parents[3]}",
+            )
         else:
             scheduler_options = (
                 f"--partition={plan.partition}",
@@ -504,17 +547,20 @@ def submit_study(
         if limit is not None and (isinstance(limit, bool) or int(limit) < 1):
             raise ValueError("SLURM array throttle must be a positive integer")
         array = f"0-{len(entries) - 1}" + ("" if limit is None else f"%{int(limit)}")
-        scheduler_options = (
-            (
+        if execution_site == "amarel":
+            scheduler_options = (
                 f"--account={AMAREL_ACCOUNT}",
                 f"--partition={AMAREL_PARTITION}",
                 f"--qos={AMAREL_QOS}",
                 f"--chdir={script.parents[3]}",
                 f"--export=ALL,AMAREL_REPO_ROOT={script.parents[3]}",
             )
-            if execution_site == "amarel"
-            else ()
-        )
+        elif execution_site == "cesar":
+            # See the cell-array branch: --export=ALL,VAR=... hangs batch jobs
+            # on this cluster, so the repository root arrives via --chdir.
+            scheduler_options = (f"--chdir={script.parents[3]}",)
+        else:
+            scheduler_options = ()
         command = (
             "sbatch",
             *scheduler_options,

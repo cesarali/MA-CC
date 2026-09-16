@@ -238,7 +238,9 @@ def build_parser() -> argparse.ArgumentParser:
     study_prepare.add_argument("--throttle", type=int)
     study_prepare.add_argument("--require-results-under", type=Path)
     study_prepare.add_argument(
-        "--execution-site", choices=("amarel", "nersc", "potsdam"), default="potsdam"
+        "--execution-site",
+        choices=("amarel", "cesar", "nersc", "potsdam"),
+        default="potsdam",
     )
     study_preflight = study_commands.add_parser(
         "preflight", help="validate every config and the optional strict study contract"
@@ -274,7 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     study_submit.add_argument(
         "--execution-site",
-        choices=("amarel", "potsdam"),
+        choices=("amarel", "cesar", "potsdam"),
         default="potsdam",
         help="scheduler adapter used for the one batch submission",
     )
