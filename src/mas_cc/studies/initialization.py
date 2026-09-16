@@ -20,6 +20,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization i
     write_initialization_artifact,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
+    _RecoveryLedger,
     _execute_decision,
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
@@ -128,6 +129,13 @@ async def materialize_initializations(
                             RegexTokenCounter(),
                             Seed(entry.episode_seed),
                             None,
+                            # Initialization has no observer and no episode to
+                            # resume, so this ledger is always empty: every
+                            # replay_decision call misses and the normal
+                            # ask/validate path runs. _execute_decision gained
+                            # this required parameter in 2a7d42a without the
+                            # caller here being updated.
+                            _RecoveryLedger(None),
                         )
                         for request in game.initial_vote_requests(
                             state, episode_config.game
