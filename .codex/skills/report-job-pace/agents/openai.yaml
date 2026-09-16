@@ -1,0 +1,7 @@
+interface:
+  display_name: "Report Job Pace"
+  short_description: "Summarize MA-CC experiment and scheduler progress"
+  default_prompt: "Use $report-job-pace to report the current pace and status of my experiment."
+
+policy:
+  allow_implicit_invocation: true

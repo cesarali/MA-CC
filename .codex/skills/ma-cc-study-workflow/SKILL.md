@@ -8,6 +8,26 @@ description: Create, preflight, submit, monitor, aggregate, or post-process MA-C
 Work from the repository root. Keep scientific design separate from scheduler
 topology and reuse the repository's established analysis engines.
 
+## Select the execution and provider profiles
+
+Treat the compute site and LLM provider as independent choices. DeepInfra is a
+provider, not a cluster; a DeepInfra study may still execute on Potsdam SLURM.
+
+- When executing on Potsdam or submitting to its SLURM cluster, read
+  [references/potsdam.md](references/potsdam.md).
+- When the scientific config uses `llm_provider.type: deepinfra`, also read
+  [references/deepinfra.md](references/deepinfra.md), regardless of compute
+  site.
+- When the scientific config uses `llm_provider.type: university`, use the
+  Potsdam university-provider section in
+  [references/potsdam.md](references/potsdam.md).
+- On another compute site, use that site's repository instructions and
+  environment. Never transplant Potsdam absolute paths or Conda commands.
+
+Provider credentials, limits, coordinators, and failure states are isolated by
+provider and study. Never combine a DeepInfra limit with a university-provider
+execution plan.
+
 ## Potsdam dedicated environment
 
 When operating on Potsdam or submitting to its SLURM cluster, use the dedicated

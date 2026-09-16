@@ -20,6 +20,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization i
     write_initialization_artifact,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
+    _RecoveryLedger,
     _execute_decision,
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
@@ -115,6 +116,7 @@ async def materialize_initializations(
             continue
         state = game.initialize(episode_config.game, entry.episode_seed)
         provider = provider_factory(episode_config)
+        recovery = _RecoveryLedger(None)
         try:
             decisions = tuple(
                 await asyncio.gather(
@@ -128,6 +130,7 @@ async def materialize_initializations(
                             RegexTokenCounter(),
                             Seed(entry.episode_seed),
                             None,
+                            recovery,
                         )
                         for request in game.initial_vote_requests(
                             state, episode_config.game
