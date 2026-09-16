@@ -45,6 +45,20 @@ For MA-CC study creation, submission, SLURM execution, aggregation, or
 post-processing, use the `ma-cc-study-workflow` skill. Read its complete
 instructions at `.codex/skills/ma-cc-study-workflow/SKILL.md` before acting.
 
+That skill routes compute-site and provider-specific operations separately:
+
+- Potsdam execution and the university provider:
+  `.codex/skills/ma-cc-study-workflow/references/potsdam.md`
+- DeepInfra provider operations on any compute site:
+  `.codex/skills/ma-cc-study-workflow/references/deepinfra.md`
+
+DeepInfra is a provider, not a cluster. A DeepInfra study running on Potsdam
+must follow both references. Do not merge credentials, limits, or provider
+coordinator state between providers.
+
+For read-only experiment monitoring and pace summaries, use the
+`report-job-pace` skill at `.codex/skills/report-job-pace/SKILL.md`.
+
 Do not create study-specific SLURM job files unless the scheduler topology
 genuinely cannot be represented by the generic study launchers.
 
