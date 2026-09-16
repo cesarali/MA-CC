@@ -9,6 +9,7 @@ from mas_cc.analysis.epistemic_phase import (
     PRE_BOUNDARY,
     analyze_epistemic_phase_diagrams,
     build_epistemic_round_states,
+    classify_capture_timing,
     load_symbolic_tasks,
     reconstruct_active_inventories,
 )
@@ -138,6 +139,32 @@ def test_symbolic_metrics_distinguish_collective_access_from_individual_access()
     assert state["reference_robustness"] == 1.0
     assert state["active_union_fact_count"] == len(facts)
     assert state["evidence_scope"] == "union_of_participant_active_inventories"
+
+
+def test_capture_timing_is_empty_when_no_control_has_no_causal_rows():
+    states = pd.DataFrame(
+        [
+            {
+                "cell_id": "cell",
+                "episode_id": "episode-0",
+                "round_index": 0,
+                "collective_solvable": True,
+            }
+        ]
+    )
+    prepared = pd.DataFrame(
+        columns=["cell_id", "episode_id", "round_index", "x_t"]
+    )
+
+    timing, summary = classify_capture_timing(
+        states,
+        threshold=0.75,
+        consecutive_rounds=3,
+        _prepared_inputs=prepared,
+    )
+
+    assert timing.empty
+    assert summary.empty
 
 
 def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():

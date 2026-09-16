@@ -1055,6 +1055,11 @@ def classify_capture_timing(
     frame = states[["cell_id", "episode_id", "round_index", "collective_solvable"]].merge(
         shares, on=["cell_id", "episode_id", "round_index"]
     )
+    # Autonomous/no-control studies retain epistemic states but legitimately
+    # have no causal controller rows. Capture timing is undefined there, so
+    # return empty outputs instead of grouping a schema-less empty frame.
+    if frame.empty:
+        return pd.DataFrame(), pd.DataFrame()
     rows: list[dict[str, Any]] = []
     for cell_id, cell in frame.groupby("cell_id", sort=True):
         lengths = cell.groupby("episode_id")["round_index"].nunique()
@@ -1134,6 +1139,8 @@ def classify_capture_timing(
                 }
             )
     episode_table = pd.DataFrame(rows)
+    if episode_table.empty:
+        return episode_table, pd.DataFrame()
     summary = episode_table.groupby("cell_id", as_index=False).agg(
         capture_before_first_loss_probability=("capture_before_first_loss", "mean"),
         capture_with_solvable_window_probability=(
