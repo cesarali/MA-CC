@@ -20,13 +20,12 @@ powered for scientific inference.
 The hash-pinned six-agent distribution in `artifacts/` is deterministic,
 covers all 27 evidence cards once, and has zero agents that can structurally
 certify the answer alone. It is an inspection fixture derived from validated
-`task_002`; it is not an additional behavioral validation of that task at
+`task_001`; it is not an additional behavioral validation of that task at
 `N = 6`.
 
-The destination must also contain the already-established validated base task
-at `results/studies/musr_team_allocation_validation_01/tasks/task_002/base_task.json`.
-That generated study asset is intentionally outside Git; the new `N = 6`
-distribution and controller design are hash-pinned repository artifacts.
+The base task, six-agent distribution, and compatible controller design are
+all tracked by Git. A normal push/pull therefore transfers every required
+scientific input; no generated `results/` asset needs to be restored manually.
 
 With five branches for each of three parent checkpoints, a complete run starts
 three scheduler-visible parent-bundle episodes and produces 15 continuation

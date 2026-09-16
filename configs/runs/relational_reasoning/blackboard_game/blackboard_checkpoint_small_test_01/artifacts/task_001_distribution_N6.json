@@ -92,10 +92,10 @@
   },
   "distribution_seed": 20260916,
   "evidence_redundancy": 1,
-  "fingerprint_sha256": "839bc3a6d7fa74147513a22ea456811141a9894aa63c8c2f2d5b0b3ab2987f3c",
+  "fingerprint_sha256": "7a057dd399ccf8ab0abdd96a95726b03c2b62ceadc1c8f98d934935ddb9f77ca",
   "no_single_agent_violations": 0,
   "population_size": 6,
   "schema_version": "musr_team_allocation_distribution_v1",
-  "semantic_world_sha256": "c953d3e38ef98d01def6a0a12c80796944d137aaf39c2eb4c43fbad1ed201541",
-  "task_id": "task_002"
+  "semantic_world_sha256": "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750",
+  "task_id": "task_001"
 }

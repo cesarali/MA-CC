@@ -25,14 +25,14 @@ game:
   topology: complete
   options:
     task_family: musr_team_allocation
-    task_dataset_dir: results/studies/musr_team_allocation_validation_01/tasks
-    task_id: task_002
+    task_dataset_dir: results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks
+    task_id: task_001
     task_distribution:
-      artifact_path: configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_small_test_01/artifacts/task_002_distribution_N6.json
-      expected_file_sha256: 9a7c75d001196f472e161812981295eed082118ccdb307170c42eec905fa42ac
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_small_test_01/artifacts/task_001_distribution_N6.json
+      expected_file_sha256: 4e8534477e5d2bc038d21ab895ae7139d7f26c777d5ba408972024017fbd55a8
     truthful_controller_design:
-      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_002_truthful_controller.json
-      expected_file_sha256: 3c730e0dcc9c88129d4ec842a7110471d1fee831b5f6b9d1106a54149df9b89c
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_truthful_controller.json
+      expected_file_sha256: 4ad6997edb488077bdc536750a5c59212d40ade9fa16145aff64a170e29e6284
     dynamics_mode: reasoning
     rounds: 4
     social_group_size: 3
@@ -84,7 +84,7 @@ ensemble:
   posting_budgets: [2]
   retain_parent_artifacts: true
   require_complete_branches: true
-  false_target: ALLOCATION_2
+  false_target: ALLOCATION_1
 
 execution:
   seed: 20260916
@@ -128,12 +128,12 @@ experiment:
   tags: [musr, blackboard, checkpoint, inspection, small-test]
   metadata:
     study: blackboard_checkpoint_small_test_01
-    task_id: task_002
+    task_id: task_001
     q: 3
     q_C: 3
     rho: 1.0
     posting_budget: 2
     independent_block: parent
     ground_truth: ALLOCATION_0
-    false_target: ALLOCATION_2
+    false_target: ALLOCATION_1
     inspection_only: true
