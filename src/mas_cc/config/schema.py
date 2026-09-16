@@ -168,6 +168,38 @@ def config_schema() -> dict[str, Any]:
                     "options": options,
                 }
             ),
+            "ensemble": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "enabled": {"type": "boolean"},
+                    "parent_count": {"type": "integer", "minimum": 1},
+                    "preparation_rounds": {"type": "integer", "minimum": 1},
+                    "continuation_rounds": {"type": "integer", "minimum": 1},
+                    "continuation_copies": {"type": "integer", "minimum": 1},
+                    "branch_policies": {
+                        "type": "array",
+                        "uniqueItems": True,
+                        "items": {
+                            "enum": [
+                                "none",
+                                "always_truth",
+                                "always_false",
+                                "sensing_truth",
+                                "sensing_false",
+                            ]
+                        },
+                    },
+                    "posting_budgets": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": True,
+                        "items": {"type": "integer", "minimum": 0},
+                    },
+                    "retain_parent_artifacts": {"type": "boolean"},
+                    "require_complete_branches": {"type": "boolean"},
+                    "false_target": {"type": "string", "minLength": 1},
+                }
+            ),
             "metrics": _simple_object(
                 {
                     "schema_version": {"const": 1},

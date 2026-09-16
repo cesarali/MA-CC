@@ -1,0 +1,15 @@
+theoretical_reference: single_affinity_revised
+estimators: [round_sensor_mae, round_sensor_mse, round_controller_action_entropy]
+resampling: {bootstrap_resamples: 2000, null_permutations: 1000, confidence: 0.95, seed: 20260916}
+checkpoint_ensemble_outputs:
+  branch_round_metrics: true
+  activation_response: true
+  expected_parents: 480
+  branch_policies: [none, always_truth, always_false, sensing_truth, sensing_false]
+  posting_budgets: [3, 12]
+  continuation_copies: 1
+  continuation_rounds: 10
+  primary_horizons: [1, 10]
+  smoothing: [0, 1, 12.5]
+  repeated_group_splits: 5
+plots: {}

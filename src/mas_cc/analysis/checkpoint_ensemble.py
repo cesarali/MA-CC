@@ -1,0 +1,848 @@
+"""Paired parent-checkpoint analysis using the repository's CMI engine."""
+
+from __future__ import annotations
+
+import json
+import math
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import brier_score_loss, log_loss
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+from mas_cc.analysis.estimators import (
+    conditional_mutual_information,
+    conditional_mutual_information_from_counts,
+)
+
+VERSION = "blackboard_checkpoint_ensemble_v1"
+CONTROLLED_POLICIES = (
+    "always_truth",
+    "always_false",
+    "sensing_truth",
+    "sensing_false",
+)
+
+BRANCH_ROUND_STATISTICS = (
+    "round_target_actuation_cmi",
+    "round_target_information_fraction",
+    "round_target_susceptibility",
+    "round_sensor_mae",
+    "round_sensor_mse",
+    "round_controller_action_entropy",
+)
+
+
+def _object(value: Any) -> Any:
+    if isinstance(value, str) and value[:1] in "[{":
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def _count(row: Mapping[str, Any], answer: str) -> int:
+    counts = _object(row.get("option_counts"))
+    if isinstance(counts, Mapping):
+        return int(counts.get(answer, 0))
+    counts = _object(row.get("occupation_counts_after"))
+    answers = _object(row.get("possible_answers"))
+    if isinstance(counts, Mapping):
+        return int(counts.get(answer, 0))
+    if isinstance(counts, Sequence) and isinstance(answers, Sequence):
+        return int(counts[list(answers).index(answer)])
+    raise ValueError("checkpoint round lacks a semantic option-count vector")
+
+
+def _count_before(row: Mapping[str, Any], answer: str) -> int:
+    counts = _object(row.get("occupation_counts_before"))
+    answers = _object(row.get("possible_answers"))
+    if isinstance(counts, Mapping):
+        return int(counts.get(answer, 0))
+    if isinstance(counts, Sequence) and isinstance(answers, Sequence):
+        return int(counts[list(answers).index(answer)])
+    if int(row.get("post_branch_horizon", -1)) == 0:
+        return _count(row, answer)
+    raise ValueError("checkpoint round lacks a semantic pre-round option-count vector")
+
+
+def validate_checkpoint_ensemble(
+    rounds: pd.DataFrame,
+    *,
+    expected_policies: Sequence[str],
+    posting_budgets: Sequence[int],
+    continuation_copies: int,
+    continuation_rounds: int,
+    expected_parents: int | None = None,
+    micro_slots: pd.DataFrame | None = None,
+    episodes: pd.DataFrame | None = None,
+    require_complete: bool = True,
+) -> dict[str, Any]:
+    """Strict parent/branch trajectory validation independent of scheduler shards."""
+
+    required = {
+        "parent_id", "checkpoint_id", "checkpoint_hash", "branch_policy",
+        "copy_id", "absolute_round", "post_branch_horizon", "q", "rho", "N",
+        "L", "M", "correct_answer_semantic_id", "preparation_seed",
+        "continuation_seed", "continuation_stream_identity", "branch_status",
+        "possible_answers", "occupation_counts_before", "occupation_counts_after",
+        "controller_sampled_U", "actual_controller_posts",
+        "total_eligible_board_message_reads", "controller_unique_readers",
+        "retry_attempts_this_round",
+    }
+    missing_columns = sorted(required - set(rounds.columns))
+    errors: list[str] = []
+    warnings: list[str] = []
+    if missing_columns:
+        errors.append("missing checkpoint columns: " + ", ".join(missing_columns))
+        return {"complete": False, "errors": errors, "warnings": warnings}
+    continuation_policies = set(expected_policies)
+    h0 = rounds[rounds["branch_policy"] == "checkpoint"].copy()
+    data = rounds[rounds["branch_policy"].isin(continuation_policies)].copy()
+    if data.empty:
+        errors.append("no continuation rows were found")
+        return {"complete": False, "errors": errors, "warnings": warnings}
+    data["copy_id"] = pd.to_numeric(data["copy_id"], errors="coerce")
+    data["post_branch_horizon"] = pd.to_numeric(
+        data["post_branch_horizon"], errors="coerce"
+    )
+    expected_controlled = {
+        (policy, int(budget), copy_id)
+        for policy in expected_policies if policy != "none"
+        for budget in posting_budgets
+        for copy_id in range(1, continuation_copies + 1)
+    }
+    expected_none = {("none", None, copy_id) for copy_id in range(1, continuation_copies + 1)}
+    found_parents = int(data["parent_id"].nunique())
+    if expected_parents is not None and found_parents != expected_parents:
+        errors.append(
+            f"found {found_parents} parents; expected {expected_parents}"
+        )
+    parent_rows = []
+    for parent_id, parent in data.groupby("parent_id", sort=True):
+        hashes = set(parent["checkpoint_hash"].dropna().astype(str))
+        checkpoints = set(parent["checkpoint_id"].dropna().astype(str))
+        if len(hashes) != 1 or len(checkpoints) != 1:
+            errors.append(f"parent {parent_id} does not have one shared checkpoint")
+        branch_keys: set[tuple[str, int | None, int]] = set()
+        duplicate_trajectories = 0
+        for (policy, budget, copy_id), branch in parent.groupby(
+            ["branch_policy", "posting_budget", "copy_id"], dropna=False
+        ):
+            normalized_budget = None if str(policy) == "none" else int(budget)
+            key = (str(policy), normalized_budget, int(copy_id))
+            branch_keys.add(key)
+            horizons = sorted(
+                int(value) for value in branch["post_branch_horizon"].dropna().unique()
+            )
+            if horizons != list(range(1, continuation_rounds + 1)):
+                errors.append(
+                    f"parent {parent_id} branch {key} has horizons {horizons}; "
+                    f"expected 1..{continuation_rounds}"
+                )
+            duplicate_trajectories += int(
+                branch.duplicated(["post_branch_horizon"]).sum()
+            )
+        expected = expected_controlled | expected_none
+        if branch_keys != expected:
+            errors.append(
+                f"parent {parent_id} branch coverage differs: missing="
+                f"{sorted(expected - branch_keys, key=str)} extra="
+                f"{sorted(branch_keys - expected, key=str)}"
+            )
+        if duplicate_trajectories:
+            errors.append(f"parent {parent_id} has duplicate branch horizons")
+        streams = parent.drop_duplicates(
+            ["branch_policy", "posting_budget", "copy_id"]
+        )["continuation_stream_identity"]
+        if streams.map(lambda value: json.dumps(_object(value), sort_keys=True)).duplicated().any():
+            errors.append(f"parent {parent_id} has duplicate continuation streams")
+        none = parent[parent["branch_policy"] == "none"]
+        for copy_id in range(1, continuation_copies + 1):
+            if none[none["copy_id"] == copy_id]["posting_budget"].notna().any():
+                errors.append(f"parent {parent_id} none branch has a posting budget")
+        if not parent["branch_status"].isin({"complete", "in_progress"}).all():
+            errors.append(f"parent {parent_id} contains failed branch status")
+        truth = set(parent["correct_answer_semantic_id"].dropna().astype(str))
+        if len(truth) != 1:
+            errors.append(f"parent {parent_id} has inconsistent semantic truth targets")
+        for policy, branch in parent.groupby("branch_policy"):
+            targets = set(branch["controller_target_semantic_id"].dropna().astype(str))
+            if policy == "none" and targets:
+                errors.append(f"parent {parent_id} none branch has a controller target")
+            elif policy != "none" and len(targets) != 1:
+                errors.append(f"parent {parent_id} policy {policy} has inconsistent targets")
+            elif policy.endswith("truth") and targets != truth:
+                errors.append(f"parent {parent_id} policy {policy} does not target truth")
+            elif policy.endswith("false") and targets & truth:
+                errors.append(f"parent {parent_id} policy {policy} targets truth")
+        parent_h0 = h0[h0["parent_id"] == parent_id]
+        h0_copies = set(pd.to_numeric(parent_h0["copy_id"], errors="coerce").dropna().astype(int))
+        if h0_copies != set(range(1, continuation_copies + 1)):
+            errors.append(f"parent {parent_id} lacks one shared h=0 row per copy")
+        if not parent_h0.empty and set(parent_h0["checkpoint_hash"].astype(str)) != hashes:
+            errors.append(f"parent {parent_id} h=0 checkpoint hash differs from siblings")
+        parent_rows.append({"parent_id": parent_id, "checkpoint_hash": next(iter(hashes), None)})
+    if require_complete and errors:
+        complete = False
+    else:
+        complete = not errors
+        if errors:
+            warnings.extend(errors)
+    if micro_slots is not None:
+        required_micro = {
+            "parent_id", "checkpoint_hash", "branch_policy", "copy_id",
+            "post_branch_horizon", "within_round_index", "sampled_message_ids",
+            "controller_message_posted", "occupation_counts_before",
+            "occupation_counts_after",
+        }
+        missing_micro = sorted(required_micro - set(micro_slots.columns))
+        if missing_micro:
+            errors.append("missing micro-slot fields: " + ", ".join(missing_micro))
+    if episodes is not None:
+        required_episode = {
+            "status", "usage_requests", "usage_input_tokens", "usage_output_tokens",
+            "started_at", "finished_at",
+        }
+        missing_episode = sorted(required_episode - set(episodes.columns))
+        if missing_episode:
+            errors.append("missing episode resource fields: " + ", ".join(missing_episode))
+        failed = episodes[~episodes["status"].isin({"completed", "skipped_resumed"})]
+        if not failed.empty:
+            errors.append(f"found {len(failed)} failed or interrupted parent episodes")
+    complete = not errors
+    if not require_complete and errors:
+        warnings.extend(errors)
+        errors = []
+        complete = False
+    return {
+        "version": VERSION,
+        "complete": complete,
+        "errors": errors if require_complete else [],
+        "warnings": warnings,
+        "counts": {
+            "parents": int(data["parent_id"].nunique()),
+            "checkpoints": int(data["checkpoint_hash"].nunique()),
+            "branches": int(
+                data[["parent_id", "branch_policy", "posting_budget", "copy_id"]]
+                .drop_duplicates().shape[0]
+            ),
+            "round_rows": int(len(data)),
+        },
+    }
+
+
+def resource_report(rounds: pd.DataFrame, episodes: pd.DataFrame) -> pd.DataFrame:
+    """Observed actuation/channel use plus parent-level provider resources."""
+
+    data = rounds[rounds["branch_policy"].isin(CONTROLLED_POLICIES)].copy()
+    group_keys = ["q", "rho", "branch_policy", "posting_budget"]
+    metrics = {
+        "controller_sampled_U": "activations",
+        "actual_controller_posts": "controller_posts",
+        "total_eligible_board_message_reads": "eligible_message_reads",
+        "controller_unique_readers": "unique_controller_readers",
+        "retry_attempts_this_round": "retry_attempts",
+    }
+    present = {source: target for source, target in metrics.items() if source in data}
+    if data.empty:
+        grouped = pd.DataFrame(columns=group_keys)
+    else:
+        grouped = data.groupby(group_keys, dropna=False, as_index=False).agg(
+            **{target: (source, "sum") for source, target in present.items()},
+            observed_rounds=("post_branch_horizon", "count"),
+        )
+    started = pd.to_datetime(episodes.get("started_at"), errors="coerce", utc=True)
+    finished = pd.to_datetime(episodes.get("finished_at"), errors="coerce", utc=True)
+    latency = (finished - started).dt.total_seconds()
+    totals = {
+        "parent_episodes": int(len(episodes)),
+        "provider_requests": float(pd.to_numeric(episodes.get("usage_requests"), errors="coerce").sum()),
+        "input_tokens": float(pd.to_numeric(episodes.get("usage_input_tokens"), errors="coerce").sum()),
+        "output_tokens": float(pd.to_numeric(episodes.get("usage_output_tokens"), errors="coerce").sum()),
+        "latency_seconds": float(latency.sum(min_count=1)),
+        "currency_cost": math.nan,
+        "currency_cost_status": "unavailable_without_authoritative_quote",
+    }
+    for key, value in totals.items():
+        grouped[key] = value
+    return grouped
+
+
+def sensing_activation_response(
+    rounds: pd.DataFrame,
+    *,
+    bootstrap_resamples: int,
+    confidence: float,
+    seed: int,
+) -> pd.DataFrame:
+    """Optional randomized-gate lag-one response for sensing branches only."""
+
+    sensing = rounds[
+        rounds["branch_policy"].isin(("sensing_truth", "sensing_false"))
+    ].copy()
+    keys = ["q", "rho", "branch_policy", "posting_budget"]
+    rows: list[dict[str, Any]] = []
+    for group_index, (coordinates, group) in enumerate(
+        sensing.groupby(keys, dropna=False, sort=True)
+    ):
+        contributions: list[dict[str, Any]] = []
+        for record in group.to_dict(orient="records"):
+            probability = record.get(
+                "controller_probability_U1_given_Y",
+                record.get(
+                    "controller_advocate_probability",
+                    record.get("round_controller_advocate_probability"),
+                ),
+            )
+            action = record.get("controller_sampled_U")
+            target = record.get("controller_target_semantic_id")
+            if (
+                probability is None
+                or action is None
+                or target is None
+                or pd.isna(probability)
+                or pd.isna(action)
+                or pd.isna(target)
+            ):
+                continue
+            propensity = float(probability)
+            if not 0.0 < propensity < 1.0:
+                continue
+            activated = int(action)
+            if activated not in (0, 1):
+                continue
+            population = int(record["N"])
+            change = (
+                _count(record, str(target)) - _count_before(record, str(target))
+            ) / population
+            contribution = (
+                activated / propensity
+                - (1 - activated) / (1 - propensity)
+            ) * change
+            contributions.append(
+                {
+                    "parent_id": str(record["parent_id"]),
+                    "contribution": contribution,
+                }
+            )
+        frame = pd.DataFrame(contributions)
+        estimate = (
+            float(frame["contribution"].mean()) if not frame.empty else math.nan
+        )
+        ci_low = ci_high = math.nan
+        parents = (
+            frame["parent_id"].drop_duplicates().to_numpy()
+            if not frame.empty
+            else np.array([])
+        )
+        if len(parents) and bootstrap_resamples > 0:
+            rng = np.random.default_rng(seed + group_index)
+            draws = []
+            for _ in range(bootstrap_resamples):
+                sampled = rng.choice(parents, size=len(parents), replace=True)
+                values = [
+                    value
+                    for parent in sampled
+                    for value in frame.loc[
+                        frame["parent_id"] == parent, "contribution"
+                    ].tolist()
+                ]
+                draws.append(float(np.mean(values)))
+            alpha = (1.0 - confidence) / 2.0
+            ci_low = float(np.quantile(draws, alpha))
+            ci_high = float(np.quantile(draws, 1.0 - alpha))
+        rows.append(
+            {
+                **dict(zip(keys, coordinates, strict=True)),
+                "metric": "tau_hat_1",
+                "estimate": estimate,
+                "ci_low": ci_low,
+                "ci_high": ci_high,
+                "units": "target_fraction_per_round",
+                "eligible_rounds": int(len(frame)),
+                "effective_K": int(len(parents)),
+                "bootstrap_unit": "parent",
+                "support_status": (
+                    "supported" if len(frame) else "unsupported_no_eligible_rounds"
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def branch_round_metrics(
+    rounds: pd.DataFrame,
+    *,
+    bootstrap_resamples: int,
+    null_permutations: int,
+    confidence: float,
+    seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Traditional round metrics estimated separately inside each branch.
+
+    This deliberately synthesizes one estimator cell per policy/budget rather
+    than allowing the generic cell-level analysis to pool mutually exclusive
+    continuation policies. The authoritative round-information engine remains
+    responsible for CMI, susceptibility, support, bootstrap, and nulls.
+    """
+
+    from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
+        ADVOCATE_TARGET,
+        NO_OP,
+        round_information_analysis,
+    )
+    from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
+        adapt_relational_round_record,
+    )
+
+    continuation = rounds[
+        rounds["branch_policy"].isin(("none", *CONTROLLED_POLICIES))
+    ].copy()
+    keys = ["q", "rho", "branch_policy", "posting_budget"]
+    metric_rows: list[dict[str, Any]] = []
+    null_rows: list[dict[str, Any]] = []
+    for group_index, (coordinates, group) in enumerate(
+        continuation.groupby(keys, dropna=False, sort=True)
+    ):
+        base = dict(zip(keys, coordinates, strict=True))
+        branch_cell = "|".join(
+            str(base[key]) for key in ("q", "rho", "branch_policy", "posting_budget")
+        )
+        events = [
+            adapt_relational_round_record(
+                row,
+                cell_id=branch_cell,
+                episode_id=str(row["parent_id"]),
+            )
+            for row in group.to_dict(orient="records")
+        ]
+        estimates, nulls = round_information_analysis(
+            events,
+            statistics=BRANCH_ROUND_STATISTICS,
+            bootstrap_resamples=bootstrap_resamples,
+            null_permutations=null_permutations,
+            confidence=confidence,
+            seed=seed + group_index,
+        )
+        by_name = {str(item["statistic"]): item for item in estimates}
+        aliases = {
+            "round_target_actuation_cmi": "T_pi",
+            "round_target_information_fraction": "eta_IF",
+            "round_target_susceptibility": "chi",
+            "round_sensor_mae": "sensor_MAE",
+            "round_sensor_mse": "sensor_MSE",
+            "round_controller_action_entropy": "controller_action_entropy",
+        }
+        for name, alias in aliases.items():
+            item = by_name.get(name)
+            if item is None:
+                metric_rows.append(
+                    {
+                        **base,
+                        "metric": alias,
+                        "source_metric": name,
+                        "estimate": math.nan,
+                        "support_status": "unavailable",
+                        "n_observations": len(events),
+                        "n_parents": int(group["parent_id"].nunique()),
+                    }
+                )
+                continue
+            metric_rows.append(
+                {
+                    **base,
+                    "metric": alias,
+                    "source_metric": name,
+                    "estimate": item.get("estimate"),
+                    "ci_low": item.get("ci_low"),
+                    "ci_high": item.get("ci_high"),
+                    "support_status": item.get("support_status"),
+                    "estimator_variant": item.get("main_estimator_variant"),
+                    "n_observations": item.get("n_rounds", len(events)),
+                    "n_parents": int(group["parent_id"].nunique()),
+                    "action_entropy_ceiling_bits": item.get(
+                        "conditional_action_entropy_bits"
+                    ),
+                }
+            )
+        actions = [event.U_k for event in events if event.U_k in {ADVOCATE_TARGET, NO_OP}]
+        activation = (
+            sum(action == ADVOCATE_TARGET for action in actions) / len(actions)
+            if actions
+            else math.nan
+        )
+        transfer = by_name.get("round_target_actuation_cmi", {}).get("estimate")
+        susceptibility = by_name.get("round_target_susceptibility", {}).get("estimate")
+        eta_ir = math.nan
+        if (
+            transfer is not None
+            and susceptibility is not None
+            and math.isfinite(float(transfer))
+            and float(transfer) > 0
+            and math.isfinite(float(susceptibility))
+        ):
+            eta_ir = (
+                2
+                * activation
+                * (1 - activation)
+                * float(susceptibility) ** 2
+                / (math.log(2) * float(transfer))
+            )
+        metric_rows.append(
+            {
+                **base,
+                "metric": "eta_IR",
+                "source_metric": "eta_ir",
+                "estimate": eta_ir,
+                "support_status": (
+                    "supported"
+                    if math.isfinite(eta_ir)
+                    else "unsupported_constant_action_or_zero_information"
+                ),
+                "activation_frequency": activation,
+                "n_observations": len(events),
+                "n_parents": int(group["parent_id"].nunique()),
+            }
+        )
+        null_rows.extend({**base, **item} for item in nulls)
+    return pd.DataFrame(metric_rows), pd.DataFrame(null_rows)
+
+
+def endpoint_table(rounds: pd.DataFrame) -> pd.DataFrame:
+    """One semantic endpoint row per parent, branch, copy, target, and horizon."""
+
+    rows: list[dict[str, Any]] = []
+    continuation = rounds[
+        rounds.get("branch_policy", pd.Series(index=rounds.index, dtype=object)).isin(
+            ("none", *CONTROLLED_POLICIES)
+        )
+    ]
+    for row in continuation.to_dict(orient="records"):
+        correct = str(row.get("correct_answer_semantic_id") or row.get("correct_answer"))
+        controller = row.get("controller_target_semantic_id")
+        controller_present = controller is not None and not pd.isna(controller)
+        targets = [("truth", correct)]
+        if controller_present and str(controller) != correct:
+            targets.append(("false_target", str(controller)))
+        elif (
+            row.get("false_target_semantic_id") is not None
+            and not pd.isna(row.get("false_target_semantic_id"))
+        ):
+            targets.append(("false_target", str(row["false_target_semantic_id"])))
+        for target_semantics, answer in targets:
+            rows.append({
+                **{key: row.get(key) for key in (
+                    "parent_id", "checkpoint_id", "checkpoint_hash", "branch_policy",
+                    "posting_budget", "copy_id", "q", "rho", "N", "L", "M",
+                    "post_branch_horizon", "absolute_round",
+                )},
+                "target_semantics": target_semantics,
+                "target_answer": answer,
+                "n_0": _count_before(row, answer) if int(row.get("post_branch_horizon", 0)) == 1 else None,
+                "target_count": _count(row, answer),
+            })
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+    result["target_fraction"] = pd.to_numeric(result["target_count"]) / pd.to_numeric(result["N"])
+    result["n_0"] = result.groupby(
+        ["parent_id", "copy_id", "target_semantics"], dropna=False
+    )["n_0"].transform(lambda values: values.dropna().iloc[0] if values.notna().any() else np.nan)
+    return result
+
+
+def _parent_bootstrap(
+    values: pd.DataFrame, *, resamples: int, confidence: float, seed: int
+) -> tuple[float, float]:
+    if values.empty or resamples <= 0:
+        return math.nan, math.nan
+    parents = values["parent_id"].drop_duplicates().to_numpy()
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(resamples):
+        sampled = rng.choice(parents, size=len(parents), replace=True)
+        draws.append(float(np.mean([
+            values.loc[values["parent_id"] == parent, "paired_difference"].mean()
+            for parent in sampled
+        ])))
+    alpha = (1.0 - confidence) / 2.0
+    return float(np.quantile(draws, alpha)), float(np.quantile(draws, 1 - alpha))
+
+
+def paired_response(
+    endpoints: pd.DataFrame,
+    *,
+    horizons: Sequence[int] = (1, 10),
+    bootstrap_resamples: int = 2000,
+    confidence: float = 0.95,
+    seed: int = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Controlled-minus-shared-none effects with whole-parent resampling."""
+
+    data = endpoints[endpoints["post_branch_horizon"].isin(horizons)].copy()
+    baseline = data[data["branch_policy"] == "none"].rename(
+        columns={"target_count": "baseline_count", "target_fraction": "baseline_fraction"}
+    )
+    controlled = data[data["branch_policy"].isin(CONTROLLED_POLICIES)].copy()
+    keys = ["parent_id", "copy_id", "q", "rho", "target_semantics", "post_branch_horizon"]
+    paired = controlled.merge(
+        baseline[keys + ["baseline_count", "baseline_fraction"]],
+        on=keys,
+        how="left",
+        validate="many_to_one",
+    )
+    paired["paired_difference"] = paired["target_fraction"] - paired["baseline_fraction"]
+    group_keys = [
+        "q", "rho", "branch_policy", "posting_budget", "target_semantics",
+        "post_branch_horizon",
+    ]
+    summaries = []
+    for index, (coordinates, group) in enumerate(paired.groupby(group_keys, dropna=False, sort=True)):
+        parent_values = group.groupby("parent_id", as_index=False).agg(
+            paired_difference=("paired_difference", "mean")
+        )
+        low, high = _parent_bootstrap(
+            parent_values,
+            resamples=bootstrap_resamples,
+            confidence=confidence,
+            seed=seed + index,
+        )
+        estimate = float(parent_values["paired_difference"].mean())
+        summaries.append({
+            **dict(zip(group_keys, coordinates, strict=True)),
+            "estimate_fraction": estimate,
+            "estimate_percentage_points": 100.0 * estimate,
+            "ci_low": low,
+            "ci_high": high,
+            "effective_K": int(parent_values["parent_id"].nunique()),
+            "missing_pairs": int(group["baseline_count"].isna().sum()),
+            "bootstrap_unit": "parent",
+        })
+    return paired, pd.DataFrame(summaries)
+
+
+def assigned_policy_information(
+    paired: pd.DataFrame, *, population_size: int, smoothing: Sequence[float] = (0, 1, 12.5)
+) -> pd.DataFrame:
+    """Balanced A-vs-none CMI adapted to the established direct-count engine."""
+
+    rows = []
+    group_keys = [
+        "q", "rho", "branch_policy", "posting_budget", "target_semantics",
+        "post_branch_horizon",
+    ]
+    for coordinates, group in paired.dropna(subset=["baseline_count"]).groupby(group_keys, dropna=False):
+        labels = [0] * len(group) + [1] * len(group)
+        outcomes = group["baseline_count"].astype(int).tolist() + group["target_count"].astype(int).tolist()
+        # The checkpoint count is exactly the baseline branch's h=0 count,
+        # retained in the endpoint input as n_0 by the canonical builder.
+        starts = group["n_0"].astype(int).tolist() * 2 if "n_0" in group else [0] * (2 * len(group))
+        starting_support = group["n_0"].astype(int).value_counts()
+        support = {
+            "n_parents": int(group["parent_id"].nunique()),
+            "n_balanced_observations": int(2 * len(group)),
+            "label_0_count": int(len(group)),
+            "label_1_count": int(len(group)),
+            "occupied_starting_states": int(len(starting_support)),
+            "singleton_starting_states": int((starting_support == 1).sum()),
+            "singleton_starting_state_fraction": float(
+                (starting_support == 1).mean()
+            ),
+            "minimum_starting_state_support": int(starting_support.min()),
+        }
+        estimate = conditional_mutual_information(
+            labels, outcomes, starts,
+            x_levels=(0, 1), y_levels=range(population_size + 1),
+        )
+        base = dict(zip(group_keys, coordinates, strict=True))
+        rows.extend([
+            {**base, **support, "estimator": "frequency_unsmoothed", "estimate_bits": estimate.unsmoothed},
+            {**base, **support, "estimator": "frequency_jeffreys_engine", "estimate_bits": estimate.jeffreys},
+            {**base, **support, "estimator": "frequency_miller_madow", "estimate_bits": estimate.miller_madow},
+        ])
+        z_levels = sorted(set(starts))
+        zi = {value: index for index, value in enumerate(z_levels)}
+        counts = np.zeros((2, len(z_levels), population_size + 1), dtype=float)
+        for a, n, m in zip(labels, starts, outcomes, strict=True):
+            counts[a, zi[n], m] += 1
+        for lam in smoothing:
+            if float(lam) == 0:
+                continue
+            smoothed = counts + float(lam) / (population_size + 1)
+            value = conditional_mutual_information_from_counts(smoothed).unsmoothed
+            rows.append({
+                **base,
+                **support,
+                "estimator": f"uniform_row_smoothing_lambda_{lam:g}",
+                "estimate_bits": value,
+            })
+    return pd.DataFrame(rows)
+
+
+def _features(n: np.ndarray, m: np.ndarray, population_size: int) -> np.ndarray:
+    x = n / population_size
+    delta = (m - n) / population_size
+    return np.column_stack((x, delta, x * delta, delta**2))
+
+
+def _folds(groups: np.ndarray, folds: int, seed: int) -> list[tuple[np.ndarray, np.ndarray]]:
+    unique = np.unique(groups)
+    rng = np.random.default_rng(seed)
+    shuffled = rng.permutation(unique)
+    assignment = {group: index % folds for index, group in enumerate(shuffled)}
+    return [
+        (np.flatnonzero([assignment[g] != fold for g in groups]),
+         np.flatnonzero([assignment[g] == fold for g in groups]))
+        for fold in range(folds)
+    ]
+
+
+def cross_fitted_classifier_score(
+    paired_group: pd.DataFrame,
+    *,
+    population_size: int,
+    seed: int = 1,
+    penalties: Sequence[float] = (0.01, 0.1, 1.0, 10.0),
+    outer_folds: int = 5,
+) -> Mapping[str, Any]:
+    """Grouped nested-CV predictive-information lower-bound score."""
+
+    group = paired_group.dropna(subset=["baseline_count"]).copy()
+    parents = group["parent_id"].astype(str).to_numpy()
+    labels = np.tile(np.array([0, 1]), len(group))
+    starts0 = group.get("n_0", pd.Series(0, index=group.index)).astype(float).to_numpy()
+    starts = np.repeat(starts0, 2)
+    outcomes = np.column_stack((group["baseline_count"], group["target_count"])).reshape(-1).astype(float)
+    row_groups = np.repeat(parents, 2)
+    X = _features(starts, outcomes, population_size)
+    folds = min(outer_folds, len(np.unique(row_groups)))
+    if folds < 2:
+        return {"estimate_bits": math.nan, "held_out_log_loss": math.nan, "candidate": "constant_1_2"}
+    probabilities = np.full(len(labels), 0.5)
+    chosen: list[str] = []
+    for fold_index, (train, test) in enumerate(_folds(row_groups, folds, seed)):
+        candidates: list[tuple[float, str, float | None]] = [(math.log(2), "constant_1_2", None)]
+        inner_groups = row_groups[train]
+        inner_folds = min(3, len(np.unique(inner_groups)))
+        if inner_folds >= 2:
+            for penalty in penalties:
+                losses = []
+                for inner_train, inner_test in _folds(inner_groups, inner_folds, seed + fold_index + 101):
+                    model = make_pipeline(
+                        StandardScaler(),
+                        LogisticRegression(C=float(penalty), max_iter=2000, random_state=seed),
+                    )
+                    model.fit(X[train][inner_train], labels[train][inner_train])
+                    losses.append(log_loss(labels[train][inner_test], model.predict_proba(X[train][inner_test])[:, 1], labels=[0, 1]))
+                candidates.append((float(np.mean(losses)), f"logistic_C_{penalty:g}", float(penalty)))
+        _, name, penalty = min(candidates, key=lambda item: item[0])
+        chosen.append(name)
+        if penalty is not None:
+            model = make_pipeline(
+                StandardScaler(),
+                LogisticRegression(C=penalty, max_iter=2000, random_state=seed + fold_index),
+            )
+            model.fit(X[train], labels[train])
+            probabilities[test] = model.predict_proba(X[test])[:, 1]
+    clipped = np.clip(probabilities, 1e-6, 1 - 1e-6)
+    true_probability = np.where(labels == 1, clipped, 1 - clipped)
+    return {
+        "estimate_bits": float(np.mean(np.log2(true_probability / 0.5))),
+        "held_out_log_loss": float(log_loss(labels, clipped, labels=[0, 1])),
+        "held_out_brier": float(brier_score_loss(labels, clipped)),
+        "outer_folds": folds,
+        "feature_definition": "n0/N, delta/N, interaction, delta_squared",
+        "penalty_grid": list(penalties),
+        "chosen_candidates": chosen,
+        "probability_clip": [1e-6, 1 - 1e-6],
+        "calibration": "none",
+        "parents": int(len(np.unique(row_groups))),
+    }
+
+
+def classifier_analysis(
+    paired: pd.DataFrame,
+    *,
+    population_size: int,
+    seed: int,
+    repeated_splits: int = 5,
+    label_swap_permutations: int = 100,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    keys = ["q", "rho", "branch_policy", "posting_budget", "target_semantics", "post_branch_horizon"]
+    estimates, nulls = [], []
+    rng = np.random.default_rng(seed)
+    for group_index, (coordinates, group) in enumerate(paired.groupby(keys, dropna=False)):
+        base = dict(zip(keys, coordinates, strict=True))
+        for repeat in range(repeated_splits):
+            result = cross_fitted_classifier_score(
+                group, population_size=population_size, seed=seed + group_index * 100 + repeat
+            )
+            estimates.append({**base, "split_repeat": repeat, **result})
+        for permutation in range(label_swap_permutations):
+            swapped = group.copy()
+            mask = {parent: bool(rng.integers(0, 2)) for parent in group["parent_id"].unique()}
+            for index, row in swapped.iterrows():
+                if mask[row["parent_id"]]:
+                    swapped.at[index, "baseline_count"], swapped.at[index, "target_count"] = (
+                        row["target_count"], row["baseline_count"]
+                    )
+            result = cross_fitted_classifier_score(
+                swapped, population_size=population_size, seed=seed + permutation + 10000
+            )
+            nulls.append({**base, "permutation": permutation, "estimate_bits": result["estimate_bits"]})
+    return pd.DataFrame(estimates), pd.DataFrame(nulls)
+
+
+def render_checkpoint_plots(
+    effects: pd.DataFrame,
+    trajectories: pd.DataFrame,
+    information: pd.DataFrame,
+    output_dir: str | Path,
+    resources: pd.DataFrame | None = None,
+) -> list[Path]:
+    import matplotlib.pyplot as plt
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for name, frame, x, y in (
+        ("paired_effects", effects, "branch_policy", "estimate_percentage_points"),
+        ("trajectories", trajectories, "post_branch_horizon", "target_fraction"),
+        ("assigned_policy_information", information, "estimator", "estimate_bits"),
+        (
+            "observed_controller_resources",
+            pd.DataFrame() if resources is None else resources,
+            "branch_policy",
+            "controller_posts",
+        ),
+    ):
+        if frame.empty or x not in frame or y not in frame:
+            continue
+        figure, axis = plt.subplots(figsize=(8, 4.5), constrained_layout=True)
+        for label, group in frame.groupby([column for column in ("q", "rho") if column in frame], dropna=False):
+            summary = group.groupby(x, as_index=False)[y].mean()
+            axis.plot(summary[x].astype(str), summary[y], marker="o", label=str(label))
+        axis.set(xlabel=x, ylabel=y, title=name.replace("_", " ").title())
+        axis.tick_params(axis="x", rotation=30)
+        if axis.lines:
+            axis.legend()
+        path = root / f"checkpoint_{name}.png"
+        figure.savefig(path, dpi=160)
+        plt.close(figure)
+        paths.append(path)
+    return paths
+
+
+__all__ = [
+    "VERSION", "assigned_policy_information", "classifier_analysis",
+    "branch_round_metrics", "cross_fitted_classifier_score", "endpoint_table", "paired_response",
+    "render_checkpoint_plots", "resource_report", "sensing_activation_response",
+    "validate_checkpoint_ensemble",
+]

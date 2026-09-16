@@ -669,13 +669,25 @@ def build_canonical_tables(
         selected_rounds, round_selection = _completed_unique_records(
             rich_rounds or _compact_round_rows(study_id, cell, frame),
             episodes,
-            coordinate_columns=("round_index",),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+            ),
         )
         round_rows.extend(selected_rounds)
         prefix_rounds = _incomplete_unique_records(
             rich_rounds,
             episodes,
-            coordinate_columns=("round_index",),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+            ),
         )
         available_round_prefix_rows.extend(prefix_rounds)
         record_selection["available_round_prefixes"]["retained_records"] += len(
@@ -703,13 +715,27 @@ def build_canonical_tables(
         selected_micro_rows, micro_selection = _completed_unique_records(
             discovered_micro_rows,
             episodes,
-            coordinate_columns=("round_index", "micro_slot_index"),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+                "micro_slot_index",
+            ),
         )
         micro_rows.extend(selected_micro_rows)
         prefix_micro_rows = _incomplete_unique_records(
             discovered_micro_rows,
             episodes,
-            coordinate_columns=("round_index", "micro_slot_index"),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+                "micro_slot_index",
+            ),
         )
         available_micro_prefix_rows.extend(prefix_micro_rows)
         record_selection["available_micro_slot_prefixes"]["retained_records"] += len(

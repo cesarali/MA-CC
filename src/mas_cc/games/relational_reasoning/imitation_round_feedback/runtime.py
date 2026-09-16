@@ -356,6 +356,7 @@ class RelationalGameResult:
     termination_reason: str
     logical_decisions: int
     validation_attempts: int
+    runtime_state: Mapping[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -372,7 +373,20 @@ class RelationalGameResult:
                 "population_rounds": len(self.rounds),
                 "microscopic_updates": len(self.interactions),
             },
+            "runtime_state": dict(self.runtime_state),
         }
+
+
+def _json_random_state(value: Any) -> Any:
+    if isinstance(value, tuple):
+        return [_json_random_state(item) for item in value]
+    return value
+
+
+def _python_random_state(value: Any) -> Any:
+    if isinstance(value, list):
+        return tuple(_python_random_state(item) for item in value)
+    return value
 
 
 async def _execute_decision(
@@ -881,8 +895,19 @@ async def run_relational_imitation_round_feedback_game(
     token_counter: TokenCounter | None = None,
     observer: Any | None = None,
     control: Control | None = None,
+    initial_state: RelationalGameState | None = None,
+    start_round: int | None = None,
+    continuation_length: int | None = None,
+    continuation_seed: int | None = None,
+    restored_runtime_state: Mapping[str, Any] | None = None,
+    continuation_metadata: Mapping[str, Any] | None = None,
 ) -> RelationalGameResult:
-    """Run one episode with exactly one controller decision per population round."""
+    """Run a new episode or continue an immutable round-boundary state.
+
+    ``start_round`` is zero-based, while retained ``absolute_round`` is
+    one-based.  Thus a checkpoint after L rounds resumes with
+    ``start_round=L`` and its first child observation has horizon one.
+    """
 
     rules = game.rules(config.game)
     if config.prompt.prompt_family not in PROMPT_FAMILIES:
@@ -895,9 +920,10 @@ async def run_relational_imitation_round_feedback_game(
             f"prompt.prompt_version is {config.prompt.prompt_version} but "
             f"game.options.prompt_version is {rules.prompt_version}; they must match"
         )
+    continuing = initial_state is not None
 
     counter = token_counter or RegexTokenCounter()
-    root = Seed(config.execution.seed)
+    root = Seed(config.execution.seed if continuation_seed is None else continuation_seed)
     recovery = _RecoveryLedger(observer)
     participant_rng = root.derive("relational-focal-and-peer-selection").create_random()
     sensor_rng = root.derive("relational-controller-sensor-policy").create_random()
@@ -905,6 +931,18 @@ async def run_relational_imitation_round_feedback_game(
         "relational-controller-slot-replacement"
     ).create_random()
     board_rng = root.derive("relational-blackboard-sampling").create_random()
+    restored = {} if restored_runtime_state is None else dict(restored_runtime_state)
+    restore_rng_positions = continuation_seed is None or int(continuation_seed) == int(
+        restored.get("root_seed", config.execution.seed)
+    )
+    for name, rng in (
+        ("participant_rng", participant_rng),
+        ("sensor_rng", sensor_rng),
+        ("replacement_rng", replacement_rng),
+        ("board_rng", board_rng),
+    ):
+        if restore_rng_positions and name in restored:
+            rng.setstate(_python_random_state(restored[name]))
 
     resolved_control = (
         None if control is None or isinstance(control, NoneControl) else control
@@ -948,8 +986,18 @@ async def run_relational_imitation_round_feedback_game(
         and controller_timing == TIMING_DAWN_ONLY
     )
     evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
-    state = game.initialize(config.game, config.execution.seed)
+    state = game.initialize(config.game, config.execution.seed) if initial_state is None else initial_state
     task = game.load_task(config.game)
+    if continuing:
+        if state.terminated:
+            raise ValueError("cannot continue a terminated relational state")
+        if canonical_hash(state.to_dict()["task"]) != canonical_hash(task.to_dict()):
+            raise ValueError("restored state task does not match continuation config")
+        state_rules = dict(state.data.get("rules", {}))
+        if int(state_rules.get("social_group_size", -1)) != rules.social_group_size:
+            raise ValueError("restored state q does not match continuation config")
+        if float(state_rules.get("epistemic_persistence", -1.0)) != rules.epistemic_persistence:
+            raise ValueError("restored state rho does not match continuation config")
     truthful_validator = getattr(
         resolved_control, "validate_truthful_report_task", None
     )
@@ -972,7 +1020,9 @@ async def run_relational_imitation_round_feedback_game(
     initialization_artifact_hash: str | None = None
     initialization_repetition: int | None = None
     initialization_source = "provider_free"
-    if not state.initial_votes and paired_initialization_required(config):
+    if continuing:
+        initialization_source = "parent_checkpoint"
+    elif not state.initial_votes and paired_initialization_required(config):
         artifact, _, state = read_initialization_artifact(
             initialization_artifact_path(config, config.execution.seed),
             game,
@@ -1010,6 +1060,36 @@ async def run_relational_imitation_round_feedback_game(
     physical_initial_state_hash = canonical_hash(
         physical_initial_state_projection(initial_state)
     )
+    initialization_context = dict(restored.get("initialization_context", {}))
+    initial_vote_vector = list(initial_state.initial_votes)
+    initial_active_fact_ids_by_agent = [
+        list(agent.active_fact_ids) for agent in initial_state.agents
+    ]
+    initial_known_fact_ids_by_agent = [
+        list(agent.known_fact_ids) for agent in initial_state.agents
+    ]
+    initial_task_id = str(initial_state.task["task_id"])
+    if continuing and initialization_context:
+        initialization_source = str(initialization_context["initialization_source"])
+        initialization_repetition = initialization_context.get(
+            "initialization_repetition"
+        )
+        initialization_artifact_hash = initialization_context.get(
+            "initialization_artifact_hash"
+        )
+        physical_initial_state_hash = str(
+            initialization_context["physical_initial_state_hash"]
+        )
+        initial_vote_vector = list(initialization_context["initial_vote_vector"])
+        initial_active_fact_ids_by_agent = [
+            list(value)
+            for value in initialization_context["initial_active_fact_ids_by_agent"]
+        ]
+        initial_known_fact_ids_by_agent = [
+            list(value)
+            for value in initialization_context["initial_known_fact_ids_by_agent"]
+        ]
+        initial_task_id = str(initialization_context["initial_task_id"])
     _notify(
         observer,
         "event",
@@ -1020,7 +1100,19 @@ async def run_relational_imitation_round_feedback_game(
         initialization_artifact_hash=initialization_artifact_hash,
         physical_initial_state_hash=physical_initial_state_hash,
     )
-    _notify(observer, "record_semantic_initialization", state=initial_state.to_dict())
+    if not continuing:
+        _notify(observer, "record_semantic_initialization", state=initial_state.to_dict())
+    else:
+        _notify(
+            observer,
+            "event",
+            "relational_checkpoint_restored",
+            **{
+                "start_round": start_round,
+                "continuation_seed": int(root),
+                **dict(continuation_metadata or {}),
+            },
+        )
 
     interactions: list[RelationalInteractionRecord] = []
     round_records: list[RelationalRoundRecord] = []
@@ -1029,11 +1121,31 @@ async def run_relational_imitation_round_feedback_game(
     validation_attempts = sum(
         decision.validation_attempts for decision in initial_decisions
     )
-    selected_report_rounds: dict[str, list[int]] = {}
-    previous_communication_modes: list[CommunicationMode] = []
-    for round_index in range(0 if rules.initialization_only else rules.rounds):
+    selected_report_rounds: dict[str, list[int]] = {
+        str(key): [int(item) for item in value]
+        for key, value in dict(restored.get("selected_report_rounds", {})).items()
+    }
+    previous_communication_modes: list[CommunicationMode] = [
+        CommunicationMode(str(value))
+        for value in restored.get("previous_communication_modes", ())
+    ]
+    first_round = 0 if start_round is None else int(start_round)
+    if first_round < 0 or first_round > rules.rounds:
+        raise ValueError("start_round must be between zero and configured rounds")
+    if continuing and state.turn != first_round * rules.n_agents:
+        raise ValueError("restored state is not at the requested round boundary")
+    available_rounds = rules.rounds - first_round
+    run_rounds = available_rounds if continuation_length is None else int(continuation_length)
+    if run_rounds < 0 or run_rounds > available_rounds:
+        raise ValueError("continuation_length exceeds the configured horizon")
+    if rules.initialization_only:
+        run_rounds = 0
+    branch_metadata = dict(continuation_metadata or {})
+    for round_index in range(first_round, first_round + run_rounds):
         if state.terminated:
             break
+        round_logical_decisions_before = logical_decisions
+        round_validation_attempts_before = validation_attempts
         options = tuple(state.possible_answers)
         population_before = [str(agent.committed_action) for agent in state.agents]
 
@@ -1067,6 +1179,8 @@ async def run_relational_imitation_round_feedback_game(
             if round_signal is None
             else round_signal.metadata.get("advocacy_probability")
         )
+        if branch_metadata.get("branch_policy") == "none":
+            probability = 0.0
 
         # Frozen dawn-board protocol: the vote sensor and U draw happen first;
         # snapshot the previous public day for the communication chooser, then
@@ -1918,6 +2032,16 @@ async def run_relational_imitation_round_feedback_game(
                 replaced_peer_slot=replaced_peer_slot,
                 board_fields=board_fields,
             )
+            if continuing and branch_metadata:
+                transition = replace(
+                    transition,
+                    event={
+                        **dict(transition.event or {}),
+                        "absolute_round": round_index + 1,
+                        "post_branch_horizon": round_index - first_round + 1,
+                        **branch_metadata,
+                    },
+                )
             event = transition.event or {}
             if sampled_controller_report_ids and target is not None:
                 if event.get("vote_before") != target:
@@ -2078,6 +2202,8 @@ async def run_relational_imitation_round_feedback_game(
         controller_sampled_u = (
             None if round_signal is None else int(action == ADVOCATE_TARGET)
         )
+        if branch_metadata.get("branch_policy") == "none":
+            controller_sampled_u = 0
         controller_injection_global_indices = [
             round_index * rules.n_agents + position for position in controlled_positions
         ]
@@ -2122,6 +2248,14 @@ async def run_relational_imitation_round_feedback_game(
         round_event = {
             "episode_id": f"{state.task['task_id']}-{state.data['seed']}",
             "round_index": round_index,
+            "absolute_round": round_index + 1,
+            "post_branch_horizon": (
+                None if not continuing else round_index - first_round + 1
+            ),
+            "continuation_seed": (
+                None if continuation_seed is None else int(continuation_seed)
+            ),
+            **branch_metadata,
             "seed": int(state.data["seed"]),
             "task_id": state.task["task_id"],
             "task_family": state.task.get("task_family", rules.task_family),
@@ -2130,6 +2264,18 @@ async def run_relational_imitation_round_feedback_game(
             "K": len(options),
             "N": rules.n_agents,
             "actual_update_count": rules.n_agents,
+            "logical_decisions_this_round": (
+                logical_decisions - round_logical_decisions_before
+            ),
+            "validation_attempts_this_round": (
+                validation_attempts - round_validation_attempts_before
+            ),
+            "retry_attempts_this_round": max(
+                0,
+                validation_attempts
+                - round_validation_attempts_before
+                - (logical_decisions - round_logical_decisions_before),
+            ),
             "dynamics_mode": rules.dynamics_mode,
             "social_group_size": rules.social_group_size,
             "social_mode": rules.social_mode,
@@ -2310,13 +2456,9 @@ async def run_relational_imitation_round_feedback_game(
             "population_state_before": population_before,
             "population_state_after": population_after,
             "agent_ids": [str(agent.agent_id) for agent in state.agents],
-            "initial_vote_vector": list(initial_state.initial_votes),
-            "initial_active_fact_ids_by_agent": [
-                list(agent.active_fact_ids) for agent in initial_state.agents
-            ],
-            "initial_known_fact_ids_by_agent": [
-                list(agent.known_fact_ids) for agent in initial_state.agents
-            ],
+            "initial_vote_vector": initial_vote_vector,
+            "initial_active_fact_ids_by_agent": initial_active_fact_ids_by_agent,
+            "initial_known_fact_ids_by_agent": initial_known_fact_ids_by_agent,
             "persistence_deactivated_pairs": [
                 {"agent_id": agent_id, "fact_id": fact_id}
                 for agent_id, fact_id in deactivated
@@ -2329,7 +2471,7 @@ async def run_relational_imitation_round_feedback_game(
                 str(agent.agent_id): list(agent.known_fact_ids)
                 for agent in state.agents
             },
-            "initial_task_id": str(initial_state.task["task_id"]),
+            "initial_task_id": initial_task_id,
             "initialization_source": initialization_source,
             "initialization_repetition": initialization_repetition,
             "initialization_artifact_hash": initialization_artifact_hash,
@@ -2642,6 +2784,28 @@ async def run_relational_imitation_round_feedback_game(
         termination_reason=termination,
         logical_decisions=logical_decisions,
         validation_attempts=validation_attempts,
+        runtime_state={
+            "schema_version": 1,
+            "root_seed": int(root),
+            "participant_rng": _json_random_state(participant_rng.getstate()),
+            "sensor_rng": _json_random_state(sensor_rng.getstate()),
+            "replacement_rng": _json_random_state(replacement_rng.getstate()),
+            "board_rng": _json_random_state(board_rng.getstate()),
+            "selected_report_rounds": selected_report_rounds,
+            "previous_communication_modes": [
+                mode.value for mode in previous_communication_modes
+            ],
+            "initialization_context": {
+                "initialization_source": initialization_source,
+                "initialization_repetition": initialization_repetition,
+                "initialization_artifact_hash": initialization_artifact_hash,
+                "physical_initial_state_hash": physical_initial_state_hash,
+                "initial_vote_vector": initial_vote_vector,
+                "initial_active_fact_ids_by_agent": initial_active_fact_ids_by_agent,
+                "initial_known_fact_ids_by_agent": initial_known_fact_ids_by_agent,
+                "initial_task_id": initial_task_id,
+            },
+        },
     )
 
 
