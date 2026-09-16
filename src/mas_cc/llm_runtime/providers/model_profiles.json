@@ -162,6 +162,63 @@
         "A live request on 2026-08-30 returned HTTP 405 when response_format=json_object was present, despite the generic metadata field. DeepInfraProvider therefore disables only its JSON-object default for this exact model.",
         "The Study 08 variant retains its explicit 4,096-token output cap; confirm prompt-only JSON compliance with the opt-in live MA-CC smoke before production."
       ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "Qwen/Qwen3-32B",
+      "family": "qwen",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-12T00:00:00Z",
+      "probe_source": "manual",
+      "supported": false,
+      "notes": [
+        "DeepInfra's authenticated model metadata listed Qwen/Qwen3-32B as active text-generation on 2026-09-12, not deprecated and with no replacement.",
+        "The metadata reports a 40,960-token context and token pricing of 0.08 USD per million input and 0.28 USD per million output; no cached-input rate is offered.",
+        "A live probe on 2026-09-12 returned a <think>...</think> block ahead of the JSON body and spent 146 output tokens on a six-token answer. This breaks strict MA-CC response contracts and inflates output cost; prefer an -Instruct variant for games."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "family": "qwen",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-12T00:00:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "DeepInfra's authenticated model metadata listed Qwen/Qwen3-235B-A22B-Instruct-2507 as active text-generation on 2026-09-12, not deprecated and with no replacement.",
+        "The metadata reports a 262,144-token context and token pricing of 0.09 USD per million input and 0.55 USD per million output; no cached-input rate is offered.",
+        "A live probe on 2026-09-12 returned a bare JSON object with no <think> block and six output tokens under the provider's json_object response format, so it honours strict response contracts."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "openai/gpt-oss-120b",
+      "family": "gpt-oss",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-14T00:00:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "DeepInfra's authenticated model metadata listed openai/gpt-oss-120b as active text-generation on 2026-09-14, not deprecated and with no replacement.",
+        "The metadata reports a 131,072-token context and token pricing of 0.037 USD per million input and 0.170 per million output.",
+        "A live concurrency sweep on 2026-09-14 returned no <think> blocks, but this model generates markedly longer completions than the Qwen and DeepSeek instruct models at the same prompt (roughly 450-550 output tokens where they produced 120-380)."
+      ]
     }
   ]
 }
