@@ -124,6 +124,8 @@ class RelationalImitationRoundFeedbackGame(Game):
                 rules.task_dataset_dir,
                 rules.task_id,
                 population_size=rules.n_agents,
+                distribution_path=rules.task_distribution_path,
+                distribution_sha256=rules.task_distribution_sha256,
                 initial_information_path=rules.initial_information_path,
                 initial_information_sha256=rules.initial_information_sha256,
                 truthful_controller_design_path=(rules.truthful_controller_design_path),

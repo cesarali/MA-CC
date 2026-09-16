@@ -737,3 +737,48 @@ with metric `propensity_weighted_causal_response`. These are unnormalized
 causal-response estimates, distinct from available-mass susceptibility and
 `round_target_susceptibility`. No persistence-aggregated phase estimate is
 created by this extension.
+
+### Null-model comparisons
+
+`null_summary` displays whole-cell `round_target_actuation_cmi` rows from
+`primary_estimates`: budget, persistence, raw estimate, null mean and standard
+deviation, stored raw-minus-null estimate, permutation p-value, and draw count.
+Duplicate budget/persistence rows are rejected. Values are recorded in the
+source ledger. Negative excess information is retained; p-values are explicitly
+unadjusted for multiple comparisons. The null standard deviation describes
+the randomization distribution, not uncertainty in the observed estimate.
+These fields can also be selected as phase-map values when state-local null
+rows exist. The current truth-control archive retains null summaries only at
+whole-cell resolution, so its report includes the table without null phase maps.
+
+### Target occupancy by persistence
+
+`occupancy_bar_summary` displays a precomputed `source_summary` Parquet table
+(path relative to the report YAML), with `epistemic_persistence` and
+`mean_target_share`. Generate it with
+`scripts/analysis/summarize_target_occupancy.py --source <causal_response_round_inputs.parquet> --output <summary.parquet>`.
+The summary weights retained rounds from completed episodes equally and pools
+across budgets. It is descriptive occupancy, not a causal intervention effect
+or a standardized comparison. The script records source hashes and weighting
+in a neighboring JSON file. Labels distinguish false and truth targets.
+
+### No-control reports
+
+Set `report.no_control: true` for population-outcome wording without control
+phase-map boilerplate. Use `occupancy_bar_summary` and `episode_timeseries`
+sections; omit control estimators and null sections. Bar sections accept a
+custom `title` and `description`, and episode sections accept `description`
+for measurement-boundary and selection notes.
+`scripts/analysis/summarize_no_control_outcomes.py` creates bar inputs from a
+validated complete analysis: start/end-round truth share, final episode truth
+share, collective/individual solvability, and active fact coverage. The first
+and epistemic means weight rounds equally; final truth weights episodes equally.
+The no-control Task003 report selects three episodes per persistence by sorted
+ID and records those identities in `episode_examples.json`.
+
+Target occupancy summaries support `--mode before` (default), `--mode after`,
+and `--mode final`. Before/after average over every retained round from
+completed episodes, using `x_t` and `x_after` respectively. Final selects the
+last round by `(cell_id, episode_id)` and weights completed episodes equally.
+All three pool across budgets; they are descriptive means, not causal effects.
+The controlled-study reports display all three definitions explicitly.

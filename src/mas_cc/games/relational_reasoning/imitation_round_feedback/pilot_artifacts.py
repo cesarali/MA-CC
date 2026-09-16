@@ -254,8 +254,13 @@ def build_blackboard_pilot_artifacts(
             "detailed prompt audit is incomplete; configure every round with no prompt cap"
         )
 
+    task_distribution = config.game.options.get("task_distribution")
     initial_information = config.game.options.get("initial_information")
-    if isinstance(initial_information, Mapping) and initial_information.get(
+    if isinstance(task_distribution, Mapping) and task_distribution.get(
+        "artifact_path"
+    ):
+        assignment_path = Path(str(task_distribution["artifact_path"]))
+    elif isinstance(initial_information, Mapping) and initial_information.get(
         "artifact_path"
     ):
         assignment_path = Path(str(initial_information["artifact_path"]))

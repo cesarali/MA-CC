@@ -345,16 +345,24 @@ class RunRecorder:
                 key: int(saved_usage.get(key, 0))
                 for key in ("requests", "input_tokens", "output_tokens")
             }
-            # Replay deterministically rebuilds these append-only views.  They
-            # must start empty or a resumed episode would duplicate rows.
-            for path in (
-                self._round_trajectory_path,
-                self._micro_slot_trajectory_path,
-                self._round_trajectory_path.parent / "dashboard_semantic.jsonl",
-                self._round_trajectory_path.parent
-                / "dashboard_semantic_complete.json",
-            ):
-                path.unlink(missing_ok=True)
+            ensemble = resolved_config.get("ensemble", {})
+            checkpoint_bundle = bool(
+                isinstance(ensemble, Mapping) and ensemble.get("enabled", False)
+            )
+            # Ordinary episode replay deterministically rebuilds these views.
+            # A checkpoint bundle instead skips already sealed siblings, so
+            # their append-only rows must survive while the failed child is
+            # retried; canonical aggregation supersedes the failed prefix by
+            # its full branch coordinates.
+            if not checkpoint_bundle:
+                for path in (
+                    self._round_trajectory_path,
+                    self._micro_slot_trajectory_path,
+                    self._round_trajectory_path.parent / "dashboard_semantic.jsonl",
+                    self._round_trajectory_path.parent
+                    / "dashboard_semantic_complete.json",
+                ):
+                    path.unlink(missing_ok=True)
         self._semantic_writer = None
         if self.retention_policy.semantic_dashboard:
             assert self.scientific_identity is not None
@@ -808,7 +816,15 @@ class RunRecorder:
                 self._semantic_writer.update(event, public_action)
             if "within_round_index" in event:
                 retained_fields = (
+                    "parent_id",
+                    "checkpoint_id",
+                    "checkpoint_hash",
+                    "branch_policy",
+                    "posting_budget",
+                    "copy_id",
                     "round_index",
+                    "absolute_round",
+                    "post_branch_horizon",
                     "within_round_index",
                     "microscopic_event_index",
                     "focal_agent_id",
@@ -856,6 +872,20 @@ class RunRecorder:
                     "controller_message_id",
                     "controller_message_directly_exposed",
                     "theory_status",
+                    "q",
+                    "rho",
+                    "N",
+                    "L",
+                    "M",
+                    "controller_target_semantic_id",
+                    "false_target_semantic_id",
+                    "correct_answer_semantic_id",
+                    "preparation_seed",
+                    "continuation_seed",
+                    "continuation_stream_derivation_version",
+                    "continuation_stream_identity",
+                    "branch_status",
+                    "branch_recovery_status",
                 )
                 _jsonl(
                     self._micro_slot_trajectory_path,

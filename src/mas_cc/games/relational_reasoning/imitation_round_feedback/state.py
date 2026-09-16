@@ -328,6 +328,29 @@ class RelationalAgentState(AgentState):
             "memory": _thaw(self.memory),
         }
 
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "RelationalAgentState":
+        """Restore the complete immutable agent state written by ``to_dict``."""
+
+        known = tuple(str(item) for item in value.get("known_fact_ids", ()))
+        active = tuple(str(item) for item in value.get("active_fact_ids", known))
+        if set(active) - set(known):
+            raise ValueError("active_fact_ids must be a subset of known_fact_ids")
+        return cls(
+            agent_id=AgentId(str(value["agent_id"])),
+            score=float(value.get("score", 0.0)),
+            memory=tuple(value.get("memory", ())),
+            attributes={
+                "committed_action": value.get("committed_action"),
+                "public_reason": value.get("public_reason"),
+                "public_shared_fact_id": value.get("public_shared_fact_id"),
+                "known_fact_ids": list(known),
+                "active_fact_ids": list(active),
+                "initial_fact_ids": list(value.get("initial_fact_ids", ())),
+                "fact_provenance": dict(value.get("fact_provenance", {})),
+            },
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RelationalGameState(GameState):
@@ -449,6 +472,85 @@ class RelationalGameState(GameState):
             "rules": _thaw(self.data.get("rules", {})),
         }
 
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "RelationalGameState":
+        """Round-trip a persisted relational state without prompt objects."""
+
+        if str(value.get("game_type")) != GAME_TYPE:
+            raise ValueError(f"state game_type must be {GAME_TYPE!r}")
+        agents = tuple(
+            RelationalAgentState.from_dict(item)
+            for item in value.get("agents", ())
+        )
+        board = BlackboardState.from_sequence(tuple(value.get("blackboard", ())))
+        task = dict(value["task"])
+        answers = tuple(str(item) for item in task.get("possible_answers", ()))
+        if not answers or len(set(answers)) != len(answers):
+            raise ValueError("state semantic answer alphabet must be non-empty and unique")
+        expected_agent_ids = {
+            str(item) for item in dict(task.get("agent_fact_ids", {}))
+        }
+        found_agent_ids = {str(agent.agent_id) for agent in agents}
+        if expected_agent_ids and found_agent_ids != expected_agent_ids:
+            raise ValueError("state agent identities do not match the frozen task")
+        if int(task.get("population_size", len(agents))) != len(agents):
+            raise ValueError("state population does not match the frozen task")
+        fact_ids = {str(item) for item in task.get("fact_order", ())}
+        for agent in agents:
+            if agent.committed_action not in answers:
+                raise ValueError(
+                    f"agent {agent.agent_id} vote is outside the semantic answer alphabet"
+                )
+            if set(agent.known_fact_ids) - fact_ids:
+                raise ValueError(f"agent {agent.agent_id} knows facts outside the task")
+            if set(agent.fact_provenance) != set(agent.known_fact_ids):
+                raise ValueError(
+                    f"agent {agent.agent_id} fact provenance does not match known facts"
+                )
+        initial_votes = tuple(str(item) for item in value.get("initial_votes", ()))
+        if len(initial_votes) != len(agents) or any(
+            vote not in answers for vote in initial_votes
+        ):
+            raise ValueError("state initial votes do not match the population/alphabet")
+        message_ids = [message.message_id for message in board.messages]
+        if len(message_ids) != len(set(message_ids)):
+            raise ValueError("state blackboard contains duplicate message ids")
+        creation_order = [
+            (message.round_created, message.micro_step_created)
+            for message in board.messages
+        ]
+        if creation_order != sorted(creation_order):
+            raise ValueError("state blackboard history is out of creation order")
+        agent_ids = found_agent_ids
+        for message in board.messages:
+            if message.author_kind == "agent" and message.author_id not in agent_ids:
+                raise ValueError(
+                    f"blackboard message {message.message_id!r} has unknown author"
+                )
+            if message.vote not in answers:
+                raise ValueError(
+                    f"blackboard message {message.message_id!r} vote is outside "
+                    "the semantic answer alphabet"
+                )
+        return cls(
+            game_type=GAME_TYPE,
+            turn=int(value["turn"]),
+            agents=agents,
+            terminated=bool(value.get("terminated", False)),
+            data={
+                "seed": int(value["seed"]),
+                "phase": str(value["phase"]),
+                "dynamics_mode": str(value["dynamics_mode"]),
+                "task": task,
+                "rules": dict(value.get("rules", {})),
+                "initial_votes": list(initial_votes),
+                "evaluator_history": list(value.get("evaluator_history", ())),
+                "event_history": list(value.get("event_history", ())),
+                "blackboard": board.to_list(),
+                "termination_reason": value.get("termination_reason"),
+            },
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RelationalTransition(Transition):
@@ -550,6 +652,8 @@ class RelationalRules:
     task_family: str
     task_dataset_dir: str
     task_id: str | None
+    task_distribution_path: str | None
+    task_distribution_sha256: str | None
     initial_information_path: str | None
     initial_information_sha256: str | None
     truthful_controller_design_path: str | None
@@ -649,6 +753,42 @@ class RelationalRules:
             )
         if task_family == "musr_team_allocation" and task_id is None:
             raise ValueError("MuSR Team Allocation requires game.options.task_id")
+        task_distribution = _mapping(
+            options.get("task_distribution"),
+            "game.options.task_distribution",
+        )
+        task_distribution_path = task_distribution.get("artifact_path")
+        task_distribution_sha256 = task_distribution.get("expected_file_sha256")
+        if task_distribution_path is not None and (
+            not isinstance(task_distribution_path, str)
+            or not task_distribution_path.strip()
+        ):
+            raise ValueError(
+                "game.options.task_distribution.artifact_path must be a path"
+            )
+        if task_distribution_sha256 is not None and (
+            not isinstance(task_distribution_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", task_distribution_sha256)
+        ):
+            raise ValueError(
+                "game.options.task_distribution.expected_file_sha256 must be "
+                "a lowercase 64-character SHA-256"
+            )
+        if (task_distribution_path is None) != (
+            task_distribution_sha256 is None
+        ):
+            raise ValueError(
+                "game.options.task_distribution must provide artifact_path and "
+                "expected_file_sha256 together"
+            )
+        if (
+            task_distribution_path is not None
+            and task_family != "musr_team_allocation"
+        ):
+            raise ValueError(
+                "game.options.task_distribution is supported only for "
+                "musr_team_allocation"
+            )
         initial_information = _mapping(
             options.get("initial_information"),
             "game.options.initial_information",
@@ -682,6 +822,14 @@ class RelationalRules:
             raise ValueError(
                 "game.options.initial_information is supported only for "
                 "musr_team_allocation"
+            )
+        if (
+            task_distribution_path is not None
+            and initial_information_path is not None
+        ):
+            raise ValueError(
+                "game.options.task_distribution and initial_information are "
+                "mutually exclusive"
             )
         controller_design = _mapping(
             options.get("truthful_controller_design"),
@@ -871,6 +1019,8 @@ class RelationalRules:
             task_family=task_family,
             task_dataset_dir=str(dataset_dir),
             task_id=task_id,
+            task_distribution_path=task_distribution_path,
+            task_distribution_sha256=task_distribution_sha256,
             initial_information_path=initial_information_path,
             initial_information_sha256=initial_information_sha256,
             truthful_controller_design_path=truthful_controller_design_path,

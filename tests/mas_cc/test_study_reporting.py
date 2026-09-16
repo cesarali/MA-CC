@@ -318,3 +318,19 @@ def test_epistemic_maps_preserve_support_and_reject_duplicates(tmp_path):
     write_scientific_table(analysis / 'tables', 'maps', pd.concat([rows, rows.iloc[[0]]], ignore_index=True))
     with pytest.raises(ValueError, match='duplicate epistemic phase'):
         _render_epistemic_maps(AnalysisPackage(analysis), section, figures_dir=figures, ledger=SourceLedger())
+
+
+def test_null_summary_keeps_negative_excess_and_source_values(tmp_path):
+    from mas_cc.studies.reporting import AnalysisPackage, SourceLedger, _null_summary
+    analysis = _analysis_package(tmp_path)
+    rows = pd.DataFrame([dict(metric='round_target_actuation_cmi', intervention_budget=6,
+        epistemic_persistence=0.7, estimate=0.1, null_mean=0.2, null_std=0.03,
+        null_adjusted_estimate=-0.1, p_value=0.8, null_permutations=1000,
+        null_type='policy_conditional_randomization')])
+    write_scientific_table(analysis / 'tables', 'primary_estimates', rows)
+    ledger = SourceLedger()
+    markdown, latex = _null_summary(AnalysisPackage(analysis), {}, ledger)
+    assert '-0.1' in markdown and '-0.1' in latex
+    assert 'unadjusted' in markdown
+    assert len(ledger.entries) == 8
+    assert next(e for e in ledger.entries if e['field'] == 'null_mean')['rendered_value'] == 0.2

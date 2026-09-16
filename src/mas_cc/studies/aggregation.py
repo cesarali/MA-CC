@@ -4122,6 +4122,122 @@ def _aggregate_study_local(
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    checkpoint_recipe = recipe.get("checkpoint_ensemble_outputs")
+    if checkpoint_recipe:
+        if not isinstance(checkpoint_recipe, Mapping):
+            raise ValueError("checkpoint_ensemble_outputs must be a mapping")
+        from mas_cc.analysis.checkpoint_ensemble import (
+            assigned_policy_information,
+            branch_round_metrics,
+            classifier_analysis,
+            endpoint_table,
+            paired_response,
+            resource_report,
+            sensing_activation_response,
+            validate_checkpoint_ensemble,
+        )
+
+        policies = tuple(checkpoint_recipe.get(
+            "branch_policies",
+            ("none", "always_truth", "always_false", "sensing_truth", "sensing_false"),
+        ))
+        budgets = tuple(int(value) for value in checkpoint_recipe.get("posting_budgets", (3, 12)))
+        copies = int(checkpoint_recipe.get("continuation_copies", 1))
+        continuation_rounds = int(checkpoint_recipe.get("continuation_rounds", 10))
+        checkpoint_validation = validate_checkpoint_ensemble(
+            canonical["rounds"],
+            expected_policies=policies,
+            posting_budgets=budgets,
+            continuation_copies=copies,
+            continuation_rounds=continuation_rounds,
+            expected_parents=(
+                None
+                if checkpoint_recipe.get("expected_parents") is None
+                else int(checkpoint_recipe["expected_parents"])
+            ),
+            micro_slots=canonical["micro_slots"],
+            episodes=canonical["episodes"],
+            require_complete=not allow_incomplete,
+        )
+        validation["checkpoint_ensemble"] = checkpoint_validation
+        if checkpoint_validation["errors"] and not allow_incomplete:
+            raise ValueError(
+                "checkpoint ensemble validation failed: "
+                + "; ".join(checkpoint_validation["errors"])
+            )
+        checkpoint_endpoints = endpoint_table(canonical["rounds"])
+        checkpoint_pairs, checkpoint_effects = paired_response(
+            checkpoint_endpoints,
+            horizons=tuple(int(value) for value in checkpoint_recipe.get("primary_horizons", (1, 10))),
+            bootstrap_resamples=int(settings["bootstrap_resamples"]),
+            confidence=float(settings["confidence"]),
+            seed=int(settings["seed"]),
+        )
+        population_size = int(
+            pd.to_numeric(checkpoint_endpoints["N"], errors="coerce").dropna().iloc[0]
+        )
+        checkpoint_information = assigned_policy_information(
+            checkpoint_pairs,
+            population_size=population_size,
+            smoothing=tuple(checkpoint_recipe.get("smoothing", (0, 1, 12.5))),
+        )
+        checkpoint_classifier, checkpoint_label_swap = classifier_analysis(
+            checkpoint_pairs,
+            population_size=population_size,
+            seed=int(settings["seed"]),
+            repeated_splits=int(checkpoint_recipe.get("repeated_group_splits", 5)),
+            label_swap_permutations=int(settings["null_permutations"]),
+        )
+        checkpoint_resources = resource_report(
+            canonical["rounds"], canonical["episodes"]
+        )
+        checkpoint_activation_response = (
+            sensing_activation_response(
+                canonical["rounds"],
+                bootstrap_resamples=int(settings["bootstrap_resamples"]),
+                confidence=float(settings["confidence"]),
+                seed=int(settings["seed"]),
+            )
+            if bool(checkpoint_recipe.get("activation_response", False))
+            else pd.DataFrame()
+        )
+        checkpoint_branch_round_metrics, checkpoint_branch_round_nulls = (
+            branch_round_metrics(
+                canonical["rounds"],
+                bootstrap_resamples=int(settings["bootstrap_resamples"]),
+                null_permutations=int(settings["null_permutations"]),
+                confidence=float(settings["confidence"]),
+                seed=int(settings["seed"]),
+            )
+            if bool(checkpoint_recipe.get("branch_round_metrics", False))
+            else (pd.DataFrame(), pd.DataFrame())
+        )
+        h0 = (
+            checkpoint_endpoints.sort_values("post_branch_horizon")
+            .groupby(["parent_id", "copy_id", "q", "rho", "target_semantics"], as_index=False)
+            .first()
+        )
+        h0["post_branch_horizon"] = 0
+        h0["target_count"] = h0["n_0"]
+        h0["target_fraction"] = h0["n_0"] / h0["N"]
+        h0["branch_policy"] = "checkpoint"
+        checkpoint_trajectories = pd.concat(
+            [h0, checkpoint_endpoints], ignore_index=True, sort=False
+        )
+        outputs.update({
+            "checkpoint_branch_endpoints": checkpoint_endpoints,
+            "checkpoint_paired_inputs": checkpoint_pairs,
+            "checkpoint_paired_effects": checkpoint_effects,
+            "checkpoint_trajectories": checkpoint_trajectories,
+            "checkpoint_assigned_policy_information": checkpoint_information,
+            "checkpoint_classifier_scores": checkpoint_classifier,
+            "checkpoint_label_swap_null": checkpoint_label_swap,
+            "checkpoint_resource_report": checkpoint_resources,
+            "checkpoint_activation_response": checkpoint_activation_response,
+            "checkpoint_branch_round_metrics": checkpoint_branch_round_metrics,
+            "checkpoint_branch_round_nulls": checkpoint_branch_round_nulls,
+        })
+        _write_json(analysis_dir / "validation.json", validation)
     profile.stage("derived_study_aggregates")
     paired_summary_plan = None
     derived_aggregation_config = recipe.get("derived_study_aggregates", {})
@@ -4496,6 +4612,20 @@ def _aggregate_study_local(
     }
     profile.stage("plotting")
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
+    if checkpoint_recipe:
+        from mas_cc.analysis.checkpoint_ensemble import render_checkpoint_plots
+
+        plots.extend(
+            render_checkpoint_plots(
+                outputs.get("checkpoint_paired_effects", pd.DataFrame()),
+                outputs.get("checkpoint_trajectories", pd.DataFrame()),
+                outputs.get(
+                    "checkpoint_assigned_policy_information", pd.DataFrame()
+                ),
+                analysis_dir / "plots",
+                outputs.get("checkpoint_resource_report", pd.DataFrame()),
+            )
+        )
     if _blackboard_phase2_requested(recipe):
         plots.extend(
             _render_causal_communication_plots(plot_tables, analysis_dir / "plots")

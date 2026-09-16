@@ -25,6 +25,53 @@ def call_plan_for_run(game: Any, config: Any) -> GameCallPlan:
     """Return game demand plus optional post-action controller LLM demand."""
 
     plan = game.call_plan(config.game)
+    ensemble = getattr(config, "ensemble", None)
+    if ensemble is not None and ensemble.enabled:
+        population_rounds = ensemble.preparation_rounds + (
+            ensemble.continuation_copies
+            * ensemble.branches_per_parent_copy
+            * ensemble.continuation_rounds
+        )
+        focal_updates = population_rounds * config.game.population_size
+        plan = GameCallPlan(
+            game_type=plan.game_type,
+            game_version=plan.game_version,
+            interactions=plan.interactions,
+            decision_stages=tuple(
+                DecisionStagePlan(
+                    name=stage.name,
+                    requests_per_interaction=(
+                        focal_updates
+                        if stage.name == "relational_ballot_update"
+                        else stage.requests_per_interaction
+                    ),
+                    forced_decisions_per_interaction=stage.forced_decisions_per_interaction,
+                    provider_free_decisions_per_interaction=(
+                        stage.provider_free_decisions_per_interaction
+                    ),
+                    retry_bound=stage.retry_bound,
+                    expected_attempts_per_request=stage.expected_attempts_per_request,
+                    concurrency_within_stage=stage.concurrency_within_stage,
+                    state_barrier_after_stage=stage.state_barrier_after_stage,
+                    lower_prompt=stage.lower_prompt,
+                    representative_prompt=stage.representative_prompt,
+                    maximum_prompt=stage.maximum_prompt,
+                    prompt_scenarios=stage.prompt_scenarios,
+                    assumptions=stage.assumptions,
+                )
+                for stage in plan.decision_stages
+            ),
+            stopping_condition_assumptions=(
+                f"Checkpoint bundle executes {population_rounds} population-round paths ",
+                "across one preparation and all named continuations.",
+            ),
+            metadata={
+                **dict(plan.metadata),
+                "checkpoint_ensemble": True,
+                "population_round_paths_per_parent": population_rounds,
+                "focal_updates_per_parent": focal_updates,
+            },
+        )
     options = dict(getattr(config.control, "options", {}))
     if (
         config.game.type != "relational_imitation_round_feedback"
@@ -37,7 +84,13 @@ def call_plan_for_run(game: Any, config: Any) -> GameCallPlan:
         LLM_CONTROLLER_INSTRUCTION,
     )
 
-    rounds = int(config.game.options.get("rounds", config.game.horizon))
+    rounds = (
+        int(config.game.options.get("rounds", config.game.horizon))
+        if ensemble is None or not ensemble.enabled
+        else ensemble.continuation_copies
+        * (ensemble.branches_per_parent_copy - 1)
+        * ensemble.continuation_rounds
+    )
     retries = int(options.get("controller_communication_max_retries", 2))
     prompt = PromptScenario(
         "controller_communication",

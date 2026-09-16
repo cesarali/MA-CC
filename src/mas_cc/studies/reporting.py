@@ -102,6 +102,7 @@ class PhaseResult:
     displayed_values: int
     source_table: str | None
     panel_count: int
+    description: str | None = None
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
@@ -858,7 +859,7 @@ def _render_episode_examples(package, section, *, figures_dir, ledger):
             path = figures_dir / f"{metric_id}.png"
             fig.savefig(path, dpi=160)
             plt.close(fig)
-            results.append(PhaseResult(metric_id, title, "episode example", [path], "available", None, count, source, len(metrics)))
+            results.append(PhaseResult(metric_id, title, "episode example", [path], "available", None, count, source, len(metrics), section.get("description")))
             selections.append({"cell_id": str(identity.cell_id), "episode_id": str(identity.episode_id), "coordinates": coordinates, "source_table": source})
     if not results:
         raise ValueError("no episodes match the example selection")
@@ -915,6 +916,68 @@ def _render_epistemic_maps(package, section, *, figures_dir, ledger):
             paths.append(path)
         results.append(PhaseResult("epistemic_" + spec["id"], spec["label"], "epistemic phase", paths, "available" if count else "unavailable", None if count else "no supported estimates", count, source, len(cells)))
     return results
+
+
+def _render_occupancy_bars(section, *, base, figures_dir, ledger):
+    """Display a separately computed descriptive occupancy summary."""
+    source = _resolve_path(section["source_summary"], base=base, label="source_summary")
+    frame = pd.read_parquet(source).sort_values("epistemic_persistence")
+    if frame.empty or frame.epistemic_persistence.duplicated().any():
+        raise ValueError("occupancy summary must have one row per persistence")
+    values = frame.mean_target_share.to_numpy(dtype=float) * 100
+    if not np.isfinite(values).all() or ((values < 0) | (values > 100)).any():
+        raise ValueError("invalid target occupancy")
+    fig, ax = plt.subplots(figsize=(7, 4.2), constrained_layout=True)
+    bars = ax.bar(range(len(frame)), values, color="#3975a8", width=0.6)
+    ax.bar_label(bars, labels=[f"{v:.1f}%" for v in values], padding=4)
+    ax.set_xticks(range(len(frame)), [f"{rho:.2f}" for rho in frame.epistemic_persistence])
+    ax.set(xlabel="Persistence rho", ylabel=section["label"] + " (%)", ylim=(0, 110), title=section.get("title", "Mean pre-intervention target support"))
+    ax.set_yticks([0, 20, 40, 60, 80, 100])
+    for index, row in frame.iterrows():
+        ledger.add(location="occupancy_bar", table=str(source), row_index=index,
+                   field="mean_target_share", value=100 * row.mean_target_share, formula="100 * mean_target_share")
+    metric_id = str(section.get("id", "target_share_by_persistence"))
+    path = figures_dir / f"{metric_id}.png"
+    fig.savefig(path, dpi=180)
+    plt.close(fig)
+    return PhaseResult(metric_id, section["label"], "occupancy bars", [path], "available", None, len(frame), str(source), 1, section.get("description"))
+
+
+def _null_summary(package, section, ledger):
+    source = str(section.get("source", "primary_estimates"))
+    frame = package.table(source)
+    frame["_source_row"] = frame.index
+    frame = frame[frame.metric == section.get("metric", "round_target_actuation_cmi")].copy()
+    if "target_fraction_bin_index" in frame:
+        frame = frame[frame.target_fraction_bin_index.isna()].copy()
+    frame = _attach_cell_coordinates(frame, package.table("cells"))
+    frame = frame.sort_values(["epistemic_persistence", "intervention_budget"])
+    fields = ["intervention_budget", "epistemic_persistence", "estimate", "null_mean", "null_std", "null_adjusted_estimate", "p_value", "null_permutations"]
+    labels = ["b", "rho", "Raw [bits]", "Null mean", "Null SD", "Raw - null", "p-value", "Draws"]
+    if frame.duplicated(["intervention_budget", "epistemic_persistence"]).any():
+        raise ValueError("null summary has duplicate budget/persistence coordinates")
+    records = []
+    for _, row in frame.iterrows():
+        values = []
+        for field in fields:
+            value = pd.to_numeric(row.get(field), errors="coerce")
+            if pd.notna(value) and np.isfinite(value):
+                ledger.add(location="null_summary", table=source, row_index=row._source_row, field=field, value=value)
+                values.append(str(int(value)) if field in {"intervention_budget", "null_permutations"} else f"{value:.4g}")
+            else:
+                values.append("N/A")
+        records.append(values)
+    kinds = ", ".join(sorted(frame.null_type.dropna().astype(str).unique())) if "null_type" in frame else "unavailable"
+    note = (f"Whole-cell T_pi estimates and stored null summaries. Null procedure: {kinds}. "
+            "Raw-minus-null values are descriptive excess information and may be negative; they are not nonnegative mutual information. "
+            "Permutation p-values are unadjusted for multiple comparisons. Null SD describes the randomization distribution, not a confidence interval for the observed estimate. Missing values are N/A.")
+    markdown = "## Null-model comparison\n\n" + note + "\n\n" + " | ".join(labels) + "\n" + " | ".join(["---"] * len(labels)) + "\n" + "\n".join(" | ".join(row) for row in records)
+    latex = (r"\section{Null-model comparison}" + "\n" + _latex_escape(note) + "\n" +
+             r"\begin{center}\small\begin{tabular}{rrrrrrrr}\toprule" + "\n" +
+             " & ".join(_latex_escape(label) for label in labels) + r" \\ \midrule" + "\n" +
+             "\n".join(" & ".join(row) + r" \\" for row in records) + "\n" +
+             r"\bottomrule\end{tabular}\end{center}")
+    return markdown, latex
 
 
 def _latex_escape(value: Any) -> str:
@@ -982,6 +1045,9 @@ def _phase_markdown(results: Sequence[PhaseResult], output_dir: Path) -> str:
                     f"![{result.label}: {result.mode}]({relative.as_posix()})"
                 )
             blocks.append(
+                result.description if result.description else
+                "Bars show mean pre-intervention controller-target share, with equal weight per retained round from completed episodes, pooled across budgets. They describe observed occupancy, not the causal effect of an intervention. No uncertainty intervals are shown."
+                if result.mode == "occupancy bars" else
                 "Episode examples are selected by sorted episode ID within configured conditions, independently of outcomes; they are illustrative, not representative. Epistemic measurements are at the pre-intervention boundary; vote shares are after the round."
                 if result.mode == "episode example" else
                 "Budget curves use existing whole-cell or study estimates; vertical bars show stored confidence intervals where available. Missing or unsupported points remain gaps."
@@ -997,7 +1063,9 @@ def _write_markdown(
     package: AnalysisPackage,
     phase_results: Sequence[PhaseResult],
     ledger: SourceLedger,
+    null_tables: Sequence[tuple[str, str]] = (),
 ) -> Path:
+    no_control = bool(config["report"].get("no_control", False))
     provisional = not bool(package.validation.get("complete", False))
     status = "INCOMPLETE / PROVISIONAL" if provisional else "COMPLETE"
     errors = package.validation.get("errors", ())
@@ -1027,11 +1095,14 @@ def _write_markdown(
         )
     if errors:
         body.extend(["", "Validation errors:", "", *[f"- {item}" for item in errors]])
+    for markdown_table, _ in null_tables:
+        body.extend(["", markdown_table])
     body.extend(
         [
             "",
-            "## Budget curves, phase diagrams, and episode examples",
+            "## Population outcomes and episode trajectories" if no_control else "## Budget curves, phase diagrams, and episode examples",
             "",
+            "Bars summarize population and epistemic outcomes by persistence. Episode examples show autonomous dynamics over rounds." if no_control else
             "Each state-local target-state axis spans 0 to 1 and uses at least eight pre-existing "
             "aggregation bins. Resolved views retain every varying scientific coordinate. "
             "Aggregated views use only aggregation-produced tables; the report does not "
@@ -1054,11 +1125,13 @@ def _write_markdown(
             "",
             "## Methods and limitations",
             "",
+            "Descriptive bars summarize retained observations from completed episodes. Examples are selected independently of outcomes and are not a representative sample. No confidence intervals are estimated for these bars." if no_control else
             "Scientific estimates, uncertainty intervals, null summaries, and support "
             "classifications come from aggregation tables. The report performs only "
             "selection, row-level arithmetic, support masking, and reshaping. A symmetric "
             "logarithmic color scale changes the display of susceptibility but not its values.",
             "",
+            "Truth share measures support for the correct answer; collective solvability concerns the union of active facts, whereas individual solvability concerns each agent separately." if no_control else
             "No-control cells can provide occupancy and outcomes. Controller-action metrics "
             "are gray when the aggregation package contains no corresponding estimate.",
         ]
@@ -1073,8 +1146,10 @@ def _write_latex(
     config: Mapping[str, Any],
     package: AnalysisPackage,
     phase_results: Sequence[PhaseResult],
+    null_tables: Sequence[tuple[str, str]] = (),
 ) -> Path:
     report = _mapping(config["report"], "report")
+    no_control = bool(config["report"].get("no_control", False))
     provisional = not bool(package.validation.get("complete", False))
     status = "INCOMPLETE / PROVISIONAL" if provisional else "COMPLETE"
     counts = _mapping(package.validation.get("counts", {}), "validation counts")
@@ -1085,6 +1160,9 @@ def _write_latex(
         )
         caption = (
             f"{result.label}, {result.mode} view. {note}" + (
+                result.description if result.description else
+                "Mean pre-intervention target share; equal weight per retained round from completed episodes, pooled across budgets. Descriptive occupancy, not an intervention effect. No uncertainty intervals are shown."
+                if result.mode == "occupancy bars" else
                 "Illustrative episode selected by sorted ID, independently of outcomes. Epistemic values: pre-intervention; vote shares: after the round."
                 if result.mode == "episode example" else
                 "Existing whole-cell or study estimates; vertical bars show stored confidence intervals where available. Missing or unsupported points remain gaps."
@@ -1140,13 +1218,15 @@ Validation item & Value \\
 
 {"The source study is incomplete, so every result is provisional." if provisional else "The source study is complete according to validation.json."}
 
-\section{{Budget curves, phase diagrams, and episode examples}}
-The target-state axis spans zero to one with at least eight pre-existing aggregation bins. Resolved views retain varying scientific coordinates. Aggregated views use only aggregation-produced tables.
+{chr(10).join(table[1] for table in null_tables)}
+
+\section{{{"Population outcomes and episode trajectories" if no_control else "Budget curves, phase diagrams, and episode examples"}}}
+{"Bars summarize population and epistemic outcomes by persistence. Episode examples show autonomous dynamics over rounds." if no_control else "The target-state axis spans zero to one with at least eight pre-existing aggregation bins. Resolved views retain varying scientific coordinates. Aggregated views use only aggregation-produced tables."}
 
 {chr(10).join(figures)}
 
 \section{{Methods and limitations}}
-Scientific estimates, intervals, nulls, and support classifications come from aggregation tables. Gray cells are missing or unsupported, not zero. Symmetric-log susceptibility panels change only the display scale.
+{"Descriptive bars summarize retained observations from completed episodes. No confidence intervals are estimated for these bars. Episode examples are selected independently of outcomes and are illustrative, not representative. Truth share measures support for the correct answer; collective solvability concerns the union of active facts, whereas individual solvability concerns each agent separately." if no_control else "Scientific estimates, intervals, nulls, and support classifications come from aggregation tables. Gray cells are missing or unsupported, not zero. Symmetric-log susceptibility panels change only the display scale."}
 \end{{document}}
 """
     path = output / "report.tex"
@@ -1209,10 +1289,17 @@ def build_study_report(config_path: str | Path) -> ReportResult:
     figures.mkdir(parents=True)
     ledger = SourceLedger()
     phase_results: list[PhaseResult] = []
+    null_tables = []
     sections = _sequence(config.get("sections", ()), "sections")
     for section_raw in sections:
         section = _mapping(section_raw, "section")
         kind = str(section.get("kind", ""))
+        if kind == "occupancy_bar_summary":
+            phase_results.append(_render_occupancy_bars(section, base=path.parent, figures_dir=figures, ledger=ledger))
+            continue
+        if kind == "null_summary":
+            null_tables.append(_null_summary(package, section, ledger))
+            continue
         if kind == "validation_summary":
             continue
         if kind == "epistemic_phase_suite":
@@ -1248,8 +1335,8 @@ def build_study_report(config_path: str | Path) -> ReportResult:
                     )
                 )
 
-    markdown = _write_markdown(staging, config, package, phase_results, ledger)
-    latex = _write_latex(staging, config, package, phase_results)
+    markdown = _write_markdown(staging, config, package, phase_results, ledger, null_tables)
+    latex = _write_latex(staging, config, package, phase_results, null_tables)
     pdf = _compile_pdf(staging, latex)
     config_hash = hashlib.sha256(path.read_bytes()).hexdigest()
     manifest_payload = {

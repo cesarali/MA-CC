@@ -14,6 +14,33 @@ sections:
     title: Validation and completeness
     kind: validation_summary
 
+  - id: target_occupancy_before
+    kind: occupancy_bar_summary
+    title: Mean start-of-round false-target share
+    label: Mean start-of-round false-target share
+    description: "Each retained round from completed episodes has equal weight; all rounds are included. Pooled across budgets. Descriptive means, not causal effects; no confidence intervals are shown."
+    source_summary: ../../../../../results/report_inputs/astra_task003_false_control_30x30_potsdam_rho3/target_occupancy.parquet
+
+  - id: target_occupancy_after
+    kind: occupancy_bar_summary
+    title: Mean end-of-round false-target share
+    label: Mean end-of-round false-target share
+    description: "Each retained round from completed episodes has equal weight; all rounds are included. Pooled across budgets. Descriptive means, not causal effects; no confidence intervals are shown."
+    source_summary: ../../../../../results/report_inputs/astra_task003_false_control_30x30_potsdam_rho3/target_occupancy_after.parquet
+
+  - id: target_occupancy_final
+    kind: occupancy_bar_summary
+    title: Mean final-episode false-target share
+    label: Mean final-episode false-target share
+    description: "Final share uses the last recorded round of each completed episode; each episode has equal weight. Pooled across budgets. Descriptive means, not causal effects; no confidence intervals are shown."
+    source_summary: ../../../../../results/report_inputs/astra_task003_false_control_30x30_potsdam_rho3/target_occupancy_final.parquet
+
+  - id: null_model_summary
+    title: Null-model comparison
+    kind: null_summary
+    source: primary_estimates
+    metric: round_target_actuation_cmi
+
   - id: budget_curves
     title: Information, susceptibility, and efficiency vs budget
     kind: budget_curve_suite
