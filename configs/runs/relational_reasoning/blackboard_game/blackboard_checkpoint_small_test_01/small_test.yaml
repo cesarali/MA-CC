@@ -5,7 +5,7 @@ llm_provider:
   base_url_env: BASE_POTSDAM_LLM_URL
   timeout_seconds: 180
   max_retries: 2
-  request_concurrency: 1
+  request_concurrency: 60
   temperature: 1.0
   max_output_tokens: 4096
   options: {estimated_latency_seconds: 10.0}
@@ -89,7 +89,7 @@ ensemble:
 execution:
   seed: 20260916
   repetitions: 3
-  parallelism: 1
+  parallelism: 3
   fail_fast: true
 
 pricing:

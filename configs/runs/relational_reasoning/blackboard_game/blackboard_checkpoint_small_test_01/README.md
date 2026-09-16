@@ -14,7 +14,8 @@ powered for scientific inference.
 - Independent parents/repetitions: `K = 3`
 - Branches per parent: `none`, `always_truth`, `always_false`,
   `sensing_truth`, and `sensing_false`
-- Runtime concurrency: one request, one worker, one active SLURM node
+- Runtime concurrency: three parent bundles, provider ceiling 60, one active
+  SLURM node
 
 The hash-pinned six-agent distribution in `artifacts/` is deterministic,
 covers all 27 evidence cards once, and has zero agents that can structurally
@@ -33,6 +34,10 @@ trajectories. The parent prefix is generated once per parent, then all five
 branches resume from the exact same checkpoint after round 2. Counting stored
 trajectory segments gives three shared preparation prefixes plus 15 branch
 continuations, but the preparation prefix is not rerun for every branch.
+Branches within each parent bundle execute sequentially for resume-safe sealing.
+Consequently, the natural steady-state request concurrency is approximately
+three, with a possible initialization burst of up to 18 concurrent requests;
+the configured ceiling of 60 no longer imposes an artificial bottleneck.
 
 ## Expected analysis artifacts
 
