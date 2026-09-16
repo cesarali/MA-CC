@@ -1,4 +1,4 @@
-\begin{thebibliography}{4}
+\begin{thebibliography}{5}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -29,5 +29,14 @@ Luis Irisarri, Lucas Trigal, Ra{\'u}l Toral, and Gonzalo Manzano.
 Christoph Riedl.
 \newblock Emergent coordination in multi-agent language models.
 \newblock In \emph{International Conference on Learning Representations}, 2026.
+
+\bibitem[Sprague et~al.(2024)Sprague, Ye, Bostrom, Chaudhuri, and
+  Durrett]{sprague2024musr}
+Zayne Sprague, Xi~Ye, Kaj Bostrom, Swarat Chaudhuri, and Greg Durrett.
+\newblock {MuSR}: Testing the limits of chain-of-thought with multistep soft
+  reasoning.
+\newblock In \emph{International Conference on Learning Representations}, 2024.
+\newblock URL
+  \url{https://proceedings.iclr.cc/paper_files/paper/2024/hash/3f8c7eb848ffec848f3ed2b7ca44915d-Abstract-Conference.html}.
 
 \end{thebibliography}
