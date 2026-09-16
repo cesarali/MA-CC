@@ -1,31 +1,18 @@
 # Matched analysis contract; controller-dependent estimates have no causal support
 # in this autonomous arm and must not be interpreted as zero treatment effects.
 theoretical_reference: none
-estimators: [round_sensing_mi, round_sensor_mae, round_sensor_mse, round_controller_action_entropy, round_controller_action_entropy_given_population, round_population_actuation_cmi, round_target_actuation_cmi, round_truth_actuation_cmi, round_target_information_fraction, round_target_susceptibility, round_target_signed_response_share, round_target_signed_actuation, round_truth_signed_actuation, round_memory_target_actuation_cmi, round_epistemic_target_actuation_cmi, round_phi_target_actuation_cmi, round_kappa_target_actuation_cmi, round_conditioning_state_count, round_dual_action_state_fraction, round_dual_action_event_fraction, round_single_action_slice_fraction, round_singleton_fraction, propensity_weighted_causal_response]
+estimators: [round_sensing_mi, round_sensor_mae, round_sensor_mse, round_controller_action_entropy, round_controller_action_entropy_given_population, round_population_actuation_cmi, round_target_actuation_cmi, round_truth_actuation_cmi, round_target_information_fraction, round_target_susceptibility, round_target_signed_response_share, round_target_signed_actuation, round_truth_signed_actuation, round_memory_target_actuation_cmi, round_epistemic_target_actuation_cmi, round_phi_target_actuation_cmi, round_kappa_target_actuation_cmi, round_conditioning_state_count, round_dual_action_state_fraction, round_dual_action_event_fraction, round_single_action_slice_fraction, round_singleton_fraction]
 resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 1}
-derived: [round_target_susceptibility, eta_ir, target_sensing_information_nats, communication_response_efficiency]
+derived: [round_target_susceptibility, eta_ir, target_sensing_information_nats]
 state_local: [x]
 state_local_x_bins: 8
 rho_aggregated_descriptive: true
 derived_study_aggregates:
-  enabled: true
-  metrics: [round_target_actuation_cmi, susceptibility_occupancy_weighted, round_target_information_fraction, eta_ir]
-  causal: true
-  epistemic: true
-  groupings:
-    - name: rho_aggregated_by_budget_target
-      group_by: [intervention_budget, target_semantics]
-      marginalize: [epistemic_persistence]
-      weighting: balanced_cell
-  bootstrap: {unit: shared_initialization_block}
-  state_local:
-    enabled: true
-    x_bins: 8
-    weighting: n_observations
-    groupings:
-      - name: rho_aggregated_by_budget_target_x
-        group_by: [intervention_budget, target_semantics]
-        marginalize: [epistemic_persistence]
+  # The autonomous arm has no intervention-budget coordinate and cannot
+  # identify a controller treatment effect. Keep its per-cell descriptive,
+  # calibration, population, and epistemic outputs, but do not manufacture a
+  # controlled b=0 study aggregate.
+  enabled: false
 blackboard_population_outputs: true
 blackboard_calibration_outputs:
   enabled: true
@@ -36,8 +23,7 @@ blackboard_calibration_outputs:
   model_predictions:
     enabled: false
 blackboard_phase2_outputs:
-  enabled: true
-  strata: [target_semantics, controller_communication_policy, intervention_budget, epistemic_persistence]
+  enabled: false
 blackboard_epistemic_phase_outputs:
   enabled: true
   task_dataset_dir: results/studies/musr_truthful_selective_task_calibration_01/tasks
@@ -47,15 +33,4 @@ blackboard_epistemic_phase_outputs:
   reference_persistence: 0.85
   capture_threshold: 0.75
   capture_consecutive_rounds: 3
-plots:
-  causal_response_weighted_by_budget: {source: causal_response_aggregated_metrics, metric: propensity_weighted_causal_response, filters: {lag: 1}, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
-  available_susceptibility_weighted_by_budget: {source: causal_response_aggregated_metrics, metric: available_mass_weighted_causal_susceptibility, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
-  eta_IF_weighted_by_budget: {source: study_aggregated_metrics, metric: round_target_information_fraction, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
-  eta_IR_weighted_by_budget: {source: study_aggregated_metrics, metric: eta_ir, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
-  symbolic_solvability_weighted_by_budget: {source: epistemic_aggregated_metrics, metric: mean_symbolic_individual_solvability_share, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
-  collective_solvability_weighted_by_budget: {source: epistemic_aggregated_metrics, metric: fraction_rounds_collectively_solvable, value: estimate, x: intervention_budget, series: target_semantics, kind: line, status_column: support_status}
-  chi_x_b_by_rho: &phase {source: state_local_phase_maps, metric: chi, x: intervention_budget, y: target_fraction_bin_center, facet: epistemic_persistence, series: target_semantics, kind: heatmap, color_scale: independent, status_column: phase_status}
-  T_pi_x_b_by_rho: {<<: *phase, metric: T_pi}
-  eta_IR_x_b_by_rho: {<<: *phase, metric: eta_IR}
-  realized_exposure_by_budget: {source: blackboard_diagnostics, value: realized_directive_exposure_fraction_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
-  active_coverage_by_budget: {source: blackboard_diagnostics, value: active_latent_coverage_mean, x: intervention_budget, series: epistemic_persistence, kind: line}
+plots: {}
