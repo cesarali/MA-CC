@@ -4,7 +4,7 @@ resampling: {bootstrap_resamples: 2000, null_permutations: 1000, confidence: 0.9
 checkpoint_ensemble_outputs:
   branch_round_metrics: true
   activation_response: true
-  expected_parents: 480
+  expected_parents: 160
   branch_policies: [none, always_truth, always_false, sensing_truth, sensing_false]
   posting_budgets: [3, 12]
   continuation_copies: 1
