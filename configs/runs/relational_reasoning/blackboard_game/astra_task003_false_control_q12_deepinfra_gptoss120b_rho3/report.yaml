@@ -1,0 +1,205 @@
+schema_version: 1
+
+report:
+  id: astra_task003_false_control_q12_deepinfra_gptoss120b_rho3_report
+  title: Astra Task 003 False-Control q=12 DeepInfra GPT-OSS 120B Persistence Study
+  # Paths resolve relative to this YAML. Extract the matching analysis ZIP
+  # from results/aggregation_results/ into the source directory below first.
+  source_analysis: ../../../../../results/aggregation_results/astra_task003_false_control_q12_deepinfra_gptoss120b_rho3_analysis
+  output_dir: ../../../../../results/reports/astra_task003_false_control_q12_deepinfra_gptoss120b_rho3
+  # The builder reads validation.json and labels incomplete data provisional.
+
+sections:
+  - id: validation
+    title: Validation and completeness
+    kind: validation_summary
+
+  - id: budget_curves
+    title: Information, susceptibility, and efficiency vs budget
+    kind: budget_curve_suite
+    x: intervention_budget
+    views: [resolved, aggregated]
+    metrics:
+      - id: T_pi
+        label: T_pi [bits]
+        source: primary_estimates
+        metric: round_target_actuation_cmi
+        aggregation_source: study_aggregated_metrics
+        aggregation_metric: round_target_actuation_cmi
+      - id: chi
+        label: Susceptibility chi (occupancy weighted)
+        source: derived_observables
+        metric: susceptibility_occupancy_weighted
+        aggregation_source: study_aggregated_metrics
+        aggregation_metric: susceptibility_occupancy_weighted
+      - id: eta_IF
+        label: eta_IF
+        source: primary_estimates
+        metric: round_target_information_fraction
+        aggregation_source: study_aggregated_metrics
+        aggregation_metric: round_target_information_fraction
+      - id: eta_IR
+        label: eta_IR
+        source: derived_observables
+        metric: eta_ir
+        aggregation_source: study_aggregated_metrics
+        aggregation_metric: eta_ir
+
+  - id: epistemic_budget_curves
+    title: Epistemic metrics vs budget
+    kind: budget_curve_suite
+    x: intervention_budget
+    views: [aggregated]
+    metrics:
+      - id: fraction_rounds_collectively_solvable
+        label: Collectively solvable rounds (fraction)
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: fraction_rounds_collectively_solvable
+      - id: mean_symbolic_individual_solvability_share
+        label: Individual solvability share
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_symbolic_individual_solvability_share
+      - id: mean_fragmentation_gap
+        label: Fragmentation gap
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_fragmentation_gap
+      - id: mean_active_union_fact_fraction
+        label: Active union fact fraction
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_active_union_fact_fraction
+      - id: mean_active_fact_occurrence_count
+        label: Active fact occurrences
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_active_fact_occurrence_count
+      - id: mean_active_holder_redundancy
+        label: Fact holder redundancy
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_active_holder_redundancy
+      - id: mean_collective_gold_probability
+        label: Collective gold probability
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_collective_gold_probability
+      - id: mean_collective_entropy
+        label: Collective normalized entropy
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_collective_entropy
+      - id: mean_configured_robustness
+        label: Robustness at configured persistence
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_configured_robustness
+      - id: mean_reference_robustness
+        label: Robustness at reference persistence
+        aggregation_source: epistemic_aggregated_metrics
+        aggregation_metric: mean_reference_robustness
+
+  - id: state_budget_phase_diagrams
+    title: State-by-budget phase diagrams
+    kind: state_budget_phase_suite
+
+    axes:
+      state: target_fraction_bin_center
+      budget: intervention_budget
+      state_domain: [0.0, 1.0]
+      minimum_state_bins: 8
+
+    facets:
+      mode: auto
+      preferred:
+        - target_semantics
+        - epistemic_persistence
+        - social_group_size
+        - task_id
+        - beta
+        - threshold
+        - sensor_sample_size
+        - receiver_epistemic_disposition
+        - controller_evidence_strategy
+        - controller_actuation_mode
+        - controller_communication_policy
+
+    max_panels_per_figure: 6
+    views: [resolved, aggregated]
+
+    metrics:
+      - id: T_pi
+        label: T_pi [bits]
+        source: primary_estimates
+        metric: round_target_actuation_cmi
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: T_pi
+        color_scale: linear
+
+      - id: eta_IF
+        label: eta_IF
+        source: primary_estimates
+        metric: round_target_information_fraction
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_IF
+        color_scale: linear
+
+      - id: eta_IR
+        label: eta_IR
+        source: derived_observables
+        metric: eta_ir_state_local
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_IR
+        color_scale: linear
+
+      - id: eta_th
+        label: eta_th
+        source: derived_observables
+        metric: eta_th_state_local
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: eta_th
+        color_scale: linear
+
+      - id: occupancy
+        label: Round observations
+        source: state_occupancy_binned
+        value: n_observations
+        aggregation_source: rho_aggregated_state_occupancy
+        aggregation_value: n_observations
+        color_scale: linear
+
+      - id: susceptibility
+        label: Susceptibility chi
+        source: primary_estimates
+        metric: round_target_susceptibility
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: chi
+        color_scale: diverging
+
+      - id: susceptibility_symlog
+        label: Susceptibility chi [symmetric-log color scale]
+        source: primary_estimates
+        metric: round_target_susceptibility
+        aggregation_source: rho_aggregated_state_local_maps
+        aggregation_metric: chi
+        color_scale:
+          kind: symlog
+          linthresh: 0.001
+
+      - id: available_causal_susceptibility
+        label: Available causal susceptibility
+        source: available_causal_susceptibility_state_local
+        metric: propensity_weighted_available_susceptibility
+        color_scale:
+          kind: symlog
+          linthresh: 0.001
+
+  - id: episode_examples
+    title: Illustrative episode trajectories
+    kind: episode_timeseries
+    source: epistemic_round_timeseries
+    # First retained episode ID per budget/persistence group, not outcome-selected.
+    filters:
+      intervention_budget: [6, 24]
+    group_by: [intervention_budget, epistemic_persistence]
+    episodes_per_group: 1
+    metrics:
+      - {value: controller_target_share, label: "False-target vote share (after)", ylim: [0, 1]}
+      - {value: truth_vote_share, label: "Truth vote share (after)", ylim: [0, 1]}
+      - {value: collective_solvable, label: "Collectively solvable (before)", ylim: [-0.05, 1.05]}
+      - {value: symbolic_individual_solvability_share, label: "Individual solvability (before)", ylim: [0, 1]}
+      - {value: active_union_fact_fraction, label: "Active fact fraction (before)", ylim: [0, 1]}
+      - {value: collective_normalized_entropy, label: "Collective entropy (before)", ylim: [0, 1]}

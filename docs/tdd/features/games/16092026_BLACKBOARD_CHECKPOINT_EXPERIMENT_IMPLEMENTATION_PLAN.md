@@ -1,6 +1,6 @@
 # Blackboard checkpoint experiment: two-phase implementation plan
 
-Date: 2026-09-16  
+Date: 2026-09-16
 Status: proposed implementation plan; no authorization for paid execution.
 
 Companion scientific specification:
@@ -125,7 +125,6 @@ Derive a continuation stream from the full scientific identity:
 ```text
 (q, rho, parent_id, policy, posting_budget, copy_id)
 ```
-
 Record the derivation version and resolved seed. The `none` branch has a
 canonical budget coordinate of zero/none and must not acquire separate stream
 identities merely because it is compared with two budgets.
@@ -407,4 +406,3 @@ explicit pilot authorization
   -> explicit main-run authorization
   -> main execution and strict aggregation
 ```
-

@@ -9,6 +9,8 @@ import os
 import random
 import time
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -19,12 +21,15 @@ from ..capabilities import ProviderCapabilities
 from ..requests import CompletionRequest
 from ..responses import CompletionResponse, ProviderUsage
 from ..load_control import (
+    ProviderAdmissionTimeout,
     ProviderCoordinationUnavailable,
     SharedProviderCoordinator,
 )
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
 _JSON_OBJECT_RESPONSE_FORMAT = {"type": "json_object"}
+_REASONING_EFFORTS = frozenset({"none", "low", "medium", "high"})
+_REQUEST_CONCURRENCY_OVERRIDE_ENV = "MAS_CC_PROVIDER_REQUEST_CONCURRENCY"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -43,6 +48,24 @@ def _response_format_from_options(
             retryable=False,
         )
     return dict(_JSON_OBJECT_RESPONSE_FORMAT)
+
+
+def _reasoning_effort_from_options(
+    options: Mapping[str, Any], *, provider_name: str
+) -> str | None:
+    value = options.get("reasoning_effort")
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in _REASONING_EFFORTS:
+        supported = ", ".join(sorted(_REASONING_EFFORTS))
+        raise ProviderError(
+            f"{provider_name} options.reasoning_effort must be one of: "
+            f"{supported}.",
+            provider=provider_name,
+            code="configuration_error",
+            retryable=False,
+        )
+    return value
 
 
 def _load_dotenv_if_available() -> None:
@@ -117,8 +140,33 @@ class OpenAICompatibleProvider:
         self._base_url = base_url.rstrip("/")
         self._timeout = config.timeout_seconds
         self._max_retries = config.max_retries
-        self._concurrency = config.request_concurrency
+        concurrency_override = environment.get(
+            _REQUEST_CONCURRENCY_OVERRIDE_ENV, ""
+        ).strip()
+        if concurrency_override:
+            try:
+                concurrency = int(concurrency_override)
+            except ValueError as exc:
+                raise ProviderError(
+                    f"{_REQUEST_CONCURRENCY_OVERRIDE_ENV} must be a positive integer.",
+                    provider=provider_name,
+                    code="configuration_error",
+                    retryable=False,
+                ) from exc
+            if concurrency < 1:
+                raise ProviderError(
+                    f"{_REQUEST_CONCURRENCY_OVERRIDE_ENV} must be a positive integer.",
+                    provider=provider_name,
+                    code="configuration_error",
+                    retryable=False,
+                )
+        else:
+            concurrency = config.request_concurrency
+        self._concurrency = concurrency
         self._response_format = _response_format_from_options(
+            config.options, provider_name=provider_name
+        )
+        self._reasoning_effort = _reasoning_effort_from_options(
             config.options, provider_name=provider_name
         )
         self._discover_endpoint = discover_endpoint
@@ -130,6 +178,15 @@ class OpenAICompatibleProvider:
         self._available_models: tuple[str, ...] | None = None
         self._endpoint_lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(self._concurrency)
+        # asyncio.to_thread() uses the event loop's small shared default pool,
+        # which can be lower than request_concurrency.  In that case the
+        # coordinator leases capacity for calls that are only waiting for a
+        # transport thread.  A provider-owned pool makes the configured limit
+        # the real maximum number of simultaneous blocking HTTP operations.
+        self._transport_executor = ThreadPoolExecutor(
+            max_workers=self._concurrency,
+            thread_name_prefix=f"mas-cc-{provider_name}",
+        )
         self._session = session
         self._request_coordinator = request_coordinator
         self._closed = False
@@ -148,21 +205,31 @@ class OpenAICompatibleProvider:
             self._session = requests.Session()
         return self._session
 
+    async def _run_transport(self, function, /, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._transport_executor, partial(function, *args, **kwargs)
+        )
+
     async def _coordinated_get(self, url: str, **kwargs: Any) -> Any:
         lease = None
         heartbeat = None
         started = time.perf_counter()
-        deadline = (
+        admission_deadline = (
             time.monotonic()
-            + self._request_coordinator.config.retry_max_elapsed_seconds
+            + self._request_coordinator.config.admission_max_elapsed_seconds
             if self._request_coordinator is not None
             else None
         )
         try:
             if self._request_coordinator is not None:
-                lease = await self._acquire_attempt(deadline)
-                heartbeat = asyncio.create_task(self._heartbeat(lease, deadline))
-            response = await asyncio.to_thread(self._get_session().get, url, **kwargs)
+                lease = await self._acquire_attempt(
+                    admission_deadline, admission=True
+                )
+                heartbeat = asyncio.create_task(self._heartbeat(lease))
+            response = await self._run_transport(
+                self._get_session().get, url, **kwargs
+            )
             if lease is not None:
                 await self._stop_heartbeat(heartbeat)
                 heartbeat = None
@@ -226,13 +293,19 @@ class OpenAICompatibleProvider:
                 exc_info=True,
             )
 
-    async def _acquire_attempt(self, deadline: float | None = None) -> Any:
+    async def _acquire_attempt(
+        self, deadline: float | None = None, *, admission: bool = False
+    ) -> Any:
         assert self._request_coordinator is not None
-        if isinstance(self._request_coordinator, SharedProviderCoordinator):
-            return await self._request_coordinator.acquire(deadline=deadline)
+        if getattr(
+            self._request_coordinator, "supports_admission_deadline", False
+        ):
+            return await self._request_coordinator.acquire(
+                deadline=deadline, admission=admission
+            )
         return await self._request_coordinator.acquire()
 
-    async def _heartbeat(self, lease: Any, deadline: float) -> None:
+    async def _heartbeat(self, lease: Any) -> None:
         coordinator = self._request_coordinator
         if coordinator is None or not hasattr(coordinator, "renew"):
             return
@@ -240,7 +313,12 @@ class OpenAICompatibleProvider:
         while True:
             await asyncio.sleep(interval)
             try:
-                renewed = await coordinator.renew(lease, deadline=deadline)
+                renewal_deadline = time.monotonic() + max(
+                    5.0, coordinator.config.lock_stale_seconds
+                )
+                renewed = await coordinator.renew(
+                    lease, deadline=renewal_deadline
+                )
                 if not renewed:
                     LOGGER.error(
                         "provider load-control lease disappeared during HTTP attempt lease=%s",
@@ -258,8 +336,6 @@ class OpenAICompatibleProvider:
                     exc,
                     exc_info=True,
                 )
-                if time.monotonic() >= deadline:
-                    return
 
     @staticmethod
     async def _stop_heartbeat(task: asyncio.Task[Any] | None) -> None:
@@ -382,18 +458,19 @@ class OpenAICompatibleProvider:
             payload["seed"] = request.seed
         if self._response_format is not None:
             payload["response_format"] = dict(self._response_format)
+        if self._reasoning_effort is not None:
+            payload["reasoning_effort"] = self._reasoning_effort
         headers = {
             "Authorization": f"Bearer {self._key}",
             "Content-Type": "application/json",
         }
         started = time.perf_counter()
-        deadline = (
-            time.monotonic()
-            + self._request_coordinator.config.retry_max_elapsed_seconds
-            if self._request_coordinator is not None
-            else None
-        )
         async with self._semaphore:
+            # Local and shared capacity waits are backpressure, not provider
+            # attempts.  The provider recovery clock begins only after the
+            # first shared lease is granted and transport is ready to start.
+            logical_started: float | None = None
+            retry_deadline: float | None = None
             retry = 0
             while True:
                 response = None
@@ -402,11 +479,28 @@ class OpenAICompatibleProvider:
                 attempt_started = time.perf_counter()
                 try:
                     if self._request_coordinator is not None:
-                        lease = await self._acquire_attempt(deadline)
-                        heartbeat = asyncio.create_task(
-                            self._heartbeat(lease, deadline)
+                        first_attempt = logical_started is None
+                        acquire_deadline = (
+                            time.monotonic()
+                            + self._request_coordinator.config.admission_max_elapsed_seconds
+                            if first_attempt
+                            else retry_deadline
                         )
-                    response = await asyncio.to_thread(
+                        lease = await self._acquire_attempt(
+                            acquire_deadline, admission=first_attempt
+                        )
+                        if first_attempt:
+                            logical_started = time.perf_counter()
+                            retry_deadline = (
+                                time.monotonic()
+                                + self._request_coordinator.config.retry_max_elapsed_seconds
+                            )
+                        heartbeat = asyncio.create_task(
+                            self._heartbeat(lease)
+                        )
+                    elif logical_started is None:
+                        logical_started = time.perf_counter()
+                    response = await self._run_transport(
                         self._get_session().post,
                         self._chat_url,
                         headers=headers,
@@ -414,7 +508,7 @@ class OpenAICompatibleProvider:
                         timeout=self._timeout,
                     )
                     if self._is_retryable(response.status_code) and self._can_retry(
-                        retry, started
+                        retry, logical_started
                     ):
                         if lease is not None:
                             await self._stop_heartbeat(heartbeat)
@@ -497,7 +591,7 @@ class OpenAICompatibleProvider:
                             latency_seconds=time.perf_counter() - attempt_started,
                         )
                         lease = None
-                    if self._can_retry(retry, started):
+                    if self._can_retry(retry, logical_started):
                         await asyncio.sleep(self._retry_delay(response, retry))
                         retry += 1
                         continue
@@ -529,10 +623,19 @@ class OpenAICompatibleProvider:
                     # skipped the retry loop entirely - so a configured
                     # `max_retries: 2` silently bought nothing, and one slow
                     # generation killed a whole episode.
-                    if self._is_retryable(status) and self._can_retry(retry, started):
+                    if self._is_retryable(status) and self._can_retry(
+                        retry, logical_started
+                    ):
                         await asyncio.sleep(self._retry_delay(response, retry))
                         retry += 1
                         continue
+                    if isinstance(exc, ProviderAdmissionTimeout):
+                        raise ProviderError(
+                            f"The {self.name} request exceeded its bounded shared-capacity admission wait.",
+                            provider=self.name,
+                            code="provider_admission_timeout",
+                            retryable=True,
+                        ) from exc
                     if isinstance(exc, ProviderCoordinationUnavailable):
                         raise ProviderError(
                             f"The {self.name} request could not obtain reliable shared coordination before its deadline.",
@@ -565,15 +668,14 @@ class OpenAICompatibleProvider:
 
         return status is None or status == 429 or status >= 500
 
-    def _can_retry(self, retry: int, started: float) -> bool:
+    def _can_retry(self, retry: int, started: float | None) -> bool:
         """Keep coordinated logical requests alive through provider outages."""
 
-        if retry < self._max_retries:
-            return True
         if self._request_coordinator is None:
-            return False
-        return (
-            time.perf_counter() - started
+            return retry < self._max_retries
+        return bool(
+            started is not None
+            and time.perf_counter() - started
             < self._request_coordinator.config.retry_max_elapsed_seconds
         )
 
@@ -624,3 +726,4 @@ class OpenAICompatibleProvider:
         self._closed = True
         if self._session is not None:
             self._session.close()
+        self._transport_executor.shutdown(wait=True, cancel_futures=True)

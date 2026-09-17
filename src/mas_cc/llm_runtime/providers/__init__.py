@@ -29,7 +29,10 @@ from .pricing import (
 )
 from .errors import ProviderError
 from .load_control import (
+    ProviderAdmissionTimeout,
+    ProviderCoordinationUnavailable,
     ProviderLoadControlConfig,
+    ProviderCoordinationStateError,
     RequestLease,
     SharedProviderCoordinator,
 )
@@ -80,6 +83,9 @@ __all__ = [
     "PricingCatalog",
     "ProviderCapabilities",
     "ProviderError",
+    "ProviderAdmissionTimeout",
+    "ProviderCoordinationUnavailable",
+    "ProviderCoordinationStateError",
     "ProviderLoadControlConfig",
     "ProviderRegistry",
     "ProviderUsage",
