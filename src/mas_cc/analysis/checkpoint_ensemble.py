@@ -39,6 +39,8 @@ BRANCH_ROUND_STATISTICS = (
 
 
 def _object(value: Any) -> Any:
+    if isinstance(value, (float, np.floating)) and math.isnan(float(value)):
+        return None
     if isinstance(value, str) and value[:1] in "[{":
         try:
             return json.loads(value)
@@ -417,7 +419,7 @@ def branch_round_metrics(
         )
         events = [
             adapt_relational_round_record(
-                row,
+                {key: _object(value) for key, value in row.items()},
                 cell_id=branch_cell,
                 episode_id=str(row["parent_id"]),
             )

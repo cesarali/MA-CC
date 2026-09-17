@@ -352,7 +352,11 @@ def submit_study(
     mode = str(spec.execution.get("mode", "config_array"))
     execution_plan: Mapping[str, Any] | None = None
     execution_manifest: Path | None = None
-    if mode in {"auto", "cell_array"}:
+    sources = tuple(load_run_config_or_grid(path) for path in spec.configs)
+    use_cell_array = mode == "cell_array" or (
+        mode == "auto" and all(isinstance(source, GridSpec) for source in sources)
+    )
+    if use_cell_array:
         from .execution import (
             build_cell_execution_entries,
             plan_cell_execution,
@@ -410,17 +414,49 @@ def submit_study(
             str(execution_manifest),
         )
     else:
+        from .execution import plan_config_execution
+
+        plan = plan_config_execution(spec, len(entries))
         script = Path(
             job_script or "scripts/Potsdam/SLURM/run_config_array.job"
         ).resolve()
-        configured_throttle = spec.execution.get("throttle")
-        limit = throttle if throttle is not None else configured_throttle
-        if limit is not None and (isinstance(limit, bool) or int(limit) < 1):
-            raise ValueError("SLURM array throttle must be a positive integer")
-        array = f"0-{len(entries) - 1}" + ("" if limit is None else f"%{int(limit)}")
+        if throttle is not None:
+            if throttle < 1:
+                raise ValueError("SLURM array throttle must be a positive integer")
+            if throttle > plan.array_throttle:
+                raise ValueError(
+                    f"requested throttle {throttle} exceeds planned throttle "
+                    f"{plan.array_throttle}"
+                )
+            plan = replace(
+                plan,
+                array_throttle=throttle,
+                total_request_concurrency=throttle * plan.request_concurrency_per_shard,
+                total_episode_slots=throttle * plan.episode_slots_per_shard,
+                estimated_rpm=min(
+                    plan.target_rpm,
+                    throttle
+                    * plan.request_concurrency_per_shard
+                    * 60.0
+                    / plan.assumed_latency_seconds,
+                ),
+            )
+        execution_plan = plan.to_dict()
+        (study_dir / "execution_plan.json").write_text(
+            json.dumps(execution_plan, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        array = f"0-{len(entries) - 1}%{plan.array_throttle}"
         command = (
             "sbatch",
             f"--array={array}",
+            f"--partition={plan.partition}",
+            f"--qos={plan.qos}",
+            "--nodes=1",
+            "--ntasks=1",
+            f"--cpus-per-task={plan.cpus_per_task}",
+            f"--mem={plan.memory}",
+            f"--time={plan.time_limit}",
             f"--output={stdout_pattern}",
             f"--error={stderr_pattern}",
             str(script),

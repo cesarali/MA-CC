@@ -542,6 +542,41 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
     assert any(argument.startswith("--array=0-1%") for argument in calls[0])
 
 
+def test_auto_submission_falls_back_to_resource_aware_config_array(
+    tmp_path, monkeypatch
+):
+    _standalone_config(tmp_path / "a.yaml", name="a")
+    _standalone_config(tmp_path / "b.yaml", name="b")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: auto-config}\nconfigs: [a.yaml, b.yaml]\n"
+        "execution:\n  mode: auto\n  throttle: 2\n  cpus_per_task: 3\n"
+        "  memory: 6G\n  time_limit: '02:00:00'\n",
+        encoding="utf-8",
+    )
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr(
+        "mas_cc.cli.experiment.run_experiment_preflight", fake_preflight
+    )
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 4244\n", "")
+
+    result = submit_study(tmp_path, tmp_path / "results", run=fake_run)
+
+    assert result.execution_plan["mode"] == "config_array"
+    assert not (result.study_dir / "execution_manifest.csv").exists()
+    assert "--array=0-1%2" in calls[0]
+    assert "--cpus-per-task=3" in calls[0]
+    assert "--mem=6G" in calls[0]
+    assert "--time=02:00:00" in calls[0]
+
+
 def test_required_results_root_rejects_home_repository_destination(tmp_path):
     _standalone_config(tmp_path / "config.yaml")
     permitted = tmp_path / "work" / "results"

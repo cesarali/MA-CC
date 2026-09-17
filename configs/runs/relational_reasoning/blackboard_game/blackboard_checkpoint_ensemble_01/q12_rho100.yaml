@@ -9,7 +9,7 @@ game:
 control: {mechanism: relational_round_budgeted, options: {target: ALLOCATION_0, sensor_sample_size: 12, policy: soft_target, threshold: 0.50, beta: 4.0, intervention_budget: 3, advocacy_schedule: soft, message_mode: recommendation_only, controller_actuation_mode: truthful_strategic_report, controller_timing: dawn_only, controller_report_cooldown_rounds: 1, controller_report_max_posts_per_fact: 3, controller_report_selection_strategy: target_preserving_v1}}
 ensemble: {enabled: true, parent_count: 40, preparation_rounds: 2, continuation_rounds: 10, continuation_copies: 1, branch_policies: [none, always_truth, always_false, sensing_truth, sensing_false], posting_budgets: [3, 12], retain_parent_artifacts: true, require_complete_branches: true, false_target: ALLOCATION_2}
 execution: {seed: 20260916, repetitions: 40, parallelism: 20, fail_fast: false}
-pricing: {mode: offline, fallback_policy: offline, explicit_unknown_price_override: true}
+pricing: {mode: live, fallback_policy: offline, explicit_unknown_price_override: true}
 budget: {accounting_unit: proxy_accounting_unit, system_max_cost_per_run: 1000.0, max_cost_per_run: 1000.0, max_provider_requests: 5000000, max_input_tokens: 3000000000, max_output_tokens: 2000000000, allow_unbounded_paid_requests: false}
 logging: {level: INFO, console: true, audit: true, comet: false}
 storage: {output_dir: results, format: jsonl, artifact_profile: results_only, checkpoint_mode: episode, overwrite: false}
