@@ -228,7 +228,9 @@ class OpenAICompatibleProvider:
 
     async def _acquire_attempt(self, deadline: float | None = None) -> Any:
         assert self._request_coordinator is not None
-        if isinstance(self._request_coordinator, SharedProviderCoordinator):
+        if isinstance(self._request_coordinator, SharedProviderCoordinator) or getattr(
+            type(self._request_coordinator), "__name__", ""
+        ) == "RedisProviderCoordinator":
             return await self._request_coordinator.acquire(deadline=deadline)
         return await self._request_coordinator.acquire()
 

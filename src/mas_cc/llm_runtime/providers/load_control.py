@@ -19,6 +19,8 @@ from typing import Any, Mapping
 
 LOAD_CONTROL_CONFIG_ENV = "MAS_CC_PROVIDER_LOAD_CONTROL"
 LOAD_CONTROL_DIR_ENV = "MAS_CC_PROVIDER_CONTROL_DIR"
+# Redis URL for mode "redis_adaptive" (for example redis://host:6379/0).
+LOAD_CONTROL_REDIS_URL_ENV = "MAS_CC_PROVIDER_CONTROL_REDIS_URL"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -100,9 +102,10 @@ class ProviderLoadControlConfig:
                 + ", ".join(unknown)
             )
         mode = str(v.get("mode", "shared_adaptive"))
-        if mode not in {"off", "shared_adaptive"}:
+        if mode not in {"off", "shared_adaptive", "redis_adaptive"}:
             raise ValueError(
-                "execution.provider_load_control.mode must be 'off' or 'shared_adaptive'"
+                "execution.provider_load_control.mode must be 'off', "
+                "'shared_adaptive' or 'redis_adaptive'"
             )
         lease = _num(v, "lease_seconds", 90, 1)
         c = cls(
@@ -665,4 +668,18 @@ def coordinator_from_environment(provider_config, *, environment=None):
     if not isinstance(loaded, Mapping):
         raise ValueError(f"{LOAD_CONTROL_CONFIG_ENV} must contain a JSON object")
     config = ProviderLoadControlConfig.from_mapping(loaded)
-    return None if config.mode == "off" else SharedProviderCoordinator(root, config)
+    if config.mode == "off":
+        return None
+    if config.mode == "redis_adaptive":
+        url = env.get(LOAD_CONTROL_REDIS_URL_ENV, "").strip()
+        if not url:
+            raise ValueError(
+                f"provider load-control mode 'redis_adaptive' needs {LOAD_CONTROL_REDIS_URL_ENV}"
+            )
+        # Imported here so the file backend never needs the redis package.
+        from .redis_load_control import RedisProviderCoordinator
+
+        # The study's control directory names the Redis key namespace, so each
+        # study job shares capacity only with its own workers.
+        return RedisProviderCoordinator(root, config, url=url)
+    return SharedProviderCoordinator(root, config)
