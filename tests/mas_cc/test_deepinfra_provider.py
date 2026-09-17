@@ -16,6 +16,7 @@ from mas_cc.llm_runtime.providers.registry import (
 
 
 MODEL = "deepseek-ai/DeepSeek-V4-Flash"
+GPT_OSS_MODEL = "openai/gpt-oss-120b"
 
 
 class _Response:
@@ -112,6 +113,85 @@ def test_deepinfra_json_mode_can_be_disabled():
     assert asyncio.run(provider.complete(_request())).content == "ready"
     provider.close()
     assert "response_format" not in session.post_calls[0][1]["json"]
+
+
+def test_provider_request_concurrency_has_execution_only_override():
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=MODEL, request_concurrency=2),
+        environment={
+            "DEEPINFRA_API_KEY": "deepinfra-test-secret",
+            "MAS_CC_PROVIDER_REQUEST_CONCURRENCY": "27",
+        },
+        session=_Session(),
+    )
+    try:
+        assert provider._concurrency == 27
+        assert provider._transport_executor._max_workers == 27
+    finally:
+        provider.close()
+
+
+@pytest.mark.parametrize("value", ["0", "many"])
+def test_provider_request_concurrency_override_must_be_positive(value):
+    with pytest.raises(ProviderError, match="positive integer"):
+        create_llm_provider(
+            LLMProviderConfig(type="deepinfra", model=MODEL),
+            environment={
+                "DEEPINFRA_API_KEY": "deepinfra-test-secret",
+                "MAS_CC_PROVIDER_REQUEST_CONCURRENCY": value,
+            },
+            session=_Session(),
+        )
+
+
+def test_deepinfra_gpt_oss_defaults_to_low_reasoning_effort():
+    session = _Session(
+        gets=[_models(GPT_OSS_MODEL)],
+        posts=[_completion()],
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=GPT_OSS_MODEL),
+        environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        session=session,
+    )
+
+    asyncio.run(provider.complete(_request()))
+    provider.close()
+
+    assert session.post_calls[0][1]["json"]["reasoning_effort"] == "low"
+
+
+def test_deepinfra_gpt_oss_reasoning_effort_can_be_overridden():
+    session = _Session(
+        gets=[_models(GPT_OSS_MODEL)],
+        posts=[_completion()],
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="deepinfra",
+            model=GPT_OSS_MODEL,
+            options={"reasoning_effort": "high"},
+        ),
+        environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        session=session,
+    )
+
+    asyncio.run(provider.complete(_request()))
+    provider.close()
+
+    assert session.post_calls[0][1]["json"]["reasoning_effort"] == "high"
+
+
+def test_deepinfra_rejects_invalid_reasoning_effort():
+    with pytest.raises(ProviderError, match="options.reasoning_effort"):
+        create_llm_provider(
+            LLMProviderConfig(
+                type="deepinfra",
+                model=GPT_OSS_MODEL,
+                options={"reasoning_effort": "maximum"},
+            ),
+            environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        )
 
 
 def test_deepinfra_account_limits_and_non_retryable_payment_error():

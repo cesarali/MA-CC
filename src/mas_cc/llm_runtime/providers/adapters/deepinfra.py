@@ -16,6 +16,10 @@ from ._openai_compatible import OpenAICompatibleProvider
 _JSON_OBJECT_UNSUPPORTED_MODELS = frozenset({"google/gemma-4-E4B-it"})
 
 
+def _is_gpt_oss(model: str) -> bool:
+    return model.rsplit("/", 1)[-1].lower().startswith("gpt-oss-")
+
+
 @dataclass(frozen=True, slots=True)
 class DeepInfraAccountLimits:
     """Authenticated per-model capacity reported by DeepInfra."""
@@ -40,6 +44,8 @@ class DeepInfraProvider(OpenAICompatibleProvider):
         request_coordinator: SharedProviderCoordinator | None = None,
     ) -> None:
         options = dict(config.options)
+        if _is_gpt_oss(config.model) and "reasoning_effort" not in options:
+            options["reasoning_effort"] = "low"
         if (
             config.model in _JSON_OBJECT_UNSUPPORTED_MODELS
             and options.get("response_format") is not None
@@ -57,6 +63,7 @@ class DeepInfraProvider(OpenAICompatibleProvider):
                 if config.model in _JSON_OBJECT_UNSUPPORTED_MODELS
                 else {"type": "json_object"}
             )
+        if options != dict(config.options):
             config = replace(config, options=options)
         super().__init__(
             config,

@@ -28,6 +28,8 @@ from ..load_control import (
 
 _OMIT_TEMPERATURE_METADATA_KEY = "_llm_runtime_omit_temperature"
 _JSON_OBJECT_RESPONSE_FORMAT = {"type": "json_object"}
+_REASONING_EFFORTS = frozenset({"none", "low", "medium", "high"})
+_REQUEST_CONCURRENCY_OVERRIDE_ENV = "MAS_CC_PROVIDER_REQUEST_CONCURRENCY"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -46,6 +48,24 @@ def _response_format_from_options(
             retryable=False,
         )
     return dict(_JSON_OBJECT_RESPONSE_FORMAT)
+
+
+def _reasoning_effort_from_options(
+    options: Mapping[str, Any], *, provider_name: str
+) -> str | None:
+    value = options.get("reasoning_effort")
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in _REASONING_EFFORTS:
+        supported = ", ".join(sorted(_REASONING_EFFORTS))
+        raise ProviderError(
+            f"{provider_name} options.reasoning_effort must be one of: "
+            f"{supported}.",
+            provider=provider_name,
+            code="configuration_error",
+            retryable=False,
+        )
+    return value
 
 
 def _load_dotenv_if_available() -> None:
@@ -120,8 +140,33 @@ class OpenAICompatibleProvider:
         self._base_url = base_url.rstrip("/")
         self._timeout = config.timeout_seconds
         self._max_retries = config.max_retries
-        self._concurrency = config.request_concurrency
+        concurrency_override = environment.get(
+            _REQUEST_CONCURRENCY_OVERRIDE_ENV, ""
+        ).strip()
+        if concurrency_override:
+            try:
+                concurrency = int(concurrency_override)
+            except ValueError as exc:
+                raise ProviderError(
+                    f"{_REQUEST_CONCURRENCY_OVERRIDE_ENV} must be a positive integer.",
+                    provider=provider_name,
+                    code="configuration_error",
+                    retryable=False,
+                ) from exc
+            if concurrency < 1:
+                raise ProviderError(
+                    f"{_REQUEST_CONCURRENCY_OVERRIDE_ENV} must be a positive integer.",
+                    provider=provider_name,
+                    code="configuration_error",
+                    retryable=False,
+                )
+        else:
+            concurrency = config.request_concurrency
+        self._concurrency = concurrency
         self._response_format = _response_format_from_options(
+            config.options, provider_name=provider_name
+        )
+        self._reasoning_effort = _reasoning_effort_from_options(
             config.options, provider_name=provider_name
         )
         self._discover_endpoint = discover_endpoint
@@ -413,6 +458,8 @@ class OpenAICompatibleProvider:
             payload["seed"] = request.seed
         if self._response_format is not None:
             payload["response_format"] = dict(self._response_format)
+        if self._reasoning_effort is not None:
+            payload["reasoning_effort"] = self._reasoning_effort
         headers = {
             "Authorization": f"Bearer {self._key}",
             "Content-Type": "application/json",
