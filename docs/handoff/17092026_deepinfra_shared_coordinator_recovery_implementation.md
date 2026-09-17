@@ -22,11 +22,21 @@ service launcher is available at
 `scripts/SLURM/run_provider_redis_micromamba.job`; it publishes a mode-0600
 authenticated endpoint file and runs Redis with `maxmemory-policy noeviction`.
 
-The merged coordinator/adapter suite passes 66 tests. A real Redis 8.10.1
+The merged coordinator/adapter/runtime suite passes 68 focused tests. A real Redis 8.10.1
 smoke granted, renewed, and released 150 simultaneous leases, recorded 150
 distinct outcomes with zero expirations, and rejected a mismatched policy.
-This validates a local real server; a multi-node scheduler smoke remains the
-final infrastructure check before paid work.
+The generic Redis service then ran as SLURM job 474 on `slurmd-0`; an
+authenticated cross-node `AUTH`/`PING` from `slurmd-1` passed. The temporary
+job was cancelled and its endpoint secret removed afterward. A complete fake
+submission resolved 15 cells, 30 episodes, `redis_adaptive`, and array
+`0-14%15` without calling `sbatch`.
+
+Paid work was not relaunched because the remaining compute nodes were not
+operationally safe: `slurmd-1` and `slurmd-big-0` returned `Stale file handle`
+for both the repository and MA-CC environment, while `slurmd-2` through
+`slurmd-4` were reported as not responding. Redis network reachability is
+therefore proven, but the cluster shared mount must recover (or the study must
+be deliberately replanned for healthy-node capacity) before submission.
 
 ## Implemented repair
 
