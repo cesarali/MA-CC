@@ -1,0 +1,101 @@
+{
+  "agent_diagnostics": [
+    {
+      "agent_id": "0",
+      "certified_index": null,
+      "distinct_latent_facts": 5,
+      "evidence_cards": 5,
+      "global_evidence_fraction": 0.18518518518518517,
+      "structurally_certifies_solution": false
+    },
+    {
+      "agent_id": "1",
+      "certified_index": null,
+      "distinct_latent_facts": 4,
+      "evidence_cards": 4,
+      "global_evidence_fraction": 0.14814814814814814,
+      "structurally_certifies_solution": false
+    },
+    {
+      "agent_id": "2",
+      "certified_index": null,
+      "distinct_latent_facts": 4,
+      "evidence_cards": 4,
+      "global_evidence_fraction": 0.14814814814814814,
+      "structurally_certifies_solution": false
+    },
+    {
+      "agent_id": "3",
+      "certified_index": null,
+      "distinct_latent_facts": 5,
+      "evidence_cards": 5,
+      "global_evidence_fraction": 0.18518518518518517,
+      "structurally_certifies_solution": false
+    },
+    {
+      "agent_id": "4",
+      "certified_index": null,
+      "distinct_latent_facts": 5,
+      "evidence_cards": 5,
+      "global_evidence_fraction": 0.18518518518518517,
+      "structurally_certifies_solution": false
+    },
+    {
+      "agent_id": "5",
+      "certified_index": null,
+      "distinct_latent_facts": 4,
+      "evidence_cards": 4,
+      "global_evidence_fraction": 0.14814814814814814,
+      "structurally_certifies_solution": false
+    }
+  ],
+  "agent_evidence_ids": {
+    "0": [
+      "e_coop_p0_p1_b02",
+      "e_coop_p0_p2_b00",
+      "e_skill_p1_t0_b02",
+      "e_skill_p1_t1_b00",
+      "e_skill_p2_t1_b02"
+    ],
+    "1": [
+      "e_coop_p0_p2_b01",
+      "e_coop_p1_p2_b00",
+      "e_skill_p0_t1_b01",
+      "e_skill_p2_t1_b01"
+    ],
+    "2": [
+      "e_coop_p0_p1_b01",
+      "e_coop_p1_p2_b02",
+      "e_skill_p1_t0_b00",
+      "e_skill_p2_t0_b01"
+    ],
+    "3": [
+      "e_coop_p0_p2_b02",
+      "e_coop_p1_p2_b01",
+      "e_skill_p0_t0_b01",
+      "e_skill_p1_t1_b02",
+      "e_skill_p2_t0_b02"
+    ],
+    "4": [
+      "e_coop_p0_p1_b00",
+      "e_skill_p0_t0_b02",
+      "e_skill_p0_t1_b02",
+      "e_skill_p1_t1_b01",
+      "e_skill_p2_t0_b00"
+    ],
+    "5": [
+      "e_skill_p0_t0_b00",
+      "e_skill_p0_t1_b00",
+      "e_skill_p1_t0_b01",
+      "e_skill_p2_t1_b00"
+    ]
+  },
+  "distribution_seed": 20260916,
+  "evidence_redundancy": 1,
+  "fingerprint_sha256": "7a057dd399ccf8ab0abdd96a95726b03c2b62ceadc1c8f98d934935ddb9f77ca",
+  "no_single_agent_violations": 0,
+  "population_size": 6,
+  "schema_version": "musr_team_allocation_distribution_v1",
+  "semantic_world_sha256": "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750",
+  "task_id": "task_001"
+}

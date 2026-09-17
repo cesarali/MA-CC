@@ -29,6 +29,18 @@ from .adaptive_communication import (
     choose_communication_mode,
 )
 from .game import RelationalImitationRoundFeedbackGame
+from .checkpoint import (
+    BRANCH_POLICIES,
+    CONTINUATION_STREAM_DERIVATION_VERSION,
+    ContinuationBranch,
+    CheckpointBundleResult,
+    ParentBundleWorker,
+    ParentCheckpoint,
+    ParentCheckpointStore,
+    run_checkpoint_continuation,
+    run_checkpoint_parent_bundle,
+    standard_continuation_branches,
+)
 from .metrics import knowledge_observables, supporting_fact_coverage
 from .prompts import (
     BOARD_MESSAGE_TYPES,
@@ -85,12 +97,16 @@ __all__ = [
     "BOARD_PROMPT_FAMILY",
     "BOARD_PROMPT_VERSION",
     "BOARD_PROMPT_VERSIONS",
+    "BRANCH_POLICIES",
     "BlackboardMessage",
     "BlackboardState",
     "CommunicationChoice",
     "CommunicationMode",
     "ControllerCommunicationContext",
     "CONTROLLER_ACTUATION_MODES",
+    "CONTINUATION_STREAM_DERIVATION_VERSION",
+    "ContinuationBranch",
+    "CheckpointBundleResult",
     "COORDINATION_REQUEST",
     "CONTROL_SOURCE_ID",
     "CONTROLLER_EVIDENCE_STRATEGIES",
@@ -106,6 +122,9 @@ __all__ = [
     "MESSAGE_REPORT",
     "MESSAGE_REQUEST",
     "ORDINARY_ACTION_TYPES",
+    "ParentBundleWorker",
+    "ParentCheckpoint",
+    "ParentCheckpointStore",
     "RECOMMENDATION_ONLY",
     "RECOMMENDATION_PLUS_FACT",
     "SCHEDULE_ALWAYS",
@@ -145,6 +164,9 @@ __all__ = [
     "reasoning_fact_ids",
     "run_relational_imitation_round_feedback_game",
     "run_relational_imitation_round_feedback_game_sync",
+    "run_checkpoint_continuation",
+    "run_checkpoint_parent_bundle",
     "sample_controlled_positions",
+    "standard_continuation_branches",
     "supporting_fact_coverage",
 ]

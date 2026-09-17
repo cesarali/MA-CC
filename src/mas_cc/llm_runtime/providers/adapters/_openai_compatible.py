@@ -252,7 +252,9 @@ class OpenAICompatibleProvider:
         self, deadline: float | None = None, *, admission: bool = False
     ) -> Any:
         assert self._request_coordinator is not None
-        if isinstance(self._request_coordinator, SharedProviderCoordinator):
+        if getattr(
+            self._request_coordinator, "supports_admission_deadline", False
+        ):
             return await self._request_coordinator.acquire(
                 deadline=deadline, admission=admission
             )

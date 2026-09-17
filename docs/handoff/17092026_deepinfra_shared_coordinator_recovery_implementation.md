@@ -4,6 +4,30 @@ Implementation snapshot: 2026-09-17. The user separately authorized the paid
 false-arm resume after reviewing the implementation and launch summary. The
 truth arm and aggregation were not submitted.
 
+## Redis integration follow-up
+
+Remote `main` commit `41dfcb7` was merged after the initial recovery. Its
+optional `redis_adaptive` coordinator removes the network-filesystem lock queue
+and JSON rewrite from acquire, renew, release, and snapshot operations. The
+false-arm pilot now selects this backend explicitly; its execution-only policy
+hash is
+`9d3b22dbd55f42a9df23184d30f23918e5ecec4b8c2d4fc2a3064b28d8568ba6`.
+
+The Redis backend was brought under the same recovery guarantees as the file
+backend: independent admission deadlines and diagnostics, cancellation-safe
+late-grant cleanup, immutable policy identity, live-limit range validation,
+fresh heartbeat deadlines, and fail-fast worker validation when
+`MAS_CC_PROVIDER_CONTROL_REDIS_URL` is absent. A generic shared-cluster Redis
+service launcher is available at
+`scripts/SLURM/run_provider_redis_micromamba.job`; it publishes a mode-0600
+authenticated endpoint file and runs Redis with `maxmemory-policy noeviction`.
+
+The merged coordinator/adapter suite passes 66 tests. A real Redis 8.10.1
+smoke granted, renewed, and released 150 simultaneous leases, recorded 150
+distinct outcomes with zero expirations, and rejected a mismatched policy.
+This validates a local real server; a multi-node scheduler smoke remains the
+final infrastructure check before paid work.
+
 ## Implemented repair
 
 - First shared-lease admission now has the independent bounded policy

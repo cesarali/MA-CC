@@ -11,6 +11,7 @@ from typing import Any, Mapping
 from mas_cc.llm_runtime.providers.load_control import (
     LOAD_CONTROL_CONFIG_ENV,
     LOAD_CONTROL_DIR_ENV,
+    LOAD_CONTROL_REDIS_URL_ENV,
     ProviderLoadControlConfig,
     provider_load_control_policy_hash,
 )
@@ -63,6 +64,13 @@ def configure_study_provider_load_control(manifest_path: str | Path) -> None:
         os.environ.pop(LOAD_CONTROL_CONFIG_ENV, None)
         os.environ.pop(LOAD_CONTROL_DIR_ENV, None)
         return
+    if resolved["mode"] == "redis_adaptive" and not os.environ.get(
+        LOAD_CONTROL_REDIS_URL_ENV, ""
+    ).strip():
+        raise RuntimeError(
+            "Redis provider load control requires "
+            f"{LOAD_CONTROL_REDIS_URL_ENV} in every worker environment"
+        )
 
     job_id = os.environ.get("SLURM_ARRAY_JOB_ID") or os.environ.get("SLURM_JOB_ID") or "local"
     control_root = study_root / "runtime" / "provider-control" / f"job-{job_id}"

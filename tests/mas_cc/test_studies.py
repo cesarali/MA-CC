@@ -88,6 +88,36 @@ def test_study_workers_reject_mixed_live_provider_policies(tmp_path, monkeypatch
         configure_study_provider_load_control(manifest)
 
 
+def test_redis_study_worker_requires_endpoint_before_publishing_settings(
+    tmp_path, monkeypatch
+):
+    study_root = tmp_path / "study"
+    study_root.mkdir()
+    manifest = study_root / "execution_manifest.csv"
+    manifest.write_text(
+        f"study_root\n{study_root.resolve()}\n", encoding="utf-8"
+    )
+    policy = {
+        "mode": "redis_adaptive",
+        "initial_concurrency": 2,
+        "minimum_concurrency": 1,
+        "maximum_concurrency": 2,
+        "target_rpm": 100,
+    }
+    (study_root / "study_manifest.json").write_text(
+        json.dumps({"execution": {"provider_load_control": policy}}),
+        encoding="utf-8",
+    )
+    (study_root / "execution_plan.json").write_text(
+        json.dumps({"provider_load_control": policy}), encoding="utf-8"
+    )
+    monkeypatch.delenv("MAS_CC_PROVIDER_CONTROL_REDIS_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="MAS_CC_PROVIDER_CONTROL_REDIS_URL"):
+        configure_study_provider_load_control(manifest)
+    assert not (study_root / "runtime/provider-control").exists()
+
+
 def _standalone_config(path: Path, *, name: str = "study-smoke") -> Path:
     config = load_run_config(
         "configs/runs/old/toy_game_smoke_test.yaml", environment={}

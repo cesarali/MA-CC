@@ -1,0 +1,139 @@
+llm_provider:
+  type: university
+  model: gwdg/openai-gpt-oss-120b
+  credentials_env: POTSDAM_API_KEY
+  base_url_env: BASE_POTSDAM_LLM_URL
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 60
+  temperature: 1.0
+  max_output_tokens: 4096
+  options: {estimated_latency_seconds: 10.0}
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 4
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 6
+  horizon: 4
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks
+    task_id: task_001
+    task_distribution:
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_small_test_01/artifacts/task_001_distribution_N6.json
+      expected_file_sha256: 4e8534477e5d2bc038d21ab895ae7139d7f26c777d5ba408972024017fbd55a8
+    truthful_controller_design:
+      artifact_path: configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_truthful_controller.json
+      expected_file_sha256: 4ad6997edb488077bdc536750a5c59212d40ade9fa16145aff64a170e29e6284
+    dynamics_mode: reasoning
+    rounds: 4
+    social_group_size: 3
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+      allow_participant_requests: true
+    epistemic_persistence: 1.0
+    vote_visibility: public
+    prompt_version: 4
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 2
+    expected_validation_failure_rate: 0.15
+
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_0
+    sensor_sample_size: 3
+    policy: soft_target
+    threshold: 0.50
+    beta: 4.0
+    intervention_budget: 2
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+    controller_actuation_mode: adaptive_communication
+    controller_timing: dawn_only
+    allow_controller_requests: true
+    allow_controller_directives: true
+    controller_communication_policy: llm_structured_v1
+    controller_communication_policy_version: 1
+    controller_communication_fallback_policy: contextual_weighted_v1
+    controller_communication_max_retries: 2
+    controller_report_cooldown_rounds: 1
+    controller_report_max_posts_per_fact: 2
+    controller_report_selection_strategy: target_preserving_v1
+
+ensemble:
+  enabled: true
+  parent_count: 3
+  preparation_rounds: 2
+  continuation_rounds: 2
+  continuation_copies: 1
+  branch_policies: [none, always_truth, always_false, sensing_truth, sensing_false]
+  posting_budgets: [2]
+  retain_parent_artifacts: true
+  require_complete_branches: true
+  false_target: ALLOCATION_1
+
+execution:
+  seed: 20260916
+  repetitions: 3
+  parallelism: 3
+  fail_fast: true
+
+pricing:
+  mode: offline
+  fallback_policy: offline
+  explicit_unknown_price_override: true
+
+budget:
+  accounting_unit: proxy_accounting_unit
+  system_max_cost_per_run: 20.0
+  max_cost_per_run: 20.0
+  max_provider_requests: 500
+  max_input_tokens: 5000000
+  max_output_tokens: 1000000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+
+experiment:
+  name: blackboard-checkpoint-small-test-01
+  description: Inspection-only checkpoint ensemble with N=6, L=2, M=2, K=3, q=q_C=3, and b=2.
+  tags: [musr, blackboard, checkpoint, inspection, small-test]
+  metadata:
+    study: blackboard_checkpoint_small_test_01
+    task_id: task_001
+    q: 3
+    q_C: 3
+    rho: 1.0
+    posting_budget: 2
+    independent_block: parent
+    ground_truth: ALLOCATION_0
+    false_target: ALLOCATION_1
+    inspection_only: true

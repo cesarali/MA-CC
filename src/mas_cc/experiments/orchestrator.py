@@ -1491,6 +1491,17 @@ def _observer_runtime(game: Game, episode_config: RunConfig, guarded_provider: A
         )
 
     if episode_config.game.type == "relational_imitation_round_feedback":
+        if episode_config.ensemble.enabled:
+            from mas_cc.games.relational_reasoning.imitation_round_feedback.checkpoint import (
+                run_checkpoint_parent_bundle,
+            )
+
+            return lambda observer: run_checkpoint_parent_bundle(
+                game=game,
+                config=episode_config,
+                provider=guarded_provider,
+                observer=observer,
+            )
         from mas_cc.games.relational_reasoning.imitation_round_feedback import (
             run_relational_imitation_round_feedback_game,
         )

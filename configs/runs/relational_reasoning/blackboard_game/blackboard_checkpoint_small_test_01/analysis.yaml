@@ -1,0 +1,19 @@
+theoretical_reference: none
+estimators: []
+resampling:
+  bootstrap_resamples: 50
+  null_permutations: 50
+  confidence: 0.95
+  seed: 20260916
+checkpoint_ensemble_outputs:
+  branch_round_metrics: true
+  activation_response: true
+  expected_parents: 3
+  branch_policies: [none, always_truth, always_false, sensing_truth, sensing_false]
+  posting_budgets: [2]
+  continuation_copies: 1
+  continuation_rounds: 2
+  primary_horizons: [1, 2]
+  smoothing: [0, 1, 12.5]
+  repeated_group_splits: 5
+plots: {}

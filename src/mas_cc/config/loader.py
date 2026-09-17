@@ -19,6 +19,7 @@ from mas_cc.llm_runtime.validation import ValidationIssue, ValidationResult
 
 from .grid import GridSpec, parse_grid_axes
 from .models import (
+    CHECKPOINT_BRANCH_POLICIES,
     DEFAULT_CELL_METRICS,
     AggregationConfig,
     AnalysisConfig,
@@ -27,6 +28,7 @@ from .models import (
     CELL_REPORTING_MODES,
     COMET_WRITERS,
     ControlConfig,
+    CheckpointEnsembleConfig,
     ExecutionConfig,
     ExperimentConfig,
     GameConfig,
@@ -1263,6 +1265,86 @@ def _parse_experiment(raw: Any, issues: list[ValidationIssue]) -> ExperimentConf
     )
 
 
+def _parse_checkpoint_ensemble(
+    raw: Any, issues: list[ValidationIssue]
+) -> CheckpointEnsembleConfig:
+    path = "ensemble"
+    values = _as_mapping(raw, path, issues)
+    allowed = {
+        "schema_version",
+        "enabled",
+        "parent_count",
+        "preparation_rounds",
+        "continuation_rounds",
+        "continuation_copies",
+        "branch_policies",
+        "posting_budgets",
+        "retain_parent_artifacts",
+        "require_complete_branches",
+        "false_target",
+    }
+    _unknown_fields(values, allowed, path, issues)
+    policies = (
+        _string_tuple(values, "branch_policies", path, issues)
+        if "branch_policies" in values
+        else CHECKPOINT_BRANCH_POLICIES
+    )
+    if len(set(policies)) != len(policies):
+        _issue(issues, f"{path}.branch_policies", "must not contain duplicates", policies)
+    unknown = sorted(set(policies) - set(CHECKPOINT_BRANCH_POLICIES))
+    if unknown:
+        _issue(
+            issues,
+            f"{path}.branch_policies",
+            "contains unsupported policies: " + ", ".join(unknown),
+            policies,
+        )
+    if "none" not in policies:
+        _issue(issues, f"{path}.branch_policies", "must contain none exactly once", policies)
+    budgets = _integer_tuple(
+        values,
+        "posting_budgets",
+        path,
+        issues,
+        default=(3, 12),
+        minimum=0,
+    )
+    if len(set(budgets)) != len(budgets):
+        _issue(issues, f"{path}.posting_budgets", "must not contain duplicates", budgets)
+    safe_policies = (
+        policies
+        if not unknown and "none" in policies and len(set(policies)) == len(policies)
+        else CHECKPOINT_BRANCH_POLICIES
+    )
+    safe_budgets = budgets if budgets and len(set(budgets)) == len(budgets) else (3, 12)
+    return CheckpointEnsembleConfig(
+        schema_version=_schema_version(values, path, issues),
+        enabled=_boolean(values, "enabled", path, issues, default=False),
+        parent_count=_integer(values, "parent_count", path, issues, default=1, minimum=1),
+        preparation_rounds=_integer(
+            values, "preparation_rounds", path, issues, default=2, minimum=1
+        ),
+        continuation_rounds=_integer(
+            values, "continuation_rounds", path, issues, default=10, minimum=1
+        ),
+        continuation_copies=_integer(
+            values, "continuation_copies", path, issues, default=1, minimum=1
+        ),
+        branch_policies=safe_policies,
+        posting_budgets=safe_budgets,
+        retain_parent_artifacts=_boolean(
+            values, "retain_parent_artifacts", path, issues, default=True
+        ),
+        require_complete_branches=_boolean(
+            values, "require_complete_branches", path, issues, default=True
+        ),
+        false_target=(
+            _string(values, "false_target", path, issues, default="ALLOCATION_2")
+            or "ALLOCATION_2"
+        ),
+    )
+
+
 def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
     """Validate a resolved mapping and return immutable typed models."""
 
@@ -1278,6 +1360,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         "storage",
         "analysis",
         "control",
+        "ensemble",
         "metrics",
         "aggregation",
         "observability",
@@ -1305,6 +1388,7 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
         storage=storage,
         analysis=_parse_analysis(values.get("analysis", {}), issues),
         control=_parse_control(values.get("control", {}), issues),
+        ensemble=_parse_checkpoint_ensemble(values.get("ensemble", {}), issues),
         metrics=_parse_metrics(values.get("metrics", {}), issues),
         aggregation=_parse_aggregation(values.get("aggregation", {}), issues),
         observability=_parse_observability(values.get("observability", {}), issues),
@@ -1326,6 +1410,49 @@ def parse_run_config(raw: Mapping[str, Any]) -> RunConfig:
                 "storage.artifact_profile",
                 "dashboard_semantic currently requires game.options.social_mode board",
                 config.game.options.get("social_mode"),
+            )
+    if config.ensemble.enabled:
+        if config.game.type != "relational_imitation_round_feedback":
+            _issue(
+                issues,
+                "ensemble.enabled",
+                "checkpoint ensembles require relational_imitation_round_feedback",
+            )
+        if config.execution.repetitions != config.ensemble.parent_count:
+            _issue(
+                issues,
+                "execution.repetitions",
+                "must equal ensemble.parent_count",
+                config.execution.repetitions,
+            )
+        expected_rounds = (
+            config.ensemble.preparation_rounds + config.ensemble.continuation_rounds
+        )
+        configured_rounds = int(config.game.options.get("rounds", config.game.horizon))
+        if configured_rounds != expected_rounds or config.game.horizon != expected_rounds:
+            _issue(
+                issues,
+                "game.horizon",
+                "game.horizon and game.options.rounds must equal L + M",
+                {"horizon": config.game.horizon, "rounds": configured_rounds},
+            )
+        if max(config.ensemble.posting_budgets) > config.game.population_size:
+            _issue(
+                issues,
+                "ensemble.posting_budgets",
+                "posting budgets cannot exceed game.population_size",
+                list(config.ensemble.posting_budgets),
+            )
+        q = int(config.game.options.get("social_group_size", 0))
+        if not 1 <= q <= config.game.population_size:
+            _issue(issues, "game.options.social_group_size", "must be between 1 and N", q)
+        rho = float(config.game.options.get("epistemic_persistence", -1.0))
+        if not 0.0 <= rho <= 1.0:
+            _issue(
+                issues,
+                "game.options.epistemic_persistence",
+                "must be between zero and one",
+                rho,
             )
     if issues:
         raise ConfigurationError(issues, context="configuration validation")

@@ -34,8 +34,13 @@ def test_no_control_is_matched_and_has_no_budget_sweep(suffix, tmp_path):
     )
     assert len(plan) == 30
     recipe = yaml.safe_load((baseline / "analysis.yaml").read_text())
-    assert recipe == yaml.safe_load((reference / "analysis.yaml").read_text())
+    reference_recipe = yaml.safe_load((reference / "analysis.yaml").read_text())
+    assert recipe["resampling"] == reference_recipe["resampling"]
     assert recipe["blackboard_epistemic_phase_outputs"]["enabled"]
-    assert recipe["derived_study_aggregates"]["epistemic"]
+    assert recipe["derived_study_aggregates"] == {"enabled": False}
+    assert recipe["blackboard_phase2_outputs"] == {"enabled": False}
+    assert "propensity_weighted_causal_response" not in recipe["estimators"]
+    assert "communication_response_efficiency" not in recipe["derived"]
+    assert recipe["plots"] == {}
     assert recipe["resampling"]["bootstrap_resamples"] == 1000
     assert recipe["blackboard_calibration_outputs"]["model_predictions"]["enabled"] is False

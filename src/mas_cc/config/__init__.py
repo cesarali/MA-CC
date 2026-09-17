@@ -16,6 +16,7 @@ from .loader import (
 from .models import (
     ARTIFACT_PROFILES,
     CHECKPOINT_MODES,
+    CHECKPOINT_BRANCH_POLICIES,
     COMET_WRITERS,
     DEFAULT_CELL_METRICS,
     AggregationConfig,
@@ -23,6 +24,7 @@ from .models import (
     BudgetConfig,
     CometObservability,
     ControlConfig,
+    CheckpointEnsembleConfig,
     ExecutionConfig,
     ExperimentConfig,
     GameConfig,
@@ -42,6 +44,7 @@ from .schema import config_schema
 __all__ = [
     "ARTIFACT_PROFILES",
     "CHECKPOINT_MODES",
+    "CHECKPOINT_BRANCH_POLICIES",
     "COMET_WRITERS",
     "DEFAULT_CELL_METRICS",
     "AggregationConfig",
@@ -50,6 +53,7 @@ __all__ = [
     "CometObservability",
     "ConfigLoader",
     "ControlConfig",
+    "CheckpointEnsembleConfig",
     "ExecutionConfig",
     "ExperimentConfig",
     "GameConfig",
