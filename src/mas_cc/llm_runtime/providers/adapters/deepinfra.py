@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
@@ -65,6 +67,20 @@ class DeepInfraProvider(OpenAICompatibleProvider):
             )
         if options != dict(config.options):
             config = replace(config, options=options)
+        # Model validation lists models from DeepInfra itself. When the base URL
+        # is redirected (DEEPINFRA_BASE_URL, e.g. an OpenAI-compatible gateway in
+        # front of DeepInfra), list models from that host instead: its key is not
+        # a DeepInfra key and the hardcoded list URL would answer 401.
+        env = os.environ if environment is None else environment
+        model_list_url = env.get("DEEPINFRA_MODEL_LIST_URL", "").strip() or None
+        if model_list_url is None:
+            base_override = env.get("DEEPINFRA_BASE_URL", "").strip().rstrip("/")
+            if base_override and base_override != self._DEFAULT_BASE_URL:
+                if base_override.endswith("/openai"):
+                    base_override = base_override[: -len("/openai")]
+                model_list_url = f"{base_override}/models"
+            else:
+                model_list_url = self._MODEL_LIST_URL
         super().__init__(
             config,
             provider_name="deepinfra",
@@ -72,7 +88,7 @@ class DeepInfraProvider(OpenAICompatibleProvider):
             default_base_url_env="DEEPINFRA_BASE_URL",
             fallback_base_url=self._DEFAULT_BASE_URL,
             validate_model=True,
-            model_list_url=self._MODEL_LIST_URL,
+            model_list_url=model_list_url,
             environment=environment,
             session=session,
             request_coordinator=request_coordinator,

@@ -27,6 +27,13 @@ for f in "${LLM_KEY_FILE:-$HOME/.llm.key}" /shared/secrets/llm.key; do
 done
 [[ -n "${LLM_KEY:-}" ]] || echo "WARN: no LLM_KEY and no readable key file (tried \$HOME/.llm.key, /shared/secrets/llm.key)" >&2
 
+# DeepInfra-type providers (llm_provider.type: deepinfra) also go through the
+# gateway: DEEPINFRA_BASE_URL is the gateway's OpenAI-compatible root and the
+# key is the gateway key. The adapter lists models from that host too. Set
+# DEEPINFRA_BASE_URL/DEEPINFRA_API_KEY yourself to bypass (not the estate default).
+export DEEPINFRA_BASE_URL="${DEEPINFRA_BASE_URL:-${LLM_BASE}/v1}"
+[[ -n "${DEEPINFRA_API_KEY:-}" ]] || export DEEPINFRA_API_KEY="${LLM_KEY:-}"
+
 # Provider load control (mode redis_adaptive in study.yaml execution.provider_load_control):
 # the cluster runs a Valkey for exactly this, so no in-job redis-server is needed.
 export MAS_CC_PROVIDER_CONTROL_REDIS_URL="${MAS_CC_PROVIDER_CONTROL_REDIS_URL:-redis://provider-control-redis.slurm-cluster.svc.cluster.local:6379/0}"
