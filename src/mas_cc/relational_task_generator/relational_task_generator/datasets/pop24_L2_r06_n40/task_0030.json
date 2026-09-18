@@ -1,0 +1,265 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0030",
+  "seed": 10849146573769026263,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 30,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Delo",
+        "coordinates": {
+          "x": 1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Navi",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Kora",
+        "coordinates": {
+          "x": 998,
+          "y": 998
+        }
+      },
+      {
+        "name": "Ralo",
+        "coordinates": {
+          "x": 998,
+          "y": 999
+        }
+      },
+      {
+        "name": "Fira",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Pavi",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Tero",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Delo",
+        "relation": "NORTH",
+        "object": "Gavi",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Gavi",
+        "relation": "SOUTHEAST",
+        "object": "Navi",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Kora",
+        "relation": "SOUTH",
+        "object": "Ralo",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Ralo",
+        "relation": "SOUTHWEST",
+        "object": "Fira",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Fira",
+        "relation": "NORTH",
+        "object": "Pavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Pavi",
+        "relation": "SOUTHWEST",
+        "object": "Tero",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Delo",
+    "reference": "Navi",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "EAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "EAST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHEAST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": []
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2",
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f1",
+        "f5",
+        "f6"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Delo relative to Navi?",
+    "facts": {
+      "f1": "Delo is north of Gavi.",
+      "f2": "Gavi is southeast of Navi.",
+      "f3": "Kora is south of Ralo.",
+      "f4": "Ralo is southwest of Fira.",
+      "f5": "Fira is north of Pavi.",
+      "f6": "Pavi is southwest of Tero."
+    },
+    "reasoning_chain": [
+      "Delo is north of Gavi.",
+      "Gavi is southeast of Navi."
+    ]
+  }
+}
