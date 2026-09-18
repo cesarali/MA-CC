@@ -664,6 +664,43 @@ def extension_aggregation_context(
                     scientific_cell_key=row.cell_key,
                 )
             )
+    # A retry execution manifest contains only the delta still requiring work.
+    # Reconstruct entries for already-complete target cells that were therefore
+    # omitted from the latest delta, otherwise aggregation silently loses them.
+    indexed_keys = {
+        str(entry.scientific_cell_key)
+        for entry in entries
+        if entry.scientific_cell_key
+    }
+    latest_index = int(target.get("extension_index", 0))
+    latest_root = root / "extensions" / f"extension-{latest_index:04d}"
+    for cell in target.get("cells", []):
+        if not isinstance(cell, Mapping):
+            continue
+        cell_key = str(cell.get("cell_key", ""))
+        if not cell_key or cell_key in indexed_keys:
+            continue
+        config = Path(str(cell["config_path"]))
+        output_dir = latest_root / "runs" / config.stem / f"cell-{cell_key[:16]}"
+        if not output_dir.is_dir():
+            continue
+        entries.append(
+            SubmissionEntry(
+                array_index=len(entries),
+                config_path=str(config),
+                config_hash=file_sha256(config),
+                resolved_config_hash="",
+                output_dir=str(output_dir),
+                expected_cell_count=1,
+                expected_episode_count=int(cell["repetitions"]),
+                execution_seed=int(cell.get("base_seed", 0)),
+                git_commit="",
+                source_extension_index=latest_index,
+                source_submission_attempt=0,
+                scientific_cell_key=cell_key,
+            )
+        )
+        indexed_keys.add(cell_key)
     return target, tuple(entries)
 
 
