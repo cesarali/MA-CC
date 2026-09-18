@@ -11,7 +11,9 @@ from typing import Any, Mapping
 from mas_cc.llm_runtime.providers.load_control import (
     LOAD_CONTROL_CONFIG_ENV,
     LOAD_CONTROL_DIR_ENV,
+    LOAD_CONTROL_REDIS_URL_ENV,
     ProviderLoadControlConfig,
+    provider_load_control_policy_hash,
 )
 
 
@@ -62,17 +64,41 @@ def configure_study_provider_load_control(manifest_path: str | Path) -> None:
         os.environ.pop(LOAD_CONTROL_CONFIG_ENV, None)
         os.environ.pop(LOAD_CONTROL_DIR_ENV, None)
         return
+    if resolved["mode"] == "redis_adaptive" and not os.environ.get(
+        LOAD_CONTROL_REDIS_URL_ENV, ""
+    ).strip():
+        raise RuntimeError(
+            "Redis provider load control requires "
+            f"{LOAD_CONTROL_REDIS_URL_ENV} in every worker environment"
+        )
 
     job_id = os.environ.get("SLURM_ARRAY_JOB_ID") or os.environ.get("SLURM_JOB_ID") or "local"
     control_root = study_root / "runtime" / "provider-control" / f"job-{job_id}"
     control_root.mkdir(parents=True, exist_ok=True)
     settings = control_root / "settings.json"
-    fd, temporary = tempfile.mkstemp(prefix="settings-", suffix=".tmp", dir=control_root)
+    config = ProviderLoadControlConfig.from_mapping(resolved)
+    settings_payload = {
+        "policy_hash": provider_load_control_policy_hash(config),
+        "provider_load_control": resolved,
+    }
+    encoded = json.dumps(settings_payload, indent=2, sort_keys=True) + "\n"
+    descriptor, temporary = tempfile.mkstemp(
+        prefix="settings-", suffix=".tmp", dir=control_root
+    )
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(resolved, stream, indent=2, sort_keys=True)
-            stream.write("\n")
-        os.replace(temporary, settings)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, settings)
+        except FileExistsError:
+            persisted = _mapping_file(settings)
+            if persisted != settings_payload:
+                raise RuntimeError(
+                    "active provider load-control settings do not match this worker; "
+                    f"refusing mixed policies at {settings}"
+                )
     finally:
         try:
             os.unlink(temporary)

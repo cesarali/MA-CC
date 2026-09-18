@@ -47,6 +47,12 @@ The real client reads `POTSDAM_API_KEY` and `BASE_POTSDAM_LLM_URL`, validates
 the requested model against the live `/models` endpoint, and never logs the
 key. The existing `.env` must not be committed.
 
+## Cygnus
+
+On the Cygnus Slurm cluster the launchers under `scripts/Cygnus/SLURM/` route model calls through
+the cluster LLM gateway and the Valkey provider coordinator; see
+[`docs/documentation/cygnus_site.md`](docs/documentation/cygnus_site.md).
+
 ## Commands
 
 Submit a folder of MA-CC experiment YAMLs as one preflighted SLURM config

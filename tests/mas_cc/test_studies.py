@@ -34,6 +34,7 @@ from mas_cc.studies.execution import (
     write_execution_manifest,
 )
 from mas_cc.studies.cell_worker import main as cell_worker_main
+from mas_cc.studies.runtime import configure_study_provider_load_control
 from mas_cc.studies.canonical import _coordinates
 from mas_cc.studies.table_io import read_scientific_table, write_scientific_table
 from mas_cc.studies.submission import (
@@ -43,6 +44,78 @@ from mas_cc.studies.submission import (
     submit_study,
     write_submission_manifest,
 )
+
+
+def test_study_workers_reject_mixed_live_provider_policies(tmp_path, monkeypatch):
+    study_root = tmp_path / "study"
+    study_root.mkdir()
+    manifest = study_root / "execution_manifest.csv"
+    manifest.write_text(
+        f"study_root\n{study_root.resolve()}\n", encoding="utf-8"
+    )
+    policy = {
+        "mode": "shared_adaptive",
+        "initial_concurrency": 2,
+        "minimum_concurrency": 1,
+        "maximum_concurrency": 2,
+        "target_rpm": 100,
+    }
+    (study_root / "study_manifest.json").write_text(
+        json.dumps({"execution": {"provider_load_control": policy}}),
+        encoding="utf-8",
+    )
+    (study_root / "execution_plan.json").write_text(
+        json.dumps({"provider_load_control": policy}), encoding="utf-8"
+    )
+    monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "policy-test")
+
+    configure_study_provider_load_control(manifest)
+    configure_study_provider_load_control(manifest)
+    settings = json.loads(
+        (
+            study_root
+            / "runtime/provider-control/job-policy-test/settings.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert len(settings["policy_hash"]) == 64
+    assert settings["provider_load_control"]["maximum_concurrency"] == 2
+
+    changed = {**policy, "maximum_concurrency": 3}
+    (study_root / "execution_plan.json").write_text(
+        json.dumps({"provider_load_control": changed}), encoding="utf-8"
+    )
+    with pytest.raises(RuntimeError, match="refusing mixed policies"):
+        configure_study_provider_load_control(manifest)
+
+
+def test_redis_study_worker_requires_endpoint_before_publishing_settings(
+    tmp_path, monkeypatch
+):
+    study_root = tmp_path / "study"
+    study_root.mkdir()
+    manifest = study_root / "execution_manifest.csv"
+    manifest.write_text(
+        f"study_root\n{study_root.resolve()}\n", encoding="utf-8"
+    )
+    policy = {
+        "mode": "redis_adaptive",
+        "initial_concurrency": 2,
+        "minimum_concurrency": 1,
+        "maximum_concurrency": 2,
+        "target_rpm": 100,
+    }
+    (study_root / "study_manifest.json").write_text(
+        json.dumps({"execution": {"provider_load_control": policy}}),
+        encoding="utf-8",
+    )
+    (study_root / "execution_plan.json").write_text(
+        json.dumps({"provider_load_control": policy}), encoding="utf-8"
+    )
+    monkeypatch.delenv("MAS_CC_PROVIDER_CONTROL_REDIS_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="MAS_CC_PROVIDER_CONTROL_REDIS_URL"):
+        configure_study_provider_load_control(manifest)
+    assert not (study_root / "runtime/provider-control").exists()
 
 
 def _standalone_config(path: Path, *, name: str = "study-smoke") -> Path:
@@ -540,6 +613,41 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
         for argument in calls[0]
     )
     assert any(argument.startswith("--array=0-1%") for argument in calls[0])
+
+
+def test_auto_submission_falls_back_to_resource_aware_config_array(
+    tmp_path, monkeypatch
+):
+    _standalone_config(tmp_path / "a.yaml", name="a")
+    _standalone_config(tmp_path / "b.yaml", name="b")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: auto-config}\nconfigs: [a.yaml, b.yaml]\n"
+        "execution:\n  mode: auto\n  throttle: 2\n  cpus_per_task: 3\n"
+        "  memory: 6G\n  time_limit: '02:00:00'\n",
+        encoding="utf-8",
+    )
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr(
+        "mas_cc.cli.experiment.run_experiment_preflight", fake_preflight
+    )
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 4244\n", "")
+
+    result = submit_study(tmp_path, tmp_path / "results", run=fake_run)
+
+    assert result.execution_plan["mode"] == "config_array"
+    assert not (result.study_dir / "execution_manifest.csv").exists()
+    assert "--array=0-1%2" in calls[0]
+    assert "--cpus-per-task=3" in calls[0]
+    assert "--mem=6G" in calls[0]
+    assert "--time=02:00:00" in calls[0]
 
 
 def test_required_results_root_rejects_home_repository_destination(tmp_path):

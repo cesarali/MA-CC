@@ -5,7 +5,7 @@ llm_provider:
   base_url_env: BASE_POTSDAM_LLM_URL
   timeout_seconds: 180
   max_retries: 2
-  request_concurrency: 60
+  request_concurrency: 40
   temperature: 1.0
   max_output_tokens: 4096
   options: {estimated_latency_seconds: 10.0}
@@ -101,10 +101,10 @@ budget:
   accounting_unit: proxy_accounting_unit
   system_max_cost_per_run: 20.0
   max_cost_per_run: 20.0
-  max_provider_requests: 500
+  max_provider_requests: 774
   max_input_tokens: 5000000
-  max_output_tokens: 1000000
-  allow_unbounded_paid_requests: false
+  max_output_tokens: 3170304
+  allow_unbounded_paid_requests: true
 
 logging:
   level: INFO

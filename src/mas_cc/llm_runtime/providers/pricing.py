@@ -729,6 +729,17 @@ def default_pricing_catalog() -> PricingCatalog:
                     maximum_output_tokens=65_536,
                 ),
             ),
+            ModelPricing(
+                "deepinfra", "openai/gpt-oss-120b", 0.037, 0.17, "USD",
+                "DeepInfra public OpenAI-model metadata denominated in USD per million tokens",
+                "https://api.deepinfra.com/v1/models",
+                retrieved_at="2026-09-16T00:00:00Z",
+                version="2026-09-16-deepinfra-openai-models-v1",
+                limits=ProviderLimits(
+                    maximum_input_tokens=131_072,
+                    maximum_output_tokens=131_072,
+                ),
+            ),
             ModelPricing("university", "gwdg/qwen3-30b-a3b-instruct-2507", 0.0, 0.0,
                          "proxy_accounting_unit", "University proxy model-info snapshot; currency unspecified",
                          "docs/university_llm_api.md dated snapshot", limits=ProviderLimits(requests_per_minute=2000),

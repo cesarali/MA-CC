@@ -63,7 +63,7 @@ ensemble: &ensemble
   require_complete_branches: true
   false_target: ALLOCATION_2
 execution: &execution {seed: 20260916, repetitions: 40, parallelism: 20, fail_fast: false}
-pricing: &pricing {mode: offline, fallback_policy: offline, explicit_unknown_price_override: true}
+pricing: &pricing {mode: live, fallback_policy: offline, explicit_unknown_price_override: true}
 budget: &budget {accounting_unit: proxy_accounting_unit, system_max_cost_per_run: 1000.0, max_cost_per_run: 1000.0, max_provider_requests: 5000000, max_input_tokens: 3000000000, max_output_tokens: 2000000000, allow_unbounded_paid_requests: false}
 logging: &logging {level: INFO, console: true, audit: true, comet: false}
 storage: &storage {output_dir: results, format: jsonl, artifact_profile: results_only, checkpoint_mode: episode, overwrite: false}
