@@ -27,6 +27,9 @@ EXTRA[b9b15]=""
 # The gate therefore relocates the bundle afresh and re-runs the finalize role
 # with the candidate tree: every finalizer stage is exercised, the information
 # stage is NOT (its fragments come from the bundle).
+# The code comes from the candidate (PYTHONPATH); MA_CC_REPOSITORY_ROOT stays the
+# ~/MA-CC snapshot because the epistemic-phase stage reads the MuSR task
+# artifacts from <root>/results/studies/... (job 82 failed without them).
 STUDY[potsdam]=$HOME/agg/iclr_false_arm_potsdam/recomm_only_q12_chatoss_false_control
 REF[potsdam]=${STUDY[potsdam]}/analysis/tables
 SBATCH[potsdam]="--cpus-per-task=8 --mem=44G --time=03:00:00"
@@ -52,7 +55,7 @@ for name in "${names[@]}"; do
       $PY -m zipfile -e ${BUNDLE[$name]} bundle/ && \
       $PY -m mas_cc.studies.relocate --bundle bundle --study-root \$W/${STUDY_ID[$name]} | tee relocate.log && \
       M=\$(grep -o '\"manifest\": \"[^\"]*\"' relocate.log | cut -d'\"' -f4) && \
-      MA_CC_REPOSITORY_ROOT=$CANDIDATE MA_CC_PYTHON=$PY bash $CANDIDATE/scripts/Cygnus/SLURM/run_study_analysis.job finalize \$M && \
+      MA_CC_REPOSITORY_ROOT=$HOME/MA-CC MA_CC_PYTHON=$PY bash $CANDIDATE/scripts/Cygnus/SLURM/run_study_analysis.job finalize \$M && \
       $PY $CANDIDATE/scripts/Cygnus/analysis/compare_dirs.py ${REF[$name]} \$W/${STUDY_ID[$name]}/analysis/tables"
   else
     wrap="cd $CANDIDATE && export PYTHONPATH=$CANDIDATE/src MA_CC_REPOSITORY_ROOT=$HOME/MA-CC MPLBACKEND=Agg OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 && \
