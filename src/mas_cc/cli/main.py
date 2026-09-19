@@ -291,6 +291,19 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
         help="execution backend (auto selects detached SLURM on Potsdam)",
     )
+    study_publish = study_commands.add_parser(
+        "publish",
+        help="copy the package zip and the analysis directory to a bucket and verify the remote",
+    )
+    study_publish.add_argument("--study-dir", type=Path, required=True)
+    study_publish.add_argument("--remote", default=None,
+                               help="rclone target, e.g. r2tmp:agent-swarm-control-research (default MA_CC_PUBLISH_REMOTE)")
+    study_publish.add_argument("--prefix", default=None, help="remote prefix for the analysis mirror (default MA_CC_PUBLISH_PREFIX or the user name)")
+    study_publish.add_argument("--analysis-dir", type=Path, default=None, help="override the analysis directory to publish")
+    study_publish.add_argument("--study-name", default=None, help="remote study folder name (default: the study directory name)")
+    study_publish.add_argument("--rclone", default=None, help="rclone binary (default MA_CC_RCLONE, PATH, ~/bin/rclone)")
+    study_publish.add_argument("--rclone-config", type=Path, default=None, help="rclone config file (default RCLONE_CONFIG)")
+    study_publish.add_argument("--dry-run", action="store_true", help="resolve targets and counts, transfer nothing")
     study_compact = study_commands.add_parser(
         "compact-analysis",
         help="convert an existing standardized analysis handoff to lean Parquet",
@@ -903,6 +916,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{summary['archive']}"
         )
         return 0 if summary["complete"] else 1
+    if args.command == "study" and args.study_command == "publish":
+        import getpass
+        import os
+
+        from mas_cc.studies.publish import PublishError, Rclone, publish
+
+        remote = args.remote or os.environ.get("MA_CC_PUBLISH_REMOTE")
+        if not remote:
+            print("publish needs --remote or MA_CC_PUBLISH_REMOTE", file=sys.stderr)
+            return 2
+        prefix = args.prefix or os.environ.get("MA_CC_PUBLISH_PREFIX") or getpass.getuser()
+        try:
+            receipt = publish(
+                args.study_dir, remote=remote, prefix=prefix, analysis_dir=args.analysis_dir,
+                study_name=args.study_name, dry_run=args.dry_run,
+                rclone=Rclone(args.rclone, args.rclone_config),
+            )
+        except (PublishError, OSError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps({key: receipt[key] for key in receipt if key in (
+            "status", "verified", "package", "package_target", "analysis_target", "local_files", "remote_files",
+            "local_bytes", "remote_bytes")}, indent=2))
+        return 0
     if args.command == "study" and args.study_command == "compact-analysis":
         from mas_cc.studies import compact_study_analysis
 
