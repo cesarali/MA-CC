@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from collections import Counter, defaultdict
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -15,6 +16,8 @@ import pandas as pd
 
 from mas_cc.analysis.estimators import (
     Estimate,
+    _cmi_from_counts,
+    _mi_from_counts,
     conditional_mutual_information,
     mutual_information,
 )
@@ -721,6 +724,115 @@ def _support(
     }
 
 
+
+
+# --- fast paths for the bits statistics ---------------------------------------
+#
+# ``mutual_information`` / ``conditional_mutual_information`` are functions of a
+# contingency table whose axes are the levels in first-appearance order. An
+# episode bootstrap draw is therefore a weighted sum of per-episode count
+# tensors (weights = how often each episode was drawn), permuted into the
+# draw's own level order; a policy-null permutation is a fresh action vector
+# over the same rows. Both are reproduced here exactly - same RNG calls, same
+# tables, same axis order - so the values are byte-identical to the row path,
+# which is kept behind ``MA_CC_INFORMATION_ENGINE=rows`` as the reference.
+
+_INFORMATION_ENGINE = os.environ.get("MA_CC_INFORMATION_ENGINE", "fast")
+
+
+def _bits_sequences(name: str, rows: Sequence[RoundEvent]) -> tuple[list, list, list | None]:
+    """The (x, y, z) sequences ``_estimate_for`` feeds the estimator for ``name``."""
+    if name == "round_sensing_mi":
+        return [row.N_k for row in rows], [row.Y_k for row in rows], None
+    if name == "round_target_sensing_mi":
+        return [row.target_before for row in rows], [row.sensor_target_count for row in rows], None
+    if name == "round_sensor_action_mi":
+        return [row.Y_k for row in rows], [str(row.U_k) for row in rows], None
+    outcome = _ROUND_OUTCOME.get(name)
+    if outcome is None:
+        raise ValueError(f"unknown round information statistic {name!r}")
+    state = ROUND_CONDITIONING_STATE[name]
+    return [str(row.U_k) for row in rows], [outcome(row) for row in rows], [state(row) for row in rows]
+
+
+def _first_appearance(values: np.ndarray) -> np.ndarray:
+    """Distinct values of an index array in order of first appearance."""
+    _, first = np.unique(values, return_index=True)
+    return values[np.sort(first)]
+
+
+class _BitsBootstrap:
+    """Episode bootstrap of one bits statistic on per-episode count tensors."""
+
+    def __init__(self, name: str, rows: Sequence[RoundEvent]):
+        x, y, z = _bits_sequences(name, rows)
+        self.cmi = z is not None
+        levels = [tuple(dict.fromkeys(seq)) for seq in ((x, y, z) if self.cmi else (x, y))]
+        self.shape = tuple(len(level) for level in levels)
+        index = [{value: i for i, value in enumerate(level)} for level in levels]
+        arrays = [np.fromiter((index[a][v] for v in seq), dtype=np.int64, count=len(seq))
+                  for a, seq in enumerate((x, y, z) if self.cmi else (x, y))]
+        by_episode = _grouped(rows, key=lambda row: row.episode_id)
+        self.ids = tuple(by_episode)
+        self.index = {str(episode_id): i for i, episode_id in enumerate(self.ids)}
+        position = {id(row): i for i, row in enumerate(rows)}
+        episodes = [np.fromiter((position[id(row)] for row in members), dtype=np.int64, count=len(members))
+                    for members in by_episode.values()]
+        # Table axes follow the estimator: (X, Y) for MI, (X, Z, Y) for CMI.
+        axis_arrays = arrays if not self.cmi else [arrays[0], arrays[2], arrays[1]]
+        axis_shape = self.shape if not self.cmi else (self.shape[0], self.shape[2], self.shape[1])
+        flat = np.ravel_multi_index(tuple(axis_arrays), axis_shape)
+        size = int(np.prod(axis_shape))
+        self.tensors = np.stack([np.bincount(flat[members], minlength=size) for members in episodes]) if episodes else np.zeros((0, size), dtype=np.int64)
+        self.axis_shape = axis_shape
+        self.episode_levels = [[_first_appearance(array[members]).tolist() for members in episodes] for array in axis_arrays]
+
+    def draw(self, rng: np.random.Generator) -> float:
+        selected = rng.choice(self.ids, size=len(self.ids), replace=True)
+        chosen = [self.index[str(episode_id)] for episode_id in selected]
+        weights = np.bincount(chosen, minlength=len(self.ids))
+        counts = (weights @ self.tensors).reshape(self.axis_shape).astype(float)
+        orders = [list(dict.fromkeys(v for e in chosen for v in per_episode[e])) for per_episode in self.episode_levels]
+        table = counts[np.ix_(*orders)]
+        return _cmi_from_counts(table) if self.cmi else _mi_from_counts(table)
+
+
+class _BitsPolicyNull:
+    """Policy-conditional randomization null of one actuation statistic."""
+
+    def __init__(self, name: str, rows: Sequence[RoundEvent]):
+        x, y, z = _bits_sequences(name, rows)
+        if z is None:
+            raise ValueError("the policy null is defined for conditional statistics")
+        x_levels = tuple(dict.fromkeys([*x, str(ADVOCATE_TARGET), str(NO_OP)]))
+        self.x_index = {value: i for i, value in enumerate(x_levels)}
+        y_levels, z_levels = tuple(dict.fromkeys(y)), tuple(dict.fromkeys(z))
+        yi, zi = {v: i for i, v in enumerate(y_levels)}, {v: i for i, v in enumerate(z_levels)}
+        self.x = np.fromiter((self.x_index[v] for v in x), dtype=np.int64, count=len(x))
+        self.y = np.fromiter((yi[v] for v in y), dtype=np.int64, count=len(y))
+        self.z = np.fromiter((zi[v] for v in z), dtype=np.int64, count=len(z))
+        probabilities = [row.p_k for row in rows]
+        self.mask = np.array([value is not None for value in probabilities])
+        self.p = np.array([0.0 if value is None else float(value) for value in probabilities])[self.mask]
+        self.advocate, self.no_op = self.x_index[str(ADVOCATE_TARGET)], self.x_index[str(NO_OP)]
+        self.shape = (len(x_levels), len(z_levels), len(y_levels))
+        self.zy = self.z * self.shape[2] + self.y
+
+    def value(self, rng: np.random.Generator) -> float:
+        x = self.x.copy()
+        if self.mask.any():
+            # One uniform per row with a probability, in row order - the same
+            # stream ``_policy_resample`` consumes with scalar ``rng.random()``.
+            uniforms = rng.random(int(self.mask.sum()))
+            x[self.mask] = np.where(uniforms < self.p, self.advocate, self.no_op)
+        counts = np.bincount(x * (self.shape[1] * self.shape[2]) + self.zy, minlength=int(np.prod(self.shape)))
+        table = counts.reshape(self.shape).astype(float)[_first_appearance(x)]
+        return _cmi_from_counts(table)
+
+    def values(self, permutations: int, seed: int) -> tuple[float, ...]:
+        return tuple(float(self.value(np.random.default_rng(seed + index))) for index in range(permutations))
+
+
 def round_information_analysis(
     rows: Sequence[RoundEvent],
     *,
@@ -784,15 +896,24 @@ def round_information_analysis(
                 "miller_madow": math.nan,
             }
         bootstrap_values = []
-        for draw in bootstrap_episode_rows(
-            eligible, resamples=bootstrap_resamples, seed=seed + name_index
-        ):
-            if name in _BITS_STATISTICS:
-                boot = float(getattr(_estimate_for(name, draw), MAIN_ESTIMATOR_VARIANT))
-            else:
-                boot = _diagnostic_for(name, draw)
-            if math.isfinite(boot):
-                bootstrap_values.append(boot)
+        if name in _BITS_STATISTICS and _INFORMATION_ENGINE == "fast":
+            fast = _BitsBootstrap(name, eligible)
+            if fast.ids and bootstrap_resamples:
+                rng = np.random.default_rng(seed + name_index)
+                for _ in range(bootstrap_resamples):
+                    boot = float(fast.draw(rng))
+                    if math.isfinite(boot):
+                        bootstrap_values.append(boot)
+        else:
+            for draw in bootstrap_episode_rows(
+                eligible, resamples=bootstrap_resamples, seed=seed + name_index
+            ):
+                if name in _BITS_STATISTICS:
+                    boot = float(getattr(_estimate_for(name, draw), MAIN_ESTIMATOR_VARIANT))
+                else:
+                    boot = _diagnostic_for(name, draw)
+                if math.isfinite(boot):
+                    bootstrap_values.append(boot)
         interval = (
             (math.nan, math.nan)
             if not bootstrap_values
@@ -804,12 +925,16 @@ def round_information_analysis(
         null_values: tuple[float, ...] = ()
         null_type = None
         if name in ROUND_ACTUATION_STATISTICS:
-            null_values = policy_resampling_null(
-                name,
-                eligible,
-                permutations=null_permutations,
-                seed=seed + 100_000 * (name_index + 1),
-            )
+            if _INFORMATION_ENGINE == "fast":
+                null_values = _BitsPolicyNull(name, eligible).values(
+                    null_permutations, seed=seed + 100_000 * (name_index + 1))
+            else:
+                null_values = policy_resampling_null(
+                    name,
+                    eligible,
+                    permutations=null_permutations,
+                    seed=seed + 100_000 * (name_index + 1),
+                )
             null_type = "policy_conditional_randomization"
         elif name in {
             "round_sensing_mi",
