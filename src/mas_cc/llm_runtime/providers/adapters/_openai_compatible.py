@@ -469,6 +469,7 @@ class OpenAICompatibleProvider:
             # Local and shared capacity waits are backpressure, not provider
             # attempts.  The provider recovery clock begins only after the
             # first shared lease is granted and transport is ready to start.
+            entered = time.perf_counter()
             logical_started: float | None = None
             retry_deadline: float | None = None
             retry = 0
@@ -556,6 +557,10 @@ class OpenAICompatibleProvider:
                         inference_seconds=latency,
                         retries=retry,
                         status_code=response.status_code,
+                        queue_seconds=entered - started,
+                        admission_seconds=(
+                            logical_started - entered if logical_started is not None else None
+                        ),
                         raw_response=body,
                     )
                 except ProviderError:
