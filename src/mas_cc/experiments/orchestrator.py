@@ -894,6 +894,12 @@ class _RoundTickingObserver:
     def record_round_trajectory(self, **payload: Any) -> None:
         self.recorder.record_round_trajectory(**payload)
 
+    def record_decision_timing(self, **payload: Any) -> None:
+        # Explicit forwarding: the runtime notifies by attribute lookup, so a
+        # method missing here is silently dropped (that is how the first smoke
+        # study produced zero timing rows).
+        self.recorder.record_decision_timing(**payload)
+
     def record_round_boundary(self, **payload: Any) -> None:
         self.recorder.record_round_boundary(
             **payload, budget_status=self.guard.checkpoint_state()

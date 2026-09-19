@@ -102,3 +102,19 @@ def test_otel_is_a_no_op_without_an_endpoint(monkeypatch):
     with otel.decision_span("x", {"a": 1}) as span:
         assert span is None
     assert otel.enabled() is False
+
+
+def test_production_observer_forwards_timing_rows():
+    from mas_cc.experiments.orchestrator import _RoundTickingObserver
+
+    class _Recorder:
+        retention_policy = SimpleNamespace(compact_scientific=True)
+        rows: list = []
+
+        def record_decision_timing(self, **row):
+            self.rows.append(row)
+
+    recorder = _Recorder()
+    observer = _RoundTickingObserver(recorder, guard=None, progress=None, episode_label="e")
+    observer.record_decision_timing(agent_id="a", wall_seconds=1.0)
+    assert recorder.rows == [{"agent_id": "a", "wall_seconds": 1.0}]
