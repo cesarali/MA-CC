@@ -1,0 +1,20 @@
+# Analysis-only image for the MA-CC finalizer and instruments, pinned to the
+# Cygnus analysis environment (see cygnus-analysis.lock.txt and
+# docs/handoff/environment.md). Not the runner image: no provider credentials,
+# no GPU. torch is in the lock because the shared environment has it; it is
+# installed only so the lock resolves identically.
+#
+#   docker buildx build -f environments/Dockerfile.analysis -t ma-cc-analysis:2026-09-19 .
+#   docker run --rm -v $PWD:/work ma-cc-analysis:2026-09-19 \
+#       python -m mas_cc.cli.main study aggregate --study-dir /work/results/studies/<study> --backend local
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/ma-cc
+COPY environments/cygnus-analysis.lock.txt ./environments/
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r environments/cygnus-analysis.lock.txt
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY scripts ./scripts
+RUN pip install --no-cache-dir --no-deps -e .
+ENV MPLBACKEND=Agg OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+CMD ["python", "-m", "mas_cc.cli.main", "--help"]
