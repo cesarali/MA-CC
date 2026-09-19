@@ -55,6 +55,11 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def detect_layout(bundle: Path) -> dict[str, Path]:
+    # A zip extracted with its top-level folder (`python -m zipfile -e x.zip out/`
+    # gives out/<bundle-name>/...): descend into a single child directory.
+    children = [child for child in bundle.iterdir() if child.is_dir()] if bundle.is_dir() else []
+    if len(children) == 1 and not (bundle / "frozen_generation").is_dir() and not (bundle / "provenance").is_dir():
+        return detect_layout(children[0])
     """Return the bundle's manifest, inputs, groups, study-manifest and config paths."""
     frozen = bundle / "frozen_generation"
     if (frozen / "execution_manifest.json").is_file():
