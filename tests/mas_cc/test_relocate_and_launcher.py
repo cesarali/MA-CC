@@ -54,6 +54,9 @@ def _make_bundle(tmp_path: Path, layout: str) -> Path:
     config = config_dir / "demo.yaml"
     config.write_text("experiment: demo\n")
     (study_dir / "study_manifest.json").write_text(json.dumps({"config_dir": old_cfg, "study_dir": old_study}))
+    (study_dir / "study_lineage.json").write_text(json.dumps({
+        "study_id": "demo_study", "legacy_root_layout": True, "latest_extension_index": 0,
+    }))
     (study_dir / "submission_manifest.csv").write_text(f"array_index,config_path,output_dir\n0,{old_cfg}/demo.yaml,{old_study}/runs\n")
     manifest = {
         "schema_version": 1,
@@ -96,6 +99,11 @@ def test_relocate_rewrites_paths_and_verifies(tmp_path, layout):
     assert "someone" not in json.dumps(relocated)
     assert "someone" not in (root / "submission_manifest.csv").read_text()
     assert (root / "analysis" / ".work" / "abc123" / "progress.json").is_file()
+    # A lineage file without an extensions tree would push finalize into lineage
+    # mode and fail; the bundle had no tree, so the file must be left out.
+    assert not (root / "study_lineage.json").exists()
+    assert (root / "study_lineage.omitted.json").is_file()
+    assert summary["lineage_omitted"] is True
 
 
 def test_relocate_refuses_nonempty_root(tmp_path):

@@ -119,13 +119,30 @@ def relocate(bundle: Path, study_root: Path, *, config_dir_name: str = "config_s
             source = layout["extras"] / name
             if source.is_file():
                 shutil.copy(source, generation / name)
-    for name in ("study_manifest.json", "submission_manifest.csv", "study_lineage.json"):
+    for name in ("study_manifest.json", "submission_manifest.csv"):
         source = layout["study"] / name
         if source.is_file():
             with open(source, encoding="utf-8") as handle:
                 text = handle.read()
             with open(study_root / name, "w", encoding="utf-8") as handle:
                 handle.write(rewrite(text))
+    # ``study_lineage.json`` switches ``_aggregate_study_local`` into lineage
+    # mode, which then requires ``extensions/extension-*/target_manifest.json``.
+    # Frozen bundles carry the lineage file but not the extensions tree, so a
+    # relocated root with the file and without the tree fails at finalize with
+    # "study lineage has no target manifest" (measured on Cygnus, job 43,
+    # 2026-09-19). Keep the file only when the bundle also ships the tree;
+    # otherwise leave it out and let the finalizer read the submission manifest.
+    lineage = layout["study"] / "study_lineage.json"
+    extensions = bundle / "extensions"
+    if lineage.is_file() and extensions.is_dir():
+        with open(lineage, encoding="utf-8") as handle:
+            text = handle.read()
+        with open(study_root / "study_lineage.json", "w", encoding="utf-8") as handle:
+            handle.write(rewrite(text))
+        shutil.copytree(extensions, study_root / "extensions", dirs_exist_ok=True)
+    elif lineage.is_file():
+        shutil.copy(lineage, study_root / "study_lineage.omitted.json")
     for source in sorted(Path(layout["config"]).glob("*.yaml")):
         shutil.copy(source, Path(new_config) / source.name)
     if layout["recipe"] is not None:
@@ -175,6 +192,11 @@ def verify(manifest_path: Path) -> dict[str, Any]:
     if valid_groups != len(manifest["groups"]):
         problems.append(f"groups valid {valid_groups}/{len(manifest['groups'])}")
     leftover = json.dumps(manifest).count("ojedamarin")
+    study_root = Path(str(manifest["study_dir"]))
+    if (study_root / "study_lineage.json").is_file() and not list(
+        (study_root / "extensions").glob("extension-*/target_manifest.json")
+    ):
+        problems.append("study_lineage.json present without extensions/*/target_manifest.json")
     summary = {
         "generation_id": manifest["generation_id"],
         "study_dir": manifest["study_dir"],
@@ -183,6 +205,7 @@ def verify(manifest_path: Path) -> dict[str, Any]:
         "valid_groups": valid_groups,
         "problems": problems,
         "foreign_path_references": leftover,
+        "lineage_omitted": (study_root / "study_lineage.omitted.json").is_file(),
     }
     if problems:
         raise ValueError("relocation verification failed: " + "; ".join(problems))
