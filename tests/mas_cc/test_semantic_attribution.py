@@ -107,3 +107,18 @@ def test_cli_dry_run_writes_manifest(tmp_path):
     preview = json.loads((out / "dry_run_preview.json").read_text())
     assert preview[0]["questions"]["stance"]["criteria"]["none"]
     assert pd.read_parquet(out / "semantic_attribution.parquet").shape[0] == 12
+
+
+def test_duplicate_messages_share_a_request_and_still_summarize(tmp_path):
+    # Two episodes with identical message texts and context: same request ids.
+    _write_episode(tmp_path, "cell-0000", "e1", 4)
+    _write_episode(tmp_path, "cell-0000", "e2", 4)
+    log: list = []
+    client = systemone.SystemOneClient(cache_dir=tmp_path / "cache", transport=_fake_transport(log), key="k")
+    messages = list(sa.iter_posted_messages(tmp_path))
+    frame = sa.attribute(messages, client)
+    assert len(messages) == 8 and frame["request_id"].nunique() < 8
+    assert client.usage.requests == frame["request_id"].nunique() and client.usage.cached == 8 - client.usage.requests
+    assert frame["stance_matches_truth"].notna().all()
+    dry = sa.attribute(messages, client=None)
+    assert len(dry) == 32

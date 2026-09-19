@@ -85,6 +85,26 @@ def iter_posted_messages(study_root: Path) -> Iterator[dict[str, Any]]:
                 }
 
 
+def messages_from_table(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    """Rebuild message dicts from a semantic_attribution table (one row per message, any question)."""
+    columns = ["source_path", "cell_id", "episode_id", "round_index", "within_round_index", "focal_agent_id",
+               "message_id", "message_type", "reply_to", "text", "vote_before", "vote_after", "controller_target",
+               "correct_answer", "controller_message_exposed", "intervention_budget", "controller_action"]
+    seen: set[tuple] = set()
+    messages: list[dict[str, Any]] = []
+    for row in frame.to_dict("records"):
+        key = (row.get("episode_id"), row.get("message_id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        message = {c: (None if pd.isna(row.get(c)) else row.get(c)) if not isinstance(row.get(c), (list, dict)) else row.get(c) for c in columns}
+        message["possible_answers"] = list(json.loads(row["possible_answers_json"])) if row.get("possible_answers_json") else []
+        message["controller_message_exposed"] = bool(message["controller_message_exposed"])
+        message["sampled_message_types"] = []
+        messages.append(message)
+    return messages
+
+
 def message_state(message: Mapping[str, Any]) -> dict[str, Any]:
     """The bounded state System One sees: the message and only the context needed."""
     return {
@@ -156,7 +176,9 @@ def attribute(messages: list[dict[str, Any]], client: systemone.SystemOneClient 
             rows.append({**base, **systemone.flatten_answer(name, answer), "model": record["model"], "cached": record["cached"]})
     frame = pd.DataFrame(rows)
     if not frame.empty and "stance" in set(frame["question"]):
-        stance = frame[frame["question"] == "stance"].set_index("request_id")["label"]
+        # Identical messages in identical context share a request_id (and a cached
+        # answer); one label per request_id is all the mapping needs.
+        stance = frame[frame["question"] == "stance"].drop_duplicates("request_id").set_index("request_id")["label"]
         frame["stance_matches_target"] = frame["request_id"].map(stance) == frame["controller_target"]
         frame["stance_matches_truth"] = frame["request_id"].map(stance) == frame["correct_answer"]
     return frame
@@ -185,15 +207,22 @@ def summarize(frame: pd.DataFrame) -> pd.DataFrame:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--study-root", required=True, type=Path)
+    parser.add_argument("--study-root", type=Path, default=None, help="study runs directory to scan")
+    parser.add_argument("--messages", type=Path, default=None,
+                        help="instead of scanning, judge the messages recorded in a previous run's semantic_attribution.parquet (e.g. a --dry-run made on the cluster)")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--sample", type=int, default=None, help="messages to judge (stratified by cell); default all")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--cache-dir", type=Path, default=None, help="default: <output>/systemone_cache")
     parser.add_argument("--dry-run", action="store_true", help="write states and questions, call nothing")
     args = parser.parse_args(argv)
+    if (args.study_root is None) == (args.messages is None):
+        parser.error("give exactly one of --study-root or --messages")
     args.output.mkdir(parents=True, exist_ok=True)
-    messages = sample_messages(iter_posted_messages(args.study_root), args.sample, args.seed)
+    if args.messages is not None:
+        messages = sample_messages(messages_from_table(pd.read_parquet(args.messages)), args.sample, args.seed)
+    else:
+        messages = sample_messages(iter_posted_messages(args.study_root), args.sample, args.seed)
     client = None if args.dry_run else systemone.SystemOneClient(cache_dir=args.cache_dir or args.output / "systemone_cache")
     frame = attribute(messages, client)
     frame.to_parquet(args.output / "semantic_attribution.parquet", index=False)
@@ -204,7 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         (args.output / "dry_run_preview.json").write_text(json.dumps(preview, indent=1, ensure_ascii=False), encoding="utf-8")
     manifest = {
         "estimator_version": VERSION, "question_version": QUESTION_VERSION,
-        "study_root": str(args.study_root), "messages_judged": len(messages), "sample": args.sample, "seed": args.seed,
+        "study_root": str(args.study_root) if args.study_root else None, "messages_source": str(args.messages) if args.messages else None,
+        "messages_judged": len(messages), "sample": args.sample, "seed": args.seed,
         "dry_run": args.dry_run,
         "provider_calls": 0 if client is None else client.usage.requests,
         "usage": None if client is None else client.usage.as_dict(),
