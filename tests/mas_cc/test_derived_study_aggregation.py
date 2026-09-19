@@ -325,3 +325,20 @@ def test_state_local_reconstruction_is_exported_as_a_diagnostic():
         diagnostic.iloc[0].state_local_reconstruction
         - diagnostic.iloc[0].whole_cell_aggregate
     )
+
+
+def test_worker_pool_matches_serial_for_all_outputs():
+    events = _cell_events("truth-rho1", 1) + _cell_events("false-rho2", 1)
+    events = [replace(e, event={**e.event, "physical_initial_state_hash":
+                               e.episode_id.rsplit("/", 1)[-1]}) for e in events]
+    config = _recipe()
+    config["derived_study_aggregates"]["bootstrap"] = {"unit": "shared_initialization_block"}
+    settings = {"bootstrap_resamples": 8, "null_permutations": 3, "confidence": .95, "seed": 4}
+    serial = derive_study_control_aggregates(events, _cells(), config, settings, "hash", workers=1)
+    pooled = derive_study_control_aggregates(events, _cells(), config, settings, "hash", workers=2)
+    for name in ("study_metrics", "state_local_metrics", "stability_metrics", "state_local_reconstruction"):
+        if hasattr(serial, name):
+            pd.testing.assert_frame_equal(getattr(serial, name), getattr(pooled, name))
+    assert not serial.study_metrics.empty
+    with pytest.raises(ValueError):
+        derive_study_control_aggregates(events, _cells(), config, settings, "hash", workers=0)
