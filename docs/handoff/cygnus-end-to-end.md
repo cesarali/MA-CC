@@ -115,6 +115,19 @@ $PY -m mas_cc.cli.main study aggregate --study-dir $RESULTS --backend slurm
 (`validation.json: complete=false, allow_incomplete=true`). Label it as such wherever
 it goes; the checkpoint-ensemble package in the bucket is one.
 
+### 3.4 Run cost in the manifest
+
+`mas-cc study submit` snapshots the submitting key's gateway spend (`GET
+/key/info` on `LLM_BASE`, key from `LLM_KEY` / `LLM_KEY_FILE` / `~/.llm.key`)
+into `<study>/run_cost.json`; `study aggregate` takes a second snapshot and
+writes the delta into `analysis_manifest.json` under `run_cost` (`usd`,
+`status`). Statuses: `ok`, `unavailable` (no gateway in reach, or no key),
+`no_start_snapshot` (relocated bundles), `key_changed`. Nothing here makes a
+model call and nothing raises: a missing snapshot is a field, not a failure.
+Verified from the login node with the Slurm per-user key against the in-cluster
+gateway (`http://llm.llm:4000`, status `ok`); the tailnet hostname does not
+resolve from inside the cluster, so keep `LLM_BASE` on the in-cluster Service.
+
 ## 4 · Finalize a Potsdam frozen bundle on Cygnus
 
 Your `*_frozen_aggregation_inputs_*.zip` bundles carry absolute Potsdam paths. One command

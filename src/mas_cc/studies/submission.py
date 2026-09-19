@@ -489,6 +489,11 @@ def submit_study(
     if match is None:
         raise ValueError(f"could not parse SLURM job ID from sbatch output: {stdout!r}")
     job_id = match.group(1)
+    # Spend snapshot of the submitting key, so the finalizer can report the
+    # run's gateway cost as a delta (observability/gateway_spend.py). Never raises.
+    from mas_cc.observability.gateway_spend import record_run_start
+
+    record_run_start(study_dir)
     (study_dir / "submission.json").write_text(
         json.dumps(
             {

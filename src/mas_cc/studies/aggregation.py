@@ -4875,6 +4875,12 @@ def _aggregate_study_local(
         "derived_semantics": _derived_semantics(derived),
     }
     profile.stage("packaging")
+    from mas_cc.observability.gateway_spend import run_cost
+
+    # Gateway spend of the key between `study submit` and now; a delta, not a
+    # provider call (the finalizer itself still makes none). Unavailable when
+    # there is no submit snapshot (relocated bundles) or no gateway in reach.
+    analysis_manifest["run_cost"] = run_cost(root)
     analysis_manifest["performance"] = profile.snapshot()
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)
     (analysis_dir / "progress.json").unlink(missing_ok=True)
