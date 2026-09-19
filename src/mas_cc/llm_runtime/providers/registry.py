@@ -71,6 +71,9 @@ def create_default_provider_registry() -> ProviderRegistry:
     registry.register("openai", f"{prefix}.openai:OpenAIProvider")
     registry.register("university", f"{prefix}.university:UniversityProvider")
     registry.register("gemma_local", f"{prefix}.gemma_local:GemmaLocalProvider")
+    # Experimental typed-choice ballot provider (TypeSafe System One). Not an
+    # OpenAI-compatible type: no coordinator, no model-profile decorator.
+    registry.register("typesafe", f"{prefix}.typesafe:TypeSafeChoiceProvider")
     return registry
 
 

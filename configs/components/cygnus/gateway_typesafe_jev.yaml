@@ -1,0 +1,19 @@
+# Experimental ballot provider: TypeSafe System One (Jev) through the estate
+# gateway pass-through. A calibrated typed Choice over the presented option
+# letters, no generated text. This is a DIFFERENT AGENT from gpt-oss; an arm
+# using it is compared on the same paired seeds and described as such.
+# Referenced by no study config. See src/mas_cc/llm_runtime/providers/adapters/typesafe.py.
+schema_version: 1
+type: typesafe
+model: jev-1.13.0
+credentials_env: LLM_KEY
+base_url_env: LLM_BASE
+timeout_seconds: 60
+max_retries: 2
+request_concurrency: 16
+temperature: 0.0
+max_output_tokens: 64
+options:
+  dry_run: false
+  # max_usd: 5.0            # refuse to send once the projected spend crosses this
+  # cache_dir: /shared/home/<user>/agg/systemone_cache

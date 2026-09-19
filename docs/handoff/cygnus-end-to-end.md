@@ -199,6 +199,18 @@ as `ctodie/semantic_attribution_probe_b9b15_q1/` with a README that says what it
 `--max-usd` / `--max-input-tokens` refuse to send once the projected spend would cross the
 cap; `MA_CC_SYSTEMONE_CACHE` shares the answer cache across runs and users.
 
+### 7.1 Experimental: System One as a ballot provider
+
+Provider type `typesafe` (`llm_runtime/providers/adapters/typesafe.py`,
+component `configs/components/cygnus/gateway_typesafe_jev.yaml`) answers a
+ballot with one calibrated typed Choice over the presented letters instead of
+generated text; the ballot contract receives `vote`, a machine-written
+`private_reason` with the probability, and a `NONE` public message, and the full
+probability vector lands in `raw_response`. It is a different agent from
+gpt-oss, not a drop-in: an arm using it is compared on the same paired seeds.
+No study config references it. Probe: `scripts/Cygnus/analysis/typesafe_ballot_probe.py`
+(20 real ballots, 0.18 s median per call, result in `docs/handoff/typesafe-ballot-probe-2026-09-19.json`).
+
 ## 8 · Verify a performance change before trusting it
 
 Every change in #9/#10 was gated on this: finalize into a side directory and compare
