@@ -42,7 +42,10 @@ STUDY_ID[potsdam]=recomm_only_q12_chatoss_false_control
 # the package publishes under analysis-runs/<run>/output (see relocate + runbook §4)
 STUDY[checkpoint]=$HOME/agg/checkpoint_ensemble_01/blackboard_checkpoint_ensemble_01
 REF[checkpoint]=${STUDY[checkpoint]}/analysis-runs/parallel-tracked-20260918/output/tables
-SBATCH[checkpoint]="--cpus-per-task=32 --mem=110G --time=06:00:00 --nodelist=big-0"
+# The reference ran on big-0 with 32 CPUs / 110 G, but its manifest shows a 6.8 GiB
+# peak RSS: a standard node (16 CPUs, 44 G) runs it, slower but without queueing
+# behind whatever occupies the big node.
+SBATCH[checkpoint]="--cpus-per-task=16 --mem=44G --time=08:00:00"
 EXTRA[checkpoint]="--allow-incomplete"
 
 names=(b9b15 potsdam checkpoint)
