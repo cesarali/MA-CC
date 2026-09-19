@@ -4291,6 +4291,7 @@ def _aggregate_study_local(
             settings,
             analysis_hash,
             bootstrap_plan=paired_summary_plan,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
         )
         if not aggregate_outputs.study_metrics.empty:
             outputs["study_aggregated_metrics"] = aggregate_outputs.study_metrics
