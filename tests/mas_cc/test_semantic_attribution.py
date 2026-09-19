@@ -87,6 +87,11 @@ def test_attribute_with_fake_model_and_summary(tmp_path):
     messages = list(sa.iter_posted_messages(tmp_path))
     frame = sa.attribute(messages, client)
     assert len(log) == 4 and client.usage.requests == 4
+    # batched: the four distinct messages fit in one request
+    batched_client = systemone.SystemOneClient(cache_dir=tmp_path / "cache2", transport=_fake_transport(log), key="k")
+    batched = sa.attribute(messages, batched_client, batch_size=4)
+    assert batched_client.usage.batches == 1 and set(batched["batch_size"]) == {4}
+    pd.testing.assert_frame_equal(frame.drop(columns=["batch_size"]), batched.drop(columns=["batch_size"]))
     stance = frame[frame["question"] == "stance"]
     # the fake picks the first option, which is ALLOCATION_0 == correct_answer here
     assert stance["stance_matches_truth"].all() and not stance["stance_matches_target"].any()
@@ -118,7 +123,9 @@ def test_duplicate_messages_share_a_request_and_still_summarize(tmp_path):
     messages = list(sa.iter_posted_messages(tmp_path))
     frame = sa.attribute(messages, client)
     assert len(messages) == 8 and frame["request_id"].nunique() < 8
-    assert client.usage.requests == frame["request_id"].nunique() and client.usage.cached == 8 - client.usage.requests
+    # duplicates inside one call are served by one request (deduplicated), not by the disk cache
+    assert client.usage.requests == frame["request_id"].nunique()
+    assert client.usage.cached + client.usage.deduplicated == 8 - client.usage.requests
     assert frame["stance_matches_truth"].notna().all()
     dry = sa.attribute(messages, client=None)
     assert len(dry) == 32

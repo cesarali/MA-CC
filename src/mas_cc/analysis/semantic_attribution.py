@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import sys
 from collections.abc import Iterable, Iterator, Mapping
@@ -156,9 +157,15 @@ def sample_messages(messages: Iterable[Mapping[str, Any]], sample: int | None, s
     return picked[:sample]
 
 
-def attribute(messages: list[dict[str, Any]], client: systemone.SystemOneClient | None) -> pd.DataFrame:
-    """One row per (message, question); ``client=None`` records the request only."""
+def attribute(messages: list[dict[str, Any]], client: systemone.SystemOneClient | None, *,
+              batch_size: int = 1, workers: int | None = None) -> pd.DataFrame:
+    """One row per (message, question); ``client=None`` records the request only.
+
+    With a client, all messages go through ``client.ask_many`` (cache hits first,
+    misses on a thread pool, optionally ``batch_size`` messages per request).
+    """
     rows = []
+    prepared = []
     for message in messages:
         state = message_state(message)
         questions = message_questions(message)
@@ -166,14 +173,20 @@ def attribute(messages: list[dict[str, Any]], client: systemone.SystemOneClient 
         base = {k: v for k, v in message.items() if k not in ("possible_answers", "sampled_message_types")}
         base.update(possible_answers_json=json.dumps(message["possible_answers"]), request_id=rid,
                     question_version=QUESTION_VERSION, estimator_version=VERSION)
-        if client is None:
+        prepared.append((base, state, questions))
+    if client is None:
+        for base, _, questions in prepared:
             for name in questions:
                 rows.append({**base, "question": name, "answer_type": questions[name]["type"], "value": None,
-                             "label": None, "confidence": None, "probabilities_json": None, "model": None, "cached": None})
-            continue
-        record = client.ask(state, questions)
-        for name, answer in record["answers"].items():
-            rows.append({**base, **systemone.flatten_answer(name, answer), "model": record["model"], "cached": record["cached"]})
+                             "label": None, "confidence": None, "probabilities_json": None, "model": None, "cached": None,
+                             "batch_size": None})
+    else:
+        records = client.ask_many([(state, questions) for _, state, questions in prepared],
+                                  batch_size=batch_size, workers=workers)
+        for (base, _, _), record in zip(prepared, records, strict=True):
+            for name, answer in record["answers"].items():
+                rows.append({**base, **systemone.flatten_answer(name, answer), "model": record["model"],
+                             "cached": record["cached"], "batch_size": record.get("batch_size", 1)})
     frame = pd.DataFrame(rows)
     if not frame.empty and "stance" in set(frame["question"]):
         # Identical messages in identical context share a request_id (and a cached
@@ -213,8 +226,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--sample", type=int, default=None, help="messages to judge (stratified by cell); default all")
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--cache-dir", type=Path, default=None, help="default: <output>/systemone_cache")
+    parser.add_argument("--cache-dir", type=Path, default=None,
+                        help="default: $MA_CC_SYSTEMONE_CACHE if set, else <output>/systemone_cache")
     parser.add_argument("--dry-run", action="store_true", help="write states and questions, call nothing")
+    parser.add_argument("--workers", type=int, default=None, help="concurrent requests (default $MA_CC_SYSTEMONE_WORKERS or 8)")
+    parser.add_argument("--batch-size", type=int, default=1, help=f"messages per request, 1..{systemone.MAX_BATCH} (default 1)")
+    parser.add_argument("--max-usd", type=float, default=None, help="refuse to send once the projected spend crosses this")
+    parser.add_argument("--max-input-tokens", type=int, default=None, help="refuse to send once projected input tokens cross this")
     args = parser.parse_args(argv)
     if (args.study_root is None) == (args.messages is None):
         parser.error("give exactly one of --study-root or --messages")
@@ -223,8 +241,16 @@ def main(argv: list[str] | None = None) -> int:
         messages = sample_messages(messages_from_table(pd.read_parquet(args.messages)), args.sample, args.seed)
     else:
         messages = sample_messages(iter_posted_messages(args.study_root), args.sample, args.seed)
-    client = None if args.dry_run else systemone.SystemOneClient(cache_dir=args.cache_dir or args.output / "systemone_cache")
-    frame = attribute(messages, client)
+    client = None
+    if not args.dry_run:
+        cache_dir = args.cache_dir or (Path(os.environ["MA_CC_SYSTEMONE_CACHE"]) if os.environ.get("MA_CC_SYSTEMONE_CACHE") else args.output / "systemone_cache")
+        budget = systemone.Budget(max_input_tokens=args.max_input_tokens, max_usd=args.max_usd) \
+            if (args.max_input_tokens is not None or args.max_usd is not None) else None
+        client = systemone.SystemOneClient(cache_dir=cache_dir, budget=budget)
+    if args.batch_size > 1 and client is not None:
+        print("WARNING: batch_size > 1 changes the judgments (measured 2026-09-19: stance label agreement 82.7 %, "
+              "pressure score mean 0.45 -> 0.98 vs single-message requests); use it for exploration only", file=sys.stderr)
+    frame = attribute(messages, client, batch_size=args.batch_size, workers=args.workers)
     frame.to_parquet(args.output / "semantic_attribution.parquet", index=False)
     summary = summarize(frame) if client is not None else pd.DataFrame()
     summary.to_parquet(args.output / "semantic_attribution_summary.parquet", index=False)
@@ -238,6 +264,10 @@ def main(argv: list[str] | None = None) -> int:
         "dry_run": args.dry_run,
         "provider_calls": 0 if client is None else client.usage.requests,
         "usage": None if client is None else client.usage.as_dict(),
+        "usd_estimate": None if client is None else round(client.usage.usd, 6),
+        "batch_size": args.batch_size, "workers": None if client is None else (args.workers or client.workers),
+        "budget": None if client is None or client.budget is None else vars(client.budget),
+        "cache_dir": None if client is None else str(client.cache_dir),
         "model": None if client is None else client.model,
         "endpoint": None if client is None else client.url,
         "questions_sha256": hashlib.sha256(json.dumps(message_questions(

@@ -1,0 +1,84 @@
+{
+ "levels": [
+  {
+   "concurrency": 1,
+   "requests": 40,
+   "messages": 40,
+   "wall_seconds": 8.17,
+   "requests_per_second": 4.9,
+   "mean_latency_s": 0.204,
+   "p95_latency_s": 0.27,
+   "retries": 0,
+   "errors": 0,
+   "input_tokens": 33586,
+   "usd": 0.00161
+  },
+  {
+   "concurrency": 2,
+   "requests": 40,
+   "messages": 40,
+   "wall_seconds": 4.19,
+   "requests_per_second": 9.56,
+   "mean_latency_s": 0.209,
+   "p95_latency_s": 0.27,
+   "retries": 0,
+   "errors": 0,
+   "input_tokens": 33769,
+   "usd": 0.00162
+  },
+  {
+   "concurrency": 4,
+   "requests": 39,
+   "messages": 40,
+   "wall_seconds": 2.16,
+   "requests_per_second": 18.06,
+   "mean_latency_s": 0.211,
+   "p95_latency_s": 0.253,
+   "retries": 0,
+   "errors": 0,
+   "input_tokens": 32751,
+   "usd": 0.00157
+  },
+  {
+   "concurrency": 8,
+   "requests": 38,
+   "messages": 40,
+   "wall_seconds": 1.15,
+   "requests_per_second": 33.1,
+   "mean_latency_s": 0.226,
+   "p95_latency_s": 0.28,
+   "retries": 0,
+   "errors": 0,
+   "input_tokens": 31831,
+   "usd": 0.00153
+  },
+  {
+   "concurrency": 16,
+   "requests": 37,
+   "messages": 40,
+   "wall_seconds": 0.74,
+   "requests_per_second": 49.86,
+   "mean_latency_s": 0.249,
+   "p95_latency_s": 0.384,
+   "retries": 0,
+   "errors": 0,
+   "input_tokens": 31013,
+   "usd": 0.00149
+  },
+  {
+   "concurrency": 32,
+   "requests": 36,
+   "messages": 40,
+   "wall_seconds": 0.67,
+   "requests_per_second": 53.56,
+   "mean_latency_s": 0.359,
+   "p95_latency_s": 0.518,
+   "retries": 0,
+   "errors": 0,
+   "input_tokens": 30218,
+   "usd": 0.00145
+  }
+ ],
+ "batch_size": 1,
+ "model": "jev-1.13.0"
+}

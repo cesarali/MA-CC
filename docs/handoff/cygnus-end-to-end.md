@@ -189,8 +189,15 @@ $PY -m mas_cc.analysis.semantic_attribution --study-root $RESULTS/runs --output 
 # judge it (needs a gateway key allowed on /typesafe/v1/systemone — today only Christian's; ask him)
 MA_CC_SYSTEMONE_KEY_FILE=~/.llm.key $PY -m mas_cc.analysis.semantic_attribution --messages ~/agg/semantic/<study>/semantic_attribution.parquet --output ~/agg/semantic/<study>-judged
 ```
-The 300-message probe on b9/b15 cost 217k input tokens and 58 s; its output is in the
-bucket as `ctodie/semantic_attribution_probe_b9b15_q1/` with a README that says what it is.
+The 300-message probe on b9/b15 cost 217k input tokens; sequential it took 58 s, with
+`--workers 8` 8.5 s (answers identical by construction). The gateway showed no errors up to
+32 concurrent requests (~50 requests/s). `--batch-size` above 1 folds several messages into
+one request and is cheaper (17 % fewer tokens) but **changes the judgments**: measured
+against single-message answers, stance label agreement 82.7 % and mean pressure score
+0.45 -> 0.98. Leave it at 1 for anything that will be quoted. Its output is in the bucket
+as `ctodie/semantic_attribution_probe_b9b15_q1/` with a README that says what it is.
+`--max-usd` / `--max-input-tokens` refuse to send once the projected spend would cross the
+cap; `MA_CC_SYSTEMONE_CACHE` shares the answer cache across runs and users.
 
 ## 8 · Verify a performance change before trusting it
 
