@@ -4571,6 +4571,7 @@ def _aggregate_study_local(
             confidence=settings["confidence"], seed=settings["seed"],
             analysis_hash=blackboard_hash, provisional=not validation["complete"],
             progress=profile.update,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
         )
         outputs.update(calibration_outputs)
         calibration_estimates = calibration_outputs["blackboard_calibration_estimates"]
@@ -4906,7 +4907,7 @@ def aggregate_study(
         backend == "auto"
         and not already_allocated
         and "PYTEST_CURRENT_TEST" not in os.environ
-        and potsdam_runtime
+        and (potsdam_runtime or "MA_CC_ANALYSIS_LAUNCHER" in os.environ)
         and shutil.which("sbatch") is not None
     )
     if use_slurm:
