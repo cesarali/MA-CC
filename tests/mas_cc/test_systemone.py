@@ -81,3 +81,14 @@ def test_malformed_response_is_an_error(tmp_path):
     with pytest.raises(systemone.SystemOneError):
         client.ask("s", {"q": systemone.noul("is it?")})
     assert client.usage.requests == 0
+
+
+def test_default_url_prefers_explicit_then_cluster_then_public(monkeypatch):
+    monkeypatch.delenv("MA_CC_SYSTEMONE_URL", raising=False)
+    monkeypatch.delenv("LLM_BASE", raising=False)
+    assert systemone.default_url() == systemone.PUBLIC_URL
+    monkeypatch.setenv("LLM_BASE", "http://llm.llm.svc.cluster.local:4000/")
+    assert systemone.default_url() == "http://llm.llm.svc.cluster.local:4000/typesafe/v1/systemone"
+    monkeypatch.setenv("MA_CC_SYSTEMONE_URL", "http://example.test/s1")
+    assert systemone.default_url() == "http://example.test/s1"
+    assert systemone.SystemOneClient(cache_dir=None).url == "http://example.test/s1"

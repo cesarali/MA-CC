@@ -14,8 +14,10 @@ to the numeric finalizer, which stays at ``provider_calls: 0``.
 
 Endpoint and credentials come from the environment, never from configs:
 
-* ``MA_CC_SYSTEMONE_URL``      - default ``https://llm.unsigned.gg/typesafe/v1/systemone``
-  (the estate gateway's pass-through; spend is attributed to the caller's key);
+* ``MA_CC_SYSTEMONE_URL``      - explicit endpoint; otherwise ``$LLM_BASE`` +
+  ``/typesafe/v1/systemone`` (the in-cluster gateway the Slurm launchers export),
+  otherwise the public ``https://llm.unsigned.gg`` pass-through. Spend is
+  attributed to the caller's key either way;
 * ``MA_CC_SYSTEMONE_KEY_FILE`` - file holding the bearer token (preferred), else
   ``LLM_KEY`` in the environment (the Slurm launchers already export it);
 * ``MA_CC_SYSTEMONE_MODEL``    - default ``jev-latest``.
@@ -37,8 +39,29 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_URL = "https://llm.unsigned.gg/typesafe/v1/systemone"
+PUBLIC_URL = "https://llm.unsigned.gg/typesafe/v1/systemone"
+PASSTHROUGH_PATH = "/typesafe/v1/systemone"
 DEFAULT_MODEL = "jev-latest"
+USER_AGENT = "mas-cc-systemone/1 (+https://github.com/cesarali/MA-CC)"
+
+
+def default_url() -> str:
+    """Explicit override, else the in-cluster gateway the launchers export, else the public host.
+
+    Slurm jobs on Cygnus run inside the cluster: ``LLM_BASE`` (set by every
+    launcher) points at the gateway Service, which is both faster and not behind
+    the public edge's browser checks (Cloudflare error 1010 for library agents).
+    """
+    explicit = os.environ.get("MA_CC_SYSTEMONE_URL")
+    if explicit:
+        return explicit
+    base = os.environ.get("LLM_BASE", "").rstrip("/")
+    if base:
+        return base + PASSTHROUGH_PATH
+    return PUBLIC_URL
+
+
+DEFAULT_URL = PUBLIC_URL
 RETRY_STATUSES = {429, 529, 502, 503, 504}
 
 
@@ -91,7 +114,7 @@ class Usage:
 class SystemOneClient:
     """Small, dependency-free HTTP client with retry and a content-hash cache."""
 
-    url: str = field(default_factory=lambda: os.environ.get("MA_CC_SYSTEMONE_URL", DEFAULT_URL))
+    url: str = field(default_factory=default_url)
     model: str = field(default_factory=lambda: os.environ.get("MA_CC_SYSTEMONE_MODEL", DEFAULT_MODEL))
     cache_dir: Path | None = None
     timeout: float = 60.0
@@ -147,7 +170,8 @@ class SystemOneClient:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(
             self.url, data=body, method="POST",
-            headers={"content-type": "application/json", "authorization": f"Bearer {self._bearer()}"},
+            headers={"content-type": "application/json", "authorization": f"Bearer {self._bearer()}",
+                     "user-agent": USER_AGENT, "accept": "application/json"},
         )
         last: str = ""
         for attempt in range(1, self.max_attempts + 1):
@@ -223,4 +247,4 @@ def flatten_answer(name: str, answer: Mapping[str, Any]) -> dict[str, Any]:
     return row
 
 
-__all__ = ["SystemOneClient", "SystemOneError", "Usage", "choice", "flatten_answer", "noul", "request_id", "score"]
+__all__ = ["SystemOneClient", "SystemOneError", "Usage", "choice", "default_url", "flatten_answer", "noul", "request_id", "score"]
