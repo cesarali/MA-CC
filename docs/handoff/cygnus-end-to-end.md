@@ -237,7 +237,14 @@ sbatch --cpus-per-task=16 --mem=44G --time=03:00:00 --wrap "\
 # expect: RESULT: byte-equivalent tables; extra=0
 ```
 Reference switches for A/B: `bootstrap_engine="rows"` (calibration) and
-`MA_CC_INFORMATION_ENGINE=rows` (information stage).
+`MA_CC_INFORMATION_ENGINE=rows` (information stage; since the diagnostic bootstraps
+and sensor-permutation nulls moved to index arrays this switch covers every
+statistic, not only the bits ones).
+
+One command runs all three references: `scripts/Cygnus/analysis/regress.sh <tree> [b9b15|potsdam|checkpoint|all]`
+(`REGRESSION.md` lists what each reference exercises; the Potsdam bundle is a frozen
+generation, so its gate re-runs the finalize role and does not touch the information
+stage).
 
 ## 9 · Gotchas, in the order they cost us time
 
