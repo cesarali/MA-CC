@@ -289,7 +289,6 @@ class RunRecorder:
         self._event_path = self.output_dir / "events.jsonl"
         self._log_path = self.output_dir / "experiment.log"
         self._api_path = self.output_dir / "api_call_status.jsonl"
-        self._decision_timing_path = self.output_dir / "decision_timing.jsonl"
         self._usage_path = self.output_dir / "usage_cost.jsonl"
         self._budget_path = self.output_dir / "budget_events.jsonl"
         self._audit_path = self.output_dir / "audit_traces.jsonl"
@@ -318,6 +317,12 @@ class RunRecorder:
             self._micro_slot_trajectory_path = (
                 self.output_dir / "micro_slot_trajectory.jsonl"
             )
+        # Timing rows live with the retained per-episode records: under the
+        # compact (study) retention policy the run directory itself is
+        # discarded at episode end and only round_records/<episode>/ survives.
+        self._decision_timing_path = (
+            self._round_trajectory_path.parent / "decision_timing.jsonl"
+        )
         self._failure_checkpoint: dict[str, Any] | None = None
         checkpoint_source = next(
             (
