@@ -17,6 +17,7 @@ from mas_cc.analysis.checkpoint_ensemble import (
     cross_fitted_classifier_score,
     endpoint_table,
     paired_response,
+    prepare_checkpoint_ensemble_inputs,
     validate_checkpoint_ensemble,
 )
 from mas_cc.config import CheckpointEnsembleConfig, ConfigLoader, load_run_config, parse_run_config
@@ -181,6 +182,50 @@ def test_strict_coverage_endpoint_and_parent_paired_effects():
     assert any("branch coverage differs" in error for error in invalid["errors"])
 
 
+def test_partial_checkpoint_analysis_recovers_only_complete_paths_and_qualifies_parents():
+    completed = _rounds(parents=1, horizons=2).assign(cell_key="cell-a")
+    interrupted = _rounds(parents=1, horizons=2).assign(cell_key="cell-b")
+    missing_path = (
+        interrupted["branch_policy"].eq("sensing_false")
+        & interrupted["posting_budget"].eq(12)
+    )
+    interrupted = interrupted[~missing_path].copy()
+    duplicate = interrupted[
+        interrupted["branch_policy"].eq("always_truth")
+        & interrupted["posting_budget"].eq(3)
+        & interrupted["post_branch_horizon"].eq(1)
+    ].copy()
+    duplicate["actual_controller_posts"] = 99
+    interrupted = pd.concat([interrupted, duplicate], ignore_index=True)
+
+    recovered, micro, diagnostics = prepare_checkpoint_ensemble_inputs(
+        completed,
+        available_round_prefixes=interrupted,
+        continuation_rounds=2,
+        expected_policies=POLICIES,
+        posting_budgets=(3, 12),
+    )
+
+    assert micro.empty
+    assert diagnostics["parents_observed"] == 2
+    assert diagnostics["parents_with_complete_branch_coverage"] == 1
+    assert diagnostics["complete_paths"] == 17
+    assert diagnostics["excluded_incomplete_paths"] == 1
+    assert recovered["parent_id"].nunique() == 2
+    assert not (
+        recovered["parent_id"].str.startswith("cell-b::")
+        & recovered["branch_policy"].eq("sensing_false")
+        & recovered["posting_budget"].eq(12)
+    ).any()
+    latest = recovered[
+        recovered["parent_id"].str.startswith("cell-b::")
+        & recovered["branch_policy"].eq("always_truth")
+        & recovered["posting_budget"].eq(3)
+        & recovered["post_branch_horizon"].eq(1)
+    ].iloc[0]
+    assert latest["actual_controller_posts"] == 99
+
+
 def test_existing_cmi_adapter_detects_assigned_policy_information():
     endpoints = endpoint_table(_rounds(parents=20))
     paired, _ = paired_response(endpoints, horizons=(2,), bootstrap_resamples=0)
@@ -210,6 +255,59 @@ def test_grouped_classifier_folds_never_split_a_parent():
     assert result["outer_folds"] == 5
     assert result["parents"] == 10
     assert result["probability_clip"] == [1e-6, 1 - 1e-6]
+
+
+def test_classifier_progress_counts_refits_without_changing_results(monkeypatch):
+    import mas_cc.analysis.checkpoint_ensemble as module
+
+    paired, _ = paired_response(
+        endpoint_table(_rounds(parents=2)), horizons=(2,), bootstrap_resamples=0
+    )
+    paired = paired[
+        paired["branch_policy"].eq("always_truth")
+        & paired["posting_budget"].eq(3)
+        & paired["target_semantics"].eq("truth")
+    ]
+    monkeypatch.setattr(
+        module, "cross_fitted_classifier_score",
+        lambda *args, **kwargs: {"estimate_bits": float(kwargs["seed"])},
+    )
+    updates = []
+    actual = module.classifier_analysis(
+        paired, population_size=10, seed=7, repeated_splits=2,
+        label_swap_permutations=3, progress_callback=updates.append,
+    )
+    expected = module.classifier_analysis(
+        paired, population_size=10, seed=7, repeated_splits=2,
+        label_swap_permutations=3,
+    )
+    for left, right in zip(actual, expected):
+        pd.testing.assert_frame_equal(left, right)
+    assert updates[0]["completed_classifier_refits"] == 0
+    assert updates[-1]["completed_classifier_refits"] == 5
+    assert updates[-1]["total_classifier_refits"] == 5
+    assert updates[-1]["completed_permutations"] == 3
+    assert updates[-1]["completed_comparisons"] == 1
+    assert updates[-1]["classifier_eta_seconds"] == 0
+
+
+def test_classifier_parallel_permutations_match_serial():
+    from mas_cc.analysis.checkpoint_ensemble import classifier_analysis
+
+    paired, _ = paired_response(
+        endpoint_table(_rounds(parents=6)), horizons=(2,), bootstrap_resamples=0
+    )
+    paired = paired[
+        paired["branch_policy"].eq("always_truth")
+        & paired["posting_budget"].eq(3)
+        & paired["target_semantics"].eq("truth")
+    ]
+    settings = dict(population_size=10, seed=17, repeated_splits=1,
+                    label_swap_permutations=3)
+    serial = classifier_analysis(paired, workers=1, **settings)
+    parallel = classifier_analysis(paired, workers=2, **settings)
+    for left, right in zip(serial, parallel):
+        pd.testing.assert_frame_equal(left, right)
 
 
 def test_downscaled_orchestrator_bundle_path_seals_all_children(tmp_path):

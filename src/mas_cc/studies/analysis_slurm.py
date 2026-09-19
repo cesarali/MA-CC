@@ -53,6 +53,19 @@ def _job_id(stdout: str) -> str:
     return value
 
 
+def _frozen_config_inputs(entries: Any) -> list[dict[str, str]]:
+    """Freeze each current config path once despite historical retry hashes."""
+
+    unique: dict[str, dict[str, str]] = {}
+    for entry in entries:
+        path = Path(str(entry.config_path)).expanduser().resolve()
+        unique[str(path)] = {
+            "path": str(path),
+            "sha256": file_sha256(path) if path.is_file() else str(entry.config_hash),
+        }
+    return [unique[path] for path in sorted(unique)]
+
+
 def _entries(
     root: Path,
 ) -> tuple[Any, tuple[Any, ...], tuple[Any, ...], Mapping[str, Any] | None]:
@@ -276,10 +289,7 @@ def create_generation(root: Path, *, allow_incomplete: bool) -> tuple[Path, dict
             }
             for name in canonical
         },
-        "config_inputs": [
-            {"path": str(entry.config_path), "sha256": str(entry.config_hash)}
-            for entry in entries
-        ],
+        "config_inputs": _frozen_config_inputs(entries),
         "groups": groups,
         "resources": {
             "task_throttle": min(throttle, max(1, len(groups))),
@@ -520,6 +530,14 @@ def finalize(manifest_path: Path) -> None:
     _atomic_json(analysis_manifest_path, analysis_manifest)
     _package(final_dir, str(manifest["study_id"]))
 
+    if manifest.get("isolated_analysis_dir"):
+        destination = Path(str(manifest["isolated_analysis_dir"]))
+        if destination.exists():
+            raise ValueError(f"isolated analysis destination already exists: {destination}")
+        final_dir.replace(destination)
+        refresh_progress(manifest_path, stage="published")
+        return
+
     root = Path(str(manifest["study_dir"]))
     publish = root / f".analysis-publish-{manifest['generation_id']}"
     previous = root / f".analysis-previous-{manifest['generation_id']}"
@@ -546,6 +564,70 @@ def submit_aggregation(
     ).is_file():
         raise ValueError(f"not a submitted MA-CC study directory: {root}")
     manifest_path, manifest = create_generation(root, allow_incomplete=allow_incomplete)
+    return submit_frozen_aggregation(manifest_path, run=run)
+
+
+def fork_generation(
+    source_manifest: str | Path,
+    workspace: str | Path,
+    *,
+    finalizer_time_limit: str | None = None,
+) -> Path:
+    """Copy a frozen analysis generation without mutating its source or publication."""
+    source_path = Path(source_manifest).resolve()
+    workspace = Path(workspace).resolve()
+    source = _read(source_path)
+    root = Path(source["study_dir"]).resolve()
+    if not workspace.is_relative_to(root / "analysis-runs"):
+        raise ValueError("isolated workspace must be under study_dir/analysis-runs")
+    if workspace.exists():
+        raise ValueError(f"isolated workspace already exists: {workspace}")
+    # Validate everything before creating any destination or scheduler jobs.
+    for item in source["canonical_inputs"].values():
+        if file_sha256(Path(item["path"])) != item["sha256"]:
+            raise ValueError(f"invalid frozen input: {item['path']}")
+    if not all(_valid_group(group) for group in source["groups"]):
+        raise ValueError("isolated finalization requires completed information groups")
+    workspace.mkdir(parents=True)
+    manifest = json.loads(json.dumps(source))
+    manifest["source_generation_id"] = source["generation_id"]
+    manifest["generation_id"] = source["generation_id"] + "-" + workspace.name
+    manifest["created_at"] = _now()
+    manifest["jobs"] = {"prepare": None, "array": None, "finalizer": None}
+    if finalizer_time_limit is not None:
+        manifest["resources"]["finalizer"]["time_limit"] = finalizer_time_limit
+    manifest["progress_path"] = str(workspace / "progress.json")
+    manifest["isolated_analysis_dir"] = str(workspace / "output")
+    manifest["final_archive"] = str(workspace / "output" / f"{source['study_id']}_analysis.zip")
+    for name, item in manifest["canonical_inputs"].items():
+        destination = workspace / "input" / f"{name}.parquet"
+        destination.parent.mkdir(exist_ok=True)
+        shutil.copy2(item["path"], destination)
+        if file_sha256(destination) != item["sha256"]:
+            raise ValueError(f"frozen copy checksum mismatch: {destination}")
+        item["path"] = str(destination)
+    shutil.copy2(source_path.parent / "input" / "validation.json", workspace / "input" / "validation.json")
+    for group in manifest["groups"]:
+        for key in ("information_path", "support_path", "completion_path"):
+            destination = workspace / "groups" / Path(group[key]).name
+            destination.parent.mkdir(exist_ok=True)
+            shutil.copy2(group[key], destination)
+            group[key] = str(destination)
+    manifest_path = workspace / "execution_manifest.json"
+    _atomic_json(manifest_path, manifest)
+    refresh_progress(manifest_path, stage="planned")
+    return manifest_path
+
+
+def submit_frozen_aggregation(
+    manifest_path: str | Path,
+    *,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> dict[str, Any]:
+    """Submit generic analysis jobs from an already frozen generation."""
+    manifest_path = Path(manifest_path).resolve()
+    manifest = _read(manifest_path)
+    root = Path(manifest["study_dir"])
     launcher = LAUNCHER
     if not launcher.is_file():
         raise ValueError(f"missing generic study-analysis launcher: {launcher}")
@@ -623,7 +705,7 @@ def submit_aggregation(
     return {
         "study_id": manifest["study_id"],
         "study_dir": str(root),
-        "analysis_dir": str(root / "analysis"),
+        "analysis_dir": manifest.get("isolated_analysis_dir", str(root / "analysis")),
         "submitted": True,
         "complete": False,
         "archive": manifest["final_archive"],
@@ -639,8 +721,10 @@ def submit_aggregation(
 __all__ = [
     "create_generation",
     "finalize",
+    "fork_generation",
     "prepare",
     "refresh_progress",
     "run_group",
     "submit_aggregation",
+    "submit_frozen_aggregation",
 ]

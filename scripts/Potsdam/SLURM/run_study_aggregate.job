@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Generic trigger for detached standardized study aggregation on Potsdam.
+#SBATCH --job-name=mas-cc-aggregate
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/aggregate-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/aggregate-%j.err
+
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: run_study_aggregate.job STUDY_DIR [--allow-incomplete]" >&2
+  exit 2
+fi
+
+readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly REPOSITORY_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly STUDY_DIR="$1"
+readonly INCOMPLETE_FLAG="${2:-}"
+
+if [[ -n "$INCOMPLETE_FLAG" && "$INCOMPLETE_FLAG" != "--allow-incomplete" ]]; then
+  echo "unsupported aggregation option: $INCOMPLETE_FLAG" >&2
+  exit 2
+fi
+
+cd "$REPOSITORY_ROOT"
+
+echo "[aggregate] study_dir=$STUDY_DIR"
+echo "[aggregate] slurm_job_id=${SLURM_JOB_ID:-manual} cpus=${SLURM_CPUS_PER_TASK:-unknown} mem=${SLURM_MEM_PER_NODE:-unknown}"
+echo "[aggregate] live progress is written to $STUDY_DIR/analysis/.work/<generation>/progress.json"
+echo "[aggregate] group and finalizer logs are written beneath $STUDY_DIR/logs/analysis-<generation>/"
+
+arguments=(study aggregate --study-dir "$STUDY_DIR" --backend slurm)
+if [[ "$INCOMPLETE_FLAG" == "--allow-incomplete" ]]; then
+  arguments+=(--allow-incomplete)
+fi
+exec "$CONDA_EXE" run -n MA-CC --live-stream mas-cc "${arguments[@]}"

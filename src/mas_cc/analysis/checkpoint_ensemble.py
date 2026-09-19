@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import json
 import math
+import time
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import nullcontext
+from typing import Callable
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -28,6 +33,176 @@ CONTROLLED_POLICIES = (
     "sensing_false",
 )
 
+
+def _qualified_parent_ids(frame: pd.DataFrame) -> pd.DataFrame:
+    """Qualify game-local parent IDs by scientific cell identity."""
+
+    result = frame.copy()
+    if result.empty or "parent_id" not in result:
+        return result
+    scope = result.get("cell_key")
+    if scope is None:
+        scope = result.get("source_run_id", pd.Series("run", index=result.index))
+    scope = scope.fillna(result.get("source_run_id", "run")).astype(str)
+    result["source_parent_id"] = result["parent_id"].astype(str)
+    result["parent_id"] = scope + "::" + result["source_parent_id"]
+    return result
+
+
+def _branch_key(row: Mapping[str, Any]) -> tuple[str, str, int, str, int]:
+    budget = row.get("posting_budget")
+    normalized_budget = "none" if budget is None or pd.isna(budget) else str(int(budget))
+    return (
+        str(row.get("parent_id")),
+        str(row.get("branch_policy")),
+        int(row.get("copy_id")),
+        normalized_budget,
+        int(row.get("post_branch_horizon")),
+    )
+
+
+def prepare_checkpoint_ensemble_inputs(
+    rounds: pd.DataFrame,
+    micro_slots: pd.DataFrame | None = None,
+    *,
+    available_round_prefixes: pd.DataFrame | None = None,
+    available_micro_slot_prefixes: pd.DataFrame | None = None,
+    continuation_rounds: int,
+    expected_policies: Sequence[str] = (
+        "none", "always_truth", "always_false", "sensing_truth", "sensing_false"
+    ),
+    posting_budgets: Sequence[int] = (3, 12),
+    continuation_copies: int = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    """Recover complete checkpoint paths from completed and interrupted episodes.
+
+    Generic episode completion may fail after a resumed parent bundle has already
+    durably written its rich round and micro-slot trajectories. For an explicitly
+    incomplete checkpoint analysis, a branch is scientifically usable when its
+    final appended attempt contains every horizon ``1..M``. The last physical
+    record at each coordinate supersedes an interrupted prefix. Branches with
+    incomplete horizon coverage are excluded rather than filled with zeros.
+    """
+
+    round_frames = [
+        frame
+        for frame in (rounds, available_round_prefixes)
+        if frame is not None and not frame.empty
+    ]
+    combined_rounds = (
+        pd.concat(round_frames, ignore_index=True, sort=False)
+        if round_frames
+        else pd.DataFrame()
+    )
+    combined_rounds = _qualified_parent_ids(combined_rounds)
+    combined_rounds["_checkpoint_input_order"] = np.arange(len(combined_rounds))
+    policies = set(expected_policies)
+    continuation = combined_rounds[
+        combined_rounds.get(
+            "branch_policy", pd.Series(index=combined_rounds.index, dtype=object)
+        ).isin(policies)
+    ].copy()
+    coordinate_columns = [
+        "parent_id", "branch_policy", "posting_budget", "copy_id",
+        "post_branch_horizon",
+    ]
+    continuation = continuation.drop_duplicates(coordinate_columns, keep="last")
+    expected_horizons = set(range(1, continuation_rounds + 1))
+    complete_keys: set[tuple[str, str, int, str]] = set()
+    for coordinates, group in continuation.groupby(
+        ["parent_id", "branch_policy", "copy_id", "posting_budget"],
+        dropna=False,
+        sort=False,
+    ):
+        parent_id, policy, copy_id, budget = coordinates
+        normalized_budget = "none" if pd.isna(budget) else str(int(budget))
+        horizons = set(pd.to_numeric(group["post_branch_horizon"]).astype(int))
+        if horizons == expected_horizons:
+            complete_keys.add((str(parent_id), str(policy), int(copy_id), normalized_budget))
+
+    def complete_branch(row: Mapping[str, Any]) -> bool:
+        parent, policy, copy_id, budget, _ = _branch_key(row)
+        return (parent, policy, copy_id, budget) in complete_keys
+
+    continuation = continuation[
+        continuation.apply(lambda row: complete_branch(row), axis=1)
+    ]
+    complete_parents = {key[0] for key in complete_keys}
+    checkpoints = combined_rounds[
+        combined_rounds.get(
+            "branch_policy", pd.Series(index=combined_rounds.index, dtype=object)
+        ).eq("checkpoint")
+    ].copy()
+    checkpoints = checkpoints[checkpoints["parent_id"].astype(str).isin(complete_parents)]
+    checkpoints = checkpoints.drop_duplicates(
+        ["parent_id", "copy_id", "post_branch_horizon"], keep="last"
+    )
+    recovered_rounds = pd.concat(
+        [checkpoints, continuation], ignore_index=True, sort=False
+    ).sort_values("_checkpoint_input_order")
+    recovered_rounds = recovered_rounds.drop(columns=["_checkpoint_input_order"])
+
+    micro_frames = [
+        frame
+        for frame in (micro_slots, available_micro_slot_prefixes)
+        if frame is not None and not frame.empty
+    ]
+    combined_micro = (
+        pd.concat(micro_frames, ignore_index=True, sort=False)
+        if micro_frames
+        else pd.DataFrame()
+    )
+    input_micro_records = len(combined_micro)
+    combined_micro = _qualified_parent_ids(combined_micro)
+    if not combined_micro.empty:
+        combined_micro["_checkpoint_input_order"] = np.arange(len(combined_micro))
+        combined_micro = combined_micro[
+            combined_micro.get(
+                "branch_policy", pd.Series(index=combined_micro.index, dtype=object)
+            ).isin(policies)
+        ].copy()
+        micro_coordinates = [
+            "parent_id", "branch_policy", "posting_budget", "copy_id",
+            "post_branch_horizon", "round_index", "micro_slot_index",
+        ]
+        combined_micro = combined_micro.drop_duplicates(micro_coordinates, keep="last")
+        combined_micro = combined_micro[
+            combined_micro.apply(lambda row: complete_branch(row), axis=1)
+        ].sort_values("_checkpoint_input_order")
+        combined_micro = combined_micro.drop(columns=["_checkpoint_input_order"])
+
+    expected_branch_keys = {
+        (policy, "none" if policy == "none" else str(int(budget)), copy_id)
+        for policy in expected_policies
+        for budget in ((None,) if policy == "none" else posting_budgets)
+        for copy_id in range(1, continuation_copies + 1)
+    }
+    paths_by_parent: dict[str, set[tuple[str, str, int]]] = {}
+    for parent, policy, copy_id, budget in complete_keys:
+        paths_by_parent.setdefault(parent, set()).add((policy, budget, copy_id))
+    fully_covered = sum(paths == expected_branch_keys for paths in paths_by_parent.values())
+    diagnostics = {
+        "input_round_records": int(len(combined_rounds)),
+        "retained_round_records": int(len(recovered_rounds)),
+        "input_micro_slot_records": int(input_micro_records),
+        "retained_micro_slot_records": int(len(combined_micro)),
+        "parents_observed": int(len(paths_by_parent)),
+        "parents_with_complete_branch_coverage": int(fully_covered),
+        "complete_paths": int(len(complete_keys)),
+        "expected_paths_for_observed_parents": int(
+            len(paths_by_parent) * len(expected_branch_keys)
+        ),
+        "excluded_incomplete_paths": int(
+            len(paths_by_parent) * len(expected_branch_keys) - len(complete_keys)
+        ),
+        "selection_rule": "last_record_per_coordinate_and_complete_horizons_1_to_M",
+    }
+    return (
+        recovered_rounds.reset_index(drop=True),
+        combined_micro.reset_index(drop=True),
+        diagnostics,
+    )
+
 BRANCH_ROUND_STATISTICS = (
     "round_target_actuation_cmi",
     "round_target_information_fraction",
@@ -39,6 +214,8 @@ BRANCH_ROUND_STATISTICS = (
 
 
 def _object(value: Any) -> Any:
+    if isinstance(value, (float, np.floating)) and math.isnan(float(value)):
+        return None
     if isinstance(value, str) and value[:1] in "[{":
         try:
             return json.loads(value)
@@ -417,7 +594,7 @@ def branch_round_metrics(
         )
         events = [
             adapt_relational_round_record(
-                row,
+                {key: _object(value) for key, value in row.items()},
                 cell_id=branch_cell,
                 episode_id=str(row["parent_id"]),
             )
@@ -767,6 +944,23 @@ def cross_fitted_classifier_score(
     }
 
 
+def _classifier_permutation_refit(task: tuple[Any, ...]) -> Mapping[str, Any]:
+    """One deterministic paired swap/refit, with no nested BLAS parallelism."""
+    from threadpoolctl import threadpool_limits
+
+    group, mask, population_size, seed = task
+    swapped = group.copy()
+    for index, row in swapped.iterrows():
+        if mask[row["parent_id"]]:
+            swapped.at[index, "baseline_count"], swapped.at[index, "target_count"] = (
+                row["target_count"], row["baseline_count"]
+            )
+    with threadpool_limits(limits=1):
+        return cross_fitted_classifier_score(
+            swapped, population_size=population_size, seed=seed
+        )
+
+
 def classifier_analysis(
     paired: pd.DataFrame,
     *,
@@ -774,29 +968,79 @@ def classifier_analysis(
     seed: int,
     repeated_splits: int = 5,
     label_swap_permutations: int = 100,
+    progress_callback: Callable[[Mapping[str, Any]], None] | None = None,
+    workers: int = 1,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if workers < 1:
+        raise ValueError("classifier workers must be positive")
     keys = ["q", "rho", "branch_policy", "posting_budget", "target_semantics", "post_branch_horizon"]
     estimates, nulls = [], []
     rng = np.random.default_rng(seed)
-    for group_index, (coordinates, group) in enumerate(paired.groupby(keys, dropna=False)):
+    grouped = paired.groupby(keys, dropna=False)
+    total_comparisons = len(grouped)
+    total_refits = total_comparisons * (repeated_splits + label_swap_permutations)
+    completed_refits = 0
+    started = time.monotonic()
+
+    def report(comparison: int, base: Mapping[str, Any], repeat: int, permutation: int, phase: str) -> None:
+        if progress_callback is None:
+            return
+        elapsed = time.monotonic() - started
+        progress_callback({
+            "stage": "checkpoint_classifier",
+            "classifier_phase": phase,
+            "classifier_workers": min(workers, max(1, label_swap_permutations)),
+            "comparison_index": comparison + 1,
+            "total_comparisons": total_comparisons,
+            "completed_comparisons": comparison + int(phase == "comparison_complete"),
+            "active_comparison": dict(base),
+            "completed_split_repeats": repeat,
+            "total_split_repeats": repeated_splits,
+            "completed_permutations": permutation,
+            "total_permutations": label_swap_permutations,
+            "completed_classifier_refits": completed_refits,
+            "total_classifier_refits": total_refits,
+            "classifier_elapsed_seconds": elapsed,
+            "classifier_eta_seconds": (
+                elapsed / completed_refits * (total_refits - completed_refits)
+                if completed_refits else None
+            ),
+        })
+
+    for group_index, (coordinates, group) in enumerate(grouped):
         base = dict(zip(keys, coordinates, strict=True))
+        report(group_index, base, 0, 0, "split_sensitivity")
         for repeat in range(repeated_splits):
             result = cross_fitted_classifier_score(
                 group, population_size=population_size, seed=seed + group_index * 100 + repeat
             )
             estimates.append({**base, "split_repeat": repeat, **result})
+            completed_refits += 1
+            report(group_index, base, repeat + 1, 0, "split_sensitivity")
+        report(group_index, base, repeated_splits, 0, "paired_label_swap")
+        tasks = []
         for permutation in range(label_swap_permutations):
-            swapped = group.copy()
+            # Draw masks in the parent process in the original serial order.
+            # Scheduling and worker count must never alter scientific randomness.
             mask = {parent: bool(rng.integers(0, 2)) for parent in group["parent_id"].unique()}
-            for index, row in swapped.iterrows():
-                if mask[row["parent_id"]]:
-                    swapped.at[index, "baseline_count"], swapped.at[index, "target_count"] = (
-                        row["target_count"], row["baseline_count"]
-                    )
-            result = cross_fitted_classifier_score(
-                swapped, population_size=population_size, seed=seed + permutation + 10000
+            tasks.append((group, mask, population_size, seed + permutation + 10000))
+        pool_context = (
+            ProcessPoolExecutor(
+                max_workers=min(workers, label_swap_permutations),
+                mp_context=multiprocessing.get_context("spawn"),
             )
-            nulls.append({**base, "permutation": permutation, "estimate_bits": result["estimate_bits"]})
+            if workers > 1 and label_swap_permutations > 0 else nullcontext(None)
+        )
+        with pool_context as pool:
+            results = (
+                pool.map(_classifier_permutation_refit, tasks, chunksize=1)
+                if pool is not None else map(_classifier_permutation_refit, tasks)
+            )
+            for permutation, result in enumerate(results):
+                nulls.append({**base, "permutation": permutation, "estimate_bits": result["estimate_bits"]})
+                completed_refits += 1
+                report(group_index, base, repeated_splits, permutation + 1, "paired_label_swap")
+        report(group_index, base, repeated_splits, label_swap_permutations, "comparison_complete")
     return pd.DataFrame(estimates), pd.DataFrame(nulls)
 
 
@@ -843,6 +1087,6 @@ def render_checkpoint_plots(
 __all__ = [
     "VERSION", "assigned_policy_information", "classifier_analysis",
     "branch_round_metrics", "cross_fitted_classifier_score", "endpoint_table", "paired_response",
-    "render_checkpoint_plots", "resource_report", "sensing_activation_response",
+    "prepare_checkpoint_ensemble_inputs", "render_checkpoint_plots", "resource_report", "sensing_activation_response",
     "validate_checkpoint_ensemble",
 ]

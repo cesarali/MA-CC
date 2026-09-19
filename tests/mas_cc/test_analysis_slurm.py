@@ -13,7 +13,13 @@ import yaml
 from mas_cc.cli.experiment import run_experiment_command
 from mas_cc.config import load_run_config
 from mas_cc.studies.aggregation import _expected_cell_coordinates, _information_tables
-from mas_cc.studies.analysis_slurm import create_generation, prepare, submit_aggregation
+from mas_cc.studies.analysis_slurm import (
+    _frozen_config_inputs,
+    fork_generation,
+    create_generation,
+    prepare,
+    submit_aggregation,
+)
 from mas_cc.studies.manifest import StudySpec
 from mas_cc.studies.submission import build_submission_entries, write_submission_manifest
 from mas_cc.studies.table_io import write_scientific_table
@@ -274,3 +280,77 @@ def test_generation_freezes_and_validates_canonical_inputs(tmp_path):
     assert set(manifest["canonical_inputs"]) >= {"cells", "episodes", "rounds", "micro_slots"}
     assert Path(manifest["progress_path"]).is_file()
     assert json.loads(Path(manifest["progress_path"]).read_text())["stage"] == "prepared"
+
+
+def test_generation_config_inputs_deduplicate_historical_hashes_by_current_path(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text("value: current\n", encoding="utf-8")
+    entries = (
+        SimpleNamespace(config_path=str(config), config_hash="historical-a"),
+        SimpleNamespace(config_path=str(config), config_hash="historical-b"),
+    )
+
+    frozen = _frozen_config_inputs(entries)
+
+    assert len(frozen) == 1
+    assert frozen[0]["path"] == str(config.resolve())
+    assert frozen[0]["sha256"] not in {"historical-a", "historical-b"}
+
+
+def test_fork_generation_copies_frozen_inputs_and_does_not_touch_source(tmp_path):
+    root = tmp_path / "study"
+    source = root / "analysis" / ".work" / "original"
+    (source / "input").mkdir(parents=True)
+    table = write_scientific_table(source / "input", "rounds", pd.DataFrame({"x": [1]}))
+    (source / "input" / "validation.json").write_text('{"complete": false}')
+    manifest = {
+        "generation_id": "original", "study_id": "study", "study_dir": str(root),
+        "created_at": "2026-09-18T00:00:00Z", "groups": [],
+        "scientific_input_identity": "science", "analysis_recipe_hash": "recipe",
+        "canonical_inputs": {"rounds": {"path": str(table), "sha256": file_sha256(table)}},
+        "jobs": {"finalizer": "running-original"},
+    }
+    source_path = source / "execution_manifest.json"
+    source_path.write_text(json.dumps(manifest))
+    before = source_path.read_bytes()
+    workspace = root / "analysis-runs" / "parallel"
+    fork_path = fork_generation(source_path, workspace)
+    fork = json.loads(fork_path.read_text())
+    assert source_path.read_bytes() == before
+    assert fork["scientific_input_identity"] == manifest["scientific_input_identity"]
+    assert fork["jobs"]["finalizer"] is None
+    assert fork["isolated_analysis_dir"] == str(workspace / "output")
+    copied = Path(fork["canonical_inputs"]["rounds"]["path"])
+    assert copied != table
+    assert copied.read_bytes() == table.read_bytes()
+
+
+def test_isolated_finalizer_publishes_only_to_its_own_destination(tmp_path, monkeypatch):
+    from mas_cc.studies.analysis_slurm import finalize
+
+    root = tmp_path / "study"
+    original = root / "analysis"
+    original.mkdir(parents=True)
+    sentinel = original / "original-progress.json"
+    sentinel.write_text("untouched")
+    workspace = root / "analysis-runs" / "parallel"
+    workspace.mkdir(parents=True)
+    manifest_path = workspace / "execution_manifest.json"
+    manifest = {
+        "study_dir": str(root), "allow_incomplete": True, "analysis_hash": "hash",
+        "study_id": "study", "generation_id": "parallel", "groups": [], "resources": {},
+        "progress_path": str(workspace / "progress.json"),
+        "isolated_analysis_dir": str(workspace / "output"),
+    }
+    manifest_path.write_text(json.dumps(manifest))
+    (workspace / "prepare_metrics.json").write_text("{}")
+    monkeypatch.setattr("mas_cc.studies.analysis_slurm.prepare", lambda path: None)
+    monkeypatch.setattr("mas_cc.studies.analysis_slurm.refresh_progress", lambda *a, **k: None)
+    def fake_aggregate(*args, analysis_output_dir, **kwargs):
+        analysis_output_dir.mkdir()
+        (analysis_output_dir / "analysis_manifest.json").write_text("{}")
+    monkeypatch.setattr("mas_cc.studies.aggregation._aggregate_study_local", fake_aggregate)
+    monkeypatch.setattr("mas_cc.studies.aggregation._package", lambda *a: None)
+    finalize(manifest_path)
+    assert sentinel.read_text() == "untouched"
+    assert (workspace / "output" / "analysis_manifest.json").is_file()

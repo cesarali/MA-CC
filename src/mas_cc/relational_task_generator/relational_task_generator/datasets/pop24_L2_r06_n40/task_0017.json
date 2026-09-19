@@ -1,0 +1,267 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0017",
+  "seed": 17093992467520181052,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 17,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Renu",
+        "coordinates": {
+          "x": -2,
+          "y": 0
+        }
+      },
+      {
+        "name": "Jora",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Rivo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 998,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Nori",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Haro",
+        "coordinates": {
+          "x": 998,
+          "y": 999
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": 999,
+          "y": 999
+        }
+      },
+      {
+        "name": "Vela",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Renu",
+        "relation": "SOUTHWEST",
+        "object": "Jora",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Jora",
+        "relation": "NORTHWEST",
+        "object": "Rivo",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Pelo",
+        "relation": "WEST",
+        "object": "Nori",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Nori",
+        "relation": "NORTHEAST",
+        "object": "Haro",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Haro",
+        "relation": "WEST",
+        "object": "Lira",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Lira",
+        "relation": "SOUTHWEST",
+        "object": "Vela",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Renu",
+    "reference": "Rivo",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTHEAST"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": []
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f3",
+        "f5"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f2",
+        "f4"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f2"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Renu relative to Rivo?",
+    "facts": {
+      "f1": "Renu is southwest of Jora.",
+      "f2": "Jora is northwest of Rivo.",
+      "f3": "Pelo is west of Nori.",
+      "f4": "Nori is northeast of Haro.",
+      "f5": "Haro is west of Lira.",
+      "f6": "Lira is southwest of Vela."
+    },
+    "reasoning_chain": [
+      "Renu is southwest of Jora.",
+      "Jora is northwest of Rivo."
+    ]
+  }
+}

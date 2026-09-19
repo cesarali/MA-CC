@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Generic dependent submitter: re-preflight and submit a study after prerequisites.
+#SBATCH --job-name=mas-cc-submit
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/submit-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/submit-%j.err
+
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: submit_study_after_dependency.job CONFIG_DIR RESULTS_DIR REDIS_ENDPOINT_FILE" >&2
+  exit 2
+fi
+
+readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly REPOSITORY_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly CONFIG_DIR="$1"
+readonly RESULTS_DIR="$2"
+readonly REDIS_ENDPOINT_FILE="$3"
+readonly QUEUE_PARTIAL_AGGREGATION="${MAS_CC_QUEUE_PARTIAL_AGGREGATION:-0}"
+
+if [[ ! -r "$REDIS_ENDPOINT_FILE" ]]; then
+  echo "Redis endpoint file is unavailable: $REDIS_ENDPOINT_FILE" >&2
+  exit 2
+fi
+
+# The endpoint file is mode 0600 and contains one shell-escaped export.
+source "$REDIS_ENDPOINT_FILE"
+if [[ -z "${MAS_CC_PROVIDER_CONTROL_REDIS_URL:-}" ]]; then
+  echo "Redis endpoint file did not define MAS_CC_PROVIDER_CONTROL_REDIS_URL" >&2
+  exit 2
+fi
+
+cd "$REPOSITORY_ROOT"
+
+"$CONDA_EXE" run -n MA-CC --live-stream \
+  mas-cc study submit --config-dir "$CONFIG_DIR" --results-dir "$RESULTS_DIR"
+
+if [[ "$QUEUE_PARTIAL_AGGREGATION" != "1" ]]; then
+  exit 0
+fi
+
+readonly SUBMISSION_JSON="$RESULTS_DIR/submission.json"
+if [[ ! -f "$SUBMISSION_JSON" ]]; then
+  echo "Study submission did not write $SUBMISSION_JSON" >&2
+  exit 1
+fi
+readonly SCIENCE_JOB_ID="$("$CONDA_EXE" run -n MA-CC python -c '
+import json
+import sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+job_id = str(value.get("job_id", ""))
+if not job_id.isdigit():
+    raise SystemExit("submission.json has no numeric job_id")
+print(job_id)
+' "$SUBMISSION_JSON")"
+readonly AGGREGATION_LAUNCHER="$REPOSITORY_ROOT/scripts/Potsdam/SLURM/run_study_aggregate.job"
+readonly AGGREGATION_LOG_DIR="$RESULTS_DIR/logs/partial-aggregation-trigger"
+# Canonical-table preparation precedes the detached array.  It must have
+# sufficient memory on its own; the analysis recipe controls the subsequent
+# per-group and finalizer resources.
+readonly AGGREGATION_CPUS="${MAS_CC_AGGREGATION_CPUS:-4}"
+readonly AGGREGATION_MEMORY="${MAS_CC_AGGREGATION_MEMORY:-32G}"
+readonly AGGREGATION_TIME="${MAS_CC_AGGREGATION_TIME:-02:00:00}"
+mkdir -p "$AGGREGATION_LOG_DIR"
+readonly AGGREGATION_JOB_ID="$(sbatch --parsable \
+  --dependency="afterany:${SCIENCE_JOB_ID}" \
+  --partition=all --qos=normal --nodes=1 --ntasks=1 \
+  --cpus-per-task="$AGGREGATION_CPUS" --mem="$AGGREGATION_MEMORY" --time="$AGGREGATION_TIME" \
+  --output="$AGGREGATION_LOG_DIR/aggregate-%j.out" \
+  --error="$AGGREGATION_LOG_DIR/aggregate-%j.err" \
+  "$AGGREGATION_LAUNCHER" "$RESULTS_DIR" --allow-incomplete)"
+echo "Queued partial aggregation job ${AGGREGATION_JOB_ID} after science array ${SCIENCE_JOB_ID}."

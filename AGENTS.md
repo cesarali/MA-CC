@@ -39,6 +39,18 @@ Outside Potsdam, use the local machine's existing project environment and
 setup instructions. Local agents must not look for, require, or reproduce the
 Potsdam-specific absolute Conda path.
 
+## Cloud result uploads
+
+For uploading existing result files or directories to the cloud bucket behind
+`results/aggregation_results`, use the `upload-results` skill at
+`.codex/skills/upload-results/SKILL.md`. All agents working in this repository
+must read it before an upload. Transfer only in environments with a confirmed
+existing bucket connection; do not assume every checkout is connected.
+The known local mount is read-only, so the skill uses direct rclone uploads
+and verification. Keep credentials in the environment's existing configuration;
+never print or commit credentials or copy them between environments.
+This routing instruction does not authorize automatic uploads.
+
 ## Experiments
 
 For MA-CC study creation, submission, SLURM execution, aggregation, or

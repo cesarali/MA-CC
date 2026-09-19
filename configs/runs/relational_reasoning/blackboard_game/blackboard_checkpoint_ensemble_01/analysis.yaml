@@ -1,4 +1,4 @@
-theoretical_reference: single_affinity_revised
+theoretical_reference: none
 estimators: [round_sensor_mae, round_sensor_mse, round_controller_action_entropy]
 resampling: {bootstrap_resamples: 2000, null_permutations: 1000, confidence: 0.95, seed: 20260916}
 checkpoint_ensemble_outputs:

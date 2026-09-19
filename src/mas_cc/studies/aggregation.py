@@ -3774,7 +3774,9 @@ def _aggregate_study_local(
         snapshot = Path(canonical_snapshot_dir)
         canonical = {
             name: read_scientific_table(snapshot / f"{name}.parquet")
-            for name in ("cells", "episodes", "rounds", "micro_slots")
+            for name in json.loads(
+                (snapshot.parent / "execution_manifest.json").read_text(encoding="utf-8")
+            )["canonical_inputs"]
         }
         validation = json.loads(
             (snapshot / "validation.json").read_text(encoding="utf-8")
@@ -4132,6 +4134,7 @@ def _aggregate_study_local(
             classifier_analysis,
             endpoint_table,
             paired_response,
+            prepare_checkpoint_ensemble_inputs,
             resource_report,
             sensing_activation_response,
             validate_checkpoint_ensemble,
@@ -4144,8 +4147,27 @@ def _aggregate_study_local(
         budgets = tuple(int(value) for value in checkpoint_recipe.get("posting_budgets", (3, 12)))
         copies = int(checkpoint_recipe.get("continuation_copies", 1))
         continuation_rounds = int(checkpoint_recipe.get("continuation_rounds", 10))
+        checkpoint_rounds, checkpoint_micro_slots, checkpoint_recovery = (
+            prepare_checkpoint_ensemble_inputs(
+                canonical["rounds"],
+                canonical["micro_slots"],
+                available_round_prefixes=(
+                    canonical.get("available_round_prefixes")
+                    if allow_incomplete else None
+                ),
+                available_micro_slot_prefixes=(
+                    canonical.get("available_micro_slot_prefixes")
+                    if allow_incomplete else None
+                ),
+                continuation_rounds=continuation_rounds,
+                expected_policies=policies,
+                posting_budgets=budgets,
+                continuation_copies=copies,
+            )
+        )
+        validation["checkpoint_recovery"] = checkpoint_recovery
         checkpoint_validation = validate_checkpoint_ensemble(
-            canonical["rounds"],
+            checkpoint_rounds,
             expected_policies=policies,
             posting_budgets=budgets,
             continuation_copies=copies,
@@ -4155,7 +4177,7 @@ def _aggregate_study_local(
                 if checkpoint_recipe.get("expected_parents") is None
                 else int(checkpoint_recipe["expected_parents"])
             ),
-            micro_slots=canonical["micro_slots"],
+            micro_slots=checkpoint_micro_slots,
             episodes=canonical["episodes"],
             require_complete=not allow_incomplete,
         )
@@ -4165,7 +4187,8 @@ def _aggregate_study_local(
                 "checkpoint ensemble validation failed: "
                 + "; ".join(checkpoint_validation["errors"])
             )
-        checkpoint_endpoints = endpoint_table(canonical["rounds"])
+        profile.stage("checkpoint_paired_response")
+        checkpoint_endpoints = endpoint_table(checkpoint_rounds)
         checkpoint_pairs, checkpoint_effects = paired_response(
             checkpoint_endpoints,
             horizons=tuple(int(value) for value in checkpoint_recipe.get("primary_horizons", (1, 10))),
@@ -4176,24 +4199,29 @@ def _aggregate_study_local(
         population_size = int(
             pd.to_numeric(checkpoint_endpoints["N"], errors="coerce").dropna().iloc[0]
         )
+        profile.stage("checkpoint_assigned_policy_information")
         checkpoint_information = assigned_policy_information(
             checkpoint_pairs,
             population_size=population_size,
             smoothing=tuple(checkpoint_recipe.get("smoothing", (0, 1, 12.5))),
         )
+        profile.stage("checkpoint_classifier")
         checkpoint_classifier, checkpoint_label_swap = classifier_analysis(
             checkpoint_pairs,
             population_size=population_size,
             seed=int(settings["seed"]),
             repeated_splits=int(checkpoint_recipe.get("repeated_group_splits", 5)),
             label_swap_permutations=int(settings["null_permutations"]),
+            progress_callback=profile.update,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
         )
+        profile.stage("checkpoint_activation_response")
         checkpoint_resources = resource_report(
-            canonical["rounds"], canonical["episodes"]
+            checkpoint_rounds, canonical["episodes"]
         )
         checkpoint_activation_response = (
             sensing_activation_response(
-                canonical["rounds"],
+                checkpoint_rounds,
                 bootstrap_resamples=int(settings["bootstrap_resamples"]),
                 confidence=float(settings["confidence"]),
                 seed=int(settings["seed"]),
@@ -4201,9 +4229,10 @@ def _aggregate_study_local(
             if bool(checkpoint_recipe.get("activation_response", False))
             else pd.DataFrame()
         )
+        profile.stage("checkpoint_branch_round_metrics")
         checkpoint_branch_round_metrics, checkpoint_branch_round_nulls = (
             branch_round_metrics(
-                canonical["rounds"],
+                checkpoint_rounds,
                 bootstrap_resamples=int(settings["bootstrap_resamples"]),
                 null_permutations=int(settings["null_permutations"]),
                 confidence=float(settings["confidence"]),
@@ -4225,6 +4254,8 @@ def _aggregate_study_local(
             [h0, checkpoint_endpoints], ignore_index=True, sort=False
         )
         outputs.update({
+            "checkpoint_complete_round_records": checkpoint_rounds,
+            "checkpoint_complete_micro_slots": checkpoint_micro_slots,
             "checkpoint_branch_endpoints": checkpoint_endpoints,
             "checkpoint_paired_inputs": checkpoint_pairs,
             "checkpoint_paired_effects": checkpoint_effects,

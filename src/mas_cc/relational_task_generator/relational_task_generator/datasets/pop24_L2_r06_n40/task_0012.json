@@ -1,0 +1,266 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0012",
+  "seed": 8915450471996813177,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 12,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Kora",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Yaro",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Nira",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Yani",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Zora",
+        "coordinates": {
+          "x": 1000,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Wira",
+        "coordinates": {
+          "x": 1001,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 1001,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Daro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Kora",
+        "relation": "WEST",
+        "object": "Yaro",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Yaro",
+        "relation": "SOUTHEAST",
+        "object": "Nira",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Yani",
+        "relation": "SOUTHWEST",
+        "object": "Zora",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Zora",
+        "relation": "NORTHWEST",
+        "object": "Wira",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Wira",
+        "relation": "SOUTH",
+        "object": "Vero",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Vero",
+        "relation": "NORTHEAST",
+        "object": "Daro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Kora",
+    "reference": "Nira",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "NORTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "EAST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1",
+        "f5"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": []
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1",
+        "f3",
+        "f4"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Kora relative to Nira?",
+    "facts": {
+      "f1": "Kora is west of Yaro.",
+      "f2": "Yaro is southeast of Nira.",
+      "f3": "Yani is southwest of Zora.",
+      "f4": "Zora is northwest of Wira.",
+      "f5": "Wira is south of Vero.",
+      "f6": "Vero is northeast of Daro."
+    },
+    "reasoning_chain": [
+      "Kora is west of Yaro.",
+      "Yaro is southeast of Nira."
+    ]
+  }
+}
