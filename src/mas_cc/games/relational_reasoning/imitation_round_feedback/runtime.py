@@ -45,6 +45,9 @@ import asyncio
 import hashlib
 import json
 import random
+import time
+
+from mas_cc.observability.otel import decision_span
 from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
@@ -431,7 +434,10 @@ async def _execute_decision(
             "prompt_instance_hash": prompt.instance_hash,
         }
 
+    attempt_responses: list[Any] = []
+
     def _on_attempt(attempt: ValidationAttempt) -> None:
+        attempt_responses.append(attempt)
         _notify(
             observer,
             "record_attempt",
@@ -453,6 +459,47 @@ async def _execute_decision(
             observation=logical.observation.to_dict(),
         )
 
+    decision_started = time.perf_counter()
+    span_context = decision_span("mas_cc.decision", {
+        "interaction_id": str(logical.interaction_id), "decision_stage": logical.stage,
+        "agent_id": str(logical.agent_id), "round_index": state.turn + 1,
+    })
+    span = span_context.__enter__()
+
+    def _finish(outcome: str) -> dict[str, Any]:
+        row = _timing_row(outcome)
+        if span is not None:
+            for key, value in row.items():
+                if isinstance(value, (bool, int, float, str)):
+                    span.set_attribute(f"mas_cc.{key}", value)
+        span_context.__exit__(None, None, None)
+        return row
+
+    def _timing_row(outcome: str) -> dict[str, Any]:
+        responses = [a.response for a in attempt_responses if a.response is not None]
+        usage_in = sum(int(getattr(r.usage, "input_tokens", 0) or 0) for r in responses)
+        usage_out = sum(int(getattr(r.usage, "output_tokens", 0) or 0) for r in responses)
+        return {
+            "round_index": state.turn + 1,
+            "interaction_id": str(logical.interaction_id),
+            "decision_stage": logical.stage,
+            "agent_id": str(logical.agent_id),
+            "outcome": outcome,
+            "wall_seconds": time.perf_counter() - decision_started,
+            "provider_latency_seconds": sum(float(r.latency_seconds or 0.0) for r in responses),
+            "queue_seconds": sum(float(r.queue_seconds or 0.0) for r in responses),
+            "admission_seconds": sum(float(r.admission_seconds or 0.0) for r in responses),
+            "provider_retries": sum(int(r.retries or 0) for r in responses),
+            "validation_attempts": len(attempt_responses),
+            "provider_errors": sum(1 for a in attempt_responses if a.provider_error),
+            "status_code": responses[-1].status_code if responses else None,
+            "input_tokens": usage_in,
+            "output_tokens": usage_out,
+            "provider": responses[-1].provider if responses else None,
+            "model": responses[-1].model if responses else None,
+            "prompt_family": logical.prompt.family,
+        }
+
     try:
         decision = await run_validated_decision(
             game=game,
@@ -468,6 +515,7 @@ async def _execute_decision(
             on_attempt=_on_attempt,
         )
     except ProviderError:
+        _notify(observer, "record_decision_timing", **_finish("provider_error"))
         recovery.checkpoint(
             {
                 "interaction_id": str(logical.interaction_id),
@@ -480,6 +528,7 @@ async def _execute_decision(
         )
         raise
     except DecisionLoopExhausted as exc:
+        _notify(observer, "record_decision_timing", **_finish("validation_exhausted"))
         # Never swallowed into a default vote: a ballot that failed to parse and
         # is silently counted as a wrong answer would corrupt every downstream
         # number without leaving a trace.
@@ -498,6 +547,7 @@ async def _execute_decision(
             f"no valid {logical.stage} action from {logical.agent_id}: {exc}"
         ) from exc
 
+    _notify(observer, "record_decision_timing", **_finish("ok"))
     result = RelationalDecision(
         request=logical,
         action=decision.action,

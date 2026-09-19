@@ -83,6 +83,12 @@ class CompletionResponse:
     status_code: int | None = None
     load_seconds: float | None = None
     inference_seconds: float | None = None
+    # Backpressure split out of latency_seconds (which spans the whole call):
+    # time waiting for the provider's local semaphore, and time waiting for the
+    # shared coordinator's first lease. Both None when the adapter does not
+    # measure them.
+    queue_seconds: float | None = None
+    admission_seconds: float | None = None
     raw_response: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -108,6 +114,8 @@ class CompletionResponse:
             "status_code": self.status_code,
             "load_seconds": self.load_seconds,
             "inference_seconds": self.inference_seconds,
+            "queue_seconds": self.queue_seconds,
+            "admission_seconds": self.admission_seconds,
         }
 
     def redacted_raw_response(self) -> dict[str, Any]:

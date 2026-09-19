@@ -289,6 +289,7 @@ class RunRecorder:
         self._event_path = self.output_dir / "events.jsonl"
         self._log_path = self.output_dir / "experiment.log"
         self._api_path = self.output_dir / "api_call_status.jsonl"
+        self._decision_timing_path = self.output_dir / "decision_timing.jsonl"
         self._usage_path = self.output_dir / "usage_cost.jsonl"
         self._budget_path = self.output_dir / "budget_events.jsonl"
         self._audit_path = self.output_dir / "audit_traces.jsonl"
@@ -497,6 +498,15 @@ class RunRecorder:
             else {k: v for k, v in payload.items() if k not in {"prompt", "response"}}
         )
         self._logger.info("%s %s", event_type, logged_payload)
+
+    def record_decision_timing(self, **row: Any) -> None:
+        """One line per logical decision: wall time split into provider latency,
+        queue/admission waits, retries and tokens, attributed to agent and stage.
+        Always on; ~300 bytes per call."""
+        _jsonl(
+            self._decision_timing_path,
+            {"schema_version": self.schema_version, "run_id": self.run_id, "recorded_at": _now(), **row},
+        )
 
     def record_attempt(
         self,
