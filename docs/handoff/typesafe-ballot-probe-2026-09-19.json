@@ -1,0 +1,463 @@
+{
+  "summary": {
+    "calls": 20,
+    "live": 19,
+    "model": [
+      "jev-1.13.0"
+    ],
+    "votes": {
+      "B": 5,
+      "C": 7,
+      "A": 8
+    },
+    "latency_seconds_median": 0.181,
+    "latency_seconds_max": 0.378,
+    "input_tokens_total": 17010,
+    "usd_estimate": 0.00071442,
+    "confidence_median": 0.895,
+    "max_probability_median": 0.93,
+    "recorded_at": "2026-09-19T20:43:17Z"
+  },
+  "ballots": [
+    {
+      "index": 0,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "B",
+      "probabilities": {
+        "B": 0.89,
+        "C": 0.08,
+        "A": 0.03
+      },
+      "confidence": 0.83,
+      "latency_seconds": 0.319,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(B)=0.890, confidence 0.830. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2149
+    },
+    {
+      "index": 1,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "A": 0.02,
+        "B": 0.01,
+        "C": 0.97
+      },
+      "confidence": 0.95,
+      "latency_seconds": 0.146,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.970, confidence 0.950. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2145
+    },
+    {
+      "index": 2,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "C": 0.11,
+        "B": 0.03,
+        "A": 0.86
+      },
+      "confidence": 0.79,
+      "latency_seconds": 0.15,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.860, confidence 0.790. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2149
+    },
+    {
+      "index": 3,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "B": 0.41,
+        "C": 0.57,
+        "A": 0.02
+      },
+      "confidence": 0.35,
+      "latency_seconds": 0.304,
+      "input_tokens": 900,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.570, confidence 0.350. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2145
+    },
+    {
+      "index": 4,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "C": 0.93,
+        "B": 0.02,
+        "A": 0.05
+      },
+      "confidence": 0.9,
+      "latency_seconds": 0.174,
+      "input_tokens": 899,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.930, confidence 0.900. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2144
+    },
+    {
+      "index": 5,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "A": 0.02,
+        "B": 0.0,
+        "C": 0.98
+      },
+      "confidence": 0.97,
+      "latency_seconds": 0.378,
+      "input_tokens": 884,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.980, confidence 0.970. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2113
+    },
+    {
+      "index": 6,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "B": 0.0,
+        "A": 0.02,
+        "C": 0.98
+      },
+      "confidence": 0.97,
+      "latency_seconds": 0.329,
+      "input_tokens": 881,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.980, confidence 0.970. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2109
+    },
+    {
+      "index": 7,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "B",
+      "probabilities": {
+        "B": 0.7,
+        "A": 0.01,
+        "C": 0.29
+      },
+      "confidence": 0.55,
+      "latency_seconds": 0.237,
+      "input_tokens": 900,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(B)=0.700, confidence 0.550. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2145
+    },
+    {
+      "index": 8,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "B",
+      "probabilities": {
+        "C": 0.04,
+        "B": 0.93,
+        "A": 0.03
+      },
+      "confidence": 0.89,
+      "latency_seconds": 0.24,
+      "input_tokens": 900,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(B)=0.930, confidence 0.890. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2145
+    },
+    {
+      "index": 9,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "B": 0.01,
+        "A": 0.98,
+        "C": 0.01
+      },
+      "confidence": 0.97,
+      "latency_seconds": 0.154,
+      "input_tokens": 883,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.980, confidence 0.970. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2112
+    },
+    {
+      "index": 10,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "A": 0.92,
+        "C": 0.03,
+        "B": 0.05
+      },
+      "confidence": 0.89,
+      "latency_seconds": 0.33,
+      "input_tokens": 916,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.920, confidence 0.890. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2186
+    },
+    {
+      "index": 11,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "C": 0.02,
+        "B": 0.46,
+        "A": 0.52
+      },
+      "confidence": 0.27,
+      "latency_seconds": 0.175,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.520, confidence 0.270. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2149
+    },
+    {
+      "index": 12,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "A": 0.02,
+        "B": 0.01,
+        "C": 0.97
+      },
+      "confidence": 0.96,
+      "latency_seconds": 0.173,
+      "input_tokens": 883,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.970, confidence 0.960. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2112
+    },
+    {
+      "index": 13,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "A": 0.99,
+        "C": 0.0,
+        "B": 0.01
+      },
+      "confidence": 0.98,
+      "latency_seconds": 0.143,
+      "input_tokens": 880,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.990, confidence 0.980. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2108
+    },
+    {
+      "index": 14,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "B",
+      "probabilities": {
+        "B": 0.94,
+        "C": 0.03,
+        "A": 0.03
+      },
+      "confidence": 0.91,
+      "latency_seconds": 0.182,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(B)=0.940, confidence 0.910. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2149
+    },
+    {
+      "index": 15,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "B",
+      "probabilities": {
+        "B": 0.93,
+        "A": 0.02,
+        "C": 0.05
+      },
+      "confidence": 0.89,
+      "latency_seconds": 0.158,
+      "input_tokens": 902,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(B)=0.930, confidence 0.890. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2148
+    },
+    {
+      "index": 16,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "A": 0.98,
+        "B": 0.01,
+        "C": 0.01
+      },
+      "confidence": 0.98,
+      "latency_seconds": 0.329,
+      "input_tokens": 884,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.980, confidence 0.980. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2113
+    },
+    {
+      "index": 17,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "A": 0.99,
+        "B": 0.01,
+        "C": 0.0
+      },
+      "confidence": 0.98,
+      "latency_seconds": 0.166,
+      "input_tokens": 880,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.990, confidence 0.980. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2108
+    },
+    {
+      "index": 18,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "A",
+      "probabilities": {
+        "A": 0.52,
+        "B": 0.46,
+        "C": 0.02
+      },
+      "confidence": 0.27,
+      "latency_seconds": 0.0,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": true,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(A)=0.520, confidence 0.270. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2149
+    },
+    {
+      "index": 19,
+      "letters": [
+        "A",
+        "B",
+        "C"
+      ],
+      "vote": "C",
+      "probabilities": {
+        "B": 0.02,
+        "A": 0.39,
+        "C": 0.59
+      },
+      "confidence": 0.38,
+      "latency_seconds": 0.181,
+      "input_tokens": 903,
+      "output_tokens": 38,
+      "cached": false,
+      "model": "jev-1.13.0",
+      "private_reason": "Typed choice by jev-1.13.0: P(C)=0.590, confidence 0.380. No free-text reasoning is produced by this provider.",
+      "prompt_chars": 2149
+    }
+  ]
+}
