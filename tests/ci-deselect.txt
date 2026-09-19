@@ -10,9 +10,12 @@
 # test becomes hermetic. One test id per line; blank lines and # comments are
 # ignored.
 #
-# Known non-fixture failures on the same tree, kept here until fixed upstream:
-#   tests/mas_cc/test_study09jk.py (NameError: allow_truth_target in
-#   src/mas_cc/studies/episode_endpoints.py:103, upstream commit 2d1b355)
+# Three further entries were added from the first GitHub Actions run: the
+# cluster tree carries some untracked MuSR task packs that a fresh clone does
+# not, which is why the list must be regenerated from a fresh clone.
+#
+# The NameError in episode_endpoints.py (upstream 2d1b355) is fixed on this
+# branch (PR #5 / upstream #11); its synthetic test is no longer deselected.
 tests/mas_cc/test_aggregation_performance.py::test_mask_lookup_matches_literal_survival_experiment[1-0.0]
 tests/mas_cc/test_aggregation_performance.py::test_mask_lookup_matches_literal_survival_experiment[1-0.3]
 tests/mas_cc/test_aggregation_performance.py::test_mask_lookup_matches_literal_survival_experiment[1-0.85]
@@ -48,6 +51,7 @@ tests/mas_cc/test_hidden_bench_scaled_q_qc.py::test_reasoning_q3_presents_three_
 tests/mas_cc/test_hiddenbench_gemma_script.py::test_canonical_loader_and_call_plan_match_paper_protocol
 tests/mas_cc/test_hiddenbench_gemma_script.py::test_default_mode_is_preflight_only_and_never_constructs_provider
 tests/mas_cc/test_hiddenbench_gemma_script.py::test_mocked_session_preserves_information_boundaries_and_audit
+tests/mas_cc/test_iclr_recomm_only_q12_chatoss_configs.py::test_recommendation_only_q12_chatoss_study_is_matched
 tests/mas_cc/test_model_profiles.py::test_built_wheel_contains_model_profile_catalogue
 tests/mas_cc/test_musr_blackboard_prompt_validation.py::test_call_plan_matches_states_and_repetitions
 tests/mas_cc/test_musr_blackboard_prompt_validation.py::test_frozen_states_use_actual_runtime_and_expected_coverage
@@ -64,7 +68,9 @@ tests/mas_cc/test_musr_prompt_solvability.py::test_full_profile_packets_have_fix
 tests/mas_cc/test_musr_prompt_solvability.py::test_prompt_ablation_is_compositional_and_p0_is_unchanged
 tests/mas_cc/test_musr_symbolic_ambiguity.py::test_behavioral_plan_is_p2_f9_and_never_leaks_hidden_matrices
 tests/mas_cc/test_musr_symbolic_ambiguity.py::test_frozen_task_pack_has_exact_balance_and_valid_private_views
+tests/mas_cc/test_musr_symbolic_ambiguity.py::test_generated_assignments_cover_cards_without_increasing_latent_breadth
 tests/mas_cc/test_musr_symbolic_ambiguity_replication.py::test_additional_plan_has_exact_ranges_counts_and_disjoint_ids
+tests/mas_cc/test_musr_symbolic_ambiguity_replication.py::test_endpoint_pairing_and_plan_determinism
 tests/mas_cc/test_musr_symbolic_ambiguity_replication.py::test_packets_latents_and_prompts_remain_frozen
 tests/mas_cc/test_musr_symbolic_ambiguity_replication.py::test_source_reference_and_existing_diagnostic_are_valid
 tests/mas_cc/test_musr_truthful_selective_isolated.py::test_execute_holds_lock_before_provider_setup
@@ -109,7 +115,6 @@ tests/mas_cc/test_studies.py::test_study06_auto_plan_uses_cells_and_stays_below_
 tests/mas_cc/test_studies.py::test_study06_results_only_retains_requested_round_and_micro_fields
 tests/mas_cc/test_studies.py::test_study07_is_matched_to_study06_and_uses_same_execution_protocol
 tests/mas_cc/test_studies.py::test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology
-tests/mas_cc/test_study09b.py::test_false_takeover_endpoint_uses_semantics_and_never_counts_ties_as_wins
 tests/mas_cc/test_study09b.py::test_study09b_hard_contract_rejects_q1
 tests/mas_cc/test_study09b.py::test_study09b_is_exactly_the_eight_episode_false_takeover_design
 tests/mas_cc/test_study09b.py::test_study09b_tasks_and_strategic_evidence_are_frozen_true_and_semantic
