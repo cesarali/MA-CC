@@ -187,6 +187,20 @@ aggregation_results/ --ttl-seconds 43200`) and `rclone` from the login node does
 ~74 MB/s (`~/bin/rclone --config <conf> sync <dir> r2tmp:<bucket>/<prefix>`). Ask him
 for a `cesar/` prefix and a credential when you want to push from your side.
 
+The publish step is a command now, and it verifies what it sent:
+```bash
+RCLONE_CONFIG=~/.rclone-r2tmp.conf $PY -m mas_cc.cli study publish \
+    --study-dir <study> --remote r2tmp:agent-swarm-control-research --prefix ctodie
+```
+It copies the package zip to `aggregation_results/`, mirrors the analysis directory
+to `<prefix>/<study>/analysis`, reads the remote back (`rclone size`, `rclone lsjson`)
+and writes `<study>/publish_receipt.json` with local and remote file counts and
+byte totals; `verified: false` is a failed publish whatever rclone's exit code said.
+Checkpoint-ensemble studies (`analysis-runs/<run>/output`) are found automatically.
+To publish straight from the aggregation job, export `MA_CC_PUBLISH_REMOTE`
+(and `RCLONE_CONFIG`) in the shell that submits `run_study_aggregate.job`; only a
+complete aggregation is published.
+
 ## 7 · Optional: semantic attribution with System One
 
 `mas_cc.analysis.semantic_attribution` reads `dashboard_semantic.jsonl`, builds one

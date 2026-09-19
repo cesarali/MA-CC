@@ -42,4 +42,16 @@ arguments=(study aggregate --study-dir "$STUDY_DIR" --backend local)
 if [[ "$INCOMPLETE_FLAG" == "--allow-incomplete" ]]; then
   arguments+=(--allow-incomplete)
 fi
-exec "$MA_CC_PYTHON" -m mas_cc.cli "${arguments[@]}"
+"$MA_CC_PYTHON" -m mas_cc.cli "${arguments[@]}"
+status=$?
+# Opt-in publish node: set MA_CC_PUBLISH_REMOTE (rclone target, e.g.
+# r2tmp:agent-swarm-control-research) and RCLONE_CONFIG in the submitting
+# shell; MA_CC_PUBLISH_PREFIX defaults to the user name. Only a complete
+# aggregation (exit 0) is published; the receipt lands in the study root.
+if [[ $status -eq 0 && -n "${MA_CC_PUBLISH_REMOTE:-}" ]]; then
+  echo "[aggregate] publishing to $MA_CC_PUBLISH_REMOTE"
+  "$MA_CC_PYTHON" -m mas_cc.cli study publish --study-dir "$STUDY_DIR" --remote "$MA_CC_PUBLISH_REMOTE" \
+    ${MA_CC_PUBLISH_PREFIX:+--prefix "$MA_CC_PUBLISH_PREFIX"}
+  status=$?
+fi
+exit $status
