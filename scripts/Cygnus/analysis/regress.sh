@@ -38,10 +38,16 @@ MODE[potsdam]=frozen
 BUNDLE[potsdam]=$HOME/agg/recomm_only_q12_chatoss_false_control_frozen_aggregation_inputs_20260918.zip
 STUDY_ID[potsdam]=recomm_only_q12_chatoss_false_control
 
-# checkpoint family: relocated bundle, lineage file set aside, incomplete inputs allowed;
-# the package publishes under analysis-runs/<run>/output (see relocate + runbook §4)
+# checkpoint family: ALSO a frozen generation (job 46 ran the finalize role on the
+# relocated bundle; the package publishes under analysis-runs/<run>/output). The
+# finalize role covers every checkpoint stage, and branch_round_metrics inside it
+# runs the information engine, so this reference exercises the diagnostic
+# bootstraps even though the per-cell information fragments come with the bundle.
 STUDY[checkpoint]=$HOME/agg/checkpoint_ensemble_01/blackboard_checkpoint_ensemble_01
 REF[checkpoint]=${STUDY[checkpoint]}/analysis-runs/parallel-tracked-20260918/output/tables
+MODE[checkpoint]=frozen
+BUNDLE[checkpoint]=$HOME/agg/blackboard_checkpoint_ensemble_01_frozen_aggregation_inputs_20260918.zip
+STUDY_ID[checkpoint]=blackboard_checkpoint_ensemble_01
 # The reference ran on big-0 with 32 CPUs / 110 G, but its manifest shows a 6.8 GiB
 # peak RSS: a standard node (16 CPUs, 44 G) runs it, slower but without queueing
 # behind whatever occupies the big node.
@@ -59,7 +65,8 @@ for name in "${names[@]}"; do
       $PY -m mas_cc.studies.relocate --bundle bundle --study-root \$W/${STUDY_ID[$name]} | tee relocate.log && \
       M=\$(grep -o '\"manifest\": \"[^\"]*\"' relocate.log | cut -d'\"' -f4) && \
       MA_CC_REPOSITORY_ROOT=$HOME/MA-CC MA_CC_PYTHON=$PY bash $CANDIDATE/scripts/Cygnus/SLURM/run_study_analysis.job finalize \$M && \
-      $PY $CANDIDATE/scripts/Cygnus/analysis/compare_dirs.py ${REF[$name]} \$W/${STUDY_ID[$name]}/analysis/tables"
+      if [ -d \$(dirname \$M)/output/tables ]; then T=\$(dirname \$M)/output/tables; else T=\$W/${STUDY_ID[$name]}/analysis/tables; fi && \
+      $PY $CANDIDATE/scripts/Cygnus/analysis/compare_dirs.py ${REF[$name]} \$T"
   else
     wrap="cd $CANDIDATE && export PYTHONPATH=$CANDIDATE/src MA_CC_REPOSITORY_ROOT=$HOME/MA-CC MPLBACKEND=Agg OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 && \
       $PY $CANDIDATE/scripts/Cygnus/analysis/finalize_to.py ${STUDY[$name]} $OUT/$name-\$SLURM_JOB_ID ${EXTRA[$name]} && \
