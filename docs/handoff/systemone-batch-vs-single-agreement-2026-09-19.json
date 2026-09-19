@@ -1,0 +1,38 @@
+{
+ "cites_controller": {
+  "kind": "noul",
+  "mean_abs_diff": 0.051,
+  "p95_abs_diff": 0.191,
+  "max_abs_diff": 0.4,
+  "corr": 0.679,
+  "mean_single": 0.063,
+  "mean_batch": 0.109,
+  "n": 300
+ },
+ "pressure_toward_target": {
+  "kind": "score",
+  "mean_abs_diff": 0.641,
+  "p95_abs_diff": 1.724,
+  "max_abs_diff": 2.5,
+  "corr": 0.669,
+  "mean_single": 0.454,
+  "mean_batch": 0.979,
+  "n": 300
+ },
+ "provides_evidence": {
+  "kind": "noul",
+  "mean_abs_diff": 0.067,
+  "p95_abs_diff": 0.27,
+  "max_abs_diff": 0.6,
+  "corr": 0.963,
+  "mean_single": 0.488,
+  "mean_batch": 0.445,
+  "n": 300
+ },
+ "stance": {
+  "kind": "choice",
+  "label_agreement": 0.827,
+  "mean_p_single_label_under_batch": 0.767,
+  "n": 300
+ }
+}
