@@ -469,6 +469,212 @@ def _prediction_status(rows: list[dict], summary: Mapping, diagnostics: Mapping)
 
 
 
+
+class _BlockBootstrap:
+    """Whole-block bootstrap on per-block sufficient statistics.
+
+    ``_resample`` + ``_summaries`` + ``_exposure_stats`` recompute every count by
+    filtering the resampled row list, which costs O(rows) Python per replicate
+    (measured 0.45 s per replicate on a 43k-row group, 72 % of the finalizer).
+    Every statistic they produce is a sum, a ratio of sums, or a count of
+    distinct blocks, so it is a function of the block multiplicity vector the
+    resample draws. This class precomputes the per-block sums once and evaluates
+    each replicate in O(blocks). The two order-sensitive quantities, the means of
+    ``sampling_probability`` and of ``E - sampling_probability`` over matched
+    rows, are reproduced exactly by concatenating the per-block value arrays in
+    the drawn block order and calling ``np.mean`` on the same sequence the row
+    path would have built. The RNG is consumed identically (one
+    ``rng.integers(0, n, n)`` per replicate), so results are byte-identical to
+    the row engine and the RNG state after the loop is the same.
+    """
+
+    # (action, channel) selections evaluated by _summaries, in its key order.
+    _SUMMARY_KEYS = tuple((action, channel) for action in (0, 1) for channel in ("all", 0, 1))
+
+    def __init__(self, rows: Sequence[Mapping], settings: Mapping):
+        self.settings = settings
+        self.prediction = settings["exposure_prediction"] != "none"
+        self.keys = sorted({r["block_id"] for r in rows})
+        index = {block: i for i, block in enumerate(self.keys)}
+        n = len(self.keys)
+        self.n = n
+        selections: dict = {}
+        for key in self._SUMMARY_KEYS:
+            selections[key] = self._new_selection(n)
+        selections["pooled"] = self._new_selection(n)
+        # Exposure selections: (action, start) with start in (None, 0, 1).
+        exposure = {(a, st): self._new_selection(n) for a in (0, 1) for st in (None, 0, 1)}
+        matched_p: dict = {k: [[] for _ in range(n)] for k in exposure}
+        matched_e: dict = {k: [[] for _ in range(n)] for k in exposure}
+        self.active_missing_exposure = np.zeros(n, dtype=np.int64)
+        for row in rows:
+            k = index[row["block_id"]]
+            u, e = row["U"], row["E"]
+            e_present = _present(e)
+            for action in (0, 1):
+                if u != action:
+                    continue
+                self._add(selections[(action, "all")], k, row, e_present)
+                if e_present and e == 0:
+                    self._add(selections[(action, 0)], k, row, e_present)
+                if e_present and e == 1:
+                    self._add(selections[(action, 1)], k, row, e_present)
+                for start in (None, 0, 1):
+                    if start is None or row["z_before"] == start:
+                        sel = exposure[(action, start)]
+                        self._add(sel, k, row, e_present)
+                        if e_present and self.prediction and math.isfinite(row["sampling_probability"]):
+                            matched_p[(action, start)][k].append(row["sampling_probability"])
+                            matched_e[(action, start)][k].append(e)
+                if action == 1 and not e_present:
+                    self.active_missing_exposure[k] += 1
+            if e_present and e == 0 and u in (0, 1):
+                self._add(selections["pooled"], k, row, e_present)
+        for sel in list(selections.values()) + list(exposure.values()):
+            self._finalize(sel)
+        self.selections = selections
+        self.exposure = exposure
+        self.matched_p = {k: [np.asarray(v, dtype=float) for v in lists] for k, lists in matched_p.items()}
+        self.matched_e = {k: [np.asarray(v, dtype=float) for v in lists] for k, lists in matched_e.items()}
+        self.matched_e_int = {k: [np.asarray(v) for v in lists] for k, lists in matched_e.items()}
+
+    @staticmethod
+    def _new_selection(n: int) -> dict:
+        return dict(
+            n=np.zeros(n, dtype=np.int64), valid=np.zeros(n, dtype=np.int64),
+            plus=np.zeros(n, dtype=np.int64), minus=np.zeros(n, dtype=np.int64),
+            a_plus=np.zeros(n, dtype=np.int64), a_minus=np.zeros(n, dtype=np.int64),
+            known=np.zeros(n, dtype=np.int64), e_one=np.zeros(n, dtype=np.int64),
+            e_sum=np.zeros(n, dtype=float),
+            known_start={0: np.zeros(n, dtype=np.int64), 1: np.zeros(n, dtype=np.int64)},
+            e_sum_start={0: np.zeros(n, dtype=float), 1: np.zeros(n, dtype=float)},
+            episodes=[set() for _ in range(n)], ep_plus=[set() for _ in range(n)], ep_minus=[set() for _ in range(n)],
+        )
+
+    @staticmethod
+    def _add(sel: dict, k: int, row: Mapping, e_present: bool) -> None:
+        sel["n"][k] += 1
+        sel["episodes"][k].add(row["episode_id"])
+        if row["valid_update"]:
+            sel["valid"][k] += 1
+            if row["z_before"] == 0:
+                sel["plus"][k] += 1
+                sel["ep_plus"][k].add(row["episode_id"])
+                if row["z_after"] == 1:
+                    sel["a_plus"][k] += 1
+            elif row["z_before"] == 1:
+                sel["minus"][k] += 1
+                sel["ep_minus"][k].add(row["episode_id"])
+                if row["z_after"] == 0:
+                    sel["a_minus"][k] += 1
+        if e_present:
+            sel["known"][k] += 1
+            sel["e_sum"][k] += row["E"]
+            if row["E"] == 1:
+                sel["e_one"][k] += 1
+            for start in (0, 1):
+                if row["z_before"] == start:
+                    sel["known_start"][start][k] += 1
+                    sel["e_sum_start"][start][k] += row["E"]
+
+    @staticmethod
+    def _finalize(sel: dict) -> None:
+        for name in ("episodes", "ep_plus", "ep_minus"):
+            sel[name] = np.asarray([len(s) for s in sel[name]], dtype=np.int64)
+
+    def counts(self, sel: dict, w: np.ndarray, present: np.ndarray) -> dict:
+        present_n = present.astype(np.int64)
+        n_obs = int(w @ sel["n"])
+        valid = int(w @ sel["valid"])
+        known = int(w @ sel["known"])
+        return dict(
+            n_observations=n_obs, n_episodes=int(present_n @ sel["episodes"]),
+            n_blocks=int(np.count_nonzero(present & (sel["n"] > 0))),
+            n_plus_blocks=int(np.count_nonzero(present & (sel["plus"] > 0))),
+            n_minus_blocks=int(np.count_nonzero(present & (sel["minus"] > 0))),
+            n_plus_episodes=int(present_n @ sel["ep_plus"]), n_minus_episodes=int(present_n @ sel["ep_minus"]),
+            D_plus=int(w @ sel["plus"]), A_plus=int(w @ sel["a_plus"]),
+            D_minus=int(w @ sel["minus"]), A_minus=int(w @ sel["a_minus"]),
+            exposure_known=known, exposure_events=int(w @ sel["e_one"]),
+            missing_exposure=n_obs - known, missing_transition=n_obs - valid,
+            exposure_coverage=known / n_obs if n_obs else NAN,
+        )
+
+    @staticmethod
+    def weight(sel: dict, w: np.ndarray, start=None) -> float:
+        if start is None:
+            known, e_sum = int(w @ sel["known"]), float(w @ sel["e_sum"])
+        else:
+            known, e_sum = int(w @ sel["known_start"][start]), float(w @ sel["e_sum_start"][start])
+        return e_sum / known if known else NAN
+
+    def summaries(self, w: np.ndarray, present: np.ndarray) -> dict:
+        settings = self.settings
+        summaries = {}
+        for action in (0, 1):
+            branch_n = int(w @ self.selections[(action, "all")]["n"])
+            branch_missing = branch_n - int(w @ self.selections[(action, "all")]["known"])
+            for channel in ("all", 0, 1):
+                sel = self.selections[(action, channel)]
+                counts = self.counts(sel, w, present)
+                summaries[(action, str(channel), "direct_silent" if action == 0 and channel == "all" else "direct_active" if channel == "all" else "action_channel")] = {
+                    **counts, **_rates(counts), "w": self.weight(sel, w),
+                    "w_nonZ": self.weight(sel, w, 0), "w_Z": self.weight(sel, w, 1),
+                    "branch_n_observations": branch_n,
+                    "excluded_unknown_exposure": branch_missing if channel != "all" else 0,
+                }
+        c0 = summaries[(1, "0", "action_channel")]
+        if settings["shared_unexposed_baseline"]:
+            pooled = self.counts(self.selections["pooled"], w, present)
+            c0 = {**pooled, **_rates(pooled)}
+            summaries[("pooled", "0", "shared_unexposed")] = c0
+        c1 = summaries[(1, "1", "action_channel")]
+        active = self.selections[(1, "all")]
+        active_missing = bool(np.any(present & (self.active_missing_exposure > 0)))
+        for variant in settings["active_parameter_variants"]:
+            if variant == "direct_active":
+                continue
+            baseline = summaries[(1, "0", "action_channel")] if variant == "mixture_start_vote_weighted" else c0
+            wp = self.weight(active, w, 0) if variant == "mixture_start_vote_weighted" else self.weight(active, w)
+            wm = self.weight(active, w, 1) if variant == "mixture_start_vote_weighted" else wp
+            mixed = mixture_parameters(baseline, c1, wp, wm)
+            if active_missing:
+                mixed = {**mixed, "model_status": "partial_exposure_coverage"}
+            summaries[(1, "mixture", variant)] = {**self.counts(active, w, present), **mixed,
+                                                  "w": self.weight(active, w), "w_nonZ": self.weight(active, w, 0),
+                                                  "w_Z": self.weight(active, w, 1)}
+        return summaries
+
+    def exposure_stats(self, key: tuple, w: np.ndarray, present: np.ndarray, order: np.ndarray) -> dict:
+        sel = self.exposure[key]
+        counts = self.counts(sel, w, present)
+        if self.prediction:
+            p_arrays = self.matched_p[key]
+            p = np.concatenate([p_arrays[i] for i in order]) if len(order) else np.zeros(0)
+            e = np.concatenate([self.matched_e_int[key][i] for i in order]) if len(order) else np.zeros(0)
+        else:
+            p = e = np.zeros(0)
+        matched = int(p.size)
+        return {**counts, "w": self.weight(sel, w),
+                "sampling_n": matched,
+                "sampling": float(np.mean(p)) if matched else NAN,
+                "sampling_observed": float(np.mean(e)) if matched else NAN,
+                "residual": float(np.mean(e - p)) if matched else NAN}
+
+    def replicate(self, rng: np.random.Generator) -> tuple[dict, dict]:
+        """One bootstrap draw: consumes the RNG exactly as ``_resample`` does."""
+        if self.n:
+            order = rng.integers(0, self.n, self.n)
+            w = np.bincount(order, minlength=self.n)
+        else:
+            order = np.zeros(0, dtype=np.int64)
+            w = np.zeros(0, dtype=np.int64)
+        present = w > 0
+        summary = self.summaries(w, present)
+        exposure = {key: self.exposure_stats(key, w, present, order) for key in self.exposure}
+        return summary, exposure
+
+
 def _calibrate_group(task: tuple) -> dict[str, list]:
     """Calibrate one (cell_id, b_budget) group; independent of every other group.
 
@@ -477,7 +683,9 @@ def _calibrate_group(task: tuple) -> dict[str, list]:
     `progress` is only forwarded when running in-process (callbacks do not pickle).
     """
     (cell_id, budget, all_rows, settings, seed, bootstrap_resamples, confidence,
-     causal_lookup, progress) = task
+     causal_lookup, bootstrap_engine, progress) = task
+    if bootstrap_engine not in ("blocks", "rows"):
+        raise ValueError(f"unknown bootstrap engine: {bootstrap_engine!r}")
     out = {name: [] for name in TABLES}
     units = sorted({r["block_id"] for r in all_rows})
     rng_seed = seed + int(_id([cell_id, str(budget)])[:8], 16)
@@ -516,15 +724,21 @@ def _calibrate_group(task: tuple) -> dict[str, list]:
                 **_diagnostics(slice_rows, _summaries(slice_rows, settings)),
                 "diagnostic_slice": field, "conditioning_json": _json({field: value})})
     exposure_draws, draw_summaries = [], []
+    block_bootstrap = _BlockBootstrap(train, settings) if bootstrap_engine == "blocks" and bootstrap_resamples else None
     for replicate in range(bootstrap_resamples):
-        sample = _resample(train, rng)
-        draw_summaries.append(_summaries(sample, settings))
-        exposure_draws.append({
-            (action, start): _exposure_stats(
-                [r for r in sample if r["U"] == action], start,
-                settings["exposure_prediction"] != "none",
-            ) for action in (0, 1) for start in (None, 0, 1)
-        })
+        if block_bootstrap is not None:
+            summary_draw, exposure_draw = block_bootstrap.replicate(rng)
+        else:
+            sample = _resample(train, rng)
+            summary_draw = _summaries(sample, settings)
+            exposure_draw = {
+                (action, start): _exposure_stats(
+                    [r for r in sample if r["U"] == action], start,
+                    settings["exposure_prediction"] != "none",
+                ) for action in (0, 1) for start in (None, 0, 1)
+            }
+        draw_summaries.append(summary_draw)
+        exposure_draws.append(exposure_draw)
         if progress and replicate % 100 == 0:
             progress(dict(stage="blackboard_calibration_bootstrap", cell_id=cell_id,
                           replicate=replicate, requested=bootstrap_resamples))
@@ -678,8 +892,14 @@ def analyze_blackboard_calibration(
     *, settings: Mapping | None = None, bootstrap_resamples: int = 1000,
     confidence: float = 0.95, seed: int = 1, analysis_hash: str = "",
     provisional: bool = False, progress=None, workers: int = 1,
+    bootstrap_engine: str = "blocks",
 ) -> dict[str, pd.DataFrame]:
     """Calibrate within physical cell/budget, with whole-block uncertainty.
+
+    ``bootstrap_engine`` selects how replicates are evaluated: ``"blocks"``
+    (default) uses per-block sufficient statistics (see ``_BlockBootstrap``),
+    ``"rows"`` re-filters the resampled row list. Both produce identical tables;
+    the row engine is retained as the reference the tests compare against.
 
     Prediction splitting is prespecified by fraction and seed, independent of
     outcomes. Fits use training blocks only; comparisons use evaluation blocks
@@ -693,6 +913,8 @@ def analyze_blackboard_calibration(
         raise ValueError("invalid calibration resampling settings")
     if workers < 1:
         raise ValueError("calibration workers must be positive")
+    if bootstrap_engine not in ("blocks", "rows"):
+        raise ValueError(f"unknown bootstrap engine: {bootstrap_engine!r}")
     inputs = adapt_calibration_inputs(micro, rounds, episodes, cells)
     if inputs.empty:
         output["blackboard_calibration_diagnostics"].append(dict(
@@ -724,7 +946,7 @@ def analyze_blackboard_calibration(
     for (cell_id, budget), frame in grouped:
         cell_causal = {k: v for k, v in causal_lookup.items() if k[0] == str(cell_id)} if causal_lookup else {}
         tasks.append((cell_id, budget, frame.to_dict("records"), settings, seed,
-                      bootstrap_resamples, confidence, cell_causal, None))
+                      bootstrap_resamples, confidence, cell_causal, bootstrap_engine, None))
     if workers > 1 and len(tasks) > 1:
         from concurrent.futures import ProcessPoolExecutor
         from multiprocessing import get_context

@@ -138,6 +138,30 @@ def _status(support: Mapping[str, Any]) -> str:
     return "adequate"
 
 
+def _cell_calculation_task(task: tuple) -> "_CellCalculation":
+    cell_id, rows, coordinates, bootstrap_resamples, null_permutations, seed, bootstrap_plan = task
+    return _cell_calculation(
+        cell_id, rows, coordinates,
+        bootstrap_resamples=bootstrap_resamples, null_permutations=null_permutations,
+        seed=seed, bootstrap_plan=bootstrap_plan,
+    )
+
+
+def _map_cells(function, tasks: Sequence[tuple], workers: int) -> list:
+    """Apply ``function`` to per-cell tasks, in a spawn pool when ``workers > 1``.
+
+    Results come back in task order regardless of completion order, so callers
+    see exactly what the serial loop would have produced.
+    """
+    if workers > 1 and len(tasks) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from multiprocessing import get_context
+
+        with ProcessPoolExecutor(max_workers=min(workers, len(tasks)), mp_context=get_context("spawn")) as pool:
+            return list(pool.map(function, tasks))
+    return [function(task) for task in tasks]
+
+
 def _cell_calculation(
     cell_id: str,
     rows: Sequence[Any],
@@ -396,20 +420,37 @@ def _state_local_calculations(
     null_permutations: int,
     seed: int,
     bootstrap_plan: PairedBootstrap | None = None,
+    workers: int = 1,
 ) -> pd.DataFrame:
     coordinates = cells.set_index(cells["cell_id"].astype(str)).to_dict(orient="index")
+    by_cell: dict[str, list[Any]] = {}
+    for event in events:
+        by_cell.setdefault(str(event.cell_id), []).append(event)
+    tasks = [
+        (cell_id, cell_events, coordinates.get(cell_id, {}), bins, bootstrap_resamples,
+         null_permutations, seed, bootstrap_plan)
+        for cell_id, cell_events in sorted(by_cell.items())
+    ]
+    rows: list[dict[str, Any]] = []
+    for cell_rows in _map_cells(_state_local_cell, tasks, workers):
+        rows.extend(cell_rows)
+    return pd.DataFrame(rows)
+
+
+def _state_local_cell(task: tuple) -> list[dict[str, Any]]:
+    """State-local rows for one cell; independent of every other cell."""
+    (cell_id, cell_events, cell_coordinates, bins, bootstrap_resamples,
+     null_permutations, seed, bootstrap_plan) = task
+
     def bin_index(event: Any) -> int:
         population = int(event.event.get("N") or sum(event.N_k))
         return min(int((event.target_before / population) * bins), bins - 1)
 
-    by_cell: dict[str, list[Any]] = {}
-    for event in events:
-        by_cell.setdefault(str(event.cell_id), []).append(event)
     rows: list[dict[str, Any]] = []
-    for cell_id, cell_events in sorted(by_cell.items()):
+    if True:
         eligible_cell = controlled_rows(cell_events)
         if not eligible_cell:
-            continue
+            return rows
         point_bins: dict[int, list[Any]] = {}
         for event in eligible_cell:
             point_bins.setdefault(bin_index(event), []).append(event)
@@ -447,7 +488,7 @@ def _state_local_calculations(
             ]
             common = {
                 "cell_id": cell_id,
-                **coordinates.get(cell_id, {}),
+                **cell_coordinates,
                 "target_fraction_bin_index": index,
                 "target_fraction_bin_lower": index / bins,
                 "target_fraction_bin_upper": (index + 1) / bins,
@@ -471,7 +512,7 @@ def _state_local_calculations(
                     "bootstrap_draws": tuple(bootstrap),
                     "null_draws": tuple(null) if metric == TARGET_CMI else (),
                 })
-    return pd.DataFrame(rows)
+    return rows
 
 
 def _validate_state_local_groupings(
@@ -832,8 +873,17 @@ def derive_study_control_aggregates(
     resampling: Mapping[str, Any],
     analysis_hash: str,
     *, bootstrap_plan: PairedBootstrap | None = None,
+    workers: int = 1,
 ) -> StudyAggregateOutputs:
-    """Build configured study and state-local summaries from retained rounds."""
+    """Build configured study and state-local summaries from retained rounds.
+
+    Cells are independent (per-cell seeds, precomputed shared bootstrap plan), so
+    with ``workers > 1`` the per-cell calculations and the state-local rows run in
+    a spawn process pool; results are merged in cell order and are identical to
+    the serial path.
+    """
+    if workers < 1:
+        raise ValueError("derived aggregation workers must be positive")
 
     config = recipe.get("derived_study_aggregates", {})
     if not isinstance(config, Mapping):
@@ -861,16 +911,15 @@ def derive_study_control_aggregates(
     for event in events:
         by_event_cell.setdefault(str(event.cell_id), []).append(event)
     cell_coordinates = controlled_cells.set_index(controlled_cells["cell_id"].astype(str)).to_dict(orient="index")
-    calculations = {
-        cell_id: _cell_calculation(
-            cell_id, by_event_cell[cell_id], coordinates,
-            bootstrap_resamples=int(resampling["bootstrap_resamples"]),
-            null_permutations=int(resampling["null_permutations"]),
-            seed=int(resampling["seed"]),
-            bootstrap_plan=bootstrap_plan,
-        )
+    cell_tasks = [
+        (cell_id, by_event_cell[cell_id], coordinates, int(resampling["bootstrap_resamples"]),
+         int(resampling["null_permutations"]), int(resampling["seed"]), bootstrap_plan)
         for cell_id, coordinates in sorted(cell_coordinates.items())
         if cell_id in by_event_cell
+    ]
+    calculations = {
+        calculation.cell_id: calculation
+        for calculation in _map_cells(_cell_calculation_task, cell_tasks, workers)
     }
     study = pd.DataFrame(_study_rows(
         calculations, controlled_cells, groupings, metrics,
@@ -893,6 +942,7 @@ def derive_study_control_aggregates(
             null_permutations=int(resampling["null_permutations"]),
             seed=int(resampling["seed"]),
             bootstrap_plan=bootstrap_plan,
+            workers=workers,
         )
         state_groupings = _validate_state_local_groupings(
             state_config, controlled_cells
