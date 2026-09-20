@@ -70,6 +70,8 @@ from .adaptive_communication import (
     COMMUNICATION_POLICY_VERSION,
     LLM_COMMUNICATION_POLICY,
     LLM_COMMUNICATION_POLICY_VERSION,
+    LLM_AUTHORED_REPORT_ONLY_POLICY,
+    LLM_AUTHORED_REPORT_ONLY_POLICY_VERSION,
 )
 
 RECOMMENDATION_ONLY = "recommendation_only"
@@ -652,7 +654,9 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         values["controller_communication_policy"] = str(communication_policy)
 
         expected_policy_version = (
-            LLM_COMMUNICATION_POLICY_VERSION
+            LLM_AUTHORED_REPORT_ONLY_POLICY_VERSION
+            if communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY
+            else LLM_COMMUNICATION_POLICY_VERSION
             if communication_policy == LLM_COMMUNICATION_POLICY
             else COMMUNICATION_POLICY_VERSION
         )

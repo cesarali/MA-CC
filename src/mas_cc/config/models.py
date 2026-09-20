@@ -82,6 +82,22 @@ class GameConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SemanticFailureGuardConfig:
+    """Stop a workload after a statistically meaningful semantic failure burst."""
+
+    minimum_finished_episodes: int = 2
+    maximum_failure_fraction: float = 0.25
+    minimum_failures: int = 2
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "minimum_finished_episodes": self.minimum_finished_episodes,
+            "maximum_failure_fraction": self.maximum_failure_fraction,
+            "minimum_failures": self.minimum_failures,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionConfig:
     """Runtime policy that remains independent from a concrete executor."""
 
@@ -91,6 +107,7 @@ class ExecutionConfig:
     parallelism: int = 1
     fail_fast: bool = True
     timeout_seconds: float | None = None
+    semantic_failure_guard: SemanticFailureGuardConfig | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +117,11 @@ class ExecutionConfig:
             "parallelism": self.parallelism,
             "fail_fast": self.fail_fast,
             "timeout_seconds": self.timeout_seconds,
+            "semantic_failure_guard": (
+                None
+                if self.semantic_failure_guard is None
+                else self.semantic_failure_guard.to_dict()
+            ),
         }
 
 

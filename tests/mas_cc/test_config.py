@@ -96,6 +96,26 @@ def test_whole_environment_references_retain_scalar_types(tmp_path: Path):
     assert config.execution.fail_fast is False
 
 
+def test_semantic_failure_guard_parses_and_validates_bounds():
+    values = _resolved_mapping()
+    values["execution"] = {
+        "semantic_failure_guard": {
+            "minimum_finished_episodes": 4,
+            "maximum_failure_fraction": 0.2,
+            "minimum_failures": 3,
+        }
+    }
+    guard = parse_run_config(values).execution.semantic_failure_guard
+    assert guard is not None
+    assert guard.minimum_finished_episodes == 4
+    assert guard.maximum_failure_fraction == 0.2
+    assert guard.minimum_failures == 3
+
+    values["execution"]["semantic_failure_guard"]["maximum_failure_fraction"] = 1.1
+    with pytest.raises(ConfigurationError, match="maximum_failure_fraction"):
+        parse_run_config(values)
+
+
 def test_reusable_component_loads_and_validates_independently():
     component = load_component_config(
         "configs/components/llm_providers/university.yaml",

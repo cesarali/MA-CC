@@ -51,14 +51,61 @@ def patched_inputs(monkeypatch):
     return frame
 
 
-def _run(workers: int, progress=None):
+def _run(workers: int, progress=None, engine: str = "blocks", settings=None, resamples: int = 25):
     empty = pd.DataFrame()
+    # The prediction path filters `rounds` by (cell_id, episode_id) before the
+    # patched adapter is consulted, so give it the columns it groups on.
+    # One non-matching row: an empty frame indexed by an empty list would drop
+    # its columns and the causal lookup's groupby would fail on `cell_id`.
+    rounds = pd.DataFrame([{"cell_id": "no-such-cell", "episode_id": "none", "round_index": 0}])
     return bc.analyze_blackboard_calibration(
-        empty, empty, empty, empty,
-        settings={"enabled": True},
-        bootstrap_resamples=25, confidence=0.9, seed=11, analysis_hash="test",
-        provisional=False, progress=progress, workers=workers,
+        empty, rounds, empty, empty,
+        settings=settings or {"enabled": True},
+        bootstrap_resamples=resamples, confidence=0.9, seed=11, analysis_hash="test",
+        provisional=False, progress=progress, workers=workers, bootstrap_engine=engine,
     )
+
+
+def _assert_same(a: dict, b: dict) -> None:
+    assert set(a) == set(b)
+    for name in a:
+        pd.testing.assert_frame_equal(a[name], b[name], check_like=False)
+
+
+PREDICTION_SETTINGS = {
+    "enabled": True,
+    "shared_unexposed_baseline": True,
+    "model_predictions": {"enabled": True, "evaluation_fraction": 0.3, "assume_homogeneous_channels": True},
+}
+
+
+def test_block_engine_matches_row_engine(patched_inputs):
+    _assert_same(_run(1, engine="rows"), _run(1, engine="blocks"))
+
+
+def test_block_engine_matches_row_engine_with_predictions_and_pooled_baseline(patched_inputs):
+    rows = _run(1, engine="rows", settings=PREDICTION_SETTINGS, resamples=40)
+    blocks = _run(1, engine="blocks", settings=PREDICTION_SETTINGS, resamples=40)
+    _assert_same(rows, blocks)
+    assert not rows["blackboard_model_predictions"].empty
+    assert not rows["blackboard_model_validation"].empty
+
+
+def test_block_engine_matches_row_engine_without_exposure_prediction(patched_inputs):
+    settings = {"enabled": True, "exposure_prediction": "none"}
+    _assert_same(_run(1, engine="rows", settings=settings), _run(1, engine="blocks", settings=settings))
+
+
+def test_block_engine_handles_missing_exposure(monkeypatch):
+    frame = _synthetic_inputs(seed=3)
+    frame.loc[frame.sample(frac=0.1, random_state=1).index, "E"] = float("nan")
+    monkeypatch.setattr(bc, "adapt_calibration_inputs", lambda *args, **kwargs: frame.copy())
+    _assert_same(_run(1, engine="rows"), _run(1, engine="blocks"))
+
+
+def test_unknown_engine_rejected(patched_inputs):
+    with pytest.raises(ValueError):
+        _run(1, engine="lists")
 
 
 def test_parallel_matches_serial(patched_inputs):

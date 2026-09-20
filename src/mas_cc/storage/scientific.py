@@ -171,6 +171,20 @@ def prompt_definition_hash(config: Any) -> str:
                     allow_participant_requests=bool(
                         board.get("allow_participant_requests", True)
                     ),
+                    require_grounded_reports=bool(
+                        board.get(
+                            "require_grounded_reports",
+                            config.prompt.prompt_version >= 5,
+                        )
+                    ),
+                    report_citation_scope=str(
+                        board.get(
+                            "report_citation_scope",
+                            "active_or_observed"
+                            if config.prompt.prompt_version >= 5
+                            else "active_only",
+                        )
+                    ),
                 )
             else:
                 prompt = registry.get(family, config.prompt.prompt_version)
