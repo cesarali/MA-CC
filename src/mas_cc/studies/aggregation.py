@@ -208,6 +208,14 @@ def _resampling(recipe: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("bootstrap_resamples and null_permutations cannot be negative")
     if not 0 < result["confidence"] < 1:
         raise ValueError("analysis confidence must be between zero and one")
+    # Opt-in adaptive stopping. The key is added ONLY when enabled: this mapping
+    # is hashed into analysis_hash and written to the manifest, so a disabled
+    # switch must leave both byte-identical.
+    from mas_cc.analysis.adaptive import AdaptiveResampling
+
+    adaptive = AdaptiveResampling.from_mapping(raw.get("adaptive"))
+    if adaptive.enabled:
+        result["adaptive"] = adaptive.as_settings()
     return result
 
 
@@ -397,6 +405,7 @@ def _run_information_group(payload: tuple[Any, ...]) -> tuple[list[Any], list[An
         null_permutations=int(settings["null_permutations"]),
         confidence=float(settings["confidence"]),
         seed=seed,
+        adaptive=settings.get("adaptive"),
     )
 
 
@@ -619,7 +628,7 @@ def _information_tables(
                     "null_std": math.nan if not finite else float(np.std(finite)),
                     "p_value": p_value,
                     "null_permutations": len(finite),
-                    "bootstrap_resamples": int(settings["bootstrap_resamples"]),
+                    "bootstrap_resamples": int(item.get("bootstrap_draws", settings["bootstrap_resamples"])),
                     "n_observations": item.get("n_rounds"),
                     "n_episodes": item.get("n_episodes"),
                     "action_entropy_ceiling_bits": item.get(
@@ -3711,8 +3720,13 @@ def _aggregate_study_local(
     information_fragments_dir: Path | None = None,
     information_fragments_analysis_hash: str | None = None,
     progress_path: Path | None = None,
+    analysis_recipe_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Create the complete canonical analysis package for one submitted study."""
+    """Create the complete canonical analysis package for one submitted study.
+
+    ``analysis_recipe_path`` replaces the recipe the study manifest records
+    (experiments such as an adaptive-resampling A/B on a reference package).
+    """
 
     root = Path(study_dir).expanduser().resolve()
     manifest_path = root / "study_manifest.json"
@@ -3729,7 +3743,10 @@ def _aggregate_study_local(
         target_manifest, entries = extension_aggregation_context(root)
     else:
         entries = read_submission_manifest(submission_path)
-    recipe, recipe_path = _recipe(study_manifest)
+    recipe, recipe_path = (
+        _recipe({"analysis_recipe": str(analysis_recipe_path)}) if analysis_recipe_path is not None
+        else _recipe(study_manifest)
+    )
     from mas_cc.analysis.blackboard_calibration import calibration_settings
 
     blackboard_settings = calibration_settings(recipe.get("blackboard_calibration_outputs"))

@@ -5,7 +5,7 @@ a scratch directory, then compare every published table against the package the
 reference code produced (compare_dirs.py). Everything sits under a main guard
 because the finalizer's spawn pools re-import __main__.
 
-usage: finalize_to.py STUDY_DIR OUTPUT_DIR [--allow-incomplete]
+usage: finalize_to.py STUDY_DIR OUTPUT_DIR [--allow-incomplete] [--recipe analysis.yaml]
 """
 import json
 import resource
@@ -19,8 +19,11 @@ def main() -> int:
 
     study, out = Path(sys.argv[1]), Path(sys.argv[2])
     allow_incomplete = "--allow-incomplete" in sys.argv[3:]
+    # --recipe: finalize with a different analysis.yaml than the study recorded (A/B runs).
+    recipe = Path(sys.argv[sys.argv.index("--recipe") + 1]) if "--recipe" in sys.argv else None
     started = time.time()
-    result = _aggregate_study_local(study, analysis_output_dir=out, allow_incomplete=allow_incomplete)
+    result = _aggregate_study_local(study, analysis_output_dir=out, allow_incomplete=allow_incomplete,
+                                    analysis_recipe_path=recipe)
     # ru_maxrss is KiB on Linux; children = the spawn pool workers (max over any one child).
     own = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     child = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024

@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 import pandas as pd
@@ -645,25 +645,29 @@ def _grouped(
     return dict(result)
 
 
-def bootstrap_episode_rows(
+def iter_bootstrap_episode_rows(
     rows: Sequence[RoundEvent], *, resamples: int, seed: int
-) -> tuple[tuple[RoundEvent, ...], ...]:
-    """Resample whole episode IDs, never individual round rows."""
+) -> Iterator[tuple[RoundEvent, ...]]:
+    """Resample whole episode IDs, never individual round rows; one draw at a time."""
 
     if resamples < 0:
         raise ValueError("resamples cannot be negative")
     by_episode = _grouped(rows, key=lambda row: row.episode_id)
     ids = tuple(by_episode)
     if not ids or resamples == 0:
-        return ()
+        return
     rng = np.random.default_rng(seed)
-    draws: list[tuple[RoundEvent, ...]] = []
     for _ in range(resamples):
         selected = rng.choice(ids, size=len(ids), replace=True)
-        draws.append(
-            tuple(row for episode_id in selected for row in by_episode[str(episode_id)])
-        )
-    return tuple(draws)
+        yield tuple(row for episode_id in selected for row in by_episode[str(episode_id)])
+
+
+def bootstrap_episode_rows(
+    rows: Sequence[RoundEvent], *, resamples: int, seed: int
+) -> tuple[tuple[RoundEvent, ...], ...]:
+    """All draws of :func:`iter_bootstrap_episode_rows`, materialised."""
+
+    return tuple(iter_bootstrap_episode_rows(rows, resamples=resamples, seed=seed))
 
 
 def _policy_resample(
@@ -1059,7 +1063,11 @@ def round_information_analysis(
     null_permutations: int = 1000,
     confidence: float = 0.95,
     seed: int = 1,
+    adaptive: Any = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    from mas_cc.analysis.adaptive import IntervalStopper, coerce
+
+    adaptive_config = coerce(adaptive)
     names = tuple(ROUND_ANALYSIS_STATISTICS if statistics is None else statistics)
     unknown = sorted(set(names) - set(ROUND_ANALYSIS_STATISTICS))
     if unknown:
@@ -1114,32 +1122,43 @@ def round_information_analysis(
                 "miller_madow": math.nan,
             }
         bootstrap_values = []
+        draws_made = 0
+        stopper = IntervalStopper(adaptive_config, alpha) if adaptive_config is not None else None
         if name in _BITS_STATISTICS and _INFORMATION_ENGINE == "fast":
             fast = _BitsBootstrap(name, eligible)
             if fast.ids and bootstrap_resamples:
                 rng = np.random.default_rng(seed + name_index)
                 for _ in range(bootstrap_resamples):
                     boot = float(fast.draw(rng))
+                    draws_made += 1
                     if math.isfinite(boot):
                         bootstrap_values.append(boot)
+                    if stopper is not None and stopper.should_stop(draws_made, bootstrap_values):
+                        break
         elif name not in _BITS_STATISTICS and _INFORMATION_ENGINE == "fast":
             fast_diagnostic = _DiagnosticBootstrap(name, eligible)
             if fast_diagnostic.ids and bootstrap_resamples:
                 rng = np.random.default_rng(seed + name_index)
                 for _ in range(bootstrap_resamples):
                     boot = float(fast_diagnostic.draw(rng))
+                    draws_made += 1
                     if math.isfinite(boot):
                         bootstrap_values.append(boot)
+                    if stopper is not None and stopper.should_stop(draws_made, bootstrap_values):
+                        break
         else:
-            for draw in bootstrap_episode_rows(
+            for draw in iter_bootstrap_episode_rows(
                 eligible, resamples=bootstrap_resamples, seed=seed + name_index
             ):
                 if name in _BITS_STATISTICS:
                     boot = float(getattr(_estimate_for(name, draw), MAIN_ESTIMATOR_VARIANT))
                 else:
                     boot = _diagnostic_for(name, draw)
+                draws_made += 1
                 if math.isfinite(boot):
                     bootstrap_values.append(boot)
+                if stopper is not None and stopper.should_stop(draws_made, bootstrap_values):
+                    break
         interval = (
             (math.nan, math.nan)
             if not bootstrap_values
@@ -1250,6 +1269,7 @@ def round_information_analysis(
                 "conditional_action_entropy_bits": entropy_ceiling,
                 "entropy_bound_satisfied": entropy_bound_satisfied,
                 **support,
+                **({"bootstrap_draws": draws_made} if adaptive_config is not None else {}),
             }
         )
     return estimates, null_rows
@@ -1799,6 +1819,7 @@ __all__ = [
     "adapt_round_record",
     "analyze_hidden_bench_imitation_round_feedback",
     "bootstrap_episode_rows",
+    "iter_bootstrap_episode_rows",
     "conditional_action_entropy_bits",
     "micro_slot_analysis",
     "policy_resampling_null",
