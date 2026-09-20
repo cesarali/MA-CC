@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id);
   const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
+  const classToken = value => String(value).replace(/[^A-Za-z0-9_-]/g, '');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
   const kv = (name, value) => `<div class="kv"><span>${esc(name)}</span><span>${esc(Array.isArray(value) ? value.join(', ') : value)}</span></div>`;
@@ -375,7 +376,7 @@
       ].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
       const selected = state.selectedControllerRound ?? timeline.rounds[0]?.round_index;
       state.selectedControllerRound = selected;
-      $('controller-events').innerHTML = timeline.rounds.map(row => `<button class="controller-event ${(row.message_types[0] || 'NO_OP')} ${Number(row.round_index) === Number(selected) ? 'selected' : ''}" data-controller-round="${row.round_index}" title="${esc(row.action || 'Unavailable')}">R${Number(row.round_index)+1}<small>${esc(row.message_types.join('/') || row.action || 'Unavailable')}</small></button>`).join('');
+      $('controller-events').innerHTML = timeline.rounds.map(row => `<button class="controller-event ${classToken(row.message_types[0] || 'NO_OP')} ${Number(row.round_index) === Number(selected) ? 'selected' : ''}" data-controller-round="${row.round_index}" title="${esc(row.action || 'Unavailable')}">R${Number(row.round_index)+1}<small>${esc(row.message_types.join('/') || row.action || 'Unavailable')}</small></button>`).join('');
       const max = Math.max(1, ...timeline.rounds.flatMap(row => [row.realized_posts || 0, row.exposed_agents || 0, row.next_votes_moved_to_target || 0]));
       $('controller-round-bars').innerHTML = timeline.rounds.map(row => `<div class="controller-bar-row"><b>R${Number(row.round_index)+1}</b>${[['posts',row.realized_posts],['exposed agents',row.exposed_agents],['moved to target',row.next_votes_moved_to_target]].map(([label,value]) => `<span>${esc(label)}</span><div class="metric-bar"><i class="${label === 'moved to target' ? 'descriptive' : ''}" style="width:${value == null ? 0 : 100*value/max}%"></i></div><strong>${esc(unavailable(value))}</strong>`).join('')}</div>`).join('');
       const selectedRow = timeline.rounds.find(row => Number(row.round_index) === Number(selected));
