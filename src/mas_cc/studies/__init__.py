@@ -4,6 +4,7 @@ from .aggregation import aggregate_study
 from .compaction import compact_study_analysis
 from .extension import extend_study, index_existing_study, plan_extension
 from .manifest import StudySpec, discover_study
+from .merge import merge_studies
 from .initialization import materialize_study_initializations
 from .preflight import StudyPreflightResult, run_study_preflight
 from .reporting import ReportResult, build_study_report
@@ -21,6 +22,7 @@ __all__ = [
     "extend_study",
     "index_existing_study",
     "materialize_study_initializations",
+    "merge_studies",
     "run_study_preflight",
     "plan_extension",
     "submit_study",

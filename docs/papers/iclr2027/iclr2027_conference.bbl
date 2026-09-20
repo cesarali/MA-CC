@@ -1,9 +1,14 @@
-\begin{thebibliography}{5}
+\begin{thebibliography}{12}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[{Anthropic}(2026)]{anthropic2026multiagent}
+{Anthropic}.
+\newblock Patterns and problems in emerging multiagent systems, August 2026.
+\newblock URL \url{https://www.anthropic.com/research/multiagent-systems}.
 
 \bibitem[Ashery et~al.(2025)Ashery, Aiello, and
   Baronchelli]{ashery2025emergent}
@@ -11,24 +16,79 @@ Ariel~Flint Ashery, Luca~Maria Aiello, and Andrea Baronchelli.
 \newblock Emergent social conventions and collective bias in {LLM} populations.
 \newblock \emph{Science Advances}, 11\penalty0 (20):\penalty0 eadu9368, 2025.
 \newblock \doi{10.1126/sciadv.adu9368}.
+\newblock URL \url{https://doi.org/10.1126/sciadv.adu9368}.
 
-\bibitem[Horowitz \& Sandberg(2014)Horowitz and Sandberg]{horowitz2014second}
-Jordan~M Horowitz and Henrik Sandberg.
-\newblock Second-law-like inequalities with information and their
-  interpretations.
-\newblock \emph{New Journal of Physics}, 16\penalty0 (12):\penalty0 125007,
-  2014.
+\bibitem[Castellano et~al.(2009)Castellano, Fortunato, and
+  Loreto]{castellano2009statistical}
+Claudio Castellano, Santo Fortunato, and Vittorio Loreto.
+\newblock Statistical physics of social dynamics.
+\newblock \emph{Reviews of Modern Physics}, 81\penalty0 (2):\penalty0 591--646,
+  2009.
+\newblock \doi{10.1103/RevModPhys.81.591}.
+\newblock URL \url{https://doi.org/10.1103/RevModPhys.81.591}.
 
-\bibitem[Irisarri et~al.(2026)Irisarri, Trigal, Toral, and
-  Manzano]{irisarri2026stochastic}
-Luis Irisarri, Lucas Trigal, Ra{\'u}l Toral, and Gonzalo Manzano.
-\newblock Stochastic thermodynamics of social imitation beyond energetics.
-\newblock \emph{Nature Communications}, 2026.
+\bibitem[Chopra(2026)]{chopra2026interaction}
+Ayush Chopra.
+\newblock Intelligence is in the interaction.
+\newblock MIT Media Lab, February 2026.
+\newblock URL
+  \url{https://www.media.mit.edu/articles/intelligence-is-in-the-interaction/}.
+
+\bibitem[El et~al.(2026)El, Paeng, Dinc, Su, Erdogan, Pappu, Ye, Zhao, Ganguli,
+  and Zou]{el2026physics}
+Batu El, Jinhee Paeng, Fatih Dinc, Shiye Su, Mete Erdogan, Aneesh Pappu,
+  Haotian Ye, Wanjia Zhao, Surya Ganguli, and James Zou.
+\newblock Physics of agents: Statistical mechanics predicts collective behavior
+  of ai agents, 2026.
+\newblock URL \url{https://arxiv.org/abs/2608.16578}.
+
+\bibitem[{Google DeepMind} et~al.(2026){Google DeepMind}, {Schmidt Sciences},
+  {Cooperative AI Foundation}, {Advanced Research and Invention Agency}, and
+  {Google.org}]{deepmind2026multiagent}
+{Google DeepMind}, {Schmidt Sciences}, {Cooperative AI Foundation}, {Advanced
+  Research and Invention Agency}, and {Google.org}.
+\newblock Investing in multi-agent ai safety research, June 2026.
+\newblock URL
+  \url{https://deepmind.google/blog/investing-in-multi-agent-ai-safety-research/}.
+
+\bibitem[Greenblatt et~al.(2026)Greenblatt, Cotra, and
+  Wijk]{greenblatt2026huggingface}
+Ryan Greenblatt, Ajeya Cotra, and Hjalmar Wijk.
+\newblock Brief independent investigation of agents' behavior, reasoning and
+  collaboration in the openai / hugging face hacking incident.
+\newblock METR and Redwood Research, August 2026.
+\newblock URL
+  \url{https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/}.
+
+\bibitem[Jiang et~al.(2026)Jiang, Zhang, Shen, Backes, and
+  Zhang]{jiang2026moltbook}
+Yukun Jiang, Yage Zhang, Xinyue Shen, Michael Backes, and Yang Zhang.
+\newblock {``Humans welcome to observe'': A First Look at the Agent Social
+  Network Moltbook}.
+\newblock \emph{CoRR}, abs/2602.10127, 2026.
+\newblock URL \url{https://arxiv.org/abs/2602.10127}.
+
+\bibitem[Meulemans et~al.(2026)Meulemans, Wo{\l}czyk, Weis, Nasser, Rocca,
+  Kobayashi, Lajoie, Steger, Richards, Hutter, Manyika, Saurous, Sacramento,
+  and Ag{\"u}era~y Arcas]{meulemans2026game}
+Alexander Meulemans, Maciej Wo{\l}czyk, Marissa~A. Weis, Rajai Nasser, Roberta
+  Rocca, Seijin Kobayashi, Guillaume Lajoie, Angelika Steger, Blake Richards,
+  Marcus Hutter, James Manyika, Rif~A. Saurous, Jo{\~a}o Sacramento, and Blaise
+  Ag{\"u}era~y Arcas.
+\newblock A game theory for foundation models shows new paths to rational
+  cooperation through similarity inference, 2026.
+\newblock URL \url{https://arxiv.org/abs/2608.03958}.
+
+\bibitem[{OpenAI}(2026)]{openai2026navierstokes}
+{OpenAI}.
+\newblock On the navier--stokes millennium prize problem, September 2026.
+\newblock URL \url{https://openai.com/index/navier-stokes-solution/}.
 
 \bibitem[Riedl(2026)]{riedl2026emergent}
 Christoph Riedl.
 \newblock Emergent coordination in multi-agent language models.
 \newblock In \emph{International Conference on Learning Representations}, 2026.
+\newblock URL \url{https://arxiv.org/abs/2510.05174}.
 
 \bibitem[Sprague et~al.(2024)Sprague, Ye, Bostrom, Chaudhuri, and
   Durrett]{sprague2024musr}

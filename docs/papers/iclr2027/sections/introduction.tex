@@ -1,79 +1,18 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Large language models (LLMs) are increasingly deployed not only as individual problem solvers, but as components of \emph{multi-agent systems} in which many autonomous agents communicate, exchange information, and collectively determine an outcome.
-Recent work has shown that populations of LLM agents can exhibit genuinely collective phenomena, including spontaneous convention formation, amplification of population-level biases, and higher-order coordination that cannot be understood from isolated agents alone \citep{ashery2025emergent,riedl2026emergent}.
-These observations raise a complementary question that becomes increasingly important as such systems are deployed:
-\emph{how can an external agent control a collective of interacting LLMs?}
-In particular, we are interested not in unconstrained steering---where a controller can inspect and modify the entire system---but in the more realistic regime in which the controller itself has limited resources.
+OpenAI's resolution of the long-standing Navier--Stokes Millennium Problem and the recent Hugging Face hacking incident are emblematic events of AI's turn toward multi-agent systems and swarms \citep{openai2026navierstokes,greenblatt2026huggingface}. From scientific discovery to agent-based social networks such as Moltbook, interacting populations of agents are becoming a distinct locus of capability in AI \citep{jiang2026moltbook}. Crucially, these capabilities need not be reducible to those of the agents in isolation: interaction can give rise to collective behavior, conventions, biases, and higher-order coordination that are absent at the level of individual agents \citep{ashery2025emergent,riedl2026emergent,anthropic2026multiagent}. This has prompted recent calls for a \emph{science of agents collective behavior} concerned with collective capabilities, population-level failures, oversight, and control \citep{deepmind2026multiagent}. In this view, intelligence is increasingly not only a property of the agent, but also of the interaction through which agents communicate and coordinate \citep{chopra2026interaction}.
 
-We study this problem through a \emph{bounded feedback controller}.
-At each population round, the controller observes only a finite random sample of agents and must use this partial observation to decide whether to intervene.
-Its sensing capacity is therefore limited: the controller never observes the complete population state and its estimate is intrinsically noisy.
-Its actuation capacity is limited as well: even when it decides to act, it may replace the social input in only a bounded number of interactions.
-The resulting closed loop has the form
+Collective behavior has long been studied through statistical physics, game theory, and complex-systems approaches to emergence \citep{castellano2009statistical}. These traditions, however, have typically represented agents through compressed states, actions, payoffs, or local update rules, leaving the epistemic content of interaction---and the reasoning induced by that content---largely outside the model. Recent work has begun precisely the translation required for language-model populations: from reformulating rational cooperation and equilibrium through similarity inference in foundation-model agents \citep{meulemans2026game}, to extending statistical-mechanical descriptions to collective regimes \citep{el2026physics} and information-theoretic descriptions to higher-order coordination \citep{riedl2026emergent}. These developments broaden the classical study of collective behavior, but leave a different question largely open: once such collective dynamics arise, how can they be steered?
+
+Much of this literature asks when coordination, consensus, or collective regimes emerge; we instead take control as the starting point. The Hugging Face incident makes this shift difficult to ignore: agents used a shared, unsanctioned message board to coordinate workstreams and redirect the activity of other agents, turning the communication substrate itself into a channel through which collective behavior could be influenced \citep{greenblatt2026huggingface}. Whenever we study multi-agent populations or swarms, we are inevitably dealing with stochastic systems. The central scientific question is therefore not simply whether control succeeds, but how directed intervention competes with the endogenous fluctuations of the population. It is this competition that defines the regimes of stochastic feedback control we study and motivates our notion of \emph{control efficiency}.
+
+To study this problem, we construct a language-mediated population in which agents reason over distributed evidence and interact through a shared message board. Each agent carries both a social state---its current decision---and an epistemic state---the evidence available for subsequent reasoning. Into this population we introduce a resource-constrained feedback controller. Before each round, the controller observes only a finite sample of agents and, conditional on this partial observation, may intervene in only a bounded number of interactions. At the coarse population level, the feedback loop is
+
 \begin{equation}
-    N_t \longrightarrow Y_t \longrightarrow U_t \longrightarrow N_{t+1},
+    n_k \longrightarrow Y_k \longrightarrow U_k \longrightarrow n_{k+1},
 \end{equation}
-where $N_t$ denotes the population state, $Y_t$ the controller's partial observation, and $U_t$ its intervention.
-This formulation makes imperfect information a consequence of finite sensing resources rather than an artificial source of observation noise, and separates two distinct constraints on control: \emph{how much of the system can be observed} and \emph{how much of it can be acted upon}.
-Our central question is therefore:
-\begin{quote}
-\emph{How efficiently can a resource-constrained feedback controller steer an interacting population of LLM agents when both information and actuation are limited?}
-\end{quote}
 
-Controlling an LLM population, however, should involve more than controlling a population of stochastic finite-state machines.
-The distinctive feature of language-model agents is precisely that their interactions can carry \emph{semantic information}: agents can possess different facts, communicate those facts through language, accumulate evidence, and reason over combinations of information.
-We therefore introduce an explicit \emph{epistemic load} into the collective dynamics using relational reasoning tasks with distributed evidence.
-The information required to solve each task is spread across the population so that the collective contains a complete proof while individual agents initially do not.
-Each agent consequently carries two coupled states: a social state, represented by its current answer or vote $X_i(t)$, and an epistemic state, represented by the set of supporting facts $K_i(t)$ available to it.
-Local language interactions can change either or both.
-An agent may adopt another agent's answer through social influence without acquiring the evidence that supports it, while an explicitly communicated fact may expand its knowledge and subsequently alter its reasoning.
-This distinction allows us to study how \emph{social influence, information propagation, and reasoning jointly determine controllability}.
+where $n_k$ denotes current support for the controller target, $Y_k$ its partial observation, and $U_k$ its intervention. Finite sensing and finite actuation therefore constitute separate control resources. In our main setting, the controller communicates a recommendation but no task evidence: it can perturb the social dynamics without directly increasing the epistemic content of the population. This allows us to distinguish changes in what agents believe from changes in what they know, and to separate controllability from task correctness.
 
-This separation is particularly important for feedback control.
-In our main setting, the controller communicates only a recommendation and does not provide task evidence.
-It can therefore directly perturb the social dynamics but cannot directly increase the epistemic content of the population.
-We can consequently distinguish whether an intervention changes what agents \emph{believe} from whether it changes what they \emph{know}.
-Moreover, by allowing the controller target to disagree with the objectively correct answer, controllability and task performance become distinct quantities: a controller can successfully steer the population while simultaneously moving it away from truth.
-This provides a controlled setting for asking when accumulated evidence makes a population resistant to external influence, when social pressure overwhelms reasoning, and whether the epistemic state of a collective changes the amount of control required to redirect it.
-
-To quantify these processes, we treat sensing and actuation as two distinct
-information channels.  Writing \(n_k\) for the current number of agents that
-support the controller target, \(Y_k\) for the controller's noisy observation
-of that count, \(U_k\) for the action selected from that observation, and
-\(n_{k+1}\) for the target-support count after actuation, the two quantities are
-\begin{align}
-    I(n_k;Y_k)
-    &\qquad \text{(sensing information)}, \\
-    T_\pi(n)
-    \equiv I(U_k;n_{k+1}\mid n_k=n)
-    &\qquad \text{(action-to-population information)}.
-\end{align}
-The first measures information acquired by the sensor about the current
-population state.  The second measures, at a fixed current state, how much the
-controller action is expressed in the population state after the actuation
-step; the subscript \(\pi\) indicates that this channel is induced by the chosen
-feedback policy.  We define \(\pi\) and the complete control loop below.
-These quantities are complemented by signed response statistics, population currents, and their fluctuations. We further introduce a finite-state feedback reference with one measurable directional affinity $h$ and a kinetic compliance $\gamma$. The affinity determines the preferred direction of a controlled revision, whereas $\gamma$ determines how readily a controlled opportunity produces any revision. This separation is directly calibratable from microscopic transitions and avoids introducing distinct ``controller'' and ``epistemic-load'' affinities that cannot be independently identified from the controlled channel.
-
-This perspective connects naturally to feedback thermodynamics, where measurement and control are treated as coupled information-processing operations \citep{horowitz2014second}, and to recent stochastic-thermodynamic formulations of social imitation, where probability currents, dynamical activity, entropy production, and uncertainty relations characterize collective dynamics without requiring a literal energetic interpretation \citep{irisarri2026stochastic}. In our finite-time feedback layer, the same single affinity leads to an exact path-space identity, $\Delta S_{\rm sys}+hJ_c+I(n_k;Y_k)=\Sigma$, with $\Sigma$ the KL irreversibility between forward and reverse feedback paths. Importantly, thermodynamics is not the motivation for introducing the controller, and $\Sigma$ is not interpreted as literal energetic dissipation of the language models. Rather, it provides a principled language for characterizing the \emph{resource--response trade-offs} generated by the bounded feedback problem: how much information is acquired, how much directed current is produced, how irreversible the resulting coarse-grained feedback cycle is, and where additional control resources cease to be useful.
-
-Finally, we introduce a matched finite-population $q$-voter process as a classical reference model.
-The reference system is subjected to the same population size, local interaction structure, finite sensing process, stochastic feedback policy, and bounded actuation schedule as the LLM population.
-It therefore captures the response expected from a system whose collective dynamics arise from stochastic local imitation alone.
-This comparison is deliberately not intended to claim that LLM agents are $q$-voters.
-Instead, the $q$-voter provides a controlled null model in which semantic communication, distributed evidence, and language-based reasoning are absent.
-Agreement with this reference identifies behavior that can already be explained by ordinary stochastic social influence; systematic departures reveal where the epistemic and reasoning capabilities of language-model agents modify the control dynamics.
-
-Taken together, our goal is to develop a quantitative account of \emph{control efficiency in reasoning multi-agent systems}: how limited sensing and limited actuation are converted into directed changes of a collective state, and how this conversion is altered when the interacting agents communicate meaningful information and reason with it.
-Our main contributions are:
-\begin{itemize}
-    \item We formulate control of an LLM collective as a \emph{resource-constrained feedback problem}, explicitly separating finite sensing capacity from finite actuation capacity and treating imperfect state information as a consequence of bounded observation.
-
-    \item We introduce a relational multi-agent environment with distributed evidence that exposes both \emph{social} and \emph{epistemic} population dynamics, allowing us to distinguish changes in expressed belief from changes in the information available for reasoning.
-
-    \item We develop information-theoretic and stochastic-dynamical observables that quantify sensing, transmission of controller actions, directional response, currents, fluctuations, and finite-time path irreversibility. From the same accounting we derive a bounded single-affinity thermodynamic efficiency that measures how much of the finite-time sensing--actuation expenditure is converted into directed current.
-
-    \item We construct a matched finite-$N$ $q$-voter reference under the same feedback protocol, providing a classical imitation baseline against which the specifically language- and reasoning-dependent behavior of the LLM population can be identified.
-\end{itemize}
+We characterize this feedback process along three complementary axes. \emph{Susceptibility} measures the directed change in population state induced by intervention, separating systematic response from the population's background dynamics. \emph{Action-to-population information} measures how strongly the controller's action is expressed in the distribution of subsequent population states; relative to the conditional entropy of the controller action, it quantifies how much of the available control information reaches the population. Finally, an \emph{information--response efficiency}, obtained through a Pinsker-type bound, compares the information required to sustain the observed directed response with the action-dependent information actually transmitted to the population. Together, these quantities distinguish whether control is strong, whether it is statistically expressed above endogenous fluctuations, and whether the transmitted control information is efficiently converted into coherent population motion. They provide a finite-time account of how limited sensing and bounded intervention steer a reasoning population whose epistemic state continues to evolve.

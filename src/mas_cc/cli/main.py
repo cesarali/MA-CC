@@ -280,6 +280,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="validate, normalize, analyze, plot, report, and package a study",
     )
     study_aggregate.add_argument("--study-dir", type=Path, required=True)
+    study_merge = study_commands.add_parser(
+        "merge", help="snapshot complementary studies for separate reaggregation"
+    )
+    study_merge.add_argument("--study-dir", type=Path, action="append", required=True)
+    study_merge.add_argument("--output-dir", type=Path, required=True)
+    study_merge.add_argument("--name")
+    study_merge.add_argument("--analysis-recipe", type=Path)
+    study_merge.add_argument(
+        "--overlap", choices=("error", "keep-first"), default="error",
+        help="reject overlapping cells, or explicitly discard later overlapping cells",
+    )
     study_aggregate.add_argument(
         "--allow-incomplete",
         action="store_true",
@@ -871,6 +882,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"  Resources: {plan['cpus_per_task']} CPU(s), {plan['memory']}, "
                 f"{plan['time_limit']} per active shard"
             )
+        return 0
+    if args.command == "study" and args.study_command == "merge":
+        from mas_cc.studies.merge import merge_studies
+
+        try:
+            result = merge_studies(
+                args.study_dir, args.output_dir, name=args.name,
+                analysis_recipe=args.analysis_recipe, overlap=args.overlap,
+            )
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study {result['study_id']} merged: {result['found_cells']} cells, "
+            f"{result['completed_episodes']} episodes; {result['skipped_cells']} overlapping cells discarded"
+        )
+        print(f"  Aggregate separately: mas-cc study aggregate --study-dir {result['study_dir']}")
         return 0
     if args.command == "study" and args.study_command == "aggregate":
         from mas_cc.studies import aggregate_study

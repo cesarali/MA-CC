@@ -4811,6 +4811,8 @@ def _aggregate_study_local(
     provenance_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(manifest_path, provenance_dir / "study_manifest.json")
     shutil.copy2(submission_path, provenance_dir / "submission_manifest.csv")
+    if (root / "merge_manifest.json").is_file():
+        shutil.copy2(root / "merge_manifest.json", provenance_dir / "merge_manifest.json")
     submission_metadata = root / "submission.json"
     if submission_metadata.is_file():
         shutil.copy2(submission_metadata, provenance_dir / "submission.json")
