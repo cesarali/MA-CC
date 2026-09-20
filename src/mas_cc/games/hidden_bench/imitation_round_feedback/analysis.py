@@ -787,7 +787,13 @@ class _BitsBootstrap:
         axis_shape = self.shape if not self.cmi else (self.shape[0], self.shape[2], self.shape[1])
         flat = np.ravel_multi_index(tuple(axis_arrays), axis_shape)
         size = int(np.prod(axis_shape))
-        self.tensors = np.stack([np.bincount(flat[members], minlength=size) for members in episodes]) if episodes else np.zeros((0, size), dtype=np.int64)
+        # Float64 on purpose: ``weights @ tensors`` on int64 is a generic (non-BLAS)
+        # matmul and was 80 % of a draw on the memory-conditioned CMI (2 x 1730 x 25
+        # cells; profiled 2026-09-20). Every entry and every partial sum is an
+        # integer far below 2**53, so the float product is exact whatever order
+        # BLAS accumulates in, and the counts table is identical to the int path.
+        self.tensors = (np.stack([np.bincount(flat[members], minlength=size) for members in episodes])
+                        if episodes else np.zeros((0, size), dtype=np.int64)).astype(float)
         self.axis_shape = axis_shape
         self.episode_levels = [[_first_appearance(array[members]).tolist() for members in episodes] for array in axis_arrays]
 
@@ -800,8 +806,8 @@ class _BitsBootstrap:
         return self.value(self.choose(rng))
 
     def value(self, chosen: Sequence[int]) -> float:
-        weights = np.bincount(chosen, minlength=len(self.ids))
-        counts = (weights @ self.tensors).reshape(self.axis_shape).astype(float)
+        weights = np.bincount(chosen, minlength=len(self.ids)).astype(float)
+        counts = (weights @ self.tensors).reshape(self.axis_shape)
         orders = [list(dict.fromkeys(v for e in chosen for v in per_episode[e])) for per_episode in self.episode_levels]
         table = counts[np.ix_(*orders)]
         return _cmi_from_counts(table) if self.cmi else _mi_from_counts(table)
