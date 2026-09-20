@@ -98,6 +98,62 @@ from .console import (
 )
 
 LOGGER = logging.getLogger("mas_cc.experiment")
+
+
+class SemanticFailureGuardTripped(RuntimeError):
+    """The workload crossed its configured semantic-failure limit."""
+
+
+class _SemanticFailureGuard:
+    _SEMANTIC_ERROR_TYPES = {
+        "DecisionLoopExhausted",
+        "RelationalDecisionFailed",
+        "ValidationError",
+    }
+
+    def __init__(self, config: Any | None) -> None:
+        self.config = config
+        self.finished = 0
+        self.failures = 0
+        self.failure_types: dict[str, int] = {}
+        self.failure_stages: dict[str, int] = {}
+        self.tripped = False
+
+    def record(self, outcome: "EpisodeOutcome") -> bool:
+        if self.config is None or outcome.status not in {"completed", "failed"}:
+            return self.tripped
+        self.finished += 1
+        if (
+            outcome.status == "failed"
+            and outcome.error_type in self._SEMANTIC_ERROR_TYPES
+        ):
+            self.failures += 1
+            key = outcome.error_type or "UnknownSemanticFailure"
+            self.failure_types[key] = self.failure_types.get(key, 0) + 1
+            stage = (
+                "initial_vote"
+                if outcome.error and "initial_vote" in outcome.error
+                else "focal_update"
+                if outcome.error and "focal_update" in outcome.error
+                else "decision_validation"
+            )
+            self.failure_stages[stage] = self.failure_stages.get(stage, 0) + 1
+        self.tripped = self.tripped or (
+            self.finished >= self.config.minimum_finished_episodes
+            and self.failures >= self.config.minimum_failures
+            and self.failures / self.finished > self.config.maximum_failure_fraction
+        )
+        return self.tripped
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "status": "tripped" if self.tripped else "active",
+            "finished_episodes": self.finished,
+            "semantic_failures": self.failures,
+            "failure_fraction": self.failures / self.finished if self.finished else 0.0,
+            "failure_types": dict(sorted(self.failure_types.items())),
+            "failure_stages": dict(sorted(self.failure_stages.items())),
+        }
 _TIMING_EPISODE: contextvars.ContextVar[tuple[str | None, str] | None] = (
     contextvars.ContextVar("mas_cc_timing_episode", default=None)
 )
@@ -1709,6 +1765,8 @@ async def _run_episode_task(
     semaphore: asyncio.Semaphore,
     abort: asyncio.Event,
     budget_abort: asyncio.Event,
+    semantic_abort: asyncio.Event,
+    semantic_guard: _SemanticFailureGuard,
     fail_fast: bool,
     resume: bool,
     policy: DetailedAuditPolicy,
@@ -1830,6 +1888,19 @@ async def _run_episode_task(
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
+        if semantic_abort.is_set():
+            outcome = EpisodeOutcome(
+                task.episode_id,
+                task.seed,
+                "skipped_aborted",
+                cell_id=task.cell_id,
+                error_type="SemanticFailureGuard",
+                error="semantic failure circuit breaker stopped new episodes",
+            )
+            outcome = _timed(outcome)
+            _persist(outcome)
+            _finished(outcome)
+            return outcome
         if fail_fast and abort.is_set():
             outcome = EpisodeOutcome(
                 task.episode_id, task.seed, "skipped_aborted", cell_id=task.cell_id
@@ -1912,6 +1983,12 @@ async def _run_episode_task(
         outcome = _timed(outcome)
         _persist(outcome)
         _finished(outcome)
+        if semantic_guard.record(outcome):
+            semantic_abort.set()
+            LOGGER.error(
+                "semantic failure guard tripped: %s",
+                json.dumps(semantic_guard.summary(), sort_keys=True),
+            )
     # Outside the semaphore: aggregating a completed cell must not hold a slot
     # that a queued episode of another cell could be running in.
     await _maybe_close_cell()
@@ -2253,6 +2330,8 @@ async def run_experiment(
     semaphore = asyncio.Semaphore(config.execution.parallelism)
     abort = asyncio.Event()
     budget_abort = asyncio.Event()
+    semantic_abort = asyncio.Event()
+    semantic_guard = _SemanticFailureGuard(config.execution.semantic_failure_guard)
     started_at = _now()
     outcomes: tuple[EpisodeOutcome, ...] = tuple(resumed_outcomes)
 
@@ -2279,6 +2358,8 @@ async def run_experiment(
                     semaphore=semaphore,
                     abort=abort,
                     budget_abort=budget_abort,
+                    semantic_abort=semantic_abort,
+                    semantic_guard=semantic_guard,
                     fail_fast=config.execution.fail_fast,
                     resume=resume,
                     policy=policy,
@@ -2358,6 +2439,12 @@ async def run_experiment(
         )
         _record_results_only_hashes(run_dir)
     _print_comet_destinations(comet_summary, analysis_summary)
+    if semantic_guard.tripped:
+        summary = semantic_guard.summary()
+        _write(run_dir / "semantic_failure_guard.json", _json(summary))
+        raise SemanticFailureGuardTripped(
+            "semantic failure guard tripped: " + json.dumps(summary, sort_keys=True)
+        )
     return result
 
 
@@ -2813,6 +2900,8 @@ async def run_experiment_grid(
     semaphore = asyncio.Semaphore(base.execution.parallelism)
     abort = asyncio.Event()
     budget_abort = asyncio.Event()
+    semantic_abort = asyncio.Event()
+    semantic_guard = _SemanticFailureGuard(base.execution.semantic_failure_guard)
     started_at = _now()
     outcomes: tuple[EpisodeOutcome, ...] = tuple(resumed_outcomes)
 
@@ -2837,6 +2926,8 @@ async def run_experiment_grid(
                 semaphore=semaphore,
                 abort=abort,
                 budget_abort=budget_abort,
+                semantic_abort=semantic_abort,
+                semantic_guard=semantic_guard,
                 fail_fast=base.execution.fail_fast,
                 resume=resume,
                 policy=policy,
@@ -2955,6 +3046,12 @@ async def run_experiment_grid(
             request_rows=() if timing_provider is None else timing_provider.rows,
         )
         _record_results_only_hashes(grid_dir)
+    if semantic_guard.tripped:
+        summary = semantic_guard.summary()
+        _write(grid_dir / "semantic_failure_guard.json", _json(summary))
+        raise SemanticFailureGuardTripped(
+            "semantic failure guard tripped: " + json.dumps(summary, sort_keys=True)
+        )
     return result
 
 

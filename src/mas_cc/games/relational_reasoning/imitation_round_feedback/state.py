@@ -90,6 +90,20 @@ ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
 ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
 CONTROLLER_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT, MESSAGE_DIRECTIVE)
 BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
+REPORT_CITATION_ACTIVE_ONLY = "active_only"
+REPORT_CITATION_ACTIVE_OR_OBSERVED = "active_or_observed"
+REPORT_CITATION_SCOPES = (
+    REPORT_CITATION_ACTIVE_ONLY,
+    REPORT_CITATION_ACTIVE_OR_OBSERVED,
+)
+NO_CITABLE_FACT_NONE = "none"
+NO_CITABLE_FACT_MODEL_SELECT = "model_select"
+NO_CITABLE_FACT_REQUEST_OR_NONE = "request_or_none"
+NO_CITABLE_FACT_ACTIONS = (
+    NO_CITABLE_FACT_NONE,
+    NO_CITABLE_FACT_MODEL_SELECT,
+    NO_CITABLE_FACT_REQUEST_OR_NONE,
+)
 LEGACY_BOARD_MESSAGE_TYPES = (
     "CLAIM",
     "QUESTION",
@@ -249,6 +263,90 @@ class BlackboardState:
 
     def to_list(self) -> list[dict[str, Any]]:
         return [message.to_dict() for message in self.messages]
+
+
+@dataclass(frozen=True, slots=True)
+class ObservedFactSource:
+    """Compact provenance for one grounded report in the sampled view."""
+
+    fact_id: str
+    message_id: str
+    author_kind: str
+    source_id: str
+    round_created: int | None
+    micro_step_created: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {field: getattr(self, field) for field in self.__dataclass_fields__}
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ObservedFactSource":
+        return cls(
+            fact_id=str(value["fact_id"]),
+            message_id=str(value["message_id"]),
+            author_kind=str(value["author_kind"]),
+            source_id=str(value["source_id"]),
+            round_created=(
+                None if value.get("round_created") is None else int(value["round_created"])
+            ),
+            micro_step_created=(
+                None
+                if value.get("micro_step_created") is None
+                else int(value["micro_step_created"])
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CitationContext:
+    """The complete, immutable evidence authority for one focal update."""
+
+    active_fact_ids: tuple[str, ...]
+    observed_fact_ids: tuple[str, ...]
+    citable_fact_ids: tuple[str, ...]
+    observed_sources: tuple[ObservedFactSource, ...]
+    report_citation_scope: str
+    no_citable_fact_action: str
+    prompt_version: int
+
+    @property
+    def communication_action_masked(self) -> bool:
+        return (
+            not self.citable_fact_ids
+            and self.no_citable_fact_action == NO_CITABLE_FACT_NONE
+        )
+
+    def source_for(self, fact_id: str) -> ObservedFactSource | None:
+        return next(
+            (source for source in self.observed_sources if source.fact_id == fact_id),
+            None,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "active_fact_ids": list(self.active_fact_ids),
+            "observed_fact_ids": list(self.observed_fact_ids),
+            "citable_fact_ids": list(self.citable_fact_ids),
+            "observed_sources": [source.to_dict() for source in self.observed_sources],
+            "report_citation_scope": self.report_citation_scope,
+            "no_citable_fact_action": self.no_citable_fact_action,
+            "prompt_version": self.prompt_version,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "CitationContext":
+        return cls(
+            active_fact_ids=tuple(str(item) for item in value.get("active_fact_ids", ())),
+            observed_fact_ids=tuple(str(item) for item in value.get("observed_fact_ids", ())),
+            citable_fact_ids=tuple(str(item) for item in value.get("citable_fact_ids", ())),
+            observed_sources=tuple(
+                ObservedFactSource.from_mapping(item)
+                for item in value.get("observed_sources", ())
+            ),
+            report_citation_scope=str(value["report_citation_scope"]),
+            no_citable_fact_action=str(value["no_citable_fact_action"]),
+            prompt_version=int(value["prompt_version"]),
+        )
 
 
 # --------------------------------------------------------------------------
@@ -648,6 +746,9 @@ class RelationalRules:
     board_exclude_self_authored: bool
     board_allow_no_post: bool
     allow_participant_requests: bool
+    require_grounded_reports: bool
+    report_citation_scope: str
+    no_citable_fact_action: str
     dynamics_mode: str
     task_family: str
     task_dataset_dir: str
@@ -715,6 +816,7 @@ class RelationalRules:
         exclude_self = board.get("exclude_self_authored", True)
         allow_no_post = board.get("allow_no_post", True)
         allow_participant_requests = board.get("allow_participant_requests", True)
+        require_grounded_reports = board.get("require_grounded_reports", False)
         if not isinstance(exclude_self, bool):
             raise ValueError(
                 "game.options.board.exclude_self_authored must be a boolean"
@@ -724,6 +826,10 @@ class RelationalRules:
         if not isinstance(allow_participant_requests, bool):
             raise ValueError(
                 "game.options.board.allow_participant_requests must be a boolean"
+            )
+        if not isinstance(require_grounded_reports, bool):
+            raise ValueError(
+                "game.options.board.require_grounded_reports must be a boolean"
             )
 
         mode = str(options.get("dynamics_mode", "reasoning"))
@@ -928,6 +1034,47 @@ class RelationalRules:
                 "game.options.board.allow_participant_requests: false requires "
                 "game.options.prompt_version: 4"
             )
+        if "require_grounded_reports" not in board:
+            require_grounded_reports = prompt_version >= 5
+        default_citation_scope = (
+            REPORT_CITATION_ACTIVE_OR_OBSERVED
+            if prompt_version >= 5
+            else REPORT_CITATION_ACTIVE_ONLY
+        )
+        report_citation_scope = str(
+            board.get("report_citation_scope", default_citation_scope)
+        )
+        if report_citation_scope not in REPORT_CITATION_SCOPES:
+            raise ValueError(
+                "game.options.board.report_citation_scope must be one of "
+                f"{list(REPORT_CITATION_SCOPES)}"
+            )
+        default_no_fact_action = (
+            NO_CITABLE_FACT_NONE
+            if prompt_version >= 5
+            else NO_CITABLE_FACT_MODEL_SELECT
+        )
+        no_citable_fact_action = str(
+            board.get("no_citable_fact_action", default_no_fact_action)
+        )
+        if no_citable_fact_action not in NO_CITABLE_FACT_ACTIONS:
+            raise ValueError(
+                "game.options.board.no_citable_fact_action must be one of "
+                f"{list(NO_CITABLE_FACT_ACTIONS)}"
+            )
+        if (
+            no_citable_fact_action == NO_CITABLE_FACT_REQUEST_OR_NONE
+            and not allow_participant_requests
+        ):
+            raise ValueError(
+                "game.options.board.no_citable_fact_action request_or_none requires "
+                "allow_participant_requests: true"
+            )
+        if no_citable_fact_action == NO_CITABLE_FACT_NONE and not allow_no_post:
+            raise ValueError(
+                "game.options.board.no_citable_fact_action none requires "
+                "allow_no_post: true"
+            )
 
         initialization = _mapping(
             options.get("initialization"), "game.options.initialization"
@@ -1015,6 +1162,9 @@ class RelationalRules:
             board_exclude_self_authored=exclude_self,
             board_allow_no_post=allow_no_post,
             allow_participant_requests=allow_participant_requests,
+            require_grounded_reports=require_grounded_reports,
+            report_citation_scope=report_citation_scope,
+            no_citable_fact_action=no_citable_fact_action,
             dynamics_mode=mode,
             task_family=task_family,
             task_dataset_dir=str(dataset_dir),
@@ -1040,15 +1190,24 @@ class RelationalRules:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        values = {
             field: _thaw(getattr(self, field)) for field in self.__dataclass_fields__
         }
+        if (
+            self.prompt_version < 5
+            and self.report_citation_scope == REPORT_CITATION_ACTIVE_ONLY
+            and self.no_citable_fact_action == NO_CITABLE_FACT_MODEL_SELECT
+        ):
+            values.pop("report_citation_scope")
+            values.pop("no_citable_fact_action")
+        return values
 
 
 __all__ = [
     "ACTIVE_FACT_IDS",
     "COMMITTED_ACTION",
     "CONTROLLER_SOURCE",
+    "CitationContext",
     "DYNAMICS_MODES",
     "FACT_SOURCES",
     "FOCAL_UPDATE",
@@ -1058,9 +1217,17 @@ __all__ = [
     "INITIAL_SOURCE",
     "INITIAL_VOTE",
     "KNOWN_FACT_IDS",
+    "NO_CITABLE_FACT_MODEL_SELECT",
+    "NO_CITABLE_FACT_NONE",
+    "NO_CITABLE_FACT_REQUEST_OR_NONE",
+    "NO_CITABLE_FACT_ACTIONS",
+    "ObservedFactSource",
     "PEER_SOURCE",
     "PUBLIC_REASON",
     "PUBLIC_SHARED_FACT_ID",
+    "REPORT_CITATION_ACTIVE_ONLY",
+    "REPORT_CITATION_ACTIVE_OR_OBSERVED",
+    "REPORT_CITATION_SCOPES",
     "ROUND_RECORD_TYPE",
     "RelationalAgentState",
     "RelationalGameState",

@@ -37,6 +37,7 @@ from .models import (
     RetentionPolicy,
     ProviderConfig,
     RunConfig,
+    SemanticFailureGuardConfig,
     StorageConfig,
 )
 from .schema import config_schema
@@ -69,6 +70,7 @@ __all__ = [
     "RetentionPolicy",
     "ProviderConfig",
     "RunConfig",
+    "SemanticFailureGuardConfig",
     "SUPPORTED_SCHEMA_VERSIONS",
     "StorageConfig",
     "assert_secret_free",

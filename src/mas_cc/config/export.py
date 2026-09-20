@@ -18,6 +18,23 @@ def resolved_config_yaml(config: RunConfig) -> str:
     """Serialize a fully resolved config after a second secret-field audit."""
 
     values = config.to_dict()
+    if (
+        config.game.type == "relational_imitation_round_feedback"
+        and config.game.options.get("social_mode") == "board"
+    ):
+        game_options = dict(values["game"]["options"])
+        board = dict(game_options.get("board", {}))
+        version = int(game_options.get("prompt_version", config.prompt.prompt_version))
+        board.setdefault(
+            "report_citation_scope",
+            "active_or_observed" if version >= 5 else "active_only",
+        )
+        board.setdefault(
+            "no_citable_fact_action",
+            "none" if version >= 5 else "model_select",
+        )
+        game_options["board"] = board
+        values["game"] = {**values["game"], "options": game_options}
     if config.prompt.schema_version == 2:
         from mas_cc.games.registry import create_default_prompt_registry
 
@@ -35,6 +52,20 @@ def resolved_config_yaml(config: RunConfig) -> str:
                 version=config.prompt.prompt_version,
                 allow_participant_requests=bool(
                     board.get("allow_participant_requests", True)
+                ),
+                require_grounded_reports=bool(
+                    board.get(
+                        "require_grounded_reports",
+                        config.prompt.prompt_version >= 5,
+                    )
+                ),
+                report_citation_scope=str(
+                    board.get(
+                        "report_citation_scope",
+                        "active_or_observed"
+                        if config.prompt.prompt_version >= 5
+                        else "active_only",
+                    )
                 ),
             )
         else:

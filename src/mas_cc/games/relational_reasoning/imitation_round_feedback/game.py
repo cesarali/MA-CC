@@ -76,6 +76,12 @@ from .state import (
     PEER_SOURCE,
     SOCIAL_MODE_BOARD,
     BlackboardMessage,
+    CitationContext,
+    NO_CITABLE_FACT_MODEL_SELECT,
+    NO_CITABLE_FACT_REQUEST_OR_NONE,
+    ObservedFactSource,
+    REPORT_CITATION_ACTIVE_ONLY,
+    REPORT_CITATION_ACTIVE_OR_OBSERVED,
     RelationalAgentState,
     RelationalGameState,
     RelationalRoundRecord,
@@ -256,6 +262,82 @@ class RelationalImitationRoundFeedbackGame(Game):
         active = set(reasoning_fact_ids(agent, state.epistemic_persistence))
         return tuple(fact_id for fact_id in state.fact_ids if fact_id in active)
 
+    def citation_context(
+        self,
+        state: RelationalGameState,
+        agent: RelationalAgentState,
+        social_sources: Sequence[Mapping[str, Any]],
+        config: GameConfig,
+    ) -> CitationContext:
+        """Derive the only fact-ID authority used during this focal update."""
+
+        rules = self.rules(config)
+        active_set = set(reasoning_fact_ids(agent, rules.epistemic_persistence))
+        observed_sources: list[ObservedFactSource] = []
+        seen: set[str] = set()
+        current_round = state.turn // rules.n_agents
+        for source in social_sources:
+            if source.get("message_id") is None or source.get("message_type") != MESSAGE_REPORT:
+                continue
+            if (
+                rules.board_exclude_self_authored
+                and str(source.get("source_id")) == str(agent.agent_id)
+            ):
+                continue
+            if (
+                source.get("round_created") is not None
+                and int(source["round_created"]) > current_round
+            ) or (
+                source.get("expires_after_round") is not None
+                and int(source["expires_after_round"]) < current_round
+            ):
+                continue
+            fact_id = source.get("shared_fact_id")
+            if fact_id is None or str(fact_id) not in set(state.fact_ids):
+                continue
+            fact_id = str(fact_id)
+            if source.get("shared_fact_text") != state.fact_text(fact_id):
+                continue
+            if fact_id in seen:
+                continue
+            seen.add(fact_id)
+            observed_sources.append(
+                ObservedFactSource(
+                    fact_id=fact_id,
+                    message_id=str(source["message_id"]),
+                    author_kind=str(source.get("author_kind", "agent")),
+                    source_id=str(source.get("source_id", "")),
+                    round_created=(
+                        None
+                        if source.get("round_created") is None
+                        else int(source["round_created"])
+                    ),
+                    micro_step_created=(
+                        None
+                        if source.get("micro_step_created") is None
+                        else int(source["micro_step_created"])
+                    ),
+                )
+            )
+        observed_set = {source.fact_id for source in observed_sources}
+        observed = tuple(fact_id for fact_id in state.fact_ids if fact_id in observed_set)
+        citable_set = set(active_set)
+        if rules.report_citation_scope == REPORT_CITATION_ACTIVE_OR_OBSERVED:
+            citable_set.update(observed_set)
+        return CitationContext(
+            active_fact_ids=tuple(
+                fact_id for fact_id in state.fact_ids if fact_id in active_set
+            ),
+            observed_fact_ids=observed,
+            citable_fact_ids=tuple(
+                fact_id for fact_id in state.fact_ids if fact_id in citable_set
+            ),
+            observed_sources=tuple(observed_sources),
+            report_citation_scope=rules.report_citation_scope,
+            no_citable_fact_action=rules.no_citable_fact_action,
+            prompt_version=rules.prompt_version,
+        )
+
     def _known_fact_lines(
         self, state: RelationalGameState, agent: RelationalAgentState
     ) -> tuple[str, ...]:
@@ -284,6 +366,12 @@ class RelationalImitationRoundFeedbackGame(Game):
             f"interaction-{state.turn + 1:04d}"
         )
         shared_before = agent.public_shared_fact_id
+        citation_context = self.citation_context(state, agent, social_sources, config)
+        citation_context_is_extended = (
+            rules.prompt_version >= 5
+            or rules.report_citation_scope != REPORT_CITATION_ACTIVE_ONLY
+            or rules.no_citable_fact_action != NO_CITABLE_FACT_MODEL_SELECT
+        )
         letters = self.option_letters(state, focal, stage=stage)
         visible_message_ids = tuple(
             str(item["message_id"])
@@ -313,6 +401,11 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "current_shared_fact_id": shared_before,
                 "social_sources": [dict(item) for item in social_sources],
                 "visible_message_ids": list(visible_message_ids),
+                **(
+                    {"citation_context": citation_context.to_dict()}
+                    if citation_context_is_extended
+                    else {}
+                ),
             },
         )
         prompt = (
@@ -321,7 +414,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 question=str(state.task["question"]),
                 option_letters=letters,
                 known_facts=self._known_fact_lines(state, agent),
-                fact_ids=self._citable_fact_ids(state, agent),
+                fact_ids=citation_context.citable_fact_ids,
                 current_vote=(
                     None
                     if agent.committed_action is None
@@ -340,6 +433,19 @@ class RelationalImitationRoundFeedbackGame(Game):
                 answer_display_texts=state.answer_display_texts,
                 version=rules.prompt_version,
                 allow_participant_requests=rules.allow_participant_requests,
+                require_grounded_reports=rules.require_grounded_reports,
+                force_none=citation_context.communication_action_masked,
+                observed_facts=tuple(
+                    render_own_fact(fact_id, state.fact_text(fact_id))
+                    for fact_id in citation_context.observed_fact_ids
+                ),
+                report_citation_scope=rules.report_citation_scope,
+                allowed_message_types=(
+                    (MESSAGE_REQUEST, MESSAGE_NONE)
+                    if not citation_context.citable_fact_ids
+                    and rules.no_citable_fact_action == NO_CITABLE_FACT_REQUEST_OR_NONE
+                    else None
+                ),
             )
             if rules.social_mode == SOCIAL_MODE_BOARD and stage == FOCAL_UPDATE
             else build_relational_ballot_prompt(
@@ -446,6 +552,40 @@ class RelationalImitationRoundFeedbackGame(Game):
         # alphabet, and also accepts the relation name spelled out - which is
         # already semantic and needs no translation.
         ballot = parse_relational_ballot(response, tuple(letters), letters)
+        raw_citation_context = visible.get("citation_context")
+        citation_context = (
+            CitationContext.from_mapping(raw_citation_context)
+            if isinstance(raw_citation_context, Mapping)
+            else CitationContext(
+                active_fact_ids=tuple(
+                    str(item) for item in visible.get("active_fact_ids", ())
+                ),
+                observed_fact_ids=(),
+                citable_fact_ids=tuple(
+                    str(item) for item in visible.get("active_fact_ids", ())
+                ),
+                observed_sources=(),
+                report_citation_scope="active_only",
+                no_citable_fact_action="model_select",
+                prompt_version=request.prompt.version,
+            )
+        )
+        public_message = ballot.public_message
+        shared_fact_id = ballot.shared_fact_id
+        raw_shared_fact_id = ballot.raw_shared_fact_id
+        shared_fact_present = ballot.shared_fact_present
+        public_message_present = ballot.public_message_present
+        if request.stage == FOCAL_UPDATE and citation_context.communication_action_masked:
+            public_message = {
+                "type": MESSAGE_NONE,
+                "text": None,
+                "shared_fact_id": None,
+                "reply_to": None,
+            }
+            shared_fact_id = None
+            raw_shared_fact_id = None
+            shared_fact_present = True
+            public_message_present = True
         vote = None if ballot.vote is None else letters.get(ballot.vote, ballot.vote)
         return Action(
             request.agent_id,
@@ -463,11 +603,21 @@ class RelationalImitationRoundFeedbackGame(Game):
                 "presented_letter": ballot.vote,
                 "option_letters": dict(letters),
                 "reason": ballot.reason,
-                "shared_fact_id": ballot.shared_fact_id,
-                "raw_shared_fact_id": ballot.raw_shared_fact_id,
-                "shared_fact_present": ballot.shared_fact_present,
-                "public_message": ballot.public_message,
-                "public_message_present": ballot.public_message_present,
+                "shared_fact_id": shared_fact_id,
+                "raw_shared_fact_id": raw_shared_fact_id,
+                "shared_fact_present": shared_fact_present,
+                "public_message": public_message,
+                "public_message_present": public_message_present,
+                **(
+                    {
+                        "citation_context": citation_context.to_dict(),
+                        "communication_action_masked": (
+                            citation_context.communication_action_masked
+                        ),
+                    }
+                    if citation_context.prompt_version >= 5
+                    else {}
+                ),
                 "resolved": vote is not None,
             },
         )
@@ -522,6 +672,17 @@ class RelationalImitationRoundFeedbackGame(Game):
             )
         shared = action.metadata.get("shared_fact_id")
         rules = self.rules(config)
+        raw_context = request.observation.visible_state.get("citation_context")
+        context = (
+            CitationContext.from_mapping(raw_context)
+            if isinstance(raw_context, Mapping)
+            else self.citation_context(
+                state,
+                state.relational_agent(request.agent_id),
+                tuple(request.observation.visible_state.get("social_sources", ())),
+                config,
+            )
+        )
         if rules.social_mode == SOCIAL_MODE_BOARD and request.stage == FOCAL_UPDATE:
             if not action.metadata.get("public_message_present"):
                 issues.append(
@@ -535,6 +696,11 @@ class RelationalImitationRoundFeedbackGame(Game):
             allowed_public_types = {MESSAGE_REPORT, MESSAGE_NONE}
             if rules.allow_participant_requests:
                 allowed_public_types.add(MESSAGE_REQUEST)
+            if (
+                not context.citable_fact_ids
+                and rules.no_citable_fact_action == NO_CITABLE_FACT_REQUEST_OR_NONE
+            ):
+                allowed_public_types = {MESSAGE_REQUEST, MESSAGE_NONE}
             if public_type not in allowed_public_types:
                 issues.append(
                     ValidationIssue(
@@ -548,6 +714,17 @@ class RelationalImitationRoundFeedbackGame(Game):
                     ValidationIssue(
                         "action.shared_fact_id",
                         f"must be none for {public_type}",
+                    )
+                )
+            if (
+                public_type == MESSAGE_REPORT
+                and rules.require_grounded_reports
+                and shared is None
+            ):
+                issues.append(
+                    ValidationIssue(
+                        "action.shared_fact_id",
+                        "REPORT must cite one active verified fact",
                     )
                 )
             if isinstance(public, Mapping) and public.get("reply_to") is not None:
@@ -567,19 +744,21 @@ class RelationalImitationRoundFeedbackGame(Game):
                         "action.public_message", "a public message is required"
                     )
                 )
-        if shared is not None:
-            active = set(
-                reasoning_fact_ids(
-                    state.relational_agent(request.agent_id),
-                    rules.epistemic_persistence,
+            if context.communication_action_masked and public_type != MESSAGE_NONE:
+                issues.append(
+                    ValidationIssue(
+                        "action.public_message",
+                        "must be NONE because no citable fact is available",
+                    )
                 )
-            )
-            if str(shared) not in active:
+        if shared is not None:
+            citable = set(context.citable_fact_ids)
+            if str(shared) not in citable:
                 issues.append(
                     ValidationIssue(
                         "action.shared_fact_id",
-                        f"{shared!r} is not among this agent's active facts "
-                        f"({sorted(active) or 'none'})",
+                        f"{shared!r} is not among the grounded facts this agent "
+                        f"remembers or currently sees ({sorted(citable) or 'none'})",
                         shared,
                     )
                 )
@@ -676,7 +855,17 @@ class RelationalImitationRoundFeedbackGame(Game):
         known_before = focal_agent.known_fact_ids
         active_before = reasoning_fact_ids(focal_agent, rules.epistemic_persistence)
 
-        exposures = self._exposures(social_sources)
+        raw_context = action.metadata.get("citation_context")
+        citation_context = (
+            self.citation_context(state, focal_agent, social_sources, config)
+            if not isinstance(raw_context, Mapping)
+            else CitationContext.from_mapping(raw_context)
+        )
+        expected_context = self.citation_context(state, focal_agent, social_sources, config)
+        if citation_context != expected_context:
+            raise ValueError("focal citation context does not match the sampled social view")
+
+        exposures = self._exposures(state, social_sources)
         peer_exposed = tuple(
             fact for fact, kind, _, _ in exposures if kind == PEER_SOURCE
         )
@@ -723,12 +912,12 @@ class RelationalImitationRoundFeedbackGame(Game):
 
         shared_after = action.metadata.get("shared_fact_id")
         shared_after = None if shared_after is None else str(shared_after)
-        if shared_after is not None and shared_after not in set(active_before):
+        if shared_after is not None and shared_after not in set(citation_context.citable_fact_ids):
             # Belt and braces: `validate_action` already rejects this, and the
             # runtime never hand-builds an action.  Reaching here would mean an
             # agent published evidence it never held.
             raise ValueError(
-                f"agent {focal} cannot share fact {shared_after!r}: it is not active"
+                f"agent {focal} cannot share fact {shared_after!r}: it is not citable"
             )
 
         board = state.blackboard
@@ -810,6 +999,62 @@ class RelationalImitationRoundFeedbackGame(Game):
             before_focal == state.correct_answer
         )
         sensor = {} if signal is None else dict(signal.observation)
+        relayed_source = (
+            None
+            if new_message is None or new_message.shared_fact_id is None
+            else citation_context.source_for(new_message.shared_fact_id)
+        )
+        citation_audit_fields = (
+            {
+                "focal_citable_fact_ids_before_action": list(
+                    citation_context.citable_fact_ids
+                ),
+                "focal_observed_fact_ids_this_update": list(
+                    citation_context.observed_fact_ids
+                ),
+                "report_citation_scope": rules.report_citation_scope,
+                "no_citable_fact_action": rules.no_citable_fact_action,
+                "communication_action_masked": bool(
+                    action.metadata.get("communication_action_masked", False)
+                ),
+                "communication_action_mask_reason": (
+                    "no_citable_fact"
+                    if action.metadata.get("communication_action_masked", False)
+                    else None
+                ),
+                "new_message_citation_source": (
+                    None
+                    if new_message is None or new_message.shared_fact_id is None
+                    else "active_memory"
+                    if new_message.shared_fact_id
+                    in set(citation_context.active_fact_ids)
+                    else "current_observation"
+                ),
+                "new_message_source_message_id": (
+                    None if relayed_source is None else relayed_source.message_id
+                ),
+                "new_message_source_author_kind": (
+                    None if relayed_source is None else relayed_source.author_kind
+                ),
+                "new_message_source_id": (
+                    None if relayed_source is None else relayed_source.source_id
+                ),
+                "new_message_source_round": (
+                    None if relayed_source is None else relayed_source.round_created
+                ),
+                "new_message_source_micro_step": (
+                    None
+                    if relayed_source is None
+                    else relayed_source.micro_step_created
+                ),
+            }
+            if (
+                rules.prompt_version >= 5
+                or rules.report_citation_scope != REPORT_CITATION_ACTIVE_ONLY
+                or rules.no_citable_fact_action != NO_CITABLE_FACT_MODEL_SELECT
+            )
+            else {}
+        )
 
         event: dict[str, Any] = {
             "episode_id": f"{state.task['task_id']}-{state.data['seed']}",
@@ -861,6 +1106,7 @@ class RelationalImitationRoundFeedbackGame(Game):
             "new_message_shared_fact_id": (
                 None if new_message is None else new_message.shared_fact_id
             ),
+            **citation_audit_fields,
             "board_size_after": (
                 len(
                     board.live_messages(int((round_fields or {}).get("round_index", 0)))
@@ -1015,8 +1261,9 @@ class RelationalImitationRoundFeedbackGame(Game):
             event=event,
         )
 
-    @staticmethod
     def _exposures(
+        self,
+        state: RelationalGameState,
         social_sources: Sequence[Mapping[str, Any]],
     ) -> tuple[tuple[str, str, str | None, str | None], ...]:
         """``(fact_id, source_kind, source_id)`` for every fact this focal saw.
@@ -1039,6 +1286,11 @@ class RelationalImitationRoundFeedbackGame(Game):
                 and source.get("message_type") != MESSAGE_REPORT
             ):
                 continue
+            if source.get("message_id") is not None:
+                if str(fact_id) not in set(state.fact_ids):
+                    continue
+                if source.get("shared_fact_text") != state.fact_text(str(fact_id)):
+                    continue
             kind = (
                 CONTROLLER_SOURCE
                 if str(source.get("source_type")) == "control"

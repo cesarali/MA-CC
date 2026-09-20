@@ -196,6 +196,14 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             "game.options.board.allow_participant_requests",
             "allow_participant_requests",
         ),
+        (
+            "game.options.board.report_citation_scope",
+            "report_citation_scope",
+        ),
+        (
+            "game.options.board.no_citable_fact_action",
+            "no_citable_fact_action",
+        ),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
@@ -259,6 +267,18 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             == "relational_imitation_round_feedback"
         ):
             result["receiver_epistemic_disposition"] = "vigilant"
+    if _nested(cell.resolved_config, "game.options.social_mode") == "board":
+        prompt_version = int(
+            _nested(cell.resolved_config, "game.options.prompt_version") or 1
+        )
+        if "report_citation_scope" not in result:
+            result["report_citation_scope"] = (
+                "active_or_observed" if prompt_version >= 5 else "active_only"
+            )
+        if "no_citable_fact_action" not in result:
+            result["no_citable_fact_action"] = (
+                "none" if prompt_version >= 5 else "model_select"
+            )
     if result.get("receiver_epistemic_disposition") and result.get(
         "controller_evidence_strategy"
     ):

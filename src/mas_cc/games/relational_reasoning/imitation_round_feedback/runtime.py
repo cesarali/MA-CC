@@ -77,6 +77,7 @@ from ...hidden_bench.imitation.metrics import population_observables
 from .adaptive_communication import (
     COMMUNICATION_POLICY,
     LLM_COMMUNICATION_POLICY,
+    LLM_AUTHORED_REPORT_ONLY_POLICY,
     CommunicationChoice,
     CommunicationMode,
     ControllerCommunicationContext,
@@ -431,7 +432,21 @@ async def _execute_decision(
             "prompt_instance_hash": prompt.instance_hash,
         }
 
+    validation_diagnostics: list[dict[str, Any]] = []
+
     def _on_attempt(attempt: ValidationAttempt) -> None:
+        if not attempt.valid:
+            validation_diagnostics.append(
+                {
+                    "attempt": attempt.attempt,
+                    "issues": [
+                        {"field": issue.field, "message": issue.message}
+                        for issue in attempt.validation_issues[:8]
+                    ],
+                    "provider_error": attempt.provider_error is not None,
+                }
+            )
+            del validation_diagnostics[:-3]
         _notify(
             observer,
             "record_attempt",
@@ -491,6 +506,7 @@ async def _execute_decision(
                 "prompt_definition_hash": prompt.definition_hash,
                 "prompt_instance_hash": prompt.instance_hash,
                 "validation_attempts": int(logical.retry_bound) + 1,
+                "validation_diagnostics": validation_diagnostics,
             },
             interruption_type="validation_exhausted",
         )
@@ -756,6 +772,7 @@ def _append_controller_report(
     fact_id: str,
     round_index: int,
     lifetime_rounds: int,
+    authored_text: str | None = None,
 ) -> tuple[RelationalGameState, BlackboardMessage]:
     """Publish canonical evidence through the same REPORT schema peers use."""
 
@@ -765,7 +782,7 @@ def _append_controller_report(
         message_id=f"m{len(board.messages) + 1:06d}",
         author_id=CONTROL_SOURCE_ID,
         message_type=MESSAGE_REPORT,
-        text=canonical_text,
+        text=canonical_text if authored_text is None else authored_text,
         vote=target,
         shared_fact_id=fact_id,
         reply_to=None,
@@ -1426,7 +1443,12 @@ async def run_relational_imitation_round_feedback_game(
                     COMMUNICATION_POLICY,
                 )
             )
-            if communication_policy == LLM_COMMUNICATION_POLICY:
+            if communication_policy in {
+                LLM_COMMUNICATION_POLICY,
+                LLM_AUTHORED_REPORT_ONLY_POLICY,
+            }:
+                if communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
+                    allowed_controller_modes = (CommunicationMode.REPORT,)
                 saved_controller = recovery.replay_controller(
                     controller_communication_context
                 )
@@ -1439,6 +1461,9 @@ async def run_relational_imitation_round_feedback_game(
                         policy_version=int(saved_choice["policy_version"]),
                         fact_ids=tuple(str(value) for value in saved_choice["fact_ids"]),
                         text=saved_choice.get("text"),
+                        report_texts=tuple(
+                            str(value) for value in saved_choice.get("report_texts", [])
+                        ),
                     )
                     controller_llm_attempts = [
                         dict(value)
@@ -1475,6 +1500,7 @@ async def run_relational_imitation_round_feedback_game(
                                 f"{round_index}:{attempt_index + 1}"
                             )
                         ),
+                        policy=communication_policy,
                     )
                     controller_llm_attempts = [
                         attempt.to_dict() for attempt in llm_result.attempts
@@ -1538,11 +1564,27 @@ async def run_relational_imitation_round_feedback_game(
                             f"relational-controller-communication-fallback:{round_index}"
                         )
                         controller_fallback_seed = int(fallback_stream)
-                        communication_choice = choose_communication_mode(
-                            controller_communication_context,
-                            allowed_controller_modes,
-                            fallback_stream.create_random(),
-                        )
+                        if communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
+                            if not controller_communication_context.eligible_facts:
+                                raise ValueError(
+                                    "authored report-only fallback has no eligible fact"
+                                )
+                            communication_choice = CommunicationChoice(
+                                mode=CommunicationMode.REPORT,
+                                reason="validated_canonical_report_fallback",
+                                policy=communication_policy,
+                                policy_version=1,
+                                fact_ids=(
+                                    controller_communication_context.eligible_facts[0].fact_id,
+                                ),
+                                text=None,
+                            )
+                        else:
+                            communication_choice = choose_communication_mode(
+                                controller_communication_context,
+                                allowed_controller_modes,
+                                fallback_stream.create_random(),
+                            )
                     recovery.record_controller(
                         controller_communication_context,
                         {
@@ -1624,6 +1666,11 @@ async def run_relational_imitation_round_feedback_game(
                     raise ValueError(
                         "truthful strategic selector did not return exactly b reports"
                     )
+                authored_by_fact = (
+                    dict(zip(communication_choice.fact_ids, communication_choice.report_texts))
+                    if communication_choice is not None
+                    else {}
+                )
                 for selection in selections:
                     state, controller_post = _append_controller_report(
                         state,
@@ -1631,6 +1678,7 @@ async def run_relational_imitation_round_feedback_game(
                         fact_id=selection.fact_id,
                         round_index=round_index,
                         lifetime_rounds=rules.board_message_lifetime_rounds,
+                        authored_text=authored_by_fact.get(selection.fact_id),
                     )
                     selected_report_rounds.setdefault(selection.fact_id, []).append(
                         round_index

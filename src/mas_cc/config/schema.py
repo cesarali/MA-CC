@@ -102,6 +102,24 @@ def config_schema() -> dict[str, Any]:
                             {"type": "null"},
                         ]
                     },
+                    "semantic_failure_guard": {
+                        "anyOf": [
+                            {"type": "null"},
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "minimum_finished_episodes": {"type": "integer", "minimum": 1},
+                                    "maximum_failure_fraction": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1,
+                                    },
+                                    "minimum_failures": {"type": "integer", "minimum": 1},
+                                },
+                            },
+                        ]
+                    },
                 }
             ),
             "logging": _simple_object(

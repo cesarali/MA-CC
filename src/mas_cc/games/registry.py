@@ -193,6 +193,7 @@ def register_game_prompt_factories(registry: PromptRegistry) -> PromptRegistry:
     registry.register(lambda: relational_blackboard_ballot_prompt(version=2))
     registry.register(lambda: relational_blackboard_ballot_prompt(version=3))
     registry.register(lambda: relational_blackboard_ballot_prompt(version=4))
+    registry.register(lambda: relational_blackboard_ballot_prompt(version=5))
     return registry
 
 

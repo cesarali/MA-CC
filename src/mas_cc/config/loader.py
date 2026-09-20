@@ -39,6 +39,7 @@ from .models import (
     PromptConfig,
     PricingConfig,
     RunConfig,
+    SemanticFailureGuardConfig,
     StorageConfig,
 )
 
@@ -750,10 +751,57 @@ def _parse_execution(raw: Any, issues: list[ValidationIssue]) -> ExecutionConfig
             "parallelism",
             "fail_fast",
             "timeout_seconds",
+            "semantic_failure_guard",
         },
         path,
         issues,
     )
+    guard = None
+    if values.get("semantic_failure_guard") is not None:
+        guard_values = _as_mapping(
+            values.get("semantic_failure_guard"),
+            f"{path}.semantic_failure_guard",
+            issues,
+        )
+        _unknown_fields(
+            guard_values,
+            {"minimum_finished_episodes", "maximum_failure_fraction", "minimum_failures"},
+            f"{path}.semantic_failure_guard",
+            issues,
+        )
+        guard = SemanticFailureGuardConfig(
+            minimum_finished_episodes=_integer(
+                guard_values,
+                "minimum_finished_episodes",
+                f"{path}.semantic_failure_guard",
+                issues,
+                default=2,
+                minimum=1,
+            ),
+            maximum_failure_fraction=_number(
+                guard_values,
+                "maximum_failure_fraction",
+                f"{path}.semantic_failure_guard",
+                issues,
+                default=0.25,
+                minimum=0.0,
+            ),
+            minimum_failures=_integer(
+                guard_values,
+                "minimum_failures",
+                f"{path}.semantic_failure_guard",
+                issues,
+                default=2,
+                minimum=1,
+            ),
+        )
+        if guard.maximum_failure_fraction > 1.0:
+            issues.append(
+                ValidationIssue(
+                    f"{path}.semantic_failure_guard.maximum_failure_fraction",
+                    "must be at most 1.0",
+                )
+            )
     return ExecutionConfig(
         schema_version=_schema_version(values, path, issues),
         seed=_integer(values, "seed", path, issues, default=0, minimum=0),
@@ -763,6 +811,7 @@ def _parse_execution(raw: Any, issues: list[ValidationIssue]) -> ExecutionConfig
         timeout_seconds=_number(
             values, "timeout_seconds", path, issues, default=None, minimum=0.001
         ),
+        semantic_failure_guard=guard,
     )
 
 

@@ -54,8 +54,8 @@ from ..data import NO_FACT
 PROMPT_FAMILY = "relational_public_ballot"
 BOARD_PROMPT_FAMILY = "relational_blackboard_ballot"
 PROMPT_VERSION = 1
-BOARD_PROMPT_VERSION = 3
-BOARD_PROMPT_VERSIONS = (2, 3, 4)
+BOARD_PROMPT_VERSION = 5
+BOARD_PROMPT_VERSIONS = (2, 3, 4, 5)
 
 VOTE_VISIBILITIES = ("public", "hidden")
 IMPLEMENTED_VOTE_VISIBILITIES = ("public",)
@@ -747,6 +747,46 @@ class KnownFactsBlock(PromptBlock[tuple[str, ...]]):
 
 
 @dataclass(frozen=True, slots=True)
+class ObservedFactsBlock(PromptBlock[tuple[str, ...]]):
+    """Grounded REPORT facts present in this update's sampled board view."""
+
+    name: str = field(init=False, default="observed_facts")
+    title: str = field(init=False, default="Currently observed grounded reports")
+    role: MessageRole = field(init=False, default=MessageRole.SYSTEM)
+    value: tuple[str, ...] | Unbound = UNBOUND
+    required: bool = field(init=False, default=True)
+    binding: str = field(init=False, default="dynamic")
+    sensitive: bool = field(init=False, default=True)
+
+    def value_issues(self, value: tuple[str, ...]) -> tuple[ValidationIssue, ...]:
+        if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+            return (
+                ValidationIssue(
+                    "prompt.blocks.observed_facts.value",
+                    "must be a sequence of rendered facts",
+                ),
+            )
+        return ()
+
+    def render(self) -> str:
+        if not self.value:
+            return (
+                "CURRENTLY OBSERVED GROUNDED REPORTS\n\n"
+                "No grounded REPORT fact is visible in this sampled update. "
+                "REQUEST and DIRECTIVE messages are not evidence."
+            )
+        facts = "\n".join(f"- {fact}" for fact in self.value)  # type: ignore[union-attr]
+        return (
+            "CURRENTLY OBSERVED GROUNDED REPORTS\n\n"
+            "These verified task facts occur in REPORT messages actually sampled "
+            "for this update. Only fact IDs enumerated by the response contract may "
+            "be relayed now. This is received grounded evidence, not private "
+            "verification.\n\n"
+            f"{facts}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CurrentPositionBlock(PromptBlock[Mapping[str, Any]]):
     """``X_i^t`` alone - the agent's own standing vote.
 
@@ -1189,6 +1229,18 @@ class BlackboardBallotContract(RelationalBallotContract):
             for item in self.options.get("allowed_message_types", BOARD_ACTION_TYPES)
         )
 
+    @property
+    def require_grounded_reports(self) -> bool:
+        return bool(self.options.get("require_grounded_reports", False))
+
+    @property
+    def force_none(self) -> bool:
+        return bool(self.options.get("force_none", False))
+
+    @property
+    def report_citation_scope(self) -> str:
+        return str(self.options.get("report_citation_scope", "active_only"))
+
     def instruction(self) -> str:
         options = " | ".join(self.allowed_values)
         citable = " | ".join((*self.fact_ids, NO_FACT))
@@ -1241,6 +1293,8 @@ class BlackboardBallotContract(RelationalBallotContract):
                     f"must be at most {MAX_REASON_CHARACTERS} characters",
                 )
             )
+        if self.force_none:
+            return ValidationResult.success()
         if "public_message" not in parsed:
             return ValidationResult.failure(
                 ValidationIssue(
@@ -1328,6 +1382,14 @@ class BlackboardBallotContract(RelationalBallotContract):
                     raw_shared,
                 )
             )
+        if message_type == "REPORT" and self.require_grounded_reports and shared is None:
+            return ValidationResult.failure(
+                ValidationIssue(
+                    "response.public_message.shared_fact_id",
+                    "REPORT must cite one verified fact available to this agent",
+                    raw_shared,
+                )
+            )
         if shared is not None:
             if not _FACT_ID.match(shared):
                 return ValidationResult.failure(
@@ -1353,6 +1415,13 @@ class BlackboardBallotContract(RelationalBallotContract):
             "response.public_message.shared_fact_id",
             "response.public_message",
         }:
+            if self.require_grounded_reports:
+                return (
+                    "Your previous REPORT did not cite an allowed verified fact.\n\n"
+                    "Return a complete replacement JSON object. Either post NONE, or "
+                    "post REPORT with exactly one shared_fact_id listed under YOUR "
+                    "VERIFIED EVIDENCE and faithfully communicate only that fact."
+                )
             return (
                 "Your previous public_message used an invalid shared_fact_id.\n\n"
                 "Return a complete replacement JSON object. For this correction, "
@@ -1377,8 +1446,31 @@ class BlackboardBallotContractV3(BlackboardBallotContract):
             if "REQUEST" in self.allowed_message_types
             else BOARD_DECISION_INSTRUCTION_NO_REQUEST_V4
         )
+        grounding = ""
+        if self.require_grounded_reports:
+            grounding = (
+                "\n\nEvery REPORT must cite exactly one grounded fact you remember or can "
+                "currently see "
+                if self.report_citation_scope == "active_or_observed"
+                else "\n\nEvery REPORT must cite exactly one fact from YOUR VERIFIED EVIDENCE "
+            ) + (
+                "and its public text must faithfully communicate that fact without "
+                "inventing or changing evidence. Strategic selection and emphasis are allowed."
+            )
+        if self.force_none:
+            return (
+                f"{instruction}\n\n"
+                "No grounded fact is available to cite in this update. Your public "
+                "communication is fixed to NONE. Still make your private decision.\n\n"
+                "Return only valid JSON:\n\n"
+                "{\n"
+                f'  "vote": "<{options}>",\n'
+                f'  "private_reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>"\n'
+                "}"
+            )
         return (
             f"{instruction}\n\n"
+            f"{grounding}\n\n"
             f"Visible message IDs: {visible}\n\n"
             "Return only valid JSON:\n\n"
             "{\n"
@@ -1466,6 +1558,10 @@ def relational_blackboard_ballot_prompt(
     social_distrust: bool | None = None,
     version: int = BOARD_PROMPT_VERSION,
     allow_participant_requests: bool = True,
+    require_grounded_reports: bool = False,
+    force_none: bool = False,
+    report_citation_scope: str = "active_only",
+    allowed_message_types: Sequence[str] | None = None,
 ) -> BlackboardBallotPrompt:
     """Prompt family for finite-memory public-board updates."""
 
@@ -1507,6 +1603,7 @@ def relational_blackboard_ballot_prompt(
             DecisionBasisBlock(),
             TaskBlock(),
             KnownFactsBlock(version=2 if version >= 3 else 1),
+            *((ObservedFactsBlock(),) if version >= 5 else ()),
             CurrentPositionBlock(version=2 if version >= 3 else 1),
             SocialInformationBlock(),
         ),
@@ -1517,12 +1614,23 @@ def relational_blackboard_ballot_prompt(
                 "relations": tuple(relations),
                 "visible_message_ids": tuple(visible_message_ids),
                 **(
+                    {"require_grounded_reports": True}
+                    if require_grounded_reports
+                    else {}
+                ),
+                **({"force_none": True} if force_none else {}),
+                **(
+                    {"report_citation_scope": report_citation_scope}
+                    if version >= 5
+                    else {}
+                ),
+                **(
                     {
-                        "allowed_message_types": (
-                            BOARD_ACTION_TYPES
-                            if allow_participant_requests
-                            else ("REPORT", "NONE")
-                        )
+                        "allowed_message_types": tuple(allowed_message_types)
+                        if allowed_message_types is not None
+                        else BOARD_ACTION_TYPES
+                        if allow_participant_requests
+                        else ("REPORT", "NONE")
                     }
                     if version >= 4
                     else {}
@@ -1641,6 +1749,11 @@ def build_relational_blackboard_prompt(
     answer_display_texts: Mapping[str, str] | None = None,
     version: int = BOARD_PROMPT_VERSION,
     allow_participant_requests: bool = True,
+    require_grounded_reports: bool = False,
+    force_none: bool = False,
+    observed_facts: Sequence[str] = (),
+    report_citation_scope: str = "active_only",
+    allowed_message_types: Sequence[str] | None = None,
 ) -> BlackboardBallotPrompt:
     """Bind one board update while keeping the private reason out of public text."""
 
@@ -1654,6 +1767,10 @@ def build_relational_blackboard_prompt(
         social_distrust=social_distrust,
         version=version,
         allow_participant_requests=allow_participant_requests,
+        require_grounded_reports=require_grounded_reports,
+        force_none=force_none,
+        report_citation_scope=report_citation_scope,
+        allowed_message_types=allowed_message_types,
     ).bind(
         identity=identity,
         decision_basis=(
@@ -1675,6 +1792,7 @@ def build_relational_blackboard_prompt(
             ),
         },
         known_facts=tuple(known_facts),
+        **({"observed_facts": tuple(observed_facts)} if version >= 5 else {}),
     )
     if current_vote is not None:
         prompt = prompt.bind(current_position={"vote": current_vote})
