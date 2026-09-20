@@ -53,6 +53,12 @@ This routing instruction does not authorize automatic uploads.
 
 ## Experiments
 
+For combining complementary completed studies before aggregation, use
+`mas-cc study merge` and read
+`docs/documentation/metrics/merging_complementary_studies.md`. Merge into a
+new result root, then run the existing aggregator separately. Do not pool
+precomputed estimates or silently count overlapping cells twice.
+
 For MA-CC study creation, submission, SLURM execution, aggregation, or
 post-processing, use the `ma-cc-study-workflow` skill. Read its complete
 instructions at `.codex/skills/ma-cc-study-workflow/SKILL.md` before acting.

@@ -4571,6 +4571,7 @@ def _aggregate_study_local(
             confidence=settings["confidence"], seed=settings["seed"],
             analysis_hash=blackboard_hash, provisional=not validation["complete"],
             progress=profile.update,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
         )
         outputs.update(calibration_outputs)
         calibration_estimates = calibration_outputs["blackboard_calibration_estimates"]
@@ -4811,6 +4812,8 @@ def _aggregate_study_local(
     provenance_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(manifest_path, provenance_dir / "study_manifest.json")
     shutil.copy2(submission_path, provenance_dir / "submission_manifest.csv")
+    if (root / "merge_manifest.json").is_file():
+        shutil.copy2(root / "merge_manifest.json", provenance_dir / "merge_manifest.json")
     submission_metadata = root / "submission.json"
     if submission_metadata.is_file():
         shutil.copy2(submission_metadata, provenance_dir / "submission.json")
@@ -4906,7 +4909,7 @@ def aggregate_study(
         backend == "auto"
         and not already_allocated
         and "PYTEST_CURRENT_TEST" not in os.environ
-        and potsdam_runtime
+        and (potsdam_runtime or "MA_CC_ANALYSIS_LAUNCHER" in os.environ)
         and shutil.which("sbatch") is not None
     )
     if use_slurm:

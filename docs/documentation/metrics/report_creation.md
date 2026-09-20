@@ -1,5 +1,10 @@
 # Creating reports from standardized MA-CC analysis packages
 
+For the short saved-results-only workflow, including frozen archives and the
+checkpoint report, see [Report quickstart](report_quickstart.md).
+The aggregation steps below describe how analysis packages are produced;
+they are not prerequisites to rerun when the user requests only a report.
+
 Agent entry point: [Metrics and aggregation master reference](README.md).
 
 This page explains how we turn the output of `mas-cc study aggregate` into a readable scientific report.

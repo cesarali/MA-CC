@@ -1,14 +1,15 @@
 # Fdb version 4
-["bibtex iclr2027_conference"] 1789482717.12214 "iclr2027_conference.aux" "iclr2027_conference.bbl" "iclr2027_conference" 1789482718.25657 0
-  "./iclr2027_conference.bib" 1789462623.34358 2964 adcef1ed37fb1c97eb0d3fdc55030fba ""
+["bibtex iclr2027_conference"] 1789909727.00866 "iclr2027_conference.aux" "iclr2027_conference.bbl" "iclr2027_conference" 1789909907.66411 0
+  "./iclr2027_conference.bib" 1789909716.27699 6485 55d00dfbc7745174c98d524e43d53d8b ""
   "./iclr2027_conference.bst" 1750852748 26973 af983813ca1a1414954dbceae7baa2a1 ""
-  "iclr2027_conference.aux" 1789482718.15849 26834 6956e72f38bdc68ae6a48e682810148a "pdflatex"
+  "iclr2027_conference.aux" 1789909907.56745 27904 caf3d681958b96f49c6a53b4d67697b5 "pdflatex"
   (generated)
   "iclr2027_conference.bbl"
   "iclr2027_conference.blg"
   (rewritten before read)
-["pdflatex"] 1789482717.13967 "iclr2027_conference.tex" "iclr2027_conference.pdf" "iclr2027_conference" 1789482718.25676 0
+["pdflatex"] 1789909906.44899 "/home/cesarali/LanguageGames/MA-CC/docs/papers/iclr2027/iclr2027_conference.tex" "iclr2027_conference.pdf" "iclr2027_conference" 1789909907.66428 0
   "/etc/texmf/web2c/texmf.cnf" 1755788686.08642 475 c0e671620eb5563b2130f56340a5fde8 ""
+  "/home/cesarali/LanguageGames/MA-CC/docs/papers/iclr2027/iclr2027_conference.tex" 1787328090 1323 8aa5c114206cd1d202c5960ff990b7da ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/courier/pcrb7t.tfm" 1136768653 960 4ab65358b8406f30ef5496c8c096d22b ""
@@ -241,9 +242,9 @@
   "figures/fig_efficiencies_all.png" 1787729902 252378 8f743d18e7ecb9273baf09ba65ca7014 ""
   "figures/fig_state_local_landscapes.png" 1787723692 221271 1a0a63e2985fc8bd283ac2ac79f4c32f ""
   "figures/fig_susceptibility_empirical_theory.png" 1787723322 212563 cabe3016432342b97fc131f3caf0f2ec ""
-  "iclr2027_conference.aux" 1789482718.15849 26834 6956e72f38bdc68ae6a48e682810148a "pdflatex"
-  "iclr2027_conference.bbl" 1789482717.1362 1865 9500252cd57b6cd39c0fb7a82e711b8f "bibtex iclr2027_conference"
-  "iclr2027_conference.out" 1789482718.15849 10135 2200c3cf01af379bbd9f9046c0c12533 "pdflatex"
+  "iclr2027_conference.aux" 1789909907.56745 27904 caf3d681958b96f49c6a53b4d67697b5 "pdflatex"
+  "iclr2027_conference.bbl" 1789909727.02294 4773 3f27f51fffe4bf6d07ec2d966cecd990 "bibtex iclr2027_conference"
+  "iclr2027_conference.out" 1789909907.57157 10135 2200c3cf01af379bbd9f9046c0c12533 "pdflatex"
   "iclr2027_conference.sty" 1785233888 9025 1b4bb9c2e12c712c56f4eb1232b88dd6 ""
   "iclr2027_conference.tex" 1787328090 1323 8aa5c114206cd1d202c5960ff990b7da ""
   "math_commands.tex" 1750852748 12284 a71653715108dc62b66e3a0bde0307d8 ""
@@ -258,7 +259,7 @@
   "sections/conclusion.tex" 1787289694 60 70218235191ab0ad53546ccbb1658bac ""
   "sections/controlled_susceptibility_study.tex" 1787316716 319 d68ef8bc3ad316fb000ad527f78e0679 ""
   "sections/information_response_bound_appendix.tex" 1787723452 8720 ab1ae8721447761a01f4686b67003141 ""
-  "sections/introduction.tex" 1787729840 9911 5fa544b6d9623eb13e9781e733d45919 ""
+  "sections/introduction.tex" 1789909906.1847 5516 9b475ca092916f700ddacea4552577e3 ""
   "sections/method.tex" 1787296680 114 4b5266188e04a52e47ff9d69c0d76717 ""
   "sections/related_work.tex" 1787289694 62 1cfcc53f5676d28cc04dc97da293f837 ""
   "sections/relational_prompt_appendix.tex" 1787901761.42945 15322 ebf67c68cb0bb4ab335404c374a2ba64 ""

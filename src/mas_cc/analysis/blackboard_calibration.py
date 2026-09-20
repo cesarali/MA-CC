@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from concurrent.futures import as_completed
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -467,11 +468,216 @@ def _prediction_status(rows: list[dict], summary: Mapping, diagnostics: Mapping)
     return "homogeneous_reference_assumed"
 
 
+
+def _calibrate_group(task: tuple) -> dict[str, list]:
+    """Calibrate one (cell_id, b_budget) group; independent of every other group.
+
+    Deterministic given (seed, cell_id, budget): the RNG is seeded per group, so
+    running groups in a process pool yields byte-identical rows to the serial loop.
+    `progress` is only forwarded when running in-process (callbacks do not pickle).
+    """
+    (cell_id, budget, all_rows, settings, seed, bootstrap_resamples, confidence,
+     causal_lookup, progress) = task
+    out = {name: [] for name in TABLES}
+    units = sorted({r["block_id"] for r in all_rows})
+    rng_seed = seed + int(_id([cell_id, str(budget)])[:8], 16)
+    rng = np.random.default_rng(rng_seed)
+    evaluation_units = set()
+    if settings["model_predictions"]["enabled"]:
+        if len(units) < 2:
+            evaluation_units = set(units)
+        else:
+            number = min(len(units)-1, max(1, math.ceil(len(units)*settings["model_predictions"]["evaluation_fraction"])))
+            evaluation_units = set(rng.choice(units, size=number, replace=False))
+    train = [r for r in all_rows if r["block_id"] not in evaluation_units]
+    evaluation = [r for r in all_rows if r["block_id"] in evaluation_units]
+    training_id = _id([cell_id, str(budget), sorted(set(units)-evaluation_units), settings])
+    identity = dict(study_id=all_rows[0]["study_id"], source_run_id=all_rows[0]["source_run_id"],
+                    cell_id=cell_id, b_budget=budget, training_group_id=training_id,
+                    grouping_json=_json({"cell_id": cell_id, "b_budget": budget}),
+                    source_selection="completed_canonical_training_blocks" if evaluation_units else "completed_canonical_episodes")
+    for block in units:
+        block_rows = [r for r in all_rows if r["block_id"] == block]
+        out["blackboard_calibration_splits"].append({**identity, "block_id": block,
+            "split": "evaluation" if block in evaluation_units else "calibration",
+            "episode_ids_json": _json(sorted({r["episode_id"] for r in block_rows})),
+            "weight": len(block_rows), "weight_unit": "micro_update", "split_seed": rng_seed})
+    summary = _summaries(train, settings)
+    diagnostic = _diagnostics(train, summary)
+    out["blackboard_calibration_diagnostics"].append({**identity, **diagnostic,
+        "diagnostic_slice": "calibration_group", "conditioning_json": "{}"})
+    # Prespecified heterogeneity diagnostics, never causal exposure strata.
+    for field in ("round_index", "task_id", "focal_agent_id", "x", "b_posted"):
+        slices = defaultdict(list)
+        for r in train:
+            slices[str(r[field])].append(r)
+        for value, slice_rows in sorted(slices.items()):
+            out["blackboard_calibration_diagnostics"].append({**identity,
+                **_diagnostics(slice_rows, _summaries(slice_rows, settings)),
+                "diagnostic_slice": field, "conditioning_json": _json({field: value})})
+    exposure_draws, draw_summaries = [], []
+    for replicate in range(bootstrap_resamples):
+        sample = _resample(train, rng)
+        draw_summaries.append(_summaries(sample, settings))
+        exposure_draws.append({
+            (action, start): _exposure_stats(
+                [r for r in sample if r["U"] == action], start,
+                settings["exposure_prediction"] != "none",
+            ) for action in (0, 1) for start in (None, 0, 1)
+        })
+        if progress and replicate % 100 == 0:
+            progress(dict(stage="blackboard_calibration_bootstrap", cell_id=cell_id,
+                          replicate=replicate, requested=bootstrap_resamples))
+    n_blocks = len(set(units)-evaluation_units)
+    estimate_ids = {}
+
+    def emit(metric, value, variant, action, channel, counts, draw_values, *, conditioning=None, dependencies=(), boundary=False):
+        conditioning_json = _json(conditioning or {})
+        eid = _id([training_id, metric, variant, action, channel, conditioning_json])
+        support = ("unvisited" if counts["n_observations"] == 0 else
+                   "missing_opportunities" if math.isnan(value) and counts.get("support_status") == "missing_opportunities" else
+                   "unidentified_boundary" if math.isnan(value) and boundary else
+                   "unsupported" if math.isnan(value) else "boundary" if boundary else "supported")
+        result = {**identity, **counts, "estimate_id": eid, "metric": metric,
+                  "estimate": value, "estimator_variant": variant, "branch": str(action),
+                  "channel": str(channel), "conditioning_json": conditioning_json,
+                  "dependencies_json": _json(list(dependencies)), "confidence": confidence,
+                  "units": "nats" if metric.endswith("affinity") else "dimensionless",
+                  "support_status": support,
+                  "model_status": counts.get("model_status", "descriptive"),
+                  **_interval(value, draw_values, min(n_blocks, counts.get("n_blocks", n_blocks)), confidence, bootstrap_resamples, boundary)}
+        out["blackboard_calibration_estimates"].append(result)
+        return eid
+
+    for key, stat in summary.items():
+        action, channel, variant = key
+        count_id = _id([training_id, key, "counts"])
+        out["blackboard_calibration_counts"].append({**identity, **stat, "count_id": count_id,
+            "branch": str(action), "channel": channel, "estimator_variant": variant})
+        if variant == "direct_active" and variant not in settings["active_parameter_variants"]:
+            continue
+        dep_ids = [count_id]
+        if "mixture" in variant:
+            dep_ids = [_id([training_id, (1, c, "action_channel"), "counts"]) for c in ("0", "1")]
+            if settings["shared_unexposed_baseline"] and variant == "mixture_common_weight":
+                dep_ids[0] = _id([training_id, ("pooled", "0", "shared_unexposed"), "counts"])
+            dep_ids.append(_id([training_id, (1, "all", "direct_active"), "counts"]))
+        prefix = "blackboard_effective" if channel in {"all", "mixture"} else "blackboard_channel"
+        metrics = {"p_plus": "blackboard_target_entry_probability", "p_minus": "blackboard_target_exit_probability",
+                   "gamma": prefix+"_compliance", "p": prefix+"_preference", "h": prefix+"_affinity"}
+        for field, metric in metrics.items():
+            value = stat[field]
+            support_blocks = stat["n_plus_blocks"] if field == "p_plus" else stat["n_minus_blocks"] if field == "p_minus" else min(stat["n_plus_blocks"], stat["n_minus_blocks"])
+            estimate_ids[(*key, field)] = emit(metric, value, variant, action, channel, {**stat, "n_blocks": support_blocks},
+                [s[key][field] for s in draw_summaries], dependencies=dep_ids,
+                boundary=stat["support_status"] == "boundary")
+            out["blackboard_calibration_estimates"][-1]["bootstrap_boundary"] = sum(
+                s[key]["support_status"] == "boundary" for s in draw_summaries
+            )
+    for action in (0, 1):
+        branch = [r for r in train if r["U"] == action]
+        for start in (None, 0, 1):
+            stat = _exposure_stats(branch, start, settings["exposure_prediction"] != "none")
+            ds = [sample[(action, start)] for sample in exposure_draws]
+            count_id = _id([training_id, action, start, "exposure_counts"])
+            out["blackboard_calibration_counts"].append({**identity, **stat, "count_id": count_id,
+                "branch": str(action), "channel": "all", "estimator_variant": "observed_average",
+                "conditioning_json": _json({"z_before": start})})
+            for field, metric in (("w", "blackboard_exposure_probability"),
+                                  ("sampling", "blackboard_sampling_exposure_probability"),
+                                  ("residual", "blackboard_exposure_probability_residual")):
+                emit(metric, stat[field], "observed_average" if field == "w" else "matched_sampler_rows",
+                     action, "all", stat, [d[field] for d in ds], conditioning={"z_before": start},
+                     dependencies=[count_id], boundary=stat[field] in (0, 1))
+
+    if not settings["model_predictions"]["enabled"]:
+        return out
+    base_key = ("pooled", "0", "shared_unexposed") if settings["shared_unexposed_baseline"] else (0, "0", "action_channel")
+    active_key = (1, "mixture", "mixture_common_weight")
+    base, active = summary[base_key], summary[active_key]
+    status = _prediction_status(train, summary, diagnostic)
+    evaluation_diagnostic = _diagnostics(evaluation, _summaries(evaluation, settings))
+    out["blackboard_calibration_diagnostics"].append({**identity,
+        **evaluation_diagnostic, "diagnostic_slice": "evaluation_group", "conditioning_json": "{}"})
+    if status == "homogeneous_reference_assumed" and evaluation_diagnostic["rounds_with_varying_board"]:
+        status = "evaluation_time_varying_board_reference_only"
+    if any(r["U"] == 0 and r["E"] == 1 for r in evaluation):
+        status = "silent_exposure_incompatible"
+    dependencies = [estimate_ids[(*key, field)] for key in (base_key, active_key) for field in ("p_plus", "p_minus")]
+    eval_rounds = {}
+    for r in evaluation:
+        eval_rounds[(r["episode_id"], r["round_index"])] = r
+    validation_rows = []
+    for key, r in sorted(eval_rounds.items()):
+        supported = _present(r["N"]) and float(r["N"]).is_integer() and math.isfinite(r["x"])
+        prediction = susceptibility(base, active, int(r["N"]), int(r["M"]), r["x"]) if supported else dict.fromkeys(("r0", "rb", "chi", "available", "intercept", "slope", "x_star"), NAN)
+        # Never reinterpret exposed silence as K0. Suppress that model.
+        if status in {"silent_exposure_incompatible", "missing_silent_baseline", "incomplete_calibration_records", "unsupported_training"}:
+            prediction = {k: NAN for k in prediction}
+        round_predictions = []
+        for ds in draw_summaries:
+            value = susceptibility(ds[base_key], ds[active_key], int(r["N"]), int(r["M"]), r["x"]) if supported else dict.fromkeys(prediction, NAN)
+            round_predictions.append(value)
+        for field, metric, branch in (
+            ("r0", "blackboard_round_relaxation", "silent_unexposed"),
+            ("rb", "blackboard_round_relaxation", "active"),
+            ("chi", "blackboard_model_target_susceptibility", "contrast"),
+            ("available", "blackboard_model_available_susceptibility", "contrast"),
+            ("intercept", "blackboard_model_response_intercept", "contrast"),
+            ("slope", "blackboard_model_response_slope", "contrast"),
+            ("x_star", "blackboard_model_zero_response_share", "contrast"),
+        ):
+            out["blackboard_model_predictions"].append({**identity,
+                "episode_id": r["episode_id"], "round_index": r["round_index"], "block_id": r["block_id"],
+                "N": r["N"], "M": r["M"], "x": r["x"], "metric": metric, "branch": branch,
+                "estimate": prediction[field], "prediction_id": _id([training_id, key, field]),
+                "dependencies_json": _json(dependencies), "estimator_variant": "held_out_frozen_board_reference",
+                "conditioning_json": _json({"episode_id": r["episode_id"], "round_index": r["round_index"]}),
+                "units": "dimensionless", "confidence": confidence, "model_status": status,
+                "support_status": "supported" if math.isfinite(prediction[field]) else "undefined",
+                "root_status": prediction.get("root_status"), "n_blocks": n_blocks,
+                **_interval(prediction[field], [p[field] for p in round_predictions], n_blocks, confidence, bootstrap_resamples, prediction[field] in (0, 1)),
+            })
+        causal = causal_lookup.get((cell_id, r["episode_id"], r["round_index"]))
+        empirical = causal["causal_response_h1"] if causal else NAN
+        validation_rows.append({**identity, "episode_id": r["episode_id"], "round_index": r["round_index"],
+            "block_id": r["block_id"], "x": r["x"], "M": r["M"], "N": r["N"], "U": r["U"],
+            "predicted": prediction["chi"], "empirical": empirical,
+            "residual": empirical-prediction["chi"], "model_status": status,
+            "comparison_provenance": "propensity_weighted_causal_response_v1:lag1",
+            "comparison_status": "held_out_round_contribution" if causal else "missing_eligible_causal_comparison",
+            "weight": 1.0, "weight_unit": "round", "dependencies_json": _json(dependencies)})
+    out["blackboard_model_validation"].extend(validation_rows)
+    # Joint training and evaluation uncertainty, fixed split membership.
+    matched = [r for r in validation_rows if math.isfinite(r["residual"])]
+    from .causal_response import _support_status
+
+    n_action = sum(r["U"] == 1 for r in matched)
+    n_silence = sum(r["U"] == 0 for r in matched)
+    comparison_support = _support_status(n_action, n_silence)
+    residual_draws = []
+    for ds in draw_summaries:
+        sampled_eval = _resample(matched, rng)
+        residuals = [r["empirical"] - susceptibility(ds[base_key], ds[active_key], int(r["N"]), int(r["M"]), r["x"])["chi"] for r in sampled_eval]
+        residual_draws.append(float(np.mean(residuals)) if residuals and {r["U"] for r in sampled_eval} == {0, 1} else NAN)
+    residual = float(np.mean([r["residual"] for r in matched])) if matched and comparison_support != "unsupported" else NAN
+    out["blackboard_model_validation"].append({**identity,
+        "comparison_status": "held_out_round_weighted_summary" if matched else "unavailable",
+        "comparison_provenance": "propensity_weighted_causal_response_v1:lag1",
+        "predicted": float(np.mean([r["predicted"] for r in matched])) if matched else NAN,
+        "empirical": float(np.mean([r["empirical"] for r in matched])) if matched else NAN,
+        "residual": residual, "n_observations": len(matched), "model_status": status,
+        "support_status": comparison_support, "n_action": n_action, "n_silence": n_silence,
+        "dependencies_json": _json(dependencies), "weight_unit": "round",
+        **_interval(residual, residual_draws, min(n_blocks, len({r["block_id"] for r in matched})), confidence, bootstrap_resamples)})
+    return out
+
+
 def analyze_blackboard_calibration(
     micro: pd.DataFrame, rounds: pd.DataFrame, episodes: pd.DataFrame, cells: pd.DataFrame,
     *, settings: Mapping | None = None, bootstrap_resamples: int = 1000,
     confidence: float = 0.95, seed: int = 1, analysis_hash: str = "",
-    provisional: bool = False, progress=None,
+    provisional: bool = False, progress=None, workers: int = 1,
 ) -> dict[str, pd.DataFrame]:
     """Calibrate within physical cell/budget, with whole-block uncertainty.
 
@@ -485,6 +691,8 @@ def analyze_blackboard_calibration(
         return {name: pd.DataFrame() for name in TABLES}
     if bootstrap_resamples < 0 or not 0 < confidence < 1:
         raise ValueError("invalid calibration resampling settings")
+    if workers < 1:
+        raise ValueError("calibration workers must be positive")
     inputs = adapt_calibration_inputs(micro, rounds, episodes, cells)
     if inputs.empty:
         output["blackboard_calibration_diagnostics"].append(dict(
@@ -511,202 +719,36 @@ def analyze_blackboard_calibration(
             for row in causal.to_dict("records"):
                 if row["episode_complete"] and row["lag_1_available"]:
                     causal_lookup[(str(row["cell_id"]), str(row["episode_id"]), row["round_index"])] = row
-    grouped = inputs.groupby(["cell_id", "b_budget"], dropna=False, sort=True) if not inputs.empty else []
-    for group_index, ((cell_id, budget), frame) in enumerate(grouped):
-        if progress:
-            progress(dict(stage="blackboard_calibration", cell_id=cell_id, group_index=group_index))
-        all_rows = frame.to_dict("records")
-        units = sorted({r["block_id"] for r in all_rows})
-        rng_seed = seed + int(_id([cell_id, str(budget)])[:8], 16)
-        rng = np.random.default_rng(rng_seed)
-        evaluation_units = set()
-        if settings["model_predictions"]["enabled"]:
-            if len(units) < 2:
-                evaluation_units = set(units)
-            else:
-                number = min(len(units)-1, max(1, math.ceil(len(units)*settings["model_predictions"]["evaluation_fraction"])))
-                evaluation_units = set(rng.choice(units, size=number, replace=False))
-        train = [r for r in all_rows if r["block_id"] not in evaluation_units]
-        evaluation = [r for r in all_rows if r["block_id"] in evaluation_units]
-        training_id = _id([cell_id, str(budget), sorted(set(units)-evaluation_units), settings])
-        identity = dict(study_id=all_rows[0]["study_id"], source_run_id=all_rows[0]["source_run_id"],
-                        cell_id=cell_id, b_budget=budget, training_group_id=training_id,
-                        grouping_json=_json({"cell_id": cell_id, "b_budget": budget}),
-                        source_selection="completed_canonical_training_blocks" if evaluation_units else "completed_canonical_episodes")
-        for block in units:
-            block_rows = [r for r in all_rows if r["block_id"] == block]
-            output["blackboard_calibration_splits"].append({**identity, "block_id": block,
-                "split": "evaluation" if block in evaluation_units else "calibration",
-                "episode_ids_json": _json(sorted({r["episode_id"] for r in block_rows})),
-                "weight": len(block_rows), "weight_unit": "micro_update", "split_seed": rng_seed})
-        summary = _summaries(train, settings)
-        diagnostic = _diagnostics(train, summary)
-        output["blackboard_calibration_diagnostics"].append({**identity, **diagnostic,
-            "diagnostic_slice": "calibration_group", "conditioning_json": "{}"})
-        # Prespecified heterogeneity diagnostics, never causal exposure strata.
-        for field in ("round_index", "task_id", "focal_agent_id", "x", "b_posted"):
-            slices = defaultdict(list)
-            for r in train:
-                slices[str(r[field])].append(r)
-            for value, slice_rows in sorted(slices.items()):
-                output["blackboard_calibration_diagnostics"].append({**identity,
-                    **_diagnostics(slice_rows, _summaries(slice_rows, settings)),
-                    "diagnostic_slice": field, "conditioning_json": _json({field: value})})
-        exposure_draws, draw_summaries = [], []
-        for replicate in range(bootstrap_resamples):
-            sample = _resample(train, rng)
-            draw_summaries.append(_summaries(sample, settings))
-            exposure_draws.append({
-                (action, start): _exposure_stats(
-                    [r for r in sample if r["U"] == action], start,
-                    settings["exposure_prediction"] != "none",
-                ) for action in (0, 1) for start in (None, 0, 1)
-            })
-            if progress and replicate % 100 == 0:
-                progress(dict(stage="blackboard_calibration_bootstrap", cell_id=cell_id,
-                              replicate=replicate, requested=bootstrap_resamples))
-        n_blocks = len(set(units)-evaluation_units)
-        estimate_ids = {}
-
-        def emit(metric, value, variant, action, channel, counts, draw_values, *, conditioning=None, dependencies=(), boundary=False):
-            conditioning_json = _json(conditioning or {})
-            eid = _id([training_id, metric, variant, action, channel, conditioning_json])
-            support = ("unvisited" if counts["n_observations"] == 0 else
-                       "missing_opportunities" if math.isnan(value) and counts.get("support_status") == "missing_opportunities" else
-                       "unidentified_boundary" if math.isnan(value) and boundary else
-                       "unsupported" if math.isnan(value) else "boundary" if boundary else "supported")
-            result = {**identity, **counts, "estimate_id": eid, "metric": metric,
-                      "estimate": value, "estimator_variant": variant, "branch": str(action),
-                      "channel": str(channel), "conditioning_json": conditioning_json,
-                      "dependencies_json": _json(list(dependencies)), "confidence": confidence,
-                      "units": "nats" if metric.endswith("affinity") else "dimensionless",
-                      "support_status": support,
-                      "model_status": counts.get("model_status", "descriptive"),
-                      **_interval(value, draw_values, min(n_blocks, counts.get("n_blocks", n_blocks)), confidence, bootstrap_resamples, boundary)}
-            output["blackboard_calibration_estimates"].append(result)
-            return eid
-
-        for key, stat in summary.items():
-            action, channel, variant = key
-            count_id = _id([training_id, key, "counts"])
-            output["blackboard_calibration_counts"].append({**identity, **stat, "count_id": count_id,
-                "branch": str(action), "channel": channel, "estimator_variant": variant})
-            if variant == "direct_active" and variant not in settings["active_parameter_variants"]:
-                continue
-            dep_ids = [count_id]
-            if "mixture" in variant:
-                dep_ids = [_id([training_id, (1, c, "action_channel"), "counts"]) for c in ("0", "1")]
-                if settings["shared_unexposed_baseline"] and variant == "mixture_common_weight":
-                    dep_ids[0] = _id([training_id, ("pooled", "0", "shared_unexposed"), "counts"])
-                dep_ids.append(_id([training_id, (1, "all", "direct_active"), "counts"]))
-            prefix = "blackboard_effective" if channel in {"all", "mixture"} else "blackboard_channel"
-            metrics = {"p_plus": "blackboard_target_entry_probability", "p_minus": "blackboard_target_exit_probability",
-                       "gamma": prefix+"_compliance", "p": prefix+"_preference", "h": prefix+"_affinity"}
-            for field, metric in metrics.items():
-                value = stat[field]
-                support_blocks = stat["n_plus_blocks"] if field == "p_plus" else stat["n_minus_blocks"] if field == "p_minus" else min(stat["n_plus_blocks"], stat["n_minus_blocks"])
-                estimate_ids[(*key, field)] = emit(metric, value, variant, action, channel, {**stat, "n_blocks": support_blocks},
-                    [s[key][field] for s in draw_summaries], dependencies=dep_ids,
-                    boundary=stat["support_status"] == "boundary")
-                output["blackboard_calibration_estimates"][-1]["bootstrap_boundary"] = sum(
-                    s[key]["support_status"] == "boundary" for s in draw_summaries
-                )
-        for action in (0, 1):
-            branch = [r for r in train if r["U"] == action]
-            for start in (None, 0, 1):
-                stat = _exposure_stats(branch, start, settings["exposure_prediction"] != "none")
-                ds = [sample[(action, start)] for sample in exposure_draws]
-                count_id = _id([training_id, action, start, "exposure_counts"])
-                output["blackboard_calibration_counts"].append({**identity, **stat, "count_id": count_id,
-                    "branch": str(action), "channel": "all", "estimator_variant": "observed_average",
-                    "conditioning_json": _json({"z_before": start})})
-                for field, metric in (("w", "blackboard_exposure_probability"),
-                                      ("sampling", "blackboard_sampling_exposure_probability"),
-                                      ("residual", "blackboard_exposure_probability_residual")):
-                    emit(metric, stat[field], "observed_average" if field == "w" else "matched_sampler_rows",
-                         action, "all", stat, [d[field] for d in ds], conditioning={"z_before": start},
-                         dependencies=[count_id], boundary=stat[field] in (0, 1))
-
-        if not settings["model_predictions"]["enabled"]:
-            continue
-        base_key = ("pooled", "0", "shared_unexposed") if settings["shared_unexposed_baseline"] else (0, "0", "action_channel")
-        active_key = (1, "mixture", "mixture_common_weight")
-        base, active = summary[base_key], summary[active_key]
-        status = _prediction_status(train, summary, diagnostic)
-        evaluation_diagnostic = _diagnostics(evaluation, _summaries(evaluation, settings))
-        output["blackboard_calibration_diagnostics"].append({**identity,
-            **evaluation_diagnostic, "diagnostic_slice": "evaluation_group", "conditioning_json": "{}"})
-        if status == "homogeneous_reference_assumed" and evaluation_diagnostic["rounds_with_varying_board"]:
-            status = "evaluation_time_varying_board_reference_only"
-        if any(r["U"] == 0 and r["E"] == 1 for r in evaluation):
-            status = "silent_exposure_incompatible"
-        dependencies = [estimate_ids[(*key, field)] for key in (base_key, active_key) for field in ("p_plus", "p_minus")]
-        eval_rounds = {}
-        for r in evaluation:
-            eval_rounds[(r["episode_id"], r["round_index"])] = r
-        validation_rows = []
-        for key, r in sorted(eval_rounds.items()):
-            supported = _present(r["N"]) and float(r["N"]).is_integer() and math.isfinite(r["x"])
-            prediction = susceptibility(base, active, int(r["N"]), int(r["M"]), r["x"]) if supported else dict.fromkeys(("r0", "rb", "chi", "available", "intercept", "slope", "x_star"), NAN)
-            # Never reinterpret exposed silence as K0. Suppress that model.
-            if status in {"silent_exposure_incompatible", "missing_silent_baseline", "incomplete_calibration_records", "unsupported_training"}:
-                prediction = {k: NAN for k in prediction}
-            round_predictions = []
-            for ds in draw_summaries:
-                value = susceptibility(ds[base_key], ds[active_key], int(r["N"]), int(r["M"]), r["x"]) if supported else dict.fromkeys(prediction, NAN)
-                round_predictions.append(value)
-            for field, metric, branch in (
-                ("r0", "blackboard_round_relaxation", "silent_unexposed"),
-                ("rb", "blackboard_round_relaxation", "active"),
-                ("chi", "blackboard_model_target_susceptibility", "contrast"),
-                ("available", "blackboard_model_available_susceptibility", "contrast"),
-                ("intercept", "blackboard_model_response_intercept", "contrast"),
-                ("slope", "blackboard_model_response_slope", "contrast"),
-                ("x_star", "blackboard_model_zero_response_share", "contrast"),
-            ):
-                output["blackboard_model_predictions"].append({**identity,
-                    "episode_id": r["episode_id"], "round_index": r["round_index"], "block_id": r["block_id"],
-                    "N": r["N"], "M": r["M"], "x": r["x"], "metric": metric, "branch": branch,
-                    "estimate": prediction[field], "prediction_id": _id([training_id, key, field]),
-                    "dependencies_json": _json(dependencies), "estimator_variant": "held_out_frozen_board_reference",
-                    "conditioning_json": _json({"episode_id": r["episode_id"], "round_index": r["round_index"]}),
-                    "units": "dimensionless", "confidence": confidence, "model_status": status,
-                    "support_status": "supported" if math.isfinite(prediction[field]) else "undefined",
-                    "root_status": prediction.get("root_status"), "n_blocks": n_blocks,
-                    **_interval(prediction[field], [p[field] for p in round_predictions], n_blocks, confidence, bootstrap_resamples, prediction[field] in (0, 1)),
-                })
-            causal = causal_lookup.get((cell_id, r["episode_id"], r["round_index"]))
-            empirical = causal["causal_response_h1"] if causal else NAN
-            validation_rows.append({**identity, "episode_id": r["episode_id"], "round_index": r["round_index"],
-                "block_id": r["block_id"], "x": r["x"], "M": r["M"], "N": r["N"], "U": r["U"],
-                "predicted": prediction["chi"], "empirical": empirical,
-                "residual": empirical-prediction["chi"], "model_status": status,
-                "comparison_provenance": "propensity_weighted_causal_response_v1:lag1",
-                "comparison_status": "held_out_round_contribution" if causal else "missing_eligible_causal_comparison",
-                "weight": 1.0, "weight_unit": "round", "dependencies_json": _json(dependencies)})
-        output["blackboard_model_validation"].extend(validation_rows)
-        # Joint training and evaluation uncertainty, fixed split membership.
-        matched = [r for r in validation_rows if math.isfinite(r["residual"])]
-        from .causal_response import _support_status
-
-        n_action = sum(r["U"] == 1 for r in matched)
-        n_silence = sum(r["U"] == 0 for r in matched)
-        comparison_support = _support_status(n_action, n_silence)
-        residual_draws = []
-        for ds in draw_summaries:
-            sampled_eval = _resample(matched, rng)
-            residuals = [r["empirical"] - susceptibility(ds[base_key], ds[active_key], int(r["N"]), int(r["M"]), r["x"])["chi"] for r in sampled_eval]
-            residual_draws.append(float(np.mean(residuals)) if residuals and {r["U"] for r in sampled_eval} == {0, 1} else NAN)
-        residual = float(np.mean([r["residual"] for r in matched])) if matched and comparison_support != "unsupported" else NAN
-        output["blackboard_model_validation"].append({**identity,
-            "comparison_status": "held_out_round_weighted_summary" if matched else "unavailable",
-            "comparison_provenance": "propensity_weighted_causal_response_v1:lag1",
-            "predicted": float(np.mean([r["predicted"] for r in matched])) if matched else NAN,
-            "empirical": float(np.mean([r["empirical"] for r in matched])) if matched else NAN,
-            "residual": residual, "n_observations": len(matched), "model_status": status,
-            "support_status": comparison_support, "n_action": n_action, "n_silence": n_silence,
-            "dependencies_json": _json(dependencies), "weight_unit": "round",
-            **_interval(residual, residual_draws, min(n_blocks, len({r["block_id"] for r in matched})), confidence, bootstrap_resamples)})
+    grouped = list(inputs.groupby(["cell_id", "b_budget"], dropna=False, sort=True)) if not inputs.empty else []
+    tasks = []
+    for (cell_id, budget), frame in grouped:
+        cell_causal = {k: v for k, v in causal_lookup.items() if k[0] == str(cell_id)} if causal_lookup else {}
+        tasks.append((cell_id, budget, frame.to_dict("records"), settings, seed,
+                      bootstrap_resamples, confidence, cell_causal, None))
+    if workers > 1 and len(tasks) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from multiprocessing import get_context
+        results: list = [None] * len(tasks)
+        with ProcessPoolExecutor(max_workers=min(workers, len(tasks)), mp_context=get_context("spawn")) as pool:
+            futures = {pool.submit(_calibrate_group, task): index for index, task in enumerate(tasks)}
+            for done, future in enumerate(as_completed(futures)):
+                index = futures[future]
+                results[index] = future.result()
+                if progress:
+                    progress(dict(stage="blackboard_calibration_bootstrap", cell_id=tasks[index][0],
+                                  replicate=bootstrap_resamples, requested=bootstrap_resamples,
+                                  groups_completed=done + 1, groups_total=len(tasks), workers=min(workers, len(tasks))))
+    else:
+        results = []
+        for group_index, task in enumerate(tasks):
+            if progress:
+                progress(dict(stage="blackboard_calibration", cell_id=task[0], group_index=group_index))
+            results.append(_calibrate_group(task[:-1] + (progress,)))
+    for group_out in results:
+        for name in TABLES:
+            out_rows = group_out.get(name)
+            if out_rows:
+                output[name].extend(out_rows)
     frames = {name: pd.DataFrame(rows) for name, rows in output.items()}
     for frame in frames.values():
         frame["estimator_version"] = VERSION
