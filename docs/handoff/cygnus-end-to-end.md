@@ -107,8 +107,40 @@ performance.stages` has per-stage seconds; that profile is how #10 was targeted.
 ### 3.2 Detached Slurm graph (prepare → per-cell groups → finalizer)
 ```bash
 export MA_CC_ANALYSIS_LAUNCHER=$ROOT/scripts/Cygnus/SLURM/run_study_analysis.job
+export MA_CC_REPOSITORY_ROOT=$ROOT MA_CC_PYTHON=$PY PYTHONPATH=$ROOT/src
 $PY -m mas_cc.cli.main study aggregate --study-dir $RESULTS --backend slurm
 ```
+Submit from inside a small allocation (`sbatch --cpus-per-task=4 --mem=16G --wrap "…"`):
+the submit step validates and prepares the canonical inputs on the submitting host,
+and the login node dropped the session once while it was doing that (2026-09-19).
+
+Size the graph from the recipe's `slurm:` policy. Measured on b9/b15 (6 cells,
+360 episodes, 10 800 rounds) with the index-array engines, 2026-09-19:
+
+```yaml
+slurm:
+  task_throttle: 6         # one group job per cell, all at once
+  cpus_per_task: 2         # a group finishes in 13–16 s; 2 CPUs is already generous
+  memory: 8G               # groups peaked at 2.6 GiB
+  prepare_memory: 16G      # prepare took 4 s
+  finalizer_cpus: 16       # every finalizer stage pools on SLURM_CPUS_PER_TASK
+  finalizer_memory: 44G    # finalizer peak 8.3 GiB; 44G is the standard-node ceiling
+  finalizer_time_limit: "03:00:00"
+```
+Result: prepare 4 s, six group jobs 13–16 s each (in parallel), finalizer 151 s;
+about four minutes end to end against 263 s for the local backend on the same 16
+CPUs, because the information stage runs in the array instead of inside the
+finalizer. The default `finalizer_cpus` (4) is the wrong setting for this
+finalizer now that every stage pools; set it to the node's CPU count.
+
+Output check: `compare_dirs.py` against the local-backend package reports the three
+information tables (`information_estimates`, `primary_estimates`,
+`support_diagnostics`) as different, and every other table identical. The difference
+is row order only: the graph path sorts those tables by `(cell_id, metric, …)` when
+it merges the per-cell fragments, the local path keeps statistic order. Sorted on
+those keys the frames are identical (`assert_frame_equal`, exact). Treat the two
+backends as interchangeable for content and do not diff their information tables
+byte-for-byte.
 
 ### 3.3 Incomplete studies
 `--allow-incomplete` on either path produces an explicitly provisional package
