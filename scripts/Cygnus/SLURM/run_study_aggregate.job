@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Generic trigger for standardized study aggregation on the Cygnus Slurm cluster.
+# Mirrors scripts/Potsdam/SLURM/run_study_aggregate.job. Runs the LOCAL backend
+# inside this single allocation (information groups in a bounded process pool,
+# calibration groups likewise, then the finalizer). For the detached Slurm graph
+# instead, export MA_CC_ANALYSIS_LAUNCHER=$REPOSITORY_ROOT/scripts/Cygnus/SLURM/run_study_analysis.job
+# and call `mas-cc study aggregate --backend slurm` from the login node (no
+# allocation needed: it only submits).
+#SBATCH --job-name=mas-cc-aggregate
+#SBATCH --output=/shared/home/cesar/LanguageGames/MA-CC/results/slurm-logs/%x-%j.out
+#SBATCH --error=/shared/home/cesar/LanguageGames/MA-CC/results/slurm-logs/%x-%j.err
+
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: run_study_aggregate.job STUDY_DIR [--allow-incomplete]" >&2
+  exit 2
+fi
+
+readonly REPOSITORY_ROOT="${MA_CC_REPOSITORY_ROOT:-/shared/home/cesar/LanguageGames/MA-CC}"
+readonly MA_CC_PYTHON="${MA_CC_PYTHON:-/shared/home/cesar/.local/share/mamba/envs/MA-CC/bin/python}"
+readonly STUDY_DIR="$1"
+readonly INCOMPLETE_FLAG="${2:-}"
+
+if [[ -n "$INCOMPLETE_FLAG" && "$INCOMPLETE_FLAG" != "--allow-incomplete" ]]; then
+  echo "unsupported aggregation option: $INCOMPLETE_FLAG" >&2
+  exit 2
+fi
+
+cd "$REPOSITORY_ROOT"
+export PYTHONPATH="${PYTHONPATH:-$REPOSITORY_ROOT/src}"
+export MA_CC_REPOSITORY_ROOT="$REPOSITORY_ROOT"
+export MPLBACKEND=Agg
+# One BLAS thread per process; parallelism comes from the analysis process pool.
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+
+echo "[aggregate] study_dir=$STUDY_DIR"
+echo "[aggregate] slurm_job_id=${SLURM_JOB_ID:-manual} cpus=${SLURM_CPUS_PER_TASK:-unknown} mem=${SLURM_MEM_PER_NODE:-unknown} node=${SLURMD_NODENAME:-unknown}"
+echo "[aggregate] progress: $STUDY_DIR/analysis/progress.json (local backend)"
+
+arguments=(study aggregate --study-dir "$STUDY_DIR" --backend local)
+if [[ "$INCOMPLETE_FLAG" == "--allow-incomplete" ]]; then
+  arguments+=(--allow-incomplete)
+fi
+exec "$MA_CC_PYTHON" -m mas_cc.cli "${arguments[@]}"

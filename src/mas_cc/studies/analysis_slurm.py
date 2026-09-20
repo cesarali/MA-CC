@@ -22,7 +22,16 @@ from .table_io import read_scientific_table, retained_table_path, write_scientif
 from .validation import validate_study
 
 
-LAUNCHER = Path(__file__).resolve().parents[3] / "scripts/Potsdam/SLURM/run_study_analysis.job"
+DEFAULT_LAUNCHER = Path(__file__).resolve().parents[3] / "scripts/Potsdam/SLURM/run_study_analysis.job"
+# Backward-compatible alias; prefer launcher_path(), which honours MA_CC_ANALYSIS_LAUNCHER
+# (e.g. scripts/Cygnus/SLURM/run_study_analysis.job on the Cygnus cluster).
+LAUNCHER = DEFAULT_LAUNCHER
+
+
+def launcher_path() -> Path:
+    """Generic ROLE EXECUTION_MANIFEST launcher for this cluster."""
+    override = os.environ.get("MA_CC_ANALYSIS_LAUNCHER")
+    return Path(override).expanduser().resolve() if override else DEFAULT_LAUNCHER
 
 
 def _now() -> str:
@@ -628,7 +637,7 @@ def submit_frozen_aggregation(
     manifest_path = Path(manifest_path).resolve()
     manifest = _read(manifest_path)
     root = Path(manifest["study_dir"])
-    launcher = LAUNCHER
+    launcher = launcher_path()
     if not launcher.is_file():
         raise ValueError(f"missing generic study-analysis launcher: {launcher}")
     logs = root / "logs" / f"analysis-{manifest['generation_id']}"
