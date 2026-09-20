@@ -148,8 +148,12 @@ lineage mode and fail in 3 s ("study lineage has no target manifest"), so the fi
 set aside; (2) checkpoint-ensemble bundles use the `analysis-runs/<run>/` layout and
 **publish to `analysis-runs/<run>/output/`**, not `analysis/`. The checkpoint
 ensemble also wants the big node (`--nodelist=big-0 --cpus-per-task=32 --mem=110G`);
-it took 2 h 16 min, mostly in `checkpoint_paired_response`, `activation_response` and
-`branch_round_metrics`, which are unprofiled and the next target for that family.
+it took 2 h 16 min: `checkpoint_classifier` 4 932 s (already pooled),
+`checkpoint_paired_response` 2 579 s, `branch_round_metrics` 318 s,
+`activation_response` 306 s. The parent bootstraps in the last three now gather
+per-parent arrays instead of a pandas mask per drawn parent, and
+`branch_round_metrics` runs its branch groups in a spawn pool
+(`SLURM_CPUS_PER_TASK` workers); the classifier is the remaining cost.
 
 ## 5 · Combine studies (joint paired aggregation)
 

@@ -4237,6 +4237,7 @@ def _aggregate_study_local(
                 null_permutations=int(settings["null_permutations"]),
                 confidence=float(settings["confidence"]),
                 seed=int(settings["seed"]),
+                workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
             )
             if bool(checkpoint_recipe.get("branch_round_metrics", False))
             else (pd.DataFrame(), pd.DataFrame())
