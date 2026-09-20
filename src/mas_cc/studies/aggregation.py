@@ -3832,7 +3832,8 @@ def _aggregate_study_local(
         retained_input_identity = str(snapshot_manifest["scientific_input_identity"])
         canonical_metadata = {}
     elif cells:
-        canonical, canonical_metadata = build_canonical_tables(study_id, cells)
+        canonical, canonical_metadata = build_canonical_tables(
+            study_id, cells, workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))))
         if target_manifest is not None:
             from .extension import consolidate_extension_tables
 
@@ -3860,7 +3861,8 @@ def _aggregate_study_local(
             "source run trees unavailable; reaggregated from retained canonical tables"
         )
     else:
-        canonical, canonical_metadata = build_canonical_tables(study_id, cells)
+        canonical, canonical_metadata = build_canonical_tables(
+            study_id, cells, workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))))
         validation = validate_study(entries, runs, cells, canonical)
     if cells:
         selection = canonical_metadata.get("record_selection", {})
