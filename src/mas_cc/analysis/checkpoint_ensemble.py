@@ -985,6 +985,25 @@ def cross_fitted_classifier_score(
     }
 
 
+# Comparison groups are shipped to the workers once (pool initializer) rather
+# than pickled into every one of the ~130k tasks; tasks carry only an index.
+_CLASSIFIER_GROUPS: list[pd.DataFrame] = []
+
+
+def _set_classifier_groups(groups: list[pd.DataFrame]) -> None:
+    global _CLASSIFIER_GROUPS
+    _CLASSIFIER_GROUPS = list(groups)
+
+
+def _classifier_task(task: tuple[Any, ...]) -> Mapping[str, Any]:
+    """One unit of classifier work: a split-sensitivity fit or a paired label-swap refit."""
+    kind, group_index, mask, population_size, seed = task
+    group = _CLASSIFIER_GROUPS[group_index]
+    if kind == "split":
+        return cross_fitted_classifier_score(group, population_size=population_size, seed=seed)
+    return _classifier_permutation_refit((group, mask, population_size, seed))
+
+
 def _classifier_permutation_refit(task: tuple[Any, ...]) -> Mapping[str, Any]:
     """One deterministic paired swap/refit, with no nested BLAS parallelism."""
     from threadpoolctl import threadpool_limits
@@ -1048,40 +1067,54 @@ def classifier_analysis(
             ),
         })
 
+    # Plan every refit up front, in the serial order: per comparison group the
+    # split-sensitivity fits, then the label-swap permutations with their masks
+    # drawn here in the parent. One pool then runs the whole plan; results come
+    # back in plan order, so scheduling and worker count never touch the
+    # scientific randomness or the row order of the tables. (The previous
+    # version started and tore down a pool per comparison group and ran the
+    # split fits serially in the parent: on the checkpoint bundle that was
+    # 128 pools and ~4,900 s of the stage's 7,019 s on 16 CPUs.)
+    bases: list[dict[str, Any]] = []
+    group_frames: list[pd.DataFrame] = []
+    plan: list[tuple[Any, ...]] = []
     for group_index, (coordinates, group) in enumerate(grouped):
-        base = dict(zip(keys, coordinates, strict=True))
-        report(group_index, base, 0, 0, "split_sensitivity")
+        bases.append(dict(zip(keys, coordinates, strict=True)))
+        group_frames.append(group)
         for repeat in range(repeated_splits):
-            result = cross_fitted_classifier_score(
-                group, population_size=population_size, seed=seed + group_index * 100 + repeat
-            )
-            estimates.append({**base, "split_repeat": repeat, **result})
-            completed_refits += 1
-            report(group_index, base, repeat + 1, 0, "split_sensitivity")
-        report(group_index, base, repeated_splits, 0, "paired_label_swap")
-        tasks = []
+            plan.append(("split", group_index, None, population_size, seed + group_index * 100 + repeat))
         for permutation in range(label_swap_permutations):
-            # Draw masks in the parent process in the original serial order.
-            # Scheduling and worker count must never alter scientific randomness.
             mask = {parent: bool(rng.integers(0, 2)) for parent in group["parent_id"].unique()}
-            tasks.append((group, mask, population_size, seed + permutation + 10000))
-        pool_context = (
-            ProcessPoolExecutor(
-                max_workers=min(workers, label_swap_permutations),
-                mp_context=multiprocessing.get_context("spawn"),
-            )
-            if workers > 1 and label_swap_permutations > 0 else nullcontext(None)
+            plan.append(("swap", group_index, mask, population_size, seed + permutation + 10000))
+    _set_classifier_groups(group_frames)
+    pool_context = (
+        ProcessPoolExecutor(
+            max_workers=min(workers, len(plan)),
+            mp_context=multiprocessing.get_context("spawn"),
+            initializer=_set_classifier_groups,
+            initargs=(group_frames,),
         )
-        with pool_context as pool:
-            results = (
-                pool.map(_classifier_permutation_refit, tasks, chunksize=1)
-                if pool is not None else map(_classifier_permutation_refit, tasks)
-            )
-            for permutation, result in enumerate(results):
+        if workers > 1 and len(plan) > 1 else nullcontext(None)
+    )
+    with pool_context as pool:
+        results = iter(
+            pool.map(_classifier_task, plan, chunksize=1)
+            if pool is not None else map(_classifier_task, plan)
+        )
+        for group_index, base in enumerate(bases):
+            report(group_index, base, 0, 0, "split_sensitivity")
+            for repeat in range(repeated_splits):
+                result = next(results)
+                estimates.append({**base, "split_repeat": repeat, **result})
+                completed_refits += 1
+                report(group_index, base, repeat + 1, 0, "split_sensitivity")
+            report(group_index, base, repeated_splits, 0, "paired_label_swap")
+            for permutation in range(label_swap_permutations):
+                result = next(results)
                 nulls.append({**base, "permutation": permutation, "estimate_bits": result["estimate_bits"]})
                 completed_refits += 1
                 report(group_index, base, repeated_splits, permutation + 1, "paired_label_swap")
-        report(group_index, base, repeated_splits, label_swap_permutations, "comparison_complete")
+            report(group_index, base, repeated_splits, label_swap_permutations, "comparison_complete")
     return pd.DataFrame(estimates), pd.DataFrame(nulls)
 
 

@@ -17,7 +17,8 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
-from mas_cc.analysis.single_affinity import ADVOCATE_ACTIONS, controlled_rows, eta_ir, susceptibility_summary
+from mas_cc.analysis.draw_components import _DrawComponents, _draw_orders  # noqa: F401  (re-exported for tests)
+from mas_cc.analysis.single_affinity import controlled_rows, eta_ir, susceptibility_summary
 from .weighted_summaries import PairedBootstrap
 from mas_cc.games.hidden_bench.imitation_round_feedback import analysis as _round_analysis
 from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
@@ -144,122 +145,6 @@ def _policy_null(rows: Sequence[Any], *, permutations: int, seed: int) -> tuple[
     if _fast_engine():
         return _BitsPolicyNull(TARGET_CMI, rows).values(permutations, seed=seed)
     return policy_resampling_null(TARGET_CMI, rows, permutations=permutations, seed=seed)
-
-
-class _DrawComponents:
-    """``_components`` evaluated on row-position arrays of one cell's controlled rows.
-
-    A bootstrap draw is a sequence of rows (episodes or initialization blocks
-    repeated by their drawn weight, in draw order). Every quantity ``_components``
-    computes on that sequence is recomputed here from per-row codes with the
-    row path's arithmetic: the CMI from the same contingency table in the same
-    first-appearance axis order, the conditional entropy from the same per-state
-    terms summed with ``sum()``, ``chi`` and the Pinsker numerator with the same
-    ``np.mean`` over the same values in the same order and the same running sums
-    over states in ascending order. The row path stays the reference behind
-    ``MA_CC_INFORMATION_ENGINE=rows``.
-    """
-
-    def __init__(self, rows: Sequence[Any]):
-        self.n = len(rows)
-        actions = [str(row.U_k) for row in rows]
-        x_levels = tuple(dict.fromkeys(actions))
-        self.x_index = {value: i for i, value in enumerate(x_levels)}
-        self.x = np.fromiter((self.x_index[value] for value in actions), dtype=np.int64, count=self.n)
-        after = [int(row.target_after) for row in rows]
-        before = [int(row.target_before) for row in rows]
-        y_levels, z_levels = tuple(dict.fromkeys(after)), tuple(dict.fromkeys(before))
-        yi, zi = {v: i for i, v in enumerate(y_levels)}, {v: i for i, v in enumerate(z_levels)}
-        self.y = np.fromiter((yi[v] for v in after), dtype=np.int64, count=self.n)
-        self.z = np.fromiter((zi[v] for v in before), dtype=np.int64, count=self.n)
-        self.shape = (len(x_levels), len(z_levels), len(y_levels))
-        self.flat = self.x * (self.shape[1] * self.shape[2]) + self.z * self.shape[2] + self.y
-        self.state = np.array(before, dtype=np.int64)
-        self.advocated = np.array([str(row.U_k) in ADVOCATE_ACTIONS for row in rows], dtype=bool)
-        deltas = [row.event.get("delta_p_ctrl") for row in rows]
-        self.has_delta = np.array([value is not None for value in deltas], dtype=bool)
-        self.delta = np.array([0.0 if value is None else float(value) for value in deltas], dtype=float)
-
-    def cmi(self, order: np.ndarray) -> float:
-        counts = np.bincount(self.flat[order], minlength=int(np.prod(self.shape))).reshape(self.shape).astype(float)
-        table = counts[np.ix_(_first_appearance(self.x[order]), _first_appearance(self.z[order]),
-                              _first_appearance(self.y[order]))]
-        return float(_cmi_from_counts(table))
-
-    def conditional_entropy(self, order: np.ndarray) -> float:
-        """``conditional_action_entropy_bits(actions, target_before)`` on the draw."""
-        x, z = self.x[order], self.z[order]
-        n = order.size
-        terms = []
-        for state in _first_appearance(z):
-            group = x[z == state]
-            counts = np.bincount(group, minlength=self.shape[0])
-            total = group.size
-            entropy = -sum((int(counts[level]) / total) * math.log2(int(counts[level]) / total)
-                           for level in _first_appearance(group) if counts[level])
-            terms.append((total / n) * entropy)
-        return _builtin_sum(np.array(terms, dtype=float))
-
-    def value(self, order: np.ndarray) -> dict[str, float]:
-        if order.size == 0:
-            return {name: math.nan for name in ("T", "H", "chi", "eta_if", "ir_numerator", "ir_denominator", "eta_ir")}
-        transfer = self.cmi(order)
-        entropy = self.conditional_entropy(order)
-        # state_response_table + pooled_occupancy + susceptibility_summary + eta_ir, in draw order
-        state, advocated, has, delta = self.state[order], self.advocated[order], self.has_delta[order], self.delta[order]
-        total = int(order.size)
-        occupancy_states, occupancy_counts = np.unique(state, return_counts=True)
-        occupancy = {int(s): int(c) / total for s, c in zip(occupancy_states, occupancy_counts)}
-        weighted = mass = numerator = 0.0
-        for value in np.unique(state[has]):
-            in_state = has & (state == value)
-            advocate, no_op = delta[in_state & advocated], delta[in_state & ~advocated]
-            if not (advocate.size and no_op.size):
-                continue
-            chi = float(np.mean(advocate)) - float(np.mean(no_op))
-            a = advocate.size / (advocate.size + no_op.size)
-            weight = occupancy.get(int(value), 0.0)
-            weighted += weight * chi
-            mass += weight
-            numerator += weight * 2.0 * a * (1.0 - a) * chi * chi / math.log(2.0)
-        chi_summary = math.nan if mass <= 0 else weighted / mass
-        valid = bool(math.isfinite(transfer) and transfer > 0.0 and mass > 0.0)
-        return {
-            "T": transfer,
-            "H": entropy,
-            "chi": _finite(chi_summary),
-            "eta_if": transfer / entropy if math.isfinite(entropy) and entropy > 1e-12 else math.nan,
-            "ir_numerator": _finite(numerator),
-            "ir_denominator": _finite(transfer),
-            "eta_ir": _finite((numerator / transfer) if valid else math.nan),
-        }
-
-
-def _draw_orders(rows: Sequence[Any], *, bootstrap_plan: PairedBootstrap | None, resamples: int, seed: int):
-    """Row-position arrays of each bootstrap draw, in the row path's draw order."""
-    if bootstrap_plan is not None:
-        by_block: dict[int, list[int]] = {}
-        for position, event in enumerate(rows):
-            by_block.setdefault(bootstrap_plan.episodes[(str(event.cell_id), str(event.episode_id))], []).append(position)
-        blocks = sorted(by_block)
-        members = {block: np.array(by_block[block], dtype=np.int64) for block in blocks}
-        for weights in bootstrap_plan.weights:
-            parts = [np.tile(members[block], int(weights[block])) for block in blocks if int(weights[block]) > 0]
-            yield np.concatenate(parts) if parts else np.zeros(0, dtype=np.int64)
-        return
-    if resamples < 0:
-        raise ValueError("resamples cannot be negative")
-    by_episode = _grouped(rows, key=lambda row: row.episode_id)
-    ids = tuple(by_episode)
-    if not ids or resamples == 0:
-        return
-    position = {id(row): i for i, row in enumerate(rows)}
-    members = {str(key): np.fromiter((position[id(row)] for row in group), dtype=np.int64, count=len(group))
-               for key, group in by_episode.items()}
-    rng = np.random.default_rng(seed)
-    for _ in range(resamples):
-        selected = rng.choice(ids, size=len(ids), replace=True)
-        yield np.concatenate([members[str(episode_id)] for episode_id in selected])
 
 
 def _status(support: Mapping[str, Any]) -> str:
