@@ -697,6 +697,36 @@ def _by_episode(
     return dict(grouped_rounds), dict(grouped_micro)
 
 
+def _fast_draws(rows, grouped_rounds, keys):
+    """Index-array evaluator for the bootstrap draws, or ``None`` to keep the row path.
+
+    Used when ``MA_CC_INFORMATION_ENGINE`` is ``fast`` and the cell has one
+    population size and one sensor sample size on every controlled row (the
+    common case); otherwise a draw could carry a different ``N``/``q_c`` set
+    than the whole cell and the row path's per-draw blanks must be reproduced
+    literally, which the row path does.
+    """
+    from mas_cc.games.hidden_bench.imitation_round_feedback import analysis as round_analysis
+
+    if round_analysis._INFORMATION_ENGINE != "fast":
+        return None
+    eligible = controlled_rows(rows)
+    if not eligible:
+        return None
+    N, q_c = population_size(eligible), sensor_sample_size(eligible)
+    if N is None or q_c is None or not 1 <= q_c <= N:
+        return None
+    if any(row.event.get("sensor_sample_size") is None for row in eligible):
+        return None
+    from .draw_components import _DrawComponents
+
+    components = _DrawComponents(rows, filter_controlled=True)
+    position = {id(row): index for index, row in enumerate(rows)}
+    members = {key: np.fromiter((position[id(row)] for row in grouped_rounds[key]), dtype=np.int64, count=len(grouped_rounds[key]))
+               for key in keys}
+    return components, members, N, sensor_kernel(N, q_c)
+
+
 def single_affinity_analysis(
     rows: Sequence[Any],
     micro_rows: Sequence[Mapping[str, Any]] = (),
@@ -730,16 +760,23 @@ def single_affinity_analysis(
             for key in keys
         }
         rng = np.random.default_rng(seed)
+        fast = _fast_draws(rows, grouped_rounds, keys)
         for _ in range(int(bootstrap_resamples)):
             selected = [keys[index] for index in rng.integers(0, len(keys), len(keys))]
-            replicate = point_estimate(
-                [row for key in selected for row in grouped_rounds[key]],
-                _micro_counts={
-                    name: sum(micro_counts[key][name] for key in selected)
-                    for name in micro_counts[keys[0]]
-                },
-                _micro_count=sum(len(grouped_micro.get(key, ())) for key in selected),
-            )
+            counts = {
+                name: sum(micro_counts[key][name] for key in selected)
+                for name in micro_counts[keys[0]]
+            }
+            if fast is not None:
+                components, members, N, S = fast
+                order = np.concatenate([members[key] for key in selected])
+                replicate = components.single_affinity_scalars(order, N=N, S=S, micro_counts=counts)
+            else:
+                replicate = point_estimate(
+                    [row for key in selected for row in grouped_rounds[key]],
+                    _micro_counts=counts,
+                    _micro_count=sum(len(grouped_micro.get(key, ())) for key in selected),
+                )
             for name in _SCALARS:
                 value = float(replicate.get(name, math.nan))
                 if math.isfinite(value):
