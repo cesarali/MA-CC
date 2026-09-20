@@ -520,17 +520,19 @@ def sensing_activation_response(
             else np.array([])
         )
         if len(parents) and bootstrap_resamples > 0:
+            # Per-parent contribution arrays in frame order; a draw is the
+            # concatenation over the sampled parents, exactly the list the
+            # per-parent ``.loc`` lookups used to build, then ``np.mean``.
+            contribution = frame["contribution"].to_numpy(dtype=float)
+            parent_column = frame["parent_id"].to_numpy()
+            per_parent = {
+                parent: contribution[parent_column == parent] for parent in parents
+            }
             rng = np.random.default_rng(seed + group_index)
             draws = []
             for _ in range(bootstrap_resamples):
                 sampled = rng.choice(parents, size=len(parents), replace=True)
-                values = [
-                    value
-                    for parent in sampled
-                    for value in frame.loc[
-                        frame["parent_id"] == parent, "contribution"
-                    ].tolist()
-                ]
+                values = np.concatenate([per_parent[parent] for parent in sampled])
                 draws.append(float(np.mean(values)))
             alpha = (1.0 - confidence) / 2.0
             ci_low = float(np.quantile(draws, alpha))
@@ -554,22 +556,10 @@ def sensing_activation_response(
     return pd.DataFrame(rows)
 
 
-def branch_round_metrics(
-    rounds: pd.DataFrame,
-    *,
-    bootstrap_resamples: int,
-    null_permutations: int,
-    confidence: float,
-    seed: int,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Traditional round metrics estimated separately inside each branch.
-
-    This deliberately synthesizes one estimator cell per policy/budget rather
-    than allowing the generic cell-level analysis to pool mutually exclusive
-    continuation policies. The authoritative round-information engine remains
-    responsible for CMI, susceptibility, support, bootstrap, and nulls.
-    """
-
+def _branch_group_task(payload: tuple[Any, ...]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """One branch group of ``branch_round_metrics``: process-safe, order-independent."""
+    (group_index, coordinates, records, keys, bootstrap_resamples, null_permutations,
+     confidence, seed) = payload
     from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
         ADVOCATE_TARGET,
         NO_OP,
@@ -579,15 +569,9 @@ def branch_round_metrics(
         adapt_relational_round_record,
     )
 
-    continuation = rounds[
-        rounds["branch_policy"].isin(("none", *CONTROLLED_POLICIES))
-    ].copy()
-    keys = ["q", "rho", "branch_policy", "posting_budget"]
     metric_rows: list[dict[str, Any]] = []
     null_rows: list[dict[str, Any]] = []
-    for group_index, (coordinates, group) in enumerate(
-        continuation.groupby(keys, dropna=False, sort=True)
-    ):
+    if True:
         base = dict(zip(keys, coordinates, strict=True))
         branch_cell = "|".join(
             str(base[key]) for key in ("q", "rho", "branch_policy", "posting_budget")
@@ -598,8 +582,9 @@ def branch_round_metrics(
                 cell_id=branch_cell,
                 episode_id=str(row["parent_id"]),
             )
-            for row in group.to_dict(orient="records")
+            for row in records
         ]
+        n_parents = len({str(row["parent_id"]) for row in records})
         estimates, nulls = round_information_analysis(
             events,
             statistics=BRANCH_ROUND_STATISTICS,
@@ -628,7 +613,7 @@ def branch_round_metrics(
                         "estimate": math.nan,
                         "support_status": "unavailable",
                         "n_observations": len(events),
-                        "n_parents": int(group["parent_id"].nunique()),
+                        "n_parents": n_parents,
                     }
                 )
                 continue
@@ -643,7 +628,7 @@ def branch_round_metrics(
                     "support_status": item.get("support_status"),
                     "estimator_variant": item.get("main_estimator_variant"),
                     "n_observations": item.get("n_rounds", len(events)),
-                    "n_parents": int(group["parent_id"].nunique()),
+                    "n_parents": n_parents,
                     "action_entropy_ceiling_bits": item.get(
                         "conditional_action_entropy_bits"
                     ),
@@ -685,10 +670,56 @@ def branch_round_metrics(
                 ),
                 "activation_frequency": activation,
                 "n_observations": len(events),
-                "n_parents": int(group["parent_id"].nunique()),
+                "n_parents": n_parents,
             }
         )
         null_rows.extend({**base, **item} for item in nulls)
+    return metric_rows, null_rows
+
+
+def branch_round_metrics(
+    rounds: pd.DataFrame,
+    *,
+    bootstrap_resamples: int,
+    null_permutations: int,
+    confidence: float,
+    seed: int,
+    workers: int = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Traditional round metrics estimated separately inside each branch.
+
+    This deliberately synthesizes one estimator cell per policy/budget rather
+    than allowing the generic cell-level analysis to pool mutually exclusive
+    continuation policies. The authoritative round-information engine remains
+    responsible for CMI, susceptibility, support, bootstrap, and nulls.
+
+    Groups are independent (each seeds its own engine from ``seed + index``),
+    so with ``workers > 1`` they run in an order-preserving spawn pool and the
+    tables come back in the same order as the serial loop.
+    """
+
+    continuation = rounds[
+        rounds["branch_policy"].isin(("none", *CONTROLLED_POLICIES))
+    ].copy()
+    keys = ["q", "rho", "branch_policy", "posting_budget"]
+    tasks = [
+        (group_index, coordinates, group.to_dict(orient="records"), keys,
+         bootstrap_resamples, null_permutations, confidence, seed)
+        for group_index, (coordinates, group) in enumerate(
+            continuation.groupby(keys, dropna=False, sort=True)
+        )
+    ]
+    if workers > 1 and len(tasks) > 1:
+        from multiprocessing import get_context
+
+        with ProcessPoolExecutor(
+            max_workers=min(workers, len(tasks)), mp_context=get_context("spawn")
+        ) as pool:
+            results = list(pool.map(_branch_group_task, tasks))
+    else:
+        results = [_branch_group_task(task) for task in tasks]
+    metric_rows = [row for metrics, _ in results for row in metrics]
+    null_rows = [row for _, nulls in results for row in nulls]
     return pd.DataFrame(metric_rows), pd.DataFrame(null_rows)
 
 
@@ -738,17 +769,27 @@ def endpoint_table(rounds: pd.DataFrame) -> pd.DataFrame:
 def _parent_bootstrap(
     values: pd.DataFrame, *, resamples: int, confidence: float, seed: int
 ) -> tuple[float, float]:
+    """Whole-parent bootstrap of the mean paired difference.
+
+    ``values`` holds one row per parent (the caller's groupby mean), so each
+    drawn parent contributes its own value and a draw is ``np.mean`` over the
+    sampled values in sampled order. The sampling call is the same
+    ``rng.choice`` over the parent array as before (same RNG stream); the
+    per-parent lookups are an index gather instead of a pandas mask per parent.
+    """
     if values.empty or resamples <= 0:
         return math.nan, math.nan
     parents = values["parent_id"].drop_duplicates().to_numpy()
+    position = {parent: index for index, parent in enumerate(parents)}
+    per_parent = np.array([
+        float(values.loc[values["parent_id"] == parent, "paired_difference"].mean())
+        for parent in parents
+    ])
     rng = np.random.default_rng(seed)
     draws = []
     for _ in range(resamples):
         sampled = rng.choice(parents, size=len(parents), replace=True)
-        draws.append(float(np.mean([
-            values.loc[values["parent_id"] == parent, "paired_difference"].mean()
-            for parent in sampled
-        ])))
+        draws.append(float(np.mean(per_parent[[position[parent] for parent in sampled]])))
     alpha = (1.0 - confidence) / 2.0
     return float(np.quantile(draws, alpha)), float(np.quantile(draws, 1 - alpha))
 
