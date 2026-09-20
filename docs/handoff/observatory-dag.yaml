@@ -1,0 +1,231 @@
+# Remaining-work DAG: Blackboard Observatory (fix -> R2-sourced -> hosted on Cygnus) plus the
+# open MA-CC items. Machine-readable so a runner can pick the next node; validated by
+# scripts/Cygnus/dag/validate_dag.py (structure) and System One (missing edges, risk, readiness).
+#
+# authority: auto     = the agent executes and self-verifies under the approved plan
+#            operator = the agent prepares, the operator signs off before execution
+# gate:      the command or observation that must hold before the node counts as done.
+schema_version: 1
+name: observatory-and-open-items-2026-09-20
+repos:
+  mirror: cerebral-work/ma-cc-cygnus (base cygnus-main)
+  upstream: cesarali/MA-CC (base main)
+  paas: unsigned-gg/unsigned-paas (base main)
+done:
+  - id: O1
+    title: Dashboard safety fixes (XSS escape, JSON 500, NaN-safe JSON, no server paths)
+    evidence: mirror PR 26 merged, CI green, 32 dashboard tests pass
+  - id: R2-RO-TOKEN
+    title: Read-only R2 token for the pod, stored in 1Password
+    evidence: list/get OK; put, delete and other buckets refused with 403
+  - id: PARITY-MSG
+    title: Byte-parity confirmation for upstream PRs 11-18 sent to Cesar
+    evidence: Slack DM 2026-09-20
+nodes:
+  - id: O1-UP
+    title: Open the O1 safety fixes as a PR on the upstream repo
+    does: Cherry-pick the O1 commit onto upstream main, run the dashboard tests, open one PR. No merge.
+    depends_on: []
+    authority: auto
+    gate: dashboard tests pass on the upstream base; PR exists
+    touches: [upstream]
+  - id: O2
+    title: Dashboard concurrency and liveness
+    does: >
+      Lock BlackboardRunReader._load and assign the cache before its signature; replace the one-shot
+      trajectory-signature edge detector with (signature, first_seen, last_changed) so liveness is the
+      same for every caller; re-discover cells when the study manifests change; bound the jsonl cache by bytes.
+    depends_on: []
+    authority: auto
+    gate: new threaded-reader, late-cell and liveness tests fail before and pass after; all dashboard tests pass; mirror CI green
+    touches: [mirror]
+  - id: O3
+    title: Dashboard request-path performance
+    does: >
+      Keep the study index cache valid while a study is live (per-cell signature plus short TTL); cache
+      compact-episode validation by file signature; memoise the analysis catalog; compute timeline() once per
+      detail request; single-pass controller timeline; stream downloads; HTTP/1.1 keep-alive; gzip JSON.
+    depends_on: [O2]
+    authority: auto
+    gate: payloads byte-equal before/after on the b9/b15 study root; request timings before/after reported; tests pass
+    touches: [mirror]
+  - id: O4
+    title: Hostable server
+    does: >
+      /healthz and /readyz; relative fetches and --base-path; replace the loopback-only bind guard with
+      --bind plus a required --allowed-host list checked on every request; access log; SIGTERM shutdown;
+      python -m entry point.
+    depends_on: []
+    authority: auto
+    gate: tests for foreign Host rejection, base path, health routes; loopback default unchanged; mirror CI green
+    touches: [mirror]
+  - id: O5A
+    title: Store interface and published-study reader
+    does: >
+      blackboard_dashboard/store.py with LocalStore and ObjectStore (s3:// and r2://, optional boto3 extra,
+      sha256-validated byte-bounded cache); PublishedStudyReader serving precomputed study/cell/prompt/analysis
+      payloads and fetching one episode directory on demand; --study-dir accepts r2:// URLs; --catalog and /api/catalog.
+    depends_on: [O4]
+    authority: auto
+    gate: PublishedStudyReader payloads equal BlackboardStudyReader payloads on the fixture study; fake-S3 and local-remote tests pass
+    touches: [mirror]
+  - id: O5B
+    title: study publish --with-dashboard
+    does: >
+      Extend studies/publish.py to write <prefix>/<study>/dashboard/{index.json,study.json,cells/*,analysis.json,
+      episodes/*} and rewrite <prefix>/catalog.json; receipt gains dashboard object counts verified by read-back.
+    depends_on: [O5A]
+    authority: auto
+    gate: publish to a local directory remote, then serve it through O5A and diff every payload against the live reader
+    touches: [mirror]
+  - id: O6
+    title: Dashboard UI
+    does: >
+      Five changes to assets/app.js and index.html, each with a markup or behaviour test: (1) a study <select> filled
+      from /api/catalog that switches the study-scoped API prefix; (2) block, controller, rho, status and sort filters
+      written to and restored from the URL hash, using pushState so Back works; (3) an auto-refresh checkbox with a
+      10/30/60 s interval, off by default, calling the existing refreshCurrentView; (4) an SVG line chart of
+      primary_estimates and information_estimates (estimate with interval by intervention budget, one line per rho)
+      in the analysis panel, drawn from the table previews the API already returns; (5) a prompt list in the episode
+      view backed by the existing /prompt-<n> route.
+    depends_on: [O5A]
+    authority: auto
+    gate: markup tests pass; study view, cell view, episode view and analysis panel screenshotted and inspected before presentation
+    touches: [mirror]
+  - id: O7
+    title: Study-level static export
+    does: Add --study-dir to blackboard export; write the O5B bundle files plus index.html, app.js and style.css; app.js reads the bundle JSON by relative URL when no API answers; compute timeline() once per episode instead of once per cursor.
+    depends_on: [O5B, O6]
+    authority: auto
+    gate: export of the fixture study opens from a plain static file server with no API; optional node
+    touches: [mirror]
+  - id: OBS-UP
+    title: Offer O2-O6 upstream as separate PRs
+    does: One upstream PR per merged mirror PR, each on upstream main, tests run on that base. No merges.
+    depends_on: [O1-UP, O2, O3, O4, O5A, O5B, O6]
+    authority: auto
+    gate: each upstream PR's tests pass on its base
+    touches: [upstream]
+  - id: PUB-B9B15
+    title: Publish the b9/b15 dashboard bundle to R2
+    does: Run study publish --with-dashboard for the b9/b15 study from slurm-login to r2 prefix ctodie/ (about 3.2 GB raw run files, gzip-compressed).
+    depends_on: [O5B]
+    authority: operator
+    gate: receipt verified true; object counts and bytes match by read-back; served from the workstation via r2:// and payloads equal the live reader
+    touches: [r2-bucket]
+  - id: IMG-BUILD
+    title: Observatory container image, built and smoke-tested
+    does: Dockerfile.observatory (python 3.11-slim, uid 1000, mas-cc[r2]) merged on the mirror; image built with rootless BuildKit; nothing is pushed.
+    depends_on: [O4, O5A, O6]
+    authority: auto
+    gate: imports smoke-tested inside the image; /healthz answers in a local run; a fixture study opens through the image
+    touches: [mirror]
+  - id: IMG-PUSH
+    title: Push and sign the image
+    does: Push to harbor.unsigned.gg/platform/blackboard-observatory over the tailnet registry with the platform push robot; cosign sign by digest with the estate signing key.
+    depends_on: [IMG-BUILD]
+    authority: operator
+    gate: cosign verify against the Kyverno public key succeeds for the pushed digest
+    touches: [harbor, signing-key]
+  - id: CHART
+    title: paas Helm chart and ArgoCD app (PR only)
+    does: >
+      helm/applications/blackboard-observatory (Deployment, Service, ServiceAccount, PDB, NetworkPolicy, tailnet
+      Service via the helm-lib helper, ExternalSecret for the read-only R2 key, read-only NFS mount of the Slurm
+      shared filesystem) and gitops/argocd-apps/blackboard-observatory-app.yaml, image pinned by digest. Opens a PR; does not merge.
+    depends_on: [IMG-PUSH]
+    authority: auto
+    gate: make lint; helm template; kubectl apply --dry-run=server; completeness and image-pin checks
+    touches: [paas]
+  - id: BAO-RO-KEY
+    title: Write the read-only R2 key to OpenBao
+    does: bao kv patch of the three S3 fields at the path the chart's ExternalSecret reads; read the full key set back.
+    depends_on: [CHART]
+    authority: operator
+    gate: ExternalSecret SecretSynced and the synced secret's sha256 equals the 1Password value
+    touches: [openbao]
+  - id: PAAS-MERGE
+    title: Merge the paas chart PR
+    does: Merge after CI and the review gates.
+    depends_on: [CHART]
+    authority: operator
+    gate: PR merged with a merge commit; content on main verified by scoped diff
+    touches: [paas]
+  - id: SYNC
+    title: ArgoCD sync of blackboard-observatory
+    does: Manual sync of the new app on Cygnus.
+    depends_on: [PAAS-MERGE, BAO-RO-KEY]
+    authority: operator
+    gate: app Synced and Healthy
+    touches: [cygnus]
+  - id: VERIFY-HOSTED
+    title: Verify the hosted Observatory
+    does: >
+      Pod image and imageID equal the pinned digest; /healthz 200 through the tailnet hostname; a foreign Host header
+      is rejected; one published study and one live study opened end to end; screenshot inspected.
+    depends_on: [SYNC, PUB-B9B15]
+    authority: auto
+    gate: every check above observed, not inferred from sync status
+    touches: [cygnus]
+  - id: NOTIFY-CESAR
+    title: Tell Cesar how to reach the hosted Observatory
+    does: Slack DM with the URL, tailnet requirement and exact steps; ask for pass/fail.
+    depends_on: [VERIFY-HOSTED]
+    authority: operator
+    gate: Cesar's reply
+    touches: [slack]
+  - id: TEST10-SUBMIT
+    title: Submit the 10x10 b6/b18 test study
+    does: bash ~/MA-CC-test10/SUBMIT-test10.sh (paid provider run, expected 64 USD, conservative 269 USD).
+    depends_on: []
+    authority: operator
+    gate: 30/30 cells complete; spend recorded
+    touches: [slurm, provider]
+  - id: TEST10-FINALIZE
+    title: Aggregate the 10x10 test study
+    does: Run mas-cc study aggregate for the finished study as one Slurm job (16 CPUs, 44G) from the optimised tree; writes only under the study's own results directory.
+    depends_on: [TEST10-SUBMIT]
+    authority: auto
+    gate: validation.json status passed; analysis package zip present; provider_calls 0 in the manifest
+    touches: [slurm]
+  - id: TEST10-PUBLISH
+    title: Publish the 10x10 test study to R2
+    does: Run the existing mas-cc study publish command for the finished study (analysis package zip and analysis directory) to prefix ctodie/ in the research bucket. The dashboard bundle is not part of this node.
+    depends_on: [TEST10-FINALIZE]
+    authority: operator
+    gate: publish receipt verified true by read-back
+    touches: [r2-bucket]
+  - id: REGATE-NEWMAIN
+    title: Re-run the byte-identity gates on Cesar's newer main
+    does: Merge the upstream stack onto upstream main 0acbc79 in a scratch tree and rerun b9/b15 and Potsdam main-vs-merged comparisons.
+    depends_on: []
+    authority: auto
+    gate: RESULT byte-equivalent tables on both, same node type
+    touches: [slurm]
+  - id: RAMSES-SHARE
+    title: Share the Ramses R2 read-write key
+    does: Share the 1Password item with Ramses; his pass/fail closes it.
+    depends_on: []
+    authority: operator
+    gate: Ramses confirms put/get works
+    touches: [1password]
+  - id: CLEAN-SCRATCH
+    title: Remove cluster scratch trees and verification outputs
+    does: Delete ~/MA-CC-pr*, ~/MA-CC-w2*, ~/MA-CC-up*, ~/agg/verify, ~/agg/e2e relocations on slurm-login once nothing references them.
+    depends_on: [REGATE-NEWMAIN, OBS-UP, TEST10-PUBLISH]
+    authority: auto
+    gate: no running job imports from the trees; listing before deletion recorded
+    touches: [slurm]
+validation:
+  validated_with: System One jev-1.13.0, scripts/Cygnus/dag/validate_dag.py, 2026-09-20
+  accepted:
+    - PUB-B9B15 and the publish half of TEST10 write to a bucket other people read (P needs sign-off 0.78 / 0.80) -> operator; TEST10 split into FINALIZE (auto) and PUBLISH (operator).
+    - IMG scored 0.67 for sign-off because it pushes to the registry and uses the signing key -> split into IMG-BUILD (auto) and IMG-PUSH (operator).
+    - Missing edge O6 -> NOTIFY-CESAR (0.76) traced to a real one: a multi-study hosted instance has no study picker before O6 -> IMG-BUILD now depends on O6.
+    - Weak edges O2 -> O4, O3 -> O5A and PUB-B9B15 -> SYNC removed (no data dependency); VERIFY-HOSTED depends on PUB-B9B15 instead, since it opens a published study.
+    - O6, O7 and TEST10-FINALIZE rewritten after readiness scores of 0.41-0.49.
+    - Second pass flagged O5B -> TEST10-PUBLISH (0.90), caused by wording that made the publish depend on the dashboard bundle; the node now publishes the analysis package only.
+  kept_against_the_model:
+    - TEST10-PUBLISH -> NOTIFY-CESAR (0.75) not added - the notification is about the hosted dashboard, not the test study.
+    - SYNC stays operator although P needs sign-off was 0.27 - ArgoCD syncs of new apps are operator-gated on this estate regardless.
+    - Edges into OBS-UP, IMG-BUILD and CLEAN-SCRATCH scored weak (0.11-0.26) but are real - a PR cannot be offered upstream before it exists, an image must contain the code it serves, and the scratch trees are inputs of the nodes listed.
