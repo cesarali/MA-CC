@@ -4,7 +4,7 @@ llm_provider:
   credentials_env: DEEPINFRA_API_KEY
   timeout_seconds: 180
   max_retries: 2
-  request_concurrency: 60
+  request_concurrency: 10
   temperature: 1.0
   max_output_tokens: 4096
   options:
@@ -23,15 +23,15 @@ prompt:
 game:
   type: relational_imitation_round_feedback
   population_size: 24
-  horizon: 30
+  horizon: 10
   topology: complete
   options:
     task_family: musr_team_allocation
     task_dataset_dir: /shared/home/cesar/work/results/studies/musr_truthful_selective_task_calibration_01/tasks
     task_id: task_003
     dynamics_mode: reasoning
-    rounds: 30
-    social_group_size: 6
+    rounds: 10
+    social_group_size: 12
     social_mode: board
     board:
       sampling: uniform
@@ -51,13 +51,13 @@ game:
     expected_validation_failure_rate: 0.15
     initialization:
       mode: paired_local_vote
-      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q6_q12_chatoss_v5_initializations
+      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18_initializations
       require_artifact: true
 control:
   mechanism: relational_round_budgeted
   options:
     target: ALLOCATION_2
-    sensor_sample_size: 6
+    sensor_sample_size: 12
     policy: soft_target
     threshold: 0.5
     beta: 4.0
@@ -77,8 +77,8 @@ control:
     controller_report_selection_strategy: target_preserving_v1
 execution:
   seed: 20260907
-  repetitions: 60
-  parallelism: 60
+  repetitions: 10
+  parallelism: 10
   fail_fast: false
   semantic_failure_guard:
     minimum_finished_episodes: 2
@@ -131,8 +131,8 @@ observability:
     cell_reporting: master
     metric_plots: true
 experiment:
-  name: iclr-report-only-authored-v5-q6-chatoss-false-control
-  description: Task-003 false-target control, q=6, DeepInfra GPT-OSS 120B, prompt v5; participants and Agent N+1
+  name: iclr-report-only-authored-v5-q12-chatoss-false-control
+  description: Task-003 false-target control, q=12, DeepInfra GPT-OSS 120B, prompt v5; participants and Agent N+1
     communicate with grounded REPORT or NONE only.
   tags:
   - iclr-experiments
@@ -141,7 +141,7 @@ experiment:
   - blackboard
   - task003
   - false-control
-  - q6
+  - q12
   - deepinfra
   - gpt-oss-120b
   - report-only
@@ -149,7 +149,7 @@ experiment:
   - prompt-v5
   - immediate-grounded-relay
   metadata:
-    study: report_only_authored_q6_q12_chatoss_v5
+    study: report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18
     arm: false_control
     task_id: task_003
     candidate_id: 130
@@ -161,12 +161,12 @@ experiment:
     controller_target_is_truth: false
     target_semantics: false
     population_size: 24
-    population_rounds: 30
-    social_group_size: 6
-    sensor_sample_size: 6
+    population_rounds: 10
+    social_group_size: 12
+    sensor_sample_size: 12
     beta: 4.0
     theta: 0.5
-    repetitions: 60
+    repetitions: 10
     common_random_numbers_across_grid: true
     paired_initialization_across_grid: true
     paired_initialization_across_targets: true
@@ -181,5 +181,4 @@ grid:
   - 1.0
   control.options.intervention_budget:
   - 6
-  - 12
   - 18

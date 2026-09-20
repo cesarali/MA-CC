@@ -31,7 +31,7 @@ game:
     task_id: task_003
     dynamics_mode: reasoning
     rounds: 10
-    social_group_size: 12
+    social_group_size: 3
     social_mode: board
     board:
       sampling: uniform
@@ -51,13 +51,13 @@ game:
     expected_validation_failure_rate: 0.15
     initialization:
       mode: paired_local_vote
-      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q6_q12_chatoss_v5_test_10x10_b6_b18_initializations
+      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18_initializations
       require_artifact: true
 control:
   mechanism: relational_round_budgeted
   options:
-    target: ALLOCATION_2
-    sensor_sample_size: 12
+    target: correct
+    sensor_sample_size: 3
     policy: soft_target
     threshold: 0.5
     beta: 4.0
@@ -131,8 +131,8 @@ observability:
     cell_reporting: master
     metric_plots: true
 experiment:
-  name: iclr-report-only-authored-v5-q12-chatoss-false-control
-  description: Task-003 false-target control, q=12, DeepInfra GPT-OSS 120B, prompt v5; participants and Agent N+1
+  name: iclr-report-only-authored-v5-q3-chatoss-truth-control
+  description: Task-003 truth-target control, q=3, DeepInfra GPT-OSS 120B, prompt v5; participants and Agent N+1
     communicate with grounded REPORT or NONE only.
   tags:
   - iclr-experiments
@@ -140,8 +140,8 @@ experiment:
   - musr
   - blackboard
   - task003
-  - false-control
-  - q12
+  - truth-control
+  - q3
   - deepinfra
   - gpt-oss-120b
   - report-only
@@ -149,21 +149,21 @@ experiment:
   - prompt-v5
   - immediate-grounded-relay
   metadata:
-    study: report_only_authored_q6_q12_chatoss_v5_test_10x10_b6_b18
-    arm: false_control
+    study: report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18
+    arm: truth_control
     task_id: task_003
     candidate_id: 130
     task_file_sha256: 1ec61ccc9578e2bcbd6a027035231dcd1ee39d44892d95b8b6ae2e9f18fdfbdb
     private_assignment_sha256: aad3e64f7a713534667e04984c9911423b94c96381ec9b8ff21f90714aaea0a4
     controller_pool_sha256: b90a3267c26212194e916777795db0751008d8802d45e35a67088fb8a0ce49d0
     ground_truth: ALLOCATION_0
-    controller_target: ALLOCATION_2
-    controller_target_is_truth: false
-    target_semantics: false
+    controller_target: ALLOCATION_0
+    controller_target_is_truth: true
+    target_semantics: true
     population_size: 24
     population_rounds: 10
-    social_group_size: 12
-    sensor_sample_size: 12
+    social_group_size: 3
+    sensor_sample_size: 3
     beta: 4.0
     theta: 0.5
     repetitions: 10

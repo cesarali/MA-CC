@@ -1,9 +1,9 @@
 study:
-  name: report_only_authored_q6_q12_chatoss_v5
+  name: report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18
 configs:
-- no_control_q6.yaml
-- false_control_q6.yaml
-- truth_control_q6.yaml
+- no_control_q3.yaml
+- false_control_q3.yaml
+- truth_control_q3.yaml
 - no_control_q12.yaml
 - false_control_q12.yaml
 - truth_control_q12.yaml
@@ -16,13 +16,13 @@ execution:
   throttle: 6
   cpus_per_task: 8
   memory: 12G
-  time_limit: '36:00:00'
+  time_limit: '12:00:00'
   partition: main
-  results_root: /shared/home/cesar/work/results/studies/report_only_authored_q6_q12_chatoss_v5
+  results_root: /shared/home/cesar/work/results/studies/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18
   require_results_under: /shared/home/cesar/work/results
   provider_load_control:
     mode: redis_adaptive
-    initial_concurrency: 150
+    initial_concurrency: 60
     minimum_concurrency: 25
     maximum_concurrency: 150
     target_rpm: 500
