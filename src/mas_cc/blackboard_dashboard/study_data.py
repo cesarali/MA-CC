@@ -43,6 +43,10 @@ _TERMINAL_FAILED = {"failed"}
 _TERMINAL_ABORTED = {"aborted", "skipped_aborted"}
 _OUTCOME_ORDER = ("completed", "failed", "aborted", "incomplete", "unknown")
 _ACTIVITY_ORDER = ("running", "advancing", "started_unchanged", "not_started")
+# An incomplete episode whose stream was written within this window is "advancing".
+ACTIVITY_WINDOW_SECONDS = 120.0
+# Parsed round-trajectory rows kept in memory, bounded by the size of their source files.
+JSONL_CACHE_LIMIT_BYTES = 256 * 1024 * 1024
 _JOB_ID = re.compile(r"^[0-9]+(?:_[0-9]+)?$")
 
 
@@ -650,13 +654,14 @@ class BlackboardStudyReader:
             else _SchedulerReader(None)
         )
         self._lock = threading.RLock()
-        self._jsonl_cache: dict[
-            Path, tuple[tuple[str, int, int] | None, list[dict[str, Any]]]
-        ] = {}
+        self._jsonl_cache: OrderedDict[
+            Path, tuple[tuple[str, int, int] | None, list[dict[str, Any]], int]
+        ] = OrderedDict()
+        self._jsonl_cache_bytes = 0
+        self._jsonl_cache_limit_bytes = JSONL_CACHE_LIMIT_BYTES
         self._seal_cache: dict[
             Path, tuple[tuple[Any, ...], bool, str | None, set[str]]
         ] = {}
-        self._last_trajectory_signatures: dict[Path, tuple[str, int, int] | None] = {}
         self._resolved_configs: dict[str, Mapping[str, Any]] = {}
         self._paths: dict[str, ResolvedDashboardCellPaths] = {}
         self._episode_readers: OrderedDict[str, BlackboardRunReader] = OrderedDict()
@@ -677,6 +682,51 @@ class BlackboardStudyReader:
                 }
             )
         self._cell_map = {cell.qualified_id: cell for cell in self._cells}
+        self._collection_signature = self._collection_state()
+
+    _COLLECTION_FIELDS = (
+        "manifest", "submissions", "executions", "submission", "_extension_target",
+        "_cells", "_cell_map", "_paths", "_resolved_configs",
+    )
+
+    def _collection_state(self) -> tuple[Any, ...]:
+        """Cheap fingerprint of what defines the cell list and where the cells live.
+
+        Directory mtimes change when a child is added, so a cell folder or a run root that
+        appears after start-up shows up here without walking the tree.
+        """
+
+        root = self.study_dir
+        watched = [root / name for name in ("study_manifest.json", "submission_manifest.csv",
+                                            "execution_manifest.csv", "submission.json", "cells", "runs", "extensions")]
+        for parent in (root / "runs", root / "extensions"):
+            if parent.is_dir():
+                watched.extend(sorted(child for child in parent.iterdir() if child.is_dir()))
+        watched.extend(sorted(root.glob("runs/*/shards")))
+        state = []
+        for path in watched:
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            state.append((str(path), stat.st_mtime_ns, stat.st_size))
+        return tuple(state)
+
+    def _refresh_collection(self) -> None:
+        """Re-discover cells when the collection changed since the last look. Caller holds the lock."""
+
+        state = self._collection_state()
+        if state == self._collection_signature:
+            return
+        try:
+            fresh = type(self)(self.study_dir, scheduler=False)
+        except (OSError, ValueError):
+            return  # a manifest caught mid-write; keep the last good view and retry next request
+        for name in self._COLLECTION_FIELDS:
+            setattr(self, name, getattr(fresh, name))
+        self._index_cells.clear()
+        self._episode_readers.clear()
+        self._collection_signature = state
 
     def _build_direct_grid_cells(self) -> tuple[CellDescriptor, ...]:
         """Build dashboard cells from a direct grid's prepared cell folders."""
@@ -912,11 +962,23 @@ class BlackboardStudyReader:
 
     def _rows(self, path: Path, *, completed: bool = False) -> list[dict[str, Any]]:
         signature = _signature(path)
-        cached = self._jsonl_cache.get(path)
-        if cached is not None and cached[0] == signature:
-            return cached[1]
+        with self._lock:
+            cached = self._jsonl_cache.get(path)
+            if cached is not None and cached[0] == signature:
+                self._jsonl_cache.move_to_end(path)
+                return cached[1]
         rows = [_event(row) for row in _jsonl(path, completed=completed)]
-        self._jsonl_cache[path] = (signature, rows)
+        size = int(signature[2]) if signature else 0
+        with self._lock:
+            previous = self._jsonl_cache.pop(path, None)
+            if previous is not None:
+                self._jsonl_cache_bytes -= previous[2]
+            self._jsonl_cache[path] = (signature, rows, size)
+            self._jsonl_cache_bytes += size
+            # Least recently used first; the entry just added always stays.
+            while self._jsonl_cache_bytes > self._jsonl_cache_limit_bytes and len(self._jsonl_cache) > 1:
+                _, evicted = self._jsonl_cache.popitem(last=False)
+                self._jsonl_cache_bytes -= evicted[2]
         return rows
 
     def _seal(self, cell: CellDescriptor) -> tuple[bool, str | None, set[str]]:
@@ -1065,14 +1127,14 @@ class BlackboardStudyReader:
             activity_status = "not_started"
             activity_path = semantic_path if semantic_exists else round_path
             if activity_path is not None and activity_path.is_file():
-                current = _signature(activity_path)
-                previous = self._last_trajectory_signatures.get(activity_path)
+                # A function of the file's age, not of reader state: every caller, the
+                # first included, gets the same answer, and nothing is mutated here.
+                age = time.time() - activity_path.stat().st_mtime
                 activity_status = (
                     "advancing"
-                    if previous is not None and current != previous
+                    if durable_status != "completed" and age <= ACTIVITY_WINDOW_SECONDS
                     else "started_unchanged"
                 )
-                self._last_trajectory_signatures[activity_path] = current
             rows = (
                 self._rows(round_path, completed=durable_status == "completed")
                 if include_votes and trajectory_exists
@@ -1483,6 +1545,7 @@ class BlackboardStudyReader:
 
     def study(self) -> dict[str, Any]:
         with self._lock:
+            self._refresh_collection()
             scheduler = self._scheduler.snapshot()
             cells = []
             for cell in self._cells:
@@ -1555,6 +1618,7 @@ class BlackboardStudyReader:
 
     def cell(self, qualified_id: str) -> dict[str, Any]:
         with self._lock:
+            self._refresh_collection()
             cell = self._cell_map.get(qualified_id)
             if cell is None:
                 raise ValueError("unknown qualified cell identifier")
