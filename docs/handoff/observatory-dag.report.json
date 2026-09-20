@@ -1,0 +1,506 @@
+{
+  "structure": "valid",
+  "nodes": 24,
+  "order": [
+    "O1-UP",
+    "O2",
+    "O4",
+    "RAMSES-SHARE",
+    "REGATE-NEWMAIN",
+    "TEST10-SUBMIT",
+    "O3",
+    "O5A",
+    "TEST10-FINALIZE",
+    "O5B",
+    "O6",
+    "TEST10-PUBLISH",
+    "IMG-BUILD",
+    "O7",
+    "OBS-UP",
+    "PUB-B9B15",
+    "CLEAN-SCRATCH",
+    "IMG-PUSH",
+    "CHART",
+    "BAO-RO-KEY",
+    "PAAS-MERGE",
+    "SYNC",
+    "VERIFY-HOSTED",
+    "NOTIFY-CESAR"
+  ],
+  "next": {
+    "runnable": [
+      "O1-UP",
+      "O2",
+      "O4",
+      "REGATE-NEWMAIN"
+    ],
+    "waiting_on_operator": [
+      "TEST10-SUBMIT",
+      "RAMSES-SHARE"
+    ],
+    "blocked": [
+      "O3",
+      "O5A",
+      "O5B",
+      "O6",
+      "O7",
+      "OBS-UP",
+      "PUB-B9B15",
+      "IMG-BUILD",
+      "IMG-PUSH",
+      "CHART",
+      "BAO-RO-KEY",
+      "PAAS-MERGE",
+      "SYNC",
+      "VERIFY-HOSTED",
+      "NOTIFY-CESAR",
+      "TEST10-FINALIZE",
+      "TEST10-PUBLISH",
+      "CLEAN-SCRATCH"
+    ],
+    "done": [
+      "O1",
+      "PARITY-MSG",
+      "R2-RO-TOKEN"
+    ]
+  },
+  "judgment": {
+    "model": "jev-1.13.0",
+    "usage": {
+      "requests": 43,
+      "batches": 0,
+      "cached": 384,
+      "deduplicated": 0,
+      "input_tokens": 27742,
+      "output_tokens": 975,
+      "retries": 0,
+      "seconds": 8.317060004999803,
+      "usd": 0.001206
+    },
+    "nodes": [
+      {
+        "id": "O1-UP",
+        "authority": "auto",
+        "p_needs_signoff": 0.14,
+        "authority_disagreement": false,
+        "p_ready": 0.79,
+        "risk": 1.27
+      },
+      {
+        "id": "O2",
+        "authority": "auto",
+        "p_needs_signoff": 0.1,
+        "authority_disagreement": false,
+        "p_ready": 0.6,
+        "risk": 2.1
+      },
+      {
+        "id": "O3",
+        "authority": "auto",
+        "p_needs_signoff": 0.13,
+        "authority_disagreement": false,
+        "p_ready": 0.57,
+        "risk": 2.06
+      },
+      {
+        "id": "O4",
+        "authority": "auto",
+        "p_needs_signoff": 0.15,
+        "authority_disagreement": false,
+        "p_ready": 0.62,
+        "risk": 2.16
+      },
+      {
+        "id": "O5A",
+        "authority": "auto",
+        "p_needs_signoff": 0.14,
+        "authority_disagreement": false,
+        "p_ready": 0.52,
+        "risk": 2.07
+      },
+      {
+        "id": "O5B",
+        "authority": "auto",
+        "p_needs_signoff": 0.24,
+        "authority_disagreement": false,
+        "p_ready": 0.52,
+        "risk": 2.03
+      },
+      {
+        "id": "O6",
+        "authority": "auto",
+        "p_needs_signoff": 0.1,
+        "authority_disagreement": false,
+        "p_ready": 0.66,
+        "risk": 1.7
+      },
+      {
+        "id": "O7",
+        "authority": "auto",
+        "p_needs_signoff": 0.12,
+        "authority_disagreement": false,
+        "p_ready": 0.59,
+        "risk": 1.64
+      },
+      {
+        "id": "OBS-UP",
+        "authority": "auto",
+        "p_needs_signoff": 0.15,
+        "authority_disagreement": false,
+        "p_ready": 0.67,
+        "risk": 1.32
+      },
+      {
+        "id": "PUB-B9B15",
+        "authority": "operator",
+        "p_needs_signoff": 0.78,
+        "authority_disagreement": false,
+        "p_ready": 0.64,
+        "risk": 1.98
+      },
+      {
+        "id": "IMG-BUILD",
+        "authority": "auto",
+        "p_needs_signoff": 0.09,
+        "authority_disagreement": false,
+        "p_ready": 0.75,
+        "risk": 0.87
+      },
+      {
+        "id": "IMG-PUSH",
+        "authority": "operator",
+        "p_needs_signoff": 0.83,
+        "authority_disagreement": false,
+        "p_ready": 0.66,
+        "risk": 2.05
+      },
+      {
+        "id": "CHART",
+        "authority": "auto",
+        "p_needs_signoff": 0.13,
+        "authority_disagreement": false,
+        "p_ready": 0.66,
+        "risk": 1.07
+      },
+      {
+        "id": "BAO-RO-KEY",
+        "authority": "operator",
+        "p_needs_signoff": 0.86,
+        "authority_disagreement": false,
+        "p_ready": 0.58,
+        "risk": 1.87
+      },
+      {
+        "id": "PAAS-MERGE",
+        "authority": "operator",
+        "p_needs_signoff": 0.7,
+        "authority_disagreement": false,
+        "p_ready": 0.75,
+        "risk": 1.84
+      },
+      {
+        "id": "SYNC",
+        "authority": "operator",
+        "p_needs_signoff": 0.27,
+        "authority_disagreement": true,
+        "p_ready": 0.78,
+        "risk": 1.37
+      },
+      {
+        "id": "VERIFY-HOSTED",
+        "authority": "auto",
+        "p_needs_signoff": 0.12,
+        "authority_disagreement": false,
+        "p_ready": 0.74,
+        "risk": 0.94
+      },
+      {
+        "id": "NOTIFY-CESAR",
+        "authority": "operator",
+        "p_needs_signoff": 0.39,
+        "authority_disagreement": false,
+        "p_ready": 0.84,
+        "risk": 0.4
+      },
+      {
+        "id": "TEST10-SUBMIT",
+        "authority": "operator",
+        "p_needs_signoff": 0.88,
+        "authority_disagreement": false,
+        "p_ready": 0.79,
+        "risk": 2.74
+      },
+      {
+        "id": "TEST10-FINALIZE",
+        "authority": "auto",
+        "p_needs_signoff": 0.34,
+        "authority_disagreement": false,
+        "p_ready": 0.64,
+        "risk": 1.54
+      },
+      {
+        "id": "TEST10-PUBLISH",
+        "authority": "operator",
+        "p_needs_signoff": 0.66,
+        "authority_disagreement": false,
+        "p_ready": 0.62,
+        "risk": 1.47
+      },
+      {
+        "id": "REGATE-NEWMAIN",
+        "authority": "auto",
+        "p_needs_signoff": 0.17,
+        "authority_disagreement": false,
+        "p_ready": 0.68,
+        "risk": 1.14
+      },
+      {
+        "id": "RAMSES-SHARE",
+        "authority": "operator",
+        "p_needs_signoff": 0.73,
+        "authority_disagreement": false,
+        "p_ready": 0.73,
+        "risk": 2.06
+      },
+      {
+        "id": "CLEAN-SCRATCH",
+        "authority": "auto",
+        "p_needs_signoff": 0.4,
+        "authority_disagreement": false,
+        "p_ready": 0.69,
+        "risk": 2.03
+      }
+    ],
+    "missing_edge_candidates": [],
+    "declared_edges": [
+      {
+        "earlier": "O2",
+        "later": "O3",
+        "p": 0.34
+      },
+      {
+        "earlier": "O4",
+        "later": "O5A",
+        "p": 0.15
+      },
+      {
+        "earlier": "O5A",
+        "later": "O5B",
+        "p": 0.72
+      },
+      {
+        "earlier": "O5A",
+        "later": "O6",
+        "p": 0.69
+      },
+      {
+        "earlier": "O5B",
+        "later": "O7",
+        "p": 0.74
+      },
+      {
+        "earlier": "O6",
+        "later": "O7",
+        "p": 0.16
+      },
+      {
+        "earlier": "O1-UP",
+        "later": "OBS-UP",
+        "p": 0.12
+      },
+      {
+        "earlier": "O2",
+        "later": "OBS-UP",
+        "p": 0.56
+      },
+      {
+        "earlier": "O3",
+        "later": "OBS-UP",
+        "p": 0.19
+      },
+      {
+        "earlier": "O4",
+        "later": "OBS-UP",
+        "p": 0.19
+      },
+      {
+        "earlier": "O5A",
+        "later": "OBS-UP",
+        "p": 0.21
+      },
+      {
+        "earlier": "O5B",
+        "later": "OBS-UP",
+        "p": 0.26
+      },
+      {
+        "earlier": "O6",
+        "later": "OBS-UP",
+        "p": 0.48
+      },
+      {
+        "earlier": "O5B",
+        "later": "PUB-B9B15",
+        "p": 0.85
+      },
+      {
+        "earlier": "O4",
+        "later": "IMG-BUILD",
+        "p": 0.19
+      },
+      {
+        "earlier": "O5A",
+        "later": "IMG-BUILD",
+        "p": 0.21
+      },
+      {
+        "earlier": "O6",
+        "later": "IMG-BUILD",
+        "p": 0.09
+      },
+      {
+        "earlier": "IMG-BUILD",
+        "later": "IMG-PUSH",
+        "p": 0.91
+      },
+      {
+        "earlier": "IMG-PUSH",
+        "later": "CHART",
+        "p": 0.76
+      },
+      {
+        "earlier": "CHART",
+        "later": "BAO-RO-KEY",
+        "p": 0.6
+      },
+      {
+        "earlier": "CHART",
+        "later": "PAAS-MERGE",
+        "p": 0.92
+      },
+      {
+        "earlier": "BAO-RO-KEY",
+        "later": "SYNC",
+        "p": 0.48
+      },
+      {
+        "earlier": "PAAS-MERGE",
+        "later": "SYNC",
+        "p": 0.51
+      },
+      {
+        "earlier": "PUB-B9B15",
+        "later": "VERIFY-HOSTED",
+        "p": 0.34
+      },
+      {
+        "earlier": "SYNC",
+        "later": "VERIFY-HOSTED",
+        "p": 0.81
+      },
+      {
+        "earlier": "VERIFY-HOSTED",
+        "later": "NOTIFY-CESAR",
+        "p": 0.71
+      },
+      {
+        "earlier": "TEST10-SUBMIT",
+        "later": "TEST10-FINALIZE",
+        "p": 0.84
+      },
+      {
+        "earlier": "TEST10-FINALIZE",
+        "later": "TEST10-PUBLISH",
+        "p": 0.71
+      },
+      {
+        "earlier": "OBS-UP",
+        "later": "CLEAN-SCRATCH",
+        "p": 0.11
+      },
+      {
+        "earlier": "REGATE-NEWMAIN",
+        "later": "CLEAN-SCRATCH",
+        "p": 0.2
+      },
+      {
+        "earlier": "TEST10-PUBLISH",
+        "later": "CLEAN-SCRATCH",
+        "p": 0.09
+      }
+    ],
+    "weak_edges": [
+      {
+        "earlier": "O4",
+        "later": "O5A",
+        "p": 0.15
+      },
+      {
+        "earlier": "O6",
+        "later": "O7",
+        "p": 0.16
+      },
+      {
+        "earlier": "O1-UP",
+        "later": "OBS-UP",
+        "p": 0.12
+      },
+      {
+        "earlier": "O3",
+        "later": "OBS-UP",
+        "p": 0.19
+      },
+      {
+        "earlier": "O4",
+        "later": "OBS-UP",
+        "p": 0.19
+      },
+      {
+        "earlier": "O5A",
+        "later": "OBS-UP",
+        "p": 0.21
+      },
+      {
+        "earlier": "O5B",
+        "later": "OBS-UP",
+        "p": 0.26
+      },
+      {
+        "earlier": "O4",
+        "later": "IMG-BUILD",
+        "p": 0.19
+      },
+      {
+        "earlier": "O5A",
+        "later": "IMG-BUILD",
+        "p": 0.21
+      },
+      {
+        "earlier": "O6",
+        "later": "IMG-BUILD",
+        "p": 0.09
+      },
+      {
+        "earlier": "OBS-UP",
+        "later": "CLEAN-SCRATCH",
+        "p": 0.11
+      },
+      {
+        "earlier": "REGATE-NEWMAIN",
+        "later": "CLEAN-SCRATCH",
+        "p": 0.2
+      },
+      {
+        "earlier": "TEST10-PUBLISH",
+        "later": "CLEAN-SCRATCH",
+        "p": 0.09
+      }
+    ],
+    "pairs_checked": 372,
+    "thresholds": {
+      "missing_edge": 0.7,
+      "weak_edge": 0.3,
+      "authority": 0.7
+    }
+  }
+}
