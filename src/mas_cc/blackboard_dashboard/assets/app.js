@@ -122,7 +122,7 @@
     state.promptsLoading = true;
     container.innerHTML = '<span class="unavailable">Loading retained prompt examples…</span>';
     try {
-      const payload = await get(`/api/study/cell/${encodeURIComponent(requestedCell)}/prompts`);
+      const payload = await get(`api/study/cell/${encodeURIComponent(requestedCell)}/prompts`);
       if (state.cellId !== requestedCell) return;
       container.dataset.cell = requestedCell;
       container.dataset.loaded = '1';
@@ -197,7 +197,7 @@
       if (!polling) state.navigationVersion += 1;
       const navigationVersion = state.navigationVersion;
       state.cellId = id;
-      const payload = await get(`/api/study/cell/${encodeURIComponent(id)}`);
+      const payload = await get(`api/study/cell/${encodeURIComponent(id)}`);
       if (state.navigationVersion !== navigationVersion || (polling && (state.mode !== 'cell' || state.cellId !== id))) return;
       const fingerprint = JSON.stringify(payload);
       state.cell = payload;
@@ -219,7 +219,7 @@
     updateHash();
     $('status-text').textContent = 'Loading episode detail…';
     try {
-      const detail = await get(`/api/study/episode/${encodeURIComponent(id)}/detail`);
+      const detail = await get(`api/study/episode/${encodeURIComponent(id)}/detail`);
       if (state.episodeId !== id || state.navigationVersion !== navigationVersion || state.mode !== 'episode') return;
       state.episodeCache.set(id, detail);
       while (state.episodeCache.size > 8) state.episodeCache.delete(state.episodeCache.keys().next().value);
@@ -437,7 +437,7 @@
         render({...base, agent: state.staticBundle.agents[key][selectedAgent]});
         return;
       }
-      const prefix = state.study && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
+      const prefix = state.study && state.episodeId ? `api/study/episode/${encodeURIComponent(state.episodeId)}` : 'api';
       let timeline = state.timeline;
       if (refreshTimeline || !timeline) {
         timeline = await get(`${prefix}/timeline`, {signal: controller.signal});
@@ -497,7 +497,7 @@
 
   async function startStudy(initialStudy = null) {
     try {
-      state.study = initialStudy || await get('/api/study'); state.mode = 'study'; renderStudy();
+      state.study = initialStudy || await get('api/study'); state.mode = 'study'; renderStudy();
       const restored = new URLSearchParams(location.hash.slice(1));
       if (restored.get('rho')) { $('filter-rho').value = restored.get('rho'); renderCellTable(); }
       if (restored.get('cellTab')) state.cellTab = restored.get('cellTab');
@@ -534,7 +534,7 @@
       if (mode === 'episode' && state.episodeId) await refresh($('follow').checked);
       else if (mode === 'cell' && state.cellId) await openCell(state.cellId, true);
       else if (mode === 'study') {
-        const payload = await get('/api/study');
+        const payload = await get('api/study');
         if (state.mode === 'study' && state.navigationVersion === navigationVersion) {
           state.study = payload; renderStudy();
         }
@@ -548,13 +548,13 @@
     if (!$('study-analysis').open || $('analysis-content').dataset.loaded) return;
     const container = $('analysis-content'); container.innerHTML = 'Loading analysis catalog…';
     try {
-      const catalog = await get('/api/study/analysis'); container.dataset.loaded = '1';
+      const catalog = await get('api/study/analysis'); container.dataset.loaded = '1';
       if (!catalog.available) { container.innerHTML = `<p class="unavailable">${esc(catalog.reason)}</p>${catalog.command ? `<pre>${esc(catalog.command)}</pre>` : ''}`; return; }
       const artifacts = catalog.artifacts || [];
       const plots = artifacts.filter(item => item.kind === 'plots' && /\.(png|svg)$/i.test(item.name));
       const previews = Object.entries(catalog.table_previews || {}).map(([name, preview]) => `<details><summary>${esc(name)} — first ${preview.rows.length} canonical rows</summary><div class="table-scroll"><table><thead><tr>${preview.columns.map(column => `<th>${esc(column)}</th>`).join('')}</tr></thead><tbody>${preview.rows.map(row => `<tr>${preview.columns.map(column => `<td>${esc(row[column] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`).join('');
       const reports = Object.entries(catalog.reports || {}).map(([name, content]) => `<details><summary>${esc(name)}</summary><pre>${esc(content)}</pre></details>`).join('');
-      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = `/api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = `/api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = `api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = `api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
     } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
   });
   $('all-parameters').addEventListener('toggle', updateHash);
@@ -576,6 +576,6 @@
     $('follow').checked = false;
     refresh();
   } else {
-    get('/api/study').then(payload => startStudy(payload)).catch(() => refresh(true));
+    get('api/study').then(payload => startStudy(payload)).catch(() => refresh(true));
   }
 })();
