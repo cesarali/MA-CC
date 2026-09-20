@@ -6,13 +6,16 @@ import json
 import math
 import mimetypes
 import re
+import signal
 import sys
+import threading
+import time
 import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
-from typing import TypeAlias
+from typing import Iterable, TypeAlias
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .data import BlackboardRunReader
@@ -107,11 +110,93 @@ def _public_error(exc: BaseException) -> str:
     return _ABSOLUTE_PATH.sub("", str(exc))
 
 
-def make_handler(reader: DashboardReader):
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+HEALTH_PATHS = frozenset({"/healthz", "/readyz"})
+
+
+def normalise_base_path(base_path: str | None) -> str:
+    """'' for the root, otherwise '/prefix' with no trailing slash."""
+
+    cleaned = "/" + (base_path or "").strip().strip("/")
+    return "" if cleaned == "/" else cleaned
+
+
+def _host_name(header: str) -> str:
+    """The host part of a Host header, lower-cased, without port or IPv6 brackets."""
+
+    value = header.strip().lower()
+    if value.startswith("["):
+        return value[1:].split("]", 1)[0]
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+
+
+def make_handler(
+    reader: DashboardReader,
+    *,
+    base_path: str | None = None,
+    allowed_hosts: Iterable[str] | None = None,
+    access_log: bool = False,
+):
+    """Build the request handler.
+
+    ``allowed_hosts`` is the Host-header allowlist (DNS-rebinding defence). ``None`` keeps the
+    historical behaviour of accepting any Host, which is only safe on a loopback bind;
+    ``serve_dashboard`` always passes a list. Health routes are exempt: a kubelet probe sends
+    the pod IP as Host and the routes disclose nothing.
+    """
+
+    prefix = normalise_base_path(base_path)
+    hosts = None if allowed_hosts is None else {h.strip().lower() for h in allowed_hosts} | LOOPBACK_HOSTS
+
     class DashboardHandler(BaseHTTPRequestHandler):
         server_version = "MASCCBlackboard/1"
 
+        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            started = time.monotonic()
+            requested = urlparse(self.path).path  # before the base path is stripped
+            self._status = 0
+            try:
+                self._route()
+            finally:
+                if access_log:
+                    print(
+                        json.dumps(
+                            {
+                                "event": "request",
+                                "path": requested,
+                                "status": self._status,
+                                "seconds": round(time.monotonic() - started, 4),
+                                "host": _host_name(self.headers.get("Host", "")),
+                            }
+                        ),
+                        file=sys.stderr,
+                        flush=True,
+                    )
+
+        def _route(self) -> None:
+            path = urlparse(self.path).path
+            if path in HEALTH_PATHS:
+                self._send(200, "application/json", _json({"status": "ok"}))
+                return
+            if hosts is not None and _host_name(self.headers.get("Host", "")) not in hosts:
+                self._send(421, "application/json", _json({"error": "host not allowed"}))
+                return
+            if prefix:
+                if path == prefix:
+                    self.send_response(308)
+                    self.send_header("Location", prefix + "/")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    self._status = 308
+                    return
+                if not path.startswith(prefix + "/"):
+                    self._send(404, "application/json", _json({"error": "not found"}))
+                    return
+                self.path = self.path[len(prefix):]
+            self._serve()
+
         def _send(self, status: int, content_type: str, body: bytes) -> None:
+            self._status = status
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
@@ -126,6 +211,7 @@ def make_handler(reader: DashboardReader):
 
         def _send_file(self, path: Path) -> None:
             body = path.read_bytes()
+            self._status = 200
             self.send_response(200)
             self.send_header(
                 "Content-Type",
@@ -139,7 +225,7 @@ def make_handler(reader: DashboardReader):
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        def _serve(self) -> None:
             parsed = urlparse(self.path)
             try:
                 if parsed.path in {"/", "/index.html"}:
@@ -321,6 +407,9 @@ def serve_dashboard(
     episode_id: str | None = None,
     host: str = "127.0.0.1",
     port: int = 8765,
+    allowed_hosts: Iterable[str] = (),
+    base_path: str | None = None,
+    access_log: bool = False,
 ) -> None:
     source = resolve_dashboard_collection(run_dir)
     reader: DashboardReader = (
@@ -328,12 +417,26 @@ def serve_dashboard(
         if is_study_root(source) or is_direct_grid_root(source)
         else BlackboardRunReader(source, episode_id)
     )
-    if host not in {"127.0.0.1", "localhost", "::1"}:
+    allowed = [name for name in allowed_hosts if name.strip()]
+    if host not in LOOPBACK_HOSTS and not allowed:
         raise ValueError(
-            "dashboard must bind to localhost; use an SSH tunnel for remote viewing"
+            "the dashboard has no authentication: binding to a non-loopback address requires "
+            "at least one --allowed-host (the name clients will use), and the network path to "
+            "it must be access-controlled; otherwise bind to localhost and use an SSH tunnel"
         )
-    server = ThreadingHTTPServer((host, port), make_handler(reader))
-    print(f"Blackboard dashboard: http://{host}:{server.server_port}")
+    handler = make_handler(
+        reader, base_path=base_path, allowed_hosts=allowed, access_log=access_log
+    )
+    server = ThreadingHTTPServer((host, port), handler)
+    server.daemon_threads = True
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(
+            signal.SIGTERM,
+            lambda *_: threading.Thread(target=server.shutdown, daemon=True).start(),
+        )
+    print(
+        f"Blackboard dashboard: http://{host}:{server.server_port}{normalise_base_path(base_path)}/"
+    )
     if isinstance(reader, BlackboardStudyReader):
         print(f"Collection: {reader.study_dir}")
     else:
