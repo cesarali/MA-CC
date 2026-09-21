@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
+  const state = { studyKey: null, timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
   const classToken = value => String(value).replace(/[^A-Za-z0-9_-]/g, '');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -26,8 +26,10 @@
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
   );
 
+  // With a catalog the server addresses a study as s/<key>/api/...; the catalog itself is unscoped.
+  const api = path => (state.studyKey && path !== 'api/catalog' ? `s/${encodeURIComponent(state.studyKey)}/` : '') + path;
   async function get(path, options = {}) {
-    const response = await fetch(path, {cache: 'no-store', ...options});
+    const response = await fetch(api(path), {cache: 'no-store', ...options});
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || response.statusText);
     return payload;
@@ -84,7 +86,7 @@
       ['Not started', activity.not_started], ['Running', activity.running + activity.advancing], ['Durable complete', totals.completed], ['Failed', totals.failed + totals.aborted],
       ['Unknown', totals.unknown], ['SLURM active', study.scheduler.available ? study.active_scheduler_tasks : 'Unavailable']
     ];
-    $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
     filterOptions('filter-block', study.cells.map(cell => cell.parameters.experiment_block));
     filterOptions('filter-controller', study.cells.map(cell => cell.parameters.controller_condition));
     filterOptions('filter-rho', study.cells.map(cell => cell.parameters.rho).sort((a,b) => Number(a)-Number(b)));
@@ -140,6 +142,7 @@
   function updateHash() {
     if (!state.study) return;
     const params = new URLSearchParams();
+    if (state.studyKey) params.set('study', state.studyKey);
     if (state.cellId) params.set('cell', state.cellId);
     if (state.episodeId) params.set('episode', state.episodeId);
     if (state.cellTab) params.set('cellTab', state.cellTab);
@@ -155,7 +158,7 @@
   function renderCell(cell) {
     showShell('cell'); renderBreadcrumbs(cell);
     const c = cell.outcome_counts, a = cell.activity_counts;
-    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Running', a.running + a.advancing], ['Inactive stream', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Running', a.running + a.advancing], ['Inactive stream', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
     const primary = [['Controller condition', cell.parameters.controller_condition], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Controller target', cell.parameters.controller_target], ['Truth', cell.parameters.ground_truth]];
     $('primary-parameters').innerHTML = primary.filter(([,value]) => value != null).map(([name,value]) => kv(name, value)).join('');
     $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
@@ -167,7 +170,7 @@
     }
     const stats = cell.statistics || {}, winners = stats.winner_counts || {}, truth = stats.final_truth_share || {}, target = stats.final_controller_target_share || {};
     const funnel = stats.controller_funnel || {};
-    $('cell-statistics-content').innerHTML = `<div class="cards">${[['Completed', stats.completed_episodes], ['Truth wins', `${stats.truth_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Target wins', `${stats.controller_target_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Ties', winners.tie ?? 0], ['Other wins', winners.other ?? 0]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}</div><h3>Controller funnel across repetitions</h3><div class="funnel">${[['Opportunities', funnel.controller_opportunities], ['ADVOCATE', funnel.controller_advocate_rounds], ['Posts admitted', funnel.controller_posts], ['Exposures', funnel.controller_message_exposures], ['Unique readers', funnel.controller_unique_readers], ['Fact changes', (funnel.controller_report_fact_acquisitions ?? 0) + (funnel.controller_report_fact_reactivations ?? 0)], ['Target adoptions', funnel.controller_report_target_adoptions]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 0)}</strong></div>`).join('')}</div><p class="meta">Blackboard posts use ordinary sampling. Report mode adds true canonical evidence without hidden priority.</p><div class="grid two"><div><h3>Final truth share (n=${truth.n ?? 0})</h3>${kv('Mean', truth.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', truth.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', truth.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', truth.q1 == null ? 'Unavailable' : `${truth.q1.toFixed(3)}–${truth.q3.toFixed(3)}`)}</div><div><h3>Final controller-target share (n=${target.n ?? 0})</h3>${kv('Mean', target.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', target.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', target.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', target.q1 == null ? 'Unavailable' : `${target.q1.toFixed(3)}–${target.q3.toFixed(3)}`)}</div></div>`;
+    $('cell-statistics-content').innerHTML = `<div class="cards">${[['Completed', stats.completed_episodes], ['Truth wins', `${stats.truth_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Target wins', `${stats.controller_target_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Ties', winners.tie ?? 0], ['Other wins', winners.other ?? 0]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('')}</div><h3>Controller funnel across repetitions</h3><div class="funnel">${[['Opportunities', funnel.controller_opportunities], ['ADVOCATE', funnel.controller_advocate_rounds], ['Posts admitted', funnel.controller_posts], ['Exposures', funnel.controller_message_exposures], ['Unique readers', funnel.controller_unique_readers], ['Fact changes', (funnel.controller_report_fact_acquisitions ?? 0) + (funnel.controller_report_fact_reactivations ?? 0)], ['Target adoptions', funnel.controller_report_target_adoptions]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 0)}</strong></div>`).join('')}</div><p class="meta">Blackboard posts use ordinary sampling. Report mode adds true canonical evidence without hidden priority.</p><div class="grid two"><div><h3>Final truth share (n=${truth.n ?? 0})</h3>${kv('Mean', truth.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', truth.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', truth.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', truth.q1 == null ? 'Unavailable' : `${truth.q1.toFixed(3)}–${truth.q3.toFixed(3)}`)}</div><div><h3>Final controller-target share (n=${target.n ?? 0})</h3>${kv('Mean', target.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', target.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', target.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', target.q1 == null ? 'Unavailable' : `${target.q1.toFixed(3)}–${target.q3.toFixed(3)}`)}</div></div>`;
     $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
     $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Durable outcome</th><th>Live activity</th><th>Progress</th><th>Controller funnel</th><th>Last update / elapsed</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => { const s = episode.statistics || {}; return `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.durable_status)}${episode.status_reason ? `<br><span class="meta">${esc(episode.status_reason)}</span>` : ''}</td><td>${statusBadge(episode.activity_status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${s.controller_opportunities == null ? '<span class="unavailable">Unavailable</span>' : `${s.controller_opportunities} → ${s.controller_advocate_rounds} → ${s.controller_posts} → ${s.controller_message_exposures}<br><span class="meta">opportunity → ADVOCATE → post → exposure</span>`}</td><td>${episode.last_update_at ? esc(new Date(episode.last_update_at).toLocaleTimeString()) : episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect episode</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">${esc(episode.detail_reason)}</span>`}</td></tr>`; }).join('')}</tbody>`;
     const availableTrajectories = new Set(availableTrajectoryIds(cell));
@@ -320,7 +323,7 @@
       ['Refreshes', p.refreshes],
       ['Prompt attempts', snapshot.run.prompt_attempts]
     ];
-    $('cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
   }
 
   function renderOverview(snapshot) {
@@ -373,7 +376,7 @@
         ['Rounds observed', s.rounds_observed], ['ADVOCATE_Z', `${s.advocate_count} (${(100*s.advocate_fraction).toFixed(1)}%)`], ['NO_OP', `${s.no_op_count} (${(100*s.no_op_fraction).toFixed(1)}%)`],
         ['Reports / requests / directives', `${s.reports} / ${s.requests} / ${s.directives}`], ['Total posts', s.total_posts], ['Requested b / realized', `${unavailable(s.requested_posts)} / ${unavailable(s.realized_posts)}`],
         ['LLM fallback', s.llm_fallback_count], ['Recorded / direct exposures', `${s.recorded_exposure_events} / ${s.direct_exposure_events}`]
-      ].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+      ].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
       const selected = state.selectedControllerRound ?? timeline.rounds[0]?.round_index;
       state.selectedControllerRound = selected;
       $('controller-events').innerHTML = timeline.rounds.map(row => `<button class="controller-event ${classToken(row.message_types[0] || 'NO_OP')} ${Number(row.round_index) === Number(selected) ? 'selected' : ''}" data-controller-round="${row.round_index}" title="${esc(row.action || 'Unavailable')}">R${Number(row.round_index)+1}<small>${esc(row.message_types.join('/') || row.action || 'Unavailable')}</small></button>`).join('');
@@ -495,6 +498,33 @@
     $('step-value').value = $('step').value; refresh(false, false);
   });
 
+  function renderStudyPicker(studies) {
+    const picker = $('study-picker');
+    picker.innerHTML = studies.map(item => `<option value="${esc(item.key)}">${esc(item.study_id)}${item.source === 'live' ? ' (live)' : ''}</option>`).join('');
+    picker.value = state.studyKey;
+    $('study-picker-wrap').hidden = false;
+    picker.onchange = () => {
+      state.studyKey = picker.value; state.navigationVersion += 1;
+      state.study = null; state.cell = null; state.cellId = null; state.episodeId = null;
+      state.selectedTrajectories = new Set();
+      history.replaceState({}, '', `#study=${encodeURIComponent(state.studyKey)}`);
+      showShell('study'); startStudy();
+    };
+  }
+
+  async function boot() {
+    let studies = [];
+    try { studies = (await get('api/catalog')).studies || []; } catch (error) { studies = []; }
+    if (studies.length) {
+      const wanted = new URLSearchParams(location.hash.slice(1)).get('study');
+      state.studyKey = studies.some(item => item.key === wanted) ? wanted : studies[0].key;
+      renderStudyPicker(studies);
+      startStudy();
+      return;
+    }
+    get('api/study').then(payload => startStudy(payload)).catch(() => refresh(true));
+  }
+
   async function startStudy(initialStudy = null) {
     try {
       state.study = initialStudy || await get('api/study'); state.mode = 'study'; renderStudy();
@@ -554,7 +584,7 @@
       const plots = artifacts.filter(item => item.kind === 'plots' && /\.(png|svg)$/i.test(item.name));
       const previews = Object.entries(catalog.table_previews || {}).map(([name, preview]) => `<details><summary>${esc(name)} — first ${preview.rows.length} canonical rows</summary><div class="table-scroll"><table><thead><tr>${preview.columns.map(column => `<th>${esc(column)}</th>`).join('')}</tr></thead><tbody>${preview.rows.map(row => `<tr>${preview.columns.map(column => `<td>${esc(row[column] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`).join('');
       const reports = Object.entries(catalog.reports || {}).map(([name, content]) => `<details><summary>${esc(name)}</summary><pre>${esc(content)}</pre></details>`).join('');
-      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = `api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = `api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
     } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
   });
   $('all-parameters').addEventListener('toggle', updateHash);
@@ -576,6 +606,6 @@
     $('follow').checked = false;
     refresh();
   } else {
-    get('api/study').then(payload => startStudy(payload)).catch(() => refresh(true));
+    boot();
   }
 })();
