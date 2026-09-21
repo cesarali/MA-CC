@@ -284,8 +284,9 @@ if ADVOCATE_Z: preallocate b controlled positions (uniform, without replacement)
 N microscopic focal updates
 ```
 
-The sensor/policy machinery is inherited unchanged from the HiddenBench round
-controller: a hypergeometric vote sensor of size `q_c`, a soft (logistic) policy
+By default (`control.options.sensing_mode: votes`) the sensor/policy machinery
+is inherited unchanged from the HiddenBench round controller: a hypergeometric
+vote sensor of size `q_c`, a soft (logistic) policy
 `P(ADVOCATE_Z) = σ(β(θ − p_Z))`, and an exact budget `b`.
 
 The controller's input is built by stripping the state down to
@@ -324,8 +325,17 @@ the live board normally, without controlled positions, slot replacement, or
 further coordinator posts. Omitting the option retains the historical
 `microscopic` timing for old configs and raw runs.
 
-The controller still senses only `q_c` votes. Its board identity is rendered as
-an ordinary participant, never as an authority.
+With `control.options.sensing_mode: board`, Day 1 is uncontrolled. Night `k`
+samples at most `q_c` live messages without replacement from the completed
+Day-`k` board, retains their public content and sampling provenance, derives
+the policy's target-support statistic, and prepares `U_(k+1)`. Only that stored
+action is seeded at the start of Day `k+1`; same-day messages are rejected by a
+runtime alignment guard. This sensing choice is orthogonal to actuation timing:
+historical microscopic slot replacement and `dawn_only` board posting both keep
+their existing semantics. Existing configs omit the option and keep vote
+sensing exactly as before. The hypergeometric sensor theory is not reported
+for board sensing, although empirical sensing and actuation-response estimators
+remain available from the retained observations.
 
 `control.options.message_mode`:
 

@@ -1,11 +1,12 @@
 """Round-level budgeted controller for the relational reasoning game.
 
-The **sensing and policy machinery is reused unchanged** from the HiddenBench
-round-feedback controller: one decision per population round, a hypergeometric
-vote sensor of size ``q_c``, a soft (logistic) policy over ``{NO_OP,
-ADVOCATE_Z}``, and an exact budget ``b`` of randomly placed controlled
-positions.  The controller senses **votes only** and never receives any agent's
-knowledge state.
+The default sensing and policy machinery is reused unchanged from the
+HiddenBench round-feedback controller: one decision per population round, a
+hypergeometric vote sensor of size ``q_c``, a soft (logistic) policy over
+``{NO_OP, ADVOCATE_Z}``, and an exact budget ``b`` of randomly placed
+controlled positions.  ``sensing_mode: board`` instead applies that policy to
+a bounded sample of the previous completed public board; the raw public sample
+is retained and the first day is uncontrolled.
 
 For ``coordination_request`` with ``controller_timing: dawn_only``, the same
 binary policy is retained but ``b`` means dawn board mass: the runtime posts
@@ -51,7 +52,7 @@ import hashlib
 import math
 
 from mas_cc.config import ControlConfig
-from mas_cc.control import Control
+from mas_cc.control import Control, RoundControlSignal
 from mas_cc.llm_runtime.validation import ValidationIssue
 
 from ...hidden_bench.imitation.controller import (
@@ -105,6 +106,10 @@ STRATEGIC_REPORT_SELECTION_STRATEGIES = (STRATEGIC_REPORT_SELECTION_V1,)
 TIMING_MICROSCOPIC = "microscopic"
 TIMING_DAWN_ONLY = "dawn_only"
 CONTROLLER_TIMINGS = (TIMING_MICROSCOPIC, TIMING_DAWN_ONLY)
+
+SENSING_VOTES = "votes"
+SENSING_BOARD = "board"
+CONTROLLER_SENSING_MODES = (SENSING_VOTES, SENSING_BOARD)
 
 _DIRECTION_VECTORS = {
     "NORTH": (0, 1),
@@ -177,6 +182,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     advocacy_schedule: str = SCHEDULE_SOFT
     controller_actuation_mode: str = DIRECT_RECOMMENDATION
     controller_timing: str = TIMING_MICROSCOPIC
+    sensing_mode: str = SENSING_VOTES
     controller_report_cooldown_rounds: int = 1
     controller_report_selection_strategy: str = STRATEGIC_REPORT_SELECTION_V1
     allow_controller_requests: bool = True
@@ -207,6 +213,68 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         # at the discarded original.  The parent does the same for the same
         # reason.
         return SoftTargetControl.select_action(self, sampled_target_share, rng)
+
+    def board_signal(
+        self,
+        *,
+        round_index: int,
+        state: Any,
+        observation: Mapping[str, Any],
+        rng: Any,
+    ) -> RoundControlSignal:
+        """Apply the existing policy to a frozen public-board observation.
+
+        The runtime owns message eligibility and sampling.  This adapter sees
+        only the already-sampled public projection, derives the smallest scalar
+        needed by the historical policy, and keeps the raw observation on the
+        returned signal for scientific retention.
+        """
+
+        target = self._resolved_target(state)
+        messages = tuple(observation.get("sampled_messages", ()))
+        votes = tuple(
+            str(message["vote"])
+            for message in messages
+            if isinstance(message, Mapping)
+            and message.get("vote") is not None
+            and str(message.get("vote")).strip()
+        )
+        counts = {
+            option: votes.count(option)
+            for option in sorted(set(votes))
+        }
+        effective = int(observation.get("q_c_effective", len(messages)))
+        # An empty public board is a genuine zero-evidence observation.  The
+        # legacy scalar policy needs a number, so its documented adapter value
+        # is zero support; the raw empty sample and effective size remain
+        # explicit and no synthetic message or vote is introduced.
+        support = counts.get(target, 0) / effective if effective else 0.0
+        action, probability = self.select_action(support, rng)
+        return RoundControlSignal(
+            action=action,
+            target=target,
+            message=None,
+            observation={
+                **dict(observation),
+                "sampled_opinions": list(votes),
+                "sampled_opinion_counts": counts,
+                "sample_size": effective,
+                "derived_target_count": counts.get(target, 0),
+                "derived_target_support_share": support,
+                "empty_sample_policy_value": 0.0 if not effective else None,
+            },
+            metadata={
+                "policy": self.policy,
+                "target_support": support,
+                "advocacy_probability": probability,
+                **self.policy_parameters,
+                "intervention_budget": self.intervention_budget,
+                "round_index": round_index,
+                "sensing_mode": SENSING_BOARD,
+                "sensing_day": observation.get("sensing_day"),
+                "action_day": observation.get("action_day"),
+            },
+        )
 
     @property
     def transmits_fact(self) -> bool:
@@ -618,6 +686,17 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             )
         values["controller_timing"] = str(timing)
 
+        sensing_mode = options.get("sensing_mode", SENSING_VOTES)
+        if sensing_mode not in CONTROLLER_SENSING_MODES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.sensing_mode",
+                    f"must be one of {list(CONTROLLER_SENSING_MODES)}",
+                )
+            )
+            sensing_mode = SENSING_VOTES
+        values["sensing_mode"] = str(sensing_mode)
+
         allow_requests = options.get("allow_controller_requests", True)
         if not isinstance(allow_requests, bool):
             issues.append(
@@ -864,6 +943,7 @@ __all__ = [
     "ADAPTIVE_COMMUNICATION",
     "CONTROLLER_ACTUATION_MODES",
     "CONTROLLER_TIMINGS",
+    "CONTROLLER_SENSING_MODES",
     "COORDINATION_REQUEST",
     "DIRECT_RECOMMENDATION",
     "TRUTHFUL_STRATEGIC_REPORT",
@@ -880,6 +960,8 @@ __all__ = [
     "SCHEDULE_ALWAYS",
     "SCHEDULE_NEVER",
     "SCHEDULE_SOFT",
+    "SENSING_BOARD",
+    "SENSING_VOTES",
     "TIMING_DAWN_ONLY",
     "TIMING_MICROSCOPIC",
     "SELECTOR_SUPPORTING",

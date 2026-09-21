@@ -276,6 +276,25 @@ def test_budget_curves_use_cell_rows_and_preserve_gaps(tmp_path):
         _render_budget_metric(AnalysisPackage(analysis), spec, {}, mode='resolved', figures_dir=figures, ledger=SourceLedger())
 
 
+def test_budget_curves_can_hide_unmatched_confidence_intervals(tmp_path):
+    from mas_cc.studies.reporting import AnalysisPackage, SourceLedger, _render_budget_metric
+    analysis = _analysis_package(tmp_path)
+    rows = pd.DataFrame([
+        dict(metric='T', intervention_budget=3, estimate=0.2,
+             null_adjusted_estimate=0.05, ci_low=0.1, ci_high=0.5,
+             support_status='adequate')
+    ])
+    write_scientific_table(analysis / 'tables', 'budget_estimates', rows)
+    figures = tmp_path / 'figures'
+    figures.mkdir()
+    ledger = SourceLedger()
+    spec = dict(id='T_minus_null', source='budget_estimates', metric='T',
+                value='null_adjusted_estimate', show_ci=False)
+    result = _render_budget_metric(AnalysisPackage(analysis), spec, {}, mode='resolved', figures_dir=figures, ledger=ledger)
+    assert result.displayed_values == 1
+    assert {e['field'] for e in ledger.entries} == {'intervention_budget', 'null_adjusted_estimate'}
+
+
 def test_episode_examples_select_ids_not_outcomes(tmp_path):
     from mas_cc.studies.reporting import AnalysisPackage, SourceLedger, _render_episode_examples
     analysis = _analysis_package(tmp_path)

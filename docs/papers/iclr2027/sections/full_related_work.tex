@@ -1,0 +1,69 @@
+\section{Full Related Work}
+\label{app:full-related-work}
+
+\paragraph{Collective dynamics and convention formation.}
+\citet{castellano2009statistical} review statistical-physics models of social dynamics, including opinion formation, cultural and language change, collective motion, and spreading processes.
+\citet{baronchelli2006sharp} show that locally interacting agents in a naming game undergo a sharp symmetry-breaking transition from competing words to a shared vocabulary.
+\citet{dallasta2006nonequilibrium} demonstrate that naming games on complex networks generally reach global consensus while degree heterogeneity concentrates spreading activity in highly connected agents.
+\citet{becker2017network} show theoretically and experimentally that decentralized influence networks can improve collective estimates, whereas centralized influence can amplify error.
+\citet{masuda2015opinion} formulate zealot placement as a pinning-control problem and show that optimized targeting can shift stationary opinions more effectively than simply controlling network hubs.
+\citet{ashery2025emergent} show that decentralized LLM populations can spontaneously form social conventions, develop collective biases absent in isolated agents, and be shifted by committed minorities.
+\citet{kouwenhoven2025searching} find that iterated learning between LLMs makes initially unstructured artificial languages more learnable but can also yield degenerate non-humanlike vocabularies.
+
+\paragraph{Statistical physics and emergence in LLM populations.}
+\citet{el2026physics} identify indifference, polarization, and consensus regimes in interacting language-model populations and reproduce them with a compact statistical-mechanics model.
+\citet{riedl2026emergent} use time-delayed mutual information and partial information decomposition to distinguish mere aggregation from higher-order, performance-relevant coordination among language-model agents.
+\citet{hiddenbench2026} show that LLM collectives frequently converge before pooling distributed evidence, producing a large gap between distributed-group and complete-information performance.
+\citet{ko2026social} demonstrate that conformity, perceived expertise, dominant speakers, and rhetorical style can systematically degrade objective decisions made by representative LLM agents.
+\citet{he2026belief} frame coordinated LLM participation as programmable collective-belief control and show that intervention scale, persistence, visibility, and persuasion strategy alter population-level belief trajectories.
+\citet{chopra2026interaction} argues from multi-agent resource-allocation experiments that collective performance depends on the structure of interaction rather than individual reasoning ability alone.
+
+\paragraph{Social dilemmas, cooperation, and collusion.}
+\citet{fontana2025nicer} find that LLM behavior in 100-round iterated Prisoner's Dilemma games is model-dependent, with some models unusually forgiving and others consistently exploitative.
+\citet{piatti2024cooperate} introduce GovSim and show that most LLM societies fail to manage shared resources sustainably unless communication and long-horizon reasoning support cooperation.
+\citet{guzman2025corrupted} find that reasoning-focused models can become free riders in repeated public-goods games even when several conventional instruction-tuned models sustain cooperation.
+\citet{meulemans2026game} introduce embedded Bayesian agents and embedded equilibrium to explain how foundation-model agents can sustain cooperation through inferences about behavioral similarity.
+\citet{nakamura2026colosseum} introduce COLOSSEUM and distinguish action-level collusion from merely verbal plans to collude under varying coalition objectives, persuasion tactics, and network structures.
+
+\paragraph{Control of complex networks.}
+\citet{liu2016control} synthesize structural and dynamical principles governing which nodes must be actuated and how network topology shapes controllability.
+\citet{ruths2014control} decompose structural controllability into source, external-dilation, and internal-dilation contributions and use their proportions to define network control profiles.
+\citet{yan2012energy} derive scaling laws for lower and upper bounds on the energy required to steer controllable complex networks over finite time.
+\citet{cornelius2013realistic} show how constrained perturbations can exploit nonlinear network dynamics to enter a desired attractor basin without directly accessing the target state.
+\citet{loiudice2015structural} define structural permeability to quantify how effectively a limited set of driver nodes propagates control signals through a network under practical constraints.
+\citet{chen2026community} show that coupling modular structure with separate within- and cross-community regulation creates low-cost regimes for containing information diffusion.
+
+\paragraph{Information, feedback, and stochastic thermodynamics.}
+\citet{touchette2000limits} establish that each bit acquired by feedback can reduce system entropy by at most one additional bit beyond open-loop control.
+\citet{touchette2004approach} model controllers as actuation channels and derive information-theoretic conditions for controllability, observability, and feedback advantage.
+\citet{horowitz2014second} compare information terms in feedback-modified second laws and interpret them as costs associated with distinct measurement protocols.
+\citet{kwon2016feedback} derive thermodynamic bounds for repeated measurement and feedback with delay, where present and previous memory states jointly affect the controlled dynamics.
+\citet{tome2023opinion} construct a nonequilibrium stochastic thermodynamics for opinion models by decomposing their transition rates into contacts with reservoirs at different effective temperatures.
+\citet{irisarri2026stochastic} derive a stochastic thermodynamics of social imitation without assuming physical energy, yielding fluctuation relations, uncertainty bounds, and inference tools for opinion currents.
+\citet{ray2023uncertainty} tighten thermodynamic uncertainty relations into an equality for an optimal current that depends on the full entropy-production distribution.
+\citet{almanza2026pareto} derive universal Pareto fronts connecting power, efficiency, dissipation, and fluctuations in endoreversible thermal machines.
+\citet{yaida2019fluctuation} derive stationary fluctuation--dissipation relations for stochastic gradient descent that connect training hyperparameters, parameter fluctuations, and loss-landscape geometry.
+
+\paragraph{Control and causal influence in agent systems.}
+\citet{chang2026robust} unify adversarial transition uncertainty and operational constraints in robust constrained Markov games and define a tractable robust-and-feasible equilibrium surrogate.
+\citet{xu2026lyapunov} use a Lyapunov-guided cooperative differential game to stabilize coupled constraints in LLM multi-agent generation through token-level interventions.
+\citet{triantafyllou2024agent} define agent-specific effects to attribute outcome changes to the causal influence that one agent's action propagates through other agents in a multi-agent MDP.
+\citet{jaques2019social} reward counterfactual causal influence between reinforcement-learning agents and thereby improve decentralized coordination and emergent communication.
+\citet{song2026empowerment} estimate action-to-future-state mutual information from language-agent trajectories and show that this empowerment measure tracks task capability and pivotal decisions.
+
+\paragraph{Multi-agent architectures, failures, and safety.}
+\citet{li2026blueprint} organize automated optimization of LLM multi-agent systems into design-time adaptation, test-time adaptation, and self-evolving architectures.
+\citet{hammond2025risks} classify advanced multi-agent AI failures into miscoordination, conflict, and collusion, supported by cross-cutting factors such as information asymmetry and destabilizing dynamics.
+\citet{huang2025resilience} show that hierarchical collaboration is more resilient to faulty agents than linear or flat structures and that challenger and inspector roles can recover lost performance.
+\citet{kavathekar2026tamas} introduce TAMAS to evaluate adversarial multi-agent failures across attack types, tools, backbone models, and interaction configurations.
+\citet{anthropic2026multiagent} report that frontier-model collectives exhibit coordination failures, brittle social epistemics, and destructive escalation when agents pursue incompatible objectives.
+\citet{greenblatt2026huggingface} document how nominally isolated agents discovered an unsanctioned message board and used it to coordinate a multi-day attack, illustrating that a communication substrate can become an unintended control channel.
+\citet{schroeder2026swarms} warn that persistent, adaptive, and coordinated malicious agent swarms could manufacture consensus and scale influence operations against democratic systems.
+\citet{jiang2026moltbook} analyze large-scale activity on the agent-only social network Moltbook and document concentrated attention, topic-dependent toxicity, and high-frequency automated posting.
+\citet{deepmind2026multiagent} frame collective capabilities, network-level failures, agent infrastructure, and scalable oversight as central priorities for a science of multi-agent safety.
+
+\paragraph{Scientific agents and reasoning-task context.}
+\citet{novikov2025alphaevolve} combine LLM-generated code, automated evaluators, and evolutionary search to improve algorithms and computational infrastructure through iterative discovery.
+\citet{abhyankar2026llema} couple LLM scientific priors with chemistry-aware evolutionary operators and feedback memories to optimize materials across competing objectives.
+\citet{openai2026navierstokes} describe a large multi-agent research system whose specialized groups exchanged intermediate results while producing and formally verifying a proposed resolution of the Navier--Stokes existence and smoothness problem.
+\citet{sprague2024musr} introduce MuSR, a benchmark of natural-language narratives requiring multistep soft reasoning that exposes persistent limitations in chain-of-thought methods.
