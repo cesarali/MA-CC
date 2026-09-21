@@ -764,6 +764,58 @@ def _cell_canonical_task(task: tuple[str, DiscoveredCell]) -> dict[str, Any]:
     return _cell_canonical(*task)
 
 
+def _normalise_semantics_label(value: Any) -> str:
+    """Same labels as ``derived_aggregation._normalize_semantics`` (kept local: no import cycle)."""
+
+    text = str(value).strip().lower()
+    if text in {"true", "truth", "correct"}:
+        return "truth"
+    if text in {"false", "incorrect", "adversarial"}:
+        return "false"
+    return text
+
+
+def _harmonise_target_semantics(
+    row_lists: Iterable[list[dict[str, Any]]], frames: Mapping[str, pd.DataFrame]
+) -> bool:
+    """Give ``target_semantics`` one type when a study mixes YAML booleans and strings.
+
+    ``target_semantics: false`` / ``true`` parse as booleans while ``none`` and ``truth`` are
+    strings. A study whose arms all use the same spelling keeps its values untouched, so
+    packages of existing studies are unchanged. A study that mixes them (no-control ``none``
+    next to ``false`` and ``true`` arms) cannot be written to Parquet at all - pyarrow
+    refuses a column holding both bool and str - so there, and only there, every value
+    becomes its canonical label (``truth`` / ``false`` / the lower-cased text).
+    """
+
+    row_lists = list(row_lists)
+    def kind(value: Any) -> str:
+        # numpy.bool_ (from a frame) and bool (from a row dict) are the same spelling
+        return "bool" if type(value).__name__ in {"bool", "bool_"} else type(value).__name__
+
+    kinds = {
+        kind(row["target_semantics"])
+        for rows in row_lists
+        for row in rows
+        if row.get("target_semantics") is not None
+    }
+    for frame in frames.values():
+        if "target_semantics" in frame:
+            kinds.update(kind(v) for v in frame["target_semantics"].dropna().unique())
+    if len(kinds) <= 1:
+        return False
+    for rows in row_lists:
+        for row in rows:
+            if row.get("target_semantics") is not None:
+                row["target_semantics"] = _normalise_semantics_label(row["target_semantics"])
+    for frame in frames.values():
+        if "target_semantics" in frame:
+            frame["target_semantics"] = frame["target_semantics"].map(
+                lambda v: v if pd.isna(v) else _normalise_semantics_label(v)
+            )
+    return True
+
+
 def build_canonical_tables(
     study_id: str, cells: tuple[DiscoveredCell, ...], *, workers: int = 1
 ) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
@@ -821,6 +873,12 @@ def build_canonical_tables(
         for key, value in part["micro_selection"].items():
             record_selection["micro_slots"][key] += value
         interrupted_episode_rows.extend(part["interrupted"])
+
+    _harmonise_target_semantics(
+        [episode_rows, cell_rows, round_rows, available_round_prefix_rows, micro_rows,
+         available_micro_prefix_rows, interrupted_episode_rows],
+        frames,
+    )
 
     interrupted_summary_rows: list[dict[str, Any]] = []
     if interrupted_episode_rows:
