@@ -490,9 +490,10 @@ def serve_dashboard(
     base_path: str | None = None,
     access_log: bool = False,
     catalogs: Iterable[str] = (),
+    scheduler: bool = True,
 ) -> None:
     reader: DashboardReader | None
-    catalog = StudyCatalog(catalogs) if list(catalogs) else None
+    catalog = StudyCatalog(catalogs, scheduler=scheduler) if list(catalogs) else None
     if run_dir is None:
         if catalog is None:
             raise ValueError("nothing to serve: pass a run, a study, a bundle or --catalog")
