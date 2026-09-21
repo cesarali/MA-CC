@@ -34,6 +34,25 @@
 
   const unavailable = value => value == null || value === '' ? 'Unavailable' : value;
   const statusBadge = value => `<span class="status-badge ${esc(value)}">${esc(value)}</span>`;
+  function controllerTargetLabel(cell) {
+    const parameters = cell.parameters || {};
+    if (parameters.controller_condition === 'no_control') return 'none';
+    const configured = parameters.controller_target;
+    const truth = parameters.ground_truth;
+    const resolved = configured === 'correct' ? truth : configured;
+    if (configured === 'correct' || (truth != null && resolved === truth)) {
+      return truth == null ? 'truth' : `truth (${truth})`;
+    }
+    if (resolved != null) return `false (${resolved})`;
+    return 'Unavailable';
+  }
+  function controlConditionLabel(cell) {
+    const target = controllerTargetLabel(cell);
+    if (target === 'none') return 'no control';
+    if (target.startsWith('truth')) return 'truth control';
+    if (target.startsWith('false')) return 'false control';
+    return target;
+  }
   function sparkline(points, key = 'truth_share', width = 150, height = 42) {
     const values = points.map((point, index) => [index, point[key]]).filter(item => item[1] != null);
     if (!values.length) return '<span class="unavailable">Unavailable</span>';
@@ -85,7 +104,7 @@
     ];
     $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
     filterOptions('filter-block', study.cells.map(cell => cell.parameters.experiment_block));
-    filterOptions('filter-controller', study.cells.map(cell => cell.parameters.controller_condition));
+    filterOptions('filter-controller', study.cells.map(controlConditionLabel));
     filterOptions('filter-rho', study.cells.map(cell => cell.parameters.rho).sort((a,b) => Number(a)-Number(b)));
     filterOptions('filter-status', study.cells.map(cell => cell.status));
     renderCellTable();
@@ -94,14 +113,14 @@
   function renderCellTable() {
     let cells = state.study.cells.filter(cell =>
       (!$('filter-block').value || String(cell.parameters.experiment_block) === $('filter-block').value) &&
-      (!$('filter-controller').value || String(cell.parameters.controller_condition) === $('filter-controller').value) &&
+      (!$('filter-controller').value || controlConditionLabel(cell) === $('filter-controller').value) &&
       (!$('filter-rho').value || Number(cell.parameters.rho) === Number($('filter-rho').value)) &&
       (!$('filter-status').value || cell.status === $('filter-status').value) &&
       true
     );
     const sort = $('cell-sort').value;
     cells.sort((a,b) => sort === 'status' ? a.status.localeCompare(b.status) : sort === 'progress' ? b.outcome_counts.completed - a.outcome_counts.completed : a.qualified_id.localeCompare(b.qualified_id));
-    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Scientific outcomes</th><th>Live activity</th><th>SLURM task</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(unavailable(cell.parameters.controller_condition))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${cell.outcome_counts.completed}/${cell.expected_episodes} durable complete<br><span class="meta">${cell.outcome_counts.failed} failed · ${cell.outcome_counts.aborted} aborted · ${cell.outcome_counts.unknown} unknown</span></td><td>${cell.activity_counts.running + cell.activity_counts.advancing} running<br><span class="meta">${cell.activity_counts.started_unchanged} inactive stream</span></td><td>${cell.scheduler ? `${statusBadge(cell.scheduler.state)}<br><span class="meta">array ${cell.scheduler.array_index} · ${esc(unavailable(cell.scheduler.node))} · ${esc(unavailable(cell.scheduler.elapsed))}</span>` : '<span class="unavailable">Unavailable</span>'}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
+    $('cell-table').innerHTML = `<thead><tr><th>Config / cell</th><th>Condition</th><th>ρ</th><th>b</th><th>Scientific outcomes</th><th>Live activity</th><th>SLURM task</th><th></th></tr></thead><tbody>${cells.map(cell => `<tr><td><b>${esc(cell.config_name)}</b><br><span class="meta">${esc(cell.cell_id)}</span></td><td>${esc(controlConditionLabel(cell))}</td><td>${esc(unavailable(cell.parameters.rho))}</td><td>${esc(unavailable(cell.parameters.b))}</td><td>${cell.outcome_counts.completed}/${cell.expected_episodes} durable complete<br><span class="meta">${cell.outcome_counts.failed} failed · ${cell.outcome_counts.aborted} aborted · ${cell.outcome_counts.unknown} unknown</span></td><td>${cell.activity_counts.running + cell.activity_counts.advancing} running<br><span class="meta">${cell.activity_counts.started_unchanged} inactive stream</span></td><td>${cell.scheduler ? `${statusBadge(cell.scheduler.state)}<br><span class="meta">array ${cell.scheduler.array_index} · ${esc(unavailable(cell.scheduler.node))} · ${esc(unavailable(cell.scheduler.elapsed))}</span>` : '<span class="unavailable">Unavailable</span>'}</td><td><button class="open-cell" data-cell="${esc(cell.qualified_id)}">Open</button></td></tr>`).join('')}</tbody>`;
     document.querySelectorAll('.open-cell').forEach(button => button.addEventListener('click', () => openCell(button.dataset.cell)));
   }
 
@@ -155,7 +174,7 @@
     showShell('cell'); renderBreadcrumbs(cell);
     const c = cell.outcome_counts, a = cell.activity_counts;
     $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Running', a.running + a.advancing], ['Inactive stream', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
-    const primary = [['Controller condition', cell.parameters.controller_condition], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Controller target', cell.parameters.controller_target], ['Truth', cell.parameters.ground_truth]];
+    const primary = [['Control condition', controlConditionLabel(cell)], ['Controller target', controllerTargetLabel(cell)], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Truth', cell.parameters.ground_truth]];
     $('primary-parameters').innerHTML = primary.filter(([,value]) => value != null).map(([name,value]) => kv(name, value)).join('');
     $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
     const promptsPanel = $('cell-prompts-content');
