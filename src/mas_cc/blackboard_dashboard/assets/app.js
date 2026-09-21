@@ -560,7 +560,7 @@
     } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
     finally { state.pollBusy = false; button.disabled = false; button.textContent = 'Refresh'; }
   }
-  ['filter-block','filter-controller','filter-rho','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', () => { renderCellTable(); updateHash(); }));
+  ['filter-block','filter-controller','filter-target','filter-rho','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', () => { renderCellTable(); updateHash(); }));
   document.querySelectorAll('#cell-tabs button').forEach(button => button.addEventListener('click', () => setCellTab(button.dataset.cellView)));
   $('study-analysis').addEventListener('toggle', async () => {
     if (!$('study-analysis').open || $('analysis-content').dataset.loaded) return;
