@@ -5,7 +5,8 @@ LLM-authored controller.
 
 ## Scientific design
 
-- fixed `q=12` (`social_group_size=12`, `sensor_sample_size=12`)
+- fixed `q=12` (`social_group_size=12`, board `sensor_sample_size=12`)
+- controller sensing mode: previous completed public board (`sensing_mode: board`)
 - 24 agents, 10 rounds, DeepInfra `openai/gpt-oss-120b`, prompt v5
 - epistemic persistence `rho`: 0.75 and 1.0
 - communication profiles: `report_only` and `full_communication`
@@ -14,6 +15,8 @@ LLM-authored controller.
 - controller budgets: 3 and 12
 - matched no-control baseline for each rho/profile pair
 - 5 paired repetitions per cell
+- Cygnus execution: up to 12 concurrent 8-CPU cell shards (96 CPUs), with
+  study-wide provider concurrency capped at 100
 
 Ordinary agents are LLM-authored in every cell. No-control cells have no
 controller, so `controller_authoring` is not applicable there. In controlled

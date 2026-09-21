@@ -55,6 +55,7 @@ control:
   options:
     target: correct
     sensor_sample_size: 12
+    sensing_mode: board
     policy: soft_target
     threshold: 0.5
     beta: 4.0
@@ -149,6 +150,7 @@ experiment:
     population_rounds: 10
     social_group_size: 12
     sensor_sample_size: 12
+    sensing_mode: board
     beta: 4.0
     theta: 0.5
     repetitions: 5

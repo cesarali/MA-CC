@@ -10,6 +10,7 @@ Credential-free study preflight on 2026-09-21: **PASS / permitted**.
 | Scientific cells | 20 |
 | Episodes | 100 |
 | Rounds per episode | 10 |
+| Controller sensing | previous public board, sample size 12 |
 | Controller budgets | 3, 12 |
 | Nominal provider calls | 24,800 |
 | Expected provider calls | 29,100 |
@@ -41,9 +42,10 @@ were not queried during this credential-free preflight.
 
 - repetitions / in-process parallelism: 5 / 5
 - one cell per shard
-- array throttle / maximum active nodes: 5 / 5
+- array throttle / maximum active nodes: 12 / 12
 - provider request concurrency: 10 per shard
-- configured study-wide initial / maximum coordinator concurrency: 50 / 100
+- configured study-wide initial / maximum coordinator concurrency: 100 / 100
+- maximum simultaneous CPU allocation: 96 CPUs
 - target RPM: 500
 - assumed provider latency: 90 seconds
 - requested resources per shard: 8 CPUs, 12 GiB, 12 hours
