@@ -1,0 +1,12 @@
+report_collection:
+  title: 'Authored REPORT v5 test: q3 and q12, all arms'
+  configs:
+  - configs/runs/relational_reasoning/blackboard_game/iclr_experiments/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report_q3_none.yaml
+  - configs/runs/relational_reasoning/blackboard_game/iclr_experiments/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report_q3_truth.yaml
+  - configs/runs/relational_reasoning/blackboard_game/iclr_experiments/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report_q3_false.yaml
+  - configs/runs/relational_reasoning/blackboard_game/iclr_experiments/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report_q12_none.yaml
+  - configs/runs/relational_reasoning/blackboard_game/iclr_experiments/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report_q12_truth.yaml
+  - configs/runs/relational_reasoning/blackboard_game/iclr_experiments/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report_q12_false.yaml
+  output_pdf: results/reports/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/report.pdf
+  source_archive: results/aggregation_results/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18_analysis.zip
+  mode: saved_results_only

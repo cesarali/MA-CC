@@ -1,7 +1,7 @@
 study:
-  name: report_only_authored_q12_chatoss_false_control_board_sensing
+  name: report_only_authored_q3_chatoss_v5_false_control_board_sensing
 configs:
-- false_control.yaml
+- false_control_q3.yaml
 execution:
   mode: auto
   cells_per_shard: 1
@@ -13,7 +13,7 @@ execution:
   memory: 12G
   time_limit: '36:00:00'
   partition: main
-  results_root: /shared/home/cesar/work/results/studies/report_only_authored_q12_chatoss_false_control_board_sensing
+  results_root: /shared/home/cesar/work/results/studies/report_only_authored_q3_chatoss_v5_false_control_board_sensing
   require_results_under: /shared/home/cesar/work/results
   provider_load_control:
     mode: redis_adaptive

@@ -13,7 +13,7 @@ llm_provider:
 prompt:
   schema_version: 2
   prompt_family: relational_blackboard_ballot
-  prompt_version: 4
+  prompt_version: 5
   response_contract:
     type: relational_blackboard_ballot
     allowed_values:
@@ -31,7 +31,7 @@ game:
     task_id: task_003
     dynamics_mode: reasoning
     rounds: 30
-    social_group_size: 12
+    social_group_size: 3
     social_mode: board
     board:
       sampling: uniform
@@ -40,17 +40,18 @@ game:
       allow_no_post: true
       allow_participant_requests: false
       require_grounded_reports: true
+      report_citation_scope: active_or_observed
+      no_citable_fact_action: none
     epistemic_persistence: 0.7
     vote_visibility: public
-    prompt_version: 4
+    prompt_version: 5
     receiver_epistemic_disposition: vigilant
     stop_on_consensus: false
     invalid_response_retries: 4
     expected_validation_failure_rate: 0.15
     initialization:
       mode: paired_local_vote
-      # Reuse the matched source study's frozen initialization artifacts.
-      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q12_chatoss_false_control_initializations
+      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q3_q12_chatoss_v5_initializations
       require_artifact: true
 control:
   mechanism: relational_round_budgeted
@@ -80,6 +81,10 @@ execution:
   repetitions: 60
   parallelism: 60
   fail_fast: false
+  semantic_failure_guard:
+    minimum_finished_episodes: 2
+    maximum_failure_fraction: 0.25
+    minimum_failures: 2
 pricing:
   mode: offline
   require_fresh_at_launch: false
@@ -127,9 +132,10 @@ observability:
     cell_reporting: master
     metric_plots: true
 experiment:
-  name: iclr-report-only-authored-q12-chatoss-false-control-board-sensing
-  description: Task-003 false-target q=12 DeepInfra GPT-OSS 120B report-only communication
-    with LLM-authored grounded reports and delayed public-board controller sensing.
+  name: iclr-report-only-authored-v5-q3-chatoss-false-control-board-sensing
+  description: Task-003 false-target control, q=3, DeepInfra GPT-OSS 120B, prompt v5;
+    participants and Agent N+1 communicate with grounded REPORT or NONE only,
+    with delayed public-board controller sensing.
   tags:
   - iclr-experiments
   - astra
@@ -139,13 +145,15 @@ experiment:
   - delayed-feedback
   - task003
   - false-control
-  - q12
+  - q3
   - deepinfra
   - gpt-oss-120b
   - report-only
   - llm-authored-reports
+  - prompt-v5
+  - immediate-grounded-relay
   metadata:
-    study: report_only_authored_q12_chatoss_false_control_board_sensing
+    study: report_only_authored_q3_chatoss_v5_false_control_board_sensing
     arm: false_control
     task_id: task_003
     candidate_id: 130
@@ -158,7 +166,7 @@ experiment:
     target_semantics: false
     population_size: 24
     population_rounds: 30
-    social_group_size: 12
+    social_group_size: 3
     sensor_sample_size: 12
     sensing_mode: board
     beta: 4.0
@@ -167,7 +175,10 @@ experiment:
     common_random_numbers_across_grid: true
     paired_initialization_across_grid: true
     paired_initialization_across_targets: true
-    communication_treatment: llm_authored_grounded_report_only
+    communication_treatment: llm_authored_grounded_report_only_v5_immediate_relay
+    controller_public_identity: Agent N+1
+    report_citation_scope: active_or_observed
+    no_citable_fact_action: none
 grid:
   game.options.epistemic_persistence:
   - 0.7
