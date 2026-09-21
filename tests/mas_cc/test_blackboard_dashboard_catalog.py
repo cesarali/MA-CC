@@ -115,3 +115,32 @@ def test_front_end_boots_through_the_catalog_and_scopes_every_api_call():
     assert "path !== 'api/catalog'" in script  # the catalog itself is never study-scoped
     assert "api(`api/study/analysis/download" in script  # direct URLs (plot images, downloads) are scoped too
     assert "params.set('study', state.studyKey)" in script
+
+
+def test_scheduler_can_be_switched_off_for_hosts_without_slurm(sources, monkeypatch):
+    """The hosted pod has no squeue/sacct; a live catalog must not shell out per request."""
+    import subprocess
+
+    published, live = sources
+    calls = []
+    real = subprocess.run
+
+    def watched(command, *args, **kwargs):
+        calls.append(command[0] if isinstance(command, (list, tuple)) else command)
+        return real(["true"], *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", watched)
+    catalog = StudyCatalog([str(published), str(live)], scheduler=False)
+    reader = catalog.reader("grid-run")
+    reader.study()
+    assert not [c for c in calls if "squeue" in str(c) or "sacct" in str(c)]
+
+
+def test_serve_dashboard_passes_the_scheduler_choice_through():
+    import inspect
+
+    from mas_cc.blackboard_dashboard import server as server_module
+
+    assert "scheduler" in inspect.signature(server_module.serve_dashboard).parameters
+    source = inspect.getsource(server_module.serve_dashboard)
+    assert "StudyCatalog(catalogs, scheduler=scheduler)" in source
