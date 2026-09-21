@@ -17,12 +17,19 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
+from mas_cc.analysis.draw_components import _DrawComponents, _draw_orders  # noqa: F401  (re-exported for tests)
 from mas_cc.analysis.single_affinity import controlled_rows, eta_ir, susceptibility_summary
 from .weighted_summaries import PairedBootstrap
+from mas_cc.games.hidden_bench.imitation_round_feedback import analysis as _round_analysis
 from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
     MAIN_ESTIMATOR_VARIANT,
     ROUND_CONDITIONING_STATE,
+    _BitsPolicyNull,
+    _builtin_sum,
+    _cmi_from_counts,
     _estimate_for,
+    _first_appearance,
+    _grouped,
     bootstrap_episode_rows,
     conditional_action_entropy_bits,
     policy_resampling_null,
@@ -127,6 +134,19 @@ def _components(rows: Sequence[Any]) -> dict[str, float]:
     }
 
 
+def _fast_engine() -> bool:
+    """The information engine switch (MA_CC_INFORMATION_ENGINE); ``rows`` keeps the reference path."""
+    return _round_analysis._INFORMATION_ENGINE == "fast"
+
+
+def _policy_null(rows: Sequence[Any], *, permutations: int, seed: int) -> tuple[float, ...]:
+    if not rows:
+        return ()
+    if _fast_engine():
+        return _BitsPolicyNull(TARGET_CMI, rows).values(permutations, seed=seed)
+    return policy_resampling_null(TARGET_CMI, rows, permutations=permutations, seed=seed)
+
+
 def _status(support: Mapping[str, Any]) -> str:
     actions = int(_finite(support.get("number_of_actions_observed")) or 0)
     dual = _finite(support.get("round_dual_action_state_fraction"))
@@ -179,20 +199,21 @@ def _cell_calculation(
     support["number_of_actions_observed"] = len(
         {str(row.U_k) for row in eligible if row.U_k is not None}
     )
-    bootstrap = [
-        _components(draw)
-        for draw in (bootstrap_plan.event_draws(eligible) if bootstrap_plan is not None else bootstrap_episode_rows(
-            eligible,
-            resamples=bootstrap_resamples,
-            seed=_stable_seed(seed, "bootstrap", cell_id),
-        ))
-    ]
-    null = policy_resampling_null(
-        TARGET_CMI,
-        eligible,
-        permutations=null_permutations,
-        seed=_stable_seed(seed, "null", cell_id),
-    ) if eligible else ()
+    if _fast_engine() and eligible:
+        fast = _DrawComponents(eligible)
+        bootstrap = [fast.value(order) for order in _draw_orders(
+            eligible, bootstrap_plan=bootstrap_plan, resamples=bootstrap_resamples,
+            seed=_stable_seed(seed, "bootstrap", cell_id))]
+    else:
+        bootstrap = [
+            _components(draw)
+            for draw in (bootstrap_plan.event_draws(eligible) if bootstrap_plan is not None else bootstrap_episode_rows(
+                eligible,
+                resamples=bootstrap_resamples,
+                seed=_stable_seed(seed, "bootstrap", cell_id),
+            ))
+        ]
+    null = _policy_null(eligible, permutations=null_permutations, seed=_stable_seed(seed, "null", cell_id))
     return _CellCalculation(
         cell_id=cell_id,
         coordinates=dict(coordinates),
@@ -455,15 +476,26 @@ def _state_local_cell(task: tuple) -> list[dict[str, Any]]:
         for event in eligible_cell:
             point_bins.setdefault(bin_index(event), []).append(event)
         bootstrap_bins: list[dict[int, list[Any]]] = []
-        for draw in (bootstrap_plan.event_draws(eligible_cell) if bootstrap_plan is not None else bootstrap_episode_rows(
-            eligible_cell,
-            resamples=bootstrap_resamples,
-            seed=_stable_seed(seed, "state-local-bootstrap", cell_id),
-        )):
-            grouped_draw: dict[int, list[Any]] = {}
-            for event in controlled_rows(draw):
-                grouped_draw.setdefault(bin_index(event), []).append(event)
-            bootstrap_bins.append(grouped_draw)
+        fast_bins: list[dict[int, dict[str, float]]] = []
+        if _fast_engine():
+            fast = _DrawComponents(eligible_cell)
+            bin_codes = np.array([bin_index(event) for event in eligible_cell], dtype=np.int64)
+            for order in _draw_orders(eligible_cell, bootstrap_plan=bootstrap_plan, resamples=bootstrap_resamples,
+                                      seed=_stable_seed(seed, "state-local-bootstrap", cell_id)):
+                codes = bin_codes[order]
+                fast_bins.append({int(index): fast.value(order[codes == index]) | {"n_observations": float(int((codes == index).sum()))}
+                                  for index in np.unique(codes)})
+        else:
+            for draw in (bootstrap_plan.event_draws(eligible_cell) if bootstrap_plan is not None else bootstrap_episode_rows(
+                eligible_cell,
+                resamples=bootstrap_resamples,
+                seed=_stable_seed(seed, "state-local-bootstrap", cell_id),
+            )):
+                grouped_draw: dict[int, list[Any]] = {}
+                for event in controlled_rows(draw):
+                    grouped_draw.setdefault(bin_index(event), []).append(event)
+                bootstrap_bins.append(grouped_draw)
+        empty_components = {**_components(()), "n_observations": 0.0}
         for index, eligible in sorted(point_bins.items()):
             components = _components(eligible)
             overlap = round_overlap_diagnostics(
@@ -473,19 +505,18 @@ def _state_local_cell(task: tuple) -> list[dict[str, Any]]:
                 {str(row.U_k) for row in eligible if row.U_k is not None}
             )
             overlap["number_of_actions_observed"] = action_count
-            null = policy_resampling_null(
-                TARGET_CMI,
-                eligible,
-                permutations=null_permutations,
-                seed=_stable_seed(seed, "state-local-null", cell_id, index),
-            )
-            bootstrap = [
-                {
-                    **_components(draw.get(index, ())),
-                    "n_observations": float(len(draw.get(index, ()))),
-                }
-                for draw in bootstrap_bins
-            ]
+            null = _policy_null(eligible, permutations=null_permutations,
+                                seed=_stable_seed(seed, "state-local-null", cell_id, index))
+            if _fast_engine():
+                bootstrap = [draw.get(index, empty_components) for draw in fast_bins]
+            else:
+                bootstrap = [
+                    {
+                        **_components(draw.get(index, ())),
+                        "n_observations": float(len(draw.get(index, ()))),
+                    }
+                    for draw in bootstrap_bins
+                ]
             common = {
                 "cell_id": cell_id,
                 **cell_coordinates,

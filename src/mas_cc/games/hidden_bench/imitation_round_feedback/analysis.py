@@ -783,15 +783,27 @@ class _BitsBootstrap:
         axis_shape = self.shape if not self.cmi else (self.shape[0], self.shape[2], self.shape[1])
         flat = np.ravel_multi_index(tuple(axis_arrays), axis_shape)
         size = int(np.prod(axis_shape))
-        self.tensors = np.stack([np.bincount(flat[members], minlength=size) for members in episodes]) if episodes else np.zeros((0, size), dtype=np.int64)
+        # Float64 on purpose: ``weights @ tensors`` on int64 is a generic (non-BLAS)
+        # matmul and was 80 % of a draw on the memory-conditioned CMI (2 x 1730 x 25
+        # cells; profiled 2026-09-20). Every entry and every partial sum is an
+        # integer far below 2**53, so the float product is exact whatever order
+        # BLAS accumulates in, and the counts table is identical to the int path.
+        self.tensors = (np.stack([np.bincount(flat[members], minlength=size) for members in episodes])
+                        if episodes else np.zeros((0, size), dtype=np.int64)).astype(float)
         self.axis_shape = axis_shape
         self.episode_levels = [[_first_appearance(array[members]).tolist() for members in episodes] for array in axis_arrays]
 
-    def draw(self, rng: np.random.Generator) -> float:
+    def choose(self, rng: np.random.Generator) -> list[int]:
+        """One episode draw, as ``bootstrap_episode_rows`` makes it (same RNG call)."""
         selected = rng.choice(self.ids, size=len(self.ids), replace=True)
-        chosen = [self.index[str(episode_id)] for episode_id in selected]
-        weights = np.bincount(chosen, minlength=len(self.ids))
-        counts = (weights @ self.tensors).reshape(self.axis_shape).astype(float)
+        return [self.index[str(episode_id)] for episode_id in selected]
+
+    def draw(self, rng: np.random.Generator) -> float:
+        return self.value(self.choose(rng))
+
+    def value(self, chosen: Sequence[int]) -> float:
+        weights = np.bincount(chosen, minlength=len(self.ids)).astype(float)
+        counts = (weights @ self.tensors).reshape(self.axis_shape)
         orders = [list(dict.fromkeys(v for e in chosen for v in per_episode[e])) for per_episode in self.episode_levels]
         table = counts[np.ix_(*orders)]
         return _cmi_from_counts(table) if self.cmi else _mi_from_counts(table)
@@ -828,6 +840,218 @@ class _BitsPolicyNull:
         counts = np.bincount(x * (self.shape[1] * self.shape[2]) + self.zy, minlength=int(np.prod(self.shape)))
         table = counts.reshape(self.shape).astype(float)[_first_appearance(x)]
         return _cmi_from_counts(table)
+
+    def values(self, permutations: int, seed: int) -> tuple[float, ...]:
+        return tuple(float(self.value(np.random.default_rng(seed + index))) for index in range(permutations))
+
+
+def _builtin_sum(values: np.ndarray) -> float:
+    """``sum()`` over the same Python floats the row path sums.
+
+    Delegating to the interpreter's ``sum`` (rather than a numpy reduction) is
+    what keeps the bits identical on every Python: 3.11 adds left to right,
+    3.12+ uses compensated summation, and the row path gets whichever the
+    interpreter does.
+    """
+    return float(sum(values.tolist()))
+
+
+def _running_sum(values: np.ndarray) -> float:
+    """A ``total = 0.0; total += x`` loop over ``values``: left-to-right float64 adds."""
+    if values.size == 0:
+        return 0.0
+    return float(np.add.accumulate(np.concatenate(([0.0], values)))[-1])
+
+
+def _group_sums(rank: np.ndarray, values: np.ndarray, groups: int) -> tuple[list[float], np.ndarray]:
+    """Per-group ``sum(list)`` of ``values`` in the given (draw) order, plus the counts."""
+    counts = np.bincount(rank, minlength=groups)
+    order = np.argsort(rank, kind="stable")
+    parts = np.split(values[order], np.cumsum(counts)[:-1])
+    return [float(sum(part.tolist())) for part in parts], counts
+
+
+def _two_level_entropy_bits(first: int, second: int) -> float:
+    """``_entropy_bits`` of a two-level sequence with these counts (order-free: two addends)."""
+    total = first + second
+    if total == 0:
+        return math.nan
+    return -sum((count / total) * math.log2(count / total) for count in (first, second) if count)
+
+
+class _DiagnosticBootstrap:
+    """Episode bootstrap of one round diagnostic on index arrays.
+
+    Every diagnostic in ``_diagnostic_for`` is a function of (action, state,
+    value) triples read in the draw's row order. The draw is reproduced as an
+    array of row positions (same ``rng.choice`` call and concatenation order as
+    ``bootstrap_episode_rows``), and each statistic is recomputed from
+    precomputed per-row codes with the row path's exact arithmetic: integer
+    counts where the row path counts, sequential float sums where it sums,
+    first-appearance order where it iterates a dict. The row path stays as the
+    reference behind ``MA_CC_INFORMATION_ENGINE=rows``.
+    """
+
+    def __init__(self, name: str, rows: Sequence[RoundEvent]):
+        self.name = name
+        by_episode = _grouped(rows, key=lambda row: row.episode_id)
+        self.ids = tuple(by_episode)
+        self.index = {str(episode_id): i for i, episode_id in enumerate(self.ids)}
+        position = {id(row): i for i, row in enumerate(rows)}
+        self.members = [np.fromiter((position[id(row)] for row in members), dtype=np.int64, count=len(members))
+                        for members in by_episode.values()]
+        self.n = len(rows)
+        self.actions = np.fromiter((0 if str(row.U_k) == str(ADVOCATE_TARGET) else 1 for row in rows),
+                                   dtype=np.int64, count=len(rows))
+        self.cmi: _BitsBootstrap | None = None
+        self.state: np.ndarray | None = None
+        self.values: np.ndarray | None = None
+        self.mask: np.ndarray | None = None
+        if name == "round_controller_action_entropy":
+            self.kind = "entropy"
+        elif name == "round_controller_action_entropy_given_population":
+            self.kind, self.state = "conditional_entropy", self._codes(rows, lambda row: row.N_k)
+        elif name == "round_population_information_fraction":
+            self.kind, self.state = "fraction", self._codes(rows, lambda row: row.N_k)
+            self.cmi = _BitsBootstrap("round_population_actuation_cmi", rows)
+        elif name == "round_target_information_fraction":
+            self.kind, self.state = "fraction", self._codes(rows, lambda row: row.target_before)
+            self.cmi = _BitsBootstrap("round_target_actuation_cmi", rows)
+        elif name in {"round_dual_action_state_fraction", "round_dual_action_event_fraction",
+                      "round_single_action_slice_fraction", "round_conditioning_state_count",
+                      "round_singleton_fraction"}:
+            self.kind, self.state = "overlap", self._codes(rows, lambda row: row.N_k)
+        elif name in {"round_sensor_mae", "round_sensor_mse"}:
+            self.kind = "sensor_error"
+            shares = [row.event.get("sensor_target_share") for row in rows]
+            self.mask = np.array([share is not None for share in shares], dtype=bool)
+            self.values = np.array([
+                0.0 if share is None else float(share) - row.target_before / sum(row.N_k)
+                for share, row in zip(shares, rows, strict=True)], dtype=float)
+        else:
+            state, delta = self._signed_definition(name)
+            self.kind, self.state = "signed", self._codes(rows, state)
+            self.values = np.array([delta(row) for row in rows], dtype=float)
+
+    @staticmethod
+    def _codes(rows: Sequence[RoundEvent], state: Callable[[RoundEvent], Hashable]) -> np.ndarray:
+        codes: dict[Hashable, int] = {}
+        return np.fromiter((codes.setdefault(state(row), len(codes)) for row in rows), dtype=np.int64, count=len(rows))
+
+    @staticmethod
+    def _signed_definition(name: str) -> tuple[Callable[[RoundEvent], Hashable], Callable[[RoundEvent], float]]:
+        if name == "round_target_signed_actuation":
+            return (lambda row: row.target_before), (lambda row: float(row.event["delta_m_ctrl"]))
+        if name == "round_truth_signed_actuation":
+            return (lambda row: row.truth_before), (lambda row: float(row.event["delta_m_truth"]))
+        if name == "round_order_signed_actuation":
+            return (lambda row: row.order_before), (lambda row: float(row.event["delta_m_order"]))
+        if name == "round_target_susceptibility":
+            return (lambda row: row.target_before), (lambda row: float(row.event["delta_p_ctrl"]))
+        if name == "round_target_signed_response_share":
+            return (lambda row: 0), (lambda row: float(row.event["delta_p_ctrl"]))
+        if name in _SIGNED_RESPONSE_SOURCE:
+            return ROUND_CONDITIONING_STATE[_SIGNED_RESPONSE_SOURCE[name]], (lambda row: float(row.event["delta_p_ctrl"]))
+        raise ValueError(f"unknown round diagnostic {name!r}")
+
+    def choose(self, rng: np.random.Generator) -> list[int]:
+        selected = rng.choice(self.ids, size=len(self.ids), replace=True)
+        return [self.index[str(episode_id)] for episode_id in selected]
+
+    def draw(self, rng: np.random.Generator) -> float:
+        return self.value(self.choose(rng))
+
+    def _ranked_state(self, order: np.ndarray) -> tuple[np.ndarray, int]:
+        """State rank per drawn row, ranks in first-appearance order of the draw."""
+        assert self.state is not None
+        states = self.state[order]
+        first = _first_appearance(states)
+        rank = np.empty(int(self.state.max()) + 1, dtype=np.int64)
+        rank[first] = np.arange(first.size)
+        return rank[states], int(first.size)
+
+    def value(self, chosen: Sequence[int]) -> float:
+        order = np.concatenate([self.members[episode] for episode in chosen]) if chosen else np.zeros(0, dtype=np.int64)
+        actions = self.actions[order]
+        if self.kind == "entropy":
+            return _two_level_entropy_bits(int((actions == 0).sum()), int((actions == 1).sum()))
+        if self.kind == "sensor_error":
+            assert self.values is not None and self.mask is not None
+            errors = self.values[order][self.mask[order]]
+            if errors.size == 0:
+                return math.nan
+            if self.name == "round_sensor_mae":
+                return _builtin_sum(np.abs(errors)) / errors.size
+            return _builtin_sum(errors * errors) / errors.size
+        rank, groups = self._ranked_state(order)
+        counts = np.bincount(rank * 2 + actions, minlength=groups * 2).reshape(groups, 2)
+        if self.kind in {"conditional_entropy", "fraction"}:
+            totals = counts.sum(axis=1)
+            terms = np.fromiter(
+                ((int(total) / order.size) * _two_level_entropy_bits(int(first), int(second))
+                 for first, second, total in zip(counts[:, 0], counts[:, 1], totals)),
+                dtype=float, count=groups)
+            conditional = math.nan if order.size == 0 else _builtin_sum(terms)
+            if self.kind == "conditional_entropy":
+                return conditional
+            assert self.cmi is not None
+            numerator = float(self.cmi.value(chosen))
+            return math.nan if not math.isfinite(conditional) or conditional <= 1e-12 else numerator / conditional
+        if self.kind == "overlap":
+            dual = (counts[:, 0] > 0) & (counts[:, 1] > 0)
+            totals = counts.sum(axis=1)
+            n_dual, n_states, n_rows = int(dual.sum()), groups, int(order.size)
+            if self.name == "round_dual_action_state_fraction":
+                return math.nan if not n_states else n_dual / n_states
+            if self.name == "round_dual_action_event_fraction":
+                return math.nan if not n_rows else int(totals[dual].sum()) / n_rows
+            if self.name == "round_single_action_slice_fraction":
+                return math.nan if not n_states else 1.0 - n_dual / n_states
+            if self.name == "round_conditioning_state_count":
+                return float(n_states)
+            return math.nan if not n_rows else int((totals == 1).sum()) / n_rows
+        assert self.kind == "signed" and self.values is not None
+        deltas = self.values[order]
+        advocated = actions == 0
+        sum_a, count_a = _group_sums(rank[advocated], deltas[advocated], groups)
+        sum_n, count_n = _group_sums(rank[~advocated], deltas[~advocated], groups)
+        # The row path: per state (first-appearance order), `size * (mean_a - mean_n)`
+        # added to a running total. Means are `sum(list) / len(list)`.
+        terms, weight = [], 0
+        for group in range(groups):
+            if count_a[group] and count_n[group]:
+                size = int(count_a[group] + count_n[group])
+                terms.append(size * (sum_a[group] / int(count_a[group]) - sum_n[group] / int(count_n[group])))
+                weight += size
+        return math.nan if weight == 0 else _running_sum(np.array(terms, dtype=float)) / weight
+
+
+class _SensorPermutationNull:
+    """Sensor-permutation null of one sensing statistic on integer codes.
+
+    The row path rebuilds every row with the permuted sensor value and re-runs
+    the estimator; the table it ends up counting is the same contingency table
+    with one axis permuted, so it is counted directly here with the same
+    ``rng.permutation`` draw and the same first-appearance axis order.
+    """
+
+    def __init__(self, name: str, rows: Sequence[RoundEvent]):
+        x, y, _ = _bits_sequences(name, rows)
+        # The permuted field is the sensor: ``x`` for the policy channel, ``y`` otherwise.
+        self.permute_x = name == "round_sensor_action_mi"
+        levels = [tuple(dict.fromkeys(seq)) for seq in (x, y)]
+        index = [{value: i for i, value in enumerate(level)} for level in levels]
+        self.x = np.fromiter((index[0][v] for v in x), dtype=np.int64, count=len(x))
+        self.y = np.fromiter((index[1][v] for v in y), dtype=np.int64, count=len(y))
+        self.shape = (len(levels[0]), len(levels[1]))
+
+    def value(self, rng: np.random.Generator) -> float:
+        order = rng.permutation(self.x.size)
+        x = self.x[order] if self.permute_x else self.x
+        y = self.y if self.permute_x else self.y[order]
+        counts = np.bincount(x * self.shape[1] + y, minlength=self.shape[0] * self.shape[1])
+        table = counts.reshape(self.shape).astype(float)[np.ix_(_first_appearance(x), _first_appearance(y))]
+        return _mi_from_counts(table)
 
     def values(self, permutations: int, seed: int) -> tuple[float, ...]:
         return tuple(float(self.value(np.random.default_rng(seed + index))) for index in range(permutations))
@@ -904,6 +1128,14 @@ def round_information_analysis(
                     boot = float(fast.draw(rng))
                     if math.isfinite(boot):
                         bootstrap_values.append(boot)
+        elif name not in _BITS_STATISTICS and _INFORMATION_ENGINE == "fast":
+            fast_diagnostic = _DiagnosticBootstrap(name, eligible)
+            if fast_diagnostic.ids and bootstrap_resamples:
+                rng = np.random.default_rng(seed + name_index)
+                for _ in range(bootstrap_resamples):
+                    boot = float(fast_diagnostic.draw(rng))
+                    if math.isfinite(boot):
+                        bootstrap_values.append(boot)
         else:
             for draw in bootstrap_episode_rows(
                 eligible, resamples=bootstrap_resamples, seed=seed + name_index
@@ -947,7 +1179,10 @@ def round_information_analysis(
                 if name in {"round_sensing_mi", "round_sensor_action_mi"}
                 else "sensor_target_count"
             )
-            for permutation in range(null_permutations):
+            if _INFORMATION_ENGINE == "fast":
+                permuted_values = list(_SensorPermutationNull(name, eligible).values(
+                    null_permutations, seed=seed + 100_000 * (name_index + 1)))
+            for permutation in range(0 if _INFORMATION_ENGINE == "fast" else null_permutations):
                 rng = np.random.default_rng(
                     seed + 100_000 * (name_index + 1) + permutation
                 )

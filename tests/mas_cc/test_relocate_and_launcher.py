@@ -122,3 +122,14 @@ def test_launcher_env_override(monkeypatch, tmp_path):
     custom.write_text("#!/usr/bin/env bash\n")
     monkeypatch.setenv("MA_CC_ANALYSIS_LAUNCHER", str(custom))
     assert analysis_slurm.launcher_path() == custom.resolve()
+
+
+def test_relocate_descends_into_a_zip_top_level_folder(tmp_path):
+    """`python -m zipfile -e bundle.zip out/` leaves out/<bundle-name>/...; relocate finds it."""
+    bundle = _make_bundle(tmp_path, "frozen_generation")
+    outer = tmp_path / "extracted"
+    outer.mkdir()
+    bundle.rename(outer / bundle.name)
+    root = tmp_path / "nested-root" / "demo_study"
+    manifest_path = relocate_module.relocate(outer, root)
+    assert relocate_module.verify(manifest_path)["valid_groups"] == 1

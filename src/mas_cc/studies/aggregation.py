@@ -3701,6 +3701,34 @@ def _scientific_identity(
     )
 
 
+
+
+def _checkpoint_h0_rows(checkpoint_endpoints: pd.DataFrame) -> pd.DataFrame:
+    """The sealed checkpoint as horizon-0 trajectory rows, one per parent/copy/target.
+
+    The checkpoint precedes every branch, so its row carries no branch
+    coordinates: ``branch_policy`` is ``checkpoint`` and ``posting_budget`` is
+    null. The previous construction sorted by horizon with the default
+    (unstable) sort and took ``groupby().first()``, which skips nulls per
+    column and therefore copied ``posting_budget`` from whichever budgeted
+    branch happened to sort first: 154 of 320 rows read 3 in one finalize of the
+    checkpoint bundle and 12 in another, otherwise byte-identical, run
+    (2026-09-19). The sort is stable and the budget is blanked on purpose.
+    """
+    h0 = (
+        checkpoint_endpoints.sort_values(
+            ["post_branch_horizon", "branch_policy", "posting_budget"], kind="stable", na_position="first")
+        .groupby(["parent_id", "copy_id", "q", "rho", "target_semantics"], as_index=False)
+        .first()
+    )
+    h0["post_branch_horizon"] = 0
+    h0["target_count"] = h0["n_0"]
+    h0["target_fraction"] = h0["n_0"] / h0["N"]
+    h0["branch_policy"] = "checkpoint"
+    h0["posting_budget"] = np.nan
+    return h0
+
+
 @measured_aggregation
 def _aggregate_study_local(
     study_dir: str | Path,
@@ -3787,7 +3815,8 @@ def _aggregate_study_local(
         retained_input_identity = str(snapshot_manifest["scientific_input_identity"])
         canonical_metadata = {}
     elif cells:
-        canonical, canonical_metadata = build_canonical_tables(study_id, cells)
+        canonical, canonical_metadata = build_canonical_tables(
+            study_id, cells, workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))))
         if target_manifest is not None:
             from .extension import consolidate_extension_tables
 
@@ -3815,7 +3844,8 @@ def _aggregate_study_local(
             "source run trees unavailable; reaggregated from retained canonical tables"
         )
     else:
-        canonical, canonical_metadata = build_canonical_tables(study_id, cells)
+        canonical, canonical_metadata = build_canonical_tables(
+            study_id, cells, workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))))
         validation = validate_study(entries, runs, cells, canonical)
     if cells:
         selection = canonical_metadata.get("record_selection", {})
@@ -4237,21 +4267,14 @@ def _aggregate_study_local(
                 null_permutations=int(settings["null_permutations"]),
                 confidence=float(settings["confidence"]),
                 seed=int(settings["seed"]),
+                workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
             )
             if bool(checkpoint_recipe.get("branch_round_metrics", False))
             else (pd.DataFrame(), pd.DataFrame())
         )
-        h0 = (
-            checkpoint_endpoints.sort_values("post_branch_horizon")
-            .groupby(["parent_id", "copy_id", "q", "rho", "target_semantics"], as_index=False)
-            .first()
-        )
-        h0["post_branch_horizon"] = 0
-        h0["target_count"] = h0["n_0"]
-        h0["target_fraction"] = h0["n_0"] / h0["N"]
-        h0["branch_policy"] = "checkpoint"
         checkpoint_trajectories = pd.concat(
-            [h0, checkpoint_endpoints], ignore_index=True, sort=False
+            [_checkpoint_h0_rows(checkpoint_endpoints), checkpoint_endpoints],
+            ignore_index=True, sort=False,
         )
         outputs.update({
             "checkpoint_complete_round_records": checkpoint_rounds,

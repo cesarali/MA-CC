@@ -614,9 +614,237 @@ def _incomplete_unique_records(
     return list(latest.values())
 
 
+def _cell_canonical(study_id: str, cell: DiscoveredCell) -> dict[str, Any]:
+    """Everything the canonical tables take from one cell, in that cell's row order.
+
+    Pure in the cell: it reads that cell's files and returns lists, so cells can
+    be built in a process pool and concatenated in cell order to the same
+    tables the serial loop produced.
+    """
+    interrupted: list[dict[str, Any]] = []
+    frame = _scientific_frame(cell)
+    episodes = _episode_rows(study_id, cell, frame)
+    seal_path = cell.path / "cell_complete.json"
+    seal: Mapping[str, Any] = {}
+    if seal_path.is_file():
+        seal = json.loads(seal_path.read_text(encoding="utf-8"))
+    completed = sum(
+        row["status"] in {"completed", "skipped_resumed"} for row in episodes
+    )
+    failed = sum(
+        row["status"] in {"failed", "skipped_aborted", "aborted"}
+        for row in episodes
+    )
+    coords = _coordinates(cell)
+    cell_row = (
+        {
+            **_provenance(study_id, cell),
+            "config_hash": cell.run.entry.config_hash,
+            "resolved_config_hash": canonical_hash(cell.resolved_config),
+            "recorded_resolved_config_hash": (
+                None
+                if frame.empty or "resolved_config_hash" not in frame
+                else json.dumps(
+                    sorted(
+                        {
+                            str(value)
+                            for value in frame["resolved_config_hash"].dropna()
+                        }
+                    )
+                )
+            ),
+            "task_id": coords.get("task_id"),
+            **coords,
+            "expected_episodes": _expected_repetitions(cell),
+            "completed_episodes": completed,
+            "failed_episodes": failed,
+            "sealed": seal.get("status") == "completed",
+        }
+    )
+    rich_rounds = _rich_rows(
+        study_id, cell, "round_trajectory.jsonl", "round_trajectory.jsonl"
+    )
+    selected_rounds, round_selection = _completed_unique_records(
+        rich_rounds or _compact_round_rows(study_id, cell, frame),
+        episodes,
+        coordinate_columns=(
+            "branch_policy",
+            "posting_budget",
+            "copy_id",
+            "post_branch_horizon",
+            "round_index",
+        ),
+    )
+    prefix_rounds = _incomplete_unique_records(
+        rich_rounds,
+        episodes,
+        coordinate_columns=(
+            "branch_policy",
+            "posting_budget",
+            "copy_id",
+            "post_branch_horizon",
+            "round_index",
+        ),
+    )
+    # Micro-slot records live in different files per artifact profile:
+    # `results_only` compaction writes a dedicated `micro_slot_trajectory`,
+    # while the `full` profile leaves them interleaved in the generic
+    # `trajectory.jsonl`.  Both are harvested, because `h` and `gamma` -
+    # and therefore `eta_th` - are read off these rows, and a profile that
+    # merely files them elsewhere must not make those quantities vanish.
+    # The generic file is filtered to genuine slot events by
+    # `within_round_index`, the same marker the game analyzers use.
+    discovered_micro_rows = _rich_rows(
+        study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl"
+    ) or [
+        row
+        for row in _rich_rows(
+            study_id, cell, "trajectory.jsonl", "trajectory.jsonl"
+        )
+        if row.get("within_round_index") is not None
+    ]
+    selected_micro_rows, micro_selection = _completed_unique_records(
+        discovered_micro_rows,
+        episodes,
+        coordinate_columns=(
+            "branch_policy",
+            "posting_budget",
+            "copy_id",
+            "post_branch_horizon",
+            "round_index",
+            "micro_slot_index",
+        ),
+    )
+    prefix_micro_rows = _incomplete_unique_records(
+        discovered_micro_rows,
+        episodes,
+        coordinate_columns=(
+            "branch_policy",
+            "posting_budget",
+            "copy_id",
+            "post_branch_horizon",
+            "round_index",
+            "micro_slot_index",
+        ),
+    )
+
+    prefix_rounds_by_episode: dict[str, list[dict[str, Any]]] = {}
+    for row in prefix_rounds:
+        prefix_rounds_by_episode.setdefault(str(row["episode_id"]), []).append(row)
+    prefix_micro_by_episode: dict[str, list[dict[str, Any]]] = {}
+    for row in prefix_micro_rows:
+        prefix_micro_by_episode.setdefault(str(row["episode_id"]), []).append(row)
+    for episode in episodes:
+        if episode.get("status") in {"completed", "skipped_resumed"}:
+            continue
+        episode_id = str(episode["episode_id"])
+        episode_rounds = prefix_rounds_by_episode.get(episode_id, [])
+        episode_micro = prefix_micro_by_episode.get(episode_id, [])
+        round_indices = [
+            int(row["round_index"])
+            for row in episode_rounds
+            if row.get("round_index") is not None
+        ]
+        micro_coordinates = [
+            (int(row["round_index"]), int(row["micro_slot_index"]))
+            for row in episode_micro
+            if row.get("round_index") is not None
+            and row.get("micro_slot_index") is not None
+        ]
+        episode["last_complete_round_index"] = (
+            max(round_indices) if round_indices else None
+        )
+        episode["last_complete_micro_slot_index"] = (
+            max(micro_coordinates)[1] if micro_coordinates else None
+        )
+        episode["prefix_round_rows"] = len(episode_rounds)
+        episode["prefix_micro_slot_rows"] = len(episode_micro)
+        interrupted.append(
+            {
+                key: episode.get(key)
+                for key in TABLE_SCHEMAS["interrupted_episode_diagnostics"]
+            }
+        )
+    return {
+        "cell_key": cell.cell_key,
+        "frame": frame,
+        "cell_row": cell_row,
+        "episodes": episodes,
+        "rounds": selected_rounds,
+        "round_selection": round_selection,
+        "prefix_rounds": prefix_rounds,
+        "micro_rows": selected_micro_rows,
+        "micro_selection": micro_selection,
+        "prefix_micro_rows": prefix_micro_rows,
+        "interrupted": interrupted,
+    }
+
+
+def _cell_canonical_task(task: tuple[str, DiscoveredCell]) -> dict[str, Any]:
+    return _cell_canonical(*task)
+
+
+def _normalise_semantics_label(value: Any) -> str:
+    """Same labels as ``derived_aggregation._normalize_semantics`` (kept local: no import cycle)."""
+
+    text = str(value).strip().lower()
+    if text in {"true", "truth", "correct"}:
+        return "truth"
+    if text in {"false", "incorrect", "adversarial"}:
+        return "false"
+    return text
+
+
+def _harmonise_target_semantics(
+    row_lists: Iterable[list[dict[str, Any]]], frames: Mapping[str, pd.DataFrame]
+) -> bool:
+    """Give ``target_semantics`` one type when a study mixes YAML booleans and strings.
+
+    ``target_semantics: false`` / ``true`` parse as booleans while ``none`` and ``truth`` are
+    strings. A study whose arms all use the same spelling keeps its values untouched, so
+    packages of existing studies are unchanged. A study that mixes them (no-control ``none``
+    next to ``false`` and ``true`` arms) cannot be written to Parquet at all - pyarrow
+    refuses a column holding both bool and str - so there, and only there, every value
+    becomes its canonical label (``truth`` / ``false`` / the lower-cased text).
+    """
+
+    row_lists = list(row_lists)
+    def kind(value: Any) -> str:
+        # numpy.bool_ (from a frame) and bool (from a row dict) are the same spelling
+        return "bool" if type(value).__name__ in {"bool", "bool_"} else type(value).__name__
+
+    kinds = {
+        kind(row["target_semantics"])
+        for rows in row_lists
+        for row in rows
+        if row.get("target_semantics") is not None
+    }
+    for frame in frames.values():
+        if "target_semantics" in frame:
+            kinds.update(kind(v) for v in frame["target_semantics"].dropna().unique())
+    if len(kinds) <= 1:
+        return False
+    for rows in row_lists:
+        for row in rows:
+            if row.get("target_semantics") is not None:
+                row["target_semantics"] = _normalise_semantics_label(row["target_semantics"])
+    for frame in frames.values():
+        if "target_semantics" in frame:
+            frame["target_semantics"] = frame["target_semantics"].map(
+                lambda v: v if pd.isna(v) else _normalise_semantics_label(v)
+            )
+    return True
+
+
 def build_canonical_tables(
-    study_id: str, cells: tuple[DiscoveredCell, ...]
+    study_id: str, cells: tuple[DiscoveredCell, ...], *, workers: int = 1
 ) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
+    """Discover and normalise every cell's records into the canonical tables.
+
+    Cells are independent, so with ``workers > 1`` they are read and
+    normalised in a spawn pool; results are concatenated in cell order and the
+    selection counters summed, which is exactly what the serial loop does.
+    """
     cell_rows: list[dict[str, Any]] = []
     episode_rows: list[dict[str, Any]] = []
     round_rows: list[dict[str, Any]] = []
@@ -641,166 +869,36 @@ def build_canonical_tables(
         "available_round_prefixes": {"retained_records": 0},
         "available_micro_slot_prefixes": {"retained_records": 0},
     }
-    for cell in cells:
-        frame = _scientific_frame(cell)
-        frames[cell.cell_key] = frame
-        episodes = _episode_rows(study_id, cell, frame)
-        episode_rows.extend(episodes)
-        seal_path = cell.path / "cell_complete.json"
-        seal: Mapping[str, Any] = {}
-        if seal_path.is_file():
-            seal = json.loads(seal_path.read_text(encoding="utf-8"))
-        completed = sum(
-            row["status"] in {"completed", "skipped_resumed"} for row in episodes
-        )
-        failed = sum(
-            row["status"] in {"failed", "skipped_aborted", "aborted"}
-            for row in episodes
-        )
-        coords = _coordinates(cell)
-        cell_rows.append(
-            {
-                **_provenance(study_id, cell),
-                "config_hash": cell.run.entry.config_hash,
-                "resolved_config_hash": canonical_hash(cell.resolved_config),
-                "recorded_resolved_config_hash": (
-                    None
-                    if frame.empty or "resolved_config_hash" not in frame
-                    else json.dumps(
-                        sorted(
-                            {
-                                str(value)
-                                for value in frame["resolved_config_hash"].dropna()
-                            }
-                        )
-                    )
-                ),
-                "task_id": coords.get("task_id"),
-                **coords,
-                "expected_episodes": _expected_repetitions(cell),
-                "completed_episodes": completed,
-                "failed_episodes": failed,
-                "sealed": seal.get("status") == "completed",
-            }
-        )
-        rich_rounds = _rich_rows(
-            study_id, cell, "round_trajectory.jsonl", "round_trajectory.jsonl"
-        )
-        selected_rounds, round_selection = _completed_unique_records(
-            rich_rounds or _compact_round_rows(study_id, cell, frame),
-            episodes,
-            coordinate_columns=(
-                "branch_policy",
-                "posting_budget",
-                "copy_id",
-                "post_branch_horizon",
-                "round_index",
-            ),
-        )
-        round_rows.extend(selected_rounds)
-        prefix_rounds = _incomplete_unique_records(
-            rich_rounds,
-            episodes,
-            coordinate_columns=(
-                "branch_policy",
-                "posting_budget",
-                "copy_id",
-                "post_branch_horizon",
-                "round_index",
-            ),
-        )
-        available_round_prefix_rows.extend(prefix_rounds)
-        record_selection["available_round_prefixes"]["retained_records"] += len(
-            prefix_rounds
-        )
-        for key, value in round_selection.items():
-            record_selection["rounds"][key] += value
-        # Micro-slot records live in different files per artifact profile:
-        # `results_only` compaction writes a dedicated `micro_slot_trajectory`,
-        # while the `full` profile leaves them interleaved in the generic
-        # `trajectory.jsonl`.  Both are harvested, because `h` and `gamma` -
-        # and therefore `eta_th` - are read off these rows, and a profile that
-        # merely files them elsewhere must not make those quantities vanish.
-        # The generic file is filtered to genuine slot events by
-        # `within_round_index`, the same marker the game analyzers use.
-        discovered_micro_rows = _rich_rows(
-            study_id, cell, "micro_slot_trajectory.jsonl", "micro_slot_trajectory.jsonl"
-        ) or [
-            row
-            for row in _rich_rows(
-                study_id, cell, "trajectory.jsonl", "trajectory.jsonl"
-            )
-            if row.get("within_round_index") is not None
-        ]
-        selected_micro_rows, micro_selection = _completed_unique_records(
-            discovered_micro_rows,
-            episodes,
-            coordinate_columns=(
-                "branch_policy",
-                "posting_budget",
-                "copy_id",
-                "post_branch_horizon",
-                "round_index",
-                "micro_slot_index",
-            ),
-        )
-        micro_rows.extend(selected_micro_rows)
-        prefix_micro_rows = _incomplete_unique_records(
-            discovered_micro_rows,
-            episodes,
-            coordinate_columns=(
-                "branch_policy",
-                "posting_budget",
-                "copy_id",
-                "post_branch_horizon",
-                "round_index",
-                "micro_slot_index",
-            ),
-        )
-        available_micro_prefix_rows.extend(prefix_micro_rows)
-        record_selection["available_micro_slot_prefixes"]["retained_records"] += len(
-            prefix_micro_rows
-        )
-        for key, value in micro_selection.items():
-            record_selection["micro_slots"][key] += value
+    tasks = [(study_id, cell) for cell in cells]
+    if workers > 1 and len(tasks) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from multiprocessing import get_context
 
-        prefix_rounds_by_episode: dict[str, list[dict[str, Any]]] = {}
-        for row in prefix_rounds:
-            prefix_rounds_by_episode.setdefault(str(row["episode_id"]), []).append(row)
-        prefix_micro_by_episode: dict[str, list[dict[str, Any]]] = {}
-        for row in prefix_micro_rows:
-            prefix_micro_by_episode.setdefault(str(row["episode_id"]), []).append(row)
-        for episode in episodes:
-            if episode.get("status") in {"completed", "skipped_resumed"}:
-                continue
-            episode_id = str(episode["episode_id"])
-            episode_rounds = prefix_rounds_by_episode.get(episode_id, [])
-            episode_micro = prefix_micro_by_episode.get(episode_id, [])
-            round_indices = [
-                int(row["round_index"])
-                for row in episode_rounds
-                if row.get("round_index") is not None
-            ]
-            micro_coordinates = [
-                (int(row["round_index"]), int(row["micro_slot_index"]))
-                for row in episode_micro
-                if row.get("round_index") is not None
-                and row.get("micro_slot_index") is not None
-            ]
-            episode["last_complete_round_index"] = (
-                max(round_indices) if round_indices else None
-            )
-            episode["last_complete_micro_slot_index"] = (
-                max(micro_coordinates)[1] if micro_coordinates else None
-            )
-            episode["prefix_round_rows"] = len(episode_rounds)
-            episode["prefix_micro_slot_rows"] = len(episode_micro)
-            interrupted_episode_rows.append(
-                {
-                    key: episode.get(key)
-                    for key in TABLE_SCHEMAS["interrupted_episode_diagnostics"]
-                }
-            )
+        with ProcessPoolExecutor(max_workers=min(workers, len(tasks)), mp_context=get_context("spawn")) as pool:
+            parts = list(pool.map(_cell_canonical_task, tasks))
+    else:
+        parts = [_cell_canonical(study_id, cell) for cell in cells]
+    for part in parts:
+        frames[part["cell_key"]] = part["frame"]
+        episode_rows.extend(part["episodes"])
+        cell_rows.append(part["cell_row"])
+        round_rows.extend(part["rounds"])
+        available_round_prefix_rows.extend(part["prefix_rounds"])
+        record_selection["available_round_prefixes"]["retained_records"] += len(part["prefix_rounds"])
+        for key, value in part["round_selection"].items():
+            record_selection["rounds"][key] += value
+        micro_rows.extend(part["micro_rows"])
+        available_micro_prefix_rows.extend(part["prefix_micro_rows"])
+        record_selection["available_micro_slot_prefixes"]["retained_records"] += len(part["prefix_micro_rows"])
+        for key, value in part["micro_selection"].items():
+            record_selection["micro_slots"][key] += value
+        interrupted_episode_rows.extend(part["interrupted"])
+
+    _harmonise_target_semantics(
+        [episode_rows, cell_rows, round_rows, available_round_prefix_rows, micro_rows,
+         available_micro_prefix_rows, interrupted_episode_rows],
+        frames,
+    )
 
     interrupted_summary_rows: list[dict[str, Any]] = []
     if interrupted_episode_rows:

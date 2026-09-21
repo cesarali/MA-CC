@@ -35,8 +35,14 @@ def _id(value: Any) -> str:
 
 
 def _present(value: Any) -> bool:
+    # Hot path: ~5 million calls per calibration group in the diagnostics
+    # slices. The scalar fast paths return exactly what pd.isna would.
     if value is None:
         return False
+    if isinstance(value, float):  # includes numpy.float64; bool() because numpy returns numpy.bool_
+        return bool(value == value)
+    if isinstance(value, (str, int, bool)):  # numpy integers are not int subclasses; they take the pd.isna path
+        return True
     missing = pd.isna(value)
     return not bool(missing) if isinstance(missing, (bool, np.bool_)) else True
 
@@ -183,14 +189,45 @@ def susceptibility(c0: Mapping, cb: Mapping, N: int, M: int, x: float) -> dict:
 
 
 def adapt_calibration_inputs(micro: pd.DataFrame, rounds: pd.DataFrame,
-                             episodes: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFrame:
+                             episodes: pd.DataFrame, cells: pd.DataFrame,
+                             *, workers: int = 1) -> pd.DataFrame:
     """Join only completed canonical identities; ambiguous duplicates are errors.
 
     Legacy compact records lack eligible composition. The transient-direct flag
     is deliberately never a fallback for actual sampled-board exposure.
+
+    Every check and every derived value is local to one cell (the whole-frame
+    checks at the end are per cell or per episode), so with ``workers > 1`` the
+    cells are adapted in a spawn pool; the records are merged back in input
+    order and the frame is built exactly as the serial path builds it, so the
+    result is identical. Measured 47 s serial on 259,200 rows (b9/b15), the
+    parent's single largest remaining cost after the bootstrap rewrite.
     """
     if micro.empty:
         return pd.DataFrame()
+    _check_identities(micro, rounds, episodes, cells)
+    cell_ids = list(dict.fromkeys(str(c) for c in micro["cell_id"]))
+    if workers > 1 and len(cell_ids) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from multiprocessing import get_context
+
+        positions = np.arange(len(micro))
+        tasks = []
+        for cell_id in cell_ids:
+            mask = (micro["cell_id"].astype(str) == cell_id).to_numpy()
+            tasks.append((
+                micro[mask], rounds[rounds["cell_id"].astype(str) == cell_id],
+                episodes[episodes["cell_id"].astype(str) == cell_id], cells[cells["cell_id"].astype(str) == cell_id],
+                positions[mask],
+            ))
+        with ProcessPoolExecutor(max_workers=min(workers, len(tasks)), mp_context=get_context("spawn")) as pool:
+            parts = list(pool.map(_adapt_cell_task, tasks))
+        ordered = sorted((pos, record) for part in parts for pos, record in part)
+        return _finalize_adapted(pd.DataFrame([record for _, record in ordered]))
+    return _finalize_adapted(pd.DataFrame(_adapt_records(micro, rounds, episodes, cells)))
+
+
+def _check_identities(micro, rounds, episodes, cells) -> None:
     def unique(frame, keys, label):
         if not set(keys) <= set(frame) or frame[keys].isna().any().any() or frame.duplicated(keys).any():
             raise ValueError(f"{label} requires unique, nonmissing canonical identities")
@@ -198,11 +235,23 @@ def adapt_calibration_inputs(micro: pd.DataFrame, rounds: pd.DataFrame,
     unique(cells, ["cell_id"], "cells")
     unique(rounds, ["cell_id", "episode_id", "round_index"], "rounds")
     unique(micro, ["cell_id", "episode_id", "round_index", "micro_slot_index"], "micro slots")
+
+
+def _adapt_cell_task(task: tuple) -> list:
+    """One cell's records tagged with their position in the full micro frame."""
+    micro, rounds, episodes, cells, positions = task
+    return _adapt_records(micro, rounds, episodes, cells, positions=positions)
+
+
+def _adapt_records(micro: pd.DataFrame, rounds: pd.DataFrame,
+                   episodes: pd.DataFrame, cells: pd.DataFrame, *, positions=None) -> list:
+    """The per-row adapter body. Returns records (or (position, record) pairs when
+    ``positions`` is given) in micro order; identity checks happen in the caller."""
     ep = {(str(r["cell_id"]), str(r["episode_id"])): r for r in episodes.to_dict("records")}
     rr = {(str(r["cell_id"]), str(r["episode_id"]), r["round_index"]): r for r in rounds.to_dict("records")}
     cc = {str(r["cell_id"]): r for r in cells.to_dict("records")}
     records = []
-    for row in micro.to_dict("records"):
+    for position, row in enumerate(micro.to_dict("records")):
         key = (str(row["cell_id"]), str(row["episode_id"]))
         episode = ep.get(key)
         if episode is None:
@@ -273,7 +322,7 @@ def adapt_calibration_inputs(micro: pd.DataFrame, rounds: pd.DataFrame,
                 x = counts_before[idx] / sum(counts_before)
             if counts_after and sum(counts_after):
                 y = counts_after[idx] / sum(counts_after)
-        records.append(dict(
+        record = dict(
             study_id=joined.get("study_id"), source_run_id=joined.get("source_run_id"),
             cell_id=key[0], episode_id=key[1], round_index=row["round_index"],
             micro_slot_index=row["micro_slot_index"], block_id=block,
@@ -290,8 +339,13 @@ def adapt_calibration_inputs(micro: pd.DataFrame, rounds: pd.DataFrame,
             propensity=_first(rd, "P_U1_given_Y", "controller_probability_U1_given_Y", "controller_action_probability", default=NAN),
             focal_selection_rule=joined.get("focal_selection_rule", "unverified"),
             adapter_version=ADAPTER_VERSION, source_selection="completed_canonical_episodes",
-        ))
-    result = pd.DataFrame(records)
+        )
+        records.append((int(positions[position]), record) if positions is not None else record)
+    return records
+
+
+def _finalize_adapted(result: pd.DataFrame) -> pd.DataFrame:
+    """Whole-frame checks and the per-round M column; identical for both paths."""
     if not result.empty:
         for _, cell in result.groupby("cell_id"):
             sizes = pd.to_numeric(cell["N"], errors="coerce").dropna()
@@ -915,7 +969,7 @@ def analyze_blackboard_calibration(
         raise ValueError("calibration workers must be positive")
     if bootstrap_engine not in ("blocks", "rows"):
         raise ValueError(f"unknown bootstrap engine: {bootstrap_engine!r}")
-    inputs = adapt_calibration_inputs(micro, rounds, episodes, cells)
+    inputs = adapt_calibration_inputs(micro, rounds, episodes, cells, workers=workers)
     if inputs.empty:
         output["blackboard_calibration_diagnostics"].append(dict(
             support_status="no_completed_board_updates", model_status="unsupported",
