@@ -1,0 +1,11 @@
+schema_version: 1
+report:
+  id: blackboard_checkpoint_ensemble_01_saved_report
+  title: Blackboard checkpoint ensemble — saved results only
+  source: ../../../../../results/aggregation_results_local/blackboard_checkpoint_ensemble_01_frozen_aggregation_inputs_20260918
+  output_dir: ../../../../../results/reports/blackboard_checkpoint_ensemble_01
+  renderer: scripts/analysis/report_saved_checkpoint.py
+  scope: canonical_completed_parents_only
+  examples_per_cell: 1
+  estimators: false
+  resampling: false

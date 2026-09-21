@@ -398,6 +398,7 @@ The repository supports two adaptive policies:
 |---|---|
 | `contextual_weighted_v1` | Seeded code draws from context-dependent mode weights |
 | `llm_structured_v1` | An LLM returns a validated mode and, for `REPORT`, eligible fact IDs |
+| `llm_authored_report_only_v1` | An LLM selects one eligible verified fact and authors one grounded public `REPORT`; requests and directives are disabled |
 
 The policy runs only after the binary gate returns $U_k=1$. It never decides
 whether the controller acts. Its random seeds are separate from the vote
@@ -1038,6 +1039,58 @@ controller_report_selection_strategy: target_preserving_v1
 
 The values shown in the individual config are base values. The `grid` replaces
 persistence and, for controlled arms, budget with all planned values.
+
+### Immediate grounded-report relay (prompt version 5)
+
+Version 5 distinguishes three fact sets for focal participant `i`: historical
+knowledge `H_i(t)`, active memory `K_i(t)`, and grounded facts `O_i(t)` in the
+exact sampled board view for the current update. Its legal citation set is
+`K_i(t) union O_i(t)`. A visible, live, non-self-authored `REPORT` with a valid
+task fact ID can therefore be relayed immediately. `REQUEST`, `DIRECTIVE`,
+transient recommendations, expired or unsampled messages, and free-form text
+never add a citable fact.
+
+An observed fact is globally grounded evidence received through a verified
+report; it is not represented as privately verified by the receiver. Events
+record whether a new report cited `active_memory` or `current_observation` and,
+for the latter, retain the source message ID. Acquisition/reactivation and
+relay commit in the same transition. Message expiry controls visibility only;
+it does not erase historical acquisition, while persistence controls whether
+the acquired fact remains active.
+
+When neither active memory nor the sampled view contains a citable fact,
+version 5 fixes the public action to `NONE` while still asking for the vote and
+private reason. The canonical configuration is:
+
+```yaml
+game:
+  options:
+    prompt_version: 5
+    board:
+      report_citation_scope: active_or_observed
+      no_citable_fact_action: none
+```
+
+Versions 2--4 retain `active_only` plus `model_select` when these fields are
+absent. Version 5 can explicitly reproduce that mechanism with those same two
+values. `request_or_none` is an explicit opt-in and requires participant
+requests to be enabled. Resolved rules record both policy values, so config
+hashes and checkpoints cannot silently cross citation semantics.
+
+Paid multi-episode configs can also enable the independent worker safeguard:
+
+```yaml
+execution:
+  semantic_failure_guard:
+    minimum_finished_episodes: 2
+    maximum_failure_fraction: 0.25
+    minimum_failures: 2
+```
+
+Once this threshold is crossed, no new episodes start, retained successes and
+failure checkpoints remain intact, and the worker exits nonzero with a compact
+failure summary. Provider failures and budget stops are not classified as
+semantic failures.
 
 For ASTRA, the grid is:
 

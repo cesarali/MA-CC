@@ -22,7 +22,12 @@ from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.core.random import Seed
 from mas_cc.storage import canonical_hash, file_sha256, validate_cell_artifact
 
-from .execution import ExecutionEntry, plan_cell_execution, write_execution_manifest
+from .execution import (
+    ExecutionEntry,
+    plan_cell_execution,
+    plan_config_execution,
+    write_execution_manifest,
+)
 from .execution import read_execution_manifest
 from .identity import (
     PROTOCOL_FINGERPRINT_VERSION,
@@ -344,7 +349,7 @@ def _repetition_index(episode_id: str) -> int:
 
 
 def _retained_episodes(study_dir: Path, target_cells: Sequence[TargetCell]) -> tuple[dict[str, dict[str, Any]], list[str]]:
-    """Read valid sealed compact episodes from the original and extension roots."""
+    """Read valid compact episodes and completed checkpoint parent bundles."""
 
     by_local: dict[tuple[str, str], TargetCell] = {}
     for cell in target_cells:
@@ -433,6 +438,85 @@ def _retained_episodes(study_dir: Path, target_cells: Sequence[TargetCell]) -> t
                     conflicts.append(key)
                 else:
                     retained[key] = record
+
+        # Checkpoint-ensemble runs intentionally defer compact cell publication
+        # until every parent bundle is complete.  A timed-out cell can therefore
+        # contain many scientifically complete parents that are represented only
+        # by their durable parent-bundle seals.  Retain those parents so a study
+        # retry schedules only the unfinished repetitions; the worker will resume
+        # any branch-level checkpoints within those unfinished repetitions.
+        for bundle_path in sorted(root.rglob("parent_bundle_seal.json")):
+            resume_dir = next(
+                (
+                    parent
+                    for parent in bundle_path.parents
+                    if parent.parent.name == ".resume"
+                ),
+                None,
+            )
+            if resume_dir is None:
+                continue
+            manifest_path = resume_dir / "manifest.json"
+            if not manifest_path.is_file():
+                continue
+            try:
+                bundle = _read_json(bundle_path)
+                manifest = _read_json(manifest_path)
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            expected = bundle.get("expected_branches")
+            completed = bundle.get("completed_branches")
+            if (
+                bundle.get("schema_version") != 1
+                or bundle.get("status") != "complete"
+                or not isinstance(expected, list)
+                or not expected
+                or not isinstance(completed, list)
+                or set(completed) != set(expected)
+                or len(completed) != len(expected)
+                or manifest.get("status") != "completed"
+                or manifest.get("episode_id") != resume_dir.name
+                or manifest.get("error") is not None
+            ):
+                continue
+            try:
+                config_name = bundle_path.relative_to(root).parts[0]
+                episode_seed = int(manifest["seed"])
+                repetition = _repetition_index(resume_dir.name)
+            except (IndexError, KeyError, TypeError, ValueError):
+                continue
+            local_id = str(manifest.get("cell_id", ""))
+            candidates = [
+                cell
+                for cell in target_cells
+                if Path(cell.config_path).stem == config_name
+                and cell.source_cell_id == local_id
+            ]
+            if len(candidates) != 1:
+                continue
+            target = candidates[0]
+            key = episode_key(target.cell_key, repetition)
+            record = {
+                "episode_key": key,
+                "cell_key": target.cell_key,
+                "repetition_index": repetition,
+                "episode_seed": episode_seed,
+                "content_hash": str(
+                    bundle.get("bundle_hash") or canonical_hash(bundle)
+                ),
+                "source": str(resume_dir),
+                "source_kind": "parent_bundle",
+            }
+            previous = retained.get(key)
+            if previous is None:
+                retained[key] = record
+            elif previous["episode_seed"] != record["episode_seed"]:
+                conflicts.append(key)
+            elif (
+                previous.get("source_kind") == "parent_bundle"
+                and previous["content_hash"] != record["content_hash"]
+            ):
+                conflicts.append(key)
     return retained, conflicts
 
 
@@ -580,6 +664,43 @@ def extension_aggregation_context(
                     scientific_cell_key=row.cell_key,
                 )
             )
+    # A retry execution manifest contains only the delta still requiring work.
+    # Reconstruct entries for already-complete target cells that were therefore
+    # omitted from the latest delta, otherwise aggregation silently loses them.
+    indexed_keys = {
+        str(entry.scientific_cell_key)
+        for entry in entries
+        if entry.scientific_cell_key
+    }
+    latest_index = int(target.get("extension_index", 0))
+    latest_root = root / "extensions" / f"extension-{latest_index:04d}"
+    for cell in target.get("cells", []):
+        if not isinstance(cell, Mapping):
+            continue
+        cell_key = str(cell.get("cell_key", ""))
+        if not cell_key or cell_key in indexed_keys:
+            continue
+        config = Path(str(cell["config_path"]))
+        output_dir = latest_root / "runs" / config.stem / f"cell-{cell_key[:16]}"
+        if not output_dir.is_dir():
+            continue
+        entries.append(
+            SubmissionEntry(
+                array_index=len(entries),
+                config_path=str(config),
+                config_hash=file_sha256(config),
+                resolved_config_hash="",
+                output_dir=str(output_dir),
+                expected_cell_count=1,
+                expected_episode_count=int(cell["repetitions"]),
+                execution_seed=int(cell.get("base_seed", 0)),
+                git_commit="",
+                source_extension_index=latest_index,
+                source_submission_attempt=0,
+                scientific_cell_key=cell_key,
+            )
+        )
+        indexed_keys.add(cell_key)
     return target, tuple(entries)
 
 
@@ -635,12 +756,21 @@ def consolidate_extension_tables(
     if extra:
         errors.append(f"episodes outside latest target: {len(extra)}")
 
-    for name, coordinates in (
+    branch_coordinates = [
+        "branch_policy",
+        "posting_budget",
+        "copy_id",
+        "post_branch_horizon",
+    ]
+    for name, base_coordinates in (
         ("rounds", ["episode_key", "round_index"]),
         ("micro_slots", ["episode_key", "round_index", "micro_slot_index"]),
     ):
         frame = result[name]
         if not frame.empty:
+            coordinates = base_coordinates + [
+                column for column in branch_coordinates if column in frame.columns
+            ]
             result[name] = frame.sort_values(
                 ["source_extension_index", "source_submission_attempt"]
             ).drop_duplicates(coordinates, keep="first").reset_index(drop=True)
@@ -950,7 +1080,13 @@ def extend_study(
     execution_manifest = write_execution_manifest(
         extension_dir / "execution_manifest.csv", execution_rows
     )
-    execution_plan = plan_cell_execution(discover_study(config_dir), len(execution_rows))
+    execution_spec = discover_study(config_dir)
+    sources = tuple(load_run_config_or_grid(path) for path in execution_spec.configs)
+    execution_plan = (
+        plan_cell_execution(execution_spec, len(execution_rows))
+        if all(isinstance(source, GridSpec) for source in sources)
+        else plan_config_execution(execution_spec, len(execution_rows))
+    )
     if throttle is not None:
         if throttle < 1 or throttle > execution_plan.array_throttle:
             raise ValueError(

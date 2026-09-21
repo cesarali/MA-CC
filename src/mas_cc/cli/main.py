@@ -303,10 +303,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="validate, normalize, analyze, plot, report, and package a study",
     )
     study_aggregate.add_argument("--study-dir", type=Path, required=True)
+    study_merge = study_commands.add_parser(
+        "merge", help="snapshot complementary studies for separate reaggregation"
+    )
+    study_merge.add_argument("--study-dir", type=Path, action="append", required=True)
+    study_merge.add_argument("--output-dir", type=Path, required=True)
+    study_merge.add_argument("--name")
+    study_merge.add_argument("--analysis-recipe", type=Path)
+    study_merge.add_argument(
+        "--overlap", choices=("error", "keep-first"), default="error",
+        help="reject overlapping cells, or explicitly discard later overlapping cells",
+    )
     study_aggregate.add_argument(
         "--allow-incomplete",
         action="store_true",
         help="produce explicitly incomplete exploratory output despite validation failures",
+    )
+    study_aggregate.add_argument(
+        "--backend",
+        choices=("auto", "local", "slurm"),
+        default="auto",
+        help="execution backend (auto selects detached SLURM on Potsdam)",
     )
     study_compact = study_commands.add_parser(
         "compact-analysis",
@@ -913,16 +930,48 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"{plan['time_limit']} per active shard"
             )
         return 0
+    if args.command == "study" and args.study_command == "merge":
+        from mas_cc.studies.merge import merge_studies
+
+        try:
+            result = merge_studies(
+                args.study_dir, args.output_dir, name=args.name,
+                analysis_recipe=args.analysis_recipe, overlap=args.overlap,
+            )
+        except (ConfigurationError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            f"Study {result['study_id']} merged: {result['found_cells']} cells, "
+            f"{result['completed_episodes']} episodes; {result['skipped_cells']} overlapping cells discarded"
+        )
+        print(f"  Aggregate separately: mas-cc study aggregate --study-dir {result['study_dir']}")
+        return 0
     if args.command == "study" and args.study_command == "aggregate":
         from mas_cc.studies import aggregate_study
 
         try:
             summary = aggregate_study(
-                args.study_dir, allow_incomplete=args.allow_incomplete
+                args.study_dir,
+                allow_incomplete=args.allow_incomplete,
+                backend=args.backend,
             )
         except (ConfigurationError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        if summary.get("submitted"):
+            jobs = summary["jobs"]
+            print(
+                f"Study {summary['study_id']} aggregation generation "
+                f"{summary['generation_id']} submitted: prepare {jobs['prepare']}, "
+                f"array {jobs['array'] or 'not needed'}, finalizer {jobs['finalizer']}"
+            )
+            print(
+                f"  {summary['groups']} information group(s), "
+                f"{summary['pending_groups']} pending; progress: {summary['progress']}"
+            )
+            print(f"  Final archive: {summary['archive']}")
+            return 0
         print(
             f"Study {summary['study_id']} aggregated "
             f"({'complete' if summary['complete'] else 'incomplete'}): "

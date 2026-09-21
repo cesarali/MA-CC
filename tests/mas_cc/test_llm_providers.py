@@ -14,9 +14,11 @@ from mas_cc.llm_runtime.providers import (
     BudgetCeiling,
     CompletionRequest,
     CompletionResponse,
+    ProviderAdmissionTimeout,
     ProviderError,
     ProviderLoadControlConfig,
     ProviderUsage,
+    SharedProviderCoordinator,
     create_llm_provider,
 )
 from mas_cc.llm_runtime.providers.adapters.gemma_local import (
@@ -110,6 +112,26 @@ class _Session:
         self.closed = True
 
 
+class _ConcurrentSession(_Session):
+    def __init__(self, posts, expected_concurrency):
+        super().__init__(posts)
+        self._barrier = threading.Barrier(expected_concurrency, timeout=2)
+        self._active = 0
+        self.maximum_active = 0
+        self._lock = threading.Lock()
+
+    def post(self, url, **kwargs):
+        with self._lock:
+            self._active += 1
+            self.maximum_active = max(self.maximum_active, self._active)
+        try:
+            self._barrier.wait()
+            return super().post(url, **kwargs)
+        finally:
+            with self._lock:
+                self._active -= 1
+
+
 class _CountingCoordinator:
     def __init__(self):
         self.acquired = 0
@@ -148,6 +170,160 @@ class _RenewFailingCoordinator(_HeartbeatCoordinator):
     async def renew(self, lease, **kwargs):
         self.renewals += 1
         raise RuntimeError("simulated transient coordinator lock timeout")
+
+
+class _DeadlineCoordinator(SharedProviderCoordinator):
+    """A shared coordinator probe that records its admission deadline."""
+
+    def __init__(self):
+        self.config = ProviderLoadControlConfig(
+            retry_max_elapsed_seconds=0.05,
+            admission_max_elapsed_seconds=0.05,
+        )
+        self.remaining_at_acquire = None
+        self.admission = None
+        self.outcomes = []
+
+    async def acquire(self, *, deadline=None, admission=False):
+        self.remaining_at_acquire = deadline - time.monotonic()
+        self.admission = admission
+        return SimpleNamespace(token="admitted")
+
+    async def release(self, lease, **outcome):
+        self.outcomes.append((lease.token, outcome))
+
+
+class _DelayedAdmissionCoordinator(_DeadlineCoordinator):
+    def __init__(self):
+        super().__init__()
+        self.config = ProviderLoadControlConfig(
+            retry_max_elapsed_seconds=0.08,
+            admission_max_elapsed_seconds=0.5,
+            retry_backoff_initial_seconds=0.001,
+            retry_backoff_max_seconds=0.001,
+        )
+        self.acquisitions = []
+
+    async def acquire(self, *, deadline=None, admission=False):
+        self.acquisitions.append((deadline - time.monotonic(), admission))
+        if admission:
+            await asyncio.sleep(0.1)
+        return SimpleNamespace(token=f"lease-{len(self.acquisitions)}")
+
+
+class _AdmissionTimeoutCoordinator(_DeadlineCoordinator):
+    async def acquire(self, *, deadline=None, admission=False):
+        raise ProviderAdmissionTimeout("simulated admission timeout")
+
+
+def test_local_admission_wait_does_not_consume_shared_retry_deadline():
+    body = {
+        "id": "req-admitted-after-local-wait",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _DeadlineCoordinator()
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            request_concurrency=1,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=_Session([_Response(200, body)]),
+        request_coordinator=coordinator,
+    )
+
+    async def exercise():
+        await provider._semaphore.acquire()
+        pending = asyncio.create_task(provider.complete(_request()))
+        await asyncio.sleep(0.08)
+        provider._semaphore.release()
+        return await pending
+
+    assert asyncio.run(exercise()).content == "A"
+    assert coordinator.remaining_at_acquire > 0.04
+    assert coordinator.admission is True
+    assert len(coordinator.outcomes) == 1
+
+
+def test_transport_concurrency_matches_configured_request_concurrency():
+    concurrency = 40
+    body = {
+        "id": "req-concurrent",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    session = _ConcurrentSession(
+        [_Response(200, body) for _ in range(concurrency)], concurrency
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            request_concurrency=concurrency,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=session,
+    )
+
+    async def exercise():
+        return await asyncio.gather(
+            *(provider.complete(_request()) for _ in range(concurrency))
+        )
+
+    assert {item.content for item in asyncio.run(exercise())} == {"A"}
+    provider.close()
+    assert session.maximum_active == concurrency
+
+
+def test_provider_retry_window_begins_after_shared_admission():
+    failed = _Response(500, {"error": "temporary"})
+    body = {
+        "id": "req-after-admission",
+        "model": "gpt-4o-mini",
+        "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+    }
+    coordinator = _DelayedAdmissionCoordinator()
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+            request_concurrency=1,
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=_Session([failed, _Response(200, body)]),
+        request_coordinator=coordinator,
+    )
+
+    response = asyncio.run(provider.complete(_request()))
+
+    assert response.content == "A"
+    assert [admission for _, admission in coordinator.acquisitions] == [True, False]
+    assert coordinator.acquisitions[0][0] > 0.45
+    assert coordinator.acquisitions[1][0] > 0.07
+
+
+def test_admission_timeout_has_distinct_provider_diagnostic():
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai",
+            model="gpt-4o-mini",
+            credentials_env="TEST_API_KEY",
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=_Session([]),
+        request_coordinator=_AdmissionTimeoutCoordinator(),
+    )
+
+    with pytest.raises(ProviderError) as captured:
+        asyncio.run(provider.complete(_request()))
+
+    assert captured.value.code == "provider_admission_timeout"
+    assert captured.value.retryable is True
 
 
 def test_openai_compatible_adapter_retries_and_normalizes_without_wire_metadata():
@@ -295,6 +471,37 @@ def test_slow_http_attempt_is_renewed_and_released():
     assert asyncio.run(provider.complete(_request())).content == "A"
     assert coordinator.renewals >= 1
     assert len(coordinator.outcomes) == 1
+
+
+def test_transport_cancellation_releases_coordinator_lease():
+    coordinator = _CountingCoordinator()
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="openai", model="gpt-4o-mini", credentials_env="TEST_API_KEY"
+        ),
+        environment={"TEST_API_KEY": "test-secret"},
+        session=_Session([]),
+        request_coordinator=coordinator,
+    )
+    blocked = asyncio.Event()
+
+    async def blocked_transport(*_args, **_kwargs):
+        blocked.set()
+        await asyncio.Event().wait()
+
+    provider._provider._run_transport = blocked_transport
+
+    async def exercise():
+        pending = asyncio.create_task(provider.complete(_request()))
+        await blocked.wait()
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+    asyncio.run(exercise())
+    assert coordinator.acquired == 1
+    assert len(coordinator.outcomes) == 1
+    assert coordinator.outcomes[0][1]["success"] is False
 
 
 def test_heartbeat_renewal_failure_does_not_destroy_valid_response():

@@ -840,6 +840,57 @@ def test_bootstrap_keeps_a_round_with_its_own_micro_slots():
     assert micro_keys <= keys
 
 
+def test_compact_micro_bootstrap_matches_literal_joint_resampling():
+    rows, micro = simulate_single_affinity(
+        _parameters(N=6, q_c=3, b=4), episodes=12, rounds=3, n0=2, seed=41
+    )
+    # Unequal episode sizes and an episode with no retained slots.
+    rows = rows[:-2]
+    micro = [row for row in micro if row["episode_id"] != micro[0]["episode_id"]]
+    actual = sa.single_affinity_analysis(rows, micro, bootstrap_resamples=31, confidence=0.9, seed=123)
+    grouped, slots = sa._by_episode(rows, micro)
+    keys = sorted(grouped, key=str)
+    rng = np.random.default_rng(123)
+    draws = {name: [] for name in sa._SCALARS}
+    for _ in range(31):
+        selected = [keys[i] for i in rng.integers(0, len(keys), len(keys))]
+        point = sa.point_estimate([row for key in selected for row in grouped[key]],
+                                 [row for key in selected for row in slots.get(key, ())])
+        for name in draws:
+            value = float(point.get(name, math.nan))
+            if math.isfinite(value):
+                draws[name].append(value)
+    for name, values in draws.items():
+        for endpoint, quantile in (("low", (1 - 0.9) / 2), ("high", 1 - (1 - 0.9) / 2)):
+            expected = np.quantile(values, quantile) if values else math.nan
+            np.testing.assert_equal(actual[f"{name}_ci_{endpoint}"], expected)
+
+
+def test_joint_efficiency_is_identical_across_worker_counts(monkeypatch):
+    import copy
+    import pandas as pd
+    from mas_cc.storage import canonical_hash
+    from mas_cc.studies.aggregation import _single_affinity_by_cell
+
+    rows, micro = simulate_single_affinity(
+        _parameters(N=6, q_c=3, b=4), episodes=6, rounds=2, n0=2, seed=41
+    )
+    other = copy.deepcopy(rows)
+    for row in other:
+        row.cell_id = "other"
+    slots = pd.DataFrame(micro + [{**row, "cell_id": "other"} for row in micro])
+    settings = dict(bootstrap_resamples=8, confidence=0.9, seed=123)
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "1")
+    serial = _single_affinity_by_cell(rows + other, slots, settings)
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "2")
+    parallel = _single_affinity_by_cell(rows + other, slots, settings)
+    assert list(serial) == list(parallel)
+    def science(bundles):
+        return {cell: {key: value for key, value in bundle.items() if not key.startswith("_")}
+                for cell, bundle in bundles.items()}
+    assert canonical_hash(science(serial)) == canonical_hash(science(parallel))
+
+
 def test_provenance_travels_with_every_estimate():
     parameters = _parameters(N=6, q_c=3, b=4)
     rows, micro = simulate_single_affinity(

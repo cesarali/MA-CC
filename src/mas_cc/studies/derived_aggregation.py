@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from mas_cc.analysis.single_affinity import controlled_rows, eta_ir, susceptibility_summary
+from .weighted_summaries import PairedBootstrap
 from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
     MAIN_ESTIMATOR_VARIANT,
     ROUND_CONDITIONING_STATE,
@@ -28,7 +29,7 @@ from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
     round_overlap_diagnostics,
 )
 
-ANALYSIS_SEMANTICS_VERSION = "study-control-aggregation-v1"
+ANALYSIS_SEMANTICS_VERSION = "study-control-aggregation-v2"
 TARGET_CMI = "round_target_actuation_cmi"
 SUPPORTED_METRICS = (
     TARGET_CMI,
@@ -137,6 +138,30 @@ def _status(support: Mapping[str, Any]) -> str:
     return "adequate"
 
 
+def _cell_calculation_task(task: tuple) -> "_CellCalculation":
+    cell_id, rows, coordinates, bootstrap_resamples, null_permutations, seed, bootstrap_plan = task
+    return _cell_calculation(
+        cell_id, rows, coordinates,
+        bootstrap_resamples=bootstrap_resamples, null_permutations=null_permutations,
+        seed=seed, bootstrap_plan=bootstrap_plan,
+    )
+
+
+def _map_cells(function, tasks: Sequence[tuple], workers: int) -> list:
+    """Apply ``function`` to per-cell tasks, in a spawn pool when ``workers > 1``.
+
+    Results come back in task order regardless of completion order, so callers
+    see exactly what the serial loop would have produced.
+    """
+    if workers > 1 and len(tasks) > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from multiprocessing import get_context
+
+        with ProcessPoolExecutor(max_workers=min(workers, len(tasks)), mp_context=get_context("spawn")) as pool:
+            return list(pool.map(function, tasks))
+    return [function(task) for task in tasks]
+
+
 def _cell_calculation(
     cell_id: str,
     rows: Sequence[Any],
@@ -145,6 +170,7 @@ def _cell_calculation(
     bootstrap_resamples: int,
     null_permutations: int,
     seed: int,
+    bootstrap_plan: PairedBootstrap | None = None,
 ) -> _CellCalculation:
     eligible = controlled_rows(rows)
     support = round_overlap_diagnostics(
@@ -155,11 +181,11 @@ def _cell_calculation(
     )
     bootstrap = [
         _components(draw)
-        for draw in bootstrap_episode_rows(
+        for draw in (bootstrap_plan.event_draws(eligible) if bootstrap_plan is not None else bootstrap_episode_rows(
             eligible,
             resamples=bootstrap_resamples,
             seed=_stable_seed(seed, "bootstrap", cell_id),
-        )
+        ))
     ]
     null = policy_resampling_null(
         TARGET_CMI,
@@ -206,10 +232,19 @@ def _metric_value(metric: str, components: Mapping[str, float]) -> tuple[float, 
 
 def _aggregate_components(cells: Sequence[_CellCalculation], weights: Sequence[float], *, draw: int | None = None) -> dict[str, float]:
     source = [cell.point if draw is None else cell.bootstrap[draw] for cell in cells]
-    return {
+    result = {
         name: _weighted([item[name] for item in source], weights)
         for name in ("T", "H", "chi", "ir_numerator", "ir_denominator")
     }
+    if any(not math.isfinite(item["chi"]) for item in source):
+        result["chi"] = math.nan
+    # Ratios must use the same cells in both components. In bootstrap draws,
+    # undefined components invalidate the draw rather than changing its design.
+    for names in (("T", "H"), ("ir_numerator", "ir_denominator")):
+        if any(not all(math.isfinite(item[name]) for name in names) for item in source):
+            for name in names:
+                result[name] = math.nan
+    return result
 
 
 def _varying_coordinates(cells: pd.DataFrame) -> set[str]:
@@ -291,13 +326,13 @@ def _study_rows(
     bootstrap_resamples: int,
     null_permutations: int,
     analysis_hash: str,
+    paired: bool = False,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     alpha = (1.0 - confidence) / 2.0
     for spec in groupings:
         keys = list(spec["group_by"])
         source = expected_cells.copy()
-        source = source[source["cell_id"].astype(str).isin(calculations)]
         grouped = source.groupby(keys, dropna=False, sort=True) if keys else [((), source)]
         expected_grouped = expected_cells.groupby(keys, dropna=False, sort=True) if keys else [((), expected_cells)]
         expected_lookup = {
@@ -306,7 +341,8 @@ def _study_rows(
         }
         for key_values, frame in grouped:
             key_tuple = tuple(key_values) if isinstance(key_values, tuple) else (key_values,)
-            group_cells = [calculations[str(cell_id)] for cell_id in sorted(frame["cell_id"].astype(str))]
+            group_cells = [calculations[str(cell_id)] for cell_id in sorted(frame["cell_id"].astype(str))
+                           if str(cell_id) in calculations]
             supported = [cell for cell in group_cells if _status(cell.support) != "unsupported"]
             weights = [1.0] * len(supported)
             expected = expected_lookup.get(key_tuple, len(group_cells))
@@ -360,9 +396,15 @@ def _study_rows(
                     "component_numerator": numerator,
                     "component_denominator": denominator,
                     **support,
-                    "bootstrap_unit": "episode",
-                    "bootstrap_scope": "stratified_by_physical_cell",
+                    "support_status": "unsupported" if not math.isfinite(value) else "limited" if
+                        support["support_status"] != "adequate" or
+                        len(bootstrap_values) < bootstrap_resamples or
+                        any(cell.n_episodes < _finite(cell.coordinates.get("expected_episodes", cell.n_episodes))
+                            for cell in supported) else "adequate",
+                    "bootstrap_unit": "shared_initialization_block" if paired else "episode",
+                    "bootstrap_scope": "stratified_by_observed_cell_membership" if paired else "stratified_by_physical_cell",
                     "bootstrap_resamples": len(draws),
+                    "n_valid_bootstrap_draws": len(bootstrap_values),
                     "analysis_semantics_version": ANALYSIS_SEMANTICS_VERSION,
                     "analysis_hash": analysis_hash,
                 })
@@ -377,29 +419,47 @@ def _state_local_calculations(
     bootstrap_resamples: int,
     null_permutations: int,
     seed: int,
+    bootstrap_plan: PairedBootstrap | None = None,
+    workers: int = 1,
 ) -> pd.DataFrame:
     coordinates = cells.set_index(cells["cell_id"].astype(str)).to_dict(orient="index")
+    by_cell: dict[str, list[Any]] = {}
+    for event in events:
+        by_cell.setdefault(str(event.cell_id), []).append(event)
+    tasks = [
+        (cell_id, cell_events, coordinates.get(cell_id, {}), bins, bootstrap_resamples,
+         null_permutations, seed, bootstrap_plan)
+        for cell_id, cell_events in sorted(by_cell.items())
+    ]
+    rows: list[dict[str, Any]] = []
+    for cell_rows in _map_cells(_state_local_cell, tasks, workers):
+        rows.extend(cell_rows)
+    return pd.DataFrame(rows)
+
+
+def _state_local_cell(task: tuple) -> list[dict[str, Any]]:
+    """State-local rows for one cell; independent of every other cell."""
+    (cell_id, cell_events, cell_coordinates, bins, bootstrap_resamples,
+     null_permutations, seed, bootstrap_plan) = task
+
     def bin_index(event: Any) -> int:
         population = int(event.event.get("N") or sum(event.N_k))
         return min(int((event.target_before / population) * bins), bins - 1)
 
-    by_cell: dict[str, list[Any]] = {}
-    for event in events:
-        by_cell.setdefault(str(event.cell_id), []).append(event)
     rows: list[dict[str, Any]] = []
-    for cell_id, cell_events in sorted(by_cell.items()):
+    if True:
         eligible_cell = controlled_rows(cell_events)
         if not eligible_cell:
-            continue
+            return rows
         point_bins: dict[int, list[Any]] = {}
         for event in eligible_cell:
             point_bins.setdefault(bin_index(event), []).append(event)
         bootstrap_bins: list[dict[int, list[Any]]] = []
-        for draw in bootstrap_episode_rows(
+        for draw in (bootstrap_plan.event_draws(eligible_cell) if bootstrap_plan is not None else bootstrap_episode_rows(
             eligible_cell,
             resamples=bootstrap_resamples,
             seed=_stable_seed(seed, "state-local-bootstrap", cell_id),
-        ):
+        )):
             grouped_draw: dict[int, list[Any]] = {}
             for event in controlled_rows(draw):
                 grouped_draw.setdefault(bin_index(event), []).append(event)
@@ -428,7 +488,7 @@ def _state_local_calculations(
             ]
             common = {
                 "cell_id": cell_id,
-                **coordinates.get(cell_id, {}),
+                **cell_coordinates,
                 "target_fraction_bin_index": index,
                 "target_fraction_bin_lower": index / bins,
                 "target_fraction_bin_upper": (index + 1) / bins,
@@ -452,7 +512,7 @@ def _state_local_calculations(
                     "bootstrap_draws": tuple(bootstrap),
                     "null_draws": tuple(null) if metric == TARGET_CMI else (),
                 })
-    return pd.DataFrame(rows)
+    return rows
 
 
 def _validate_state_local_groupings(
@@ -506,6 +566,8 @@ def _state_local_rows(
     confidence: float,
     bootstrap_resamples: int,
     analysis_hash: str,
+    paired: bool = False,
+    expected_cells: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if local.empty:
         return pd.DataFrame()
@@ -561,11 +623,26 @@ def _state_local_rows(
                     )
                     for name in ("T", "H", "chi", "ir_numerator", "ir_denominator")
                 }
+                for names in (("T", "H"), ("ir_numerator", "ir_denominator")):
+                    if any(weight > 0 and not all(math.isfinite(component[name]) for name in names)
+                           for component, weight in zip(draw_components, draw_weights, strict=True)):
+                        for name in names:
+                            aggregated[name] = math.nan
+                if any(weight > 0 and not math.isfinite(component["chi"])
+                       for component, weight in zip(draw_components, draw_weights, strict=True)):
+                    aggregated["chi"] = math.nan
                 draw_value = _metric_value(metric, aggregated)[0]
                 if math.isfinite(draw_value):
                     bootstrap_values.append(draw_value)
             coordinate_values = coordinates[:-1]
             output_coordinates = dict(zip(keys, coordinate_values, strict=True))
+            expected_count = int(group["cell_id"].nunique())
+            if expected_cells is not None:
+                expected_group = expected_cells
+                for column in group_by:
+                    value = output_coordinates[column]
+                    expected_group = expected_group[expected_group[column].isna()] if pd.isna(value) else expected_group[expected_group[column] == value]
+                expected_count = int(expected_group["cell_id"].nunique())
             rho_values = (
                 sorted(selected["epistemic_persistence"].dropna().astype(str).unique())
                 if "epistemic_persistence" in selected
@@ -594,9 +671,10 @@ def _state_local_rows(
                 "ci_low": float(np.quantile(bootstrap_values, alpha)) if bootstrap_values else math.nan,
                 "ci_high": float(np.quantile(bootstrap_values, 1.0 - alpha)) if bootstrap_values else math.nan,
                 "bootstrap_sd": float(np.std(bootstrap_values, ddof=1)) if len(bootstrap_values) > 1 else math.nan,
-                "bootstrap_resamples": len(bootstrap_values),
-                "bootstrap_unit": "episode",
-                "bootstrap_scope": "stratified_by_physical_cell",
+                "bootstrap_resamples": bootstrap_resamples,
+                "n_valid_bootstrap_draws": len(bootstrap_values),
+                "bootstrap_unit": "shared_initialization_block" if paired else "episode",
+                "bootstrap_scope": "stratified_by_observed_cell_membership" if paired else "stratified_by_physical_cell",
                 "aggregation_name": str(item["name"]),
                 "aggregation_level": "+".join(marginalize) + "_marginalized_state_local",
                 "aggregation_scope": "state_local_" + "+".join(marginalize) + "_marginalized",
@@ -609,6 +687,8 @@ def _state_local_rows(
                     pd.to_numeric(selected["n_observations"], errors="coerce").sum()
                 ),
                 "n_contributing_cells": int(selected["cell_id"].nunique()),
+                "n_expected_cells": expected_count,
+                "cell_coverage_fraction": selected["cell_id"].nunique()/expected_count if expected_count else math.nan,
                 "n_rho_contributing": int(selected["epistemic_persistence"].nunique()) if "epistemic_persistence" in selected else 0,
                 "n_target_semantics_contributing": int(selected["target_semantics"].nunique()) if "target_semantics" in selected else 0,
                 "rho_values_json": json.dumps(rho_values),
@@ -616,7 +696,7 @@ def _state_local_rows(
                 "weighted_dual_action_state_fraction": _weighted(pd.to_numeric(selected["round_dual_action_state_fraction"], errors="coerce"), selected_weights),
                 "weighted_dual_action_event_fraction": _weighted(pd.to_numeric(selected["round_dual_action_event_fraction"], errors="coerce"), selected_weights),
                 "dual_action_supported": bool(support_statuses) and all(value != "unsupported" for value in support_statuses),
-                "support_status": "unsupported" if selected.empty or balanced_semantics_incomplete else "limited" if any(value != "adequate" for value in support_statuses) else "adequate",
+                "support_status": "unsupported" if selected.empty or balanced_semantics_incomplete else "limited" if any(value != "adequate" for value in support_statuses) or selected["cell_id"].nunique() < expected_count or len(bootstrap_values) < bootstrap_resamples else "adequate",
                 "null_mean": null_mean,
                 "null_sd": float(np.std(null_draws, ddof=1)) if len(null_draws) > 1 else math.nan,
                 "null_adjusted_estimate": estimate - null_mean if math.isfinite(estimate) and math.isfinite(null_mean) else math.nan,
@@ -792,8 +872,18 @@ def derive_study_control_aggregates(
     recipe: Mapping[str, Any],
     resampling: Mapping[str, Any],
     analysis_hash: str,
+    *, bootstrap_plan: PairedBootstrap | None = None,
+    workers: int = 1,
 ) -> StudyAggregateOutputs:
-    """Build configured study and state-local summaries from retained rounds."""
+    """Build configured study and state-local summaries from retained rounds.
+
+    Cells are independent (per-cell seeds, precomputed shared bootstrap plan), so
+    with ``workers > 1`` the per-cell calculations and the state-local rows run in
+    a spawn process pool; results are merged in cell order and are identical to
+    the serial path.
+    """
+    if workers < 1:
+        raise ValueError("derived aggregation workers must be positive")
 
     config = recipe.get("derived_study_aggregates", {})
     if not isinstance(config, Mapping):
@@ -806,6 +896,11 @@ def derive_study_control_aggregates(
     unknown = sorted(set(metrics) - set(SUPPORTED_METRICS))
     if unknown:
         raise ValueError("unsupported derived study metric(s): " + ", ".join(unknown))
+    if config.get("bootstrap", {}).get("unit") == "shared_initialization_block" and bootstrap_plan is None:
+        bootstrap_plan = PairedBootstrap(pd.DataFrame([
+            {**event.event, "cell_id": str(event.cell_id), "episode_id": str(event.episode_id)}
+            for event in events
+        ]), resamples=int(resampling["bootstrap_resamples"]), seed=int(resampling["seed"]))
     controlled_cells = cells.copy()
     if "target_semantics" not in controlled_cells:
         raise ValueError("derived study aggregation requires target_semantics")
@@ -816,15 +911,15 @@ def derive_study_control_aggregates(
     for event in events:
         by_event_cell.setdefault(str(event.cell_id), []).append(event)
     cell_coordinates = controlled_cells.set_index(controlled_cells["cell_id"].astype(str)).to_dict(orient="index")
-    calculations = {
-        cell_id: _cell_calculation(
-            cell_id, by_event_cell[cell_id], coordinates,
-            bootstrap_resamples=int(resampling["bootstrap_resamples"]),
-            null_permutations=int(resampling["null_permutations"]),
-            seed=int(resampling["seed"]),
-        )
+    cell_tasks = [
+        (cell_id, by_event_cell[cell_id], coordinates, int(resampling["bootstrap_resamples"]),
+         int(resampling["null_permutations"]), int(resampling["seed"]), bootstrap_plan)
         for cell_id, coordinates in sorted(cell_coordinates.items())
         if cell_id in by_event_cell
+    ]
+    calculations = {
+        calculation.cell_id: calculation
+        for calculation in _map_cells(_cell_calculation_task, cell_tasks, workers)
     }
     study = pd.DataFrame(_study_rows(
         calculations, controlled_cells, groupings, metrics,
@@ -832,6 +927,7 @@ def derive_study_control_aggregates(
         bootstrap_resamples=int(resampling["bootstrap_resamples"]),
         null_permutations=int(resampling["null_permutations"]),
         analysis_hash=analysis_hash,
+        paired=bootstrap_plan is not None,
     ))
     state_config = config.get("state_local", {})
     state = pd.DataFrame()
@@ -845,6 +941,8 @@ def derive_study_control_aggregates(
             bootstrap_resamples=int(resampling["bootstrap_resamples"]),
             null_permutations=int(resampling["null_permutations"]),
             seed=int(resampling["seed"]),
+            bootstrap_plan=bootstrap_plan,
+            workers=workers,
         )
         state_groupings = _validate_state_local_groupings(
             state_config, controlled_cells
@@ -855,6 +953,8 @@ def derive_study_control_aggregates(
             confidence=float(resampling["confidence"]),
             bootstrap_resamples=int(resampling["bootstrap_resamples"]),
             analysis_hash=analysis_hash,
+            paired=bootstrap_plan is not None,
+            expected_cells=controlled_cells,
         )
     stability_config = config.get("sample_size_stability", {})
     stability = pd.DataFrame()
@@ -872,6 +972,17 @@ def derive_study_control_aggregates(
         state_groupings,
         analysis_hash=analysis_hash,
     )
+    for frame in (study, state, reconstruction):
+        for column in PROTECTED_COORDINATES:
+            if column not in frame and column in controlled_cells and controlled_cells[column].nunique(dropna=False) == 1:
+                frame[column] = controlled_cells[column].iloc[0]
+    if bootstrap_plan is not None:
+        diagnostics = bootstrap_plan.diagnostics(controlled_cells["cell_id"])
+        for frame in (study, state):
+            for name, value in diagnostics.items():
+                frame[name] = value
+            if diagnostics["singleton_bootstrap_strata"] and "support_status" in frame:
+                frame.loc[frame["support_status"] == "adequate", "support_status"] = "limited"
     return StudyAggregateOutputs(study, state, stability, reconstruction)
 
 

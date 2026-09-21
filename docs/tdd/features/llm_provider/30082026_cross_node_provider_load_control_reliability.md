@@ -4,6 +4,23 @@
 **Status:** implementation plan  
 **Scope:** generic remote-provider runtime and standardized study execution
 
+## 2026-09-17 admission/backpressure amendment
+
+Shared-capacity admission is no longer charged to the provider outage window.
+`execution.provider_load_control.admission_max_elapsed_seconds` bounds the
+first shared-lease wait (default 1,800 seconds), while
+`retry_max_elapsed_seconds` starts only when that lease has been granted and
+the first transport attempt is ready. Reacquisition for retries remains inside
+the provider window. Admission timeout is reported as
+`provider_admission_timeout`, creates no adaptive provider-failure event, and
+remains a resumable provider error.
+
+Each coordinator state and immutable per-job `settings.json` records a SHA-256
+hash of the complete resolved policy. A worker with a different policy, or a
+live limit outside that policy's minimum/maximum range, fails closed. Runtime
+policy mutation is unsupported; submit a coherent new job instead of editing
+`state.json`.
+
 ## 1. Motivation and observed failure
 
 Study 09f exercised the shared adaptive provider coordinator from two Potsdam

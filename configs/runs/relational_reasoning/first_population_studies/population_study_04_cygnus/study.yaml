@@ -1,0 +1,26 @@
+# Cygnus study.yaml for the study-04 q_c=6 row (Allen Hackley, 2026-09-12; brought
+# into MA-CC 2026-09-18). Submit from the repository root with
+#   mas-cc study submit --config-dir configs/runs/relational_reasoning/first_population_studies/population_study_04_cygnus \
+#     --job-script scripts/Cygnus/SLURM/run_config_array.job
+# Cesar's Potsdam row (population_study_04/) is untouched; this folder is the
+# Cygnus variant: 20-task grid, retries 5, gateway provider (LLM_BASE/LLM_KEY).
+study: {name: study04_qc06_cygnus}
+configs: [relational_population_study04_qc06_cygnus.yaml]
+execution:
+  mode: config_array          # one array task per config file
+  throttle: 3                 # one task per row config once qc12/qc18 rows are listed
+  cpus_per_task: 1            # one asyncio process per task
+  memory: 2G
+  time_limit: "04:00:00"
+  partition: main
+  results_root: /shared/home/cesar/LanguageGames/MA-CC/results/studies/study04_qc06_cygnus
+  require_results_under: /shared/home/cesar/LanguageGames/MA-CC/results
+  # Cross-shard provider coordinator on the cluster Valkey (redis_adaptive);
+  # the launcher exports MAS_CC_PROVIDER_CONTROL_REDIS_URL. Ceilings from the
+  # 2026-09-18 measurement: DeepInfra held 400 concurrent at 14,400 req/min.
+  provider_load_control:
+    mode: redis_adaptive
+    initial_concurrency: 150
+    minimum_concurrency: 16
+    maximum_concurrency: 400
+    target_rpm: 12000

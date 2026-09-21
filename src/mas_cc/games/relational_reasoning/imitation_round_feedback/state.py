@@ -79,7 +79,8 @@ SOCIAL_MODE_BOARD = "board"
 SOCIAL_MODES = (SOCIAL_MODE_PEER, SOCIAL_MODE_BOARD)
 
 BOARD_SAMPLING_UNIFORM = "uniform"
-BOARD_SAMPLING_MODES = (BOARD_SAMPLING_UNIFORM,)
+BOARD_SAMPLING_FULL = "full"
+BOARD_SAMPLING_MODES = (BOARD_SAMPLING_UNIFORM, BOARD_SAMPLING_FULL)
 
 MESSAGE_REQUEST = "REQUEST"
 MESSAGE_REPORT = "REPORT"
@@ -89,6 +90,20 @@ ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
 ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
 CONTROLLER_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT, MESSAGE_DIRECTIVE)
 BOARD_MESSAGE_TYPES = (*ORDINARY_MESSAGE_TYPES, *CONTROLLER_MESSAGE_TYPES)
+REPORT_CITATION_ACTIVE_ONLY = "active_only"
+REPORT_CITATION_ACTIVE_OR_OBSERVED = "active_or_observed"
+REPORT_CITATION_SCOPES = (
+    REPORT_CITATION_ACTIVE_ONLY,
+    REPORT_CITATION_ACTIVE_OR_OBSERVED,
+)
+NO_CITABLE_FACT_NONE = "none"
+NO_CITABLE_FACT_MODEL_SELECT = "model_select"
+NO_CITABLE_FACT_REQUEST_OR_NONE = "request_or_none"
+NO_CITABLE_FACT_ACTIONS = (
+    NO_CITABLE_FACT_NONE,
+    NO_CITABLE_FACT_MODEL_SELECT,
+    NO_CITABLE_FACT_REQUEST_OR_NONE,
+)
 LEGACY_BOARD_MESSAGE_TYPES = (
     "CLAIM",
     "QUESTION",
@@ -250,6 +265,90 @@ class BlackboardState:
         return [message.to_dict() for message in self.messages]
 
 
+@dataclass(frozen=True, slots=True)
+class ObservedFactSource:
+    """Compact provenance for one grounded report in the sampled view."""
+
+    fact_id: str
+    message_id: str
+    author_kind: str
+    source_id: str
+    round_created: int | None
+    micro_step_created: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {field: getattr(self, field) for field in self.__dataclass_fields__}
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ObservedFactSource":
+        return cls(
+            fact_id=str(value["fact_id"]),
+            message_id=str(value["message_id"]),
+            author_kind=str(value["author_kind"]),
+            source_id=str(value["source_id"]),
+            round_created=(
+                None if value.get("round_created") is None else int(value["round_created"])
+            ),
+            micro_step_created=(
+                None
+                if value.get("micro_step_created") is None
+                else int(value["micro_step_created"])
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CitationContext:
+    """The complete, immutable evidence authority for one focal update."""
+
+    active_fact_ids: tuple[str, ...]
+    observed_fact_ids: tuple[str, ...]
+    citable_fact_ids: tuple[str, ...]
+    observed_sources: tuple[ObservedFactSource, ...]
+    report_citation_scope: str
+    no_citable_fact_action: str
+    prompt_version: int
+
+    @property
+    def communication_action_masked(self) -> bool:
+        return (
+            not self.citable_fact_ids
+            and self.no_citable_fact_action == NO_CITABLE_FACT_NONE
+        )
+
+    def source_for(self, fact_id: str) -> ObservedFactSource | None:
+        return next(
+            (source for source in self.observed_sources if source.fact_id == fact_id),
+            None,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "active_fact_ids": list(self.active_fact_ids),
+            "observed_fact_ids": list(self.observed_fact_ids),
+            "citable_fact_ids": list(self.citable_fact_ids),
+            "observed_sources": [source.to_dict() for source in self.observed_sources],
+            "report_citation_scope": self.report_citation_scope,
+            "no_citable_fact_action": self.no_citable_fact_action,
+            "prompt_version": self.prompt_version,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "CitationContext":
+        return cls(
+            active_fact_ids=tuple(str(item) for item in value.get("active_fact_ids", ())),
+            observed_fact_ids=tuple(str(item) for item in value.get("observed_fact_ids", ())),
+            citable_fact_ids=tuple(str(item) for item in value.get("citable_fact_ids", ())),
+            observed_sources=tuple(
+                ObservedFactSource.from_mapping(item)
+                for item in value.get("observed_sources", ())
+            ),
+            report_citation_scope=str(value["report_citation_scope"]),
+            no_citable_fact_action=str(value["no_citable_fact_action"]),
+            prompt_version=int(value["prompt_version"]),
+        )
+
+
 # --------------------------------------------------------------------------
 # Agent / game state
 # --------------------------------------------------------------------------
@@ -326,6 +425,29 @@ class RelationalAgentState(AgentState):
             "fact_provenance": _thaw(self.attributes.get("fact_provenance", {})),
             "memory": _thaw(self.memory),
         }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "RelationalAgentState":
+        """Restore the complete immutable agent state written by ``to_dict``."""
+
+        known = tuple(str(item) for item in value.get("known_fact_ids", ()))
+        active = tuple(str(item) for item in value.get("active_fact_ids", known))
+        if set(active) - set(known):
+            raise ValueError("active_fact_ids must be a subset of known_fact_ids")
+        return cls(
+            agent_id=AgentId(str(value["agent_id"])),
+            score=float(value.get("score", 0.0)),
+            memory=tuple(value.get("memory", ())),
+            attributes={
+                "committed_action": value.get("committed_action"),
+                "public_reason": value.get("public_reason"),
+                "public_shared_fact_id": value.get("public_shared_fact_id"),
+                "known_fact_ids": list(known),
+                "active_fact_ids": list(active),
+                "initial_fact_ids": list(value.get("initial_fact_ids", ())),
+                "fact_provenance": dict(value.get("fact_provenance", {})),
+            },
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,6 +570,85 @@ class RelationalGameState(GameState):
             "rules": _thaw(self.data.get("rules", {})),
         }
 
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "RelationalGameState":
+        """Round-trip a persisted relational state without prompt objects."""
+
+        if str(value.get("game_type")) != GAME_TYPE:
+            raise ValueError(f"state game_type must be {GAME_TYPE!r}")
+        agents = tuple(
+            RelationalAgentState.from_dict(item)
+            for item in value.get("agents", ())
+        )
+        board = BlackboardState.from_sequence(tuple(value.get("blackboard", ())))
+        task = dict(value["task"])
+        answers = tuple(str(item) for item in task.get("possible_answers", ()))
+        if not answers or len(set(answers)) != len(answers):
+            raise ValueError("state semantic answer alphabet must be non-empty and unique")
+        expected_agent_ids = {
+            str(item) for item in dict(task.get("agent_fact_ids", {}))
+        }
+        found_agent_ids = {str(agent.agent_id) for agent in agents}
+        if expected_agent_ids and found_agent_ids != expected_agent_ids:
+            raise ValueError("state agent identities do not match the frozen task")
+        if int(task.get("population_size", len(agents))) != len(agents):
+            raise ValueError("state population does not match the frozen task")
+        fact_ids = {str(item) for item in task.get("fact_order", ())}
+        for agent in agents:
+            if agent.committed_action not in answers:
+                raise ValueError(
+                    f"agent {agent.agent_id} vote is outside the semantic answer alphabet"
+                )
+            if set(agent.known_fact_ids) - fact_ids:
+                raise ValueError(f"agent {agent.agent_id} knows facts outside the task")
+            if set(agent.fact_provenance) != set(agent.known_fact_ids):
+                raise ValueError(
+                    f"agent {agent.agent_id} fact provenance does not match known facts"
+                )
+        initial_votes = tuple(str(item) for item in value.get("initial_votes", ()))
+        if len(initial_votes) != len(agents) or any(
+            vote not in answers for vote in initial_votes
+        ):
+            raise ValueError("state initial votes do not match the population/alphabet")
+        message_ids = [message.message_id for message in board.messages]
+        if len(message_ids) != len(set(message_ids)):
+            raise ValueError("state blackboard contains duplicate message ids")
+        creation_order = [
+            (message.round_created, message.micro_step_created)
+            for message in board.messages
+        ]
+        if creation_order != sorted(creation_order):
+            raise ValueError("state blackboard history is out of creation order")
+        agent_ids = found_agent_ids
+        for message in board.messages:
+            if message.author_kind == "agent" and message.author_id not in agent_ids:
+                raise ValueError(
+                    f"blackboard message {message.message_id!r} has unknown author"
+                )
+            if message.vote not in answers:
+                raise ValueError(
+                    f"blackboard message {message.message_id!r} vote is outside "
+                    "the semantic answer alphabet"
+                )
+        return cls(
+            game_type=GAME_TYPE,
+            turn=int(value["turn"]),
+            agents=agents,
+            terminated=bool(value.get("terminated", False)),
+            data={
+                "seed": int(value["seed"]),
+                "phase": str(value["phase"]),
+                "dynamics_mode": str(value["dynamics_mode"]),
+                "task": task,
+                "rules": dict(value.get("rules", {})),
+                "initial_votes": list(initial_votes),
+                "evaluator_history": list(value.get("evaluator_history", ())),
+                "event_history": list(value.get("event_history", ())),
+                "blackboard": board.to_list(),
+                "termination_reason": value.get("termination_reason"),
+            },
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RelationalTransition(Transition):
@@ -545,10 +746,15 @@ class RelationalRules:
     board_exclude_self_authored: bool
     board_allow_no_post: bool
     allow_participant_requests: bool
+    require_grounded_reports: bool
+    report_citation_scope: str
+    no_citable_fact_action: str
     dynamics_mode: str
     task_family: str
     task_dataset_dir: str
     task_id: str | None
+    task_distribution_path: str | None
+    task_distribution_sha256: str | None
     initial_information_path: str | None
     initial_information_sha256: str | None
     truthful_controller_design_path: str | None
@@ -610,6 +816,7 @@ class RelationalRules:
         exclude_self = board.get("exclude_self_authored", True)
         allow_no_post = board.get("allow_no_post", True)
         allow_participant_requests = board.get("allow_participant_requests", True)
+        require_grounded_reports = board.get("require_grounded_reports", False)
         if not isinstance(exclude_self, bool):
             raise ValueError(
                 "game.options.board.exclude_self_authored must be a boolean"
@@ -619,6 +826,10 @@ class RelationalRules:
         if not isinstance(allow_participant_requests, bool):
             raise ValueError(
                 "game.options.board.allow_participant_requests must be a boolean"
+            )
+        if not isinstance(require_grounded_reports, bool):
+            raise ValueError(
+                "game.options.board.require_grounded_reports must be a boolean"
             )
 
         mode = str(options.get("dynamics_mode", "reasoning"))
@@ -648,6 +859,42 @@ class RelationalRules:
             )
         if task_family == "musr_team_allocation" and task_id is None:
             raise ValueError("MuSR Team Allocation requires game.options.task_id")
+        task_distribution = _mapping(
+            options.get("task_distribution"),
+            "game.options.task_distribution",
+        )
+        task_distribution_path = task_distribution.get("artifact_path")
+        task_distribution_sha256 = task_distribution.get("expected_file_sha256")
+        if task_distribution_path is not None and (
+            not isinstance(task_distribution_path, str)
+            or not task_distribution_path.strip()
+        ):
+            raise ValueError(
+                "game.options.task_distribution.artifact_path must be a path"
+            )
+        if task_distribution_sha256 is not None and (
+            not isinstance(task_distribution_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", task_distribution_sha256)
+        ):
+            raise ValueError(
+                "game.options.task_distribution.expected_file_sha256 must be "
+                "a lowercase 64-character SHA-256"
+            )
+        if (task_distribution_path is None) != (
+            task_distribution_sha256 is None
+        ):
+            raise ValueError(
+                "game.options.task_distribution must provide artifact_path and "
+                "expected_file_sha256 together"
+            )
+        if (
+            task_distribution_path is not None
+            and task_family != "musr_team_allocation"
+        ):
+            raise ValueError(
+                "game.options.task_distribution is supported only for "
+                "musr_team_allocation"
+            )
         initial_information = _mapping(
             options.get("initial_information"),
             "game.options.initial_information",
@@ -681,6 +928,14 @@ class RelationalRules:
             raise ValueError(
                 "game.options.initial_information is supported only for "
                 "musr_team_allocation"
+            )
+        if (
+            task_distribution_path is not None
+            and initial_information_path is not None
+        ):
+            raise ValueError(
+                "game.options.task_distribution and initial_information are "
+                "mutually exclusive"
             )
         controller_design = _mapping(
             options.get("truthful_controller_design"),
@@ -779,6 +1034,47 @@ class RelationalRules:
                 "game.options.board.allow_participant_requests: false requires "
                 "game.options.prompt_version: 4"
             )
+        if "require_grounded_reports" not in board:
+            require_grounded_reports = prompt_version >= 5
+        default_citation_scope = (
+            REPORT_CITATION_ACTIVE_OR_OBSERVED
+            if prompt_version >= 5
+            else REPORT_CITATION_ACTIVE_ONLY
+        )
+        report_citation_scope = str(
+            board.get("report_citation_scope", default_citation_scope)
+        )
+        if report_citation_scope not in REPORT_CITATION_SCOPES:
+            raise ValueError(
+                "game.options.board.report_citation_scope must be one of "
+                f"{list(REPORT_CITATION_SCOPES)}"
+            )
+        default_no_fact_action = (
+            NO_CITABLE_FACT_NONE
+            if prompt_version >= 5
+            else NO_CITABLE_FACT_MODEL_SELECT
+        )
+        no_citable_fact_action = str(
+            board.get("no_citable_fact_action", default_no_fact_action)
+        )
+        if no_citable_fact_action not in NO_CITABLE_FACT_ACTIONS:
+            raise ValueError(
+                "game.options.board.no_citable_fact_action must be one of "
+                f"{list(NO_CITABLE_FACT_ACTIONS)}"
+            )
+        if (
+            no_citable_fact_action == NO_CITABLE_FACT_REQUEST_OR_NONE
+            and not allow_participant_requests
+        ):
+            raise ValueError(
+                "game.options.board.no_citable_fact_action request_or_none requires "
+                "allow_participant_requests: true"
+            )
+        if no_citable_fact_action == NO_CITABLE_FACT_NONE and not allow_no_post:
+            raise ValueError(
+                "game.options.board.no_citable_fact_action none requires "
+                "allow_no_post: true"
+            )
 
         initialization = _mapping(
             options.get("initialization"), "game.options.initialization"
@@ -866,10 +1162,15 @@ class RelationalRules:
             board_exclude_self_authored=exclude_self,
             board_allow_no_post=allow_no_post,
             allow_participant_requests=allow_participant_requests,
+            require_grounded_reports=require_grounded_reports,
+            report_citation_scope=report_citation_scope,
+            no_citable_fact_action=no_citable_fact_action,
             dynamics_mode=mode,
             task_family=task_family,
             task_dataset_dir=str(dataset_dir),
             task_id=task_id,
+            task_distribution_path=task_distribution_path,
+            task_distribution_sha256=task_distribution_sha256,
             initial_information_path=initial_information_path,
             initial_information_sha256=initial_information_sha256,
             truthful_controller_design_path=truthful_controller_design_path,
@@ -889,15 +1190,24 @@ class RelationalRules:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        values = {
             field: _thaw(getattr(self, field)) for field in self.__dataclass_fields__
         }
+        if (
+            self.prompt_version < 5
+            and self.report_citation_scope == REPORT_CITATION_ACTIVE_ONLY
+            and self.no_citable_fact_action == NO_CITABLE_FACT_MODEL_SELECT
+        ):
+            values.pop("report_citation_scope")
+            values.pop("no_citable_fact_action")
+        return values
 
 
 __all__ = [
     "ACTIVE_FACT_IDS",
     "COMMITTED_ACTION",
     "CONTROLLER_SOURCE",
+    "CitationContext",
     "DYNAMICS_MODES",
     "FACT_SOURCES",
     "FOCAL_UPDATE",
@@ -907,9 +1217,17 @@ __all__ = [
     "INITIAL_SOURCE",
     "INITIAL_VOTE",
     "KNOWN_FACT_IDS",
+    "NO_CITABLE_FACT_MODEL_SELECT",
+    "NO_CITABLE_FACT_NONE",
+    "NO_CITABLE_FACT_REQUEST_OR_NONE",
+    "NO_CITABLE_FACT_ACTIONS",
+    "ObservedFactSource",
     "PEER_SOURCE",
     "PUBLIC_REASON",
     "PUBLIC_SHARED_FACT_ID",
+    "REPORT_CITATION_ACTIVE_ONLY",
+    "REPORT_CITATION_ACTIVE_OR_OBSERVED",
+    "REPORT_CITATION_SCOPES",
     "ROUND_RECORD_TYPE",
     "RelationalAgentState",
     "RelationalGameState",

@@ -149,6 +149,67 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
     )
 
 
+def plan_config_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
+    """Plan one array shard per ordinary config under shared load control."""
+
+    bases = []
+    for path in spec.configs:
+        source = load_run_config_or_grid(path)
+        bases.append(source.base if isinstance(source, GridSpec) else source)
+    request_concurrencies = {
+        min(
+            base.llm_provider.request_concurrency,
+            base.execution.parallelism,
+            base.execution.repetitions,
+        )
+        for base in bases
+    }
+    if len(request_concurrencies) != 1:
+        raise ValueError("automatic config-array planning requires one request concurrency")
+    per_shard = request_concurrencies.pop()
+    episode_slots = max(base.execution.parallelism for base in bases)
+    policy = spec.execution
+    target_rpm = int(policy.get("target_rpm", 900))
+    latency = float(policy.get("assumed_latency_seconds", 10.0))
+    if target_rpm < 1 or latency <= 0:
+        raise ValueError("target_rpm and assumed_latency_seconds must be positive")
+    max_nodes = int(policy.get("max_active_nodes", shard_count))
+    throttle = min(shard_count, max_nodes)
+    configured = policy.get("throttle")
+    if configured is not None:
+        throttle = min(throttle, int(configured))
+    if throttle < 1:
+        raise ValueError("planned array throttle must be positive")
+    total_concurrency = throttle * per_shard
+    control = ProviderLoadControlConfig.from_mapping(
+        policy.get("provider_load_control"),
+        defaults={
+            "initial_concurrency": total_concurrency,
+            "minimum_concurrency": min(4, total_concurrency),
+            "maximum_concurrency": total_concurrency,
+            "target_rpm": target_rpm,
+        },
+    )
+    return ExecutionPlan(
+        mode="config_array",
+        shard_count=shard_count,
+        array_throttle=throttle,
+        request_concurrency_per_shard=per_shard,
+        total_request_concurrency=total_concurrency,
+        episode_slots_per_shard=episode_slots,
+        total_episode_slots=throttle * episode_slots,
+        target_rpm=target_rpm,
+        assumed_latency_seconds=latency,
+        estimated_rpm=min(target_rpm, total_concurrency * 60.0 / latency),
+        cpus_per_task=int(policy.get("cpus_per_task", episode_slots)),
+        memory=str(policy.get("memory", "8G")),
+        time_limit=str(policy.get("time_limit", "04:00:00")),
+        partition=str(policy.get("partition", "all")),
+        qos=str(policy.get("qos", "normal")),
+        provider_load_control=control.to_dict(),
+    )
+
+
 def write_execution_manifest(path: str | Path, entries: Sequence[ExecutionEntry]) -> Path:
     destination = Path(path)
     with destination.open("w", newline="", encoding="utf-8") as stream:

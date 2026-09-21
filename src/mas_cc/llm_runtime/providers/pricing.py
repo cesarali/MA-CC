@@ -769,22 +769,31 @@ def default_pricing_catalog() -> PricingCatalog:
                 limits=ProviderLimits(maximum_input_tokens=40_960),
             ),
             ModelPricing(
+                # The DeepInfra-hosted counterpart of the
+                # gwdg/openai-gpt-oss-120b served through the university proxy.
+                # Record taken from origin/main, which carries a later snapshot
+                # and the output-token limit this entry originally lacked.
+                #
+                # A 24-episode experiment on 2026-09-14 showed this model
+                # generating ~714 output tokens per request where the DeepSeek
+                # and Qwen instruct models produced 167 and 245 on the identical
+                # workload, so its low per-token rate does not make it the
+                # cheapest choice per run.
+                "deepinfra", "openai/gpt-oss-120b", 0.037, 0.17, "USD",
+                "DeepInfra public OpenAI-model metadata denominated in USD per million tokens",
+                "https://api.deepinfra.com/v1/models",
+                retrieved_at="2026-09-16T00:00:00Z",
+                version="2026-09-16-deepinfra-openai-models-v1",
+                limits=ProviderLimits(
+                    maximum_input_tokens=131_072,
+                    maximum_output_tokens=131_072,
+                ),
+            ),
+            ModelPricing(
                 # Live metadata reported 0.09 USD per million input and 0.55 USD
                 # per million output, with no cached-input rate. A live probe on
                 # 2026-09-12 returned a bare JSON body with no <think> block and
                 # six output tokens, so it honours strict response contracts.
-                # Live metadata on 2026-09-14: 0.037 USD per million input and
-                # 0.170 per million output, 131,072-token context. This is the
-                # DeepInfra-hosted counterpart of the gwdg/openai-gpt-oss-120b
-                # served through the university proxy.
-                "deepinfra", "openai/gpt-oss-120b", 0.037, 0.170, "USD",
-                "DeepInfra authenticated model metadata denominated in cents per token",
-                "https://api.deepinfra.com/models/openai/gpt-oss-120b",
-                retrieved_at="2026-09-14T00:00:00Z",
-                version="2026-09-14-deepinfra-gpt-oss-120b-live-v1",
-                limits=ProviderLimits(maximum_input_tokens=131_072),
-            ),
-            ModelPricing(
                 "deepinfra", "Qwen/Qwen3-235B-A22B-Instruct-2507", 0.09, 0.55, "USD",
                 "DeepInfra authenticated model metadata denominated in cents per token",
                 "https://api.deepinfra.com/models/Qwen/Qwen3-235B-A22B-Instruct-2507",

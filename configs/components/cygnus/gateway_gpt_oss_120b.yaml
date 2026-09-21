@@ -1,0 +1,21 @@
+# Cygnus: gpt-oss-120b through the cluster LLM gateway (LiteLLM), OpenAI-compatible.
+# LLM_BASE / LLM_KEY are exported by scripts/Cygnus/SLURM/*.job. Measured
+# 2026-09-18 from inside the cluster; see docs/documentation/cygnus_site.md.
+schema_version: 1
+type: university
+model: gpt-oss-120b
+credentials_env: LLM_KEY
+base_url_env: LLM_BASE
+timeout_seconds: 120
+max_retries: 2
+# Per process. The gateway key allows 30,000 rpm and no parallel cap; the
+# provider sustained 400 concurrent requests cluster-wide, so size
+# (array throttle x request_concurrency) to about 400 in total.
+request_concurrency: 48
+temperature: 0.0
+max_output_tokens: 4096
+options:
+  estimated_latency_seconds: 4.5
+  # Default effort spends 2,500-3,000 hidden reasoning tokens per vote (25-70 s,
+  # truncates at 4,096) — low is 6 s and fits (measured 2026-09-17).
+  reasoning_effort: low

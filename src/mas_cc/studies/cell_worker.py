@@ -52,9 +52,22 @@ class _GridCellShard:
 
 def _run_entry(entry: Any) -> None:
     source = load_run_config_or_grid(entry.config_path)
-    if not isinstance(source, GridSpec):
-        raise ValueError(f"configuration is not a grid: {entry.config_path}")
-    cell = source.cells[entry.cell_index]
+    if isinstance(source, GridSpec):
+        cell = source.cells[entry.cell_index]
+        base = source.base
+        axes = source.axes
+        source_id = source.grid_id
+    else:
+        if entry.cell_index != 0 or entry.cell_id != "run":
+            raise ValueError(
+                "standalone execution manifest identity no longer matches config"
+            )
+        cell = GridCell(index=0, cell_id="run", overrides={}, config=source)
+        base = source
+        axes = ()
+        source_id = hashlib.sha256(
+            f"standalone:{entry.config_path}".encode()
+        ).hexdigest()
     if cell.cell_id != entry.cell_id:
         raise ValueError("execution manifest cell identity no longer matches config")
     episode_plan = None
@@ -71,7 +84,7 @@ def _run_entry(entry: Any) -> None:
                 for row in rows
             }
         }
-    shard = _GridCellShard(source.base, source.axes, source.grid_id, cell)
+    shard = _GridCellShard(base, axes, source_id, cell)
     output = Path(entry.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     (output / "shard_definition.json").write_text(

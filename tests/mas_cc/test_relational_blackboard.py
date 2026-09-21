@@ -51,6 +51,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.state import (
     ORDINARY_ACTION_TYPES,
     BlackboardMessage,
     BlackboardState,
+    CitationContext,
 )
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
@@ -67,7 +68,10 @@ CONFIG = (
 )
 
 
-def _config(*, rounds=1, q=1, lifetime=1, prompt_version=2):
+def _config(
+    *, rounds=1, q=1, lifetime=1, prompt_version=2,
+    sampling="uniform", exclude_self=True,
+):
     config = load_run_config(CONFIG, environment={})
     options = {
         **dict(config.game.options),
@@ -76,9 +80,9 @@ def _config(*, rounds=1, q=1, lifetime=1, prompt_version=2):
         "social_mode": "board",
         "prompt_version": prompt_version,
         "board": {
-            "sampling": "uniform",
+            "sampling": sampling,
             "message_lifetime_rounds": lifetime,
-            "exclude_self_authored": True,
+            "exclude_self_authored": exclude_self,
             "allow_no_post": True,
         },
     }
@@ -132,6 +136,172 @@ def _run(config, *, control=None, ballots=None):
         )
     )
     return result, ballots
+
+
+def _v5_config(**board_overrides):
+    config = _config(prompt_version=5)
+    options = {**dict(config.game.options), "epistemic_persistence": 0.7}
+    options["board"] = {**dict(options["board"]), **board_overrides}
+    return replace(config, game=replace(config.game, options=options))
+
+
+def test_v5_defaults_to_immediate_observed_citations_and_force_none():
+    rules = create_game(_v5_config().game).rules(_v5_config().game)
+    assert rules.report_citation_scope == "active_or_observed"
+    assert rules.no_citable_fact_action == "none"
+    assert rules.require_grounded_reports is True
+
+    legacy = create_game(_config(prompt_version=4).game).rules(
+        _config(prompt_version=4).game
+    )
+    assert legacy.report_citation_scope == "active_only"
+    assert legacy.no_citable_fact_action == "model_select"
+
+
+def test_sampled_grounded_report_is_immediately_citable_and_audited():
+    config = _v5_config()
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    focal = state.agents[0]
+    fact_id = state.fact_ids[0]
+    agents = list(state.agents)
+    agents[0] = replace(
+        focal,
+        attributes={**dict(focal.attributes), "active_fact_ids": []},
+    )
+    state = replace(state, agents=tuple(agents))
+    source = {
+        "message_id": "m-visible",
+        "source_id": "agent_002",
+        "source_type": "ordinary",
+        "author_kind": "agent",
+        "label": "Agent 2",
+        "message_type": "REPORT",
+        "text": "grounded report",
+        "vote": state.possible_answers[0],
+        "shared_fact_id": fact_id,
+        "shared_fact_text": state.fact_text(fact_id),
+        "reply_to": None,
+        "round_created": 0,
+        "micro_step_created": 1,
+    }
+    request = game.ballot_request(state, focal.agent_id, (source,), config.game)
+    context = CitationContext.from_mapping(
+        request.observation.visible_state["citation_context"]
+    )
+    assert context.active_fact_ids == ()
+    assert context.observed_fact_ids == (fact_id,)
+    assert context.citable_fact_ids == (fact_id,)
+
+    action = game.parse_action(
+        request,
+        json.dumps(
+            {
+                "vote": "A",
+                "private_reason": "The visible grounded report informs my vote.",
+                "public_message": {
+                    "type": "REPORT",
+                    "text": state.fact_text(fact_id),
+                    "shared_fact_id": fact_id,
+                    "reply_to": "m-visible",
+                },
+            }
+        ),
+    )
+    assert game.validate_action(state, request, action, config.game).is_valid
+    transition = game.apply_round_event_transition(
+        state,
+        focal=focal.agent_id,
+        action=action,
+        config=config.game,
+        social_sources=(source,),
+        round_fields={"round_index": 0, "within_round_index": 0},
+    )
+    assert fact_id in transition.next_state.relational_agent(focal.agent_id).active_fact_ids
+    assert transition.event["new_message_citation_source"] == "current_observation"
+    assert transition.event["new_message_source_message_id"] == "m-visible"
+
+
+def test_v5_empty_citable_set_masks_only_public_communication():
+    config = _v5_config()
+    game = create_game(config.game)
+    state = game.initialize(config.game, config.execution.seed)
+    focal = state.agents[0]
+    agents = list(state.agents)
+    agents[0] = replace(
+        focal,
+        attributes={**dict(focal.attributes), "active_fact_ids": []},
+    )
+    state = replace(state, agents=tuple(agents))
+    request = game.ballot_request(state, focal.agent_id, (), config.game)
+    response = json.dumps({"vote": "A", "private_reason": "I still decide privately."})
+
+    assert request.prompt.response_contract.validate(response).is_valid
+    action = game.parse_action(request, response)
+    assert action.metadata["public_message"] == {
+        "type": "NONE",
+        "text": None,
+        "shared_fact_id": None,
+        "reply_to": None,
+    }
+    assert action.metadata["communication_action_masked"] is True
+    assert game.validate_action(state, request, action, config.game).is_valid
+
+
+@pytest.mark.parametrize("persistence", [0.70, 0.85, 1.0])
+def test_v5_provider_free_smoke_completes_across_persistence(persistence):
+    config = _v5_config()
+    options = {
+        **dict(config.game.options),
+        "epistemic_persistence": persistence,
+        "rounds": 2,
+    }
+    config = replace(
+        config,
+        game=replace(config.game, horizon=2, options=options),
+    )
+
+    class _GroundedBallots(_BoardBallots):
+        def provider(self, provider_config):
+            def factory(request):
+                prompt = "\n\n".join(message.content for message in request.messages)
+                self.prompts.append(prompt)
+                marker = '"shared_fact_id": "<'
+                if marker not in prompt:
+                    return json.dumps(
+                        {"vote": "A", "private_reason": "No citable fact is available."}
+                    )
+                choices = prompt.split(marker, 1)[1].split('> or null', 1)[0]
+                fact_id = next(
+                    (item.strip() for item in choices.split("|") if item.strip() != "none"),
+                    None,
+                )
+                if fact_id is None:
+                    return json.dumps(
+                        {"vote": "A", "private_reason": "No citable fact is available."}
+                    )
+                return json.dumps(
+                    {
+                        "vote": "A",
+                        "private_reason": "I use the grounded evidence available now.",
+                        "public_message": {
+                            "type": "REPORT",
+                            "text": f"Grounded evidence {fact_id}.",
+                            "shared_fact_id": fact_id,
+                            "reply_to": None,
+                        },
+                    }
+                )
+
+            return MockLLMProvider(provider_config, response_factory=factory)
+
+    result, _ = _run(config, ballots=_GroundedBallots())
+    assert result.termination_reason == "max_rounds_reached"
+    assert len(result.interactions) == len(result.final_state.agents) * 2
+    assert all(
+        item.transition.event["report_citation_scope"] == "active_or_observed"
+        for item in result.interactions
+    )
 
 
 def _control(config, mode):
@@ -334,6 +504,32 @@ def test_request_cannot_attach_evidence_and_report_can():
     assert not contract.validate(json.dumps(request)).valid
     request["public_message"]["type"] = "REPORT"
     assert contract.validate(json.dumps(request)).valid
+
+
+def test_grounded_report_only_contract_requires_a_verified_fact():
+    contract = BlackboardBallotContract(
+        allowed_values=("A", "B"),
+        options={
+            "fact_ids": ("f1",),
+            "relations": (),
+            "visible_message_ids": (),
+            "allowed_message_types": ("REPORT", "NONE"),
+            "require_grounded_reports": True,
+        },
+    )
+    response = {
+        "vote": "A",
+        "private_reason": "private",
+        "public_message": {
+            "type": "REPORT",
+            "text": "A faithful paraphrase.",
+            "shared_fact_id": None,
+            "reply_to": None,
+        },
+    }
+    assert not contract.validate(json.dumps(response)).valid
+    response["public_message"]["shared_fact_id"] = "f1"
+    assert contract.validate(json.dumps(response)).valid
 
 
 def test_blackboard_v4_can_remove_participant_request_from_prompt_and_schema():
@@ -589,8 +785,9 @@ def test_blackboard_prompt_factory_supports_historical_and_current_versions():
     assert relational_blackboard_ballot_prompt(version=2).version == 2
     assert relational_blackboard_ballot_prompt(version=3).version == 3
     assert relational_blackboard_ballot_prompt(version=4).version == 4
+    assert relational_blackboard_ballot_prompt(version=5).version == 5
     with pytest.raises(ValueError, match="must be one of"):
-        relational_blackboard_ballot_prompt(version=5)
+        relational_blackboard_ballot_prompt(version=6)
 
 
 def test_invalid_blackboard_fact_repair_requires_null_without_coercion():
@@ -1198,3 +1395,42 @@ def test_pilot_artifact_builder_writes_complete_inspection_bundle(tmp_path):
         / "relational_imitation_round_feedback_analysis"
         / "round_information_estimates.csv"
     ).is_file()
+
+
+@pytest.mark.parametrize("exclude_self", [True, False])
+@pytest.mark.parametrize("lifetime", [1, 2])
+def test_full_board_reads_every_eligible_message(exclude_self, lifetime):
+    config = _config(rounds=2, q=1, sampling="full", lifetime=lifetime,
+                     exclude_self=exclude_self)
+    result, _ = _run(config)
+    events = [item.transition.event for item in result.interactions]
+    assert events[0]["board_sample_size"] == 0
+    assert max(event["board_sample_size"] for event in events) > 1
+    for event in events:
+        assert event["board_sample_size"] == event["eligible_board_message_count"]
+        assert len(event["sampled_message_ids"]) == event["board_sample_size"]
+        assert len(set(event["sampled_message_ids"])) == event["board_sample_size"]
+    assert all(record.event["board_sampling"] == "full" for record in result.rounds)
+    n = result.final_state.data["rules"]["n_agents"]
+    first_round_ids = {
+        message.message_id for message in result.final_state.blackboard.messages
+        if message.round_created == 0
+    }
+    second_round_ids = {
+        mid for event in events[n:] for mid in event["sampled_message_ids"]
+    }
+    assert bool(first_round_ids & second_round_ids) == (lifetime == 2)
+    if not exclude_self and lifetime == 2:
+        assert events[n]["board_sample_size"] == n
+
+
+@pytest.mark.parametrize("mode", [DIRECT_RECOMMENDATION, COORDINATION_REQUEST])
+def test_full_board_preserves_all_messages_with_controller(mode):
+    config = _config(q=1, sampling="full")
+    result, _ = _run(config, control=_control(config, mode))
+    events = [item.transition.event for item in result.interactions]
+    for event in events:
+        assert event["board_sample_size"] == event["eligible_board_message_count"]
+        extra = int(mode == DIRECT_RECOMMENDATION and event["controlled_slot"])
+        assert event["q_effective"] == event["board_sample_size"] + extra
+    assert any(event["board_sample_size"] > 1 for event in events)

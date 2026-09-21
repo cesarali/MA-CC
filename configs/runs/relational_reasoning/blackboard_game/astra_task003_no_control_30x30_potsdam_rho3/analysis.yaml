@@ -1,0 +1,36 @@
+# Matched analysis contract; controller-dependent estimates have no causal support
+# in this autonomous arm and must not be interpreted as zero treatment effects.
+theoretical_reference: none
+estimators: [round_sensing_mi, round_sensor_mae, round_sensor_mse, round_controller_action_entropy, round_controller_action_entropy_given_population, round_population_actuation_cmi, round_target_actuation_cmi, round_truth_actuation_cmi, round_target_information_fraction, round_target_susceptibility, round_target_signed_response_share, round_target_signed_actuation, round_truth_signed_actuation, round_memory_target_actuation_cmi, round_epistemic_target_actuation_cmi, round_phi_target_actuation_cmi, round_kappa_target_actuation_cmi, round_conditioning_state_count, round_dual_action_state_fraction, round_dual_action_event_fraction, round_single_action_slice_fraction, round_singleton_fraction]
+resampling: {bootstrap_resamples: 1000, null_permutations: 1000, confidence: 0.95, seed: 1}
+derived: [round_target_susceptibility, eta_ir, target_sensing_information_nats]
+state_local: [x]
+state_local_x_bins: 8
+rho_aggregated_descriptive: true
+derived_study_aggregates:
+  # The autonomous arm has no intervention-budget coordinate and cannot
+  # identify a controller treatment effect. Keep its per-cell descriptive,
+  # calibration, population, and epistemic outputs, but do not manufacture a
+  # controlled b=0 study aggregate.
+  enabled: false
+blackboard_population_outputs: true
+blackboard_calibration_outputs:
+  enabled: true
+  active_parameter_variants:
+    - direct_active
+    - mixture_common_weight
+    - mixture_start_vote_weighted
+  model_predictions:
+    enabled: false
+blackboard_phase2_outputs:
+  enabled: false
+blackboard_epistemic_phase_outputs:
+  enabled: true
+  task_dataset_dir: results/studies/musr_truthful_selective_task_calibration_01/tasks
+  x_bins: 8
+  phi_bands: 3
+  robustness_draws: 500
+  reference_persistence: 0.85
+  capture_threshold: 0.75
+  capture_consecutive_rounds: 3
+plots: {}

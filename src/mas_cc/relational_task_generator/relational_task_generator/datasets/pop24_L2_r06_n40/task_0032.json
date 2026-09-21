@@ -1,0 +1,268 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0032",
+  "seed": 12107544069666888461,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 32,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Jora",
+        "coordinates": {
+          "x": 1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Peni",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Weno",
+        "coordinates": {
+          "x": 1002,
+          "y": 1003
+        }
+      },
+      {
+        "name": "Viko",
+        "coordinates": {
+          "x": 1001,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Pira",
+        "coordinates": {
+          "x": 1000,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Selo",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Demi",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Bavi",
+        "relation": "WEST",
+        "object": "Jora",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Jora",
+        "relation": "SOUTHEAST",
+        "object": "Peni",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Weno",
+        "relation": "NORTHEAST",
+        "object": "Viko",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Viko",
+        "relation": "EAST",
+        "object": "Pira",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Pira",
+        "relation": "NORTHEAST",
+        "object": "Selo",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Selo",
+        "relation": "NORTHWEST",
+        "object": "Demi",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Bavi",
+    "reference": "Peni",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTH"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": []
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Bavi relative to Peni?",
+    "facts": {
+      "f1": "Bavi is west of Jora.",
+      "f2": "Jora is southeast of Peni.",
+      "f3": "Weno is northeast of Viko.",
+      "f4": "Viko is east of Pira.",
+      "f5": "Pira is northeast of Selo.",
+      "f6": "Selo is northwest of Demi."
+    },
+    "reasoning_chain": [
+      "Bavi is west of Jora.",
+      "Jora is southeast of Peni."
+    ]
+  }
+}

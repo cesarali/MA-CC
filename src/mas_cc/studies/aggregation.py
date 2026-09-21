@@ -11,7 +11,9 @@ import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timezone
+from multiprocessing import get_context
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -24,6 +26,7 @@ from mas_cc.storage.scientific import compact_row_to_imitation_event
 
 from .canonical import build_canonical_tables
 from .discovery import DiscoveredCell, DiscoveredRun, discover_cells, discover_runs
+from .performance import active_profile, measured_aggregation
 from .submission import read_submission_manifest
 from .table_io import (
     CANONICAL_TABLE_FORMAT,
@@ -400,6 +403,14 @@ def _run_information_group(payload: tuple[Any, ...]) -> tuple[list[Any], list[An
 def _write_analysis_progress(
     path: Path, *, completed: int, total: int, active: str | None = None
 ) -> None:
+    profile = active_profile.get()
+    if profile is not None:
+        profile.update({
+            "stage": "information_resampling", "completed_groups": completed,
+            "total_groups": total, "remaining_groups": total - completed,
+            "active_group": active,
+        })
+        return
     _write_json(
         path,
         {
@@ -423,6 +434,8 @@ def _information_tables(
     *,
     progress_path: Path | None = None,
     workers: int = 1,
+    fragments_dir: Path | None = None,
+    fragments_analysis_hash: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     from mas_cc.games.hidden_bench.imitation_round_feedback.analysis import (
         ROUND_ANALYSIS_STATISTICS,
@@ -442,6 +455,70 @@ def _information_tables(
     grouped: dict[str, list[Any]] = {}
     for event in events:
         grouped.setdefault(str(event.cell_id), []).append(event)
+    if fragments_dir is not None:
+        information_fragments: list[pd.DataFrame] = []
+        support_fragments: list[pd.DataFrame] = []
+        for cell_id in sorted(grouped):
+            stem = hashlib.sha256(cell_id.encode("utf-8")).hexdigest()
+            complete_path = fragments_dir / f"{stem}.complete.json"
+            information_path = fragments_dir / f"{stem}.information.parquet"
+            support_path = fragments_dir / f"{stem}.support.parquet"
+            if not complete_path.is_file():
+                raise ValueError(f"missing information fragment completion: {cell_id}")
+            completion = json.loads(complete_path.read_text(encoding="utf-8"))
+            expected_seed = int(settings["seed"]) + int(stem[:8], 16)
+            if (
+                completion.get("cell_id") != cell_id
+                or completion.get("group_hash") != stem
+                or int(completion.get("seed", -1)) != expected_seed
+            ):
+                raise ValueError(f"information fragment identity mismatch: {cell_id}")
+            for path, key in (
+                (information_path, "information_sha256"),
+                (support_path, "support_sha256"),
+            ):
+                if not path.is_file() or file_sha256(path) != completion.get(key):
+                    raise ValueError(f"invalid information fragment: {path}")
+            information_fragment = read_scientific_table(information_path)
+            support_fragment = read_scientific_table(support_path)
+            expected_fragment_hash = fragments_analysis_hash or analysis_hash
+            for fragment in (information_fragment, support_fragment):
+                if not fragment.empty and (
+                    set(fragment["cell_id"].astype(str)) != {cell_id}
+                    or set(fragment["analysis_hash"].astype(str))
+                    != {expected_fragment_hash}
+                ):
+                    raise ValueError(
+                        f"information fragment scientific identity mismatch: {cell_id}"
+                    )
+                if not fragment.empty:
+                    fragment["analysis_hash"] = analysis_hash
+            information_fragments.append(information_fragment)
+            support_fragments.append(support_fragment)
+        information = (
+            pd.concat(information_fragments, ignore_index=True, sort=False)
+            if information_fragments
+            else pd.DataFrame(columns=PRIMARY_COLUMNS)
+        )
+        support = (
+            pd.concat(support_fragments, ignore_index=True, sort=False)
+            if support_fragments
+            else pd.DataFrame()
+        )
+        information = information.sort_values(
+            [
+                column
+                for column in ("cell_id", "metric", "estimator_variant")
+                if column in information
+            ],
+            kind="stable",
+        ).reset_index(drop=True)
+        if not support.empty:
+            support = support.sort_values(
+                [column for column in ("cell_id", "metric") if column in support],
+                kind="stable",
+            ).reset_index(drop=True)
+        return information, support
     estimates: list[dict[str, Any]] = []
     support: list[dict[str, Any]] = []
     confidence = float(settings["confidence"])
@@ -458,16 +535,12 @@ def _information_tables(
     if progress_path is not None:
         _write_analysis_progress(progress_path, completed=done, total=total)
     if pending:
-        with ProcessPoolExecutor(
-            max_workers=max(1, min(workers, len(pending)))
-        ) as pool:
-            futures = {
-                pool.submit(_run_information_group, payload): cell_id
+        if workers == 1:
+            iterator = (
+                (cell_id, _run_information_group(payload))
                 for cell_id, payload in pending.items()
-            }
-            for future in as_completed(futures):
-                cell_id = futures[future]
-                value = future.result()
+            )
+            for cell_id, value in iterator:
                 completed_results[cell_id] = value
                 done += 1
                 print(
@@ -478,11 +551,34 @@ def _information_tables(
                     _write_analysis_progress(
                         progress_path, completed=done, total=total, active=cell_id
                     )
+        else:
+            with ProcessPoolExecutor(
+                max_workers=max(1, min(workers, len(pending))),
+                mp_context=get_context("spawn"),
+            ) as pool:
+                futures = {
+                    pool.submit(_run_information_group, payload): cell_id
+                    for cell_id, payload in pending.items()
+                }
+                for future in as_completed(futures):
+                    cell_id = futures[future]
+                    value = future.result()
+                    completed_results[cell_id] = value
+                    done += 1
+                    print(
+                        f"[analysis] information groups {done}/{total}: {cell_id}",
+                        flush=True,
+                    )
+                    if progress_path is not None:
+                        _write_analysis_progress(
+                            progress_path, completed=done, total=total, active=cell_id
+                        )
 
     for cell_id, rows in ordered:
         result_rows, null_rows = completed_results[cell_id]
+        source_prefix = cell_id.split("/", 1)[0]
         source_run_id = source_run_ids.get(
-            cell_id.split("/", 1)[0], cell_id.split("/", 1)[0]
+            cell_id, source_run_ids.get(source_prefix, source_prefix)
         )
         null_by_metric: dict[str, list[float]] = {}
         for item in null_rows:
@@ -1191,10 +1287,28 @@ def _micro_rows_by_cell(micro_slots: pd.DataFrame) -> dict[str, list[dict[str, A
     if micro_slots.empty:
         return {}
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in micro_slots.to_dict(orient="records"):
+    fields = {
+        "cell_id", "episode_id", "round_index", "analysis_target",
+        "controller_target", "round_controller_target", "round_controller_action",
+        "controller_action", "controlled_slot", "focal_opinion_before", "focal_opinion_after",
+    }
+    projected = micro_slots.loc[:, [name for name in micro_slots if name in fields]]
+    for row in projected.to_dict(orient="records"):
         cell_id = str(row.get("cell_id", "run"))
         grouped.setdefault(cell_id, []).append(row)
     return grouped
+
+
+def _single_affinity_cell(payload: tuple[Any, ...]) -> dict[str, Any]:
+    from mas_cc.analysis.single_affinity import single_affinity_analysis
+
+    rows, micro, settings, seed = payload
+    return single_affinity_analysis(
+        rows, micro,
+        bootstrap_resamples=int(settings["bootstrap_resamples"]),
+        confidence=float(settings["confidence"]),
+        seed=seed,
+    )
 
 
 def _single_affinity_by_cell(
@@ -1210,8 +1324,6 @@ def _single_affinity_by_cell(
     losing the correlations their intervals depend on.
     """
 
-    from mas_cc.analysis.single_affinity import single_affinity_analysis
-
     by_cell: dict[str, list[Any]] = {}
     for event in events:
         by_cell.setdefault(str(event.cell_id), []).append(event)
@@ -1223,7 +1335,7 @@ def _single_affinity_by_cell(
         )
         round_targets[(str(event.cell_id), local, int(event.round_index))] = event.event
 
-    result: dict[str, dict[str, Any]] = {}
+    prepared: dict[str, tuple[Any, ...]] = {}
     for index, (cell_id, rows) in enumerate(sorted(by_cell.items())):
         micro: list[dict[str, Any]] = []
         for row in micro_by_cell.get(cell_id, ()):
@@ -1243,16 +1355,44 @@ def _single_affinity_by_cell(
                     or round_event.get("controller_action"),
                 }
             )
-        bundle = single_affinity_analysis(
-            rows,
-            micro,
-            bootstrap_resamples=int(settings["bootstrap_resamples"]),
-            confidence=float(settings["confidence"]),
-            seed=int(settings["seed"]) + index,
-        )
+        prepared[cell_id] = (rows, micro, settings, int(settings["seed"]) + index)
+    workers = min(
+        len(prepared), max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1")))
+    )
+    result: dict[str, dict[str, Any]] = {}
+    profile = active_profile.get()
+
+    def collect(cell_id: str, bundle: dict[str, Any]) -> None:
+        rows, micro, _, _ = prepared[cell_id]
         bundle["_rows"], bundle["_micro"] = rows, micro
         result[cell_id] = bundle
-    return result
+        if profile is not None:
+            profile.update({
+                "stage": "joint_efficiency_bootstrap", "active_group": cell_id,
+                "completed_groups": len(result), "total_groups": len(prepared),
+                "workers": workers,
+            })
+
+    if profile is not None:
+        profile.stage(
+            "joint_efficiency_bootstrap", completed_groups=0,
+            total_groups=len(prepared), workers=workers,
+        )
+    if workers <= 1:
+        for cell_id, payload in prepared.items():
+            collect(cell_id, _single_affinity_cell(payload))
+    else:
+        # Spawn avoids inheriting the finalizer heartbeat thread and BLAS state.
+        with ProcessPoolExecutor(
+            max_workers=workers, mp_context=get_context("spawn")
+        ) as pool:
+            pending = {
+                pool.submit(_single_affinity_cell, payload): cell_id
+                for cell_id, payload in prepared.items()
+            }
+            for future in as_completed(pending):
+                collect(pending[future], future.result())
+    return {cell_id: result[cell_id] for cell_id in sorted(result)}
 
 
 def _single_affinity_theory_comparison(
@@ -2002,19 +2142,77 @@ def _write_blackboard_population_views(
     )
 
 
-def _expected_cell_coordinates(entries: Sequence[Any]) -> list[dict[str, Any]]:
+def _expected_cell_coordinates(
+    entries: Sequence[Any],
+    canonical_cells: pd.DataFrame | None = None,
+    *,
+    discovered_cells: Sequence[DiscoveredCell] = (),
+    target_manifest: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Resolve the declared structural grid, including cells not yet run."""
+
+    from .identity import protocol_fingerprint, scientific_cell_key
+
+    persisted = {
+        (int(item["config_index"]), str(item["source_cell_id"])): str(item["cell_key"])
+        for item in (target_manifest or {}).get("cells", ())
+        if isinstance(item, Mapping)
+        and {"config_index", "source_cell_id", "cell_key"}.issubset(item)
+    }
+    discovered = {
+        (int(cell.run.entry.array_index), str(cell.local_cell_id)): str(cell.cell_key)
+        for cell in discovered_cells
+    }
+    retained: dict[tuple[int, str], str] = {}
+    if canonical_cells is not None and not canonical_cells.empty:
+        required = {"cell_id", "source_config_index", "source_cell_id"}
+        if required.issubset(canonical_cells.columns):
+            retained = {
+                (int(row["source_config_index"]), str(row["source_cell_id"])): str(
+                    row["cell_id"]
+                )
+                for row in canonical_cells.to_dict(orient="records")
+            }
 
     rows: list[dict[str, Any]] = []
     for entry in entries:
         source = load_run_config_or_grid(entry.config_path)
-        cells = source.cells if isinstance(source, GridSpec) else ()
-        if not cells:
-            continue
+        cells = (
+            source.cells
+            if isinstance(source, GridSpec)
+            else (
+                SimpleNamespace(
+                    cell_id="run", overrides={}, config=source
+                ),
+            )
+        )
         for cell in cells:
             config = cell.config
+            local_key = (int(entry.array_index), str(cell.cell_id))
+            canonical_id = (
+                persisted.get(local_key)
+                or discovered.get(local_key)
+                or retained.get(local_key)
+            )
+            if canonical_id is None:
+                swept_paths = (
+                    tuple(axis.path for axis in source.axes)
+                    if isinstance(source, GridSpec)
+                    else ()
+                )
+                canonical_id = scientific_cell_key(
+                    protocol_fingerprint(
+                        config.to_dict(), swept_paths=swept_paths
+                    ),
+                    cell.overrides,
+                )
             record = {
-                "cell_id": f"config-{entry.array_index:04d}/{cell.cell_id}",
+                "cell_id": canonical_id,
+                "source_config_index": int(entry.array_index),
+                "source_cell_id": str(cell.cell_id),
+                "expected_episode_count": int(config.execution.repetitions),
+                "canonical_observations_present": canonical_id
+                in set(retained.values()),
                 **dict(cell.overrides),
             }
             for path, value in cell.overrides.items():
@@ -2054,12 +2252,19 @@ def _state_local_phase_tables(
     events: Sequence[Any],
     *,
     bins: int | None,
+    discovered_cells: Sequence[DiscoveredCell] = (),
+    target_manifest: Mapping[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Complete binned phase grids with explicit absence/support semantics."""
 
     if bins is None:
         return pd.DataFrame(), pd.DataFrame()
-    expected = _expected_cell_coordinates(entries)
+    expected = _expected_cell_coordinates(
+        entries,
+        cells,
+        discovered_cells=discovered_cells,
+        target_manifest=target_manifest,
+    )
     found = set(cells.get("cell_id", pd.Series(dtype=str)).astype(str))
     occupancy_counts: dict[tuple[str, int], int] = {}
     occupancy_episodes: dict[tuple[str, int], set[str]] = {}
@@ -3426,7 +3631,11 @@ def _package(analysis_dir: Path, study_id: str) -> Path:
         if directory.is_dir():
             paths.extend(path for path in directory.rglob("*") if path.is_file())
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(paths):
+        # Write provenance last so its measurements include table/plot compression.
+        manifest_path = analysis_dir / "analysis_manifest.json"
+        for path in sorted(
+            paths, key=lambda path: (path == manifest_path, path)
+        ):
             relative = path.relative_to(analysis_dir)
             if (
                 "cache" in relative.parts
@@ -3435,11 +3644,18 @@ def _package(analysis_dir: Path, study_id: str) -> Path:
                 or path.name.endswith(":Zone.Identifier")
             ):
                 continue
+            profile = active_profile.get()
+            if path == manifest_path and profile is not None:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                manifest["performance"] = profile.snapshot()
+                _write_json(path, manifest)
             info = zipfile.ZipInfo(str(relative).replace("\\", "/"))
             info.date_time = (1980, 1, 1, 0, 0, 0)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
-            archive.writestr(info, path.read_bytes())
+            info.file_size = path.stat().st_size
+            with path.open("rb") as source, archive.open(info, "w") as target:
+                shutil.copyfileobj(source, target, length=1024 * 1024)
     temporary.replace(destination)
     return destination
 
@@ -3485,8 +3701,16 @@ def _scientific_identity(
     )
 
 
-def aggregate_study(
-    study_dir: str | Path, *, allow_incomplete: bool = False
+@measured_aggregation
+def _aggregate_study_local(
+    study_dir: str | Path,
+    *,
+    allow_incomplete: bool = False,
+    analysis_output_dir: Path | None = None,
+    canonical_snapshot_dir: Path | None = None,
+    information_fragments_dir: Path | None = None,
+    information_fragments_analysis_hash: str | None = None,
+    progress_path: Path | None = None,
 ) -> dict[str, Any]:
     """Create the complete canonical analysis package for one submitted study."""
 
@@ -3506,19 +3730,29 @@ def aggregate_study(
     else:
         entries = read_submission_manifest(submission_path)
     recipe, recipe_path = _recipe(study_manifest)
+    from mas_cc.analysis.blackboard_calibration import calibration_settings
+
+    blackboard_settings = calibration_settings(recipe.get("blackboard_calibration_outputs"))
+    from mas_cc.analysis.blackboard_theory import theory_settings
+
+    blackboard_theory_settings = theory_settings(recipe.get("blackboard_theory_outputs"))
     epistemic_settings = _epistemic_phase_settings(recipe, recipe_path)
     from mas_cc.analysis.single_affinity import PROVENANCE as theory_provenance
 
     theoretical_reference = recipe.get(
         "theoretical_reference", "single_affinity_revised"
     )
-    if theoretical_reference not in {"single_affinity_revised", "none"}:
+    if theoretical_reference not in {"single_affinity_revised", "none", "calibrated_blackboard_finite_state_v1"}:
         raise ValueError(
-            "analysis theoretical_reference must be single_affinity_revised or none"
+            "analysis theoretical_reference must be single_affinity_revised, none, or calibrated_blackboard_finite_state_v1"
         )
+    if theoretical_reference == "calibrated_blackboard_finite_state_v1" and blackboard_theory_settings is None:
+        raise ValueError("calibrated blackboard reference requires blackboard_theory_outputs")
     settings = _resampling(recipe)
 
-    analysis_dir = root / "analysis"
+    analysis_dir = analysis_output_dir or (root / "analysis")
+    profile = active_profile.get()
+    assert profile is not None
     retained_input_identity: str | None = None
     runs = discover_runs(entries)
     cells = discover_cells(runs)
@@ -3528,7 +3762,31 @@ def aggregate_study(
         name: retained_table_path(analysis_dir / "tables", name)
         for name in ("cells", "episodes", "rounds", "micro_slots")
     }
-    if cells:
+    retained_inputs = (
+        [Path(canonical_snapshot_dir) / f"{name}.parquet" for name in retained_paths]
+        if canonical_snapshot_dir is not None
+        else [path for path in retained_paths.values() if path is not None]
+    )
+    retained_input_bytes = sum(
+        path.stat().st_size for path in retained_inputs if path.is_file()
+    )
+    if canonical_snapshot_dir is not None:
+        snapshot = Path(canonical_snapshot_dir)
+        canonical = {
+            name: read_scientific_table(snapshot / f"{name}.parquet")
+            for name in json.loads(
+                (snapshot.parent / "execution_manifest.json").read_text(encoding="utf-8")
+            )["canonical_inputs"]
+        }
+        validation = json.loads(
+            (snapshot / "validation.json").read_text(encoding="utf-8")
+        )
+        snapshot_manifest = json.loads(
+            (snapshot.parent / "execution_manifest.json").read_text(encoding="utf-8")
+        )
+        retained_input_identity = str(snapshot_manifest["scientific_input_identity"])
+        canonical_metadata = {}
+    elif cells:
         canonical, canonical_metadata = build_canonical_tables(study_id, cells)
         if target_manifest is not None:
             from .extension import consolidate_extension_tables
@@ -3611,12 +3869,22 @@ def aggregate_study(
             "study validation failed; inspect " + str(analysis_dir / "validation.json")
         )
 
+    profile.update({
+        "stage": "canonical_discovery_read",
+        "rows": {name: len(frame) for name, frame in canonical.items()},
+        "column_counts": {name: len(frame.columns) for name, frame in canonical.items()},
+        "retained_input_bytes": retained_input_bytes,
+    })
+    profile.stage(
+        "canonical_writing", rows={name: len(frame) for name, frame in canonical.items()}
+    )
     for name, frame in canonical.items():
         write_scientific_table(tables_dir, name, frame)
 
     input_identity = retained_input_identity or _scientific_identity(
         entries, cells, canonical
     )
+    profile.stage("event_preparation_and_endpoints")
     statistics = _requested_statistics(recipe)
     raw_estimators = recipe.get("estimators", ())
     requested_estimators = {str(name) for name in raw_estimators}
@@ -3633,7 +3901,7 @@ def aggregate_study(
         }
     )
     events = _round_events_from_canonical(canonical["rounds"])
-    if theoretical_reference != "none" and any(
+    if theoretical_reference == "single_affinity_revised" and any(
         event.event.get("record_type") == "relational_imitation_round_feedback"
         and float(event.event.get("epistemic_persistence", 1.0)) < 1.0
         for event in events
@@ -3642,7 +3910,7 @@ def aggregate_study(
             "analysis theoretical_reference must be none for finite epistemic "
             "persistence"
         )
-    if theoretical_reference != "none" and any(
+    if theoretical_reference == "single_affinity_revised" and any(
         event.event.get("record_type") == "relational_imitation_round_feedback"
         and event.event.get("social_mode", "peer") == "board"
         for event in events
@@ -3700,6 +3968,7 @@ def aggregate_study(
     source_run_ids.update(
         {f"config-{run.entry.array_index:04d}": run.run_id for run in runs}
     )
+    profile.stage("information_fragment_validation_merge")
     if statistics:
         information, support = _information_tables(
             study_id,
@@ -3710,6 +3979,8 @@ def aggregate_study(
             source_run_ids,
             progress_path=analysis_dir / "progress.json",
             workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
+            fragments_dir=information_fragments_dir,
+            fragments_analysis_hash=information_fragments_analysis_hash,
         )
     else:
         information, support = _ingest_existing_information(
@@ -3739,6 +4010,7 @@ def aggregate_study(
             "version": 1,
         }
     )
+    profile.stage("current_estimators")
     current_primary = _current_primary(
         study_id,
         events,
@@ -3747,6 +4019,7 @@ def aggregate_study(
         auxiliary_hash,
         source_run_ids,
     )
+    profile.stage("affinity_estimators")
     affinity_primary, affinity_support = _affinity_primary(
         study_id,
         canonical["micro_slots"],
@@ -3756,6 +4029,7 @@ def aggregate_study(
         auxiliary_hash,
         source_run_ids,
     )
+    profile.stage("state_local_estimators")
     state_local = _attach_coordinates(
         _state_local_primary(study_id, events, recipe, analysis_hash, source_run_ids),
         canonical["cells"],
@@ -3796,6 +4070,7 @@ def aggregate_study(
             "theory_provenance": dict(theory_provenance),
         }
     )
+    profile.stage("derived_observables")
     derived, theory_comparison = _derived(
         study_id,
         derived_raw,
@@ -3819,17 +4094,195 @@ def aggregate_study(
     if not contrasts.empty:
         derived = pd.concat([derived, contrasts], ignore_index=True, sort=False)
 
+    canonical_cell_ids = set(
+        canonical["cells"].get("cell_id", pd.Series(dtype=str)).dropna().astype(str)
+    )
+    for label, frame in (
+        ("information estimates", information),
+        ("support diagnostics", support),
+        ("primary estimates", primary),
+        ("derived observables", derived),
+    ):
+        if frame.empty or "cell_id" not in frame:
+            continue
+        scientific_rows = frame
+        if label == "derived observables" and "contrast_type" in frame:
+            scientific_rows = frame[frame["contrast_type"].isna()]
+        unknown_cell_ids = (
+            set(scientific_rows["cell_id"].dropna().astype(str))
+            - canonical_cell_ids
+        )
+        if unknown_cell_ids:
+            raise ValueError(
+                f"{label} contain non-canonical cell_id values: "
+                + ", ".join(sorted(unknown_cell_ids))
+            )
+
     outputs = {
         "primary_estimates": primary,
         "information_estimates": information,
         "support_diagnostics": support,
         "derived_observables": derived,
     }
+    checkpoint_recipe = recipe.get("checkpoint_ensemble_outputs")
+    if checkpoint_recipe:
+        if not isinstance(checkpoint_recipe, Mapping):
+            raise ValueError("checkpoint_ensemble_outputs must be a mapping")
+        from mas_cc.analysis.checkpoint_ensemble import (
+            assigned_policy_information,
+            branch_round_metrics,
+            classifier_analysis,
+            endpoint_table,
+            paired_response,
+            prepare_checkpoint_ensemble_inputs,
+            resource_report,
+            sensing_activation_response,
+            validate_checkpoint_ensemble,
+        )
+
+        policies = tuple(checkpoint_recipe.get(
+            "branch_policies",
+            ("none", "always_truth", "always_false", "sensing_truth", "sensing_false"),
+        ))
+        budgets = tuple(int(value) for value in checkpoint_recipe.get("posting_budgets", (3, 12)))
+        copies = int(checkpoint_recipe.get("continuation_copies", 1))
+        continuation_rounds = int(checkpoint_recipe.get("continuation_rounds", 10))
+        checkpoint_rounds, checkpoint_micro_slots, checkpoint_recovery = (
+            prepare_checkpoint_ensemble_inputs(
+                canonical["rounds"],
+                canonical["micro_slots"],
+                available_round_prefixes=(
+                    canonical.get("available_round_prefixes")
+                    if allow_incomplete else None
+                ),
+                available_micro_slot_prefixes=(
+                    canonical.get("available_micro_slot_prefixes")
+                    if allow_incomplete else None
+                ),
+                continuation_rounds=continuation_rounds,
+                expected_policies=policies,
+                posting_budgets=budgets,
+                continuation_copies=copies,
+            )
+        )
+        validation["checkpoint_recovery"] = checkpoint_recovery
+        checkpoint_validation = validate_checkpoint_ensemble(
+            checkpoint_rounds,
+            expected_policies=policies,
+            posting_budgets=budgets,
+            continuation_copies=copies,
+            continuation_rounds=continuation_rounds,
+            expected_parents=(
+                None
+                if checkpoint_recipe.get("expected_parents") is None
+                else int(checkpoint_recipe["expected_parents"])
+            ),
+            micro_slots=checkpoint_micro_slots,
+            episodes=canonical["episodes"],
+            require_complete=not allow_incomplete,
+        )
+        validation["checkpoint_ensemble"] = checkpoint_validation
+        if checkpoint_validation["errors"] and not allow_incomplete:
+            raise ValueError(
+                "checkpoint ensemble validation failed: "
+                + "; ".join(checkpoint_validation["errors"])
+            )
+        profile.stage("checkpoint_paired_response")
+        checkpoint_endpoints = endpoint_table(checkpoint_rounds)
+        checkpoint_pairs, checkpoint_effects = paired_response(
+            checkpoint_endpoints,
+            horizons=tuple(int(value) for value in checkpoint_recipe.get("primary_horizons", (1, 10))),
+            bootstrap_resamples=int(settings["bootstrap_resamples"]),
+            confidence=float(settings["confidence"]),
+            seed=int(settings["seed"]),
+        )
+        population_size = int(
+            pd.to_numeric(checkpoint_endpoints["N"], errors="coerce").dropna().iloc[0]
+        )
+        profile.stage("checkpoint_assigned_policy_information")
+        checkpoint_information = assigned_policy_information(
+            checkpoint_pairs,
+            population_size=population_size,
+            smoothing=tuple(checkpoint_recipe.get("smoothing", (0, 1, 12.5))),
+        )
+        profile.stage("checkpoint_classifier")
+        checkpoint_classifier, checkpoint_label_swap = classifier_analysis(
+            checkpoint_pairs,
+            population_size=population_size,
+            seed=int(settings["seed"]),
+            repeated_splits=int(checkpoint_recipe.get("repeated_group_splits", 5)),
+            label_swap_permutations=int(settings["null_permutations"]),
+            progress_callback=profile.update,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
+        )
+        profile.stage("checkpoint_activation_response")
+        checkpoint_resources = resource_report(
+            checkpoint_rounds, canonical["episodes"]
+        )
+        checkpoint_activation_response = (
+            sensing_activation_response(
+                checkpoint_rounds,
+                bootstrap_resamples=int(settings["bootstrap_resamples"]),
+                confidence=float(settings["confidence"]),
+                seed=int(settings["seed"]),
+            )
+            if bool(checkpoint_recipe.get("activation_response", False))
+            else pd.DataFrame()
+        )
+        profile.stage("checkpoint_branch_round_metrics")
+        checkpoint_branch_round_metrics, checkpoint_branch_round_nulls = (
+            branch_round_metrics(
+                checkpoint_rounds,
+                bootstrap_resamples=int(settings["bootstrap_resamples"]),
+                null_permutations=int(settings["null_permutations"]),
+                confidence=float(settings["confidence"]),
+                seed=int(settings["seed"]),
+            )
+            if bool(checkpoint_recipe.get("branch_round_metrics", False))
+            else (pd.DataFrame(), pd.DataFrame())
+        )
+        h0 = (
+            checkpoint_endpoints.sort_values("post_branch_horizon")
+            .groupby(["parent_id", "copy_id", "q", "rho", "target_semantics"], as_index=False)
+            .first()
+        )
+        h0["post_branch_horizon"] = 0
+        h0["target_count"] = h0["n_0"]
+        h0["target_fraction"] = h0["n_0"] / h0["N"]
+        h0["branch_policy"] = "checkpoint"
+        checkpoint_trajectories = pd.concat(
+            [h0, checkpoint_endpoints], ignore_index=True, sort=False
+        )
+        outputs.update({
+            "checkpoint_complete_round_records": checkpoint_rounds,
+            "checkpoint_complete_micro_slots": checkpoint_micro_slots,
+            "checkpoint_branch_endpoints": checkpoint_endpoints,
+            "checkpoint_paired_inputs": checkpoint_pairs,
+            "checkpoint_paired_effects": checkpoint_effects,
+            "checkpoint_trajectories": checkpoint_trajectories,
+            "checkpoint_assigned_policy_information": checkpoint_information,
+            "checkpoint_classifier_scores": checkpoint_classifier,
+            "checkpoint_label_swap_null": checkpoint_label_swap,
+            "checkpoint_resource_report": checkpoint_resources,
+            "checkpoint_activation_response": checkpoint_activation_response,
+            "checkpoint_branch_round_metrics": checkpoint_branch_round_metrics,
+            "checkpoint_branch_round_nulls": checkpoint_branch_round_nulls,
+        })
+        _write_json(analysis_dir / "validation.json", validation)
+    profile.stage("derived_study_aggregates")
+    paired_summary_plan = None
     derived_aggregation_config = recipe.get("derived_study_aggregates", {})
     if isinstance(derived_aggregation_config, Mapping) and bool(
         derived_aggregation_config.get("enabled", False)
     ):
         from .derived_aggregation import derive_study_control_aggregates
+        from .weighted_summaries import PairedBootstrap
+
+        if derived_aggregation_config.get("bootstrap", {}).get("unit") == "shared_initialization_block":
+            paired_summary_plan = PairedBootstrap(
+                canonical["rounds"], resamples=int(settings["bootstrap_resamples"]),
+                seed=int(settings["seed"]),
+            )
 
         aggregate_outputs = derive_study_control_aggregates(
             events,
@@ -3837,6 +4290,8 @@ def aggregate_study(
             recipe,
             settings,
             analysis_hash,
+            bootstrap_plan=paired_summary_plan,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
         )
         if not aggregate_outputs.study_metrics.empty:
             outputs["study_aggregated_metrics"] = aggregate_outputs.study_metrics
@@ -3887,6 +4342,7 @@ def aggregate_study(
             bootstrap_resamples=int(settings["bootstrap_resamples"]),
             confidence=float(settings["confidence"]),
             seed=int(settings["seed"]),
+            progress=profile.update,
         )
         available_tables = {
             "available_causal_susceptibility_state_local",
@@ -3977,9 +4433,11 @@ def aggregate_study(
             canonical["rounds"],
             canonical["cells"],
             **epistemic_settings,
+            causal_inputs=outputs.get("causal_response_round_inputs"),
             bootstrap_resamples=int(settings["bootstrap_resamples"]),
             confidence=float(settings["confidence"]),
             seed=int(settings["seed"]),
+            progress=profile.update,
         )
         for frame in epistemic_outputs.values():
             if not frame.empty:
@@ -4007,6 +4465,24 @@ def aggregate_study(
             "provider_calls": 0,
         }
         _write_json(analysis_dir / "validation.json", validation)
+    if isinstance(derived_aggregation_config, Mapping) and derived_aggregation_config.get("enabled") and (
+        derived_aggregation_config.get("causal") or derived_aggregation_config.get("epistemic")
+    ):
+        from .weighted_summaries import PairedBootstrap, derive_blackboard_summaries
+
+        profile.stage("weighted_blackboard_summaries")
+        if paired_summary_plan is None:
+            paired_summary_plan = PairedBootstrap(
+                canonical["rounds"], resamples=int(settings["bootstrap_resamples"]),
+                seed=int(settings["seed"]),
+            )
+        outputs.update(derive_blackboard_summaries(
+            outputs, canonical["cells"], recipe, settings,
+            canonical_hash({"primary": analysis_hash, "causal": causal_hash,
+                            "epistemic": epistemic_hash, "version": "paired-summary-v1"}),
+            paired_summary_plan
+        ))
+    profile.stage("derived_state_maps")
     phi_comparison = _phi_conditioning_comparison(primary)
     if not phi_comparison.empty:
         outputs["phi_conditioning_comparison"] = _attach_coordinates(
@@ -4028,6 +4504,8 @@ def aggregate_study(
         derived,
         events,
         bins=state_bins,
+        discovered_cells=cells,
+        target_manifest=target_manifest,
     )
     if not phase_maps.empty:
         outputs["state_local_phase_maps"] = phase_maps
@@ -4047,6 +4525,10 @@ def aggregate_study(
         )
         if not rho_summary.empty:
             outputs["rho_aggregated_descriptive_summary"] = rho_summary
+    if isinstance(derived_aggregation_config, Mapping) and derived_aggregation_config.get("enabled", False) and recipe.get("rho_aggregated_descriptive", False):
+        from .weighted_summaries import weighted_rho_aliases
+
+        weighted_rho_aliases(outputs)
     if {
         "cell_id",
         "episode_id",
@@ -4072,6 +4554,72 @@ def aggregate_study(
         outputs["single_affinity_theory_comparison"] = _attach_coordinates(
             theory_comparison, canonical["cells"]
         )
+    blackboard_hash = None
+    if blackboard_settings is not None:
+        from mas_cc.analysis.blackboard_calibration import VERSION, analyze_blackboard_calibration
+
+        profile.stage("blackboard_calibration")
+        blackboard_hash = canonical_hash({
+            "scientific_input_identity": input_identity,
+            "estimator_version": VERSION,
+            "settings": blackboard_settings,
+            "resampling": settings,
+        })
+        calibration_outputs = analyze_blackboard_calibration(
+            canonical["micro_slots"], canonical["rounds"], canonical["episodes"],
+            canonical["cells"], settings=blackboard_settings,
+            bootstrap_resamples=settings["bootstrap_resamples"],
+            confidence=settings["confidence"], seed=settings["seed"],
+            analysis_hash=blackboard_hash, provisional=not validation["complete"],
+            progress=profile.update,
+            workers=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))),
+        )
+        outputs.update(calibration_outputs)
+        calibration_estimates = calibration_outputs["blackboard_calibration_estimates"]
+        primary = pd.concat([primary, calibration_estimates], ignore_index=True, sort=False)
+        outputs["primary_estimates"] = primary
+        validation["blackboard_calibration"] = {
+            "estimator_version": VERSION, "analysis_hash": blackboard_hash,
+            "completed_canonical_episodes_only": True,
+            "input_rows": len(calibration_outputs["blackboard_calibration_inputs"]),
+            "estimate_rows": len(calibration_estimates),
+            "prediction_rows": len(calibration_outputs["blackboard_model_predictions"]),
+            "provider_calls": 0,
+        }
+        _write_json(analysis_dir / "validation.json", validation)
+    blackboard_theory_hash = None
+    if blackboard_theory_settings is not None:
+        from mas_cc.analysis.blackboard_theory import VERSION as THEORY_VERSION, analyze_blackboard_theory
+
+        profile.stage("blackboard_theory")
+        blackboard_theory_hash = canonical_hash({
+            "scientific_input_identity": input_identity,
+            "calibration_hash": blackboard_hash,
+            "model_version": THEORY_VERSION,
+            "settings": blackboard_theory_settings,
+            "resampling": settings,
+        })
+        theory_outputs = analyze_blackboard_theory(
+            outputs, canonical["rounds"], canonical["cells"],
+            settings=blackboard_theory_settings,
+            calibration_settings=blackboard_settings,
+            events=_round_events_from_canonical(canonical["rounds"]),
+            bootstrap_resamples=settings["bootstrap_resamples"],
+            confidence=settings["confidence"], seed=settings["seed"],
+            analysis_hash=blackboard_theory_hash, provisional=not validation["complete"],
+            progress=profile.update,
+        )
+        outputs.update(theory_outputs)
+        validation["blackboard_theory"] = {
+            "model_version": THEORY_VERSION, "analysis_hash": blackboard_theory_hash,
+            "provider_calls": 0,
+            "validation_rows": len(theory_outputs["theory_validation"]),
+            "comparison_rows": len(theory_outputs["theory_empirical_comparison"]),
+        }
+        _write_json(analysis_dir / "validation.json", validation)
+    profile.stage(
+        "table_writing", rows={name: len(frame) for name, frame in outputs.items()}
+    )
     for name, frame in outputs.items():
         write_scientific_table(tables_dir, name, frame)
     if bool(recipe.get("blackboard_population_outputs", False)):
@@ -4095,7 +4643,22 @@ def aggregate_study(
         "episode_endpoint_summary": episode_endpoint_summary,
         **outputs,
     }
+    profile.stage("plotting")
     plots = _render_plots(recipe, plot_tables, analysis_dir / "plots")
+    if checkpoint_recipe:
+        from mas_cc.analysis.checkpoint_ensemble import render_checkpoint_plots
+
+        plots.extend(
+            render_checkpoint_plots(
+                outputs.get("checkpoint_paired_effects", pd.DataFrame()),
+                outputs.get("checkpoint_trajectories", pd.DataFrame()),
+                outputs.get(
+                    "checkpoint_assigned_policy_information", pd.DataFrame()
+                ),
+                analysis_dir / "plots",
+                outputs.get("checkpoint_resource_report", pd.DataFrame()),
+            )
+        )
     if _blackboard_phase2_requested(recipe):
         plots.extend(
             _render_causal_communication_plots(plot_tables, analysis_dir / "plots")
@@ -4116,6 +4679,7 @@ def aggregate_study(
                 analysis_dir / "plots",
             )
         )
+    profile.stage("reports_and_provenance")
     reports = analysis_dir / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     counts = validation["counts"]
@@ -4192,6 +4756,15 @@ def aggregate_study(
                 f"Analysis hash: `{analysis_hash}`.",
                 "",
                 *(SINGLE_AFFINITY_METHODS if not derived.empty else ()),
+                *([
+                    "",
+                    "Calibrated blackboard theory runs after empirical estimators and calibration. "
+                    "Prepared theory tables retain policy, split, masks, calibration dependencies, "
+                    "and unsupported model statuses. Exact model information has no empirical null offset. "
+                    "In-sample fitted references are not held-out predictions. Intervals refit retained "
+                    "shared-initialization blocks; exact summation itself introduces no Monte Carlo uncertainty.",
+                    "See tables/theory_model_manifest.parquet and tables/theory_validation.parquet.",
+                ] if blackboard_theory_settings is not None else []),
             ]
         ),
         encoding="utf-8",
@@ -4240,6 +4813,8 @@ def aggregate_study(
     provenance_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(manifest_path, provenance_dir / "study_manifest.json")
     shutil.copy2(submission_path, provenance_dir / "submission_manifest.csv")
+    if (root / "merge_manifest.json").is_file():
+        shutil.copy2(root / "merge_manifest.json", provenance_dir / "merge_manifest.json")
     submission_metadata = root / "submission.json"
     if submission_metadata.is_file():
         shutil.copy2(submission_metadata, provenance_dir / "submission.json")
@@ -4267,6 +4842,10 @@ def aggregate_study(
         "auxiliary_analysis_hash": auxiliary_hash,
         "causal_response_hash": causal_hash,
         "epistemic_phase_hash": epistemic_hash,
+        "blackboard_calibration_hash": blackboard_hash,
+        "blackboard_theory_hash": blackboard_theory_hash,
+        "blackboard_theory_settings": blackboard_theory_settings,
+        "blackboard_calibration_settings": blackboard_settings,
         "theory": dict(theory_provenance),
         "theoretical_reference": theoretical_reference,
         "estimator_engine": "mas_cc.games.hidden_bench.imitation_round_feedback.analysis.round_information_analysis",
@@ -4297,6 +4876,8 @@ def aggregate_study(
         "tables": sorted(path.name for path in tables_dir.glob("*.parquet")),
         "derived_semantics": _derived_semantics(derived),
     }
+    profile.stage("packaging")
+    analysis_manifest["performance"] = profile.snapshot()
     _write_json(analysis_dir / "analysis_manifest.json", analysis_manifest)
     (analysis_dir / "progress.json").unlink(missing_ok=True)
     archive = _package(analysis_dir, study_id)
@@ -4311,9 +4892,42 @@ def aggregate_study(
     }
 
 
+def aggregate_study(
+    study_dir: str | Path,
+    *,
+    allow_incomplete: bool = False,
+    backend: str = "auto",
+) -> dict[str, Any]:
+    """Aggregate locally or submit the internal detached SLURM graph."""
+
+    if backend not in {"auto", "local", "slurm"}:
+        raise ValueError("aggregation backend must be auto, local, or slurm")
+    already_allocated = bool(os.environ.get("SLURM_JOB_ID"))
+    potsdam_runtime = Path(
+        "/home/ojedamarin/.local/share/miniforge3/bin/conda"
+    ).is_file()
+    use_slurm = backend == "slurm" or (
+        backend == "auto"
+        and not already_allocated
+        and "PYTEST_CURRENT_TEST" not in os.environ
+        and (potsdam_runtime or "MA_CC_ANALYSIS_LAUNCHER" in os.environ)
+        and shutil.which("sbatch") is not None
+    )
+    if use_slurm:
+        from .analysis_slurm import submit_aggregation
+
+        return submit_aggregation(
+            study_dir, allow_incomplete=allow_incomplete
+        )
+    return _aggregate_study_local(
+        study_dir, allow_incomplete=allow_incomplete
+    )
+
+
 __all__ = [
     "DERIVED_COLUMNS",
     "ESTIMATOR_ALIASES",
     "SINGLE_AFFINITY_DERIVED",
+    "_aggregate_study_local",
     "aggregate_study",
 ]

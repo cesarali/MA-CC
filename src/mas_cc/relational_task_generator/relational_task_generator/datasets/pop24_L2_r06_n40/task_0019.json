@@ -1,0 +1,266 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0019",
+  "seed": 14026229723522391851,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 19,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": 2,
+          "y": 1
+        }
+      },
+      {
+        "name": "Ralo",
+        "coordinates": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Gavi",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 996,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Belo",
+        "coordinates": {
+          "x": 997,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Nori",
+        "coordinates": {
+          "x": 998,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Caro",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Sora",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Jeni",
+        "relation": "EAST",
+        "object": "Ralo",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Ralo",
+        "relation": "NORTHEAST",
+        "object": "Gavi",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Bavi",
+        "relation": "WEST",
+        "object": "Belo",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Belo",
+        "relation": "WEST",
+        "object": "Nori",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Nori",
+        "relation": "WEST",
+        "object": "Caro",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Caro",
+        "relation": "WEST",
+        "object": "Sora",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Jeni",
+    "reference": "Gavi",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTHEAST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "WEST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHEAST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": []
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": []
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": [
+        "f2",
+        "f5",
+        "f6"
+      ]
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Jeni relative to Gavi?",
+    "facts": {
+      "f1": "Jeni is east of Ralo.",
+      "f2": "Ralo is northeast of Gavi.",
+      "f3": "Bavi is west of Belo.",
+      "f4": "Belo is west of Nori.",
+      "f5": "Nori is west of Caro.",
+      "f6": "Caro is west of Sora."
+    },
+    "reasoning_chain": [
+      "Jeni is east of Ralo.",
+      "Ralo is northeast of Gavi."
+    ]
+  }
+}

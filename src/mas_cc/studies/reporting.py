@@ -102,6 +102,7 @@ class PhaseResult:
     displayed_values: int
     source_table: str | None
     panel_count: int
+    description: str | None = None
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
@@ -293,9 +294,9 @@ def _metric_rows(
         return frame, source, f"metric {metric!r} is unavailable in {source}.parquet"
     if value not in frame:
         return pd.DataFrame(), source, f"value column {value!r} is unavailable"
+    frame["_source_row"] = frame.index
     frame = _attach_cell_coordinates(frame, package.table("cells", required=False))
     frame["_report_value"] = pd.to_numeric(frame[value], errors="coerce")
-    frame["_source_row"] = frame.index
     frame["_source_field"] = value
     return frame, source, None
 
@@ -751,6 +752,234 @@ def _render_unavailable_phase(
     )
 
 
+def _render_budget_metric(package, spec, section, *, mode, figures_dir, ledger):
+    """Plot existing whole-cell or study estimates without pooling source rows."""
+    frame, source, reason = _metric_rows(package, spec, mode=mode)
+    metric_id = str(spec["id"])
+    label = str(spec.get("label", metric_id))
+    result = PhaseResult(metric_id, label, "budget " + mode, [], "unavailable", reason, 0, source, 0)
+    if reason:
+        return result
+    if "target_fraction_bin_index" in frame:
+        frame = frame[frame.target_fraction_bin_index.isna()].copy()
+    for key, value in spec.get("filters", {}).items():
+        if key not in frame:
+            result.reason = f"filter column {key!r} is unavailable"
+            return result
+        frame = frame[frame[key] == value].copy()
+    x = str(section.get("x", "intervention_budget"))
+    if frame.empty or x not in frame:
+        result.reason = "whole-cell budget estimates are unavailable"
+        return result
+    groups = [c for c in DEFAULT_FACETS if c != x and c in frame and frame[c].nunique(dropna=False) > 1]
+    if frame.duplicated([*groups, x]).any():
+        raise ValueError(f"duplicate budget coordinates for {metric_id}; filter the source rows")
+    fig, ax = plt.subplots(figsize=(7.2, 4.3), constrained_layout=True)
+    grouped = frame.groupby(groups, dropna=False) if groups else [((), frame)]
+    count = 0
+    for key, rows in grouped:
+        rows = rows.sort_values(x)
+        keys = key if isinstance(key, tuple) else (key,)
+        curve_label = ", ".join(f"{c}={v}" for c, v in zip(groups, keys)) or "aggregated cells"
+        y = rows._report_value.to_numpy(dtype=float, na_value=np.nan).copy()
+        supported = rows.get("support_status", pd.Series("unsupported", index=rows.index)).isin(["adequate", "limited"]).to_numpy()
+        y[~supported] = np.nan
+        xs = pd.to_numeric(rows[x], errors="raise").to_numpy(dtype=float)
+        line, = ax.plot(xs, y, "o-", label=curve_label)
+        for i, (_, row) in enumerate(rows.iterrows()):
+            if not np.isfinite(y[i]):
+                continue
+            count += 1
+            for field, value in [(x, xs[i]), (row._source_field, y[i])]:
+                ledger.add(location=f"budget:{metric_id}:{mode}", table=source,
+                           row_index=row._source_row, field=field, value=value)
+            low, high = row.get("ci_low"), row.get("ci_high")
+            if pd.notna(low) and pd.notna(high) and np.isfinite(float(low)) and np.isfinite(float(high)):
+                ax.vlines(xs[i], float(low), float(high), color=line.get_color(), alpha=0.5)
+                for field, value in [("ci_low", low), ("ci_high", high)]:
+                    ledger.add(location=f"budget:{metric_id}:{mode}", table=source,
+                               row_index=row._source_row, field=field, value=value)
+    ax.set(xlabel="intervention budget b", ylabel=label, title=f"{label} vs budget: {mode}")
+    ax.set_xticks(sorted(frame[x].unique()))
+    ax.grid(alpha=0.2)
+    ax.legend(fontsize=8)
+    path = figures_dir / f"budget_{metric_id}_{mode}.png"
+    fig.savefig(path, dpi=180)
+    plt.close(fig)
+    result.figures = [path]
+    result.displayed_values = count
+    result.panel_count = 1
+    result.status = "available" if count else "unavailable"
+    result.reason = None if count else "no supported finite estimates"
+    return result
+
+
+def _render_episode_examples(package, section, *, figures_dir, ledger):
+    """Select examples by coordinates and stable episode ID, never by outcome."""
+    source = str(section.get("source", "epistemic_round_timeseries"))
+    frame = package.table(source)
+    frame["_source_row"] = frame.index
+    for column, values in section.get("filters", {}).items():
+        frame = frame[frame[column].isin(values)].copy()
+    group_columns = list(section.get("group_by", ["cell_id"]))
+    metrics = list(section["metrics"])
+    required = [*group_columns, "episode_id", "round_index", *[m["value"] for m in metrics]]
+    missing = sorted(set(required) - set(frame.columns))
+    if missing:
+        raise ValueError(f"episode examples lack columns: {missing}")
+    if frame.duplicated(["cell_id", "episode_id", "round_index"]).any():
+        raise ValueError("duplicate episode-round coordinates")
+    results = []
+    selections = []
+    for _, group in frame.groupby(group_columns, dropna=False, sort=True):
+        episodes = group[["cell_id", "episode_id"]].drop_duplicates().sort_values(["cell_id", "episode_id"])
+        for _, identity in episodes.head(int(section.get("episodes_per_group", 1))).iterrows():
+            rows = group[(group.cell_id == identity.cell_id) & (group.episode_id == identity.episode_id)].sort_values("round_index")
+            coordinates = {c: str(rows.iloc[0][c]) for c in group_columns}
+            title = ", ".join(f"{c}={v}" for c, v in coordinates.items())
+            fig, axes = plt.subplots(len(metrics), 1, figsize=(8, 1.7 * len(metrics)), sharex=True, constrained_layout=True, squeeze=False)
+            count = 0
+            for ax, spec in zip(axes.flat, metrics, strict=True):
+                field = spec["value"]
+                y = pd.to_numeric(rows[field], errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+                x = pd.to_numeric(rows.round_index).to_numpy(dtype=float)
+                ax.plot(x, y, ".-", linewidth=1)
+                ax.set_ylabel(spec.get("label", field), fontsize=8)
+                if "ylim" in spec:
+                    ax.set_ylim(spec["ylim"])
+                ax.grid(alpha=0.2)
+                for i, (_, row) in enumerate(rows.iterrows()):
+                    if np.isfinite(y[i]):
+                        count += 1
+                        for col, value in [(field, y[i]), ("round_index", x[i])]:
+                            ledger.add(location=f"episode:{identity.cell_id}:{identity.episode_id}", table=source, row_index=row._source_row, field=col, value=value)
+            axes[-1, 0].set_xlabel("Round")
+            fig.suptitle(title + "\nEpisode " + str(identity.episode_id), fontsize=9)
+            metric_id = f"episode_example_{len(results) + 1}"
+            path = figures_dir / f"{metric_id}.png"
+            fig.savefig(path, dpi=160)
+            plt.close(fig)
+            results.append(PhaseResult(metric_id, title, "episode example", [path], "available", None, count, source, len(metrics), section.get("description")))
+            selections.append({"cell_id": str(identity.cell_id), "episode_id": str(identity.episode_id), "coordinates": coordinates, "source_table": source})
+    if not results:
+        raise ValueError("no episodes match the example selection")
+    (figures_dir.parent / "episode_examples.json").write_text(json.dumps({"selection": "First episode IDs in sorted cell/episode order within each configured group; independent of outcomes. Illustrative, not representative.", "examples": selections}, indent=2) + "\n")
+    return results
+
+
+def _render_epistemic_maps(package, section, *, figures_dir, ledger):
+    """Reshape retained x/phi estimates, preserving cell identity and support."""
+    recipe = yaml.safe_load((package.root / "analysis_recipe.yaml").read_text())
+    settings = recipe["blackboard_epistemic_phase_outputs"]
+    nx, ny = int(settings["x_bins"]), int(settings["phi_bands"])
+    results = []
+    for spec in section["metrics"]:
+        source, field = spec["source"], spec["value"]
+        frame = package.table(source)
+        frame["_source_row"] = frame.index
+        for col, value in spec.get("filters", {}).items():
+            frame = frame[frame[col] == value].copy()
+        if frame.duplicated(["cell_id", "x_bin", "phi_star_band"]).any():
+            raise ValueError("duplicate epistemic phase coordinates")
+        cells = package.table("cells").sort_values(["epistemic_persistence", "intervention_budget"])
+        finite = pd.to_numeric(frame.loc[frame.support_status.isin(["adequate", "limited"]), field], errors="coerce")
+        bound = float(finite.abs().max()) if finite.notna().any() else 1.0
+        bound = max(bound, 1e-12)
+        paths, count = [], 0
+        for offset in range(0, len(cells), 6):
+            fig, axes = plt.subplots(2, 3, figsize=(12, 7), constrained_layout=True)
+            page = cells.iloc[offset:offset + 6]
+            for ax, (_, cell) in zip(axes.flat, page.iterrows()):
+                grid = np.full((ny, nx), np.nan)
+                rows = frame[frame.cell_id == cell.cell_id]
+                for _, row in rows.iterrows():
+                    ix, iy = int(row.x_bin), int(row.phi_star_band)
+                    if not (0 <= ix < nx and 0 <= iy < ny):
+                        raise ValueError("epistemic bin is outside the analysis recipe")
+                    value = pd.to_numeric(row[field], errors="coerce")
+                    if row.support_status not in {"adequate", "limited"} or not np.isfinite(value):
+                        continue
+                    grid[iy, ix] = value
+                    count += 1
+                    ledger.add(location=f"epistemic:{spec['id']}:{cell.cell_id}", table=source, row_index=row._source_row, field=field, value=value)
+                cmap = plt.get_cmap("RdBu_r").copy()
+                cmap.set_bad("#dddddd")
+                im = ax.imshow(np.ma.masked_invalid(grid), origin="lower", extent=(0, 1, 0, 1), aspect="auto", cmap=cmap, vmin=-bound, vmax=bound)
+                ax.set(xlabel="Target vote share x", ylabel="Individual solvability phi*", title=f"b={cell.intervention_budget}, rho={cell.epistemic_persistence}")
+            for ax in axes.flat[len(page):]:
+                ax.set_visible(False)
+            fig.colorbar(im, ax=list(axes.flat), shrink=0.8, label=spec["label"])
+            fig.suptitle(spec["label"])
+            path = figures_dir / f"epistemic_{spec['id']}_{offset // 6 + 1}.png"
+            fig.savefig(path, dpi=160)
+            plt.close(fig)
+            paths.append(path)
+        results.append(PhaseResult("epistemic_" + spec["id"], spec["label"], "epistemic phase", paths, "available" if count else "unavailable", None if count else "no supported estimates", count, source, len(cells)))
+    return results
+
+
+def _render_occupancy_bars(section, *, base, figures_dir, ledger):
+    """Display a separately computed descriptive occupancy summary."""
+    source = _resolve_path(section["source_summary"], base=base, label="source_summary")
+    frame = pd.read_parquet(source).sort_values("epistemic_persistence")
+    if frame.empty or frame.epistemic_persistence.duplicated().any():
+        raise ValueError("occupancy summary must have one row per persistence")
+    values = frame.mean_target_share.to_numpy(dtype=float) * 100
+    if not np.isfinite(values).all() or ((values < 0) | (values > 100)).any():
+        raise ValueError("invalid target occupancy")
+    fig, ax = plt.subplots(figsize=(7, 4.2), constrained_layout=True)
+    bars = ax.bar(range(len(frame)), values, color="#3975a8", width=0.6)
+    ax.bar_label(bars, labels=[f"{v:.1f}%" for v in values], padding=4)
+    ax.set_xticks(range(len(frame)), [f"{rho:.2f}" for rho in frame.epistemic_persistence])
+    ax.set(xlabel="Persistence rho", ylabel=section["label"] + " (%)", ylim=(0, 110), title=section.get("title", "Mean pre-intervention target support"))
+    ax.set_yticks([0, 20, 40, 60, 80, 100])
+    for index, row in frame.iterrows():
+        ledger.add(location="occupancy_bar", table=str(source), row_index=index,
+                   field="mean_target_share", value=100 * row.mean_target_share, formula="100 * mean_target_share")
+    metric_id = str(section.get("id", "target_share_by_persistence"))
+    path = figures_dir / f"{metric_id}.png"
+    fig.savefig(path, dpi=180)
+    plt.close(fig)
+    return PhaseResult(metric_id, section["label"], "occupancy bars", [path], "available", None, len(frame), str(source), 1, section.get("description"))
+
+
+def _null_summary(package, section, ledger):
+    source = str(section.get("source", "primary_estimates"))
+    frame = package.table(source)
+    frame["_source_row"] = frame.index
+    frame = frame[frame.metric == section.get("metric", "round_target_actuation_cmi")].copy()
+    if "target_fraction_bin_index" in frame:
+        frame = frame[frame.target_fraction_bin_index.isna()].copy()
+    frame = _attach_cell_coordinates(frame, package.table("cells"))
+    frame = frame.sort_values(["epistemic_persistence", "intervention_budget"])
+    fields = ["intervention_budget", "epistemic_persistence", "estimate", "null_mean", "null_std", "null_adjusted_estimate", "p_value", "null_permutations"]
+    labels = ["b", "rho", "Raw [bits]", "Null mean", "Null SD", "Raw - null", "p-value", "Draws"]
+    if frame.duplicated(["intervention_budget", "epistemic_persistence"]).any():
+        raise ValueError("null summary has duplicate budget/persistence coordinates")
+    records = []
+    for _, row in frame.iterrows():
+        values = []
+        for field in fields:
+            value = pd.to_numeric(row.get(field), errors="coerce")
+            if pd.notna(value) and np.isfinite(value):
+                ledger.add(location="null_summary", table=source, row_index=row._source_row, field=field, value=value)
+                values.append(str(int(value)) if field in {"intervention_budget", "null_permutations"} else f"{value:.4g}")
+            else:
+                values.append("N/A")
+        records.append(values)
+    kinds = ", ".join(sorted(frame.null_type.dropna().astype(str).unique())) if "null_type" in frame else "unavailable"
+    note = (f"Whole-cell T_pi estimates and stored null summaries. Null procedure: {kinds}. "
+            "Raw-minus-null values are descriptive excess information and may be negative; they are not nonnegative mutual information. "
+            "Permutation p-values are unadjusted for multiple comparisons. Null SD describes the randomization distribution, not a confidence interval for the observed estimate. Missing values are N/A.")
+    markdown = "## Null-model comparison\n\n" + note + "\n\n" + " | ".join(labels) + "\n" + " | ".join(["---"] * len(labels)) + "\n" + "\n".join(" | ".join(row) for row in records)
+    latex = (r"\section{Null-model comparison}" + "\n" + _latex_escape(note) + "\n" +
+             r"\begin{center}\small\begin{tabular}{rrrrrrrr}\toprule" + "\n" +
+             " & ".join(_latex_escape(label) for label in labels) + r" \\ \midrule" + "\n" +
+             "\n".join(" & ".join(row) + r" \\" for row in records) + "\n" +
+             r"\bottomrule\end{tabular}\end{center}")
+    return markdown, latex
+
+
 def _latex_escape(value: Any) -> str:
     text = str(value)
     replacements = (
@@ -816,8 +1045,14 @@ def _phase_markdown(results: Sequence[PhaseResult], output_dir: Path) -> str:
                     f"![{result.label}: {result.mode}]({relative.as_posix()})"
                 )
             blocks.append(
-                "Gray cells have no displayed estimate. They may be unvisited, "
-                "unsupported, structurally absent, or otherwise missing; gray does not mean zero."
+                result.description if result.description else
+                "Bars show mean pre-intervention controller-target share, with equal weight per retained round from completed episodes, pooled across budgets. They describe observed occupancy, not the causal effect of an intervention. No uncertainty intervals are shown."
+                if result.mode == "occupancy bars" else
+                "Episode examples are selected by sorted episode ID within configured conditions, independently of outcomes; they are illustrative, not representative. Epistemic measurements are at the pre-intervention boundary; vote shares are after the round."
+                if result.mode == "episode example" else
+                "Budget curves use existing whole-cell or study estimates; vertical bars show stored confidence intervals where available. Missing or unsupported points remain gaps."
+                if result.mode.startswith("budget ") else
+                "Gray cells have no displayed estimate. They may be unvisited, unsupported, structurally absent, or otherwise missing; gray does not mean zero."
             )
     return "\n\n".join(blocks)
 
@@ -828,7 +1063,9 @@ def _write_markdown(
     package: AnalysisPackage,
     phase_results: Sequence[PhaseResult],
     ledger: SourceLedger,
+    null_tables: Sequence[tuple[str, str]] = (),
 ) -> Path:
+    no_control = bool(config["report"].get("no_control", False))
     provisional = not bool(package.validation.get("complete", False))
     status = "INCOMPLETE / PROVISIONAL" if provisional else "COMPLETE"
     errors = package.validation.get("errors", ())
@@ -858,11 +1095,14 @@ def _write_markdown(
         )
     if errors:
         body.extend(["", "Validation errors:", "", *[f"- {item}" for item in errors]])
+    for markdown_table, _ in null_tables:
+        body.extend(["", markdown_table])
     body.extend(
         [
             "",
-            "## State-by-budget phase diagrams",
+            "## Population outcomes and episode trajectories" if no_control else "## Budget curves, phase diagrams, and episode examples",
             "",
+            "Bars summarize population and epistemic outcomes by persistence. Episode examples show autonomous dynamics over rounds." if no_control else
             "Each state-local target-state axis spans 0 to 1 and uses at least eight pre-existing "
             "aggregation bins. Resolved views retain every varying scientific coordinate. "
             "Aggregated views use only aggregation-produced tables; the report does not "
@@ -885,11 +1125,13 @@ def _write_markdown(
             "",
             "## Methods and limitations",
             "",
+            "Descriptive bars summarize retained observations from completed episodes. Examples are selected independently of outcomes and are not a representative sample. No confidence intervals are estimated for these bars." if no_control else
             "Scientific estimates, uncertainty intervals, null summaries, and support "
             "classifications come from aggregation tables. The report performs only "
             "selection, row-level arithmetic, support masking, and reshaping. A symmetric "
             "logarithmic color scale changes the display of susceptibility but not its values.",
             "",
+            "Truth share measures support for the correct answer; collective solvability concerns the union of active facts, whereas individual solvability concerns each agent separately." if no_control else
             "No-control cells can provide occupancy and outcomes. Controller-action metrics "
             "are gray when the aggregation package contains no corresponding estimate.",
         ]
@@ -904,8 +1146,10 @@ def _write_latex(
     config: Mapping[str, Any],
     package: AnalysisPackage,
     phase_results: Sequence[PhaseResult],
+    null_tables: Sequence[tuple[str, str]] = (),
 ) -> Path:
     report = _mapping(config["report"], "report")
+    no_control = bool(config["report"].get("no_control", False))
     provisional = not bool(package.validation.get("complete", False))
     status = "INCOMPLETE / PROVISIONAL" if provisional else "COMPLETE"
     counts = _mapping(package.validation.get("counts", {}), "validation counts")
@@ -915,8 +1159,16 @@ def _write_latex(
             f"Unavailable: {result.reason}. " if result.status == "unavailable" else ""
         )
         caption = (
-            f"{result.label}, {result.mode} view. {note}Gray cells have no displayed "
-            "estimate and do not mean zero."
+            f"{result.label}, {result.mode} view. {note}" + (
+                result.description if result.description else
+                "Mean pre-intervention target share; equal weight per retained round from completed episodes, pooled across budgets. Descriptive occupancy, not an intervention effect. No uncertainty intervals are shown."
+                if result.mode == "occupancy bars" else
+                "Illustrative episode selected by sorted ID, independently of outcomes. Epistemic values: pre-intervention; vote shares: after the round."
+                if result.mode == "episode example" else
+                "Existing whole-cell or study estimates; vertical bars show stored confidence intervals where available. Missing or unsupported points remain gaps."
+                if result.mode.startswith("budget ") else
+                "Gray cells have no displayed estimate and do not mean zero."
+            )
         )
         for path in result.figures:
             figures.append(
@@ -950,7 +1202,7 @@ def _write_latex(
 \maketitle
 \textbf{{Status: {_latex_escape(status)}}}
 
-Source analysis package: \texttt{{{_latex_escape(package.root)}}}
+Source analysis package: \path{{{package.root}}}
 
 \section{{Executive summary}}
 This report uses only the standard aggregation package. It does not rerun episodes or reconstruct missing scientific estimators from raw observations.
@@ -966,13 +1218,15 @@ Validation item & Value \\
 
 {"The source study is incomplete, so every result is provisional." if provisional else "The source study is complete according to validation.json."}
 
-\section{{State-by-budget phase diagrams}}
-The target-state axis spans zero to one with at least eight pre-existing aggregation bins. Resolved views retain varying scientific coordinates. Aggregated views use only aggregation-produced tables.
+{chr(10).join(table[1] for table in null_tables)}
+
+\section{{{"Population outcomes and episode trajectories" if no_control else "Budget curves, phase diagrams, and episode examples"}}}
+{"Bars summarize population and epistemic outcomes by persistence. Episode examples show autonomous dynamics over rounds." if no_control else "The target-state axis spans zero to one with at least eight pre-existing aggregation bins. Resolved views retain varying scientific coordinates. Aggregated views use only aggregation-produced tables."}
 
 {chr(10).join(figures)}
 
 \section{{Methods and limitations}}
-Scientific estimates, intervals, nulls, and support classifications come from aggregation tables. Gray cells are missing or unsupported, not zero. Symmetric-log susceptibility panels change only the display scale.
+{"Descriptive bars summarize retained observations from completed episodes. No confidence intervals are estimated for these bars. Episode examples are selected independently of outcomes and are illustrative, not representative. Truth share measures support for the correct answer; collective solvability concerns the union of active facts, whereas individual solvability concerns each agent separately." if no_control else "Scientific estimates, intervals, nulls, and support classifications come from aggregation tables. Gray cells are missing or unsupported, not zero. Symmetric-log susceptibility panels change only the display scale."}
 \end{{document}}
 """
     path = output / "report.tex"
@@ -1035,13 +1289,26 @@ def build_study_report(config_path: str | Path) -> ReportResult:
     figures.mkdir(parents=True)
     ledger = SourceLedger()
     phase_results: list[PhaseResult] = []
+    null_tables = []
     sections = _sequence(config.get("sections", ()), "sections")
     for section_raw in sections:
         section = _mapping(section_raw, "section")
         kind = str(section.get("kind", ""))
+        if kind == "occupancy_bar_summary":
+            phase_results.append(_render_occupancy_bars(section, base=path.parent, figures_dir=figures, ledger=ledger))
+            continue
+        if kind == "null_summary":
+            null_tables.append(_null_summary(package, section, ledger))
+            continue
         if kind == "validation_summary":
             continue
-        if kind != "state_budget_phase_suite":
+        if kind == "epistemic_phase_suite":
+            phase_results.extend(_render_epistemic_maps(package, section, figures_dir=figures, ledger=ledger))
+            continue
+        if kind == "episode_timeseries":
+            phase_results.extend(_render_episode_examples(package, section, figures_dir=figures, ledger=ledger))
+            continue
+        if kind not in {"state_budget_phase_suite", "budget_curve_suite"}:
             raise ValueError(f"unsupported report section kind: {kind!r}")
         metrics = _sequence(section.get("metrics", ()), "phase metrics")
         if not metrics:
@@ -1058,7 +1325,7 @@ def build_study_report(config_path: str | Path) -> ReportResult:
             metric = _mapping(metric_raw, "phase metric")
             for mode in views:
                 phase_results.append(
-                    _render_phase_metric(
+                    (_render_budget_metric if kind == "budget_curve_suite" else _render_phase_metric)(
                         package,
                         metric,
                         section,
@@ -1068,8 +1335,8 @@ def build_study_report(config_path: str | Path) -> ReportResult:
                     )
                 )
 
-    markdown = _write_markdown(staging, config, package, phase_results, ledger)
-    latex = _write_latex(staging, config, package, phase_results)
+    markdown = _write_markdown(staging, config, package, phase_results, ledger, null_tables)
+    latex = _write_latex(staging, config, package, phase_results, null_tables)
     pdf = _compile_pdf(staging, latex)
     config_hash = hashlib.sha256(path.read_bytes()).hexdigest()
     manifest_payload = {

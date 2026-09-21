@@ -82,6 +82,22 @@ class GameConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class SemanticFailureGuardConfig:
+    """Stop a workload after a statistically meaningful semantic failure burst."""
+
+    minimum_finished_episodes: int = 2
+    maximum_failure_fraction: float = 0.25
+    minimum_failures: int = 2
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "minimum_finished_episodes": self.minimum_finished_episodes,
+            "maximum_failure_fraction": self.maximum_failure_fraction,
+            "minimum_failures": self.minimum_failures,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionConfig:
     """Runtime policy that remains independent from a concrete executor."""
 
@@ -91,6 +107,7 @@ class ExecutionConfig:
     parallelism: int = 1
     fail_fast: bool = True
     timeout_seconds: float | None = None
+    semantic_failure_guard: SemanticFailureGuardConfig | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +117,11 @@ class ExecutionConfig:
             "parallelism": self.parallelism,
             "fail_fast": self.fail_fast,
             "timeout_seconds": self.timeout_seconds,
+            "semantic_failure_guard": (
+                None
+                if self.semantic_failure_guard is None
+                else self.semantic_failure_guard.to_dict()
+            ),
         }
 
 
@@ -253,6 +275,91 @@ class ControlConfig:
             "schema_version": self.schema_version,
             "mechanism": self.mechanism,
             "options": _thaw(self.options),
+        }
+
+
+CHECKPOINT_BRANCH_POLICIES = (
+    "none",
+    "always_truth",
+    "always_false",
+    "sensing_truth",
+    "sensing_false",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CheckpointEnsembleConfig:
+    """Scientific parent/checkpoint/continuation design for forked episodes."""
+
+    enabled: bool = False
+    parent_count: int = 1
+    preparation_rounds: int = 2
+    continuation_rounds: int = 10
+    continuation_copies: int = 1
+    branch_policies: tuple[str, ...] = CHECKPOINT_BRANCH_POLICIES
+    posting_budgets: tuple[int, ...] = (3, 12)
+    retain_parent_artifacts: bool = True
+    require_complete_branches: bool = True
+    false_target: str = "ALLOCATION_2"
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "branch_policies", tuple(self.branch_policies))
+        object.__setattr__(self, "posting_budgets", tuple(self.posting_budgets))
+        if self.schema_version != 1:
+            raise ValueError("unsupported checkpoint ensemble schema version")
+        for name in (
+            "parent_count", "preparation_rounds", "continuation_rounds",
+            "continuation_copies",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if len(set(self.branch_policies)) != len(self.branch_policies):
+            raise ValueError("branch_policies must be unique")
+        if "none" not in self.branch_policies:
+            raise ValueError("branch_policies must include none")
+        unknown = set(self.branch_policies) - set(CHECKPOINT_BRANCH_POLICIES)
+        if unknown:
+            raise ValueError(f"unsupported checkpoint branch policies: {sorted(unknown)}")
+        if not self.posting_budgets or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in self.posting_budgets
+        ):
+            raise ValueError("posting_budgets must contain non-negative integers")
+        if len(set(self.posting_budgets)) != len(self.posting_budgets):
+            raise ValueError("posting_budgets must be unique")
+        if not self.false_target.strip():
+            raise ValueError("false_target must be non-empty")
+
+    @property
+    def branches_per_parent_copy(self) -> int:
+        controlled = sum(policy != "none" for policy in self.branch_policies)
+        return int("none" in self.branch_policies) + controlled * len(
+            self.posting_budgets
+        )
+
+    @property
+    def continuation_count(self) -> int:
+        return (
+            self.parent_count
+            * self.continuation_copies
+            * self.branches_per_parent_copy
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "enabled": self.enabled,
+            "parent_count": self.parent_count,
+            "preparation_rounds": self.preparation_rounds,
+            "continuation_rounds": self.continuation_rounds,
+            "continuation_copies": self.continuation_copies,
+            "branch_policies": list(self.branch_policies),
+            "posting_budgets": list(self.posting_budgets),
+            "retain_parent_artifacts": self.retain_parent_artifacts,
+            "require_complete_branches": self.require_complete_branches,
+            "false_target": self.false_target,
         }
 
 
@@ -620,6 +727,7 @@ class RunConfig:
     storage: StorageConfig = field(default_factory=StorageConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     control: ControlConfig = field(default_factory=ControlConfig)
+    ensemble: CheckpointEnsembleConfig = field(default_factory=CheckpointEnsembleConfig)
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
     aggregation: AggregationConfig = field(default_factory=AggregationConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
@@ -647,6 +755,7 @@ class RunConfig:
             "storage": self.storage.to_dict(),
             "analysis": self.analysis.to_dict(),
             "control": self.control.to_dict(),
+            "ensemble": self.ensemble.to_dict(),
             "metrics": self.metrics.to_dict(),
             "aggregation": self.aggregation.to_dict(),
             "observability": self.observability.to_dict(),

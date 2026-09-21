@@ -10,9 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Iterator, Mapping, Sequence
+from time import monotonic
 
 import numpy as np
 import pandas as pd
@@ -31,6 +32,7 @@ PRE_BOUNDARY = "post_forgetting_pre_intervention_delivery"
 SCOPE = "union_of_participant_active_inventories"
 DEFAULT_X_BINS = 8
 DEFAULT_PHI_BANDS = 3
+Progress = Callable[[str, int, int], None]
 
 
 @dataclass(slots=True)
@@ -47,6 +49,9 @@ class SymbolicTask:
     fact_world_masks: Mapping[str, int]
     winner_world_masks: tuple[int, int, int]
     all_world_mask: int
+    _mask_tables: list[tuple[tuple[str, ...], np.ndarray]] | None = field(
+        default=None, init=False, repr=False
+    )
 
     def evaluate(self, fact_ids: Sequence[str]) -> PrivateViewMetrics:
         key = tuple(sorted(set(map(str, fact_ids))))
@@ -85,6 +90,51 @@ class SymbolicTask:
         if compatible == 0:
             raise ValueError("canonical fact set has no valid completions")
         return compatible & ~self.winner_world_masks[self.gold_index] == 0
+
+    def solvable_survival_draws(
+        self, fact_ids: Sequence[str], retained: np.ndarray
+    ) -> np.ndarray:
+        """Evaluate the same survival experiment with byte-sized mask lookups.
+
+        Tables contain deterministic intersections only, never Monte Carlo
+        answers. Python integers preserve worlds beyond the uint64 boundary.
+        Storage is bounded by 256 masks per eight task facts plus one draw vector.
+        """
+        if retained.ndim != 2 or retained.shape[1] != len(fact_ids):
+            raise ValueError("survival matrix must align with fact IDs")
+        columns = {str(fact): i for i, fact in enumerate(fact_ids)}
+        unknown = set(columns) - set(self.fact_world_masks)
+        if unknown:
+            raise ValueError(
+                f"task {self.task_id!r} inventory contains unknown facts: {sorted(unknown)}"
+            )
+        if self._mask_tables is None:
+            self._mask_tables = []
+            ordered = sorted(self.fact_world_masks)
+            for start in range(0, len(ordered), 8):
+                group = tuple(ordered[start:start + 8])
+                masks = np.empty(1 << len(group), dtype=object)
+                masks[0] = self.all_world_mask
+                for code in range(1, len(masks)):
+                    bit = code & -code
+                    masks[code] = (
+                        masks[code ^ bit]
+                        & self.fact_world_masks[group[bit.bit_length() - 1]]
+                    )
+                self._mask_tables.append((group, masks))
+        compatible = np.full(len(retained), self.all_world_mask, dtype=object)
+        for group, masks in self._mask_tables:
+            codes = np.zeros(len(retained), dtype=np.uint8)
+            for bit, fact in enumerate(group):
+                if fact in columns:
+                    codes |= retained[:, columns[fact]].astype(np.uint8) << bit
+            np.bitwise_and(compatible, masks[codes], out=compatible)
+        if np.any(compatible == 0):
+            raise ValueError("canonical fact set has no valid completions")
+        return np.asarray(
+            (compatible & ~self.winner_world_masks[self.gold_index]) == 0,
+            dtype=bool,
+        )
 
 
 def _decoded(value: Any) -> Any:
@@ -379,7 +429,6 @@ def _robustness(
     if draws <= 0:
         raise ValueError("robustness_draws must be positive")
     rng = np.random.default_rng(seed)
-    successes = 0
     holder_counts = {
         fact: sum(fact in set(map(str, facts)) for facts in inventory.values())
         for fact in {fact for facts in inventory.values() for fact in map(str, facts)}
@@ -390,9 +439,7 @@ def _robustness(
         dtype=float,
     )
     retained = rng.random((draws, len(fact_ids))) < survival_probabilities
-    for draw in retained:
-        surviving = [fact for fact, keep in zip(fact_ids, draw, strict=True) if keep]
-        successes += int(task.solvable_from_masks(surviving))
+    successes = int(np.count_nonzero(task.solvable_survival_draws(fact_ids, retained)))
     estimate = successes / draws
     se = math.sqrt(estimate * (1.0 - estimate) / draws)
     return {
@@ -412,13 +459,24 @@ def build_epistemic_round_states(
     robustness_draws: int = 500,
     reference_persistence: float = 0.85,
     seed: int = 1,
+    progress: Progress | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Build the main bookkeeping time series with more than ten metrics."""
 
+    if progress:
+        progress("inventory_reconstruction", 0, len(rounds))
     reconstructed = reconstruct_active_inventories(rounds)
+    if progress:
+        progress("inventory_reconstruction", len(rounds), len(rounds))
     if reconstructed.empty:
         return reconstructed
     output: list[dict[str, Any]] = []
+    signatures: set[tuple] = set()
+    unsolvable = shortcuts = calls = 0
+    robustness_seconds = state_seconds = 0.0
+    if progress:
+        progress("round_states", 0, len(reconstructed))
     for raw in reconstructed.to_dict(orient="records"):
         task_id = str(raw.get("task_id") or raw.get("initial_task_id"))
         if task_id not in tasks:
@@ -433,10 +491,23 @@ def build_epistemic_round_states(
         after = _mapping(
             raw["active_fact_ids_by_agent_after_verified"], "after inventory"
         )
+        state_started = monotonic()
         pre_metrics = _state_metrics(task, pre)
         after_metrics = _state_metrics(task, after)
+        state_seconds += monotonic() - state_started
         configured_rho = float(raw.get("epistemic_persistence", 1.0))
+        holders: dict[str, int] = {}
+        for facts in pre.values():
+            for fact in set(facts):
+                holders[fact] = holders.get(fact, 0) + 1
+        signatures.add((task_id, tuple(sorted(holders.items()))))
+        if not pre_metrics["collective_solvable"]:
+            unsolvable += 1
+        else:
+            shortcuts += int(configured_rho == 1) + int(reference_persistence == 1)
+            calls += int(configured_rho != 1) + int(reference_persistence != 1)
         identity = (raw["cell_id"], raw["episode_id"], raw["round_index"])
+        robustness_started = monotonic()
         configured = _robustness(
             task,
             pre,
@@ -451,6 +522,7 @@ def build_epistemic_round_states(
             robustness_draws,
             _stable_seed(seed, *identity, "reference"),
         )
+        robustness_seconds += monotonic() - robustness_started
         row = {
             key: value
             for key, value in raw.items()
@@ -500,6 +572,24 @@ def build_epistemic_round_states(
             }
         )
         output.append(row)
+        if progress:
+            progress("round_states", len(output), len(reconstructed))
+    if diagnostics is not None:
+        diagnostics.update(
+            total_states=len(output),
+            unique_inventory_signatures=len(signatures),
+            unsolvable_states=unsolvable,
+            rho_one_shortcuts=shortcuts,
+            monte_carlo_calls=calls,
+            mask_draws=calls * robustness_draws,
+            robustness_seconds=robustness_seconds,
+            symbolic_metrics_seconds=state_seconds,
+            unique_solver_queries=sum(len(task._cache) for task in tasks.values()),
+            deterministic_mask_table_entries=sum(
+                len(table) for task in tasks.values()
+                for _, table in (task._mask_tables or [])
+            ),
+        )
     result = pd.DataFrame(output)
     recorded = pd.to_numeric(
         result["symbolic_full_proof_share_recorded"], errors="coerce"
@@ -516,12 +606,16 @@ def _bin(values: pd.Series, count: int) -> pd.Series:
 
 
 def epistemic_occupancy(
-    states: pd.DataFrame, *, x_bins: int, phi_bands: int
+    states: pd.DataFrame, *, x_bins: int, phi_bands: int,
+    _prepared_inputs: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if states.empty:
         return pd.DataFrame()
-    frame = states.copy()
-    causal = build_causal_response_inputs(frame, lags=(1,))
+    columns = ["cell_id", "episode_id", "round_index", "collective_solvable",
+               "symbolic_individual_solvability_share", "fragmentation_gap", "reference_robustness"]
+    frame = states[columns].copy()
+    causal = (_prepared_inputs if _prepared_inputs is not None
+              else build_causal_response_inputs(states, lags=(1,)))
     shares = causal[["cell_id", "episode_id", "round_index", "x_t"]]
     frame = frame.merge(shares, on=["cell_id", "episode_id", "round_index"], how="left")
     frame["x_bin"] = _bin(frame["x_t"], x_bins)
@@ -592,27 +686,105 @@ def epistemic_parameter_summary(states: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _bootstrap_frames(
-    frame: pd.DataFrame, resamples: int, seed: int
-) -> list[pd.DataFrame]:
-    if frame.empty or resamples <= 0:
-        return []
-    blocks = sorted(frame["initialization_block_id"].astype(str).unique())
-    by_block = {
-        block: frame[frame["initialization_block_id"].astype(str) == block]
-        for block in blocks
-    }
-    rng = np.random.default_rng(seed)
-    return [
-        pd.concat(
-            [
-                by_block[block]
-                for block in rng.choice(blocks, len(blocks), replace=True)
-            ],
-            ignore_index=True,
+class _BlockBootstrap:
+    """Replay shared-block draws in bounded batches, without copying observations.
+
+    Every group replays the same global block draws. Sampling independently within
+    cells would change both the bootstrap law and cross-cell dependence.
+    """
+
+    def __init__(self, frame: pd.DataFrame, resamples: int, seed: int):
+        blocks = sorted(frame["initialization_block_id"].astype(str).unique())
+        self.blocks = {block: index for index, block in enumerate(blocks)}
+        self.resamples = max(0, resamples)
+        self.seed = seed
+
+    def codes(self, group: pd.DataFrame) -> np.ndarray:
+        return (
+            group["initialization_block_id"]
+            .astype(str)
+            .map(self.blocks)
+            .to_numpy(dtype=int)
         )
-        for _ in range(resamples)
-    ]
+
+    def batches(self) -> Iterator[np.ndarray]:
+        count = len(self.blocks)
+        if not count:
+            return
+        rng = np.random.default_rng(self.seed)
+        # Bound temporary multiplicities to roughly 8 MiB even for many blocks.
+        batch_size = max(1, min(64, 1_048_576 // count))
+        for start in range(0, self.resamples, batch_size):
+            weights = np.empty(
+                (min(batch_size, self.resamples - start), count), dtype=np.int64
+            )
+            for row in weights:
+                row[:] = np.bincount(
+                    rng.choice(count, count, replace=True), minlength=count
+                )
+            yield weights
+
+    def means(self, group: pd.DataFrame, scores: np.ndarray) -> np.ndarray:
+        codes = self.codes(group)
+        count = len(self.blocks)
+        valid = ~np.isnan(scores)
+        sums = np.column_stack(
+            [
+                np.bincount(
+                    codes,
+                    weights=np.where(valid[:, col], scores[:, col], 0.0),
+                    minlength=count,
+                )
+                for col in range(scores.shape[1])
+            ]
+        )
+        counts = np.column_stack(
+            [
+                np.bincount(codes, weights=valid[:, col], minlength=count)
+                for col in range(scores.shape[1])
+            ]
+        )
+        result = np.full((self.resamples, scores.shape[1]), np.nan)
+        offset = 0
+        for weights in self.batches():
+            # Avoid threaded BLAS overhead for these small score dimensions.
+            numerator = np.einsum("bk,kc->bc", weights, sums, optimize=False)
+            denominator = np.einsum("bk,kc->bc", weights, counts, optimize=False)
+            np.divide(
+                numerator,
+                denominator,
+                out=result[offset : offset + len(weights)],
+                where=denominator > 0,
+            )
+            offset += len(weights)
+        return result
+
+    def regression(
+        self, group: pd.DataFrame, design: np.ndarray, y: np.ndarray
+    ) -> list[float]:
+        codes = self.codes(group)
+        estimates: list[float] = []
+        for batch in self.batches():
+            for weights in batch:
+                row_weights = weights[codes]
+                selected = row_weights > 0
+                if not selected.any():
+                    continue
+                root = np.sqrt(row_weights[selected])
+                weighted = design[selected] * root[:, None]
+                # Square-root multiplicities reproduce duplicated-row least squares
+                # without squaring the condition number via normal equations.
+                # Keep the original duplicated-row dimensions in the numerical
+                # rank cutoff, even though the weighted matrix has fewer rows.
+                rcond = np.finfo(float).eps * max(
+                    int(row_weights.sum()), design.shape[1]
+                )
+                coefficients, _, rank, singular = np.linalg.lstsq(
+                    weighted, y[selected] * root, rcond=rcond
+                )
+                if rank == weighted.shape[1] and singular[0] / singular[-1] <= 1e8:
+                    estimates.append(float(coefficients[2] * 0.1))
+        return estimates
 
 
 def _interval(values: Sequence[float], confidence: float) -> tuple[float, float]:
@@ -646,10 +818,13 @@ def estimate_joint_drift(
     bootstrap_resamples: int,
     confidence: float,
     seed: int,
+    progress: Progress | None = None,
+    _prepared_inputs: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if states.empty:
         return pd.DataFrame()
-    frame = build_causal_response_inputs(states, cells, lags=(1,))
+    frame = (_prepared_inputs if _prepared_inputs is not None
+             else build_causal_response_inputs(states, cells, lags=(1,)))
     frame = frame[frame["episode_complete"] & frame["lag_1_available"]].copy()
     frame["delta_phi_star"] = (
         frame["symbolic_individual_solvability_share_after"]
@@ -659,10 +834,13 @@ def estimate_joint_drift(
     frame["phi_star_band"] = _bin(
         frame["symbolic_individual_solvability_share"], phi_bands
     )
-    draws = _bootstrap_frames(frame, bootstrap_resamples, seed)
+    bootstrap = _BlockBootstrap(frame, bootstrap_resamples, seed)
     rows: list[dict[str, Any]] = []
     keys = ["cell_id", "x_bin", "phi_star_band"]
-    for key, group in frame.groupby(keys, dropna=False, sort=True):
+    groups = frame.groupby(keys, dropna=False, sort=True)
+    if progress:
+        progress("joint_drift", 0, len(groups))
+    for group_index, (key, group) in enumerate(groups):
         cell_id, x_bin, phi_band = key
         action = int((group["U_t"] == 1).sum())
         silence = int((group["U_t"] == 0).sum())
@@ -673,31 +851,23 @@ def estimate_joint_drift(
             if min(action, silence) < 2
             else "adequate"
         )
-        for branch in ("silence", "activation", "contrast"):
-            estimates_x = [
-                _drift_estimate(
-                    draw[
-                        (draw["cell_id"] == cell_id)
-                        & (draw["x_bin"] == x_bin)
-                        & (draw["phi_star_band"] == phi_band)
-                    ],
-                    branch,
-                    "delta_x_h1",
-                )
-                for draw in draws
+        branches = ("silence", "activation", "contrast")
+        weights = (
+            (1 - group["U_t"]) / (1 - group["e_t"]),
+            group["U_t"] / group["e_t"],
+            group["ipw_contrast_weight"],
+        )
+        scores = np.column_stack(
+            [
+                weight * group[component]
+                for weight in weights
+                for component in ("delta_x_h1", "delta_phi_star")
             ]
-            estimates_phi = [
-                _drift_estimate(
-                    draw[
-                        (draw["cell_id"] == cell_id)
-                        & (draw["x_bin"] == x_bin)
-                        & (draw["phi_star_band"] == phi_band)
-                    ],
-                    branch,
-                    "delta_phi_star",
-                )
-                for draw in draws
-            ]
+        )
+        estimates = bootstrap.means(group, scores)
+        for branch_index, branch in enumerate(branches):
+            estimates_x = estimates[:, 2 * branch_index]
+            estimates_phi = estimates[:, 2 * branch_index + 1]
             x_low, x_high = _interval(estimates_x, confidence)
             p_low, p_high = _interval(estimates_phi, confidence)
             rows.append(
@@ -728,6 +898,8 @@ def estimate_joint_drift(
                     "analysis_version": ANALYSIS_VERSION,
                 }
             )
+        if progress:
+            progress("joint_drift", group_index + 1, len(groups))
     return pd.DataFrame(rows)
 
 
@@ -740,32 +912,31 @@ def estimate_epistemic_modulation(
     bootstrap_resamples: int,
     confidence: float,
     seed: int,
+    progress: Progress | None = None,
+    _prepared_inputs: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     if states.empty:
         return pd.DataFrame(), pd.DataFrame()
-    frame = build_causal_response_inputs(states, cells, lags=(1,))
+    frame = (_prepared_inputs if _prepared_inputs is not None
+             else build_causal_response_inputs(states, cells, lags=(1,)))
     frame = frame[frame["episode_complete"] & frame["lag_1_available"]].copy()
     frame["causal_score"] = frame["ipw_contrast_weight"] * frame["delta_x_h1"]
     frame["x_bin"] = _bin(frame["x_t"], x_bins)
     frame["phi_star_band"] = _bin(
         frame["symbolic_individual_solvability_share"], phi_bands
     )
-    draws = _bootstrap_frames(frame, bootstrap_resamples, seed)
+    bootstrap = _BlockBootstrap(frame, bootstrap_resamples, seed)
     surface_rows: list[dict[str, Any]] = []
-    for (cell_id, x_bin, phi_band), group in frame.groupby(
+    groups = frame.groupby(
         ["cell_id", "x_bin", "phi_star_band"], dropna=False, sort=True
-    ):
+    )
+    if progress:
+        progress("susceptibility_surface", 0, len(groups))
+    for group_index, ((cell_id, x_bin, phi_band), group) in enumerate(groups):
         action, silence = int((group.U_t == 1).sum()), int((group.U_t == 0).sum())
-        estimates = [
-            float(
-                draw[
-                    (draw.cell_id == cell_id)
-                    & (draw.x_bin == x_bin)
-                    & (draw.phi_star_band == phi_band)
-                ]["causal_score"].mean()
-            )
-            for draw in draws
-        ]
+        estimates = bootstrap.means(
+            group, group[["causal_score"]].to_numpy(dtype=float)
+        )[:, 0]
         low, high = _interval(estimates, confidence)
         surface_rows.append(
             {
@@ -792,8 +963,14 @@ def estimate_epistemic_modulation(
             }
         )
 
+        if progress:
+            progress("susceptibility_surface", group_index + 1, len(groups))
+
     regression_rows: list[dict[str, Any]] = []
-    for cell_id, group in frame.groupby("cell_id", sort=True):
+    groups = frame.groupby("cell_id", sort=True)
+    if progress:
+        progress("modulation_regression", 0, len(groups))
+    for group_index, (cell_id, group) in enumerate(groups):
         x = pd.DataFrame(
             {
                 "intercept": 1.0,
@@ -816,32 +993,7 @@ def estimate_epistemic_modulation(
             if identified
             else math.nan
         )
-        boot: list[float] = []
-        for draw in draws:
-            subset = draw[draw["cell_id"] == cell_id]
-            if subset.empty:
-                continue
-            design = np.column_stack(
-                [
-                    np.ones(len(subset)),
-                    subset["x_t"].astype(float),
-                    subset["symbolic_individual_solvability_share"].astype(float),
-                    subset["round_index"].astype(float)
-                    / max(1.0, float(group["round_index"].max())),
-                ]
-            )
-            if (
-                np.linalg.matrix_rank(design) == design.shape[1]
-                and np.linalg.cond(design) <= 1e8
-            ):
-                boot.append(
-                    float(
-                        np.linalg.lstsq(design, subset["causal_score"], rcond=None)[0][
-                            2
-                        ]
-                        * 0.1
-                    )
-                )
+        boot = bootstrap.regression(group, x, y)
         low, high = _interval(boot, confidence)
         low_group = group[
             group["symbolic_individual_solvability_share"]
@@ -886,17 +1038,28 @@ def estimate_epistemic_modulation(
                 "analysis_version": ANALYSIS_VERSION,
             }
         )
+        if progress:
+            progress("modulation_regression", group_index + 1, len(groups))
     return pd.DataFrame(surface_rows), pd.DataFrame(regression_rows)
 
 
 def classify_capture_timing(
-    states: pd.DataFrame, *, threshold: float, consecutive_rounds: int
+    states: pd.DataFrame, *, threshold: float, consecutive_rounds: int,
+    _prepared_inputs: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     if states.empty:
         return pd.DataFrame(), pd.DataFrame()
-    causal = build_causal_response_inputs(states, lags=(1,))
+    causal = (_prepared_inputs if _prepared_inputs is not None
+              else build_causal_response_inputs(states, lags=(1,)))
     shares = causal[["cell_id", "episode_id", "round_index", "x_t"]]
-    frame = states.merge(shares, on=["cell_id", "episode_id", "round_index"])
+    frame = states[["cell_id", "episode_id", "round_index", "collective_solvable"]].merge(
+        shares, on=["cell_id", "episode_id", "round_index"]
+    )
+    # Autonomous/no-control studies retain epistemic states but legitimately
+    # have no causal controller rows. Capture timing is undefined there, so
+    # return empty outputs instead of grouping a schema-less empty frame.
+    if frame.empty:
+        return pd.DataFrame(), pd.DataFrame()
     rows: list[dict[str, Any]] = []
     for cell_id, cell in frame.groupby("cell_id", sort=True):
         lengths = cell.groupby("episode_id")["round_index"].nunique()
@@ -976,6 +1139,8 @@ def classify_capture_timing(
                 }
             )
     episode_table = pd.DataFrame(rows)
+    if episode_table.empty:
+        return episode_table, pd.DataFrame()
     summary = episode_table.groupby("cell_id", as_index=False).agg(
         capture_before_first_loss_probability=("capture_before_first_loss", "mean"),
         capture_with_solvable_window_probability=(
@@ -1042,6 +1207,8 @@ def analyze_epistemic_phase_diagrams(
     bootstrap_resamples: int = 1000,
     confidence: float = 0.95,
     seed: int = 1,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+    causal_inputs: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Create all five analysis classes from retained canonical rounds."""
 
@@ -1053,20 +1220,86 @@ def analyze_epistemic_phase_diagrams(
         raise ValueError("reference_persistence must lie in [0, 1]")
     if not 0 <= capture_threshold <= 1 or capture_consecutive_rounds < 1:
         raise ValueError("capture rule is invalid")
+    started = monotonic()
+    last_report = 0.0
+    active_stage = ""
+    stage_started = started
+
+    def report(stage: str, completed: int, total: int) -> None:
+        nonlocal last_report, active_stage, stage_started
+        now = monotonic()
+        changed = stage != active_stage
+        if changed:
+            stage_started = now
+            active_stage = stage
+        if progress and (changed or completed == total or now - last_report >= 2.0):
+            progress(
+                {
+                    "stage": "epistemic_phase",
+                    "substage": stage,
+                    "completed_groups": completed,
+                    "total_groups": total,
+                    "remaining_groups": total - completed,
+                    "elapsed_seconds": now - started,
+                    "substage_elapsed_seconds": now - stage_started,
+                }
+            )
+            last_report = now
+
+    report("load_symbolic_tasks", 0, 1)
     task_series = rounds.get(
         "task_id", rounds.get("initial_task_id", pd.Series(dtype=str))
     )
     task_ids = [str(value) for value in task_series.dropna().unique()]
     tasks = load_symbolic_tasks(task_ids, task_dataset_dir)
+    report("load_symbolic_tasks", 1, 1)
+    diagnostics: dict[str, Any] = {}
     states = build_epistemic_round_states(
         rounds,
         tasks,
         robustness_draws=robustness_draws,
         reference_persistence=reference_persistence,
         seed=seed,
+        progress=report,
+        diagnostics=diagnostics,
     )
+    if progress:
+        progress({
+            "stage": "epistemic_phase", "substage": "round_states",
+            "elapsed_seconds": monotonic() - started,
+            "substage_elapsed_seconds": monotonic() - stage_started,
+            "completed_groups": len(states), "total_groups": len(states),
+            "remaining_groups": 0,
+            "robustness_diagnostics": diagnostics,
+        })
+    report("prepare_causal_inputs", 0, 1)
+    keys = ["cell_id", "episode_id", "round_index"]
+    causal_columns = keys + [
+        "initialization_block_id", "episode_complete", "lag_1_available",
+        "x_t", "U_t", "e_t", "ipw_contrast_weight", "delta_x_h1",
+    ]
+    symbolic_columns = [
+        "symbolic_individual_solvability_share",
+        "symbolic_individual_solvability_share_after",
+    ]
+    if states.empty:
+        prepared = pd.DataFrame()
+    elif causal_inputs is None:
+        prepared = build_causal_response_inputs(states, cells, lags=(1,))
+        prepared = prepared.reindex(columns=causal_columns + symbolic_columns)
+    else:
+        prepared = causal_inputs[causal_columns].merge(
+            states[keys + symbolic_columns], on=keys, how="inner", validate="one_to_one",
+        )
+        if len(prepared) != len(causal_inputs):
+            raise ValueError("prepared causal rows do not match epistemic states")
+    report("prepare_causal_inputs", 1, 1)
+    report("parameter_and_occupancy", 0, 1)
     parameter = epistemic_parameter_summary(states)
-    occupancy = epistemic_occupancy(states, x_bins=x_bins, phi_bands=phi_bands)
+    occupancy = epistemic_occupancy(
+        states, x_bins=x_bins, phi_bands=phi_bands, _prepared_inputs=prepared
+    )
+    report("parameter_and_occupancy", 1, 1)
     drift = estimate_joint_drift(
         states,
         cells,
@@ -1075,6 +1308,8 @@ def analyze_epistemic_phase_diagrams(
         bootstrap_resamples=bootstrap_resamples,
         confidence=confidence,
         seed=seed,
+        progress=report,
+        _prepared_inputs=prepared,
     )
     susceptibility, modulation = estimate_epistemic_modulation(
         states,
@@ -1084,12 +1319,17 @@ def analyze_epistemic_phase_diagrams(
         bootstrap_resamples=bootstrap_resamples,
         confidence=confidence,
         seed=seed + 1,
+        progress=report,
+        _prepared_inputs=prepared,
     )
+    report("capture_timing", 0, 1)
     timing, timing_summary = classify_capture_timing(
         states,
         threshold=capture_threshold,
         consecutive_rounds=capture_consecutive_rounds,
+        _prepared_inputs=prepared,
     )
+    report("capture_timing", 1, 1)
     return {
         "epistemic_round_timeseries": _attach(states, cells),
         "epistemic_parameter_summary": _attach(parameter, cells),

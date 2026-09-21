@@ -220,6 +220,68 @@ def test_completed_cells_reuse_only_missing_repetition_indices(tmp_path):
     } == {0, 1, 2, 3}
 
 
+def test_completed_checkpoint_parent_bundle_is_retained_before_cell_compaction(tmp_path):
+    study_dir, config_dir = _legacy_study(tmp_path, repetitions=2, values=(1, 2))
+    index_existing_study(study_dir)
+    initial = plan_extension(study_dir, config_dir)
+    episode = initial.episodes[0]
+    target = next(
+        cell for cell in initial.target_cells if cell.cell_key == episode.cell_key
+    )
+
+    resume_dir = (
+        study_dir
+        / "extensions"
+        / "extension-0000"
+        / "runs"
+        / "grid"
+        / "partial-cell"
+        / "cells"
+        / target.source_cell_id
+        / ".resume"
+        / f"episode-{episode.repetition_index:04d}"
+    )
+    bundle_dir = (
+        resume_dir
+        / "checkpoint_ensembles"
+        / target.source_cell_id
+        / f"episode-{episode.repetition_index:04d}"
+    )
+    bundle_dir.mkdir(parents=True)
+    (resume_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "cell_id": target.source_cell_id,
+                "episode_id": resume_dir.name,
+                "seed": episode.episode_seed,
+                "status": "completed",
+                "error": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (bundle_dir / "parent_bundle_seal.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "complete",
+                "expected_branches": ["branch-0"],
+                "completed_branches": ["branch-0"],
+                "bundle_hash": "sealed-parent-bundle",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    recovered = plan_extension(study_dir, config_dir)
+    assert recovered.target_episode_count == 4
+    assert recovered.retained_episode_count == 1
+    assert recovered.missing_episode_count == 3
+    assert episode.episode_key not in {
+        missing.episode_key for missing in recovered.episodes
+    }
+
+
 def test_extension_reuses_prior_keys_after_retention_identity_policy_change(tmp_path):
     study_dir, config_dir = _legacy_study(tmp_path, repetitions=1, values=(1, 2))
     spec = StudySpec("extension-test", config_dir, (config_dir / "grid.yaml",))

@@ -4,11 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from mas_cc.config import RunConfig, load_run_config
+from mas_cc.config import RunConfig, SemanticFailureGuardConfig, load_run_config
 from mas_cc.cli.experiment import compute_preflight_id
 from mas_cc.experiments import run_experiment_sync
-from mas_cc.experiments.orchestrator import _LiveSpendWatcher
+from mas_cc.experiments.orchestrator import (
+    SemanticFailureGuardTripped,
+    _LiveSpendWatcher,
+)
 from mas_cc.games import create_game
+from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
+    RelationalDecisionFailed,
+)
 from mas_cc.llm_runtime.providers import (
     AccountBudget,
     BudgetLimits,
@@ -240,6 +246,43 @@ def test_an_ordinary_failure_without_fail_fast_still_runs_every_episode(
         "failed", "completed", "completed",
     ]
     assert len(calls) == 3
+
+
+def test_semantic_failure_guard_stops_new_episodes_and_exits_nonzero(
+    tmp_path: Path, monkeypatch
+):
+    config = _with_ample_budget(
+        _toy_config(
+            repetitions=5,
+            parallelism=1,
+            fail_fast=False,
+            semantic_failure_guard=SemanticFailureGuardConfig(
+                minimum_finished_episodes=2,
+                maximum_failure_fraction=0.25,
+                minimum_failures=2,
+            ),
+        )
+    )
+    calls: list[int] = []
+
+    async def semantically_invalid(game, episode_config, provider, **kwargs):
+        calls.append(episode_config.execution.seed)
+        raise RelationalDecisionFailed("simulated semantic validation failure")
+
+    monkeypatch.setattr("mas_cc.experiments.orchestrator.run_game", semantically_invalid)
+    monkeypatch.setattr(
+        "mas_cc.experiments.orchestrator.run_configured_analysis",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(SemanticFailureGuardTripped):
+        run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
+    assert len(calls) == 2
+    summary_path = next(tmp_path.rglob("semantic_failure_guard.json"))
+    summary = __import__("json").loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["status"] == "tripped"
+    assert summary["finished_episodes"] == 2
+    assert summary["semantic_failures"] == 2
 
 
 class _FakeSpendSource:

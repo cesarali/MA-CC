@@ -1,0 +1,266 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0008",
+  "seed": 16680084545606402363,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 8,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Zani",
+        "coordinates": {
+          "x": -2,
+          "y": -1
+        }
+      },
+      {
+        "name": "Leni",
+        "coordinates": {
+          "x": -1,
+          "y": -1
+        }
+      },
+      {
+        "name": "Weno",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Zora",
+        "coordinates": {
+          "x": 998,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 997,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Pelo",
+        "coordinates": {
+          "x": 998,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Mira",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Seni",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Zani",
+        "relation": "WEST",
+        "object": "Leni",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Leni",
+        "relation": "SOUTHWEST",
+        "object": "Weno",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Zora",
+        "relation": "EAST",
+        "object": "Vero",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Vero",
+        "relation": "NORTHWEST",
+        "object": "Pelo",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Pelo",
+        "relation": "NORTHWEST",
+        "object": "Mira",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Mira",
+        "relation": "WEST",
+        "object": "Seni",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Zani",
+    "reference": "Weno",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "SOUTHWEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "SOUTHWEST"
+      },
+      {
+        "label": "B",
+        "relation": "WEST"
+      },
+      {
+        "label": "C",
+        "relation": "NORTHWEST"
+      }
+    ],
+    "correct_option": "A"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": []
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1",
+        "f4"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1",
+        "f6"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": []
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": []
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": []
+    }
+  },
+  "rendered": {
+    "question": "Where is Zani relative to Weno?",
+    "facts": {
+      "f1": "Zani is west of Leni.",
+      "f2": "Leni is southwest of Weno.",
+      "f3": "Zora is east of Vero.",
+      "f4": "Vero is northwest of Pelo.",
+      "f5": "Pelo is northwest of Mira.",
+      "f6": "Mira is west of Seni."
+    },
+    "reasoning_chain": [
+      "Zani is west of Leni.",
+      "Leni is southwest of Weno."
+    ]
+  }
+}

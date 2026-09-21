@@ -293,6 +293,8 @@ def load_musr_team_allocation_task(
     task_id: str,
     *,
     population_size: int,
+    distribution_path: str | Path | None = None,
+    distribution_sha256: str | None = None,
     initial_information_path: str | Path | None = None,
     initial_information_sha256: str | None = None,
     truthful_controller_design_path: str | Path | None = None,
@@ -315,16 +317,28 @@ def load_musr_team_allocation_task(
         ):
             return _load_musr_truthful_selective_task(root, selective, population_size)
     base_path = root / "base_task.json"
-    distribution_path = root / f"distribution_N{population_size}.json"
+    distribution_override = (
+        None if distribution_path is None else Path(distribution_path)
+    )
+    resolved_distribution_path = (
+        root / f"distribution_N{population_size}.json"
+        if distribution_override is None
+        else distribution_override
+    )
     assignment_path = (
         None if initial_information_path is None else Path(initial_information_path)
     )
-    for path in (base_path, assignment_path or distribution_path):
+    if assignment_path is not None and distribution_override is not None:
+        raise RelationalTaskError(
+            "MuSR distribution override and initial-information artifact are "
+            "mutually exclusive"
+        )
+    for path in (base_path, assignment_path or resolved_distribution_path):
         if not path.is_file():
             raise RelationalTaskError(f"required MuSR task file does not exist: {path}")
     try:
         base = json.loads(base_path.read_text(encoding="utf-8"))
-        assignment_source = assignment_path or distribution_path
+        assignment_source = assignment_path or resolved_distribution_path
         distribution = json.loads(assignment_source.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RelationalTaskError(f"MuSR task JSON is invalid: {exc}") from exc
@@ -358,6 +372,18 @@ def load_musr_team_allocation_task(
     if distribution.get("semantic_world_sha256") != semantic_hash:
         raise RelationalTaskError("MuSR assignment does not match the base task")
     if assignment_path is None:
+        if distribution_override is not None:
+            if not distribution_sha256:
+                raise RelationalTaskError(
+                    "MuSR distribution override requires an expected file SHA-256"
+                )
+            actual_file_hash = hashlib.sha256(
+                distribution_override.read_bytes()
+            ).hexdigest()
+            if actual_file_hash != distribution_sha256:
+                raise RelationalTaskError(
+                    "MuSR distribution override file SHA-256 does not match"
+                )
         fingerprint = distribution.get("fingerprint_sha256")
         if fingerprint != _sha256_object(
             {

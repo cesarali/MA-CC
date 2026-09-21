@@ -4,10 +4,12 @@ import asyncio
 import multiprocessing
 import os
 import time
+from dataclasses import replace
 
 import pytest
 
 from mas_cc.llm_runtime.providers.load_control import (
+    ProviderAdmissionTimeout,
     ProviderLoadControlConfig,
     SharedProviderCoordinator,
     ProviderCoordinationStateError,
@@ -46,13 +48,7 @@ def _config(**changes):
 def _contending_worker(root, active, observed_max):
     coordinator = SharedProviderCoordinator(
         root,
-        # Keep the global pacer from becoming the subject of this test; the
-        # workers must overlap so this isolates the leased concurrency cap.
-        _config(
-            initial_concurrency=2,
-            maximum_concurrency=2,
-            target_rpm=6_000,
-        ),
+        _config(initial_concurrency=2, maximum_concurrency=2),
     )
     lease = asyncio.run(coordinator.acquire())
     with active.get_lock(), observed_max.get_lock():
@@ -87,17 +83,14 @@ def _die_while_holding_owner_lock(root, ready):
 
 
 def test_shared_workers_use_one_leased_concurrency_limit(tmp_path):
-    clock = _Clock()
-    config = _config()
     first = SharedProviderCoordinator(
-        tmp_path, config, worker_id="worker-a", node_id="node-a", clock=clock
+        tmp_path, _config(), worker_id="worker-a", node_id="node-a"
     )
     second = SharedProviderCoordinator(
-        tmp_path, config, worker_id="worker-b", node_id="node-b", clock=clock
+        tmp_path, _config(), worker_id="worker-b", node_id="node-b"
     )
 
     lease_a = asyncio.run(first.acquire())
-    clock.advance(60 / config.target_rpm)
     lease_b = asyncio.run(second.acquire())
     state = first.snapshot()
 
@@ -132,7 +125,8 @@ def test_concurrent_processes_cannot_exceed_shared_limit(tmp_path):
         worker.join(timeout=5)
         assert worker.exitcode == 0
     assert observed_max.value == 2
-    assert SharedProviderCoordinator(tmp_path, _config()).snapshot()["leases"] == {}
+    matching = _config(initial_concurrency=2, maximum_concurrency=2)
+    assert SharedProviderCoordinator(tmp_path, matching).snapshot()["leases"] == {}
 
 
 def test_process_death_inside_owner_lock_is_recovered(tmp_path):
@@ -230,7 +224,6 @@ def test_local_pause_and_global_breaker_are_distinct(tmp_path):
                 latency_seconds=0.1,
             )
         )
-        clock.advance(60 / config.target_rpm)
     assert bad._try_acquire()[0] is None
     healthy_lease, _ = healthy._try_acquire()
     assert healthy_lease is not None
@@ -247,53 +240,6 @@ def test_local_pause_and_global_breaker_are_distinct(tmp_path):
     assert state["global_pause_until"] > clock()
     assert state["limit"] == 1
     assert healthy._try_acquire()[0] is None
-
-
-def test_successful_retries_cannot_hide_a_failure_burst_below_min_samples(tmp_path):
-    """Recovery samples must still trip the rolling global failure ratio."""
-
-    clock = _Clock()
-    config = _config(
-        initial_concurrency=4,
-        global_min_samples=4,
-        global_failure_ratio=0.25,
-        local_failure_threshold=10,
-    )
-    coordinator = SharedProviderCoordinator(
-        tmp_path, config, worker_id="worker-a", node_id="node-a", clock=clock
-    )
-
-    for status_code in (None, 429):
-        lease = asyncio.run(coordinator.acquire())
-        asyncio.run(
-            coordinator.release(
-                lease,
-                success=False,
-                retryable=True,
-                status_code=status_code,
-                latency_seconds=120,
-            )
-        )
-        clock.advance(60 / config.target_rpm)
-    # The burst is real but there are not enough rolling samples yet.
-    assert coordinator.snapshot()["limit"] == 4
-
-    for index in range(2):
-        lease = asyncio.run(coordinator.acquire())
-        asyncio.run(
-            coordinator.release(
-                lease,
-                success=True,
-                retryable=False,
-                status_code=200,
-                latency_seconds=1,
-            )
-        )
-        clock.advance(60 / config.target_rpm)
-
-    state = coordinator.snapshot()
-    assert state["global_pause_until"] > clock()
-    assert state["limit"] == 2
 
 
 def test_stale_leases_are_recovered_and_success_increases_limit(tmp_path):
@@ -319,7 +265,7 @@ def test_rolling_rpm_gate_counts_dispatches_including_released_attempts(tmp_path
     coordinator = SharedProviderCoordinator(
         tmp_path, _config(target_rpm=2), node_id="node-a", clock=clock
     )
-    for index in range(2):
+    for _ in range(2):
         lease = asyncio.run(coordinator.acquire())
         asyncio.run(
             coordinator.release(
@@ -330,52 +276,8 @@ def test_rolling_rpm_gate_counts_dispatches_including_released_attempts(tmp_path
                 latency_seconds=0.1,
             )
         )
-        if index == 0:
-            clock.advance(30)
     assert coordinator._try_acquire()[0] is None
-    clock.advance(31)
-    assert coordinator._try_acquire()[0] is not None
-
-
-def test_rpm_gate_smoothly_paces_dispatches_instead_of_bursting(tmp_path):
-    clock = _Clock()
-    coordinator = SharedProviderCoordinator(
-        tmp_path,
-        _config(target_rpm=20, initial_concurrency=4),
-        node_id="node-a",
-        clock=clock,
-    )
-
-    first, _ = coordinator._try_acquire()
-    assert first is not None
-    second, delay = coordinator._try_acquire()
-    assert second is None
-    assert delay == pytest.approx(3.0)
-
-    clock.advance(2.9)
-    assert coordinator._try_acquire()[0] is None
-    clock.advance(0.1)
-    assert coordinator._try_acquire()[0] is not None
-
-
-def test_dispatch_pacing_recovers_transaction_overhead_without_a_burst(tmp_path):
-    clock = _Clock()
-    coordinator = SharedProviderCoordinator(
-        tmp_path,
-        _config(target_rpm=20, initial_concurrency=4),
-        node_id="node-a",
-        clock=clock,
-    )
-
-    assert coordinator._try_acquire()[0] is not None
-    clock.advance(3.5)
-    assert coordinator._try_acquire()[0] is not None
-
-    # The half-second delay is recovered from the virtual schedule: the next
-    # dispatch remains due at t=6 rather than drifting to t=6.5.
-    clock.advance(2.4)
-    assert coordinator._try_acquire()[0] is None
-    clock.advance(0.1)
+    clock.advance(61)
     assert coordinator._try_acquire()[0] is not None
 
 
@@ -539,3 +441,274 @@ def test_timing_invariants_are_validated():
         ProviderLoadControlConfig.from_mapping(
             {"lease_seconds": 160, "heartbeat_seconds": 10}
         )
+
+
+def test_admission_wait_is_independent_from_short_provider_retry_window(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path,
+        replace(
+            _config(initial_concurrency=1, maximum_concurrency=1),
+            retry_max_elapsed_seconds=0.05,
+            admission_max_elapsed_seconds=0.5,
+        ),
+    )
+
+    async def exercise():
+        first = await coordinator.acquire()
+        pending = asyncio.create_task(
+            coordinator.acquire(
+                deadline=time.monotonic()
+                + coordinator.config.admission_max_elapsed_seconds,
+                admission=True,
+            )
+        )
+        await asyncio.sleep(0.1)
+        assert not pending.done()
+        await coordinator.release(
+            first,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.1,
+        )
+        second = await pending
+        await coordinator.release(
+            second,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.01,
+        )
+
+    asyncio.run(exercise())
+
+
+def test_admission_timeout_is_distinct_and_does_not_record_provider_failure(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path, _config(initial_concurrency=1, maximum_concurrency=1)
+    )
+
+    async def exercise():
+        lease = await coordinator.acquire()
+        with pytest.raises(ProviderAdmissionTimeout):
+            await coordinator.acquire(
+                deadline=time.monotonic() + 0.03, admission=True
+            )
+        state = coordinator.snapshot()
+        assert state["events"] == []
+        await coordinator.release(
+            lease,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.1,
+        )
+
+    asyncio.run(exercise())
+
+
+def test_thirty_callers_finish_after_limit_reduces_to_ten(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path,
+        _config(
+            initial_concurrency=30,
+            minimum_concurrency=10,
+            maximum_concurrency=30,
+            target_rpm=1000,
+            admission_max_elapsed_seconds=2,
+        ),
+    )
+    active = 0
+    maximum = 0
+
+    async def caller(ready):
+        nonlocal active, maximum
+        lease = await coordinator.acquire(
+            deadline=time.monotonic() + 2, admission=True
+        )
+        active += 1
+        maximum = max(maximum, active)
+        ready.set()
+        await asyncio.sleep(0.02)
+        active -= 1
+        await coordinator.release(
+            lease,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.02,
+        )
+
+    async def exercise():
+        ready = [asyncio.Event() for _ in range(10)]
+        first = [asyncio.create_task(caller(item)) for item in ready]
+        await asyncio.gather(*(item.wait() for item in ready))
+
+        def reduce(state, _now):
+            state["limit"] = 10
+
+        coordinator._transaction("test_reduce", reduce)
+        remaining = [
+            asyncio.create_task(caller(asyncio.Event())) for _ in range(20)
+        ]
+        await asyncio.gather(*first, *remaining)
+
+    asyncio.run(exercise())
+    assert maximum <= 10
+    assert coordinator.snapshot()["leases"] == {}
+
+
+def test_coherent_policy_reduces_thirty_to_fifteen_to_ten_then_recovers(tmp_path):
+    clock = _Clock()
+    coordinator = SharedProviderCoordinator(
+        tmp_path,
+        _config(
+            initial_concurrency=30,
+            minimum_concurrency=10,
+            maximum_concurrency=30,
+            target_rpm=1000,
+            local_failure_threshold=100,
+            global_min_samples=1,
+            global_failure_ratio=1,
+            global_cooldown_seconds=1,
+            event_window_seconds=2,
+            decrease_factor=0.5,
+            increase_step=2,
+            increase_interval_seconds=1,
+        ),
+        clock=clock,
+    )
+
+    async def outcome(*, success, retryable, status):
+        lease = await coordinator.acquire()
+        await coordinator.release(
+            lease,
+            success=success,
+            retryable=retryable,
+            status_code=status,
+            latency_seconds=0.1,
+        )
+
+    asyncio.run(outcome(success=False, retryable=True, status=500))
+    assert coordinator.snapshot()["limit"] == 15
+    clock.advance(1.1)
+    asyncio.run(outcome(success=False, retryable=True, status=500))
+    assert coordinator.snapshot()["limit"] == 10
+    clock.advance(3)
+    asyncio.run(outcome(success=True, retryable=False, status=200))
+    assert coordinator.snapshot()["limit"] == 12
+
+
+def test_policy_mismatch_and_out_of_policy_live_limit_are_rejected(tmp_path):
+    original = SharedProviderCoordinator(tmp_path, _config())
+    lease = asyncio.run(original.acquire())
+    mismatched = SharedProviderCoordinator(
+        tmp_path, _config(maximum_concurrency=5)
+    )
+    with pytest.raises(ProviderCoordinationStateError, match="policy mismatch"):
+        mismatched.snapshot()
+
+    state = original.snapshot()
+    state["limit"] = 100
+    original._write(state)
+    with pytest.raises(ProviderCoordinationStateError, match="outside"):
+        original.snapshot()
+    # The invalid state is deliberately preserved for diagnosis.
+    assert lease.token in state["leases"]
+
+
+def test_optimistic_full_read_avoids_lock_and_locked_recheck_controls_grant(
+    tmp_path, monkeypatch
+):
+    coordinator = SharedProviderCoordinator(
+        tmp_path, _config(initial_concurrency=1, maximum_concurrency=1)
+    )
+    lease = asyncio.run(coordinator.acquire())
+    calls = 0
+    original = coordinator._try_acquire
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator, "_try_acquire", counted)
+
+    async def exercise():
+        pending = asyncio.create_task(
+            coordinator.acquire(deadline=time.monotonic() + 1, admission=True)
+        )
+        await asyncio.sleep(0.05)
+        assert calls == 0
+        await coordinator.release(
+            lease,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.05,
+        )
+        granted = await pending
+        await coordinator.release(
+            granted,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.01,
+        )
+
+    asyncio.run(exercise())
+    assert calls >= 1
+
+
+def test_cancellation_interrupts_admission_without_leaking_a_lease(tmp_path):
+    coordinator = SharedProviderCoordinator(
+        tmp_path, _config(initial_concurrency=1, maximum_concurrency=1)
+    )
+
+    async def exercise():
+        lease = await coordinator.acquire()
+        pending = asyncio.create_task(
+            coordinator.acquire(deadline=time.monotonic() + 30, admission=True)
+        )
+        await asyncio.sleep(0.03)
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+        assert list(coordinator.snapshot()["leases"]) == [lease.token]
+        await coordinator.release(
+            lease,
+            success=True,
+            retryable=False,
+            status_code=200,
+            latency_seconds=0.03,
+        )
+
+    asyncio.run(exercise())
+
+
+def test_cancellation_during_locked_recheck_abandons_late_grant(
+    tmp_path, monkeypatch
+):
+    coordinator = SharedProviderCoordinator(
+        tmp_path, _config(initial_concurrency=1, maximum_concurrency=1)
+    )
+    original = coordinator._try_acquire
+
+    def delayed(*args, **kwargs):
+        time.sleep(0.05)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator, "_try_acquire", delayed)
+
+    async def exercise():
+        pending = asyncio.create_task(
+            coordinator.acquire(deadline=time.monotonic() + 1, admission=True)
+        )
+        await asyncio.sleep(0.01)
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+    asyncio.run(exercise())
+    assert coordinator.snapshot()["leases"] == {}
+    assert coordinator.snapshot()["events"] == []

@@ -8,6 +8,26 @@ description: Create, preflight, submit, monitor, aggregate, or post-process MA-C
 Work from the repository root. Keep scientific design separate from scheduler
 topology and reuse the repository's established analysis engines.
 
+## Select the execution and provider profiles
+
+Treat the compute site and LLM provider as independent choices. DeepInfra is a
+provider, not a cluster; a DeepInfra study may still execute on Potsdam SLURM.
+
+- When executing on Potsdam or submitting to its SLURM cluster, read
+  [references/potsdam.md](references/potsdam.md).
+- When the scientific config uses `llm_provider.type: deepinfra`, also read
+  [references/deepinfra.md](references/deepinfra.md), regardless of compute
+  site.
+- When the scientific config uses `llm_provider.type: university`, use the
+  Potsdam university-provider section in
+  [references/potsdam.md](references/potsdam.md).
+- On another compute site, use that site's repository instructions and
+  environment. Never transplant Potsdam absolute paths or Conda commands.
+
+Provider credentials, limits, coordinators, and failure states are isolated by
+provider and study. Never combine a DeepInfra limit with a university-provider
+execution plan.
+
 ## Potsdam dedicated environment
 
 When operating on Potsdam or submitting to its SLURM cluster, use the dedicated
@@ -69,9 +89,31 @@ root under `/scratch/df630/MA-CC-results`, and the matching
 checkpoints, a provider-safe array throttle, and resubmission of the same study
 root rather than exceeding the 72-hour cap.
 
-Outside Potsdam, NERSC, and Amarel, use the existing environment and setup
-conventions of the local checkout. Do not require any cluster's environment
-name or absolute Conda path on a developer's local machine.
+On Potsdam only, distinguish the runtime working directory from the output
+root. Scientific results and SLURM logs belong under `/work`, while the generic
+Potsdam launchers must explicitly establish
+`/home/ojedamarin/Projects/LanguageGames/MA-CC` as the runtime working
+directory so repository-local provider configuration, including `.env`, is
+found independently of the directory from which `sbatch` was invoked. Do not
+apply this absolute path or environment-loading convention outside Potsdam.
+
+## Cesar cluster
+
+Cesar has no Conda, no modules, and no root. The environment is a uv virtualenv
+on the shared NFS mount and the repository is an rsync copy at `/shared/MA-CC`,
+not a clone, so there is no git on the cluster and studies submitted there
+record an empty `git_commit`; commit before syncing if a run needs to be
+traceable. Push with `scripts/Cesar/sync.sh`, which refuses to run while jobs
+are active because workers import from the synced `src/`. Submit with
+`mas-cc study submit --execution-site cesar`; results are pinned under
+`/shared/MA-CC-results`. Two site facts the launchers encode: compute nodes
+ship no CA certificates, so `SSL_CERT_FILE` must point at a staged bundle; and
+any explicit `VAR=value` in `--export` makes a batch job hang indefinitely, so
+the repository root is passed via `--chdir`.
+
+Outside Potsdam, NERSC, Amarel, and Cesar, use the existing environment and
+setup conventions of the local checkout. Do not require any cluster's
+environment name or absolute Conda path on a developer's local machine.
 
 ## Read the architecture first
 

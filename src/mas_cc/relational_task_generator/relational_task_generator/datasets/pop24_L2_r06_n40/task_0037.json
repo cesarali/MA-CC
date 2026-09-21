@@ -1,0 +1,268 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0037",
+  "seed": 3851686339888389860,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 37,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Jeni",
+        "coordinates": {
+          "x": -1,
+          "y": 0
+        }
+      },
+      {
+        "name": "Tala",
+        "coordinates": {
+          "x": 0,
+          "y": -1
+        }
+      },
+      {
+        "name": "Nelo",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Bira",
+        "coordinates": {
+          "x": 997,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Bavi",
+        "coordinates": {
+          "x": 998,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Faro",
+        "coordinates": {
+          "x": 998,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Wali",
+        "coordinates": {
+          "x": 999,
+          "y": 1000
+        }
+      },
+      {
+        "name": "Maro",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Jeni",
+        "relation": "NORTHWEST",
+        "object": "Tala",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Tala",
+        "relation": "SOUTH",
+        "object": "Nelo",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Bira",
+        "relation": "SOUTHWEST",
+        "object": "Bavi",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Bavi",
+        "relation": "NORTH",
+        "object": "Faro",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Faro",
+        "relation": "NORTHWEST",
+        "object": "Wali",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Wali",
+        "relation": "WEST",
+        "object": "Maro",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Jeni",
+    "reference": "Nelo",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "WEST",
+    "options": [
+      {
+        "label": "A",
+        "relation": "EAST"
+      },
+      {
+        "label": "B",
+        "relation": "SOUTH"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "C"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f1",
+        "f3"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": []
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": []
+    },
+    "agent_014": {
+      "fact_ids": [
+        "f5"
+      ]
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": []
+    },
+    "agent_017": {
+      "fact_ids": []
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": []
+    },
+    "agent_022": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f2"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Jeni relative to Nelo?",
+    "facts": {
+      "f1": "Jeni is northwest of Tala.",
+      "f2": "Tala is south of Nelo.",
+      "f3": "Bira is southwest of Bavi.",
+      "f4": "Bavi is north of Faro.",
+      "f5": "Faro is northwest of Wali.",
+      "f6": "Wali is west of Maro."
+    },
+    "reasoning_chain": [
+      "Jeni is northwest of Tala.",
+      "Tala is south of Nelo."
+    ]
+  }
+}

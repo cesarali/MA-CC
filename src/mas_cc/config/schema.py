@@ -102,6 +102,24 @@ def config_schema() -> dict[str, Any]:
                             {"type": "null"},
                         ]
                     },
+                    "semantic_failure_guard": {
+                        "anyOf": [
+                            {"type": "null"},
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "properties": {
+                                    "minimum_finished_episodes": {"type": "integer", "minimum": 1},
+                                    "maximum_failure_fraction": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1,
+                                    },
+                                    "minimum_failures": {"type": "integer", "minimum": 1},
+                                },
+                            },
+                        ]
+                    },
                 }
             ),
             "logging": _simple_object(
@@ -166,6 +184,38 @@ def config_schema() -> dict[str, Any]:
                     "schema_version": {"const": 1},
                     "mechanism": {"type": "string", "minLength": 1},
                     "options": options,
+                }
+            ),
+            "ensemble": _simple_object(
+                {
+                    "schema_version": {"const": 1},
+                    "enabled": {"type": "boolean"},
+                    "parent_count": {"type": "integer", "minimum": 1},
+                    "preparation_rounds": {"type": "integer", "minimum": 1},
+                    "continuation_rounds": {"type": "integer", "minimum": 1},
+                    "continuation_copies": {"type": "integer", "minimum": 1},
+                    "branch_policies": {
+                        "type": "array",
+                        "uniqueItems": True,
+                        "items": {
+                            "enum": [
+                                "none",
+                                "always_truth",
+                                "always_false",
+                                "sensing_truth",
+                                "sensing_false",
+                            ]
+                        },
+                    },
+                    "posting_budgets": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": True,
+                        "items": {"type": "integer", "minimum": 0},
+                    },
+                    "retain_parent_artifacts": {"type": "boolean"},
+                    "require_complete_branches": {"type": "boolean"},
+                    "false_target": {"type": "string", "minLength": 1},
                 }
             ),
             "metrics": _simple_object(

@@ -196,6 +196,14 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             "game.options.board.allow_participant_requests",
             "allow_participant_requests",
         ),
+        (
+            "game.options.board.report_citation_scope",
+            "report_citation_scope",
+        ),
+        (
+            "game.options.board.no_citable_fact_action",
+            "no_citable_fact_action",
+        ),
         ("control.options.sensor_sample_size", "sensor_sample_size"),
         ("control.options.intervention_budget", "intervention_budget"),
         ("control.options.beta", "beta"),
@@ -259,6 +267,18 @@ def _coordinates(cell: DiscoveredCell) -> dict[str, Any]:
             == "relational_imitation_round_feedback"
         ):
             result["receiver_epistemic_disposition"] = "vigilant"
+    if _nested(cell.resolved_config, "game.options.social_mode") == "board":
+        prompt_version = int(
+            _nested(cell.resolved_config, "game.options.prompt_version") or 1
+        )
+        if "report_citation_scope" not in result:
+            result["report_citation_scope"] = (
+                "active_or_observed" if prompt_version >= 5 else "active_only"
+            )
+        if "no_citable_fact_action" not in result:
+            result["no_citable_fact_action"] = (
+                "none" if prompt_version >= 5 else "model_select"
+            )
     if result.get("receiver_epistemic_disposition") and result.get(
         "controller_evidence_strategy"
     ):
@@ -669,13 +689,25 @@ def build_canonical_tables(
         selected_rounds, round_selection = _completed_unique_records(
             rich_rounds or _compact_round_rows(study_id, cell, frame),
             episodes,
-            coordinate_columns=("round_index",),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+            ),
         )
         round_rows.extend(selected_rounds)
         prefix_rounds = _incomplete_unique_records(
             rich_rounds,
             episodes,
-            coordinate_columns=("round_index",),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+            ),
         )
         available_round_prefix_rows.extend(prefix_rounds)
         record_selection["available_round_prefixes"]["retained_records"] += len(
@@ -703,13 +735,27 @@ def build_canonical_tables(
         selected_micro_rows, micro_selection = _completed_unique_records(
             discovered_micro_rows,
             episodes,
-            coordinate_columns=("round_index", "micro_slot_index"),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+                "micro_slot_index",
+            ),
         )
         micro_rows.extend(selected_micro_rows)
         prefix_micro_rows = _incomplete_unique_records(
             discovered_micro_rows,
             episodes,
-            coordinate_columns=("round_index", "micro_slot_index"),
+            coordinate_columns=(
+                "branch_policy",
+                "posting_budget",
+                "copy_id",
+                "post_branch_horizon",
+                "round_index",
+                "micro_slot_index",
+            ),
         )
         available_micro_prefix_rows.extend(prefix_micro_rows)
         record_selection["available_micro_slot_prefixes"]["retained_records"] += len(

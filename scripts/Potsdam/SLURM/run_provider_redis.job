@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Generic authenticated Redis coordinator service for MA-CC jobs on Potsdam.
+#SBATCH --job-name=mas-cc-redis
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/redis-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/redis-%j.err
+
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: run_provider_redis.job ENDPOINT_FILE [PORT]" >&2
+  exit 2
+fi
+
+readonly ENV_PREFIX=/home/ojedamarin/.local/share/miniforge3/envs/MA-CC
+readonly REDIS_SERVER="$ENV_PREFIX/bin/redis-server"
+readonly REDIS_CLI="$ENV_PREFIX/bin/redis-cli"
+readonly JOB_ID="${SLURM_JOB_ID:-local}"
+readonly REDIS_HOST="$(hostname -f)"
+readonly REDIS_PORT="${2:-$((20000 + JOB_ID % 20000))}"
+readonly ENDPOINT_FILE="$1"
+readonly RUNTIME_DIR="$(dirname "$ENDPOINT_FILE")/redis-${JOB_ID}"
+
+if [[ ! "$REDIS_PORT" =~ ^[0-9]+$ ]] || (( REDIS_PORT < 1024 || REDIS_PORT > 65535 )); then
+  echo "Redis port must be an integer between 1024 and 65535" >&2
+  exit 2
+fi
+if [[ ! -x "$REDIS_SERVER" || ! -x "$REDIS_CLI" ]]; then
+  echo "Redis server/client executables are missing from the MA-CC environment" >&2
+  exit 2
+fi
+
+umask 077
+mkdir -p "$RUNTIME_DIR" "$(dirname "$ENDPOINT_FILE")"
+readonly REDIS_PASSWORD="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
+readonly TEMP_ENDPOINT="${ENDPOINT_FILE}.tmp-${JOB_ID}"
+endpoint_published=false
+
+"$REDIS_SERVER" \
+  --bind 0.0.0.0 \
+  --port "$REDIS_PORT" \
+  --protected-mode yes \
+  --requirepass "$REDIS_PASSWORD" \
+  --save '' \
+  --appendonly no \
+  --maxmemory 512mb \
+  --maxmemory-policy noeviction \
+  --dir "$RUNTIME_DIR" \
+  --logfile '' &
+readonly REDIS_PID=$!
+
+shutdown_redis() {
+  "$REDIS_CLI" -h 127.0.0.1 -p "$REDIS_PORT" \
+    -a "$REDIS_PASSWORD" --no-auth-warning shutdown nosave >/dev/null 2>&1 || true
+  wait "$REDIS_PID" 2>/dev/null || true
+  [[ ! -e "$TEMP_ENDPOINT" ]] || unlink "$TEMP_ENDPOINT"
+  if [[ "$endpoint_published" == true && -e "$ENDPOINT_FILE" ]]; then
+    unlink "$ENDPOINT_FILE"
+  fi
+}
+trap shutdown_redis EXIT INT TERM
+
+ready=false
+for _ in $(seq 1 100); do
+  if "$REDIS_CLI" -h 127.0.0.1 -p "$REDIS_PORT" \
+    -a "$REDIS_PASSWORD" --no-auth-warning ping 2>/dev/null | grep -qx PONG; then
+    ready=true
+    break
+  fi
+  kill -0 "$REDIS_PID" 2>/dev/null || break
+  sleep 0.1
+done
+if [[ "$ready" != true ]]; then
+  echo "Redis failed to become ready on ${REDIS_HOST}:${REDIS_PORT}" >&2
+  exit 1
+fi
+
+printf 'export MAS_CC_PROVIDER_CONTROL_REDIS_URL=%q\n' \
+  "redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0" > "$TEMP_ENDPOINT"
+if ! ln "$TEMP_ENDPOINT" "$ENDPOINT_FILE"; then
+  echo "Refusing to replace existing Redis endpoint file: $ENDPOINT_FILE" >&2
+  exit 1
+fi
+unlink "$TEMP_ENDPOINT"
+endpoint_published=true
+echo "Redis provider coordinator ready; source the protected endpoint file: $ENDPOINT_FILE"
+
+wait "$REDIS_PID"

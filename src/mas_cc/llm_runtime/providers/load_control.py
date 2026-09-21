@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -19,11 +20,17 @@ from typing import Any, Mapping
 
 LOAD_CONTROL_CONFIG_ENV = "MAS_CC_PROVIDER_LOAD_CONTROL"
 LOAD_CONTROL_DIR_ENV = "MAS_CC_PROVIDER_CONTROL_DIR"
+# Redis URL for mode "redis_adaptive" (for example redis://host:6379/0).
+LOAD_CONTROL_REDIS_URL_ENV = "MAS_CC_PROVIDER_CONTROL_REDIS_URL"
 LOGGER = logging.getLogger(__name__)
 
 
 class ProviderCoordinationUnavailable(RuntimeError):
     pass
+
+
+class ProviderAdmissionTimeout(ProviderCoordinationUnavailable):
+    """A request could not enter the shared provider queue in time."""
 
 
 class ProviderCoordinationStateError(RuntimeError):
@@ -85,6 +92,7 @@ class ProviderLoadControlConfig:
     increase_step: int = 1
     increase_interval_seconds: float = 30.0
     retry_max_elapsed_seconds: float = 300.0
+    admission_max_elapsed_seconds: float = 1800.0
     retry_backoff_initial_seconds: float = 2.0
     retry_backoff_max_seconds: float = 60.0
 
@@ -100,9 +108,10 @@ class ProviderLoadControlConfig:
                 + ", ".join(unknown)
             )
         mode = str(v.get("mode", "shared_adaptive"))
-        if mode not in {"off", "shared_adaptive"}:
+        if mode not in {"off", "shared_adaptive", "redis_adaptive"}:
             raise ValueError(
-                "execution.provider_load_control.mode must be 'off' or 'shared_adaptive'"
+                "execution.provider_load_control.mode must be 'off', "
+                "'shared_adaptive' or 'redis_adaptive'"
             )
         lease = _num(v, "lease_seconds", 90, 1)
         c = cls(
@@ -132,6 +141,9 @@ class ProviderLoadControlConfig:
             increase_step=_int(v, "increase_step", 1, 1),
             increase_interval_seconds=_num(v, "increase_interval_seconds", 30, 0.1),
             retry_max_elapsed_seconds=_num(v, "retry_max_elapsed_seconds", 300, 1),
+            admission_max_elapsed_seconds=_num(
+                v, "admission_max_elapsed_seconds", 1800, 1
+            ),
             retry_backoff_initial_seconds=_num(
                 v, "retry_backoff_initial_seconds", 2, 0.01
             ),
@@ -168,12 +180,23 @@ class ProviderLoadControlConfig:
         return asdict(self)
 
 
+def provider_load_control_policy_hash(config: ProviderLoadControlConfig) -> str:
+    """Return the stable identity of one complete execution-only policy."""
+
+    payload = json.dumps(
+        config.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class RequestLease:
     token: str
 
 
 class SharedProviderCoordinator:
+    supports_admission_deadline = True
+
     def __init__(self, root, config, *, worker_id=None, node_id=None, clock=time.time):
         self.root = Path(root)
         self.config = config
@@ -183,6 +206,7 @@ class SharedProviderCoordinator:
             or f"{self.node_id}:{os.getpid()}:{os.environ.get('SLURM_ARRAY_TASK_ID','local')}"
         )
         self._clock = clock
+        self.policy_hash = provider_load_control_policy_hash(config)
         self._jitter = random.Random()
         self._pending = {}
         self._retries = {}
@@ -243,10 +267,10 @@ class SharedProviderCoordinator:
     def _initial(self, now):
         return {
             "schema_version": 2,
+            "policy_hash": self.policy_hash,
             "limit": self.config.initial_concurrency,
             "leases": {},
             "dispatches": [],
-            "next_dispatch_at": now,
             "events": [],
             "event_ids": [],
             "node_pauses": {},
@@ -280,6 +304,25 @@ class SharedProviderCoordinator:
         if not isinstance(state, dict) or state.get("schema_version") != 2:
             raise ProviderCoordinationStateError(
                 f"unsupported provider load-control state at {self._state_path}; preserve it for diagnosis"
+            )
+        if state.get("policy_hash") != self.policy_hash:
+            raise ProviderCoordinationStateError(
+                "provider load-control policy mismatch at "
+                f"{self._state_path}: state={state.get('policy_hash')!r} "
+                f"worker={self.policy_hash!r}; active coordinators cannot change policy"
+            )
+        limit = state.get("limit")
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not self.config.minimum_concurrency
+            <= limit
+            <= self.config.maximum_concurrency
+        ):
+            raise ProviderCoordinationStateError(
+                "provider load-control limit is outside the persisted policy at "
+                f"{self._state_path}: limit={limit!r} allowed="
+                f"[{self.config.minimum_concurrency}, {self.config.maximum_concurrency}]"
             )
         for key, kind in (
             ("leases", dict),
@@ -501,13 +544,6 @@ class SharedProviderCoordinator:
                     ),
                     dirty=False,
                 )
-            # A rolling-window ceiling alone permits a large startup burst and
-            # then forces every worker to idle until the oldest dispatch ages
-            # out. Pace admissions globally so target_rpm is also a smooth
-            # request rate.
-            next_dispatch_at = float(s.get("next_dispatch_at", now))
-            if next_dispatch_at > now:
-                return None, max(0.01, next_dispatch_at - now)
             s["leases"][token] = {
                 "worker": self.worker_id,
                 "node": self.node_id,
@@ -516,26 +552,100 @@ class SharedProviderCoordinator:
                 "expires_at": now + self.config.lease_seconds,
             }
             s["dispatches"].append(now)
-            dispatch_interval = 60.0 / self.config.target_rpm
-            # Retain the virtual schedule so lock/fsync overhead does not get
-            # added to every interval.  Bound lateness to one interval: after
-            # a pause at most one catch-up admission can happen immediately,
-            # rather than replaying an accumulated burst.
-            scheduled_at = max(next_dispatch_at, now - dispatch_interval)
-            s["next_dispatch_at"] = scheduled_at + dispatch_interval
             return RequestLease(token), 0.0
 
         return self._transaction("acquire", op, deadline=deadline)
 
-    async def acquire(self, *, deadline=None):
+    def _optimistic_wait_delay(self) -> float:
+        """Return a wait hint without taking a lock; grants remain locked."""
+
+        now = float(self._clock())
+        try:
+            state = self._read(now)
+        except OSError:
+            return 0.0
+        active_leases = sum(
+            float(item.get("expires_at", 0)) > now
+            for item in state["leases"].values()
+        )
+        pause = max(
+            float(state.get("global_pause_until", 0)),
+            float(state["node_pauses"].get(self.node_id, 0)),
+        )
+        if pause > now:
+            return max(self.config.polling_seconds, min(pause - now, 1.0))
+        dispatches = [
+            float(item) for item in state["dispatches"] if float(item) > now - 60
+        ]
+        if len(dispatches) >= self.config.target_rpm:
+            return max(
+                self.config.polling_seconds,
+                min(60 - (now - dispatches[0]), 1.0),
+            )
+        if active_leases >= int(state["limit"]):
+            return self.config.polling_seconds
+        return 0.0
+
+    async def acquire(self, *, deadline=None, admission=False):
         token = uuid.uuid4().hex
         async with self._acquire_gate:
             contention_delay = self.config.polling_seconds
             while deadline is None or time.monotonic() < deadline:
-                try:
-                    lease, delay = await asyncio.to_thread(
-                        self._try_acquire, token, deadline=deadline
+                optimistic_delay = await asyncio.to_thread(
+                    self._optimistic_wait_delay
+                )
+                if optimistic_delay > 0:
+                    contention_delay = min(
+                        max(1.0, self.config.polling_seconds * 8),
+                        max(self.config.polling_seconds, contention_delay * 1.5),
                     )
+                    delay = max(optimistic_delay, contention_delay)
+                    await asyncio.sleep(
+                        min(
+                            self._jitter.uniform(0.75 * delay, 1.25 * delay),
+                            max(0, deadline - time.monotonic())
+                            if deadline
+                            else delay,
+                        )
+                    )
+                    continue
+                try:
+                    transaction_deadline = time.monotonic() + max(
+                        1.0, self.config.polling_seconds * 4
+                    )
+                    if deadline is not None:
+                        transaction_deadline = min(deadline, transaction_deadline)
+                    attempt = asyncio.create_task(
+                        asyncio.to_thread(
+                            self._try_acquire,
+                            token,
+                            deadline=transaction_deadline,
+                        )
+                    )
+                    try:
+                        lease, delay = await asyncio.shield(attempt)
+                    except asyncio.CancelledError:
+                        # A thread cannot be cancelled after it has entered a
+                        # filesystem transaction. Reconcile its bounded result
+                        # so cancellation cannot strand a newly granted lease.
+                        try:
+                            granted, _ = await asyncio.shield(attempt)
+                        except Exception:
+                            pass
+                        else:
+                            if granted is not None:
+                                try:
+                                    await asyncio.shield(self.abandon(granted))
+                                except Exception:
+                                    LOGGER.exception(
+                                        "failed to abandon provider lease after cancelled admission "
+                                        "root=%s node=%s worker=%s lease=%s",
+                                        self.root,
+                                        self.node_id,
+                                        self.worker_id,
+                                        granted.token[:8],
+                                    )
+                        raise
                 except ProviderCoordinationUnavailable:
                     if deadline is None:
                         raise
@@ -561,8 +671,23 @@ class SharedProviderCoordinator:
                         ),
                     )
                 )
-        raise ProviderCoordinationUnavailable(
-            f"coordinator acquire deadline expired root={self.root} node={self.node_id} worker={self.worker_id}"
+        error = ProviderAdmissionTimeout if admission else ProviderCoordinationUnavailable
+        raise error(
+            "coordinator admission deadline expired "
+            f"root={self.root} node={self.node_id} worker={self.worker_id} "
+            f"policy_hash={self.policy_hash}"
+        )
+
+    async def abandon(self, lease):
+        """Remove a lease granted to a caller cancelled before transport."""
+
+        def op(state, _now):
+            existed = state["leases"].pop(lease.token, None) is not None
+            return _OperationResult(None, dirty=existed)
+
+        deadline = time.monotonic() + max(1.0, self.config.polling_seconds * 4)
+        return await asyncio.to_thread(
+            self._transaction, "abandon", op, deadline=deadline
         )
 
     async def renew(self, lease, *, deadline=None):
@@ -613,29 +738,15 @@ class SharedProviderCoordinator:
                 s["node_pauses"][self.node_id] = (
                     now + self.config.local_cooldown_seconds
                 )
-            global_failure_burst = (
-                bool(fail)
+            if (
+                retryable
                 and len(s["events"]) >= self.config.global_min_samples
                 and len(fail) / len(s["events"]) >= self.config.global_failure_ratio
-            )
-            if global_failure_burst:
-                # A synchronized failure burst can arrive after an idle minute,
-                # when the rolling window contains fewer than
-                # ``global_min_samples``.  Successful retries then supply the
-                # remaining samples.  Evaluate the rolling ratio on every
-                # release so that recovery traffic does not hide the burst.
-                # Do not keep extending an already-active pause on successes;
-                # only fresh retryable failures may extend it.
-                pause_until = float(s.get("global_pause_until", 0))
-                if retryable:
-                    s["global_pause_until"] = max(
-                        pause_until,
-                        now + self.config.global_cooldown_seconds,
-                    )
-                elif pause_until <= now:
-                    s["global_pause_until"] = (
-                        now + self.config.global_cooldown_seconds
-                    )
+            ):
+                s["global_pause_until"] = max(
+                    float(s.get("global_pause_until", 0)),
+                    now + self.config.global_cooldown_seconds,
+                )
                 if (
                     now - float(s.get("last_decrease_at", 0))
                     >= self.config.global_cooldown_seconds
@@ -694,4 +805,18 @@ def coordinator_from_environment(provider_config, *, environment=None):
     if not isinstance(loaded, Mapping):
         raise ValueError(f"{LOAD_CONTROL_CONFIG_ENV} must contain a JSON object")
     config = ProviderLoadControlConfig.from_mapping(loaded)
-    return None if config.mode == "off" else SharedProviderCoordinator(root, config)
+    if config.mode == "off":
+        return None
+    if config.mode == "redis_adaptive":
+        url = env.get(LOAD_CONTROL_REDIS_URL_ENV, "").strip()
+        if not url:
+            raise ValueError(
+                f"provider load-control mode 'redis_adaptive' needs {LOAD_CONTROL_REDIS_URL_ENV}"
+            )
+        # Imported here so the file backend never needs the redis package.
+        from .redis_load_control import RedisProviderCoordinator
+
+        # The study's control directory names the Redis key namespace, so each
+        # study job shares capacity only with its own workers.
+        return RedisProviderCoordinator(root, config, url=url)
+    return SharedProviderCoordinator(root, config)

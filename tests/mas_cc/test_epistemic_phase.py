@@ -9,6 +9,7 @@ from mas_cc.analysis.epistemic_phase import (
     PRE_BOUNDARY,
     analyze_epistemic_phase_diagrams,
     build_epistemic_round_states,
+    classify_capture_timing,
     load_symbolic_tasks,
     reconstruct_active_inventories,
 )
@@ -140,6 +141,32 @@ def test_symbolic_metrics_distinguish_collective_access_from_individual_access()
     assert state["evidence_scope"] == "union_of_participant_active_inventories"
 
 
+def test_capture_timing_is_empty_when_no_control_has_no_causal_rows():
+    states = pd.DataFrame(
+        [
+            {
+                "cell_id": "cell",
+                "episode_id": "episode-0",
+                "round_index": 0,
+                "collective_solvable": True,
+            }
+        ]
+    )
+    prepared = pd.DataFrame(
+        columns=["cell_id", "episode_id", "round_index", "x_t"]
+    )
+
+    timing, summary = classify_capture_timing(
+        states,
+        threshold=0.75,
+        consecutive_rounds=3,
+        _prepared_inputs=prepared,
+    )
+
+    assert timing.empty
+    assert summary.empty
+
+
 def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():
     facts = _facts()
     agents = [f"agent_{index:03d}" for index in range(1, len(facts) + 1)]
@@ -177,6 +204,7 @@ def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():
             }
         ]
     )
+    progress = []
     outputs = analyze_epistemic_phase_diagrams(
         pd.DataFrame(rows),
         cells,
@@ -186,7 +214,33 @@ def test_full_epistemic_analysis_emits_timeseries_drift_modulation_and_timing():
         bootstrap_resamples=4,
         confidence=0.9,
         seed=3,
+        progress=progress.append,
     )
+    from mas_cc.analysis.causal_response import build_causal_response_inputs
+    reused = analyze_epistemic_phase_diagrams(
+        pd.DataFrame(rows), cells, task_dataset_dir=TASKS,
+        robustness_draws=2, reference_persistence=1.0,
+        bootstrap_resamples=4, confidence=0.9, seed=3,
+        causal_inputs=build_causal_response_inputs(pd.DataFrame(rows), cells),
+    )
+    for name, frame in outputs.items():
+        pd.testing.assert_frame_equal(frame, reused[name])
+    assert {update["substage"] for update in progress} == {
+        "load_symbolic_tasks",
+        "inventory_reconstruction",
+        "prepare_causal_inputs",
+        "round_states",
+        "parameter_and_occupancy",
+        "joint_drift",
+        "susceptibility_surface",
+        "modulation_regression",
+        "capture_timing",
+    }
+    assert all(update["stage"] == "epistemic_phase" for update in progress)
+    assert all(update["elapsed_seconds"] >= 0 for update in progress)
+    for stage in {update["substage"] for update in progress}:
+        last = [update for update in progress if update["substage"] == stage][-1]
+        assert last["completed_groups"] == last["total_groups"]
     assert set(outputs) == {
         "epistemic_round_timeseries",
         "epistemic_parameter_summary",

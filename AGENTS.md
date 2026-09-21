@@ -112,15 +112,69 @@ calls. Before submitting a real Potsdam job, verify that the resolved `MA-CC`
 Python imports `mas_cc`, `pandas`, and `pyarrow` from the expected
 environment/repository.
 
-Outside Potsdam and NERSC Perlmutter, use the local machine's existing project
-environment and setup instructions. Local agents must not look for, require,
-or reproduce either cluster's absolute paths.
+Potsdam SLURM submission working directories and scientific output roots are
+separate concerns. Results and SLURM logs must remain under `/work`, but the
+generic Potsdam launchers establish
+`/home/ojedamarin/Projects/LanguageGames/MA-CC` as their runtime working
+directory so repository-local provider configuration (including `.env`) is
+resolved consistently. Do not rely on the directory from which `sbatch` was
+called. This rule is Potsdam-specific and must not be copied into local or
+other deployment instructions.
+
+## Cesar cluster
+
+Cesar is the private SLURM-on-Kubernetes cluster reached over Tailscale. It has
+no Conda, no module system, and no root: the environment is a uv virtualenv on
+the shared NFS mount at `~/envs/MA-CC`, and the repository is an rsync copy at
+`/shared/MA-CC` rather than a clone, so the cluster has no git and studies
+submitted there record an empty `git_commit`. Push with `scripts/Cesar/sync.sh`,
+which refuses to run while jobs are active because workers import from the
+synced `src/` at runtime. Compute nodes ship no CA certificates, so
+`SSL_CERT_FILE` must point at a bundle staged on `/shared`; the launchers under
+`scripts/Cesar/SLURM/` handle this and fail loudly if it is missing. Results
+belong under `/shared/MA-CC-results`.
+
+Outside Potsdam, NERSC Perlmutter, and Cesar, use the local machine's existing
+project environment and setup instructions. Local agents must not look for,
+require, or reproduce any cluster's absolute paths.
+
+## Cloud result uploads
+
+For uploading existing result files or directories to the cloud bucket behind
+`results/aggregation_results`, use the `upload-results` skill at
+`.codex/skills/upload-results/SKILL.md`. All agents working in this repository
+must read it before an upload. Transfer only in environments with a confirmed
+existing bucket connection; do not assume every checkout is connected.
+The known local mount is read-only, so the skill uses direct rclone uploads
+and verification. Keep credentials in the environment's existing configuration;
+never print or commit credentials or copy them between environments.
+This routing instruction does not authorize automatic uploads.
 
 ## Experiments
+
+For combining complementary completed studies before aggregation, use
+`mas-cc study merge` and read
+`docs/documentation/metrics/merging_complementary_studies.md`. Merge into a
+new result root, then run the existing aggregator separately. Do not pool
+precomputed estimates or silently count overlapping cells twice.
 
 For MA-CC study creation, submission, SLURM execution, aggregation, or
 post-processing, use the `ma-cc-study-workflow` skill. Read its complete
 instructions at `.codex/skills/ma-cc-study-workflow/SKILL.md` before acting.
+
+That skill routes compute-site and provider-specific operations separately:
+
+- Potsdam execution and the university provider:
+  `.codex/skills/ma-cc-study-workflow/references/potsdam.md`
+- DeepInfra provider operations on any compute site:
+  `.codex/skills/ma-cc-study-workflow/references/deepinfra.md`
+
+DeepInfra is a provider, not a cluster. A DeepInfra study running on Potsdam
+must follow both references. Do not merge credentials, limits, or provider
+coordinator state between providers.
+
+For read-only experiment monitoring and pace summaries, use the
+`report-job-pace` skill at `.codex/skills/report-job-pace/SKILL.md`.
 
 Do not create study-specific SLURM job files unless the scheduler topology
 genuinely cannot be represented by the generic study launchers.

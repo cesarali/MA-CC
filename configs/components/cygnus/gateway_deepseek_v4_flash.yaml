@@ -1,0 +1,18 @@
+# Cygnus: deepseek-v4-flash through the cluster LLM gateway (LiteLLM), OpenAI-compatible.
+# LLM_BASE / LLM_KEY are exported by scripts/Cygnus/SLURM/*.job. Measured
+# 2026-09-18 from inside the cluster; see docs/documentation/cygnus_site.md.
+schema_version: 1
+type: university
+model: deepseek-v4-flash
+credentials_env: LLM_KEY
+base_url_env: LLM_BASE
+timeout_seconds: 120
+max_retries: 2
+# Per process. The gateway key allows 30,000 rpm and no parallel cap; the
+# provider sustained 400 concurrent requests cluster-wide, so size
+# (array throttle x request_concurrency) to about 400 in total.
+request_concurrency: 48
+temperature: 0.0
+max_output_tokens: 4096
+options:
+  estimated_latency_seconds: 1.5

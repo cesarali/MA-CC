@@ -459,7 +459,11 @@ def affinity_compliance(micro_rows: Sequence[Mapping[str, Any]]) -> dict[str, An
     empirical and theoretical calibrations cannot drift apart.
     """
 
-    counts = controlled_transition_counts(micro_rows)
+    return _affinity_from_counts(controlled_transition_counts(micro_rows))
+
+
+def _affinity_from_counts(counts: Mapping[str, int]) -> dict[str, Any]:
+    """Calibrate the same unsmoothed estimator from sufficient counts."""
     result: dict[str, Any] = {
         **counts,
         "p_plus": math.nan,
@@ -636,14 +640,22 @@ from scratch inside each bootstrap replicate."""
 
 
 def point_estimate(
-    rows: Sequence[Any], micro_rows: Sequence[Mapping[str, Any]] = ()
+    rows: Sequence[Any],
+    micro_rows: Sequence[Mapping[str, Any]] = (),
+    *,
+    _micro_counts: Mapping[str, int] | None = None,
+    _micro_count: int | None = None,
 ) -> dict[str, Any]:
     """The complete single-affinity family for one group of rounds."""
 
     response = susceptibility_summary(rows)
     information = eta_ir(rows)
     sensing = target_sensing_information(rows)
-    affinity = affinity_compliance(micro_rows)
+    affinity = (
+        affinity_compliance(micro_rows)
+        if _micro_counts is None
+        else _affinity_from_counts(_micro_counts)
+    )
     current = controlled_current(rows)
     thermodynamics = eta_th_from_components(
         h=affinity["effective_affinity"],
@@ -667,7 +679,7 @@ def point_estimate(
         **thermodynamics,
         "n_rounds": len(controlled_rows(rows)),
         "n_episodes": len({episode_key(row) for row in rows}),
-        "n_micro_slots": len(micro_rows),
+        "n_micro_slots": len(micro_rows) if _micro_count is None else _micro_count,
     }
 
 
@@ -711,12 +723,22 @@ def single_affinity_analysis(
     keys = sorted(grouped_rounds, key=str)
     draws: dict[str, list[float]] = {name: [] for name in _SCALARS}
     if keys and bootstrap_resamples > 0:
+        # The joint episode selection is unchanged. Four integer counts replace
+        # repeatedly copying and scanning all micro-slots in each replicate.
+        micro_counts = {
+            key: controlled_transition_counts(grouped_micro.get(key, ()))
+            for key in keys
+        }
         rng = np.random.default_rng(seed)
         for _ in range(int(bootstrap_resamples)):
             selected = [keys[index] for index in rng.integers(0, len(keys), len(keys))]
             replicate = point_estimate(
                 [row for key in selected for row in grouped_rounds[key]],
-                [row for key in selected for row in grouped_micro.get(key, ())],
+                _micro_counts={
+                    name: sum(micro_counts[key][name] for key in selected)
+                    for name in micro_counts[keys[0]]
+                },
+                _micro_count=sum(len(grouped_micro.get(key, ())) for key in selected),
             )
             for name in _SCALARS:
                 value = float(replicate.get(name, math.nan))

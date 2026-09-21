@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=mas-cc-study
+#SBATCH --output=/shared/home/cesar/LanguageGames/MA-CC/results/slurm-logs/%x-%A_%a.out
+#SBATCH --error=/shared/home/cesar/LanguageGames/MA-CC/results/slurm-logs/%x-%A_%a.err
+# Generic MA-CC config-array launcher for the Cygnus Slurm cluster (Slinky on
+# Kubernetes, see docs/documentation/cygnus_site.md). One array task = one
+# config file = one python process. Select it with:
+#   mas-cc study submit --config-dir <study> --job-script scripts/Cygnus/SLURM/run_config_array.job
+# Create the log directory once: mkdir -p results/slurm-logs
+set -euo pipefail
+if [[ $# -ne 1 ]]; then
+  echo "usage: run_config_array.job SUBMISSION_MANIFEST" >&2
+  exit 2
+fi
+readonly REPOSITORY_ROOT="${MA_CC_REPOSITORY_ROOT:-/shared/home/cesar/LanguageGames/MA-CC}"
+readonly MA_CC_PYTHON="${MA_CC_PYTHON:-/shared/home/cesar/.local/share/mamba/envs/MA-CC/bin/python}"
+cd "$REPOSITORY_ROOT"
+
+# LLM gateway (LiteLLM on the cluster). The batch pool is reserved for the
+# experiment namespaces; the shared pool is llm.llm.svc.cluster.local:4000.
+export LLM_BASE="${LLM_BASE:-http://llm-batch.llm.svc.cluster.local:4000}"
+
+# Gateway key: per-user file first (each Slurm user has their own LiteLLM key so
+# spend is attributed per person), then the shared harness key file.
+for f in "${LLM_KEY_FILE:-$HOME/.llm.key}" /shared/secrets/llm.key; do
+  [[ -z "${LLM_KEY:-}" && -r "$f" ]] && export LLM_KEY="$(tr -d '\n' < "$f")"
+done
+[[ -n "${LLM_KEY:-}" ]] || echo "WARN: no LLM_KEY and no readable key file (tried \$HOME/.llm.key, /shared/secrets/llm.key)" >&2
+
+# DeepInfra-type providers (llm_provider.type: deepinfra) also go through the
+# gateway: DEEPINFRA_BASE_URL is the gateway's OpenAI-compatible root and the
+# key is the gateway key. The adapter lists models from that host too. Set
+# DEEPINFRA_BASE_URL/DEEPINFRA_API_KEY yourself to bypass (not the estate default).
+export DEEPINFRA_BASE_URL="${DEEPINFRA_BASE_URL:-${LLM_BASE}/v1}"
+[[ -n "${DEEPINFRA_API_KEY:-}" ]] || export DEEPINFRA_API_KEY="${LLM_KEY:-}"
+
+# Provider load control (mode redis_adaptive in study.yaml execution.provider_load_control):
+# the cluster runs a Valkey for exactly this, so no in-job redis-server is needed.
+export MAS_CC_PROVIDER_CONTROL_REDIS_URL="${MAS_CC_PROVIDER_CONTROL_REDIS_URL:-redis://provider-control-redis.slurm-cluster.svc.cluster.local:6379/0}"
+
+exec "$MA_CC_PYTHON" -m mas_cc.studies.array_worker "$1"

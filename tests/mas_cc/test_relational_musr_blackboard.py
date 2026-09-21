@@ -24,6 +24,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     RelationalRoundBudgetedControl,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
+    LLM_AUTHORED_REPORT_ONLY_POLICY,
     LLM_COMMUNICATION_POLICY,
     CommunicationChoice,
     CommunicationMode,
@@ -36,6 +37,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
 )
 from mas_cc.llm_runtime.prompts import RegexTokenCounter
 from mas_cc.llm_runtime.providers.adapters.mock import MockLLMProvider
+from mas_cc.llm_runtime.providers import ProviderError
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     run_relational_imitation_round_feedback_game,
 )
@@ -240,6 +242,35 @@ def _llm_controller_provider(config, controller_outputs, captured):
         )
 
     return MockLLMProvider(config.llm_provider, response_factory=factory)
+
+
+class _RecoveryObserver:
+    def __init__(self):
+        self.runtime = None
+
+    def load_failure_checkpoint(self):
+        return self.runtime
+
+    def record_failure_checkpoint(self, *, runtime):
+        self.runtime = runtime
+
+
+class _FailOnceProvider:
+    def __init__(self, delegate, *, fail_at):
+        self.delegate = delegate
+        self.fail_at = fail_at
+        self.calls = 0
+
+    async def complete(self, request):
+        self.calls += 1
+        if self.calls == self.fail_at:
+            raise ProviderError(
+                "temporary upstream failure",
+                provider="test",
+                retryable=True,
+                status_code=503,
+            )
+        return await self.delegate.complete(request)
 
 
 def test_validated_musr_task_and_n12_distribution_load_exactly():
@@ -777,6 +808,101 @@ def test_llm_controller_sees_previous_board_and_uses_canonical_fact_text():
     assert second["controller_llm_total_tokens"] > 0
 
 
+def test_llm_authored_report_only_text_is_posted_with_verified_fact():
+    config = _llm_adaptive_task3_config(rounds=1)
+    config = replace(
+        config,
+        game=replace(
+            config.game,
+            options={
+                **dict(config.game.options),
+                "task_dataset_dir": "/shared/home/cesar/work/results/studies/"
+                "musr_truthful_selective_task_calibration_01/tasks",
+            },
+        ),
+    )
+    control_options = {
+        **dict(config.control.options),
+        "controller_communication_policy": LLM_AUTHORED_REPORT_ONLY_POLICY,
+        "allow_controller_requests": False,
+        "allow_controller_directives": False,
+    }
+    config = replace(config, control=replace(config.control, options=control_options))
+    task = create_game(config.game).load_task(config.game)
+    fact_id = task.controller_reportable_fact_ids[0]
+    authored = "This verified detail is especially relevant to the proposed team."
+    provider = _llm_controller_provider(
+        config,
+        [json.dumps({"mode": "REPORT", "fact_ids": [fact_id], "text": None,
+                     "report_texts": [authored], "reason": "highlight useful evidence"})],
+        [],
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game), config, provider, control=RelationalRoundBudgetedControl.from_options(control_options)
+        )
+    )
+    post = next(m for m in result.final_state.blackboard.messages if m.author_kind == "controller")
+    assert post.message_type == "REPORT"
+    assert post.shared_fact_id == fact_id
+    assert post.text == authored
+    assert result.rounds[0].event["allowed_message_modes"] == ["REPORT"]
+
+
+def test_provider_recovery_replays_saved_llm_controller_choice():
+    config = _llm_adaptive_task3_config(rounds=1)
+    task = create_game(config.game).load_task(config.game)
+    fact_id = task.controller_reportable_fact_ids[0]
+    observer = _RecoveryObserver()
+    first_controller_requests = []
+    delegate = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "REPORT",
+                    "fact_ids": [fact_id],
+                    "text": None,
+                    "reason": "evidence",
+                }
+            )
+        ],
+        first_controller_requests,
+    )
+
+    with pytest.raises(ProviderError):
+        asyncio.run(
+            run_relational_imitation_round_feedback_game(
+                create_game(config.game),
+                config,
+                _FailOnceProvider(delegate, fail_at=2),
+                control=RelationalRoundBudgetedControl.from_options(
+                    config.control.options
+                ),
+                observer=observer,
+            )
+        )
+
+    assert observer.runtime is not None
+    assert len(observer.runtime["controller_choices"]) == 1
+    assert len(first_controller_requests) == 1
+
+    replayed_controller_requests = []
+    resumed = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _llm_controller_provider(config, [], replayed_controller_requests),
+            control=RelationalRoundBudgetedControl.from_options(config.control.options),
+            observer=observer,
+        )
+    )
+
+    assert replayed_controller_requests == []
+    assert resumed.rounds[0].event["chosen_message_mode"] == "REPORT"
+    assert resumed.rounds[0].event["selected_fact_ids"] == [fact_id]
+
+
 def test_llm_controller_is_not_called_for_binary_silence():
     config = _llm_adaptive_task3_config(rounds=1, schedule=SCHEDULE_NEVER)
     control = RelationalRoundBudgetedControl.from_options(config.control.options)
@@ -809,6 +935,38 @@ def test_llm_choice_rejects_ineligible_and_duplicate_report_facts():
             '{"mode":"REPORT","fact_ids":["invented"],"text":null,"reason":"x"}',
             context=context,
             allowed_modes=(CommunicationMode.REPORT,),
+        )
+
+
+def test_authored_report_only_choice_requires_one_grounded_report():
+    context = ControllerCommunicationContext(
+        round_index=2,
+        target="ALLOCATION_2",
+        sampled_opinion_counts={"ALLOCATION_2": 2},
+        live_message_type_counts={},
+        eligible_facts=(ControllerVisibleFact("fact-1", "Verified.", 0, None),),
+        budget=6,
+    )
+    choice = parse_llm_communication_choice(
+        '{"mode":"REPORT","fact_ids":["fact-1"],'
+        '"text":null,"report_texts":["The verified evidence is relevant."],'
+        '"reason":"strategic framing"}',
+        context=context,
+        allowed_modes=(CommunicationMode.REPORT,),
+        policy="llm_authored_report_only_v1",
+    )
+    assert choice.mode == CommunicationMode.REPORT
+    assert choice.fact_ids == ("fact-1",)
+    assert choice.report_texts == ("The verified evidence is relevant.",)
+    assert choice.policy == "llm_authored_report_only_v1"
+
+    with pytest.raises(ValueError, match="1 through budget fact IDs"):
+        parse_llm_communication_choice(
+            '{"mode":"REPORT","fact_ids":[],"text":null,'
+            '"report_texts":[],"reason":"x"}',
+            context=context,
+            allowed_modes=(CommunicationMode.REPORT,),
+            policy="llm_authored_report_only_v1",
         )
     with pytest.raises(ValueError, match="distinct"):
         parse_llm_communication_choice(

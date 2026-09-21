@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Generic MA-CC cell-array launcher for the shared micromamba cluster.
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: run_study_cell_array_micromamba.job EXECUTION_MANIFEST" >&2
+  exit 2
+fi
+
+readonly REPOSITORY_ROOT="${MA_CC_REPOSITORY_ROOT:-/shared/home/cesar/LanguageGames/MA-CC}"
+readonly MA_CC_PYTHON="${MA_CC_PYTHON:-/shared/home/cesar/.local/share/mamba/envs/MA-CC/bin/python}"
+
+cd "$REPOSITORY_ROOT"
+exec "$MA_CC_PYTHON" -m mas_cc.studies.cell_worker "$1"

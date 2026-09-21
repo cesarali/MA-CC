@@ -1,0 +1,91 @@
+schema_version: 1
+report:
+  id: astra_task003_no_control_30x30_potsdam_rho3_report
+  title: Astra Task 003 No-Control Population and Epistemic Dynamics
+  no_control: true
+  source_analysis: ../../../../../results/aggregation_results_local/astra_task003_no_control_30x30_potsdam_rho3_analysis
+  output_dir: ../../../../../results/reports/astra_task003_no_control_30x30_potsdam_rho3
+sections:
+- id: validation
+  title: Validation and completeness
+  kind: validation_summary
+- id: truth_before
+  kind: occupancy_bar_summary
+  title: Mean start-of-round truth share
+  label: Mean start-of-round truth share
+  description: Equal weight per completed round. All 30 rounds are included. Descriptive
+    means; no confidence intervals are shown.
+  source_summary: ../../../../../results/report_inputs/astra_task003_no_control_30x30_potsdam_rho3/truth_before.parquet
+- id: truth_after
+  kind: occupancy_bar_summary
+  title: Mean end-of-round truth share
+  label: Mean end-of-round truth share
+  description: Equal weight per completed round. All 30 rounds are included. Descriptive
+    means; no confidence intervals are shown.
+  source_summary: ../../../../../results/report_inputs/astra_task003_no_control_30x30_potsdam_rho3/truth_after.parquet
+- id: final_truth
+  kind: occupancy_bar_summary
+  title: Mean final truth share
+  label: Mean final truth share
+  description: Equal weight per completed episode. Final share uses the last recorded
+    round of each episode. Descriptive means; no confidence intervals are shown.
+  source_summary: ../../../../../results/report_inputs/astra_task003_no_control_30x30_potsdam_rho3/final_truth.parquet
+- id: collective
+  kind: occupancy_bar_summary
+  title: Collectively solvable rounds
+  label: Collectively solvable rounds
+  description: Equal weight per completed round. All 30 rounds are included. Epistemic
+    quantities are measured after forgetting and before within-round interactions.
+    Descriptive means; no confidence intervals are shown.
+  source_summary: ../../../../../results/report_inputs/astra_task003_no_control_30x30_potsdam_rho3/collective.parquet
+- id: individual
+  kind: occupancy_bar_summary
+  title: Mean individually solvable agent share
+  label: Mean individually solvable agent share
+  description: Equal weight per completed round. All 30 rounds are included. Epistemic
+    quantities are measured after forgetting and before within-round interactions.
+    Descriptive means; no confidence intervals are shown.
+  source_summary: ../../../../../results/report_inputs/astra_task003_no_control_30x30_potsdam_rho3/individual.parquet
+- id: facts
+  kind: occupancy_bar_summary
+  title: Mean active fact coverage
+  label: Mean active fact coverage
+  description: Equal weight per completed round. All 30 rounds are included. Epistemic
+    quantities are measured after forgetting and before within-round interactions.
+    Descriptive means; no confidence intervals are shown.
+  source_summary: ../../../../../results/report_inputs/astra_task003_no_control_30x30_potsdam_rho3/facts.parquet
+- id: episode_examples
+  kind: episode_timeseries
+  source: epistemic_round_timeseries
+  group_by:
+  - epistemic_persistence
+  episodes_per_group: 3
+  description: First three retained episode IDs per persistence, selected independently
+    of outcomes; illustrative, not representative. Vote shares are end-of-round. Epistemic
+    quantities are after forgetting and before within-round interactions.
+  metrics:
+  - value: truth_vote_share
+    label: Truth share (end of round)
+    ylim:
+    - -0.03
+    - 1.03
+  - value: collective_solvable
+    label: Collectively solvable (start)
+    ylim:
+    - -0.03
+    - 1.03
+  - value: symbolic_individual_solvability_share
+    label: Individual solvability (start)
+    ylim:
+    - -0.03
+    - 1.03
+  - value: active_union_fact_fraction
+    label: Active fact coverage (start)
+    ylim:
+    - -0.03
+    - 1.03
+  - value: collective_normalized_entropy
+    label: Collective entropy (start)
+    ylim:
+    - -0.03
+    - 1.03

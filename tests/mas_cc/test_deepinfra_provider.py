@@ -39,6 +39,7 @@ STUDY09H_RELEASE_SMOKE_CONFIG = (
     "configs/runs/relational_reasoning/"
     "population_study_09h_deepinfra_deepseek_one_episode_smoke.yaml"
 )
+GPT_OSS_MODEL = "openai/gpt-oss-120b"
 
 
 class _Response:
@@ -207,27 +208,113 @@ def test_deepinfra_e4b_rejects_an_explicit_unsupported_json_object_mode():
     assert captured.value.retryable is False
 
 
-def test_deepinfra_account_limits_use_the_provider_metadata_endpoint():
+def test_provider_request_concurrency_has_execution_only_override():
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=MODEL, request_concurrency=2),
+        environment={
+            "DEEPINFRA_API_KEY": "deepinfra-test-secret",
+            "MAS_CC_PROVIDER_REQUEST_CONCURRENCY": "27",
+        },
+        session=_Session(),
+    )
+    try:
+        assert provider._concurrency == 27
+        assert provider._transport_executor._max_workers == 27
+    finally:
+        provider.close()
+
+
+@pytest.mark.parametrize("value", ["0", "many"])
+def test_provider_request_concurrency_override_must_be_positive(value):
+    with pytest.raises(ProviderError, match="positive integer"):
+        create_llm_provider(
+            LLMProviderConfig(type="deepinfra", model=MODEL),
+            environment={
+                "DEEPINFRA_API_KEY": "deepinfra-test-secret",
+                "MAS_CC_PROVIDER_REQUEST_CONCURRENCY": value,
+            },
+            session=_Session(),
+        )
+
+
+def test_deepinfra_gpt_oss_defaults_to_low_reasoning_effort():
     session = _Session(
+        gets=[_models(GPT_OSS_MODEL)],
+        posts=[_completion()],
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=GPT_OSS_MODEL),
+        environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        session=session,
+    )
+
+    asyncio.run(provider.complete(_request()))
+    provider.close()
+
+    assert session.post_calls[0][1]["json"]["reasoning_effort"] == "low"
+
+
+def test_deepinfra_gpt_oss_reasoning_effort_can_be_overridden():
+    session = _Session(
+        gets=[_models(GPT_OSS_MODEL)],
+        posts=[_completion()],
+    )
+    provider = create_llm_provider(
+        LLMProviderConfig(
+            type="deepinfra",
+            model=GPT_OSS_MODEL,
+            options={"reasoning_effort": "high"},
+        ),
+        environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        session=session,
+    )
+
+    asyncio.run(provider.complete(_request()))
+    provider.close()
+
+    assert session.post_calls[0][1]["json"]["reasoning_effort"] == "high"
+
+
+def test_deepinfra_rejects_invalid_reasoning_effort():
+    with pytest.raises(ProviderError, match="options.reasoning_effort"):
+        create_llm_provider(
+            LLMProviderConfig(
+                type="deepinfra",
+                model=GPT_OSS_MODEL,
+                options={"reasoning_effort": "maximum"},
+            ),
+            environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        )
+
+
+def test_deepinfra_account_limits_and_non_retryable_payment_error():
+    limit_session = _Session(
         gets=[_Response({"rate_limit": 200, "tpm_rate_limit": 1_500_000})]
     )
     provider = create_llm_provider(
         LLMProviderConfig(type="deepinfra", model=MODEL),
         environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
-        session=session,
+        session=limit_session,
     )
-
     limits = asyncio.run(provider.discover_account_limits())
     provider.close()
-
     assert limits.maximum_concurrent_requests == 200
     assert limits.tokens_per_minute == 1_500_000
-    assert [call[0] for call in session.get_calls] == [
-        "https://api.deepinfra.com/v1/me/rate_limit"
-    ]
-    assert session.get_calls[0][1]["headers"]["Authorization"] == (
-        "Bearer deepinfra-test-secret"
+
+    payment_session = _Session(
+        gets=[_models(MODEL)], posts=[_Response({}, status_code=402)]
     )
+    provider = create_llm_provider(
+        LLMProviderConfig(type="deepinfra", model=MODEL, max_retries=8),
+        environment={"DEEPINFRA_API_KEY": "deepinfra-test-secret"},
+        session=payment_session,
+    )
+    with pytest.raises(ProviderError) as captured:
+        asyncio.run(provider.complete(_request()))
+    provider.close()
+    assert captured.value.code == "payment_required"
+    assert captured.value.retryable is False
+    assert len(payment_session.post_calls) == 1
 
 
 def test_deepinfra_rejects_a_malformed_account_limit_response():

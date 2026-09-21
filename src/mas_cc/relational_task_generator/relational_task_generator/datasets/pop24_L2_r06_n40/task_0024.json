@@ -1,0 +1,268 @@
+{
+  "schema_version": "spatial_relational_task_v1",
+  "task_id": "task_0024",
+  "seed": 11847869236799777711,
+  "generation": {
+    "dataset_seed": 20260818,
+    "task_index": 24,
+    "population_size": 24,
+    "reasoning_depth": 2,
+    "support_redundancy": 6,
+    "distractors": 4,
+    "distractor_redundancy": 1,
+    "num_options": 3,
+    "no_single_agent_solution": true
+  },
+  "world": {
+    "coordinate_convention": "For each fact (subject, relation, object), position(subject)-position(object) equals the unit vector of relation.",
+    "entities": [
+      {
+        "name": "Peni",
+        "coordinates": {
+          "x": 0,
+          "y": 2
+        }
+      },
+      {
+        "name": "Lira",
+        "coordinates": {
+          "x": -1,
+          "y": 1
+        }
+      },
+      {
+        "name": "Kavi",
+        "coordinates": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "name": "Cali",
+        "coordinates": {
+          "x": 997,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Selo",
+        "coordinates": {
+          "x": 998,
+          "y": 1003
+        }
+      },
+      {
+        "name": "Vani",
+        "coordinates": {
+          "x": 998,
+          "y": 1002
+        }
+      },
+      {
+        "name": "Tala",
+        "coordinates": {
+          "x": 999,
+          "y": 1001
+        }
+      },
+      {
+        "name": "Vero",
+        "coordinates": {
+          "x": 1000,
+          "y": 1000
+        }
+      }
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "subject": "Peni",
+        "relation": "NORTHEAST",
+        "object": "Lira",
+        "role": "supporting"
+      },
+      {
+        "id": "f2",
+        "subject": "Lira",
+        "relation": "NORTHWEST",
+        "object": "Kavi",
+        "role": "supporting"
+      },
+      {
+        "id": "f3",
+        "subject": "Cali",
+        "relation": "SOUTHWEST",
+        "object": "Selo",
+        "role": "distractor"
+      },
+      {
+        "id": "f4",
+        "subject": "Selo",
+        "relation": "NORTH",
+        "object": "Vani",
+        "role": "distractor"
+      },
+      {
+        "id": "f5",
+        "subject": "Vani",
+        "relation": "NORTHWEST",
+        "object": "Tala",
+        "role": "distractor"
+      },
+      {
+        "id": "f6",
+        "subject": "Tala",
+        "relation": "NORTHWEST",
+        "object": "Vero",
+        "role": "distractor"
+      }
+    ]
+  },
+  "query": {
+    "subject": "Peni",
+    "reference": "Kavi",
+    "reasoning_depth": 2,
+    "supporting_fact_ids": [
+      "f1",
+      "f2"
+    ]
+  },
+  "answer": {
+    "correct_relation": "NORTH",
+    "options": [
+      {
+        "label": "A",
+        "relation": "EAST"
+      },
+      {
+        "label": "B",
+        "relation": "NORTH"
+      },
+      {
+        "label": "C",
+        "relation": "WEST"
+      }
+    ],
+    "correct_option": "B"
+  },
+  "agents": {
+    "agent_001": {
+      "fact_ids": [
+        "f4"
+      ]
+    },
+    "agent_002": {
+      "fact_ids": []
+    },
+    "agent_003": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_004": {
+      "fact_ids": []
+    },
+    "agent_005": {
+      "fact_ids": [
+        "f6"
+      ]
+    },
+    "agent_006": {
+      "fact_ids": []
+    },
+    "agent_007": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_008": {
+      "fact_ids": []
+    },
+    "agent_009": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_010": {
+      "fact_ids": []
+    },
+    "agent_011": {
+      "fact_ids": [
+        "f3"
+      ]
+    },
+    "agent_012": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_013": {
+      "fact_ids": [
+        "f2",
+        "f5"
+      ]
+    },
+    "agent_014": {
+      "fact_ids": []
+    },
+    "agent_015": {
+      "fact_ids": []
+    },
+    "agent_016": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_017": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_018": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_019": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_020": {
+      "fact_ids": [
+        "f1"
+      ]
+    },
+    "agent_021": {
+      "fact_ids": [
+        "f2"
+      ]
+    },
+    "agent_022": {
+      "fact_ids": []
+    },
+    "agent_023": {
+      "fact_ids": []
+    },
+    "agent_024": {
+      "fact_ids": [
+        "f1"
+      ]
+    }
+  },
+  "rendered": {
+    "question": "Where is Peni relative to Kavi?",
+    "facts": {
+      "f1": "Peni is northeast of Lira.",
+      "f2": "Lira is northwest of Kavi.",
+      "f3": "Cali is southwest of Selo.",
+      "f4": "Selo is north of Vani.",
+      "f5": "Vani is northwest of Tala.",
+      "f6": "Tala is northwest of Vero."
+    },
+    "reasoning_chain": [
+      "Peni is northeast of Lira.",
+      "Lira is northwest of Kavi."
+    ]
+  }
+}

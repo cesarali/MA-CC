@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Generic single-job launcher for provider-backed paired initialization banks.
+#SBATCH --job-name=mas-cc-init
+#SBATCH --output=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/init-%j.out
+#SBATCH --error=/work/ojedamarin/Projects/LanguageGames/MA-CC/logs/init-%j.err
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: run_study_initializations.job CONFIG_DIR OUTPUT_DIR" >&2
+  exit 2
+fi
+
+readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
+readonly REPOSITORY_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
+readonly CONFIG_DIR="$1"
+readonly OUTPUT_DIR="$2"
+readonly MAX_RETRIES="${MAS_CC_INITIALIZATION_RETRY_ATTEMPTS:-0}"
+readonly RETRY_DELAY_SECONDS="${MAS_CC_INITIALIZATION_RETRY_DELAY_SECONDS:-60}"
+
+if [[ ! "$MAX_RETRIES" =~ ^[0-9]+$ ]]; then
+  echo "MAS_CC_INITIALIZATION_RETRY_ATTEMPTS must be a non-negative integer" >&2
+  exit 2
+fi
+if [[ ! "$RETRY_DELAY_SECONDS" =~ ^[0-9]+$ ]] || (( RETRY_DELAY_SECONDS < 1 )); then
+  echo "MAS_CC_INITIALIZATION_RETRY_DELAY_SECONDS must be a positive integer" >&2
+  exit 2
+fi
+
+cd "$REPOSITORY_ROOT"
+
+mkdir -p "$OUTPUT_DIR/logs"
+readonly RETRY_LOG="$OUTPUT_DIR/logs/initialization-retry-${SLURM_JOB_ID:-local}.log"
+attempt=0
+while true; do
+  set +e
+  "$CONDA_EXE" run -n MA-CC --live-stream \
+    mas-cc study initialize --config-dir "$CONFIG_DIR" --output-dir "$OUTPUT_DIR" \
+    2>&1 | tee -a "$RETRY_LOG"
+  status=${PIPESTATUS[0]}
+  set -e
+  if (( status == 0 )); then
+    exit 0
+  fi
+  if ! tail -n 200 "$RETRY_LOG" | grep -Eq 'HTTP 429|rate_limited|HTTP 5[0-9]{2}|connection_error'; then
+    exit "$status"
+  fi
+  if (( attempt >= MAX_RETRIES )); then
+    echo "Initialization retry budget exhausted after ${attempt} retry attempt(s)." >&2
+    exit "$status"
+  fi
+  delay=$(( RETRY_DELAY_SECONDS * (2 ** attempt) ))
+  if (( delay > 600 )); then
+    delay=600
+  fi
+  attempt=$(( attempt + 1 ))
+  echo "Retryable provider failure; preserving completed artifacts and retrying ${attempt}/${MAX_RETRIES} in ${delay}s." >&2
+  sleep "$delay"
+done

@@ -116,6 +116,7 @@ async def materialize_initializations(
             continue
         state = game.initialize(episode_config.game, entry.episode_seed)
         provider = provider_factory(episode_config)
+        recovery = _RecoveryLedger(None)
         try:
             decisions = tuple(
                 await asyncio.gather(
@@ -129,13 +130,7 @@ async def materialize_initializations(
                             RegexTokenCounter(),
                             Seed(entry.episode_seed),
                             None,
-                            # Initialization has no observer and no episode to
-                            # resume, so this ledger is always empty: every
-                            # replay_decision call misses and the normal
-                            # ask/validate path runs. _execute_decision gained
-                            # this required parameter in 2a7d42a without the
-                            # caller here being updated.
-                            _RecoveryLedger(None),
+                            recovery,
                         )
                         for request in game.initial_vote_requests(
                             state, episode_config.game
