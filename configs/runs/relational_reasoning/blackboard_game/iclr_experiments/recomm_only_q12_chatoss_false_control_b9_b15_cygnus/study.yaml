@@ -1,0 +1,21 @@
+# Cygnus extension of recomm_only_q12_chatoss_false_control (Potsdam, 3x3 grid complete):
+# intervention budgets 9 and 15 x rho {0.70, 0.85, 1.00}, 60 repetitions -> 6 cells, 360 episodes.
+# Same science config and provider (DeepInfra direct, openai/gpt-oss-120b, reasoning_effort low, estate key).
+study: {name: recomm_only_q12_chatoss_false_control_b9_b15_cygnus}
+configs: [false_control.yaml]
+execution:
+  mode: auto
+  cells_per_shard: 1
+  target_rpm: 12000
+  assumed_latency_seconds: 6.0
+  max_active_nodes: 6
+  throttle: 6
+  cpus_per_task: 8
+  memory: 12G
+  time_limit: "36:00:00"
+  partition: main
+  results_root: /shared/home/todie/MA-CC/results/studies/recomm_only_q12_chatoss_false_control_b9_b15_cygnus
+  require_results_under: /shared/home/todie/MA-CC/results
+  # DeepInfra guarantees 400 concurrent for this account (measured 14,400 req/min at 400): 6 shards x 60 = 360 in flight.
+  provider_load_control: {mode: redis_adaptive, initial_concurrency: 360, minimum_concurrency: 25, maximum_concurrency: 400, target_rpm: 12000, lease_seconds: 180, heartbeat_seconds: 60, retry_max_elapsed_seconds: 1800, admission_max_elapsed_seconds: 1800, global_min_samples: 12, global_failure_ratio: 0.25, decrease_factor: 0.5, increase_step: 10, increase_interval_seconds: 60}
+analysis: {recipe: analysis.yaml}

@@ -100,7 +100,11 @@ def relational_false_takeover_tables(
                 ),
                 "ground_truth": truth,
                 "controller_target": target,
-                "controller_target_is_truth": bool(allow_truth_target),
+                # This table is the false-takeover endpoint: a truth target is
+                # rejected above, so the flag is always False. It used to read a
+                # variable that only exists in relational_persistence_tables
+                # (NameError on every call).
+                "controller_target_is_truth": target == truth,
                 "initial_false_target_share": trajectory[0][1],
                 "final_false_target_share": trajectory[-1][1],
                 "initial_truth_share": truth_trajectory[0][1],
