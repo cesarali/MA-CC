@@ -1,0 +1,35 @@
+study:
+  name: 21-09-2026-full-vs-report-v1
+configs:
+- no_control.yaml
+- controlled.yaml
+execution:
+  mode: auto
+  cells_per_shard: 1
+  target_rpm: 500
+  assumed_latency_seconds: 15.0
+  max_active_nodes: 25
+  throttle: 25
+  cpus_per_task: 4
+  memory: 12G
+  time_limit: '24:00:00'
+  partition: main
+  results_root: /shared/home/cesar/work/results/studies/21-09-2026-full-vs-report-v1
+  require_results_under: /shared/home/cesar/work/results
+  provider_load_control:
+    mode: redis_adaptive
+    initial_concurrency: 100
+    minimum_concurrency: 20
+    maximum_concurrency: 100
+    target_rpm: 500
+    lease_seconds: 180
+    heartbeat_seconds: 60
+    retry_max_elapsed_seconds: 1800
+    admission_max_elapsed_seconds: 1800
+    global_min_samples: 12
+    global_failure_ratio: 0.25
+    decrease_factor: 0.5
+    increase_step: 2
+    increase_interval_seconds: 60
+analysis:
+  recipe: analysis.yaml
