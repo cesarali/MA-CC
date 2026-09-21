@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -189,8 +190,14 @@ class BlackboardRunReader:
         self.episode_dir = resolve_episode_dir(self.run_dir, episode_id)
         self._cache_signature: tuple[tuple[str, int, int], ...] | None = None
         self._cache: dict[str, Any] | None = None
+        # One reload at a time: ThreadingHTTPServer calls a shared reader from many threads.
+        self._load_lock = threading.RLock()
 
     def _load(self) -> dict[str, Any]:
+        with self._load_lock:
+            return self._load_locked()
+
+    def _load_locked(self) -> dict[str, Any]:
         semantic_path = semantic_stream_path(self.episode_dir)
         semantic_seal = semantic_seal_path(self.episode_dir)
         paths = (
@@ -217,8 +224,10 @@ class BlackboardRunReader:
         run_manifest = _safe_json(self.run_dir / "manifest.json")
         if semantic_path.is_file():
             loaded = self._load_semantic(run_manifest)
-            self._cache_signature = signature
+            # Payload first: a reader comparing signatures must never pair the new
+            # signature with the previous payload.
             self._cache = loaded
+            self._cache_signature = signature
             return loaded
         completed = episode_manifest.get("status") in {"completed", "skipped_resumed"}
         trajectory = [
@@ -274,8 +283,8 @@ class BlackboardRunReader:
                 ),
             },
         }
-        self._cache_signature = signature
         self._cache = loaded
+        self._cache_signature = signature
         return loaded
 
     def _load_semantic(self, run_manifest: dict[str, Any]) -> dict[str, Any]:
@@ -1552,6 +1561,11 @@ class BlackboardRunReader:
             "evidence_events": evidence_events,
             "available_cursors": self.timeline()["available_cursors"],
         }
+
+    def prompt_count(self) -> int:
+        """How many decision audits this episode retained; the range prompt() accepts."""
+
+        return len(self._load()["audits"])
 
     def prompt(self, audit_index: int) -> dict[str, Any]:
         audits = self._load()["audits"]

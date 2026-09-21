@@ -207,18 +207,45 @@ def build_parser() -> argparse.ArgumentParser:
     blackboard_dashboard = blackboard_commands.add_parser(
         "dashboard", help="serve the interactive read-only blackboard dashboard"
     )
-    blackboard_source = blackboard_dashboard.add_mutually_exclusive_group(required=True)
+    blackboard_source = blackboard_dashboard.add_mutually_exclusive_group(required=False)
     blackboard_source.add_argument(
         "--run-dir",
         type=Path,
         help="episode/run directory, or a standardized study root",
     )
     blackboard_source.add_argument(
-        "--study-dir", type=Path, help="standardized study or direct grid result root"
+        "--study-dir",
+        type=str,
+        help="standardized study or direct grid result root, a published bundle directory, "
+        "or a published bundle URL (s3://bucket/prefix, r2://bucket/prefix)",
     )
     blackboard_dashboard.add_argument("--episode-id")
     blackboard_dashboard.add_argument("--host", default="127.0.0.1")
     blackboard_dashboard.add_argument("--port", type=int, default=8765)
+    blackboard_dashboard.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        help="Host header the server answers to (repeatable); required when --host is not loopback",
+    )
+    blackboard_dashboard.add_argument(
+        "--base-path", default="", help="URL prefix when served behind a reverse proxy, e.g. /observatory"
+    )
+    blackboard_dashboard.add_argument(
+        "--access-log", action="store_true", help="one JSON line per request on stderr"
+    )
+    blackboard_dashboard.add_argument(
+        "--catalog",
+        action="append",
+        default=[],
+        help="serve several studies (repeatable): a published prefix holding catalog.json "
+        "(directory, s3:// or r2:// URL) or a directory whose children are live study roots",
+    )
+    blackboard_dashboard.add_argument(
+        "--no-scheduler",
+        action="store_true",
+        help="do not shell out to squeue/sacct for live studies (a host without Slurm client tools)",
+    )
     blackboard_export = blackboard_commands.add_parser(
         "export", help="write a portable completed-run dashboard"
     )
@@ -808,6 +835,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 episode_id=args.episode_id,
                 host=args.host,
                 port=args.port,
+                allowed_hosts=args.allowed_host,
+                base_path=args.base_path,
+                access_log=args.access_log,
+                catalogs=args.catalog,
+                scheduler=not args.no_scheduler,
             )
         except (OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

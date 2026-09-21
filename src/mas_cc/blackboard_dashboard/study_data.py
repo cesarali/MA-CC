@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -14,7 +15,7 @@ from collections import Counter, OrderedDict
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pandas as pd
 import yaml
@@ -29,6 +30,7 @@ from mas_cc.studies.discovery import (
 )
 from mas_cc.studies.execution import read_execution_manifest
 from mas_cc.studies.submission import read_submission_manifest
+from mas_cc.studies.table_io import read_scientific_table, retained_table_path
 from mas_cc.storage.scientific import (
     ScientificIdentity,
     validate_cell_artifact,
@@ -43,6 +45,10 @@ _TERMINAL_FAILED = {"failed"}
 _TERMINAL_ABORTED = {"aborted", "skipped_aborted"}
 _OUTCOME_ORDER = ("completed", "failed", "aborted", "incomplete", "unknown")
 _ACTIVITY_ORDER = ("running", "advancing", "started_unchanged", "not_started")
+# An incomplete episode whose stream was written within this window is "advancing".
+ACTIVITY_WINDOW_SECONDS = 120.0
+# Parsed round-trajectory rows kept in memory, bounded by the size of their source files.
+JSONL_CACHE_LIMIT_BYTES = 256 * 1024 * 1024
 _JOB_ID = re.compile(r"^[0-9]+(?:_[0-9]+)?$")
 
 
@@ -562,6 +568,83 @@ class _SchedulerReader:
         )
 
 
+# Columns worth showing in a table preview: the estimate tables are up to 112 columns wide, and a
+# 20-row head of all of them is unreadable in a browser.
+PREVIEW_COLUMNS = (
+    "metric", "estimator_variant", "target_semantics", "epistemic_persistence", "social_group_size",
+    "intervention_budget", "estimate", "ci_low", "ci_high", "p_value", "n_episodes", "support_status",
+)
+# The coordinates a series is keyed by, when they actually vary in the table.
+SERIES_COLUMNS = ("target_semantics", "epistemic_persistence", "social_group_size", "estimator_variant")
+SERIES_X = "intervention_budget"
+SERIES_POINT_LIMIT = 2000
+
+
+def _number(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _series_label(row: Mapping[str, Any], columns: Sequence[str]) -> str:
+    parts = []
+    for column in columns:
+        value = row.get(column)
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            continue
+        if column == "epistemic_persistence":
+            parts.append(f"rho {_number(value):g}")
+        elif column == "social_group_size":
+            parts.append(f"q {_number(value):g}")
+        else:
+            parts.append(str(value))
+    return " · ".join(parts) or "all cells"
+
+
+def _estimate_series(frame: pd.DataFrame) -> dict[str, Any]:
+    """Plot-ready points: estimate with interval against intervention budget, one line per coordinate.
+
+    Emitted only for rows that have both an x and a finite estimate, so an unsupported cell leaves a
+    gap in the chart instead of a zero. Bounded by SERIES_POINT_LIMIT.
+    """
+
+    if "metric" not in frame.columns or "estimate" not in frame.columns or SERIES_X not in frame.columns:
+        return {"x": SERIES_X, "series_by": [], "metrics": {}}
+    keys = [
+        column for column in SERIES_COLUMNS
+        if column in frame.columns and frame[column].astype(str).nunique(dropna=True) > 1
+    ]
+    metrics: dict[str, list[dict[str, Any]]] = {}
+    emitted = 0
+    for row in frame.to_dict(orient="records"):
+        x, y = _number(row.get(SERIES_X)), _number(row.get("estimate"))
+        if x is None or y is None:
+            continue
+        if emitted >= SERIES_POINT_LIMIT:
+            break
+        point = {"x": x, "y": y, "series": _series_label(row, keys)}
+        low, high = _number(row.get("ci_low")), _number(row.get("ci_high"))
+        if low is not None and high is not None:
+            point["lo"], point["hi"] = low, high
+        if row.get("support_status"):
+            point["support"] = str(row["support_status"])
+        metrics.setdefault(str(row["metric"]), []).append(point)
+        emitted += 1
+    for points in metrics.values():
+        points.sort(key=lambda item: (item["series"], item["x"]))
+    return {"x": SERIES_X, "series_by": keys, "metrics": metrics, "points": emitted,
+            "truncated": emitted >= SERIES_POINT_LIMIT}
+
+
+def _public_reason(error: BaseException) -> str:
+    """A short reason with no server directories in it."""
+
+    text = str(error).replace("'", "").replace('"', "")
+    return text.rsplit("/", 1)[-1].strip() if "/" in text else text.strip()
+
+
 class BlackboardStudyReader:
     """Discover expected cells once and refresh only compact live artifacts."""
 
@@ -612,9 +695,18 @@ class BlackboardStudyReader:
             if self.source_kind == "standardized_study"
             else []
         )
+        self.degraded: list[str] = []
         if targets:
             latest_target_path = targets[-1]
-            latest_target = _safe_json(latest_target_path, required=True)
+            try:
+                latest_target = _safe_json(latest_target_path, required=True)
+            except (OSError, ValueError) as exc:
+                # An extension manifest we cannot read must not cost us the whole study. It is written
+                # mode 0600 while the rest of a study is 0664, so a reader running as another uid - a
+                # hosted dashboard over a read-only mount of someone else's results - loses only the
+                # extension. Recorded rather than swallowed: the study reports itself as degraded.
+                self.degraded.append(f"extension manifest unreadable ({_public_reason(exc)})")
+                latest_target = {}
             if int(latest_target.get("extension_index", 0)) > 0:
                 extension_dir = latest_target_path.parent
                 execution_path = extension_dir / "execution_manifest.csv"
@@ -650,13 +742,14 @@ class BlackboardStudyReader:
             else _SchedulerReader(None)
         )
         self._lock = threading.RLock()
-        self._jsonl_cache: dict[
-            Path, tuple[tuple[str, int, int] | None, list[dict[str, Any]]]
-        ] = {}
+        self._jsonl_cache: OrderedDict[
+            Path, tuple[tuple[str, int, int] | None, list[dict[str, Any]], int]
+        ] = OrderedDict()
+        self._jsonl_cache_bytes = 0
+        self._jsonl_cache_limit_bytes = JSONL_CACHE_LIMIT_BYTES
         self._seal_cache: dict[
             Path, tuple[tuple[Any, ...], bool, str | None, set[str]]
         ] = {}
-        self._last_trajectory_signatures: dict[Path, tuple[str, int, int] | None] = {}
         self._resolved_configs: dict[str, Mapping[str, Any]] = {}
         self._paths: dict[str, ResolvedDashboardCellPaths] = {}
         self._episode_readers: OrderedDict[str, BlackboardRunReader] = OrderedDict()
@@ -677,6 +770,51 @@ class BlackboardStudyReader:
                 }
             )
         self._cell_map = {cell.qualified_id: cell for cell in self._cells}
+        self._collection_signature = self._collection_state()
+
+    _COLLECTION_FIELDS = (
+        "manifest", "submissions", "executions", "submission", "_extension_target",
+        "_cells", "_cell_map", "_paths", "_resolved_configs",
+    )
+
+    def _collection_state(self) -> tuple[Any, ...]:
+        """Cheap fingerprint of what defines the cell list and where the cells live.
+
+        Directory mtimes change when a child is added, so a cell folder or a run root that
+        appears after start-up shows up here without walking the tree.
+        """
+
+        root = self.study_dir
+        watched = [root / name for name in ("study_manifest.json", "submission_manifest.csv",
+                                            "execution_manifest.csv", "submission.json", "cells", "runs", "extensions")]
+        for parent in (root / "runs", root / "extensions"):
+            if parent.is_dir():
+                watched.extend(sorted(child for child in parent.iterdir() if child.is_dir()))
+        watched.extend(sorted(root.glob("runs/*/shards")))
+        state = []
+        for path in watched:
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            state.append((str(path), stat.st_mtime_ns, stat.st_size))
+        return tuple(state)
+
+    def _refresh_collection(self) -> None:
+        """Re-discover cells when the collection changed since the last look. Caller holds the lock."""
+
+        state = self._collection_state()
+        if state == self._collection_signature:
+            return
+        try:
+            fresh = type(self)(self.study_dir, scheduler=False)
+        except (OSError, ValueError):
+            return  # a manifest caught mid-write; keep the last good view and retry next request
+        for name in self._COLLECTION_FIELDS:
+            setattr(self, name, getattr(fresh, name))
+        self._index_cells.clear()
+        self._episode_readers.clear()
+        self._collection_signature = state
 
     def _build_direct_grid_cells(self) -> tuple[CellDescriptor, ...]:
         """Build dashboard cells from a direct grid's prepared cell folders."""
@@ -912,11 +1050,23 @@ class BlackboardStudyReader:
 
     def _rows(self, path: Path, *, completed: bool = False) -> list[dict[str, Any]]:
         signature = _signature(path)
-        cached = self._jsonl_cache.get(path)
-        if cached is not None and cached[0] == signature:
-            return cached[1]
+        with self._lock:
+            cached = self._jsonl_cache.get(path)
+            if cached is not None and cached[0] == signature:
+                self._jsonl_cache.move_to_end(path)
+                return cached[1]
         rows = [_event(row) for row in _jsonl(path, completed=completed)]
-        self._jsonl_cache[path] = (signature, rows)
+        size = int(signature[2]) if signature else 0
+        with self._lock:
+            previous = self._jsonl_cache.pop(path, None)
+            if previous is not None:
+                self._jsonl_cache_bytes -= previous[2]
+            self._jsonl_cache[path] = (signature, rows, size)
+            self._jsonl_cache_bytes += size
+            # Least recently used first; the entry just added always stays.
+            while self._jsonl_cache_bytes > self._jsonl_cache_limit_bytes and len(self._jsonl_cache) > 1:
+                _, evicted = self._jsonl_cache.popitem(last=False)
+                self._jsonl_cache_bytes -= evicted[2]
         return rows
 
     def _seal(self, cell: CellDescriptor) -> tuple[bool, str | None, set[str]]:
@@ -1065,14 +1215,14 @@ class BlackboardStudyReader:
             activity_status = "not_started"
             activity_path = semantic_path if semantic_exists else round_path
             if activity_path is not None and activity_path.is_file():
-                current = _signature(activity_path)
-                previous = self._last_trajectory_signatures.get(activity_path)
+                # A function of the file's age, not of reader state: every caller, the
+                # first included, gets the same answer, and nothing is mutated here.
+                age = time.time() - activity_path.stat().st_mtime
                 activity_status = (
                     "advancing"
-                    if previous is not None and current != previous
+                    if durable_status != "completed" and age <= ACTIVITY_WINDOW_SECONDS
                     else "started_unchanged"
                 )
-                self._last_trajectory_signatures[activity_path] = current
             rows = (
                 self._rows(round_path, completed=durable_status == "completed")
                 if include_votes and trajectory_exists
@@ -1483,6 +1633,7 @@ class BlackboardStudyReader:
 
     def study(self) -> dict[str, Any]:
         with self._lock:
+            self._refresh_collection()
             scheduler = self._scheduler.snapshot()
             cells = []
             for cell in self._cells:
@@ -1547,6 +1698,7 @@ class BlackboardStudyReader:
                 "refreshed_at": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
+                "degraded": list(self.degraded),
                 "cells": cells,
             }
 
@@ -1555,6 +1707,7 @@ class BlackboardStudyReader:
 
     def cell(self, qualified_id: str) -> dict[str, Any]:
         with self._lock:
+            self._refresh_collection()
             cell = self._cell_map.get(qualified_id)
             if cell is None:
                 raise ValueError("unknown qualified cell identifier")
@@ -1653,7 +1806,7 @@ class BlackboardStudyReader:
                 "available": False,
                 "status": "missing",
                 "reason": "Analysis has not been aggregated for this study.",
-                "command": f"mas-cc study aggregate --study-dir {self.study_dir}",
+                "command": f"mas-cc study aggregate --study-dir {self.study_dir.name}",
                 "artifacts": [],
             }
         try:
@@ -1665,7 +1818,7 @@ class BlackboardStudyReader:
                 "available": False,
                 "status": "invalid",
                 "reason": str(exc),
-                "command": f"mas-cc study aggregate --study-dir {self.study_dir}",
+                "command": f"mas-cc study aggregate --study-dir {self.study_dir.name}",
                 "artifacts": [],
             }
         allowed = []
@@ -1693,22 +1846,30 @@ class BlackboardStudyReader:
                 )
         valid = bool(validation.get("valid", validation.get("complete", False)))
         table_previews: dict[str, Any] = {}
-        for name in (
-            "primary_estimates.csv",
-            "information_estimates.csv",
-            "support_diagnostics.csv",
-            "derived_observables.csv",
+        estimate_series: dict[str, Any] = {}
+        for stem in (
+            "primary_estimates",
+            "information_estimates",
+            "support_diagnostics",
+            "derived_observables",
         ):
-            path = root / "tables" / name
-            if not path.is_file():
+            # The finalizer writes Parquet (table_io.CANONICAL_TABLE_FORMAT); this looked for .csv
+            # only, so the preview was silently empty for every study since the format changed.
+            path = retained_table_path(root / "tables", stem)
+            if path is None:
                 continue
-            frame = pd.read_csv(path, nrows=20).astype(object)
-            frame = frame.where(pd.notna(frame), None)
-            table_previews[name] = {
-                "columns": list(frame.columns),
-                "rows": frame.to_dict(orient="records"),
+            frame = read_scientific_table(path)
+            chosen = [column for column in PREVIEW_COLUMNS if column in frame.columns]
+            preview = (frame[chosen] if chosen else frame).head(20).astype(object)
+            table_previews[path.name] = {
+                "columns": list(preview.columns),
+                "rows": preview.where(pd.notna(preview), None).to_dict(orient="records"),
                 "preview_limit": 20,
+                "total_rows": int(len(frame)),
             }
+            series = _estimate_series(frame)
+            if series["metrics"]:
+                estimate_series[path.name] = series
         reports = {}
         for name in ("summary.md", "methods.md"):
             path = root / "reports" / name
@@ -1725,6 +1886,7 @@ class BlackboardStudyReader:
             "manifest": manifest,
             "artifacts": allowed if valid else [],
             "table_previews": table_previews if valid else {},
+            "estimate_series": estimate_series if valid else {},
             "reports": reports if valid else {},
         }
 

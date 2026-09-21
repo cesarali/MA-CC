@@ -740,7 +740,10 @@ def test_study_opens_running_semantic_episode_read_only(tmp_path: Path):
     reader = BlackboardStudyReader(root, scheduler=False)
     status = reader.episode_status("config-0000~cell-0000~episode-0000")
     assert status["detail_available"] is True
-    assert status["activity_status"] == "started_unchanged"
+    # The stream was written a moment ago and the episode is not complete: liveness is a
+    # function of the file's age (study_data.ACTIVITY_WINDOW_SECONDS), so the first
+    # observation already reports it. It used to need two observations by the same reader.
+    assert status["activity_status"] == "advancing"
     first_reader = reader.episode_reader("config-0000~cell-0000~episode-0000")
     assert first_reader is reader.episode_reader("config-0000~cell-0000~episode-0000")
     assert (

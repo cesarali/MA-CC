@@ -1,8 +1,9 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
+  const state = { promptCache: new Map(), autoRefreshTimer: null, studyKey: null, lastPlace: undefined, restoring: false, timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
+  const classToken = value => String(value).replace(/[^A-Za-z0-9_-]/g, '');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const json = value => JSON.stringify(value ?? null, null, 2);
   const kv = (name, value) => `<div class="kv"><span>${esc(name)}</span><span>${esc(Array.isArray(value) ? value.join(', ') : value)}</span></div>`;
@@ -25,8 +26,10 @@
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
   );
 
+  // With a catalog the server addresses a study as s/<key>/api/...; the catalog itself is unscoped.
+  const api = path => (state.studyKey && path !== 'api/catalog' ? `s/${encodeURIComponent(state.studyKey)}/` : '') + path;
   async function get(path, options = {}) {
-    const response = await fetch(path, {cache: 'no-store', ...options});
+    const response = await fetch(api(path), {cache: 'no-store', ...options});
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || response.statusText);
     return payload;
@@ -92,7 +95,20 @@
   function renderStudy() {
     showShell('study'); renderBreadcrumbs();
     const study = state.study;
-    document.querySelector('h1').textContent = study.study_id;
+    // Parts of a study the reader could not open. The counts below are computed from what it COULD
+    // read, so saying nothing would present a quietly incomplete study as a whole one.
+    const degraded = study.degraded || [];
+    const notice = $('study-degraded');
+    notice.hidden = !degraded.length;
+    notice.innerHTML = degraded.length
+      ? `<p class="degraded-notice"><b>Partial study.</b> ${degraded.map(esc).join(' · ')}. Expected counts are derived from the parts that could be read.</p>`
+      : '';
+    // Study ids are long and made of underscores, which offer no line-break opportunity: the title
+    // was clipped at the window edge. Allow a break after each underscore and set ids smaller than the
+    // product name.
+    const heading = document.querySelector('h1');
+    heading.classList.add('study-title');
+    heading.innerHTML = esc(study.study_id).replace(/_/g, '_<wbr>');
     const totals = study.episode_outcomes, activity = study.episode_activity;
     $('status-text').textContent = `${totals.completed} durable episodes complete · ${activity.running + activity.advancing} running · ${study.active_scheduler_tasks} SLURM cell tasks active`;
     document.querySelector('.status').className = `status ${study.live ? 'running' : 'completed'}`;
@@ -102,7 +118,7 @@
       ['Not started', activity.not_started], ['Running', activity.running + activity.advancing], ['Durable complete', totals.completed], ['Failed', totals.failed + totals.aborted],
       ['Unknown', totals.unknown], ['SLURM active', study.scheduler.available ? study.active_scheduler_tasks : 'Unavailable']
     ];
-    $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('study-cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
     filterOptions('filter-block', study.cells.map(cell => cell.parameters.experiment_block));
     filterOptions('filter-controller', study.cells.map(controlConditionLabel));
     filterOptions('filter-rho', study.cells.map(cell => cell.parameters.rho).sort((a,b) => Number(a)-Number(b)));
@@ -140,7 +156,7 @@
     state.promptsLoading = true;
     container.innerHTML = '<span class="unavailable">Loading retained prompt examples…</span>';
     try {
-      const payload = await get(`/api/study/cell/${encodeURIComponent(requestedCell)}/prompts`);
+      const payload = await get(`api/study/cell/${encodeURIComponent(requestedCell)}/prompts`);
       if (state.cellId !== requestedCell) return;
       container.dataset.cell = requestedCell;
       container.dataset.loaded = '1';
@@ -155,9 +171,11 @@
     }
   }
 
+  const FILTER_PARAMS = [['block','filter-block'],['controller','filter-controller'],['rho','filter-rho'],['status','filter-status'],['sort','cell-sort']];
   function updateHash() {
     if (!state.study) return;
     const params = new URLSearchParams();
+    if (state.studyKey) params.set('study', state.studyKey);
     if (state.cellId) params.set('cell', state.cellId);
     if (state.episodeId) params.set('episode', state.episodeId);
     if (state.cellTab) params.set('cellTab', state.cellTab);
@@ -166,14 +184,19 @@
     const activeTab = document.querySelector('#tabs button.active')?.dataset.view;
     if (state.episodeId && activeTab) params.set('episodeTab', activeTab);
     if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); if (state.selectedAgent) params.set('agent', state.selectedAgent); params.set('blackboard', state.blackboardAuthorFilter); params.set('controllerRound', state.selectedControllerRound ?? ''); params.set('follow', $('follow').checked ? '1' : '0'); }
-    if ($('filter-rho').value) params.set('rho', $('filter-rho').value);
-    history.replaceState({}, '', `#${params}`);
+    for (const [name, id] of FILTER_PARAMS) { if ($(id).value) params.set(name, $(id).value); }
+    // Where the user IS (study / cell / episode) makes a history entry so Back works; how they are
+    // looking at it (filters, tab, round) only rewrites the current entry.
+    const place = [state.studyKey, state.cellId, state.episodeId].map(value => value || '').join('|');
+    const moved = state.lastPlace !== undefined && place !== state.lastPlace && !state.restoring;
+    state.lastPlace = place;
+    history[moved ? 'pushState' : 'replaceState']({}, '', `#${params}`);
   }
 
   function renderCell(cell) {
     showShell('cell'); renderBreadcrumbs(cell);
     const c = cell.outcome_counts, a = cell.activity_counts;
-    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Running', a.running + a.advancing], ['Inactive stream', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('cell-cards').innerHTML = [['Durable complete', c.completed], ['Failed / aborted', c.failed + c.aborted], ['Incomplete / unknown', c.incomplete + c.unknown], ['Running', a.running + a.advancing], ['Inactive stream', a.started_unchanged], ['Not started', a.not_started]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
     const primary = [['Control condition', controlConditionLabel(cell)], ['Controller target', controllerTargetLabel(cell)], ['ρ', cell.parameters.rho], ['b', cell.parameters.b], ['Task', cell.parameters.task_id], ['Population', cell.parameters.population_size], ['Rounds', cell.parameters['game.options.rounds']], ['Truth', cell.parameters.ground_truth]];
     $('primary-parameters').innerHTML = primary.filter(([,value]) => value != null).map(([name,value]) => kv(name, value)).join('');
     $('cell-parameters').innerHTML = Object.entries(cell.parameters).sort(([a],[b]) => a.localeCompare(b)).map(([name,value]) => kv(name, unavailable(typeof value === 'object' ? json(value) : value))).join('');
@@ -185,7 +208,7 @@
     }
     const stats = cell.statistics || {}, winners = stats.winner_counts || {}, truth = stats.final_truth_share || {}, target = stats.final_controller_target_share || {};
     const funnel = stats.controller_funnel || {};
-    $('cell-statistics-content').innerHTML = `<div class="cards">${[['Completed', stats.completed_episodes], ['Truth wins', `${stats.truth_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Target wins', `${stats.controller_target_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Ties', winners.tie ?? 0], ['Other wins', winners.other ?? 0]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}</div><h3>Controller funnel across repetitions</h3><div class="funnel">${[['Opportunities', funnel.controller_opportunities], ['ADVOCATE', funnel.controller_advocate_rounds], ['Posts admitted', funnel.controller_posts], ['Exposures', funnel.controller_message_exposures], ['Unique readers', funnel.controller_unique_readers], ['Fact changes', (funnel.controller_report_fact_acquisitions ?? 0) + (funnel.controller_report_fact_reactivations ?? 0)], ['Target adoptions', funnel.controller_report_target_adoptions]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 0)}</strong></div>`).join('')}</div><p class="meta">Blackboard posts use ordinary sampling. Report mode adds true canonical evidence without hidden priority.</p><div class="grid two"><div><h3>Final truth share (n=${truth.n ?? 0})</h3>${kv('Mean', truth.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', truth.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', truth.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', truth.q1 == null ? 'Unavailable' : `${truth.q1.toFixed(3)}–${truth.q3.toFixed(3)}`)}</div><div><h3>Final controller-target share (n=${target.n ?? 0})</h3>${kv('Mean', target.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', target.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', target.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', target.q1 == null ? 'Unavailable' : `${target.q1.toFixed(3)}–${target.q3.toFixed(3)}`)}</div></div>`;
+    $('cell-statistics-content').innerHTML = `<div class="cards">${[['Completed', stats.completed_episodes], ['Truth wins', `${stats.truth_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Target wins', `${stats.controller_target_wins ?? 0}/${stats.completed_episodes ?? 0}`], ['Ties', winners.tie ?? 0], ['Other wins', winners.other ?? 0]].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('')}</div><h3>Controller funnel across repetitions</h3><div class="funnel">${[['Opportunities', funnel.controller_opportunities], ['ADVOCATE', funnel.controller_advocate_rounds], ['Posts admitted', funnel.controller_posts], ['Exposures', funnel.controller_message_exposures], ['Unique readers', funnel.controller_unique_readers], ['Fact changes', (funnel.controller_report_fact_acquisitions ?? 0) + (funnel.controller_report_fact_reactivations ?? 0)], ['Target adoptions', funnel.controller_report_target_adoptions]].map(([name,value]) => `<div><span>${esc(name)}</span><strong>${esc(value ?? 0)}</strong></div>`).join('')}</div><p class="meta">Blackboard posts use ordinary sampling. Report mode adds true canonical evidence without hidden priority.</p><div class="grid two"><div><h3>Final truth share (n=${truth.n ?? 0})</h3>${kv('Mean', truth.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', truth.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', truth.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', truth.q1 == null ? 'Unavailable' : `${truth.q1.toFixed(3)}–${truth.q3.toFixed(3)}`)}</div><div><h3>Final controller-target share (n=${target.n ?? 0})</h3>${kv('Mean', target.mean?.toFixed(3) ?? 'Unavailable')}${kv('Median', target.median?.toFixed(3) ?? 'Unavailable')}${kv('Std', target.std?.toFixed(3) ?? 'Unavailable')}${kv('IQR', target.q1 == null ? 'Unavailable' : `${target.q1.toFixed(3)}–${target.q3.toFixed(3)}`)}</div></div>`;
     $('mean-label').textContent = `Descriptive live mean · ${cell.descriptive_mean.label}. Missing rounds are not interpolated.`;
     $('episode-table').innerHTML = `<thead><tr><th>Repetition</th><th>Episode</th><th>Seed</th><th>Durable outcome</th><th>Live activity</th><th>Progress</th><th>Controller funnel</th><th>Last update / elapsed</th><th></th></tr></thead><tbody>${cell.episodes.map(episode => { const s = episode.statistics || {}; return `<tr><td>${episode.repetition_index}</td><td>${esc(episode.episode_id)}</td><td>${esc(unavailable(episode.seed))}</td><td>${statusBadge(episode.durable_status)}${episode.status_reason ? `<br><span class="meta">${esc(episode.status_reason)}</span>` : ''}</td><td>${statusBadge(episode.activity_status)}</td><td>${episode.current_round == null ? 'Unavailable' : `round ${episode.current_round + 1}`}${episode.current_update == null ? '' : ` / update ${episode.current_update + 1}`}</td><td>${s.controller_opportunities == null ? '<span class="unavailable">Unavailable</span>' : `${s.controller_opportunities} → ${s.controller_advocate_rounds} → ${s.controller_posts} → ${s.controller_message_exposures}<br><span class="meta">opportunity → ADVOCATE → post → exposure</span>`}</td><td>${episode.last_update_at ? esc(new Date(episode.last_update_at).toLocaleTimeString()) : episode.elapsed_seconds == null ? 'Unavailable' : `${episode.elapsed_seconds.toFixed(1)} s`}</td><td>${episode.detail_available ? `<button class="open-episode" data-episode="${esc(episode.qualified_id)}">Inspect episode</button>` : `<span class="unavailable" title="${esc(episode.detail_reason)}">${esc(episode.detail_reason)}</span>`}</td></tr>`; }).join('')}</tbody>`;
     const availableTrajectories = new Set(availableTrajectoryIds(cell));
@@ -215,7 +238,7 @@
       if (!polling) state.navigationVersion += 1;
       const navigationVersion = state.navigationVersion;
       state.cellId = id;
-      const payload = await get(`/api/study/cell/${encodeURIComponent(id)}`);
+      const payload = await get(`api/study/cell/${encodeURIComponent(id)}`);
       if (state.navigationVersion !== navigationVersion || (polling && (state.mode !== 'cell' || state.cellId !== id))) return;
       const fingerprint = JSON.stringify(payload);
       state.cell = payload;
@@ -225,6 +248,52 @@
       renderCell(state.cell); $('all-parameters').open = disclosureOpen;
       updateHash();
     } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
+  }
+
+
+  // --- Decision audits ------------------------------------------------------------------
+  // One row per retained decision attempt; each record is fetched only when its row is opened,
+  // because an episode can hold hundreds and they are never needed all at once.
+  function renderPromptList(episodeId, count) {
+    const host = $('prompt-list');
+    if (!host) return;
+    state.promptCache = new Map();
+    if (!count) {
+      host.innerHTML = '<p class="unavailable">This episode retained no decision audits.</p>';
+      return;
+    }
+    host.innerHTML = Array.from({length: count}, (_, index) =>
+      `<details class="prompt-entry" data-prompt="${index}"><summary>Attempt ${index + 1}</summary><div class="prompt-body">Loading…</div></details>`).join('');
+    host.querySelectorAll('details[data-prompt]').forEach(entry => entry.addEventListener('toggle', async () => {
+      if (!entry.open || entry.dataset.loaded) return;
+      const index = Number(entry.dataset.prompt);
+      const body = entry.querySelector('.prompt-body');
+      try {
+        const payload = state.promptCache.get(index)
+          || await get(`api/study/episode/${encodeURIComponent(episodeId)}/prompt-${index}`);
+        if (state.episodeId !== episodeId) return;
+        state.promptCache.set(index, payload);
+        entry.dataset.loaded = '1';
+        body.innerHTML = renderAudit(payload.audit || {});
+        const summary = entry.querySelector('summary');
+        const audit = payload.audit || {};
+        summary.innerHTML = `Attempt ${index + 1}${audit.agent_id ? ` · ${esc(audit.agent_id)}` : ''}${audit.decision_stage ? ` · ${esc(audit.decision_stage)}` : ''}${audit.valid === false ? ' · <b>invalid</b>' : ''}`;
+      } catch (error) { body.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
+    }));
+  }
+
+  function renderAudit(audit) {
+    const scalars = Object.entries(audit).filter(([, value]) => value == null || typeof value !== 'object');
+    const issues = Array.isArray(audit.validation_issues) ? audit.validation_issues : [];
+    // A lean retention profile keeps the audit record but not the compiled prompt; say so rather
+    // than rendering an empty panel.
+    const messages = audit.compiled_messages || audit.messages;
+    const prompt = Array.isArray(messages) && messages.length
+      ? messages.map(message => `<div class="prompt-message"><div class="prompt-role">${esc(message.role || 'message')}</div><pre>${esc(message.content ?? '')}</pre></div>`).join('')
+      : `<p class="unavailable">${audit.semantic_only ? 'Lean retention profile: the compiled prompt text was not retained for this run.' : 'No compiled prompt on this audit record.'}</p>`;
+    return `${scalars.map(([name, value]) => kv(name, value)).join('')}
+      ${issues.length ? `<h3>Validation issues</h3><ul>${issues.map(issue => `<li>${esc(typeof issue === 'string' ? issue : json(issue))}</li>`).join('')}</ul>` : ''}
+      <h3>Prompt</h3>${prompt}`;
   }
 
   async function openEpisode(id) {
@@ -237,11 +306,12 @@
     updateHash();
     $('status-text').textContent = 'Loading episode detail…';
     try {
-      const detail = await get(`/api/study/episode/${encodeURIComponent(id)}/detail`);
+      const detail = await get(`api/study/episode/${encodeURIComponent(id)}/detail`);
       if (state.episodeId !== id || state.navigationVersion !== navigationVersion || state.mode !== 'episode') return;
       state.episodeCache.set(id, detail);
       while (state.episodeCache.size > 8) state.episodeCache.delete(state.episodeCache.keys().next().value);
       populateTimeline(detail.timeline);
+      renderPromptList(id, Number(detail.prompt_attempts) || 0);
       if (detail.snapshot.cursor) {
         $('round').value = detail.snapshot.cursor.round_index;
         updateStepRange();
@@ -338,7 +408,7 @@
       ['Refreshes', p.refreshes],
       ['Prompt attempts', snapshot.run.prompt_attempts]
     ];
-    $('cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('cards').innerHTML = cards.map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
   }
 
   function renderOverview(snapshot) {
@@ -391,10 +461,10 @@
         ['Rounds observed', s.rounds_observed], ['ADVOCATE_Z', `${s.advocate_count} (${(100*s.advocate_fraction).toFixed(1)}%)`], ['NO_OP', `${s.no_op_count} (${(100*s.no_op_fraction).toFixed(1)}%)`],
         ['Reports / requests / directives', `${s.reports} / ${s.requests} / ${s.directives}`], ['Total posts', s.total_posts], ['Requested b / realized', `${unavailable(s.requested_posts)} / ${unavailable(s.realized_posts)}`],
         ['LLM fallback', s.llm_fallback_count], ['Recorded / direct exposures', `${s.recorded_exposure_events} / ${s.direct_exposure_events}`]
-      ].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('');
+      ].map(([name,value]) => `<div class="card"><span>${esc(name)}</span><strong${/^[\d.,/ %-]+$/.test(String(value)) ? '' : ' class="text"'}>${esc(value)}</strong></div>`).join('');
       const selected = state.selectedControllerRound ?? timeline.rounds[0]?.round_index;
       state.selectedControllerRound = selected;
-      $('controller-events').innerHTML = timeline.rounds.map(row => `<button class="controller-event ${(row.message_types[0] || 'NO_OP')} ${Number(row.round_index) === Number(selected) ? 'selected' : ''}" data-controller-round="${row.round_index}" title="${esc(row.action || 'Unavailable')}">R${Number(row.round_index)+1}<small>${esc(row.message_types.join('/') || row.action || 'Unavailable')}</small></button>`).join('');
+      $('controller-events').innerHTML = timeline.rounds.map(row => `<button class="controller-event ${classToken(row.message_types[0] || 'NO_OP')} ${Number(row.round_index) === Number(selected) ? 'selected' : ''}" data-controller-round="${row.round_index}" title="${esc(row.action || 'Unavailable')}">R${Number(row.round_index)+1}<small>${esc(row.message_types.join('/') || row.action || 'Unavailable')}</small></button>`).join('');
       const max = Math.max(1, ...timeline.rounds.flatMap(row => [row.realized_posts || 0, row.exposed_agents || 0, row.next_votes_moved_to_target || 0]));
       $('controller-round-bars').innerHTML = timeline.rounds.map(row => `<div class="controller-bar-row"><b>R${Number(row.round_index)+1}</b>${[['posts',row.realized_posts],['exposed agents',row.exposed_agents],['moved to target',row.next_votes_moved_to_target]].map(([label,value]) => `<span>${esc(label)}</span><div class="metric-bar"><i class="${label === 'moved to target' ? 'descriptive' : ''}" style="width:${value == null ? 0 : 100*value/max}%"></i></div><strong>${esc(unavailable(value))}</strong>`).join('')}</div>`).join('');
       const selectedRow = timeline.rounds.find(row => Number(row.round_index) === Number(selected));
@@ -455,7 +525,7 @@
         render({...base, agent: state.staticBundle.agents[key][selectedAgent]});
         return;
       }
-      const prefix = state.study && state.episodeId ? `/api/study/episode/${encodeURIComponent(state.episodeId)}` : '/api';
+      const prefix = state.study && state.episodeId ? `api/study/episode/${encodeURIComponent(state.episodeId)}` : 'api';
       let timeline = state.timeline;
       if (refreshTimeline || !timeline) {
         timeline = await get(`${prefix}/timeline`, {signal: controller.signal});
@@ -513,11 +583,69 @@
     $('step-value').value = $('step').value; refresh(false, false);
   });
 
+  function renderStudyPicker(studies) {
+    const picker = $('study-picker');
+    picker.innerHTML = studies.map(item => `<option value="${esc(item.key)}">${esc(item.study_id)}${item.source === 'live' ? ' (live)' : ''}</option>`).join('');
+    picker.value = state.studyKey;
+    $('study-picker-wrap').hidden = false;
+    picker.onchange = () => {
+      state.studyKey = picker.value; state.navigationVersion += 1;
+      state.study = null; state.cell = null; state.cellId = null; state.episodeId = null;
+      state.selectedTrajectories = new Set();
+      history.replaceState({}, '', `#study=${encodeURIComponent(state.studyKey)}`);
+      showShell('study'); startStudy();
+    };
+  }
+
+  window.addEventListener('popstate', async () => {
+    if (state.staticMode) return;
+    const wanted = new URLSearchParams(location.hash.slice(1));
+    state.restoring = true;
+    try {
+      if (wanted.get('study') && wanted.get('study') !== state.studyKey && $('study-picker').options.length) {
+        state.studyKey = wanted.get('study'); $('study-picker').value = state.studyKey; state.study = null;
+      }
+      state.navigationVersion += 1; state.cell = null; state.cellId = null; state.episodeId = null;
+      showShell('study');
+      await startStudy(state.study);
+    } finally { state.restoring = false; state.lastPlace = [state.studyKey, state.cellId, state.episodeId].map(value => value || '').join('|'); }
+  });
+
+  // Opt-in auto-refresh. Off by default and never persisted: a self-rescheduling timeout that exists
+  // only while the box is ticked, waits for the previous refresh to finish, and pauses in a hidden tab.
+  function scheduleAutoRefresh() {
+    clearTimeout(state.autoRefreshTimer);
+    if (!$('auto-refresh').checked || state.staticMode) return;
+    state.autoRefreshTimer = setTimeout(async () => {
+      try { if (!document.hidden) await refreshCurrentView(); } finally { scheduleAutoRefresh(); }
+    }, Number($('auto-refresh-seconds').value) * 1000);
+  }
+  $('auto-refresh').addEventListener('change', scheduleAutoRefresh);
+  $('auto-refresh-seconds').addEventListener('change', scheduleAutoRefresh);
+
+  async function boot() {
+    let studies = [];
+    try { studies = (await get('api/catalog')).studies || []; } catch (error) { studies = []; }
+    if (studies.length) {
+      const wanted = new URLSearchParams(location.hash.slice(1)).get('study');
+      state.studyKey = studies.some(item => item.key === wanted) ? wanted : studies[0].key;
+      renderStudyPicker(studies);
+      startStudy();
+      return;
+    }
+    get('api/study').then(payload => startStudy(payload)).catch(() => refresh(true));
+  }
+
   async function startStudy(initialStudy = null) {
     try {
-      state.study = initialStudy || await get('/api/study'); state.mode = 'study'; renderStudy();
+      state.study = initialStudy || await get('api/study'); state.mode = 'study'; renderStudy();
       const restored = new URLSearchParams(location.hash.slice(1));
-      if (restored.get('rho')) { $('filter-rho').value = restored.get('rho'); renderCellTable(); }
+      let filtered = false;
+      for (const [name, id] of FILTER_PARAMS) {
+        const wanted = restored.get(name);
+        if (wanted !== null && [...$(id).options].some(option => option.value === wanted)) { $(id).value = wanted; filtered = true; }
+      }
+      if (filtered) renderCellTable();
       if (restored.get('cellTab')) state.cellTab = restored.get('cellTab');
       if (restored.get('trajectories')) state.selectedTrajectories = new Set(restored.get('trajectories').split(','));
       if (restored.get('cell')) await openCell(restored.get('cell'));
@@ -552,7 +680,7 @@
       if (mode === 'episode' && state.episodeId) await refresh($('follow').checked);
       else if (mode === 'cell' && state.cellId) await openCell(state.cellId, true);
       else if (mode === 'study') {
-        const payload = await get('/api/study');
+        const payload = await get('api/study');
         if (state.mode === 'study' && state.navigationVersion === navigationVersion) {
           state.study = payload; renderStudy();
         }
@@ -562,19 +690,94 @@
   }
   ['filter-block','filter-controller','filter-target','filter-rho','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', () => { renderCellTable(); updateHash(); }));
   document.querySelectorAll('#cell-tabs button').forEach(button => button.addEventListener('click', () => setCellTab(button.dataset.cellView)));
-  $('study-analysis').addEventListener('toggle', async () => {
+
+  // --- Estimate charts -------------------------------------------------------------------
+  // Drawn from analysis_catalog().estimate_series: the canonical estimate with its interval against
+  // intervention budget, one line per coordinate. Nothing is recomputed here; a point the finalizer
+  // could not support is simply absent, so an unsupported cell is a gap rather than a zero.
+  const BAND_SERIES_LIMIT = 4;
+  const HEADLINE_METRICS = ['round_target_actuation_cmi', 'round_target_information_fraction',
+    'round_target_susceptibility', 'round_target_signed_actuation', 'blackboard_effective_affinity'];
+  const SERIES_COLOURS = ['#5fc487', '#6ba9e8', '#e8b04b', '#c77dbb', '#4fc3c3', '#e2795f', '#b0894f', '#8d8df0'];
+
+  function estimateChart(points, width = 760, height = 300) {
+    const names = [...new Set(points.map(point => point.series))].sort();
+    const xs = [...new Set(points.map(point => point.x))].sort((a, b) => a - b);
+    const lows = points.map(point => point.lo ?? point.y), highs = points.map(point => point.hi ?? point.y);
+    let min = Math.min(...lows), max = Math.max(...highs);
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return '<p class="unavailable">No finite estimates for this metric.</p>';
+    if (min === max) { min -= 0.5; max += 0.5; }
+    const pad = (max - min) * 0.08; min -= pad; max += pad;
+    const left = 62, right = 16, top = 14, bottom = 38;
+    const plotWidth = Math.max(1, width - left - right), plotHeight = Math.max(1, height - top - bottom);
+    const spread = xs.length > 1 ? xs[xs.length - 1] - xs[0] : 1;
+    const X = value => left + (xs.length > 1 ? (value - xs[0]) / spread : 0.5) * plotWidth;
+    const Y = value => top + (1 - (value - min) / (max - min)) * plotHeight;
+    const ticks = [min, (min + max) / 2, max];
+    const grid = ticks.map(value => `<line class="plot-grid" x1="${left}" y1="${Y(value).toFixed(1)}" x2="${width - right}" y2="${Y(value).toFixed(1)}"></line><text class="plot-label" x="${left - 8}" y="${(Y(value) + 4).toFixed(1)}" text-anchor="end">${value.toFixed(2)}</text>`).join('');
+    const axis = xs.map(value => `<text class="plot-label" x="${X(value).toFixed(1)}" y="${height - 14}" text-anchor="middle">b = ${value}</text>`).join('');
+    const body = names.map((name, index) => {
+      const colour = SERIES_COLOURS[index % SERIES_COLOURS.length];
+      const mine = points.filter(point => point.series === name).sort((a, b) => a.x - b.x);
+      // A filled interval band per series is only legible for a handful of lines; beyond that the bands
+      // overlap into mush, so each point gets a thin whisker instead and the interval stays in the tooltip.
+      const withInterval = mine.filter(point => point.lo != null);
+      const band = !withInterval.length ? ''
+        : names.length <= BAND_SERIES_LIMIT
+        ? `<polygon class="plot-band" fill="${colour}" points="${mine.map(p => `${X(p.x).toFixed(1)},${Y(p.hi ?? p.y).toFixed(1)}`).concat(mine.slice().reverse().map(p => `${X(p.x).toFixed(1)},${Y(p.lo ?? p.y).toFixed(1)}`)).join(' ')}"></polygon>`
+        : withInterval.map(p => `<line class="plot-whisker" stroke="${colour}" x1="${X(p.x).toFixed(1)}" y1="${Y(p.lo).toFixed(1)}" x2="${X(p.x).toFixed(1)}" y2="${Y(p.hi).toFixed(1)}"></line>`).join('');
+      const line = `<polyline fill="none" stroke="${colour}" stroke-width="2" points="${mine.map(p => `${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(' ')}"></polyline>`;
+      const dots = mine.map(p => `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="3.5" fill="${colour}"><title>${esc(name)}\nb = ${p.x}\nestimate ${p.y.toFixed(4)}${p.lo != null ? `\n95% ${p.lo.toFixed(4)} … ${p.hi.toFixed(4)}` : ''}${p.support ? `\nsupport ${p.support}` : ''}</title></circle>`).join('');
+      return band + line + dots;
+    }).join('');
+    const legend = names.map((name, index) => `<span class="plot-key"><i style="background:${SERIES_COLOURS[index % SERIES_COLOURS.length]}"></i>${esc(name)}</span>`).join('');
+    return `<svg class="estimate-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="estimate against intervention budget">${grid}${axis}${body}</svg><div class="plot-legend">${legend}</div>`;
+  }
+
+  function renderEstimateCharts(container, seriesByTable) {
+    const tables = Object.entries(seriesByTable || {}).filter(([, value]) => Object.keys(value.metrics || {}).length);
+    if (!tables.length) return '';
+    const pairs = tables.flatMap(([table, value]) => Object.keys(value.metrics).sort().map(metric => [table, metric]));
+    // Open on a headline estimand rather than whichever metric sorts first (a diagnostic count).
+    const preferred = pairs.findIndex(([, metric]) => HEADLINE_METRICS.includes(metric));
+    const chosen = preferred >= 0 ? preferred : 0;
+    const options = pairs.map(([table, metric], index) =>
+      `<option value="${esc(table)}|${esc(metric)}"${index === chosen ? ' selected' : ''}>${esc(metric)} — ${esc(table.replace(/\.(parquet|csv)$/, ''))}</option>`).join('');
+    return `<div class="estimate-charts"><label>Estimate <select id="estimate-metric">${options}</select></label><div id="estimate-chart-body"></div></div>`;
+  }
+
+  function wireEstimateCharts(seriesByTable) {
+    const select = $('estimate-metric'), body = $('estimate-chart-body');
+    if (!select || !body) return;
+    const draw = () => {
+      const [table, metric] = select.value.split('|');
+      const series = seriesByTable[table];
+      const points = (series?.metrics || {})[metric] || [];
+      body.innerHTML = `${estimateChart(points)}<p class="meta">${points.length} estimates · lines by ${esc((series?.series_by || []).join(', ') || 'cell')} · x = ${esc(series?.x || 'intervention_budget')}${series?.truncated ? ' · truncated' : ''}</p>`;
+    };
+    select.addEventListener('change', draw);
+    draw();
+  }
+
+  // A <details> that is ALREADY open at load never fires 'toggle', so binding the loader to the event
+  // alone left the panel stuck on "Open to load the analysis catalog". Load on demand, from either path.
+  async function loadAnalysis() {
     if (!$('study-analysis').open || $('analysis-content').dataset.loaded) return;
     const container = $('analysis-content'); container.innerHTML = 'Loading analysis catalog…';
     try {
-      const catalog = await get('/api/study/analysis'); container.dataset.loaded = '1';
+      const catalog = await get('api/study/analysis'); container.dataset.loaded = '1';
       if (!catalog.available) { container.innerHTML = `<p class="unavailable">${esc(catalog.reason)}</p>${catalog.command ? `<pre>${esc(catalog.command)}</pre>` : ''}`; return; }
       const artifacts = catalog.artifacts || [];
       const plots = artifacts.filter(item => item.kind === 'plots' && /\.(png|svg)$/i.test(item.name));
       const previews = Object.entries(catalog.table_previews || {}).map(([name, preview]) => `<details><summary>${esc(name)} — first ${preview.rows.length} canonical rows</summary><div class="table-scroll"><table><thead><tr>${preview.columns.map(column => `<th>${esc(column)}</th>`).join('')}</tr></thead><tbody>${preview.rows.map(row => `<tr>${preview.columns.map(column => `<td>${esc(row[column] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`).join('');
+      const charts = renderEstimateCharts(container, catalog.estimate_series);
       const reports = Object.entries(catalog.reports || {}).map(([name, content]) => `<details><summary>${esc(name)}</summary><pre>${esc(content)}</pre></details>`).join('');
-      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = `/api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = `/api/study/analysis/download?id=${encodeURIComponent(item.id)}`; return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Estimates</h3>${charts || '<p class="unavailable">No plottable estimate series in this package.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+      wireEstimateCharts(catalog.estimate_series || {});
     } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
-  });
+  }
+  $('study-analysis').addEventListener('toggle', loadAnalysis);
+  if ($('study-analysis').open) loadAnalysis();
   $('all-parameters').addEventListener('toggle', updateHash);
   $('show-all-trajectories').addEventListener('click', () => {
     availableTrajectoryIds().forEach(id => state.selectedTrajectories.add(id));
@@ -594,6 +797,6 @@
     $('follow').checked = false;
     refresh();
   } else {
-    get('/api/study').then(payload => startStudy(payload)).catch(() => refresh(true));
+    boot();
   }
 })();
