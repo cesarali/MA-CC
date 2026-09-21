@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
 import math
 import mimetypes
 import re
+import shutil
 import signal
 import sys
 import threading
@@ -110,6 +113,7 @@ def _public_error(exc: BaseException) -> str:
     return _ABSOLUTE_PATH.sub("", str(exc))
 
 
+GZIP_MIN_BYTES = 1024
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 HEALTH_PATHS = frozenset({"/healthz", "/readyz"})
 
@@ -150,6 +154,15 @@ def make_handler(
 
     class DashboardHandler(BaseHTTPRequestHandler):
         server_version = "MASCCBlackboard/1"
+        # Keep-alive: the UI issues many small requests (one per plot image). Every response
+        # below carries Content-Length, which HTTP/1.1 persistence requires.
+        protocol_version = "HTTP/1.1"
+        timeout = 30  # reap idle persistent connections; each holds a server thread
+        # Headers and body must leave as one segment. Unbuffered (the default), they are two
+        # small writes and a persistent connection stalls ~40 ms per request on Nagle +
+        # delayed ACK (measured: 40 requests 1,774 ms vs 22 ms on fresh connections).
+        wbufsize = 64 * 1024
+        disable_nagle_algorithm = True
 
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
             started = time.monotonic()
@@ -195,12 +208,48 @@ def make_handler(
                 self.path = self.path[len(prefix):]
             self._serve()
 
-        def _send(self, status: int, content_type: str, body: bytes) -> None:
+        def _accepts_gzip(self) -> bool:
+            return any(
+                token.split(";", 1)[0].strip().lower() == "gzip" and not token.replace(" ", "").endswith(";q=0")
+                for token in self.headers.get("Accept-Encoding", "").split(",")
+            )
+
+        def _send_asset(self, name: str, content_type: str) -> None:
+            """Static assets revalidate with an ETag instead of being re-sent on every view."""
+
+            body = _asset(name)
+            etag = '"' + hashlib.sha256(body).hexdigest()[:32] + '"'
+            if self.headers.get("If-None-Match") == etag:
+                self._status = 304
+                self.send_response(304)
+                self.send_header("ETag", etag)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self._send(200, content_type, body, cache_control="no-cache", etag=etag)
+
+        def _send(
+            self,
+            status: int,
+            content_type: str,
+            body: bytes,
+            *,
+            cache_control: str = "no-store",
+            etag: str | None = None,
+        ) -> None:
             self._status = status
+            compress = len(body) >= GZIP_MIN_BYTES and self._accepts_gzip()
+            if compress:
+                body = gzip.compress(body, compresslevel=5, mtime=0)
             self.send_response(status)
             self.send_header("Content-Type", content_type)
+            if compress:
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+            if etag:
+                self.send_header("ETag", etag)
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache_control)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header(
                 "Content-Security-Policy",
@@ -210,32 +259,36 @@ def make_handler(
             self.wfile.write(body)
 
         def _send_file(self, path: Path) -> None:
-            body = path.read_bytes()
-            self._status = 200
-            self.send_response(200)
-            self.send_header(
-                "Content-Type",
-                mimetypes.guess_type(path.name)[0] or "application/octet-stream",
-            )
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header(
-                "Content-Disposition", f'attachment; filename="{path.name}"'
-            )
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            self.wfile.write(body)
+            """Stream a file; an analysis package is tens of MB and was read whole into memory."""
+
+            content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            # Plots are shown inline by the analysis panel; everything else downloads.
+            disposition = "inline" if content_type.startswith("image/") else "attachment"
+            with path.open("rb") as handle:
+                size = path.stat().st_size
+                self._status = 200
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(size))
+                self.send_header(
+                    "Content-Disposition", f'{disposition}; filename="{path.name}"'
+                )
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                shutil.copyfileobj(handle, self.wfile, 1024 * 1024)
 
         def _serve(self) -> None:
             parsed = urlparse(self.path)
             try:
                 if parsed.path in {"/", "/index.html"}:
-                    self._send(200, "text/html; charset=utf-8", _asset("index.html"))
+                    self._send_asset("index.html", "text/html; charset=utf-8")
                     return
                 if parsed.path == "/app.js":
-                    self._send(200, "text/javascript; charset=utf-8", _asset("app.js"))
+                    self._send_asset("app.js", "text/javascript; charset=utf-8")
                     return
                 if parsed.path == "/style.css":
-                    self._send(200, "text/css; charset=utf-8", _asset("style.css"))
+                    self._send_asset("style.css", "text/css; charset=utf-8")
                     return
                 if isinstance(reader, BlackboardStudyReader):
                     if parsed.path == "/api/study":
