@@ -48,7 +48,7 @@ game:
     expected_validation_failure_rate: 0.15
     initialization:
       mode: paired_local_vote
-      artifact_dir: /shared/home/cesar/work/results/studies/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18_initializations
+      artifact_dir: /shared/home/cesar/work/results/studies/21-09-2026-full-vs-report-v0_initializations
       require_artifact: true
 control:
   mechanism: none

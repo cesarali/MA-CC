@@ -36,9 +36,9 @@ USD 21.44 at representative token usage. The conservative retry/context bound
 is 122,400 calls and USD 90.21; the nominal no-retry count is 24,800 calls.
 See `PREFLIGHT.md` for the accounting details.
 
-The study reuses the existing q=12 Task-003 paired initialization artifacts
-with execution seed `20260907`, allowing the first five paired episode seeds to
-match across every cell.
+The study uses its own q=12 Task-003 paired initialization artifacts under
+`/shared/home/cesar/work/results/studies/21-09-2026-full-vs-report-v0_initializations`
+with execution seed `20260907`. The five episode seeds match across every cell.
 
 No paid provider run is authorized by these files. Run study preflight and
 re-check live DeepInfra account limits before submission.
