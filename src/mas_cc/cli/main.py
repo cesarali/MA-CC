@@ -319,6 +319,10 @@ def build_parser() -> argparse.ArgumentParser:
     study_publish.add_argument("--rclone", default=None, help="rclone binary (default MA_CC_RCLONE, PATH, ~/bin/rclone)")
     study_publish.add_argument("--rclone-config", type=Path, default=None, help="rclone config file (default RCLONE_CONFIG)")
     study_publish.add_argument("--dry-run", action="store_true", help="resolve targets and counts, transfer nothing")
+    study_publish.add_argument("--with-dashboard", action="store_true",
+                               help="also publish the dashboard bundle to <prefix>/<study>/dashboard and list it in <prefix>/catalog.json")
+    study_publish.add_argument("--bundle-dir", type=Path, default=None,
+                               help="scratch directory for building the bundle (default: the system temp dir)")
     study_compact = study_commands.add_parser(
         "compact-analysis",
         help="convert an existing standardized analysis handoff to lean Parquet",
@@ -950,13 +954,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.study_dir, remote=remote, prefix=prefix, analysis_dir=args.analysis_dir,
                 study_name=args.study_name, dry_run=args.dry_run,
                 rclone=Rclone(args.rclone, args.rclone_config),
+                with_dashboard=args.with_dashboard, bundle_dir=args.bundle_dir,
             )
-        except (PublishError, OSError) as exc:
+        except (PublishError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(json.dumps({key: receipt[key] for key in receipt if key in (
             "status", "verified", "package", "package_target", "analysis_target", "local_files", "remote_files",
-            "local_bytes", "remote_bytes")}, indent=2))
+            "local_bytes", "remote_bytes", "dashboard_target", "dashboard")}, indent=2))
         return 0
     if args.command == "study" and args.study_command == "compact-analysis":
         from mas_cc.studies import compact_study_analysis
