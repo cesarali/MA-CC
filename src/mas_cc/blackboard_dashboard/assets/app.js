@@ -76,6 +76,14 @@
   function renderStudy() {
     showShell('study'); renderBreadcrumbs();
     const study = state.study;
+    // Parts of a study the reader could not open. The counts below are computed from what it COULD
+    // read, so saying nothing would present a quietly incomplete study as a whole one.
+    const degraded = study.degraded || [];
+    const notice = $('study-degraded');
+    notice.hidden = !degraded.length;
+    notice.innerHTML = degraded.length
+      ? `<p class="degraded-notice"><b>Partial study.</b> ${degraded.map(esc).join(' · ')}. Expected counts are derived from the parts that could be read.</p>`
+      : '';
     // Study ids are long and made of underscores, which offer no line-break opportunity: the title
     // was clipped at the window edge. Allow a break after each underscore and set ids smaller than the
     // product name.
