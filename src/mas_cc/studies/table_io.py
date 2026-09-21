@@ -34,6 +34,37 @@ def csv_safe(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _semantics_label(value: Any) -> str:
+    text = str(value).strip().lower()
+    if text in {"true", "truth", "correct"}:
+        return "truth"
+    if text in {"false", "incorrect", "adversarial"}:
+        return "false"
+    return text
+
+
+def single_kind_semantics(frame: pd.DataFrame) -> pd.DataFrame:
+    """One Parquet type for ``target_semantics`` when a table mixes booleans and strings.
+
+    YAML ``false`` / ``true`` are booleans, ``none`` / ``truth`` are strings, and report tables
+    concatenate rows from sources that spell the same arm differently. pyarrow refuses an
+    object column holding both. A column with one kind of value is returned untouched, so
+    tables of single-spelling studies are byte-identical; a mixed column becomes the
+    canonical labels ``derived_aggregation._normalize_semantics`` already uses.
+    """
+
+    column = "target_semantics"
+    if column not in frame or frame[column].dtype != object:
+        return frame
+    kinds = {"bool" if type(v).__name__ in {"bool", "bool_"} else type(v).__name__
+             for v in frame[column].dropna().unique()}
+    if len(kinds) <= 1:
+        return frame
+    result = frame.copy()
+    result[column] = result[column].map(lambda v: v if pd.isna(v) else _semantics_label(v))
+    return result
+
+
 def write_scientific_table(
     tables_dir: str | Path, name: str, frame: pd.DataFrame
 ) -> Path:
@@ -42,7 +73,7 @@ def write_scientific_table(
     directory = Path(tables_dir)
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{name}.parquet"
-    safe = csv_safe(frame)
+    safe = csv_safe(single_kind_semantics(frame))
     safe.to_parquet(destination, index=False, engine="pyarrow", compression="zstd")
 
     # Discover writer/schema regressions at creation time, before packaging.
