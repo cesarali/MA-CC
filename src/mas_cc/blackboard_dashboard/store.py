@@ -224,6 +224,27 @@ def open_store(location: str | os.PathLike[str], *, client: Any | None = None, *
     return BundleStore(_DirectoryTransport(Path(str(location))), **options)
 
 
+def read_raw(location: str | os.PathLike[str], relative: str, *, client: Any | None = None) -> bytes | None:
+    """One unindexed object next to bundles (the cross-study ``catalog.json``); None when absent."""
+
+    parsed = urlparse(str(location))
+    transport: Transport = (_ObjectTransport(parsed.netloc, parsed.path, client) if parsed.scheme in OBJECT_SCHEMES
+                            else _DirectoryTransport(Path(str(location))))
+    try:
+        return transport.get(relative)
+    except StoreError as error:
+        if "NoSuchKey" in str(error) or "is missing" in str(error) or "404" in str(error):
+            return None
+        raise
+
+
+def child_location(location: str | os.PathLike[str], relative: str) -> str:
+    """``location`` + ``relative`` for both URLs and directories."""
+
+    text = str(location).rstrip("/")
+    return f"{text}/{safe_relative(relative)}"
+
+
 def is_bundle_dir(path: str | os.PathLike[str]) -> bool:
     return (Path(str(path)).expanduser() / INDEX_NAME).is_file()
 
@@ -256,4 +277,4 @@ def copy_gzipped(source: Path, target: Path) -> None:
 
 
 __all__ = ["BUNDLE_SCHEMA_VERSION", "BundleStore", "INDEX_NAME", "StoreError", "copy_gzipped", "is_bundle_dir",
-           "is_store_url", "open_store", "safe_relative", "sha256_bytes", "write_index"]
+           "child_location", "is_store_url", "open_store", "read_raw", "safe_relative", "sha256_bytes", "write_index"]
