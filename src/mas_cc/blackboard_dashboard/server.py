@@ -22,10 +22,14 @@ from typing import Iterable, TypeAlias
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .data import BlackboardRunReader
+from .published import PublishedStudyReader
+from .store import is_bundle_dir, is_store_url, open_store
 from .study_data import BlackboardStudyReader, is_direct_grid_root, is_study_root
 
 
-DashboardReader: TypeAlias = BlackboardRunReader | BlackboardStudyReader
+DashboardReader: TypeAlias = BlackboardRunReader | BlackboardStudyReader | PublishedStudyReader
+# Readers that answer the study-level API (a live filesystem study or a published bundle).
+STUDY_READERS = (BlackboardStudyReader, PublishedStudyReader)
 
 
 def resolve_dashboard_collection(path: str | Path) -> Path:
@@ -290,7 +294,7 @@ def make_handler(
                 if parsed.path == "/style.css":
                     self._send_asset("style.css", "text/css; charset=utf-8")
                     return
-                if isinstance(reader, BlackboardStudyReader):
+                if isinstance(reader, STUDY_READERS):
                     if parsed.path == "/api/study":
                         self._send(200, "application/json", _json(reader.study()))
                         return
@@ -464,12 +468,17 @@ def serve_dashboard(
     base_path: str | None = None,
     access_log: bool = False,
 ) -> None:
-    source = resolve_dashboard_collection(run_dir)
-    reader: DashboardReader = (
-        BlackboardStudyReader(source)
-        if is_study_root(source) or is_direct_grid_root(source)
-        else BlackboardRunReader(source, episode_id)
-    )
+    reader: DashboardReader
+    if is_store_url(run_dir) or is_bundle_dir(run_dir):
+        # A published bundle: s3://bucket/prefix, r2://bucket/prefix, or a directory with index.json.
+        reader = PublishedStudyReader(open_store(run_dir))
+    else:
+        source = resolve_dashboard_collection(run_dir)
+        reader = (
+            BlackboardStudyReader(source)
+            if is_study_root(source) or is_direct_grid_root(source)
+            else BlackboardRunReader(source, episode_id)
+        )
     allowed = [name for name in allowed_hosts if name.strip()]
     if host not in LOOPBACK_HOSTS and not allowed:
         raise ValueError(
@@ -490,7 +499,9 @@ def serve_dashboard(
     print(
         f"Blackboard dashboard: http://{host}:{server.server_port}{normalise_base_path(base_path)}/"
     )
-    if isinstance(reader, BlackboardStudyReader):
+    if isinstance(reader, PublishedStudyReader):
+        print(f"Published study: {reader.study_id} ({reader.store.describe()})")
+    elif isinstance(reader, BlackboardStudyReader):
         print(f"Collection: {reader.study_dir}")
     else:
         print(f"Episode: {reader.episode_dir}")
