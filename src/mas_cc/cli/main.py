@@ -241,6 +241,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="serve several studies (repeatable): a published prefix holding catalog.json "
         "(directory, s3:// or r2:// URL) or a directory whose children are live study roots",
     )
+    blackboard_dashboard.add_argument(
+        "--no-scheduler",
+        action="store_true",
+        help="do not shell out to squeue/sacct for live studies (a host without Slurm client tools)",
+    )
     blackboard_export = blackboard_commands.add_parser(
         "export", help="write a portable completed-run dashboard"
     )
@@ -834,6 +839,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 base_path=args.base_path,
                 access_log=args.access_log,
                 catalogs=args.catalog,
+                scheduler=not args.no_scheduler,
             )
         except (OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
