@@ -616,7 +616,78 @@
   }
   ['filter-block','filter-controller','filter-rho','filter-status','cell-sort'].forEach(id => $(id).addEventListener('change', () => { renderCellTable(); updateHash(); }));
   document.querySelectorAll('#cell-tabs button').forEach(button => button.addEventListener('click', () => setCellTab(button.dataset.cellView)));
-  $('study-analysis').addEventListener('toggle', async () => {
+
+  // --- Estimate charts -------------------------------------------------------------------
+  // Drawn from analysis_catalog().estimate_series: the canonical estimate with its interval against
+  // intervention budget, one line per coordinate. Nothing is recomputed here; a point the finalizer
+  // could not support is simply absent, so an unsupported cell is a gap rather than a zero.
+  const BAND_SERIES_LIMIT = 4;
+  const HEADLINE_METRICS = ['round_target_actuation_cmi', 'round_target_information_fraction',
+    'round_target_susceptibility', 'round_target_signed_actuation', 'blackboard_effective_affinity'];
+  const SERIES_COLOURS = ['#5fc487', '#6ba9e8', '#e8b04b', '#c77dbb', '#4fc3c3', '#e2795f', '#b0894f', '#8d8df0'];
+
+  function estimateChart(points, width = 760, height = 300) {
+    const names = [...new Set(points.map(point => point.series))].sort();
+    const xs = [...new Set(points.map(point => point.x))].sort((a, b) => a - b);
+    const lows = points.map(point => point.lo ?? point.y), highs = points.map(point => point.hi ?? point.y);
+    let min = Math.min(...lows), max = Math.max(...highs);
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return '<p class="unavailable">No finite estimates for this metric.</p>';
+    if (min === max) { min -= 0.5; max += 0.5; }
+    const pad = (max - min) * 0.08; min -= pad; max += pad;
+    const left = 62, right = 16, top = 14, bottom = 38;
+    const plotWidth = Math.max(1, width - left - right), plotHeight = Math.max(1, height - top - bottom);
+    const spread = xs.length > 1 ? xs[xs.length - 1] - xs[0] : 1;
+    const X = value => left + (xs.length > 1 ? (value - xs[0]) / spread : 0.5) * plotWidth;
+    const Y = value => top + (1 - (value - min) / (max - min)) * plotHeight;
+    const ticks = [min, (min + max) / 2, max];
+    const grid = ticks.map(value => `<line class="plot-grid" x1="${left}" y1="${Y(value).toFixed(1)}" x2="${width - right}" y2="${Y(value).toFixed(1)}"></line><text class="plot-label" x="${left - 8}" y="${(Y(value) + 4).toFixed(1)}" text-anchor="end">${value.toFixed(2)}</text>`).join('');
+    const axis = xs.map(value => `<text class="plot-label" x="${X(value).toFixed(1)}" y="${height - 14}" text-anchor="middle">b = ${value}</text>`).join('');
+    const body = names.map((name, index) => {
+      const colour = SERIES_COLOURS[index % SERIES_COLOURS.length];
+      const mine = points.filter(point => point.series === name).sort((a, b) => a.x - b.x);
+      // A filled interval band per series is only legible for a handful of lines; beyond that the bands
+      // overlap into mush, so each point gets a thin whisker instead and the interval stays in the tooltip.
+      const withInterval = mine.filter(point => point.lo != null);
+      const band = !withInterval.length ? ''
+        : names.length <= BAND_SERIES_LIMIT
+        ? `<polygon class="plot-band" fill="${colour}" points="${mine.map(p => `${X(p.x).toFixed(1)},${Y(p.hi ?? p.y).toFixed(1)}`).concat(mine.slice().reverse().map(p => `${X(p.x).toFixed(1)},${Y(p.lo ?? p.y).toFixed(1)}`)).join(' ')}"></polygon>`
+        : withInterval.map(p => `<line class="plot-whisker" stroke="${colour}" x1="${X(p.x).toFixed(1)}" y1="${Y(p.lo).toFixed(1)}" x2="${X(p.x).toFixed(1)}" y2="${Y(p.hi).toFixed(1)}"></line>`).join('');
+      const line = `<polyline fill="none" stroke="${colour}" stroke-width="2" points="${mine.map(p => `${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(' ')}"></polyline>`;
+      const dots = mine.map(p => `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="3.5" fill="${colour}"><title>${esc(name)}\nb = ${p.x}\nestimate ${p.y.toFixed(4)}${p.lo != null ? `\n95% ${p.lo.toFixed(4)} … ${p.hi.toFixed(4)}` : ''}${p.support ? `\nsupport ${p.support}` : ''}</title></circle>`).join('');
+      return band + line + dots;
+    }).join('');
+    const legend = names.map((name, index) => `<span class="plot-key"><i style="background:${SERIES_COLOURS[index % SERIES_COLOURS.length]}"></i>${esc(name)}</span>`).join('');
+    return `<svg class="estimate-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="estimate against intervention budget">${grid}${axis}${body}</svg><div class="plot-legend">${legend}</div>`;
+  }
+
+  function renderEstimateCharts(container, seriesByTable) {
+    const tables = Object.entries(seriesByTable || {}).filter(([, value]) => Object.keys(value.metrics || {}).length);
+    if (!tables.length) return '';
+    const pairs = tables.flatMap(([table, value]) => Object.keys(value.metrics).sort().map(metric => [table, metric]));
+    // Open on a headline estimand rather than whichever metric sorts first (a diagnostic count).
+    const preferred = pairs.findIndex(([, metric]) => HEADLINE_METRICS.includes(metric));
+    const chosen = preferred >= 0 ? preferred : 0;
+    const options = pairs.map(([table, metric], index) =>
+      `<option value="${esc(table)}|${esc(metric)}"${index === chosen ? ' selected' : ''}>${esc(metric)} — ${esc(table.replace(/\.(parquet|csv)$/, ''))}</option>`).join('');
+    return `<div class="estimate-charts"><label>Estimate <select id="estimate-metric">${options}</select></label><div id="estimate-chart-body"></div></div>`;
+  }
+
+  function wireEstimateCharts(seriesByTable) {
+    const select = $('estimate-metric'), body = $('estimate-chart-body');
+    if (!select || !body) return;
+    const draw = () => {
+      const [table, metric] = select.value.split('|');
+      const series = seriesByTable[table];
+      const points = (series?.metrics || {})[metric] || [];
+      body.innerHTML = `${estimateChart(points)}<p class="meta">${points.length} estimates · lines by ${esc((series?.series_by || []).join(', ') || 'cell')} · x = ${esc(series?.x || 'intervention_budget')}${series?.truncated ? ' · truncated' : ''}</p>`;
+    };
+    select.addEventListener('change', draw);
+    draw();
+  }
+
+  // A <details> that is ALREADY open at load never fires 'toggle', so binding the loader to the event
+  // alone left the panel stuck on "Open to load the analysis catalog". Load on demand, from either path.
+  async function loadAnalysis() {
     if (!$('study-analysis').open || $('analysis-content').dataset.loaded) return;
     const container = $('analysis-content'); container.innerHTML = 'Loading analysis catalog…';
     try {
@@ -625,10 +696,14 @@
       const artifacts = catalog.artifacts || [];
       const plots = artifacts.filter(item => item.kind === 'plots' && /\.(png|svg)$/i.test(item.name));
       const previews = Object.entries(catalog.table_previews || {}).map(([name, preview]) => `<details><summary>${esc(name)} — first ${preview.rows.length} canonical rows</summary><div class="table-scroll"><table><thead><tr>${preview.columns.map(column => `<th>${esc(column)}</th>`).join('')}</tr></thead><tbody>${preview.rows.map(row => `<tr>${preview.columns.map(column => `<td>${esc(row[column] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`).join('');
+      const charts = renderEstimateCharts(container, catalog.estimate_series);
       const reports = Object.entries(catalog.reports || {}).map(([name, content]) => `<details><summary>${esc(name)}</summary><pre>${esc(content)}</pre></details>`).join('');
-      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+      container.innerHTML = `<p>${statusBadge(catalog.status)} · canonical aggregation outputs; no estimators are recomputed here.</p>${plots.length ? `<div class="analysis-plots">${plots.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<figure><img src="${href}" alt="${esc(item.name)}"><figcaption><a href="${href}">${esc(item.name)}</a></figcaption></figure>`; }).join('')}</div>` : '<p class="unavailable">No configured plot files are present.</p>'}<h3>Estimates</h3>${charts || '<p class="unavailable">No plottable estimate series in this package.</p>'}<h3>Canonical estimate previews</h3>${previews || '<p class="unavailable">No supported estimate tables are present.</p>'}<h3>Reports</h3>${reports || '<p class="unavailable">No concise reports are present.</p>'}<h3>Downloads</h3><div class="analysis-files">${artifacts.map(item => { const href = api(`api/study/analysis/download?id=${encodeURIComponent(item.id)}`); return `<a href="${href}">${esc(item.id)} <span class="meta">${Math.ceil(item.size/1024)} KiB</span></a>`; }).join('')}</div><details><summary>Estimator and validation metadata</summary><pre>${esc(json({manifest: catalog.manifest, validation: catalog.validation}))}</pre></details>`;
+      wireEstimateCharts(catalog.estimate_series || {});
     } catch (error) { container.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
-  });
+  }
+  $('study-analysis').addEventListener('toggle', loadAnalysis);
+  if ($('study-analysis').open) loadAnalysis();
   $('all-parameters').addEventListener('toggle', updateHash);
   $('show-all-trajectories').addEventListener('click', () => {
     availableTrajectoryIds().forEach(id => state.selectedTrajectories.add(id));

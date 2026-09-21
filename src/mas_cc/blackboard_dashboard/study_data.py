@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -14,7 +15,7 @@ from collections import Counter, OrderedDict
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pandas as pd
 import yaml
@@ -29,6 +30,7 @@ from mas_cc.studies.discovery import (
 )
 from mas_cc.studies.execution import read_execution_manifest
 from mas_cc.studies.submission import read_submission_manifest
+from mas_cc.studies.table_io import read_scientific_table, retained_table_path
 from mas_cc.storage.scientific import (
     ScientificIdentity,
     validate_cell_artifact,
@@ -564,6 +566,76 @@ class _SchedulerReader:
         return SchedulerSnapshot(
             bool(tasks), self.job_id, refreshed, tasks, "; ".join(errors) or None
         )
+
+
+# Columns worth showing in a table preview: the estimate tables are up to 112 columns wide, and a
+# 20-row head of all of them is unreadable in a browser.
+PREVIEW_COLUMNS = (
+    "metric", "estimator_variant", "target_semantics", "epistemic_persistence", "social_group_size",
+    "intervention_budget", "estimate", "ci_low", "ci_high", "p_value", "n_episodes", "support_status",
+)
+# The coordinates a series is keyed by, when they actually vary in the table.
+SERIES_COLUMNS = ("target_semantics", "epistemic_persistence", "social_group_size", "estimator_variant")
+SERIES_X = "intervention_budget"
+SERIES_POINT_LIMIT = 2000
+
+
+def _number(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _series_label(row: Mapping[str, Any], columns: Sequence[str]) -> str:
+    parts = []
+    for column in columns:
+        value = row.get(column)
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            continue
+        if column == "epistemic_persistence":
+            parts.append(f"rho {_number(value):g}")
+        elif column == "social_group_size":
+            parts.append(f"q {_number(value):g}")
+        else:
+            parts.append(str(value))
+    return " · ".join(parts) or "all cells"
+
+
+def _estimate_series(frame: pd.DataFrame) -> dict[str, Any]:
+    """Plot-ready points: estimate with interval against intervention budget, one line per coordinate.
+
+    Emitted only for rows that have both an x and a finite estimate, so an unsupported cell leaves a
+    gap in the chart instead of a zero. Bounded by SERIES_POINT_LIMIT.
+    """
+
+    if "metric" not in frame.columns or "estimate" not in frame.columns or SERIES_X not in frame.columns:
+        return {"x": SERIES_X, "series_by": [], "metrics": {}}
+    keys = [
+        column for column in SERIES_COLUMNS
+        if column in frame.columns and frame[column].astype(str).nunique(dropna=True) > 1
+    ]
+    metrics: dict[str, list[dict[str, Any]]] = {}
+    emitted = 0
+    for row in frame.to_dict(orient="records"):
+        x, y = _number(row.get(SERIES_X)), _number(row.get("estimate"))
+        if x is None or y is None:
+            continue
+        if emitted >= SERIES_POINT_LIMIT:
+            break
+        point = {"x": x, "y": y, "series": _series_label(row, keys)}
+        low, high = _number(row.get("ci_low")), _number(row.get("ci_high"))
+        if low is not None and high is not None:
+            point["lo"], point["hi"] = low, high
+        if row.get("support_status"):
+            point["support"] = str(row["support_status"])
+        metrics.setdefault(str(row["metric"]), []).append(point)
+        emitted += 1
+    for points in metrics.values():
+        points.sort(key=lambda item: (item["series"], item["x"]))
+    return {"x": SERIES_X, "series_by": keys, "metrics": metrics, "points": emitted,
+            "truncated": emitted >= SERIES_POINT_LIMIT}
 
 
 class BlackboardStudyReader:
@@ -1757,22 +1829,30 @@ class BlackboardStudyReader:
                 )
         valid = bool(validation.get("valid", validation.get("complete", False)))
         table_previews: dict[str, Any] = {}
-        for name in (
-            "primary_estimates.csv",
-            "information_estimates.csv",
-            "support_diagnostics.csv",
-            "derived_observables.csv",
+        estimate_series: dict[str, Any] = {}
+        for stem in (
+            "primary_estimates",
+            "information_estimates",
+            "support_diagnostics",
+            "derived_observables",
         ):
-            path = root / "tables" / name
-            if not path.is_file():
+            # The finalizer writes Parquet (table_io.CANONICAL_TABLE_FORMAT); this looked for .csv
+            # only, so the preview was silently empty for every study since the format changed.
+            path = retained_table_path(root / "tables", stem)
+            if path is None:
                 continue
-            frame = pd.read_csv(path, nrows=20).astype(object)
-            frame = frame.where(pd.notna(frame), None)
-            table_previews[name] = {
-                "columns": list(frame.columns),
-                "rows": frame.to_dict(orient="records"),
+            frame = read_scientific_table(path)
+            chosen = [column for column in PREVIEW_COLUMNS if column in frame.columns]
+            preview = (frame[chosen] if chosen else frame).head(20).astype(object)
+            table_previews[path.name] = {
+                "columns": list(preview.columns),
+                "rows": preview.where(pd.notna(preview), None).to_dict(orient="records"),
                 "preview_limit": 20,
+                "total_rows": int(len(frame)),
             }
+            series = _estimate_series(frame)
+            if series["metrics"]:
+                estimate_series[path.name] = series
         reports = {}
         for name in ("summary.md", "methods.md"):
             path = root / "reports" / name
@@ -1789,6 +1869,7 @@ class BlackboardStudyReader:
             "manifest": manifest,
             "artifacts": allowed if valid else [],
             "table_previews": table_previews if valid else {},
+            "estimate_series": estimate_series if valid else {},
             "reports": reports if valid else {},
         }
 
