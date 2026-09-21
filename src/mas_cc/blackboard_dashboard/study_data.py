@@ -638,6 +638,13 @@ def _estimate_series(frame: pd.DataFrame) -> dict[str, Any]:
             "truncated": emitted >= SERIES_POINT_LIMIT}
 
 
+def _public_reason(error: BaseException) -> str:
+    """A short reason with no server directories in it."""
+
+    text = str(error).replace("'", "").replace('"', "")
+    return text.rsplit("/", 1)[-1].strip() if "/" in text else text.strip()
+
+
 class BlackboardStudyReader:
     """Discover expected cells once and refresh only compact live artifacts."""
 
@@ -688,9 +695,18 @@ class BlackboardStudyReader:
             if self.source_kind == "standardized_study"
             else []
         )
+        self.degraded: list[str] = []
         if targets:
             latest_target_path = targets[-1]
-            latest_target = _safe_json(latest_target_path, required=True)
+            try:
+                latest_target = _safe_json(latest_target_path, required=True)
+            except (OSError, ValueError) as exc:
+                # An extension manifest we cannot read must not cost us the whole study. It is written
+                # mode 0600 while the rest of a study is 0664, so a reader running as another uid - a
+                # hosted dashboard over a read-only mount of someone else's results - loses only the
+                # extension. Recorded rather than swallowed: the study reports itself as degraded.
+                self.degraded.append(f"extension manifest unreadable ({_public_reason(exc)})")
+                latest_target = {}
             if int(latest_target.get("extension_index", 0)) > 0:
                 extension_dir = latest_target_path.parent
                 execution_path = extension_dir / "execution_manifest.csv"
@@ -1682,6 +1698,7 @@ class BlackboardStudyReader:
                 "refreshed_at": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
+                "degraded": list(self.degraded),
                 "cells": cells,
             }
 
