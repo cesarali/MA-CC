@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { autoRefreshTimer: null, studyKey: null, lastPlace: undefined, restoring: false, timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
+  const state = { promptCache: new Map(), autoRefreshTimer: null, studyKey: null, lastPlace: undefined, restoring: false, timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
   const classToken = value => String(value).replace(/[^A-Za-z0-9_-]/g, '');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -223,6 +223,52 @@
     } catch (error) { $('status-text').textContent = `error · ${error.message}`; }
   }
 
+
+  // --- Decision audits ------------------------------------------------------------------
+  // One row per retained decision attempt; each record is fetched only when its row is opened,
+  // because an episode can hold hundreds and they are never needed all at once.
+  function renderPromptList(episodeId, count) {
+    const host = $('prompt-list');
+    if (!host) return;
+    state.promptCache = new Map();
+    if (!count) {
+      host.innerHTML = '<p class="unavailable">This episode retained no decision audits.</p>';
+      return;
+    }
+    host.innerHTML = Array.from({length: count}, (_, index) =>
+      `<details class="prompt-entry" data-prompt="${index}"><summary>Attempt ${index + 1}</summary><div class="prompt-body">Loading…</div></details>`).join('');
+    host.querySelectorAll('details[data-prompt]').forEach(entry => entry.addEventListener('toggle', async () => {
+      if (!entry.open || entry.dataset.loaded) return;
+      const index = Number(entry.dataset.prompt);
+      const body = entry.querySelector('.prompt-body');
+      try {
+        const payload = state.promptCache.get(index)
+          || await get(`api/study/episode/${encodeURIComponent(episodeId)}/prompt-${index}`);
+        if (state.episodeId !== episodeId) return;
+        state.promptCache.set(index, payload);
+        entry.dataset.loaded = '1';
+        body.innerHTML = renderAudit(payload.audit || {});
+        const summary = entry.querySelector('summary');
+        const audit = payload.audit || {};
+        summary.innerHTML = `Attempt ${index + 1}${audit.agent_id ? ` · ${esc(audit.agent_id)}` : ''}${audit.decision_stage ? ` · ${esc(audit.decision_stage)}` : ''}${audit.valid === false ? ' · <b>invalid</b>' : ''}`;
+      } catch (error) { body.innerHTML = `<span class="unavailable">${esc(error.message)}</span>`; }
+    }));
+  }
+
+  function renderAudit(audit) {
+    const scalars = Object.entries(audit).filter(([, value]) => value == null || typeof value !== 'object');
+    const issues = Array.isArray(audit.validation_issues) ? audit.validation_issues : [];
+    // A lean retention profile keeps the audit record but not the compiled prompt; say so rather
+    // than rendering an empty panel.
+    const messages = audit.compiled_messages || audit.messages;
+    const prompt = Array.isArray(messages) && messages.length
+      ? messages.map(message => `<div class="prompt-message"><div class="prompt-role">${esc(message.role || 'message')}</div><pre>${esc(message.content ?? '')}</pre></div>`).join('')
+      : `<p class="unavailable">${audit.semantic_only ? 'Lean retention profile: the compiled prompt text was not retained for this run.' : 'No compiled prompt on this audit record.'}</p>`;
+    return `${scalars.map(([name, value]) => kv(name, value)).join('')}
+      ${issues.length ? `<h3>Validation issues</h3><ul>${issues.map(issue => `<li>${esc(typeof issue === 'string' ? issue : json(issue))}</li>`).join('')}</ul>` : ''}
+      <h3>Prompt</h3>${prompt}`;
+  }
+
   async function openEpisode(id) {
     cancelPendingRefresh();
     state.refreshVersion += 1;
@@ -238,6 +284,7 @@
       state.episodeCache.set(id, detail);
       while (state.episodeCache.size > 8) state.episodeCache.delete(state.episodeCache.keys().next().value);
       populateTimeline(detail.timeline);
+      renderPromptList(id, Number(detail.prompt_attempts) || 0);
       if (detail.snapshot.cursor) {
         $('round').value = detail.snapshot.cursor.round_index;
         updateStepRange();

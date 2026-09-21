@@ -1562,6 +1562,11 @@ class BlackboardRunReader:
             "available_cursors": self.timeline()["available_cursors"],
         }
 
+    def prompt_count(self) -> int:
+        """How many decision audits this episode retained; the range prompt() accepts."""
+
+        return len(self._load()["audits"])
+
     def prompt(self, audit_index: int) -> dict[str, Any]:
         audits = self._load()["audits"]
         if audit_index < 0 or audit_index >= len(audits):
