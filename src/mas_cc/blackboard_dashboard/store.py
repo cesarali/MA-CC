@@ -95,8 +95,9 @@ class _ObjectTransport:
 
     def get(self, relative: str) -> bytes:
         key = "/".join(part for part in (self.prefix, safe_relative(relative)) if part)
+        client = self._s3()  # outside the try: "boto3 is not installed" must reach the user as itself
         try:
-            return self._s3().get_object(Bucket=self.bucket, Key=key)["Body"].read()
+            return client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
         except Exception as error:  # botocore raises its own hierarchy; keep keys out of messages
             code = getattr(error, "response", {}).get("Error", {}).get("Code", type(error).__name__)
             raise StoreError(f"bundle object could not be read ({code}): {relative}") from None
