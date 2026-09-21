@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Iterable, TypeAlias
 from urllib.parse import parse_qs, unquote, urlparse
 
+from .catalog import StudyCatalog
 from .data import BlackboardRunReader
 from .published import PublishedStudyReader
 from .store import is_bundle_dir, is_store_url, open_store
@@ -139,8 +140,9 @@ def _host_name(header: str) -> str:
 
 
 def make_handler(
-    reader: DashboardReader,
+    reader: DashboardReader | None,
     *,
+    catalog: StudyCatalog | None = None,
     base_path: str | None = None,
     allowed_hosts: Iterable[str] | None = None,
     access_log: bool = False,
@@ -153,6 +155,7 @@ def make_handler(
     the pod IP as Host and the routes disclose nothing.
     """
 
+    initial_reader = reader
     prefix = normalise_base_path(base_path)
     hosts = None if allowed_hosts is None else {h.strip().lower() for h in allowed_hosts} | LOOPBACK_HOSTS
 
@@ -285,6 +288,22 @@ def make_handler(
         def _serve(self) -> None:
             parsed = urlparse(self.path)
             try:
+                # With a catalog, /api/catalog lists the studies and /s/<key>/api/... addresses one;
+                # un-prefixed API calls go to the single study the server was started with, if any.
+                reader = initial_reader  # a local: study-scoped routes rebind it for this request only
+                if parsed.path == "/api/catalog":
+                    if catalog is None:
+                        self._send(404, "application/json", _json({"error": "not found"}))
+                    else:
+                        self._send(200, "application/json", _json(catalog.payload()))
+                    return
+                scoped = re.match(r"^/s/([^/]+)(/.*)$", parsed.path)
+                if scoped and catalog is not None:
+                    reader = catalog.reader(unquote(scoped.group(1)))
+                    parsed = parsed._replace(path=scoped.group(2))
+                if reader is None and parsed.path.startswith("/api/"):
+                    self._send(404, "application/json", _json({"error": "no study selected"}))
+                    return
                 if parsed.path in {"/", "/index.html"}:
                     self._send_asset("index.html", "text/html; charset=utf-8")
                     return
@@ -364,6 +383,9 @@ def make_handler(
                                         edge["step"] if edge else None,
                                     ),
                                     "statistics": episode_reader.statistics(),
+                                    # The audit range for /prompt-<n>; without it the UI would have
+                                    # to probe indices until one 400s.
+                                    "prompt_attempts": episode_reader.prompt_count(),
                                 }
                             elif action == "timeline":
                                 payload = episode_reader.timeline()
@@ -459,7 +481,7 @@ def make_handler(
 
 
 def serve_dashboard(
-    run_dir: str | Path,
+    run_dir: str | Path | None,
     *,
     episode_id: str | None = None,
     host: str = "127.0.0.1",
@@ -467,9 +489,15 @@ def serve_dashboard(
     allowed_hosts: Iterable[str] = (),
     base_path: str | None = None,
     access_log: bool = False,
+    catalogs: Iterable[str] = (),
 ) -> None:
-    reader: DashboardReader
-    if is_store_url(run_dir) or is_bundle_dir(run_dir):
+    reader: DashboardReader | None
+    catalog = StudyCatalog(catalogs) if list(catalogs) else None
+    if run_dir is None:
+        if catalog is None:
+            raise ValueError("nothing to serve: pass a run, a study, a bundle or --catalog")
+        reader = None
+    elif is_store_url(run_dir) or is_bundle_dir(run_dir):
         # A published bundle: s3://bucket/prefix, r2://bucket/prefix, or a directory with index.json.
         reader = PublishedStudyReader(open_store(run_dir))
     else:
@@ -487,7 +515,7 @@ def serve_dashboard(
             "it must be access-controlled; otherwise bind to localhost and use an SSH tunnel"
         )
     handler = make_handler(
-        reader, base_path=base_path, allowed_hosts=allowed, access_log=access_log
+        reader, catalog=catalog, base_path=base_path, allowed_hosts=allowed, access_log=access_log
     )
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
@@ -499,11 +527,13 @@ def serve_dashboard(
     print(
         f"Blackboard dashboard: http://{host}:{server.server_port}{normalise_base_path(base_path)}/"
     )
+    if catalog is not None:
+        print(f"Catalog: {len(catalog.entries())} studies from {len(catalog.sources)} source(s)")
     if isinstance(reader, PublishedStudyReader):
         print(f"Published study: {reader.study_id} ({reader.store.describe()})")
     elif isinstance(reader, BlackboardStudyReader):
         print(f"Collection: {reader.study_dir}")
-    else:
+    elif reader is not None:
         print(f"Episode: {reader.episode_dir}")
     try:
         server.serve_forever(poll_interval=0.5)

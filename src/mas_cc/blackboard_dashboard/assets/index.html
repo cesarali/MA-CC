@@ -13,7 +13,12 @@
       <h1>Blackboard Observatory</h1>
     </div>
     <div class="header-actions">
+      <label id="study-picker-wrap" class="study-picker" hidden>Study <select id="study-picker" aria-label="Study"></select></label>
       <button id="manual-refresh" class="theme-toggle" type="button">Refresh</button>
+      <label class="auto-refresh" title="Reload the current view on a timer. Off by default: a live study is otherwise refreshed only when you ask.">
+        <input id="auto-refresh" type="checkbox"> Auto
+        <select id="auto-refresh-seconds" aria-label="Auto-refresh interval"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="60">60 s</option></select>
+      </label>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch color theme">Dark theme</button>
       <div class="status"><span id="status-dot"></span><span id="status-text">connecting</span></div>
     </div>
@@ -93,6 +98,7 @@
     <button data-view="coverage">Coverage</button>
     <button data-view="agent-view">Agent</button>
     <button data-view="controller">Controller</button>
+    <button data-view="prompts">Prompts</button>
   </nav>
 
   <main>
@@ -161,6 +167,9 @@
       <article class="panel"><h2>Controller event strip</h2><p class="meta">Select a round to inspect its exact retained controller posts.</p><div id="controller-events"></div></article>
       <article class="panel"><h2>Per-round actuation and exposure</h2><div id="controller-round-bars"></div><p class="meta">Vote movement means the next recorded exposed update changed from a non-target vote to the target. It is descriptive, not causal.</p></article>
       <article class="panel"><h2>Selected round controller</h2><div id="controller-event-messages"></div><div id="controller-state"></div></article>
+    </section>
+    <section id="prompts" class="view">
+      <article class="panel"><h2>Decision audits</h2><p class="meta">Every retained decision attempt, newest index last. Each entry is fetched on demand; a lean retention profile keeps the audit record without the compiled prompt text.</p><div id="prompt-list"></div></article>
     </section>
   </main>
   </section>

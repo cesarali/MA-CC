@@ -207,7 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     blackboard_dashboard = blackboard_commands.add_parser(
         "dashboard", help="serve the interactive read-only blackboard dashboard"
     )
-    blackboard_source = blackboard_dashboard.add_mutually_exclusive_group(required=True)
+    blackboard_source = blackboard_dashboard.add_mutually_exclusive_group(required=False)
     blackboard_source.add_argument(
         "--run-dir",
         type=Path,
@@ -233,6 +233,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     blackboard_dashboard.add_argument(
         "--access-log", action="store_true", help="one JSON line per request on stderr"
+    )
+    blackboard_dashboard.add_argument(
+        "--catalog",
+        action="append",
+        default=[],
+        help="serve several studies (repeatable): a published prefix holding catalog.json "
+        "(directory, s3:// or r2:// URL) or a directory whose children are live study roots",
     )
     blackboard_export = blackboard_commands.add_parser(
         "export", help="write a portable completed-run dashboard"
@@ -826,6 +833,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 allowed_hosts=args.allowed_host,
                 base_path=args.base_path,
                 access_log=args.access_log,
+                catalogs=args.catalog,
             )
         except (OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
