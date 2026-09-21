@@ -8,9 +8,9 @@ execution:
   cells_per_shard: 1
   target_rpm: 500
   assumed_latency_seconds: 90.0
-  max_active_nodes: 12
-  throttle: 12
-  cpus_per_task: 8
+  max_active_nodes: 20
+  throttle: 20
+  cpus_per_task: 5
   memory: 12G
   time_limit: '12:00:00'
   partition: main

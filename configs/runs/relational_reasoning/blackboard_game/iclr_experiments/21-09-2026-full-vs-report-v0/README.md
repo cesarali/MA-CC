@@ -15,8 +15,9 @@ LLM-authored controller.
 - controller budgets: 3 and 12
 - matched no-control baseline for each rho/profile pair
 - 5 paired repetitions per cell
-- Cygnus execution: up to 12 concurrent 8-CPU cell shards (96 CPUs), with
-  study-wide provider concurrency capped at 100
+- Cygnus execution: all 20 cells at once, with 5 concurrent episode slots and
+  5 CPUs per cell shard (100 episodes / 100 CPUs), while study-wide provider
+  concurrency remains independently capped at 100
 
 Ordinary agents are LLM-authored in every cell. No-control cells have no
 controller, so `controller_authoring` is not applicable there. In controlled

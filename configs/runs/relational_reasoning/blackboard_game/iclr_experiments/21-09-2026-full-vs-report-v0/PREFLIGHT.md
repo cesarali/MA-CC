@@ -42,13 +42,13 @@ were not queried during this credential-free preflight.
 
 - repetitions / in-process parallelism: 5 / 5
 - one cell per shard
-- array throttle / maximum active nodes: 12 / 12
+- array throttle / maximum active cell shards: 20 / 20
 - provider request concurrency: 10 per shard
 - configured study-wide initial / maximum coordinator concurrency: 100 / 100
-- maximum simultaneous CPU allocation: 96 CPUs
+- simultaneous episode slots / CPU allocation: 100 / 100 CPUs
 - target RPM: 500
 - assumed provider latency: 90 seconds
-- requested resources per shard: 8 CPUs, 12 GiB, 12 hours
+- requested resources per shard: 5 CPUs, 12 GiB, 12 hours
 
 The preflight's summed per-config rough-runtime estimate is approximately 4.85
 hours, but this is not a scheduler wall-time guarantee and does not incorporate
