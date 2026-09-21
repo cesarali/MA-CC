@@ -214,7 +214,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="episode/run directory, or a standardized study root",
     )
     blackboard_source.add_argument(
-        "--study-dir", type=Path, help="standardized study or direct grid result root"
+        "--study-dir",
+        type=str,
+        help="standardized study or direct grid result root, a published bundle directory, "
+        "or a published bundle URL (s3://bucket/prefix, r2://bucket/prefix)",
     )
     blackboard_dashboard.add_argument("--episode-id")
     blackboard_dashboard.add_argument("--host", default="127.0.0.1")
