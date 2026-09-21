@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { studyKey: null, timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
+  const state = { autoRefreshTimer: null, studyKey: null, lastPlace: undefined, restoring: false, timeline: null, snapshot: null, staticMode: false, staticBundle: null, busy: false, refreshVersion: 0, refreshController: null, sliderTimer: null, pollBusy: false, navigationVersion: 0, mode: 'episode', study: null, cell: null, cellId: null, episodeId: null, cellTab: 'cell-episodes', selectedTrajectories: new Set(), episodeCache: new Map(), promptsLoading: false, cellFingerprint: null, selectedAgent: null, blackboardAuthorFilter: 'all', selectedControllerRound: null };
   const embedded = $('dashboard-data').textContent.trim();
   const classToken = value => String(value).replace(/[^A-Za-z0-9_-]/g, '');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -76,7 +76,12 @@
   function renderStudy() {
     showShell('study'); renderBreadcrumbs();
     const study = state.study;
-    document.querySelector('h1').textContent = study.study_id;
+    // Study ids are long and made of underscores, which offer no line-break opportunity: the title
+    // was clipped at the window edge. Allow a break after each underscore and set ids smaller than the
+    // product name.
+    const heading = document.querySelector('h1');
+    heading.classList.add('study-title');
+    heading.innerHTML = esc(study.study_id).replace(/_/g, '_<wbr>');
     const totals = study.episode_outcomes, activity = study.episode_activity;
     $('status-text').textContent = `${totals.completed} durable episodes complete · ${activity.running + activity.advancing} running · ${study.active_scheduler_tasks} SLURM cell tasks active`;
     document.querySelector('.status').className = `status ${study.live ? 'running' : 'completed'}`;
@@ -139,6 +144,7 @@
     }
   }
 
+  const FILTER_PARAMS = [['block','filter-block'],['controller','filter-controller'],['rho','filter-rho'],['status','filter-status'],['sort','cell-sort']];
   function updateHash() {
     if (!state.study) return;
     const params = new URLSearchParams();
@@ -151,8 +157,13 @@
     const activeTab = document.querySelector('#tabs button.active')?.dataset.view;
     if (state.episodeId && activeTab) params.set('episodeTab', activeTab);
     if (state.episodeId) { params.set('round', $('round').value); params.set('step', $('step').value); if (state.selectedAgent) params.set('agent', state.selectedAgent); params.set('blackboard', state.blackboardAuthorFilter); params.set('controllerRound', state.selectedControllerRound ?? ''); params.set('follow', $('follow').checked ? '1' : '0'); }
-    if ($('filter-rho').value) params.set('rho', $('filter-rho').value);
-    history.replaceState({}, '', `#${params}`);
+    for (const [name, id] of FILTER_PARAMS) { if ($(id).value) params.set(name, $(id).value); }
+    // Where the user IS (study / cell / episode) makes a history entry so Back works; how they are
+    // looking at it (filters, tab, round) only rewrites the current entry.
+    const place = [state.studyKey, state.cellId, state.episodeId].map(value => value || '').join('|');
+    const moved = state.lastPlace !== undefined && place !== state.lastPlace && !state.restoring;
+    state.lastPlace = place;
+    history[moved ? 'pushState' : 'replaceState']({}, '', `#${params}`);
   }
 
   function renderCell(cell) {
@@ -512,6 +523,32 @@
     };
   }
 
+  window.addEventListener('popstate', async () => {
+    if (state.staticMode) return;
+    const wanted = new URLSearchParams(location.hash.slice(1));
+    state.restoring = true;
+    try {
+      if (wanted.get('study') && wanted.get('study') !== state.studyKey && $('study-picker').options.length) {
+        state.studyKey = wanted.get('study'); $('study-picker').value = state.studyKey; state.study = null;
+      }
+      state.navigationVersion += 1; state.cell = null; state.cellId = null; state.episodeId = null;
+      showShell('study');
+      await startStudy(state.study);
+    } finally { state.restoring = false; state.lastPlace = [state.studyKey, state.cellId, state.episodeId].map(value => value || '').join('|'); }
+  });
+
+  // Opt-in auto-refresh. Off by default and never persisted: a self-rescheduling timeout that exists
+  // only while the box is ticked, waits for the previous refresh to finish, and pauses in a hidden tab.
+  function scheduleAutoRefresh() {
+    clearTimeout(state.autoRefreshTimer);
+    if (!$('auto-refresh').checked || state.staticMode) return;
+    state.autoRefreshTimer = setTimeout(async () => {
+      try { if (!document.hidden) await refreshCurrentView(); } finally { scheduleAutoRefresh(); }
+    }, Number($('auto-refresh-seconds').value) * 1000);
+  }
+  $('auto-refresh').addEventListener('change', scheduleAutoRefresh);
+  $('auto-refresh-seconds').addEventListener('change', scheduleAutoRefresh);
+
   async function boot() {
     let studies = [];
     try { studies = (await get('api/catalog')).studies || []; } catch (error) { studies = []; }
@@ -529,7 +566,12 @@
     try {
       state.study = initialStudy || await get('api/study'); state.mode = 'study'; renderStudy();
       const restored = new URLSearchParams(location.hash.slice(1));
-      if (restored.get('rho')) { $('filter-rho').value = restored.get('rho'); renderCellTable(); }
+      let filtered = false;
+      for (const [name, id] of FILTER_PARAMS) {
+        const wanted = restored.get(name);
+        if (wanted !== null && [...$(id).options].some(option => option.value === wanted)) { $(id).value = wanted; filtered = true; }
+      }
+      if (filtered) renderCellTable();
       if (restored.get('cellTab')) state.cellTab = restored.get('cellTab');
       if (restored.get('trajectories')) state.selectedTrajectories = new Set(restored.get('trajectories').split(','));
       if (restored.get('cell')) await openCell(restored.get('cell'));

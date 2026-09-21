@@ -15,6 +15,10 @@
     <div class="header-actions">
       <label id="study-picker-wrap" class="study-picker" hidden>Study <select id="study-picker" aria-label="Study"></select></label>
       <button id="manual-refresh" class="theme-toggle" type="button">Refresh</button>
+      <label class="auto-refresh" title="Reload the current view on a timer. Off by default: a live study is otherwise refreshed only when you ask.">
+        <input id="auto-refresh" type="checkbox"> Auto
+        <select id="auto-refresh-seconds" aria-label="Auto-refresh interval"><option value="10">10 s</option><option value="30" selected>30 s</option><option value="60">60 s</option></select>
+      </label>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch color theme">Dark theme</button>
       <div class="status"><span id="status-dot"></span><span id="status-text">connecting</span></div>
     </div>
