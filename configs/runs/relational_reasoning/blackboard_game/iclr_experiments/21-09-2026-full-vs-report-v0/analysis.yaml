@@ -1,0 +1,61 @@
+slurm:
+  task_throttle: 5
+  cpus_per_task: 1
+  memory: 16G
+  time_limit: 08:00:00
+  prepare_memory: 32G
+  prepare_time_limit: 02:00:00
+  finalizer_cpus: 8
+  finalizer_memory: 64G
+  finalizer_time_limit: '12:00:00'
+estimators:
+- round_sensing_mi
+- round_sensor_mae
+- round_sensor_mse
+- round_controller_action_entropy
+- round_target_actuation_cmi
+- round_truth_actuation_cmi
+- round_target_information_fraction
+- round_target_susceptibility
+- round_target_signed_actuation
+- round_truth_signed_actuation
+- propensity_weighted_causal_response
+resampling:
+  bootstrap_resamples: 1000
+  null_permutations: 1000
+  confidence: 0.95
+  seed: 1
+derived:
+- round_target_susceptibility
+- eta_ir
+- target_sensing_information_nats
+- communication_response_efficiency
+state_local:
+- x
+state_local_x_bins: 8
+blackboard_population_outputs: true
+blackboard_phase2_outputs:
+  enabled: true
+  strata:
+  - communication_profile
+  - controller_authoring
+  - controller_target_semantics
+  - intervention_budget
+  - epistemic_persistence
+plots:
+  target_information_by_profile:
+    source: primary_estimates
+    metric: round_target_information_fraction
+    x: intervention_budget
+    series: communication_profile
+    facet: controller_target_semantics
+    kind: line
+    status_column: support_status
+  causal_response_by_profile:
+    source: primary_estimates
+    metric: propensity_weighted_causal_response
+    x: intervention_budget
+    series: communication_profile
+    facet: controller_target_semantics
+    kind: line
+    status_column: support_status

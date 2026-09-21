@@ -48,10 +48,13 @@ def resolved_config_yaml(config: RunConfig) -> str:
             )
 
             board = config.game.options.get("board", {})
+            communication_profile = board.get("communication_profile")
             prompt = relational_blackboard_ballot_prompt(
                 version=config.prompt.prompt_version,
                 allow_participant_requests=bool(
-                    board.get("allow_participant_requests", True)
+                    communication_profile == "full_communication"
+                    if communication_profile is not None
+                    else board.get("allow_participant_requests", True)
                 ),
                 require_grounded_reports=bool(
                     board.get(

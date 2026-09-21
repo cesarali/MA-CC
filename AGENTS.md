@@ -63,6 +63,14 @@ For MA-CC study creation, submission, SLURM execution, aggregation, or
 post-processing, use the `ma-cc-study-workflow` skill. Read its complete
 instructions at `.codex/skills/ma-cc-study-workflow/SKILL.md` before acting.
 
+For those operations on the Cygnus cluster or its `slurm-login` host, also use
+the `ma-cc-cygnus-study-workflow` skill at
+`.codex/skills/ma-cc-cygnus-study-workflow/SKILL.md`. It requires agents to
+read `docs/handoff/cygnus-end-to-end.md` in full and keeps Cygnus environment,
+launcher, path, resource, and aggregation rules separate from Potsdam. This
+routing requirement does not itself authorize a real submission or paid
+provider call.
+
 That skill routes compute-site and provider-specific operations separately:
 
 - Potsdam execution and the university provider:

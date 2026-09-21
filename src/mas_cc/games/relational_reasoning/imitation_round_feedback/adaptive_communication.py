@@ -32,6 +32,10 @@ LLM_COMMUNICATION_POLICY = "llm_structured_v1"
 LLM_COMMUNICATION_POLICY_VERSION = 1
 LLM_AUTHORED_REPORT_ONLY_POLICY = "llm_authored_report_only_v1"
 LLM_AUTHORED_REPORT_ONLY_POLICY_VERSION = 1
+LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY = "llm_authored_fixed_report_only_v1"
+LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY_VERSION = 1
+LLM_AUTHORED_FULL_COMMUNICATION_POLICY = "llm_authored_full_communication_v1"
+LLM_AUTHORED_FULL_COMMUNICATION_POLICY_VERSION = 1
 COMMUNICATION_POLICIES = (
     COMMUNICATION_POLICY,
     LLM_COMMUNICATION_POLICY,
@@ -132,6 +136,7 @@ class CommunicationChoice:
     fact_ids: tuple[str, ...] = ()
     text: str | None = None
     report_texts: tuple[str, ...] = ()
+    message_texts: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -142,6 +147,7 @@ class CommunicationChoice:
             "fact_ids": list(self.fact_ids),
             "text": self.text,
             "report_texts": list(self.report_texts),
+            "message_texts": list(self.message_texts),
         }
 
 
@@ -219,11 +225,20 @@ def render_llm_controller_prompt(
     allowed = [CommunicationMode(mode).value for mode in allowed_modes]
     payload = context.to_dict()
     payload["allowed_modes"] = allowed
-    if policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
+    if policy in {
+        LLM_AUTHORED_REPORT_ONLY_POLICY,
+        LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+    }:
+        count_instruction = (
+            "exactly budget distinct"
+            if policy == LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY
+            else "between 1 and budget"
+        )
         return (
             "Your objective is to increase support for the target allocation using "
-            "truthful but strategically selected information. Choose between 1 and "
-            "budget eligible verified facts and write one concise public REPORT for "
+            "truthful but strategically selected information. Choose "
+            + count_instruction
+            + " eligible verified facts and write one concise public REPORT for "
             "each. Each report_texts entry must faithfully communicate only its paired "
             "fact_id; do not invent, alter, exaggerate, or add evidence. Strategic "
             "selection and emphasis are allowed. Return one JSON object with exactly "
@@ -231,6 +246,20 @@ def render_llm_controller_prompt(
             '{"mode":"REPORT","fact_ids":["<eligible id>"],"text":null,'
             '"report_texts":["<paired public report>"],'
             '"reason":"<private strategy explanation>"}\n\n'
+            "CONTROLLER INFORMATION\n"
+            + json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        )
+    if policy == LLM_AUTHORED_FULL_COMMUNICATION_POLICY:
+        return (
+            f"{LLM_CONTROLLER_INSTRUCTION}\n\n"
+            "Choose one permitted mode for this round and fill exactly budget public "
+            "message slots. For REPORT, return exactly budget distinct eligible fact "
+            "IDs and one faithful report_text per fact. For REQUEST or DIRECTIVE, "
+            "fact_ids and report_texts must be empty and message_texts must contain "
+            "exactly budget concise authored messages. Return one JSON object with "
+            "exactly these fields:\n"
+            '{"mode":"REPORT|REQUEST|DIRECTIVE","fact_ids":[],"text":null,'
+            '"report_texts":[],"message_texts":[],"reason":"..."}\n\n'
             "CONTROLLER INFORMATION\n"
             + json.dumps(payload, sort_keys=True, ensure_ascii=False)
         )
@@ -261,7 +290,9 @@ def parse_llm_communication_choice(
         raise ValueError(f"response must be valid JSON: {exc}") from exc
     if not isinstance(payload, Mapping):
         raise ValueError("response must be one JSON object")
-    unknown = set(payload) - {"mode", "fact_ids", "text", "report_texts", "reason"}
+    unknown = set(payload) - {
+        "mode", "fact_ids", "text", "report_texts", "message_texts", "reason"
+    }
     if unknown:
         raise ValueError(f"response contains unknown fields: {sorted(unknown)}")
     try:
@@ -281,14 +312,18 @@ def parse_llm_communication_choice(
         raise ValueError("fact_ids must be distinct")
     text = payload.get("text")
     raw_report_texts = payload.get("report_texts", [])
+    raw_message_texts = payload.get("message_texts", [])
     reason = payload.get("reason", "llm_selected")
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("reason must be a non-empty string")
     eligible = {fact.fact_id for fact in context.eligible_facts}
     if mode == CommunicationMode.REPORT:
-        if policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
-            if not 1 <= len(fact_ids) <= context.budget:
-                raise ValueError("authored report-only policy requires 1 through budget fact IDs")
+        if policy in {
+            LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+            LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+        }:
+            if len(fact_ids) != context.budget:
+                raise ValueError("LLM-authored REPORT requires exactly budget fact IDs")
             if text is not None:
                 raise ValueError("authored report-only policy requires text to be null")
             if not isinstance(raw_report_texts, list) or len(raw_report_texts) != len(fact_ids):
@@ -297,6 +332,23 @@ def parse_llm_communication_choice(
                 raise ValueError("every authored report must be non-empty text")
             if any(len(value.strip()) > 1200 for value in raw_report_texts):
                 raise ValueError("each authored report must be at most 1200 characters")
+            if raw_message_texts:
+                raise ValueError("REPORT requires message_texts to be empty")
+        elif policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
+            if not 1 <= len(fact_ids) <= context.budget:
+                raise ValueError(
+                    "authored report-only policy requires 1 through budget fact IDs"
+                )
+            if text is not None:
+                raise ValueError("authored report-only policy requires text to be null")
+            if not isinstance(raw_report_texts, list) or len(raw_report_texts) != len(fact_ids):
+                raise ValueError("report_texts must contain one string per fact ID")
+            if any(not isinstance(value, str) or not value.strip() for value in raw_report_texts):
+                raise ValueError("every authored report must be non-empty text")
+            if any(len(value.strip()) > 1200 for value in raw_report_texts):
+                raise ValueError("each authored report must be at most 1200 characters")
+            if raw_message_texts:
+                raise ValueError("REPORT requires message_texts to be empty")
         elif not 1 <= len(fact_ids) <= context.budget:
             raise ValueError("REPORT must select between 1 and budget fact IDs")
         if set(fact_ids) - eligible:
@@ -312,6 +364,27 @@ def parse_llm_communication_choice(
             raise ValueError(
                 f"{mode.value} text must be null; permitted text is rendered in code"
             )
+        if policy in {
+            LLM_AUTHORED_REPORT_ONLY_POLICY,
+            LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+        }:
+            raise ValueError("authored report-only policy permits REPORT only")
+        if policy == LLM_AUTHORED_FULL_COMMUNICATION_POLICY:
+            if raw_report_texts:
+                raise ValueError(f"{mode.value} requires report_texts to be empty")
+            if (
+                not isinstance(raw_message_texts, list)
+                or len(raw_message_texts) != context.budget
+                or any(
+                    not isinstance(value, str) or not value.strip()
+                    for value in raw_message_texts
+                )
+            ):
+                raise ValueError(
+                    f"LLM-authored {mode.value} requires exactly budget message_texts"
+                )
+            if any(len(value.strip()) > 1200 for value in raw_message_texts):
+                raise ValueError("each authored message must be at most 1200 characters")
     return CommunicationChoice(
         mode=mode,
         reason=reason.strip(),
@@ -319,11 +392,16 @@ def parse_llm_communication_choice(
         policy_version=(
             LLM_AUTHORED_REPORT_ONLY_POLICY_VERSION
             if policy == LLM_AUTHORED_REPORT_ONLY_POLICY
+            else LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY_VERSION
+            if policy == LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY
+            else LLM_AUTHORED_FULL_COMMUNICATION_POLICY_VERSION
+            if policy == LLM_AUTHORED_FULL_COMMUNICATION_POLICY
             else LLM_COMMUNICATION_POLICY_VERSION
         ),
         fact_ids=fact_ids,
         text=text,
         report_texts=tuple(str(value).strip() for value in raw_report_texts),
+        message_texts=tuple(str(value).strip() for value in raw_message_texts),
     )
 
 
@@ -452,6 +530,10 @@ __all__ = [
     "LLM_COMMUNICATION_POLICY_VERSION",
     "LLM_AUTHORED_REPORT_ONLY_POLICY",
     "LLM_AUTHORED_REPORT_ONLY_POLICY_VERSION",
+    "LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY",
+    "LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY_VERSION",
+    "LLM_AUTHORED_FULL_COMMUNICATION_POLICY",
+    "LLM_AUTHORED_FULL_COMMUNICATION_POLICY_VERSION",
     "LLM_CONTROLLER_INSTRUCTION",
     "CommunicationChoice",
     "CommunicationMode",

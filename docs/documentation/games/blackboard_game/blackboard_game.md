@@ -370,6 +370,28 @@ statements.
 
 ## 8. The adaptive communication controller
 
+New studies should configure the public vocabulary and controller authorship
+with two orthogonal handles:
+
+```yaml
+game:
+  options:
+    board:
+      communication_profile: report_only  # or full_communication
+control:
+  options:
+    controller_authoring: llm_authored     # or deterministic
+```
+
+Ordinary agents are always LLM-authored. Under `report_only` they may choose
+`REPORT` or `NONE`, while the controller may use only `REPORT`. Under
+`full_communication`, agents may additionally use `REQUEST`, and the controller
+may use `REPORT`, `REQUEST`, or `DIRECTIVE`. The binary controller gate and
+configured budget remain external to authorship: an inactive round posts zero
+controller messages and an active round fills exactly `b` controller message
+slots. Legacy low-level flags below remain supported for replaying historical
+configs and retain their historical maximum-budget semantics.
+
 The adaptive study sets:
 
 ```yaml

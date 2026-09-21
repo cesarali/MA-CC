@@ -24,6 +24,8 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     RelationalRoundBudgetedControl,
 )
 from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
+    LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+    LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
     LLM_AUTHORED_REPORT_ONLY_POLICY,
     LLM_COMMUNICATION_POLICY,
     CommunicationChoice,
@@ -849,6 +851,227 @@ def test_llm_authored_report_only_text_is_posted_with_verified_fact():
     assert result.rounds[0].event["allowed_message_modes"] == ["REPORT"]
 
 
+def test_report_only_llm_handle_posts_exactly_the_fixed_budget():
+    config = _llm_adaptive_task3_config(rounds=1)
+    game_options = dict(config.game.options)
+    board = dict(game_options["board"])
+    board.pop("allow_participant_requests", None)
+    board["communication_profile"] = "report_only"
+    game_options.update(
+        {
+            "board": board,
+            "task_dataset_dir": "/shared/home/cesar/work/results/studies/"
+            "musr_truthful_selective_task_calibration_01/tasks",
+        }
+    )
+    control_options = dict(config.control.options)
+    for legacy in (
+        "controller_communication_policy",
+        "controller_communication_policy_version",
+        "controller_communication_fallback_policy",
+        "allow_controller_requests",
+        "allow_controller_directives",
+    ):
+        control_options.pop(legacy, None)
+    control_options["controller_authoring"] = "llm_authored"
+    config = replace(
+        config,
+        game=replace(config.game, options=game_options),
+        control=replace(config.control, options=control_options),
+    )
+    task = create_game(config.game).load_task(config.game)
+    fact_ids = list(task.controller_reportable_fact_ids[:3])
+    authored = [f"Grounded authored report {index}." for index in range(3)]
+    provider = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "REPORT",
+                    "fact_ids": fact_ids,
+                    "text": None,
+                    "report_texts": authored,
+                    "reason": "fill the fixed intervention",
+                }
+            )
+        ],
+        [],
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            provider,
+            control=RelationalRoundBudgetedControl.from_options(control_options),
+        )
+    )
+    event = result.rounds[0].event
+    assert event["requested_b"] == 3
+    assert event["actual_controller_posts"] == 3
+    assert event["communication_profile"] == "report_only"
+    assert event["controller_authoring"] == "llm_authored"
+    assert event["allowed_message_modes"] == ["REPORT"]
+    controller_posts = [
+        message
+        for message in result.final_state.blackboard.messages
+        if message.author_kind == "controller"
+    ]
+    assert [message.text for message in controller_posts] == authored
+
+
+def test_llm_authoring_handle_fails_closed_instead_of_using_deterministic_text():
+    config = _llm_adaptive_task3_config(rounds=1)
+    game_options = dict(config.game.options)
+    board = dict(game_options["board"])
+    board.pop("allow_participant_requests", None)
+    board["communication_profile"] = "report_only"
+    game_options.update(
+        {
+            "board": board,
+            "task_dataset_dir": "/shared/home/cesar/work/results/studies/"
+            "musr_truthful_selective_task_calibration_01/tasks",
+        }
+    )
+    control_options = dict(config.control.options)
+    for legacy in (
+        "controller_communication_policy",
+        "controller_communication_policy_version",
+        "controller_communication_fallback_policy",
+        "allow_controller_requests",
+        "allow_controller_directives",
+    ):
+        control_options.pop(legacy, None)
+    control_options.update(
+        {
+            "controller_authoring": "llm_authored",
+            "controller_communication_max_retries": 0,
+        }
+    )
+    config = replace(
+        config,
+        game=replace(config.game, options=game_options),
+        control=replace(config.control, options=control_options),
+    )
+    with pytest.raises(ValueError, match="refusing to substitute deterministic"):
+        asyncio.run(
+            run_relational_imitation_round_feedback_game(
+                create_game(config.game),
+                config,
+                _llm_controller_provider(config, ["not json"], []),
+                control=RelationalRoundBudgetedControl.from_options(control_options),
+            )
+        )
+
+
+def test_full_communication_llm_handle_authors_exactly_budget_requests():
+    config = _llm_adaptive_task3_config(rounds=1)
+    game_options = dict(config.game.options)
+    board = dict(game_options["board"])
+    board.pop("allow_participant_requests", None)
+    board["communication_profile"] = "full_communication"
+    game_options.update(
+        {
+            "board": board,
+            "task_dataset_dir": "/shared/home/cesar/work/results/studies/"
+            "musr_truthful_selective_task_calibration_01/tasks",
+        }
+    )
+    control_options = dict(config.control.options)
+    for legacy in (
+        "controller_communication_policy",
+        "controller_communication_policy_version",
+        "controller_communication_fallback_policy",
+        "allow_controller_requests",
+        "allow_controller_directives",
+    ):
+        control_options.pop(legacy, None)
+    control_options["controller_authoring"] = "llm_authored"
+    config = replace(
+        config,
+        game=replace(config.game, options=game_options),
+        control=replace(config.control, options=control_options),
+    )
+    texts = [f"Please investigate evidence channel {index}." for index in range(3)]
+    provider = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "REQUEST",
+                    "fact_ids": [],
+                    "text": None,
+                    "report_texts": [],
+                    "message_texts": texts,
+                    "reason": "request missing evidence",
+                }
+            )
+        ],
+        [],
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            provider,
+            control=RelationalRoundBudgetedControl.from_options(control_options),
+        )
+    )
+    event = result.rounds[0].event
+    assert event["requested_b"] == event["actual_controller_posts"] == 3
+    assert event["allow_participant_requests"] is True
+    assert event["allowed_message_modes"] == ["REPORT", "REQUEST", "DIRECTIVE"]
+    controller_posts = [
+        message
+        for message in result.final_state.blackboard.messages
+        if message.author_kind == "controller"
+    ]
+    assert [message.message_type for message in controller_posts] == ["REQUEST"] * 3
+    assert [message.text for message in controller_posts] == texts
+
+
+def test_full_communication_deterministic_handle_keeps_exact_budget_without_controller_llm():
+    config = _llm_adaptive_task3_config(rounds=1)
+    game_options = dict(config.game.options)
+    board = dict(game_options["board"])
+    board.pop("allow_participant_requests", None)
+    board["communication_profile"] = "full_communication"
+    game_options.update(
+        {
+            "board": board,
+            "task_dataset_dir": "/shared/home/cesar/work/results/studies/"
+            "musr_truthful_selective_task_calibration_01/tasks",
+        }
+    )
+    control_options = dict(config.control.options)
+    for legacy in (
+        "controller_communication_policy",
+        "controller_communication_policy_version",
+        "controller_communication_fallback_policy",
+        "allow_controller_requests",
+        "allow_controller_directives",
+    ):
+        control_options.pop(legacy, None)
+    control_options["controller_authoring"] = "deterministic"
+    config = replace(
+        config,
+        game=replace(config.game, options=game_options),
+        control=replace(config.control, options=control_options),
+    )
+    captured = []
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            _llm_controller_provider(config, [], captured),
+            control=RelationalRoundBudgetedControl.from_options(control_options),
+        )
+    )
+    event = result.rounds[0].event
+    assert event["requested_b"] == event["actual_controller_posts"] == 3
+    assert event["controller_authoring"] == "deterministic"
+    assert captured == []
+
+
 def test_provider_recovery_replays_saved_llm_controller_choice():
     config = _llm_adaptive_task3_config(rounds=1)
     task = create_game(config.game).load_task(config.game)
@@ -968,6 +1191,86 @@ def test_authored_report_only_choice_requires_one_grounded_report():
             allowed_modes=(CommunicationMode.REPORT,),
             policy="llm_authored_report_only_v1",
         )
+
+
+def test_fixed_report_only_handle_requires_exactly_budget_authored_reports():
+    facts = tuple(
+        ControllerVisibleFact(f"fact-{index}", f"Verified {index}.", 0, None)
+        for index in range(1, 4)
+    )
+    context = ControllerCommunicationContext(
+        round_index=0,
+        target="ALLOCATION_2",
+        sampled_opinion_counts={},
+        live_message_type_counts={},
+        eligible_facts=facts,
+        budget=3,
+    )
+    payload = json.dumps(
+        {
+            "mode": "REPORT",
+            "fact_ids": [fact.fact_id for fact in facts],
+            "text": None,
+            "report_texts": ["One.", "Two.", "Three."],
+            "reason": "fixed dose",
+        }
+    )
+    choice = parse_llm_communication_choice(
+        payload,
+        context=context,
+        allowed_modes=(CommunicationMode.REPORT,),
+        policy=LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+    )
+    assert len(choice.fact_ids) == context.budget
+    assert len(choice.report_texts) == context.budget
+
+    with pytest.raises(ValueError, match="exactly budget"):
+        parse_llm_communication_choice(
+            json.dumps(
+                {
+                    "mode": "REPORT",
+                    "fact_ids": [facts[0].fact_id],
+                    "text": None,
+                    "report_texts": ["One."],
+                    "reason": "variable dose",
+                }
+            ),
+            context=context,
+            allowed_modes=(CommunicationMode.REPORT,),
+            policy=LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+        )
+
+
+@pytest.mark.parametrize("mode", [CommunicationMode.REQUEST, CommunicationMode.DIRECTIVE])
+def test_full_communication_authored_factless_modes_fill_exact_budget(mode):
+    context = ControllerCommunicationContext(
+        round_index=0,
+        target="ALLOCATION_2",
+        sampled_opinion_counts={},
+        live_message_type_counts={},
+        budget=2,
+    )
+    choice = parse_llm_communication_choice(
+        json.dumps(
+            {
+                "mode": mode.value,
+                "fact_ids": [],
+                "text": None,
+                "report_texts": [],
+                "message_texts": ["First public message.", "Second public message."],
+                "reason": "fill both slots",
+            }
+        ),
+        context=context,
+        allowed_modes=(
+            CommunicationMode.REPORT,
+            CommunicationMode.REQUEST,
+            CommunicationMode.DIRECTIVE,
+        ),
+        policy=LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+    )
+    assert choice.mode == mode
+    assert len(choice.message_texts) == context.budget
     with pytest.raises(ValueError, match="distinct"):
         parse_llm_communication_choice(
             '{"mode":"REPORT","fact_ids":["fact-1","fact-1"],"text":null,"reason":"x"}',
