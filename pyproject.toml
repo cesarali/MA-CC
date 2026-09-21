@@ -27,6 +27,8 @@ test = ["pytest>=8.0"]
 # Redis-backed provider coordinator (execution.provider_load_control.mode: redis_adaptive)
 redis = ["redis>=5.0"]
 comet = ["comet_ml>=3.58,<4"]
+# Published dashboard bundles read from s3:// or r2:// (blackboard_dashboard/store.py)
+r2 = ["boto3>=1.34"]
 gemma4 = [
   "accelerate>=1.0",
   "huggingface-hub>=0.30",
