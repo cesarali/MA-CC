@@ -178,3 +178,18 @@ def test_http_server_serves_a_published_bundle(published, tmp_path: Path):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_a_missing_boto3_is_reported_as_itself(monkeypatch, tmp_path: Path):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_boto3(name, *args, **kwargs):
+        if name == "boto3":
+            raise ImportError("No module named 'boto3'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_boto3)
+    with pytest.raises(StoreError, match=r"needs boto3 \(pip install 'mas-cc\[r2\]'\)"):
+        open_store("r2://bucket/prefix", cache_dir=tmp_path / "cache")
