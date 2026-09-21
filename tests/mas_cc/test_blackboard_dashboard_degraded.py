@@ -40,3 +40,18 @@ def test_a_readable_study_reports_nothing_degraded(tmp_path: Path):
 
 def test_a_plain_study_reports_nothing_degraded(tmp_path: Path):
     assert BlackboardStudyReader(_study(tmp_path), scheduler=False).study()["degraded"] == []
+
+
+def test_the_study_view_shows_a_partial_study_notice():
+    """A study missing a part it could not read must say so: the counts beside it are derived from
+    what was readable, so silence would present an incomplete study as a whole one."""
+    from importlib.resources import files
+
+    assets = files("mas_cc.blackboard_dashboard.assets")
+    script = assets.joinpath("app.js").read_text(encoding="utf-8")
+    page = assets.joinpath("index.html").read_text(encoding="utf-8")
+    assert '<div id="study-degraded" hidden></div>' in page
+    assert "const degraded = study.degraded || [];" in script
+    assert "notice.hidden = !degraded.length;" in script
+    assert "degraded.map(esc)" in script          # reasons come from disk; escape them
+    assert "Partial study." in script
