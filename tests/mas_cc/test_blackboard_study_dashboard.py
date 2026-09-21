@@ -622,6 +622,9 @@ def test_cell_markup_separates_episode_navigation_and_trajectories():
     assert 'id="cell-trajectories"' in html
     assert '<details id="all-parameters">' in html
     assert 'id="filter-rho"' in html
+    assert 'id="filter-target"' in html
+    assert "controllerTargetLabel" in script
+    assert "<th>Target</th>" in script
     episode_template = script.split("$('episode-table').innerHTML =", 1)[1].split(
         ";", 1
     )[0]
