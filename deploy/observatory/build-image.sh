@@ -5,7 +5,10 @@
 #   deploy/observatory/build-image.sh <registry/repo> <tag> [--insecure]
 #
 # Prints the final digest. Requires: python3.12 (same minor as the base image; wheels are installed on the
-# host and must match), pip, crane, and registry credentials already configured for crane.
+# host and must match), pip, git, crane, and registry credentials already configured for crane.
+#
+# The application layer is built from `git archive HEAD` (override with MA_CC_BUILD_REF), so the image
+# corresponds to a commit and cannot pick up a stale build/lib or an uncommitted file.
 set -euo pipefail
 
 REPO=${1:?usage: build-image.sh <registry/repo> <tag> [--insecure]}
@@ -22,7 +25,16 @@ SITE=$WORK/layer/opt/observatory/site-packages
 mkdir -p "$SITE"
 python3 -m pip install --quiet --no-compile --only-binary=:all: --platform manylinux2014_x86_64 --platform manylinux_2_28_x86_64 \
   --python-version 3.12 --implementation cp --target "$SITE" -r "$HERE/requirements.txt"
-python3 -m pip install --quiet --no-compile --no-deps --target "$SITE" "$ROOT"
+
+# Build from a pristine export of the commit, never the working tree. Two reasons, both measured:
+# a leftover build/lib from an earlier install keeps a copy of each data file, setuptools re-copies only
+# when the SOURCE is newer, and a stale copy with a newer mtime is then packaged silently - it shipped an
+# image whose assets were an edit behind while reporting success. Exporting also keeps untracked and
+# uncommitted files out of the image, so the digest corresponds to a commit.
+SOURCE=$WORK/source
+mkdir -p "$SOURCE"
+git -C "$ROOT" archive --format=tar "${MA_CC_BUILD_REF:-HEAD}" | tar -x -C "$SOURCE"
+python3 -m pip install --quiet --no-compile --no-deps --target "$SITE" "$SOURCE"
 find "$SITE" -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 # Reproducible layer: sorted names, fixed mtime, root-owned, world-readable.
