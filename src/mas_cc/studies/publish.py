@@ -20,11 +20,14 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 RECEIPT = "publish_receipt.json"
+CATALOG = "catalog.json"
+CATALOG_SCHEMA_VERSION = 1
 
 
 class PublishError(RuntimeError):
@@ -79,9 +82,72 @@ class Rclone:
         entries = json.loads(self._run("lsjson", target))
         return int(entries[0]["Size"]) if entries else None
 
+    def read_text(self, target: str) -> str | None:
+        """The object's text, or None when it does not exist (``lsjson`` first: ``cat`` of a
+        missing object is an error on some backends and empty output on others)."""
+        try:
+            entries = json.loads(self._run("lsjson", target))
+        except PublishError:
+            return None
+        if not entries:
+            return None
+        return self._run("cat", target)
+
+
+def publish_dashboard(study_dir: Path, *, remote: str, prefix: str, name: str, client: Rclone,
+                      bundle_dir: Path | None = None) -> dict[str, Any]:
+    """Write the dashboard bundle for a finished study, mirror it, and list it in the catalog.
+
+    ``<remote>/<prefix>/<name>/dashboard/`` receives the bundle (``blackboard_dashboard.published``),
+    which ``mas-cc blackboard dashboard --study-dir r2://bucket/<prefix>/<name>/dashboard`` serves.
+    ``<remote>/<prefix>/catalog.json`` gets one row per published study, replaced on republish. The
+    catalog is read-modify-write without a lock: publish one study at a time per prefix.
+    """
+    from mas_cc.blackboard_dashboard import write_dashboard_bundle
+    from mas_cc.blackboard_dashboard.study_data import BlackboardStudyReader
+
+    root = f"{remote}/{prefix.strip('/')}"
+    target = f"{root}/{name}/dashboard"
+    with tempfile.TemporaryDirectory(dir=bundle_dir, prefix="dashboard-bundle-") as scratch:
+        bundle = Path(scratch) / "bundle"
+        index = write_dashboard_bundle(BlackboardStudyReader(study_dir, scheduler=False), bundle)
+        local_count, local_bytes = _local_inventory(bundle)
+        client.sync(bundle, target)
+        remote_count, remote_bytes = client.size(target)
+        verified = remote_count == local_count and remote_bytes == local_bytes
+        result: dict[str, Any] = {
+            "target": target, "objects": local_count, "bytes": local_bytes, "remote_objects": remote_count,
+            "remote_bytes": remote_bytes, "cells": index["cells"],
+            "episodes_with_detail": index["episodes_with_detail"], "verified": verified,
+        }
+        if not verified:
+            return result  # never advertise a bundle that did not arrive whole
+        catalog_target = f"{root}/{CATALOG}"
+        existing = client.read_text(catalog_target)
+        try:
+            catalog = json.loads(existing) if existing else {}
+        except ValueError:
+            raise PublishError(f"existing {CATALOG} under {prefix} is not valid JSON; refusing to overwrite it") from None
+        if catalog and int(catalog.get("schema_version", 0)) != CATALOG_SCHEMA_VERSION:
+            raise PublishError(f"existing {CATALOG} has an unsupported schema version")
+        studies = {row["study"]: row for row in catalog.get("studies", []) if isinstance(row, dict) and "study" in row}
+        studies[name] = {
+            "study": name, "study_id": index["study_id"], "dashboard": f"{name}/dashboard", "cells": index["cells"],
+            "episodes_with_detail": index["episodes_with_detail"], "objects": local_count, "bytes": local_bytes,
+            "published_at": index["generated_at"],
+        }
+        catalog_file = Path(scratch) / CATALOG
+        catalog_file.write_text(json.dumps({"schema_version": CATALOG_SCHEMA_VERSION,
+                                            "studies": [studies[key] for key in sorted(studies)]}, indent=1) + "\n",
+                                encoding="utf-8")
+        client.copyto(catalog_file, catalog_target)
+        result.update(catalog_target=catalog_target, catalog_studies=len(studies))
+    return result
+
 
 def publish(study_dir: Path, *, remote: str, prefix: str, rclone: Rclone | None = None,
-            analysis_dir: Path | None = None, study_name: str | None = None, dry_run: bool = False) -> dict[str, Any]:
+            analysis_dir: Path | None = None, study_name: str | None = None, dry_run: bool = False,
+            with_dashboard: bool = False, bundle_dir: Path | None = None) -> dict[str, Any]:
     study_dir = Path(study_dir)
     analysis = Path(analysis_dir) if analysis_dir else find_analysis_dir(study_dir)
     zips = sorted(analysis.glob("*_analysis.zip"))
@@ -99,6 +165,8 @@ def publish(study_dir: Path, *, remote: str, prefix: str, rclone: Rclone | None 
         "analysis_target": analysis_target, "local_files": local_count, "local_bytes": local_bytes,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "dry_run": dry_run,
     }
+    if with_dashboard:
+        receipt["dashboard_target"] = f"{remote}/{prefix.strip('/')}/{name}/dashboard"
     if dry_run:
         receipt.update(verified=None, status="dry_run")
         return receipt
@@ -113,6 +181,10 @@ def publish(study_dir: Path, *, remote: str, prefix: str, rclone: Rclone | None 
     )
     receipt["verified"] = (remote_count == local_count and remote_bytes == local_bytes
                            and remote_package_bytes == receipt["package_bytes"])
+    if with_dashboard and receipt["verified"]:
+        receipt["dashboard"] = publish_dashboard(study_dir, remote=remote, prefix=prefix, name=name, client=client,
+                                                 bundle_dir=bundle_dir)
+        receipt["verified"] = bool(receipt["dashboard"]["verified"])
     receipt["status"] = "ok" if receipt["verified"] else "mismatch"
     receipt_path = study_dir / RECEIPT
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
@@ -122,4 +194,4 @@ def publish(study_dir: Path, *, remote: str, prefix: str, rclone: Rclone | None 
     return receipt
 
 
-__all__ = ["PublishError", "RECEIPT", "Rclone", "find_analysis_dir", "publish"]
+__all__ = ["CATALOG", "PublishError", "RECEIPT", "Rclone", "find_analysis_dir", "publish", "publish_dashboard"]
