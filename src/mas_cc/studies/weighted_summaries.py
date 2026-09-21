@@ -311,9 +311,14 @@ derived suite is enabled, its rows are authoritative for matching rho views.
         # efficiency value or interval when its new estimate is unsupported.
         if not old.empty:
             replaced = old[old["metric"].isin(new["metric"])].copy()
-            keys = [c for c in ("intervention_budget", "target_semantics", "target_fraction_bin_index", "metric")
-                    if c in new and c in replaced]
-            if new.duplicated(keys).any():
+            # A study may vary the social group size (and with it the sensor sample size):
+            # those are report coordinates too, or the q=3 and q=12 views of one budget
+            # collide. They join the match keys when both tables carry them; a view is a
+            # duplicate only if it repeats on every coordinate the derived table has.
+            coordinates = ("social_group_size", "sensor_sample_size", "intervention_budget",
+                           "target_semantics", "target_fraction_bin_index", "metric")
+            keys = [c for c in coordinates if c in new and c in replaced]
+            if new.duplicated([c for c in coordinates if c in new], keep=False).any():
                 raise ValueError("multiple derived rho views map to the same report coordinates")
             missing = replaced.merge(new[keys].assign(_present=True), on=keys, how="left")
             missing = missing[missing["_present"].isna()].drop(columns="_present")
