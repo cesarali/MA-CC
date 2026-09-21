@@ -81,6 +81,44 @@ sections:
         aggregation_source: causal_response_aggregated_metrics
         aggregation_metric: available_mass_weighted_causal_susceptibility
 
+  - id: phi_conditioned_transfer_information
+    title: Transfer information conditioned on epistemic solvability
+    kind: budget_curve_suite
+    x: intervention_budget
+    views: [resolved]
+    metrics:
+      - id: T_pi_phi
+        label: "T_pi conditioned on phi [bits]"
+        source: primary_estimates
+        metric: round_phi_target_actuation_cmi
+      - id: T_pi_phi_minus_null
+        label: "T_pi conditioned on phi minus permutation-null mean [bits]"
+        source: primary_estimates
+        metric: round_phi_target_actuation_cmi
+        value: null_adjusted_estimate
+        show_ci: false
+      - id: Delta_T_phi
+        label: "Change from conditioning on phi: T_pi_phi - T_pi [bits]"
+        source: phi_conditioning_comparison
+        value: Delta_T_phi
+
+  - id: kappa_conditioned_transfer_information
+    title: Transfer information conditioned on mean proof coverage
+    kind: budget_curve_suite
+    x: intervention_budget
+    views: [resolved]
+    metrics:
+      - id: T_pi_kappa
+        label: "T_pi conditioned on kappa [bits]"
+        source: primary_estimates
+        metric: round_kappa_target_actuation_cmi
+      - id: T_pi_kappa_minus_null
+        label: "T_pi conditioned on kappa minus permutation-null mean [bits]"
+        source: primary_estimates
+        metric: round_kappa_target_actuation_cmi
+        value: null_adjusted_estimate
+        show_ci: false
+
   - id: lagged_causal_response
     title: Causal response at lags 1, 2, and 3
     kind: budget_curve_suite

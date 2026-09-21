@@ -1,0 +1,69 @@
+schema_version: 1
+report:
+  id: report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18_q12_none
+  title: 'Authored REPORT v5: q=12, none control (10 rounds, 10 episodes/cell)'
+  source_analysis: /home/cesarali/LanguageGames/MA-CC/results/report_inputs/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/q12_none
+  output_dir: /home/cesarali/LanguageGames/MA-CC/results/reports/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/q12_none
+  no_control: true
+sections:
+- id: validation
+  kind: validation_summary
+  title: Validation and completeness
+- id: occupancy_before
+  kind: occupancy_bar_summary
+  title: Start-of-round truth share
+  label: Start-of-round truth share
+  source_summary: /home/cesarali/LanguageGames/MA-CC/results/report_inputs/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/q12_none/occupancy_before.parquet
+  description: q=12, none arm. Descriptive arithmetic mean; equal weight per recorded
+    round. Controlled budgets are pooled within this arm only. No new confidence intervals
+    are computed.
+- id: occupancy_after
+  kind: occupancy_bar_summary
+  title: End-of-round truth share
+  label: End-of-round truth share
+  source_summary: /home/cesarali/LanguageGames/MA-CC/results/report_inputs/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/q12_none/occupancy_after.parquet
+  description: q=12, none arm. Descriptive arithmetic mean; equal weight per recorded
+    round. Controlled budgets are pooled within this arm only. No new confidence intervals
+    are computed.
+- id: occupancy_final
+  kind: occupancy_bar_summary
+  title: Final-episode truth share
+  label: Final-episode truth share
+  source_summary: /home/cesarali/LanguageGames/MA-CC/results/report_inputs/report_only_authored_q3_q12_chatoss_v5_test_10x10_b6_b18/q12_none/occupancy_final.parquet
+  description: q=12, none arm. Descriptive arithmetic mean; equal weight per completed
+    episode. Controlled budgets are pooled within this arm only. No new confidence
+    intervals are computed.
+- id: episode_examples
+  title: Illustrative episode trajectories
+  kind: episode_timeseries
+  source: epistemic_round_timeseries
+  filters: {}
+  group_by:
+  - epistemic_persistence
+  episodes_per_group: 1
+  metrics:
+  - value: truth_vote_share
+    label: Truth vote share (after)
+    ylim:
+    - 0
+    - 1
+  - value: collective_solvable
+    label: Collectively solvable (before)
+    ylim:
+    - -0.05
+    - 1.05
+  - value: symbolic_individual_solvability_share
+    label: Individual solvability (before)
+    ylim:
+    - 0
+    - 1
+  - value: active_union_fact_fraction
+    label: Active fact fraction (before)
+    ylim:
+    - 0
+    - 1
+  - value: collective_normalized_entropy
+    label: Collective entropy (before)
+    ylim:
+    - 0
+    - 1

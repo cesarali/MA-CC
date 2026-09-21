@@ -1,18 +1,81 @@
 \section{Introduction}
 \label{sec:introduction}
 
-OpenAI's resolution of the long-standing Navier--Stokes Millennium Problem and the recent Hugging Face hacking incident are emblematic events of AI's turn toward multi-agent systems and swarms \citep{openai2026navierstokes,greenblatt2026huggingface}. From scientific discovery to agent-based social networks such as Moltbook, interacting populations of agents are becoming a distinct locus of capability in AI \citep{jiang2026moltbook}. Crucially, these capabilities need not be reducible to those of the agents in isolation: interaction can give rise to collective behavior, conventions, biases, and higher-order coordination that are absent at the level of individual agents \citep{ashery2025emergent,riedl2026emergent,anthropic2026multiagent}. This has prompted recent calls for a \emph{science of agents collective behavior} concerned with collective capabilities, population-level failures, oversight, and control \citep{deepmind2026multiagent}. In this view, intelligence is increasingly not only a property of the agent, but also of the interaction through which agents communicate and coordinate \citep{chopra2026interaction}.
+OpenAI's resolution of the long-standing Navier--Stokes Millennium Problem and the
+recent Hugging Face hacking incident are emblematic events of AI's turn toward
+multi-agent systems and swarms
+\citep{openai2026navierstokes,greenblatt2026huggingface}. From scientific discovery to
+agent-based social networks (e.g. Moltbook), interacting populations of agents are
+becoming a distinct locus of capability in AI \citep{jiang2026moltbook}. Crucially,
+these capabilities need not be reducible to those of the agents in isolation:
+interaction can give rise to collective behavior, conventions, biases, and
+higher-order coordination that are absent at the level of individual agents
+\citep{ashery2025emergent,riedl2026emergent,anthropic2026multiagent}. This has prompted
+recent calls for a new \emph{science of multi agents systems} concerned with collective capabilities,
+population-level failures, oversight, and control \citep{deepmind2026multiagent}. In
+this view, intelligence is increasingly not only a property of the agent, but also of
+the interaction through which agents communicate and coordinate
+\citep{chopra2026interaction}.
 
-Collective behavior has long been studied through statistical physics, game theory, and complex-systems approaches to emergence \citep{castellano2009statistical}. These traditions, however, have typically represented agents through compressed states, actions, payoffs, or local update rules, leaving the epistemic content of interaction---and the reasoning induced by that content---largely outside the model. Recent work has begun precisely the translation required for language-model populations: from reformulating rational cooperation and equilibrium through similarity inference in foundation-model agents \citep{meulemans2026game}, to extending statistical-mechanical descriptions to collective regimes \citep{el2026physics} and information-theoretic descriptions to higher-order coordination \citep{riedl2026emergent}. These developments broaden the classical study of collective behavior, but leave a different question largely open: once such collective dynamics arise, how can they be steered?
+Collective behavior has long been studied through statistical physics, game theory,
+and complex-systems approaches to emergence \citep{castellano2009statistical}. These
+traditions, however, have typically represented agents through discrete states,
+actions, or local update rules, leaving the epistemic content of
+interaction---and the reasoning induced by that content---largely outside the model.
+Recent work has begun precisely the translation required for language-model
+populations: from reformulating rational cooperation and equilibrium through
+similarity inference in foundation-model agents \citep{meulemans2026game}, to
+extending statistical-mechanical descriptions to collective regimes
+\citep{el2026physics} and information-theoretic descriptions to higher-order
+coordination \citep{riedl2026emergent}. These developments broaden the classical
+study of collective behavior, but leave a different question largely open: once such
+collective dynamics arise, how can they be steered?
 
-Much of this literature asks when coordination, consensus, or collective regimes emerge; we instead take control as the starting point. The Hugging Face incident makes this shift difficult to ignore: agents used a shared, unsanctioned message board to coordinate workstreams and redirect the activity of other agents, turning the communication substrate itself into a channel through which collective behavior could be influenced \citep{greenblatt2026huggingface}. Whenever we study multi-agent populations or swarms, we are inevitably dealing with stochastic systems. The central scientific question is therefore not simply whether control succeeds, but how directed intervention competes with the endogenous fluctuations of the population. It is this competition that defines the regimes of stochastic feedback control we study and motivates our notion of \emph{control efficiency}.
+Much of this literature asks when coordination, consensus, or collective regimes
+emerge; we instead take control as the starting point. The Hugging Face incident
+makes this shift difficult to ignore: agents used a shared, unsanctioned message
+board to coordinate workstreams and redirect the activity of other agents, turning
+the communication substrate itself into a channel through which collective behavior
+could be influenced \citep{greenblatt2026huggingface}. Whenever we study multi-agent
+populations or swarms, we are inevitably dealing with stochastic systems. The
+central scientific question is therefore not simply whether control succeeds, but
+how directed intervention competes with the endogenous fluctuations of the
+population. It is this competition that defines the regimes of stochastic feedback
+control we study and motivates our notion of \emph{control efficiency}.
 
-To study this problem, we construct a language-mediated population in which agents reason over distributed evidence and interact through a shared message board. Each agent carries both a social state---its current decision---and an epistemic state---the evidence available for subsequent reasoning. Into this population we introduce a resource-constrained feedback controller. Before each round, the controller observes only a finite sample of agents and, conditional on this partial observation, may intervene in only a bounded number of interactions. At the coarse population level, the feedback loop is
+To study this problem, we construct a language-mediated population in which agents
+reason over distributed evidence and interact through a shared message board. Each
+agent carries both a social state---its current decision---and an epistemic
+state---the evidence available for subsequent reasoning. Into this population we
+introduce a resource-constrained feedback controller. Before each round, the
+controller observes only a finite sample of agents and, conditional on this partial
+observation, may intervene in only a bounded number of interactions. At the coarse
+population level, the feedback loop is
 
 \begin{equation}
     n_k \longrightarrow Y_k \longrightarrow U_k \longrightarrow n_{k+1},
 \end{equation}
 
-where $n_k$ denotes current support for the controller target, $Y_k$ its partial observation, and $U_k$ its intervention. Finite sensing and finite actuation therefore constitute separate control resources. In our main setting, the controller communicates a recommendation but no task evidence: it can perturb the social dynamics without directly increasing the epistemic content of the population. This allows us to distinguish changes in what agents believe from changes in what they know, and to separate controllability from task correctness.
+where $n_k$ denotes current support for the controller target, $Y_k$ its partial
+observation, and $U_k$ its intervention. Finite sensing and finite actuation therefore
+constitute separate control resources. In our main setting, the controller
+communicates a recommendation but no task evidence: it can perturb the social
+dynamics without directly increasing the epistemic content of the population. This
+allows us to distinguish changes in what agents believe from changes in what they
+know, and to separate controllability from task correctness.
 
-We characterize this feedback process along three complementary axes. \emph{Susceptibility} measures the directed change in population state induced by intervention, separating systematic response from the population's background dynamics. \emph{Action-to-population information} measures how strongly the controller's action is expressed in the distribution of subsequent population states; relative to the conditional entropy of the controller action, it quantifies how much of the available control information reaches the population. Finally, an \emph{information--response efficiency}, obtained through a Pinsker-type bound, compares the information required to sustain the observed directed response with the action-dependent information actually transmitted to the population. Together, these quantities distinguish whether control is strong, whether it is statistically expressed above endogenous fluctuations, and whether the transmitted control information is efficiently converted into coherent population motion. They provide a finite-time account of how limited sensing and bounded intervention steer a reasoning population whose epistemic state continues to evolve.
+We characterize this feedback process along three complementary axes.
+\emph{Susceptibility} measures the directed change in population state induced by
+intervention, separating systematic response from the population's background
+dynamics. \emph{Action-to-population information} measures how strongly the
+controller's action is expressed in the distribution of subsequent population
+states; relative to the conditional entropy of the controller action, it quantifies
+how much of the available control information reaches the population. Finally, an
+\emph{information--response efficiency}, obtained through a Pinsker-type bound,
+compares the information required to sustain the observed directed response with the
+action-dependent information actually transmitted to the population. Together,
+these quantities distinguish whether control is strong, whether it is statistically
+expressed above endogenous fluctuations, and whether the transmitted control
+information is efficiently converted into coherent population motion. They provide
+a finite-time account of how limited sensing and bounded intervention steer a
+reasoning population whose epistemic state continues to evolve.

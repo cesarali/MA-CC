@@ -20,6 +20,8 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
     SCHEDULE_ALWAYS,
     SCHEDULE_NEVER,
     SCHEDULE_SOFT,
+    SENSING_BOARD,
+    SENSING_VOTES,
     TIMING_DAWN_ONLY,
     RelationalRoundBudgetedControl,
 )
@@ -32,6 +34,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communi
 from mas_cc.games.relational_reasoning.imitation_round_feedback.analysis import (
     adapt_relational_round_record,
 )
+from mas_cc.analysis.single_affinity import target_sensing_information
 from mas_cc.games.hidden_bench.imitation.controller import advocacy_probability
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     BlackboardBallotContract,
@@ -328,6 +331,200 @@ def _dawn_control(config, *, schedule=SCHEDULE_ALWAYS, budget=4):
             "controller_timing": TIMING_DAWN_ONLY,
         }
     )
+
+
+def _board_sensing_control(
+    config, *, schedule=SCHEDULE_ALWAYS, budget=4, sample_size=6
+):
+    return RelationalRoundBudgetedControl.from_options(
+        {
+            **dict(config.control.options),
+            "sensor_sample_size": sample_size,
+            "intervention_budget": budget,
+            "advocacy_schedule": schedule,
+            "message_mode": RECOMMENDATION_ONLY,
+            "controller_actuation_mode": COORDINATION_REQUEST,
+            "controller_timing": TIMING_DAWN_ONLY,
+            "sensing_mode": SENSING_BOARD,
+        }
+    )
+
+
+def test_board_sensing_strict_day_night_alignment_and_public_only_observation():
+    config = _config(rounds=2, q=1)
+    result, _ = _run(config, control=_board_sensing_control(config))
+    day1, day2 = (record.event for record in result.rounds)
+
+    assert day1["controller_action"] is None
+    assert day1["feedback_action_applied"] is False
+    night1 = day1["night_controller_decision"]
+    assert night1["sensing_day"] == 1
+    assert night1["action_day"] == 2
+    assert day2["controller_action"] == night1["action"]
+    assert day2["controller_action_probability"] == night1["action_probability"]
+    assert day2["sensing_day"] == 1
+    assert day2["action_day"] == 2
+
+    observation = night1["observation"]
+    assert observation["q_c_effective"] <= observation["q_c"]
+    assert all(
+        message["round_created"] == 0
+        for message in observation["sampled_messages"]
+    )
+    assert not any(
+        forbidden in message
+        for message in observation["sampled_messages"]
+        for forbidden in ("private_reason", "known_fact_ids", "active_fact_ids")
+    )
+    assert all(
+        "private reasoning that must not be shared" not in message["text"]
+        for message in observation["sampled_messages"]
+    )
+
+
+def test_board_sensing_preserves_microscopic_actuation_semantics_with_delay():
+    config = _config(rounds=2, q=1)
+    control = RelationalRoundBudgetedControl.from_options(
+        {
+            **dict(config.control.options),
+            "sensor_sample_size": 3,
+            "intervention_budget": 4,
+            "advocacy_schedule": SCHEDULE_ALWAYS,
+            "message_mode": RECOMMENDATION_ONLY,
+            "controller_actuation_mode": DIRECT_RECOMMENDATION,
+            "sensing_mode": SENSING_BOARD,
+        }
+    )
+    result, _ = _run(config, control=control)
+    day1, day2 = (record.event for record in result.rounds)
+
+    assert day1["controller_action"] is None
+    assert day1["controlled_position_count"] == 0
+    assert day2["controller_action"] == day1["next_controller_action"]
+    assert day2["controlled_position_count"] == 4
+    assert len(day2["controlled_positions"]) == 4
+
+
+def test_board_sensing_budget_effective_size_and_seed_are_replayable():
+    config = _config(rounds=1, q=1)
+    control = _board_sensing_control(config, sample_size=100)
+    first, _ = _run(config, control=control)
+    second, _ = _run(config, control=control)
+    left = first.rounds[0].event["night_controller_decision"]["observation"]
+    right = second.rounds[0].event["night_controller_decision"]["observation"]
+
+    assert left["q_c"] == 100
+    assert left["eligible_message_count"] == len(first.final_state.agents)
+    assert left["q_c_effective"] == left["eligible_message_count"]
+    assert left["sampled_message_ids"] == right["sampled_message_ids"]
+    assert left["sampling_seed"] == right["sampling_seed"]
+    assert left["policy_seed"] == right["policy_seed"]
+
+
+def test_vote_sensing_remains_default_and_day_one_behavior_is_unchanged():
+    config = _config(q=1)
+    control = _dawn_control(config, schedule=SCHEDULE_NEVER)
+    result, _ = _run(config, control=control)
+    event = result.rounds[0].event
+
+    assert control.sensing_mode == SENSING_VOTES
+    assert event["controller_sensing_mode"] == SENSING_VOTES
+    assert event["controller_action"] == "NO_OP"
+    assert len(event["sensor_agent_ids"]) == control.sensor_sample_size
+    assert event["sensor_theory_status"] == "hypergeometric_vote_sensor"
+
+
+def test_board_sensing_disables_hypergeometric_sensor_theory_only():
+    config = _config(rounds=2, q=1)
+    result, _ = _run(config, control=_board_sensing_control(config))
+    rows = [adapt_relational_round_record(record.event) for record in result.rounds]
+
+    estimate = target_sensing_information(rows)
+    assert estimate["target_sensing_valid"] is False
+    assert estimate["target_sensing_theory_status"] == (
+        "not_applicable_board_observation_channel"
+    )
+    assert "hypergeometric" in estimate["target_sensing_theory_skip_reason"]
+    assert result.rounds[1].event["controlled_target_adoption_rate"] is not None or (
+        result.rounds[1].event["controlled_off_target_count"] == 0
+    )
+
+
+def test_results_only_retains_complete_board_sensing_decision_chain(tmp_path):
+    config = _config(rounds=2, q=1)
+    response = json.dumps(
+        {
+            "vote": "A",
+            "private_reason": "private material must not enter the sensor",
+            "public_message": {
+                "type": "REPORT",
+                "text": "Public evidence summary.",
+                "shared_fact_id": None,
+                "reply_to": None,
+            },
+        }
+    )
+    config = replace(
+        config,
+        llm_provider=replace(
+            config.llm_provider,
+            type="mock",
+            model="board-sensing-retention",
+            temperature=0.0,
+            options={"response": response},
+        ),
+        execution=replace(config.execution, repetitions=1, parallelism=1),
+        control=replace(
+            config.control,
+            mechanism="relational_round_budgeted",
+            options={
+                **dict(config.control.options),
+                "sensor_sample_size": 3,
+                "intervention_budget": 1,
+                "advocacy_schedule": SCHEDULE_ALWAYS,
+                "message_mode": RECOMMENDATION_ONLY,
+                "controller_actuation_mode": COORDINATION_REQUEST,
+                "controller_timing": TIMING_DAWN_ONLY,
+                "sensing_mode": SENSING_BOARD,
+            },
+        ),
+        storage=replace(
+            config.storage,
+            output_dir=str(tmp_path),
+            artifact_profile="results_only",
+            overwrite=True,
+        ),
+        analysis=replace(config.analysis, enabled=False, estimators=()),
+        pricing=replace(
+            config.pricing,
+            mode="offline",
+            require_fresh_at_launch=False,
+            explicit_unknown_price_override=True,
+        ),
+        budget=replace(
+            config.budget,
+            system_max_cost_per_run=None,
+            max_cost_per_run=None,
+            allow_unbounded_paid_requests=True,
+        ),
+    )
+
+    run = run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
+    paths = list(run.output_dir.rglob("round_records/*/round_trajectory.jsonl"))
+    assert len(paths) == 1
+    rows = [json.loads(line) for line in paths[0].read_text().splitlines()]
+    day1, day2 = rows
+    decision = day1["night_controller_decision"]
+
+    assert day1["controller_action"] is None
+    assert decision["sensing_day"] == 1
+    assert decision["action_day"] == 2
+    assert day2["controller_action"] == decision["action"]
+    observation = decision["observation"]
+    assert observation["eligible_message_ids"]
+    assert observation["sampled_message_ids"]
+    assert observation["sampling_seed"] is not None
+    assert observation["q_c_effective"] <= observation["q_c"]
 
 
 def test_board_state_lifetime_and_serialization():

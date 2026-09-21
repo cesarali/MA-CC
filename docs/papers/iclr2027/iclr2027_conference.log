@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.8.21)  20 SEP 2026 15:11
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.8.21)  21 SEP 2026 17:56
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -688,12 +688,12 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
 ) (./sections/abstract.tex) (./sections/introduction.tex [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
-]) (./sections/related_work.tex)
+]) (./sections/related_work.tex [2]) (./sections/background.tex)
 
 Package lipsum Warning: Unknown language 'latin'. Hyphenation patterns for
 (lipsum)                'english' will be used instead.
 
-[2] (./sections/background.tex) (./sections/method.tex (./sections/21082026_methods_data_generation_and_game.tex
+(./sections/method.tex (./sections/21082026_methods_data_generation_and_game.tex
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
  [3] [4]
@@ -705,53 +705,76 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `pcr' (encoding: OT1).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
-)) (./sections/21082026_feedback_control_efficiency_theory.tex [5] [6] [7] [8]) (./sections/results.tex [9]
-<figures/fig_susceptibility_empirical_theory.png, id=315, 911.5875pt x 311.7465pt>
+ [5])) (./sections/21082026_feedback_control_efficiency_theory.tex [6] [7] [8]) (./sections/results.tex [9]
+<figures/fig_susceptibility_empirical_theory.png, id=390, 911.5875pt x 311.7465pt>
 File: figures/fig_susceptibility_empirical_theory.png Graphic file (type png)
 <use figures/fig_susceptibility_empirical_theory.png>
 Package pdftex.def Info: figures/fig_susceptibility_empirical_theory.png  used on input line 55.
 (pdftex.def)             Requested size: 325.9406pt x 111.46754pt.
  [10 <./figures/fig_susceptibility_empirical_theory.png>]
-<figures/fig_state_local_landscapes.png, id=328, 1768.6075pt x 1313.90875pt>
+<figures/fig_state_local_landscapes.png, id=403, 1768.6075pt x 1313.90875pt>
 File: figures/fig_state_local_landscapes.png Graphic file (type png)
 <use figures/fig_state_local_landscapes.png>
 Package pdftex.def Info: figures/fig_state_local_landscapes.png  used on input line 97.
 (pdftex.def)             Requested size: 317.9892pt x 236.23274pt.
-<figures/fig_beta_theory.png, id=331, 957.249pt x 407.0115pt>
+ [11 <./figures/fig_state_local_landscapes.png (PNG copy)>]
+<figures/fig_beta_theory.png, id=411, 957.249pt x 407.0115pt>
 File: figures/fig_beta_theory.png Graphic file (type png)
 <use figures/fig_beta_theory.png>
 Package pdftex.def Info: figures/fig_beta_theory.png  used on input line 125.
 (pdftex.def)             Requested size: 325.9406pt x 138.58702pt.
- [11 <./figures/fig_state_local_landscapes.png (PNG copy)>] [12 <./figures/fig_beta_theory.png>]
-<figures/fig_efficiencies_all.png, id=348, 2602.72375pt x 596.2275pt>
+ [12 <./figures/fig_beta_theory.png>]
+<figures/fig_efficiencies_all.png, id=423, 2602.72375pt x 596.2275pt>
 File: figures/fig_efficiencies_all.png Graphic file (type png)
 <use figures/fig_efficiencies_all.png>
 Package pdftex.def Info: figures/fig_efficiencies_all.png  used on input line 219.
 (pdftex.def)             Requested size: 325.9406pt x 74.66472pt.
-) (./sections/conclusion.tex) (./iclr2027_conference.bbl
-Underfull \vbox (badness 1067) has occurred while \output is active []
+) (./sections/conclusion.tex) (./iclr2027_conference.bbl [13 <./figures/fig_efficiencies_all.png (PNG copy)>]
+Underfull \hbox (badness 10000) in paragraph at lines 10--16
+[]\OT1/ptm/m/n/10 (+20) Nikhil Ab-hyankar, San-chit Kabra, Saaketh De-sai, and Chan-dan K. Reddy.
+ []
 
- [13 <./figures/fig_efficiencies_all.png (PNG copy)>]
-Underfull \hbox (badness 10000) in paragraph at lines 48--53
+
+Underfull \hbox (badness 10000) in paragraph at lines 10--16
+\OT1/ptm/m/n/10 (+20) LLEMA: Evo-lu-tion-ary search with LLMs for multi-objective ma-te-ri-als dis-cov-
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 10--16
+\OT1/ptm/m/n/10 (+20) ery.  In \OT1/ptm/m/it/10 (+20) In-ter-na-tional Con-fer-ence on Learn-ing Rep-re-sen-ta-tions\OT1/ptm/m/n/10 (+20) , 2026.  URL
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 10--16
+[]$\OT1/pcr/m/n/10 https : / / proceedings . iclr . cc / paper _ files / paper / 2026 / hash /
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 121--126
 []\OT1/ptm/m/n/10 (+20) Google Deep-Mind, Schmidt Sci-ences, Co-op-er-a-tive AI Foun-da-tion, Ad-vanced Re-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 48--53
+Underfull \hbox (badness 10000) in paragraph at lines 121--126
 \OT1/ptm/m/n/10 (+20) search and In-ven-tion Agency, and Google.org.  In-vest-ing in multi-agent ai
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 48--53
+Underfull \hbox (badness 10000) in paragraph at lines 121--126
 \OT1/ptm/m/n/10 (+20) safety re-search, June 2026.  URL []$\OT1/pcr/m/n/10 https : / / deepmind . google / blog /
  []
 
-
-Underfull \hbox (badness 2111) in paragraph at lines 56--62
+[14]
+Underfull \hbox (badness 2111) in paragraph at lines 129--135
 []\OT1/ptm/m/n/10 (+20) Ryan Green-blatt, Ajeya Co-tra, and Hjal-mar Wijk.  Brief in-de-pen-dent in-ves-ti-ga-tion of
  []
 
-) (./sections/appendix.tex (./sections/information_response_bound_appendix.tex [14] [15] [16] [17]) (./sections/thermodynamic_efficiency_derivation_appendix.tex [18] [19]) (./sections/relational_prompt_appendix.tex [20]
+[15]
+Underfull \hbox (badness 1412) in paragraph at lines 310--318
+\OT1/ptm/m/n/10 (+20) 2024.  URL []$\OT1/pcr/m/n/10 https : / / proceedings . neurips . cc / paper _ files / paper / 2024 /
+ []
+
+[16]) (./sections/appendix.tex (./sections/information_response_bound_appendix.tex [17] [18] [19]) (./sections/thermodynamic_efficiency_derivation_appendix.tex [20] [21] [22]) (./sections/relational_prompt_appendix.tex
 LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 70.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/ts1ptm.fd
 File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
@@ -762,36 +785,36 @@ File: omspcr.fd
 )
 LaTeX Font Info:    Font shape `OMS/pcr/m/n' in size <9> not available
 (Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 131.
- [21] [22]
-Underfull \vbox (badness 5175) has occurred while \output is active []
+ [23]
+Underfull \vbox (badness 1117) has occurred while \output is active []
 
- [23])) (./sections/controlled_susceptibility_study.tex (./sections/state_matched_response_appendix_bundle/appendix_state_matched_response.tex
-<sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf, id=512, 370.34926pt x 232.5005pt>
+ [24] [25] [26]) (./sections/full_related_work.tex [27])) (./sections/controlled_susceptibility_study.tex [28] (./sections/state_matched_response_appendix_bundle/appendix_state_matched_response.tex
+<sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf, id=781, 370.34926pt x 232.5005pt>
 File: sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf Graphic file (type pdf)
 <use sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf>
 Package pdftex.def Info: sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf  used on input line 24.
 (pdftex.def)             Requested size: 397.48499pt x 249.53581pt.
-) [24] (./sections/21082026_empirical_effective_affinity.tex [25 <./sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf>])) (./sections/appendix_D_resource_constrained_control_design.tex [26] [27]) [28] (./iclr2027_conference.aux)
+) (./sections/21082026_empirical_effective_affinity.tex [29])) (./sections/appendix_D_resource_constrained_control_design.tex [30 <./sections/state_matched_response_appendix_bundle/figures/state_matched_response.pdf>] [31] [32]) [33] (./iclr2027_conference.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
 Package rerunfilecheck Info: File `iclr2027_conference.out' has not changed.
-(rerunfilecheck)             Checksum: 2200C3CF01AF379BBD9F9046C0C12533;10135.
+(rerunfilecheck)             Checksum: D37BCD7853BA3E06C875E9254FF4FF7B;10271.
  ) 
 Here is how much of TeX's memory you used:
- 29270 strings out of 476106
- 563774 string characters out of 5793933
- 1946975 words of memory out of 5000000
- 50230 multiletter control sequences out of 15000+600000
- 600825 words of font info for 287 fonts, out of 8000000 for 9000
+ 29499 strings out of 476106
+ 568469 string characters out of 5793933
+ 1950975 words of memory out of 5000000
+ 50355 multiletter control sequences out of 15000+600000
+ 603786 words of font info for 319 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
- 101i,15n,107p,1316b,1044s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 101i,15n,107p,2127b,946s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on iclr2027_conference.pdf (28 pages, 1225854 bytes).
+Output written on iclr2027_conference.pdf (33 pages, 1262461 bytes).
 PDF statistics:
- 758 PDF objects out of 1000 (max. 8388607)
- 623 compressed objects within 7 object streams
- 230 named destinations out of 1000 (max. 500000)
- 57174 words of extra memory for PDF output out of 61914 (max. 10000000)
+ 1036 PDF objects out of 1200 (max. 8388607)
+ 894 compressed objects within 9 object streams
+ 283 named destinations out of 1000 (max. 500000)
+ 57182 words of extra memory for PDF output out of 61914 (max. 10000000)
 

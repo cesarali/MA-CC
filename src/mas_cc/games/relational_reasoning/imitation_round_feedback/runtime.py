@@ -1,17 +1,9 @@
 """Two-clock runtime for the budgeted relational reasoning game.
 
-One population round:
+In legacy/default vote sensing, one population round begins with the existing
+private vote sample.  In opt-in board sensing the causal clock is instead:
 
-    population state
-          |
-          v
-    controller senses q_c votes  (votes only - never K_i)
-          |
-          v
-    one controller decision  {NO_OP, ADVOCATE_Z}
-          |
-          v
-    expire public memory; persist K_active for the new day
+    Day k applies only the action prepared after Day k-1
           |
           v
     dawn_only board mode:
@@ -27,11 +19,15 @@ One population round:
             -> apply the vote, publish the ballot, grow K_focal
           |
           v
-    record n_(k+1), K_active, K_hist, board, and exposure observables
+    freeze completed B_k and sample at most q_c public messages
+          |
+          v
+    Night k chooses and stores U_(k+1), then records the complete chain
 
 The historical microscopic peer/direct-board modes remain available for old
-configs. ``controller_timing: dawn_only`` selects the frozen night/dawn/day
-protocol and deliberately never constructs their controlled-position schedule.
+configs. ``controller_timing: dawn_only`` selects dawn actuation;
+``sensing_mode: board`` additionally enforces the completed-day/night delay and
+deliberately never constructs a Day-1 feedback action.
 
 The decision execution itself - ask, validate, retry, record every attempt - is
 the repository's shared loop (``mas_cc.runtime.run_validated_decision``); this
@@ -96,6 +92,8 @@ from .controller import (
     RECOMMENDATION_ONLY,
     SILENT,
     TRUTHFUL_STRATEGIC_REPORT,
+    SENSING_BOARD,
+    SENSING_VOTES,
     TIMING_DAWN_ONLY,
     TIMING_MICROSCOPIC,
     CONTROLLER_AUTHORING_DETERMINISTIC,
@@ -396,6 +394,89 @@ def _python_random_state(value: Any) -> Any:
     return value
 
 
+def _public_board_message(message: BlackboardMessage) -> dict[str, Any]:
+    """The public, replayable projection available to the board sensor."""
+
+    return {
+        "message_id": message.message_id,
+        "author_id": message.author_id,
+        "author_kind": message.author_kind,
+        "message_type": message.message_type,
+        "text": message.text,
+        "vote": message.vote,
+        "shared_fact_id": message.shared_fact_id,
+        "reply_to": message.reply_to,
+        "round_created": message.round_created,
+        "micro_step_created": message.micro_step_created,
+        "expires_after_round": message.expires_after_round,
+        "schema_version": message.schema_version,
+    }
+
+
+def _sample_completed_board(
+    state: RelationalGameState,
+    *,
+    round_index: int,
+    requested: int,
+) -> dict[str, Any]:
+    """Sample the frozen completed Day-k board with an isolated seeded stream."""
+
+    eligible = tuple(state.blackboard.live_messages(round_index))
+    stream = Seed(int(state.data["seed"])).derive(
+        f"relational-controller-board-sensor:night:{round_index + 1}"
+    )
+    rng = stream.create_random()
+    sampled = tuple(rng.sample(list(eligible), min(requested, len(eligible))))
+    return {
+        "observation_schema_version": 1,
+        "sensing_mode": SENSING_BOARD,
+        "sensing_day": round_index + 1,
+        "action_day": round_index + 2,
+        "board_round_index": round_index,
+        "board_size": len(eligible),
+        "eligible_message_count": len(eligible),
+        "eligible_message_ids": [message.message_id for message in eligible],
+        "q_c": requested,
+        "q_c_effective": len(sampled),
+        "sampling_without_replacement": True,
+        "sampling_seed": int(stream),
+        "sampling_stream": (
+            f"relational-controller-board-sensor:night:{round_index + 1}"
+        ),
+        "sampling_algorithm": "python_random_sample_without_replacement",
+        "sampled_message_ids": [message.message_id for message in sampled],
+        "sampled_author_ids": [message.author_id for message in sampled],
+        "sampled_message_types": [message.message_type for message in sampled],
+        "sampled_votes": [message.vote for message in sampled],
+        "sampled_shared_fact_ids": [message.shared_fact_id for message in sampled],
+        "sampled_messages": [_public_board_message(message) for message in sampled],
+    }
+
+
+def _signal_to_dict(signal: RoundControlSignal | None) -> dict[str, Any] | None:
+    if signal is None:
+        return None
+    return {
+        "action": signal.action,
+        "target": signal.target,
+        "message": signal.message,
+        "observation": dict(signal.observation),
+        "metadata": dict(signal.metadata),
+    }
+
+
+def _signal_from_dict(value: Any) -> RoundControlSignal | None:
+    if not isinstance(value, Mapping):
+        return None
+    return RoundControlSignal(
+        action=value.get("action"),
+        target=value.get("target"),
+        message=value.get("message"),
+        observation=dict(value.get("observation", {})),
+        metadata=dict(value.get("metadata", {})),
+    )
+
+
 async def _execute_decision(
     game: Game,
     logical: DecisionRequest,
@@ -547,6 +628,34 @@ def _controller_view(state: RelationalGameState) -> GameState:
                 agent_id=agent.agent_id,
                 attributes={"committed_action": agent.committed_action},
             )
+            for agent in state.agents
+        ),
+        terminated=state.terminated,
+        data={
+            "seed": int(state.data["seed"]),
+            "task": {
+                "task_id": task["task_id"],
+                "possible_answers": list(state.possible_answers),
+                "correct_answer": state.correct_answer,
+            },
+        },
+    )
+
+
+def _board_controller_view(state: RelationalGameState) -> GameState:
+    """Target-resolution view with no population votes or private state.
+
+    Board sensing receives message content separately.  Keeping even committed
+    actions out of this object makes it impossible for the board adapter to
+    regress into private vote sensing by accident.
+    """
+
+    task = state.task
+    return GameState(
+        game_type=state.game_type,
+        turn=state.turn,
+        agents=tuple(
+            AgentState(agent_id=agent.agent_id, attributes={})
             for agent in state.agents
         ),
         terminated=state.terminated,
@@ -970,6 +1079,7 @@ async def run_relational_imitation_round_feedback_game(
     resolved_control = (
         None if control is None or isinstance(control, NoneControl) else control
     )
+    sensing_mode = str(getattr(resolved_control, "sensing_mode", SENSING_VOTES))
     sensor_sample_size = getattr(resolved_control, "sensor_sample_size", None)
     intervention_budget = int(getattr(resolved_control, "intervention_budget", 0))
     controller_authoring = getattr(resolved_control, "controller_authoring", None)
@@ -996,7 +1106,11 @@ async def run_relational_imitation_round_feedback_game(
         if controller_authoring == CONTROLLER_AUTHORING_DETERMINISTIC
         else getattr(resolved_control, "controller_communication_policy", None)
     )
-    if sensor_sample_size is not None and int(sensor_sample_size) > rules.n_agents:
+    if (
+        sensing_mode == SENSING_VOTES
+        and sensor_sample_size is not None
+        and int(sensor_sample_size) > rules.n_agents
+    ):
         raise ValueError(
             "controller sensor_sample_size cannot exceed the population size"
         )
@@ -1032,6 +1146,8 @@ async def run_relational_imitation_round_feedback_game(
         in {COORDINATION_REQUEST, TRUTHFUL_STRATEGIC_REPORT, ADAPTIVE_COMMUNICATION}
         and controller_timing == TIMING_DAWN_ONLY
     )
+    if sensing_mode == SENSING_BOARD and rules.social_mode != SOCIAL_MODE_BOARD:
+        raise ValueError("controller sensing_mode 'board' requires social_mode 'board'")
     evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
     state = game.initialize(config.game, config.execution.seed) if initial_state is None else initial_state
     task = game.load_task(config.game)
@@ -1176,6 +1292,7 @@ async def run_relational_imitation_round_feedback_game(
         CommunicationMode(str(value))
         for value in restored.get("previous_communication_modes", ())
     ]
+    pending_board_signal = _signal_from_dict(restored.get("pending_board_signal"))
     first_round = 0 if start_round is None else int(start_round)
     if first_round < 0 or first_round > rules.rounds:
         raise ValueError("start_round must be between zero and configured rounds")
@@ -1198,18 +1315,22 @@ async def run_relational_imitation_round_feedback_game(
 
         round_signal: RoundControlSignal | None = None
         if resolved_control is not None:
-            round_signal = resolved_control.round_signal(
-                round_index=round_index,
-                state=_controller_view(state),
-                rng=sensor_rng,
-            )
+            if sensing_mode == SENSING_BOARD:
+                round_signal = pending_board_signal
+                pending_board_signal = None
+            else:
+                round_signal = resolved_control.round_signal(
+                    round_index=round_index,
+                    state=_controller_view(state),
+                    rng=sensor_rng,
+                )
             if round_signal is not None and not isinstance(
                 round_signal, RoundControlSignal
             ):
                 raise TypeError(
                     "Control.round_signal must return RoundControlSignal or None"
                 )
-            if round_signal is None:
+            if round_signal is None and sensing_mode != SENSING_BOARD:
                 raise ValueError(
                     "the selected control does not implement round-level signaling"
                 )
@@ -1218,6 +1339,12 @@ async def run_relational_imitation_round_feedback_game(
         if action is not None and action not in {NO_OP, ADVOCATE_TARGET}:
             raise ValueError("round controller action must be NO_OP or ADVOCATE_Z")
         target = None if round_signal is None else round_signal.target
+        if (
+            target is None
+            and sensing_mode == SENSING_BOARD
+            and resolved_control is not None
+        ):
+            target = resolved_control._resolved_target(_board_controller_view(state))
         analysis_target = state.correct_answer if target is None else target
         if analysis_target not in options:
             raise ValueError("controller target is outside the task option alphabet")
@@ -1233,11 +1360,39 @@ async def run_relational_imitation_round_feedback_game(
         # snapshot the previous public day for the communication chooser, then
         # expire it before participant delivery. Historical evidence is never
         # touched and old messages cannot be sampled for another day.
-        previous_board_messages = (
-            state.blackboard.live_messages(round_index - 1)
-            if dawn_blackboard and round_index > 0
-            else ()
-        )
+        if sensing_mode == SENSING_BOARD and round_signal is not None:
+            sampled_ids = tuple(
+                str(value)
+                for value in round_signal.observation.get("sampled_message_ids", ())
+            )
+            previous_board_messages = tuple(
+                message
+                for message_id in sampled_ids
+                for message in (state.blackboard.find(message_id),)
+                if message is not None
+            )
+            if len(previous_board_messages) != len(sampled_ids) or any(
+                message.round_created >= round_index
+                for message in previous_board_messages
+            ):
+                raise ValueError(
+                    "board-sensed controller action contains a missing or "
+                    "same-day message"
+                )
+            if (
+                round_signal.metadata.get("sensing_day") != round_index
+                or round_signal.metadata.get("action_day") != round_index + 1
+            ):
+                raise ValueError(
+                    "board-sensed controller action is not aligned to the "
+                    "previous night"
+                )
+        else:
+            previous_board_messages = (
+                state.blackboard.live_messages(round_index - 1)
+                if dawn_blackboard and round_index > 0
+                else ()
+            )
         _, night_expired_message_ids = state.blackboard.expire(round_index - 1)
         persistence_seed: int | None = None
         deactivated: tuple[tuple[str, str], ...] = ()
@@ -1690,7 +1845,11 @@ async def run_relational_imitation_round_feedback_game(
             if chosen_mode == CommunicationMode.REPORT:
                 live_fact_counts = Counter(
                     message.shared_fact_id
-                    for message in state.blackboard.live_messages(round_index)
+                    for message in (
+                        previous_board_messages
+                        if sensing_mode == SENSING_BOARD
+                        else state.blackboard.live_messages(round_index)
+                    )
                     if message.message_type == MESSAGE_REPORT
                     and message.shared_fact_id is not None
                 )
@@ -2288,6 +2447,34 @@ async def run_relational_imitation_round_feedback_game(
         deactivated_supporting = sum(
             1 for _, fact_id in deactivated if fact_id in set(state.supporting_fact_ids)
         )
+
+        # Night k begins only after every Day-k focal update and public post is
+        # complete.  It samples that frozen board and prepares (but does not
+        # apply) the action for Day k+1.
+        night_board_observation: dict[str, Any] | None = None
+        night_signal: RoundControlSignal | None = None
+        if sensing_mode == SENSING_BOARD and resolved_control is not None:
+            assert sensor_sample_size is not None
+            night_board_observation = _sample_completed_board(
+                state,
+                round_index=round_index,
+                requested=int(sensor_sample_size),
+            )
+            policy_stream = Seed(int(state.data["seed"])).derive(
+                f"relational-controller-board-policy:night:{round_index + 1}"
+            )
+            night_board_observation["policy_seed"] = int(policy_stream)
+            night_board_observation["policy_stream"] = (
+                f"relational-controller-board-policy:night:{round_index + 1}"
+            )
+            night_signal = resolved_control.board_signal(
+                round_index=round_index + 1,
+                state=_board_controller_view(state),
+                observation=night_board_observation,
+                rng=policy_stream.create_random(),
+            )
+            pending_board_signal = night_signal
+
         sensor = {} if round_signal is None else dict(round_signal.observation)
         raw_sensor_counts = sensor.get("sampled_opinion_counts", {})
         sensor_counts = (
@@ -2296,11 +2483,24 @@ async def run_relational_imitation_round_feedback_game(
             else [0 for _ in options]
         )
         target_index = options.index(analysis_target)
-        q_c = None if round_signal is None else int(sensor.get("sample_size", 0))
-        sensor_target_share = None if not q_c else sensor_counts[target_index] / q_c
+        q_c_effective = (
+            None if round_signal is None else int(sensor.get("sample_size", 0))
+        )
+        q_c = (
+            int(sensor_sample_size)
+            if sensing_mode == SENSING_BOARD and sensor_sample_size is not None
+            else q_c_effective
+        )
+        sensor_target_share = (
+            None
+            if q_c_effective in {None, 0}
+            else sensor_counts[target_index] / q_c_effective
+        )
         controller_sensor_y = (
             None
             if round_signal is None
+            else dict(sensor)
+            if sensing_mode == SENSING_BOARD
             else {
                 "sample_size": q_c,
                 "sampled_agent_ids": list(sensor.get("sampled_agent_ids", ())),
@@ -2396,12 +2596,21 @@ async def run_relational_imitation_round_feedback_game(
             "board_sampling": rules.board_sampling,
             "message_lifetime_rounds": rules.board_message_lifetime_rounds,
             "board_exclude_self_authored": rules.board_exclude_self_authored,
+            "controller_sensing_mode": sensing_mode,
             "sensor_sample_size": q_c,
+            "requested_q_c": q_c,
+            "q_c_effective": q_c_effective,
             "intervention_budget": intervention_budget,
             "b": intervention_budget,
-            "sensing_fraction": None if q_c is None else q_c / rules.n_agents,
+            "sensing_fraction": (
+                None
+                if q_c is None or sensing_mode == SENSING_BOARD
+                else q_c / rules.n_agents
+            ),
             "actuation_fraction": intervention_budget / rules.n_agents,
             "controller_enabled": round_signal is not None,
+            "controller_configured": resolved_control is not None,
+            "feedback_action_applied": round_signal is not None,
             "controller_action": action,
             "controller_target": target,
             "analysis_target": analysis_target,
@@ -2417,6 +2626,16 @@ async def run_relational_imitation_round_feedback_game(
             "controller_advocate_probability": probability,
             "controller_advocacy_probability": probability,
             "controller_action_probability": probability,
+            "sensing_day": (
+                None
+                if round_signal is None
+                else round_signal.metadata.get("sensing_day", round_index + 1)
+            ),
+            "action_day": (
+                None
+                if round_signal is None
+                else round_signal.metadata.get("action_day", round_index + 1)
+            ),
             # Stable transition contract for the existing MI/CMI adapters.
             # Blackboard channel observables below are additive to these fields.
             "n_k": _count_vector(before_obs["occupation_counts"], options)[
@@ -2431,6 +2650,41 @@ async def run_relational_imitation_round_feedback_game(
             "controller_sensor_Y": controller_sensor_y,
             "controller_probability_U1_given_Y": probability,
             "controller_sampled_U": controller_sampled_u,
+            "night_controller_decision": (
+                None
+                if night_signal is None
+                else {
+                    "sensing_day": night_signal.metadata.get("sensing_day"),
+                    "action_day": night_signal.metadata.get("action_day"),
+                    "observation": dict(night_signal.observation),
+                    "action_probability": night_signal.metadata.get(
+                        "advocacy_probability"
+                    ),
+                    "action": night_signal.action,
+                    "target": night_signal.target,
+                    "policy": night_signal.metadata.get("policy"),
+                    "threshold": night_signal.metadata.get("threshold"),
+                    "beta": night_signal.metadata.get("beta"),
+                }
+            ),
+            "night_sensing_day": (
+                None
+                if night_signal is None
+                else night_signal.metadata.get("sensing_day")
+            ),
+            "night_action_day": (
+                None
+                if night_signal is None
+                else night_signal.metadata.get("action_day")
+            ),
+            "next_controller_action": (
+                None if night_signal is None else night_signal.action
+            ),
+            "next_controller_action_probability": (
+                None
+                if night_signal is None
+                else night_signal.metadata.get("advocacy_probability")
+            ),
             "controller_injection_within_round_indices": list(controlled_positions),
             "controller_injection_global_update_indices": (
                 controller_injection_global_indices
@@ -2524,7 +2778,11 @@ async def run_relational_imitation_round_feedback_game(
                 resolved_control, "controller_report_selection_strategy", None
             ),
             "protocol": (
-                "night_dawn_autonomous_day_v1" if dawn_blackboard else "legacy"
+                "board_sensing_night_dawn_day_v1"
+                if sensing_mode == SENSING_BOARD
+                else "night_dawn_autonomous_day_v1"
+                if dawn_blackboard
+                else "legacy"
             ),
             "coordinator_public_vote": target,
             "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
@@ -2557,6 +2815,13 @@ async def run_relational_imitation_round_feedback_game(
             "sensor_observed_opinions": list(sensor.get("sampled_opinions", ())),
             "sensor_count_vector": sensor_counts if round_signal is not None else None,
             "sensor_target_share": sensor_target_share,
+            "sensor_sampled_message_ids": list(
+                sensor.get("sampled_message_ids", ())
+            ),
+            "sensor_sampled_author_ids": list(sensor.get("sampled_author_ids", ())),
+            "sensor_sampled_message_types": list(
+                sensor.get("sampled_message_types", ())
+            ),
             "controlled_positions": list(controlled_positions),
             "controlled_position_count": len(controlled_positions),
             "controlled_positions_seed": schedule_seed,
@@ -2830,6 +3095,20 @@ async def run_relational_imitation_round_feedback_game(
                 if rules.social_mode == SOCIAL_MODE_BOARD
                 else None
             ),
+            "sensor_theory_status": (
+                "not_applicable_board_observation_channel"
+                if sensing_mode == SENSING_BOARD
+                else "hypergeometric_vote_sensor"
+                if round_signal is not None
+                else "not_applicable_no_controller"
+            ),
+            "sensor_theory_skip_reason": (
+                "public board messages are endogenous, selective, redundant, "
+                "stale, or absent; the private-vote hypergeometric kernel does "
+                "not apply"
+                if sensing_mode == SENSING_BOARD
+                else None
+            ),
             # --- self-contained round summary (§ compact artifact profile) ---
             # These make round_trajectory.jsonl sufficient on its own: under
             # `results_only` the microscopic trajectory is not retained, so
@@ -2915,6 +3194,7 @@ async def run_relational_imitation_round_feedback_game(
             "previous_communication_modes": [
                 mode.value for mode in previous_communication_modes
             ],
+            "pending_board_signal": _signal_to_dict(pending_board_signal),
             "initialization_context": {
                 "initialization_source": initialization_source,
                 "initialization_repetition": initialization_repetition,
