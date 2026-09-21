@@ -21,3 +21,5 @@
 header{flex-wrap:wrap;gap:14px 24px}header>div:first-child{min-width:0;flex:1 1 320px}.header-actions{margin-left:auto;flex-wrap:wrap;justify-content:flex-end}.status{white-space:nowrap}
 /* Words ("Unavailable") are set smaller than numbers so they fit a narrow summary card. */
 .card strong.text{font:650 15px/1.3 ui-sans-serif,system-ui,sans-serif;margin-top:10px;overflow-wrap:break-word}
+h1.study-title{font-size:clamp(20px,2.4vw,32px);line-height:1.15;overflow-wrap:anywhere}
+.auto-refresh{display:flex;gap:6px;align-items:center;font-size:12px;color:#d6e6dc;border:1px solid #ffffff2a;background:#ffffff12;border-radius:30px;padding:5px 11px}.auto-refresh select{border:0;background:transparent;color:#fff;padding:2px;font:600 12px ui-sans-serif,system-ui,sans-serif}.auto-refresh select option{color:#152019;background:#fff}
