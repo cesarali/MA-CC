@@ -98,6 +98,7 @@
     <button data-view="coverage">Coverage</button>
     <button data-view="agent-view">Agent</button>
     <button data-view="controller">Controller</button>
+    <button data-view="prompts">Prompts</button>
   </nav>
 
   <main>
@@ -166,6 +167,9 @@
       <article class="panel"><h2>Controller event strip</h2><p class="meta">Select a round to inspect its exact retained controller posts.</p><div id="controller-events"></div></article>
       <article class="panel"><h2>Per-round actuation and exposure</h2><div id="controller-round-bars"></div><p class="meta">Vote movement means the next recorded exposed update changed from a non-target vote to the target. It is descriptive, not causal.</p></article>
       <article class="panel"><h2>Selected round controller</h2><div id="controller-event-messages"></div><div id="controller-state"></div></article>
+    </section>
+    <section id="prompts" class="view">
+      <article class="panel"><h2>Decision audits</h2><p class="meta">Every retained decision attempt, newest index last. Each entry is fetched on demand; a lean retention profile keeps the audit record without the compiled prompt text.</p><div id="prompt-list"></div></article>
     </section>
   </main>
   </section>

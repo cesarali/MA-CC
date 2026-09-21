@@ -383,6 +383,9 @@ def make_handler(
                                         edge["step"] if edge else None,
                                     ),
                                     "statistics": episode_reader.statistics(),
+                                    # The audit range for /prompt-<n>; without it the UI would have
+                                    # to probe indices until one 400s.
+                                    "prompt_attempts": episode_reader.prompt_count(),
                                 }
                             elif action == "timeline":
                                 payload = episode_reader.timeline()

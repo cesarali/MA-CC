@@ -27,3 +27,4 @@ h1.study-title{font-size:clamp(20px,2.4vw,32px);line-height:1.15;overflow-wrap:a
 .plot-whisker{stroke-width:1.5;opacity:.55}
 /* A status the badge has no colour for (e.g. the analysis 'valid') was white text on a white pill. */
 .status-badge{color:#3c3a33}
+.prompt-entry{border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:6px 0}.prompt-entry summary{cursor:pointer;font-weight:650}.prompt-entry .prompt-body{margin-top:8px}
