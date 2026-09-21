@@ -1,0 +1,22 @@
+# Runtime set of the hosted Blackboard Observatory (python 3.12, linux/amd64). The package itself is installed
+# with --no-deps: its declared dependencies include torch and sentence-transformers, which the dashboard never
+# imports. Found by importing the dashboard and CLI in a clean venv; matplotlib is an import-time need of the CLI.
+boto3==1.43.98
+botocore==1.43.98
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.65.0
+jmespath==1.1.0
+kiwisolver==1.5.1
+matplotlib==3.11.2
+numpy==2.5.3
+packaging==26.3
+pandas==3.0.6
+pillow==12.3.0
+pyarrow==25.0.1
+pyparsing==3.3.3
+python-dateutil==2.9.0.post0
+PyYAML==6.0.3
+s3transfer==0.19.2
+six==1.17.0
+urllib3==2.8.0
