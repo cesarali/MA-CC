@@ -74,6 +74,10 @@ from .adaptive_communication import (
     COMMUNICATION_POLICY,
     LLM_COMMUNICATION_POLICY,
     LLM_AUTHORED_REPORT_ONLY_POLICY,
+    LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+    LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+    LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
+    AuthoredControllerMessage,
     CommunicationChoice,
     CommunicationMode,
     ControllerCommunicationContext,
@@ -94,6 +98,8 @@ from .controller import (
     SENSING_VOTES,
     TIMING_DAWN_ONLY,
     TIMING_MICROSCOPIC,
+    CONTROLLER_AUTHORING_DETERMINISTIC,
+    CONTROLLER_AUTHORING_LLM,
 )
 from .game import RelationalImitationRoundFeedbackGame
 from .initialization import (
@@ -117,6 +123,8 @@ from .state import (
     MESSAGE_DIRECTIVE,
     MESSAGE_REQUEST,
     MESSAGE_REPORT,
+    COMMUNICATION_PROFILE_FULL,
+    COMMUNICATION_PROFILE_REPORT_ONLY,
     SOCIAL_MODE_BOARD,
     SOCIAL_MODE_PEER,
     BlackboardMessage,
@@ -1076,6 +1084,42 @@ async def run_relational_imitation_round_feedback_game(
     sensing_mode = str(getattr(resolved_control, "sensing_mode", SENSING_VOTES))
     sensor_sample_size = getattr(resolved_control, "sensor_sample_size", None)
     intervention_budget = int(getattr(resolved_control, "intervention_budget", 0))
+    controller_authoring = getattr(resolved_control, "controller_authoring", None)
+    allow_mixed_message_types = bool(
+        getattr(resolved_control, "controller_allow_mixed_message_types", False)
+    )
+    uses_communication_handles = controller_authoring is not None
+    board_options = config.game.options.get("board", {})
+    communication_profile_explicit = (
+        isinstance(board_options, Mapping)
+        and "communication_profile" in board_options
+    )
+    if resolved_control is not None and (
+        communication_profile_explicit != uses_communication_handles
+    ):
+        raise ValueError(
+            "controlled runs must set communication_profile and "
+            "controller_authoring together"
+        )
+    if allow_mixed_message_types and controller_authoring != CONTROLLER_AUTHORING_LLM:
+        raise ValueError(
+            "controller_allow_mixed_message_types requires llm_authored "
+            "controller authoring"
+        )
+    effective_communication_policy = (
+        LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY
+        if controller_authoring == CONTROLLER_AUTHORING_LLM
+        and allow_mixed_message_types
+        and rules.communication_profile == COMMUNICATION_PROFILE_FULL
+        else LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY
+        if controller_authoring == CONTROLLER_AUTHORING_LLM
+        and rules.communication_profile == COMMUNICATION_PROFILE_REPORT_ONLY
+        else LLM_AUTHORED_FULL_COMMUNICATION_POLICY
+        if controller_authoring == CONTROLLER_AUTHORING_LLM
+        else COMMUNICATION_POLICY
+        if controller_authoring == CONTROLLER_AUTHORING_DETERMINISTIC
+        else getattr(resolved_control, "controller_communication_policy", None)
+    )
     if (
         sensing_mode == SENSING_VOTES
         and sensor_sample_size is not None
@@ -1446,7 +1490,9 @@ async def run_relational_imitation_round_feedback_game(
         round_board_sizes: list[int] = []
         round_created_message_ids: list[str] = []
         round_controller_post_ids: list[str] = []
+        round_controller_report_ids: list[str] = []
         round_controller_readers: set[str] = set()
+        round_controller_report_readers: set[str] = set()
         round_controller_exposure_count = 0
         round_controller_exposed_updates = 0
         round_controller_repeat_exposures = 0
@@ -1469,16 +1515,29 @@ async def run_relational_imitation_round_feedback_game(
         executed_communication_mode: CommunicationMode | None = None
         request_topic: str | None = None
         directive_topic: str | None = None
+        request_topics: list[str] = []
+        directive_topics: list[str] = []
 
         if actuation_mode == ADAPTIVE_COMMUNICATION:
-            allowed_controller_modes = allowed_communication_modes(
-                allow_requests=bool(
-                    getattr(resolved_control, "allow_controller_requests", True)
-                ),
-                allow_directives=bool(
-                    getattr(resolved_control, "allow_controller_directives", True)
-                ),
-            )
+            if uses_communication_handles:
+                allowed_controller_modes = (
+                    (CommunicationMode.REPORT,)
+                    if rules.communication_profile == COMMUNICATION_PROFILE_REPORT_ONLY
+                    else (
+                        CommunicationMode.REPORT,
+                        CommunicationMode.REQUEST,
+                        CommunicationMode.DIRECTIVE,
+                    )
+                )
+            else:
+                allowed_controller_modes = allowed_communication_modes(
+                    allow_requests=bool(
+                        getattr(resolved_control, "allow_controller_requests", True)
+                    ),
+                    allow_directives=bool(
+                        getattr(resolved_control, "allow_controller_directives", True)
+                    ),
+                )
         elif actuation_mode == TRUTHFUL_STRATEGIC_REPORT:
             allowed_controller_modes = (CommunicationMode.REPORT,)
         elif actuation_mode == COORDINATION_REQUEST:
@@ -1577,7 +1636,7 @@ async def run_relational_imitation_round_feedback_game(
                         prior_post_count=row.prior_post_count,
                         last_post_round=row.last_post_round,
                     )
-                    for row in eligible_ranked
+                    for row in (all_ranked if uses_communication_handles else eligible_ranked)
                 ),
                 posting_history=tuple(
                     {
@@ -1591,18 +1650,18 @@ async def run_relational_imitation_round_feedback_game(
                 ),
                 budget=intervention_budget,
             )
-            communication_policy = str(
-                getattr(
-                    resolved_control,
-                    "controller_communication_policy",
-                    COMMUNICATION_POLICY,
-                )
-            )
+            communication_policy = str(effective_communication_policy)
             if communication_policy in {
                 LLM_COMMUNICATION_POLICY,
                 LLM_AUTHORED_REPORT_ONLY_POLICY,
+                LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+                LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+                LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
             }:
-                if communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
+                if communication_policy in {
+                    LLM_AUTHORED_REPORT_ONLY_POLICY,
+                    LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+                }:
                     allowed_controller_modes = (CommunicationMode.REPORT,)
                 saved_controller = recovery.replay_controller(
                     controller_communication_context
@@ -1618,6 +1677,17 @@ async def run_relational_imitation_round_feedback_game(
                         text=saved_choice.get("text"),
                         report_texts=tuple(
                             str(value) for value in saved_choice.get("report_texts", [])
+                        ),
+                        message_texts=tuple(
+                            str(value) for value in saved_choice.get("message_texts", [])
+                        ),
+                        messages=tuple(
+                            AuthoredControllerMessage(
+                                mode=CommunicationMode(str(value["type"])),
+                                fact_id=value.get("fact_id"),
+                                text=str(value["text"]),
+                            )
+                            for value in saved_choice.get("messages", [])
                         ),
                     )
                     controller_llm_attempts = [
@@ -1719,7 +1789,17 @@ async def run_relational_imitation_round_feedback_game(
                             f"relational-controller-communication-fallback:{round_index}"
                         )
                         controller_fallback_seed = int(fallback_stream)
-                        if communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
+                        if communication_policy in {
+                            LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+                            LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+                            LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
+                        }:
+                            raise ValueError(
+                                "LLM-authored controller failed to produce a valid "
+                                "fixed-budget communication; refusing to substitute "
+                                "deterministic authorship"
+                            )
+                        elif communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
                             if not controller_communication_context.eligible_facts:
                                 raise ValueError(
                                     "authored report-only fallback has no eligible fact"
@@ -1730,7 +1810,9 @@ async def run_relational_imitation_round_feedback_game(
                                 policy=communication_policy,
                                 policy_version=1,
                                 fact_ids=(
-                                    controller_communication_context.eligible_facts[0].fact_id,
+                                    controller_communication_context.eligible_facts[
+                                        0
+                                    ].fact_id,
                                 ),
                                 text=None,
                             )
@@ -1788,7 +1870,47 @@ async def run_relational_imitation_round_feedback_game(
                 else CommunicationMode.DIRECTIVE
             )
             executed_communication_mode = chosen_mode
-            if chosen_mode == CommunicationMode.REPORT:
+            if communication_choice is not None and communication_choice.messages:
+                ranked_by_id = {row.fact_id: row for row in all_ranked}
+                for authored_message in communication_choice.messages:
+                    if authored_message.mode == CommunicationMode.REPORT:
+                        selection = ranked_by_id[str(authored_message.fact_id)]
+                        state, controller_post = _append_controller_report(
+                            state,
+                            target=target,
+                            fact_id=selection.fact_id,
+                            round_index=round_index,
+                            lifetime_rounds=rules.board_message_lifetime_rounds,
+                            authored_text=authored_message.text,
+                        )
+                        selected_report_rounds.setdefault(
+                            selection.fact_id, []
+                        ).append(round_index)
+                        round_controller_report_selection.append(selection.to_dict())
+                        round_controller_report_ids.append(controller_post.message_id)
+                    else:
+                        message_type = (
+                            MESSAGE_REQUEST
+                            if authored_message.mode == CommunicationMode.REQUEST
+                            else MESSAGE_DIRECTIVE
+                        )
+                        state, controller_post = _append_controller_public_message(
+                            state,
+                            target=target,
+                            text=authored_message.text,
+                            message_type=message_type,
+                            round_index=round_index,
+                            lifetime_rounds=rules.board_message_lifetime_rounds,
+                        )
+                        if message_type == MESSAGE_REQUEST:
+                            request_topic = request_topic or authored_message.text
+                            request_topics.append(authored_message.text)
+                        else:
+                            directive_topic = directive_topic or authored_message.text
+                            directive_topics.append(authored_message.text)
+                    round_controller_post_ids.append(controller_post.message_id)
+                    round_created_message_ids.append(controller_post.message_id)
+            elif chosen_mode == CommunicationMode.REPORT:
                 live_fact_counts = Counter(
                     message.shared_fact_id
                     for message in (
@@ -1800,12 +1922,18 @@ async def run_relational_imitation_round_feedback_game(
                     and message.shared_fact_id is not None
                 )
                 selector_name = (
-                    "select_adaptive_truthful_reports"
-                    if actuation_mode == ADAPTIVE_COMMUNICATION
-                    else "select_truthful_reports"
+                    "select_truthful_reports"
+                    if uses_communication_handles
+                    or actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                    else "select_adaptive_truthful_reports"
                 )
                 if communication_choice is not None and communication_choice.fact_ids:
-                    ranked_by_id = {row.fact_id: row for row in eligible_ranked}
+                    ranked_by_id = {
+                        row.fact_id: row
+                        for row in (
+                            all_ranked if uses_communication_handles else eligible_ranked
+                        )
+                    }
                     selections = tuple(
                         ranked_by_id[fact_id]
                         for fact_id in communication_choice.fact_ids
@@ -1819,11 +1947,11 @@ async def run_relational_imitation_round_feedback_game(
                         selected_rounds=selected_report_rounds,
                     )
                 if (
-                    actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                    (actuation_mode == TRUTHFUL_STRATEGIC_REPORT or uses_communication_handles)
                     and len(selections) != intervention_budget
                 ):
                     raise ValueError(
-                        "truthful strategic selector did not return exactly b reports"
+                        "fixed-budget controller did not produce exactly b reports"
                     )
                 authored_by_fact = (
                     dict(zip(communication_choice.fact_ids, communication_choice.report_texts))
@@ -1843,6 +1971,7 @@ async def run_relational_imitation_round_feedback_game(
                         round_index
                     )
                     round_controller_report_selection.append(selection.to_dict())
+                    round_controller_report_ids.append(controller_post.message_id)
                     round_controller_post_ids.append(controller_post.message_id)
                     round_created_message_ids.append(controller_post.message_id)
             else:
@@ -1872,26 +2001,51 @@ async def run_relational_imitation_round_feedback_game(
                 )
                 if message_type == MESSAGE_REQUEST:
                     request_topic = coordination_text
+                    request_topics.append(coordination_text)
                 else:
                     directive_topic = coordination_text
-                # In adaptive mode b is a maximum. A factless act is posted
-                # once rather than duplicated merely to fill all slots.
+                    directive_topics.append(coordination_text)
                 post_count = (
-                    1
+                    intervention_budget
+                    if uses_communication_handles
+                    else 1
                     if actuation_mode == ADAPTIVE_COMMUNICATION
                     else intervention_budget
                 )
-                for _ in range(post_count):
+                authored_messages = (
+                    communication_choice.message_texts
+                    if communication_choice is not None
+                    and communication_choice.message_texts
+                    else (coordination_text,) * post_count
+                )
+                for message_text in authored_messages:
                     state, controller_post = _append_controller_public_message(
                         state,
                         target=target,
-                        text=coordination_text,
+                        text=message_text,
                         message_type=message_type,
                         round_index=round_index,
                         lifetime_rounds=rules.board_message_lifetime_rounds,
                     )
                     round_controller_post_ids.append(controller_post.message_id)
                     round_created_message_ids.append(controller_post.message_id)
+
+        communication_choice_source = (
+            None
+            if communication_choice is None
+            else "algorithmic_fallback"
+            if controller_llm_fallback_used
+            else "llm"
+            if communication_choice.policy
+            in {
+                LLM_COMMUNICATION_POLICY,
+                LLM_AUTHORED_REPORT_ONLY_POLICY,
+                LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+                LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+                LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
+            }
+            else "algorithmic"
+        )
 
         _notify(
             observer,
@@ -1911,7 +2065,12 @@ async def run_relational_imitation_round_feedback_game(
                 "sensor": None
                 if round_signal is None
                 else dict(round_signal.observation),
-                "directive_ids": list(round_controller_post_ids),
+                "directive_ids": [
+                    message.message_id
+                    for message in state.blackboard.messages
+                    if message.message_id in set(round_controller_post_ids)
+                    and message.message_type == MESSAGE_DIRECTIVE
+                ],
                 "post_ids": list(round_controller_post_ids),
                 "request_ids": [
                     message.message_id
@@ -1938,15 +2097,7 @@ async def run_relational_imitation_round_feedback_game(
                 ),
                 "requested_b": intervention_budget,
                 "actual_posts": len(round_controller_post_ids),
-                "communication_choice_source": (
-                    None
-                    if communication_choice is None
-                    else "algorithmic_fallback"
-                    if controller_llm_fallback_used
-                    else "llm"
-                    if communication_choice.policy == LLM_COMMUNICATION_POLICY
-                    else "algorithmic"
-                ),
+                "communication_choice_source": communication_choice_source,
                 "llm_fallback_used": controller_llm_fallback_used,
             },
         )
@@ -2151,6 +2302,8 @@ async def run_relational_imitation_round_feedback_game(
                 round_controller_repeat_exposures += max(
                     0, len(sampled_controller_ids) - 1
                 )
+            if sampled_controller_report_ids:
+                round_controller_report_readers.add(str(focal))
             board_fields = {
                 "sampled_message_ids": [
                     source.get("message_id") for source in social_sources
@@ -2626,12 +2779,19 @@ async def run_relational_imitation_round_feedback_game(
             "controller_message_mode": message_mode,
             "controller_actuation_mode": actuation_mode,
             "controller_timing": controller_timing,
+            "communication_profile": rules.communication_profile,
+            "controller_authoring": controller_authoring,
+            "controller_allow_mixed_message_types": allow_mixed_message_types,
             "allow_participant_requests": rules.allow_participant_requests,
-            "allow_controller_requests": bool(
-                getattr(resolved_control, "allow_controller_requests", True)
+            "allow_controller_requests": (
+                rules.communication_profile == COMMUNICATION_PROFILE_FULL
+                if uses_communication_handles
+                else bool(getattr(resolved_control, "allow_controller_requests", True))
             ),
-            "allow_controller_directives": bool(
-                getattr(resolved_control, "allow_controller_directives", True)
+            "allow_controller_directives": (
+                rules.communication_profile == COMMUNICATION_PROFILE_FULL
+                if uses_communication_handles
+                else bool(getattr(resolved_control, "allow_controller_directives", True))
             ),
             "allowed_message_modes": [mode.value for mode in allowed_controller_modes],
             "chosen_message_mode": (
@@ -2655,15 +2815,7 @@ async def run_relational_imitation_round_feedback_game(
             "controller_communication_choice": (
                 None if communication_choice is None else communication_choice.to_dict()
             ),
-            "controller_communication_choice_source": (
-                None
-                if communication_choice is None
-                else "algorithmic_fallback"
-                if controller_llm_fallback_used
-                else "llm"
-                if communication_choice.policy == LLM_COMMUNICATION_POLICY
-                else "algorithmic"
-            ),
+            "controller_communication_choice_source": communication_choice_source,
             "controller_llm_attempts": controller_llm_attempts,
             "controller_llm_fallback_used": controller_llm_fallback_used,
             "controller_fallback_seed": controller_fallback_seed,
@@ -2679,7 +2831,7 @@ async def run_relational_imitation_round_feedback_game(
                 else None
             ),
             "communication_policy": (
-                getattr(resolved_control, "controller_communication_policy", None)
+                effective_communication_policy
                 if actuation_mode == ADAPTIVE_COMMUNICATION
                 else None
             ),
@@ -2699,6 +2851,8 @@ async def run_relational_imitation_round_feedback_game(
             ],
             "request_topic": request_topic,
             "directive_topic": directive_topic,
+            "request_topics": request_topics,
+            "directive_topics": directive_topics,
             "controller_report_cooldown_rounds": getattr(
                 resolved_control, "controller_report_cooldown_rounds", None
             ),
@@ -2911,46 +3065,23 @@ async def run_relational_imitation_round_feedback_game(
             "controller_posts": len(round_controller_post_ids),
             "controller_post_ids": list(round_controller_post_ids),
             "controller_reports_requested": (
-                intervention_budget
-                if action == ADVOCATE_TARGET
-                and (
-                    actuation_mode == TRUTHFUL_STRATEGIC_REPORT
-                    or communication_choice is not None
-                    and communication_choice.mode == CommunicationMode.REPORT
-                )
-                else 0
+                len(round_controller_report_selection)
             ),
-            "controller_reports_admitted": (
-                len(round_controller_post_ids)
-                if executed_communication_mode == CommunicationMode.REPORT
-                else 0
-            ),
-            "controller_report_ids": (
-                list(round_controller_post_ids)
-                if executed_communication_mode == CommunicationMode.REPORT
-                else []
-            ),
+            "controller_reports_admitted": len(round_controller_report_ids),
+            "controller_report_ids": list(round_controller_report_ids),
             "controller_report_fact_ids": [
                 row["fact_id"] for row in round_controller_report_selection
             ],
             "controller_report_selection": round_controller_report_selection,
             "controller_message_exposures": round_controller_exposure_count,
-            "controller_report_exposures": (
-                controller_exposures
-                if executed_communication_mode == CommunicationMode.REPORT
-                else 0
-            ),
+            "controller_report_exposures": controller_exposures,
             "controller_report_repeat_exposures": round_controller_repeat_exposures,
             "directive_exposed_focal_updates": round_controller_exposed_updates,
             "realized_directive_exposure_fraction": (
                 round_controller_exposed_updates / rules.n_agents
             ),
             "controller_unique_readers": len(round_controller_readers),
-            "controller_report_unique_readers": (
-                len(round_controller_readers)
-                if executed_communication_mode == CommunicationMode.REPORT
-                else 0
-            ),
+            "controller_report_unique_readers": len(round_controller_report_readers),
             "controller_direct_replies": direct_replies,
             "directive_report_reply_count": direct_report_replies,
             "directive_evidence_report_count": direct_evidence_report_replies,
@@ -2972,16 +3103,8 @@ async def run_relational_imitation_round_feedback_game(
                 if round_message_read_count
                 else 0.0
             ),
-            "controller_report_fact_acquisitions": (
-                new_controller_facts
-                if executed_communication_mode == CommunicationMode.REPORT
-                else 0
-            ),
-            "controller_report_fact_reactivations": (
-                reactivated_controller_facts
-                if executed_communication_mode == CommunicationMode.REPORT
-                else 0
-            ),
+            "controller_report_fact_acquisitions": new_controller_facts,
+            "controller_report_fact_reactivations": reactivated_controller_facts,
             "controller_report_off_target_exposures": (
                 round_controller_report_off_target_exposures
             ),

@@ -106,6 +106,12 @@ STRATEGIC_REPORT_SELECTION_STRATEGIES = (STRATEGIC_REPORT_SELECTION_V1,)
 TIMING_MICROSCOPIC = "microscopic"
 TIMING_DAWN_ONLY = "dawn_only"
 CONTROLLER_TIMINGS = (TIMING_MICROSCOPIC, TIMING_DAWN_ONLY)
+CONTROLLER_AUTHORING_DETERMINISTIC = "deterministic"
+CONTROLLER_AUTHORING_LLM = "llm_authored"
+CONTROLLER_AUTHORING_MODES = (
+    CONTROLLER_AUTHORING_DETERMINISTIC,
+    CONTROLLER_AUTHORING_LLM,
+)
 
 SENSING_VOTES = "votes"
 SENSING_BOARD = "board"
@@ -192,6 +198,8 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     controller_communication_fallback_policy: str = COMMUNICATION_POLICY
     controller_communication_max_retries: int = 2
     controller_report_max_posts_per_fact: int = 3
+    controller_authoring: str | None = None
+    controller_allow_mixed_message_types: bool = False
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -755,6 +763,69 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             communication_policy_version
         )
 
+        controller_authoring = options.get("controller_authoring")
+        if controller_authoring is not None:
+            if controller_authoring not in CONTROLLER_AUTHORING_MODES:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.controller_authoring",
+                        f"must be one of {list(CONTROLLER_AUTHORING_MODES)}",
+                    )
+                )
+                controller_authoring = None
+            for legacy_field in (
+                "controller_communication_policy",
+                "controller_communication_policy_version",
+                "controller_communication_fallback_policy",
+                "allow_controller_requests",
+                "allow_controller_directives",
+            ):
+                if legacy_field in options:
+                    issues.append(
+                        ValidationIssue(
+                            f"control.options.{legacy_field}",
+                            "remove this legacy field when controller_authoring is set",
+                        )
+                    )
+            if actuation_mode != ADAPTIVE_COMMUNICATION:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.controller_authoring",
+                        "requires controller_actuation_mode: adaptive_communication",
+                    )
+                )
+            if timing != TIMING_DAWN_ONLY:
+                issues.append(
+                    ValidationIssue(
+                        "control.options.controller_authoring",
+                        "requires controller_timing: dawn_only",
+                    )
+                )
+        values["controller_authoring"] = controller_authoring
+
+        allow_mixed_message_types = options.get(
+            "controller_allow_mixed_message_types", False
+        )
+        if not isinstance(allow_mixed_message_types, bool):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_allow_mixed_message_types",
+                    "must be a boolean",
+                )
+            )
+            allow_mixed_message_types = False
+        if (
+            allow_mixed_message_types
+            and controller_authoring != CONTROLLER_AUTHORING_LLM
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_allow_mixed_message_types",
+                    "requires controller_authoring: llm_authored",
+                )
+            )
+        values["controller_allow_mixed_message_types"] = allow_mixed_message_types
+
         fallback_policy = options.get(
             "controller_communication_fallback_policy", COMMUNICATION_POLICY
         )
@@ -942,6 +1013,9 @@ def create_relational_round_budgeted_control(config: ControlConfig) -> Control:
 __all__ = [
     "ADAPTIVE_COMMUNICATION",
     "CONTROLLER_ACTUATION_MODES",
+    "CONTROLLER_AUTHORING_DETERMINISTIC",
+    "CONTROLLER_AUTHORING_LLM",
+    "CONTROLLER_AUTHORING_MODES",
     "CONTROLLER_TIMINGS",
     "CONTROLLER_SENSING_MODES",
     "COORDINATION_REQUEST",

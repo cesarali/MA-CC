@@ -38,7 +38,7 @@ game:
       message_lifetime_rounds: 1
       exclude_self_authored: true
       allow_no_post: true
-      allow_participant_requests: false
+      communication_profile: report_only
       require_grounded_reports: true
       report_citation_scope: active_or_observed
       no_citable_fact_action: none
@@ -66,11 +66,7 @@ control:
     message_mode: recommendation_only
     controller_actuation_mode: adaptive_communication
     controller_timing: dawn_only
-    allow_controller_requests: false
-    allow_controller_directives: false
-    controller_communication_policy: llm_authored_report_only_v1
-    controller_communication_policy_version: 1
-    controller_communication_fallback_policy: contextual_weighted_v1
+    controller_authoring: llm_authored
     controller_communication_max_retries: 2
     controller_report_cooldown_rounds: 1
     controller_report_max_posts_per_fact: 3
