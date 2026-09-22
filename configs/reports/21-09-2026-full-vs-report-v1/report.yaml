@@ -1,0 +1,7 @@
+report:
+  title: Full communication vs report only — v1
+  source_analysis: ../../../results/aggregation_results_local/21-09-2026-full-vs-report-v1_analysis
+  output_dir: ../../../results/reports/21-09-2026-full-vs-report-v1
+  renderer: scripts/analysis/report_communication_comparison.py
+  mode: saved_results_only
+  rho_aggregate_maps: true
