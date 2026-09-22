@@ -24,6 +24,9 @@ class CommunicationMode(str, Enum):
     REPORT = "REPORT"
     REQUEST = "REQUEST"
     DIRECTIVE = "DIRECTIVE"
+    # A round-level composition marker. Individual public messages still use
+    # REPORT, REQUEST, or DIRECTIVE.
+    MIXED = "MIXED"
 
 
 COMMUNICATION_POLICY = "contextual_weighted_v1"
@@ -36,6 +39,10 @@ LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY = "llm_authored_fixed_report_only_v1"
 LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY_VERSION = 1
 LLM_AUTHORED_FULL_COMMUNICATION_POLICY = "llm_authored_full_communication_v1"
 LLM_AUTHORED_FULL_COMMUNICATION_POLICY_VERSION = 1
+LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY = (
+    "llm_authored_mixed_full_communication_v1"
+)
+LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY_VERSION = 1
 COMMUNICATION_POLICIES = (
     COMMUNICATION_POLICY,
     LLM_COMMUNICATION_POLICY,
@@ -128,6 +135,22 @@ class ControllerCommunicationContext:
 
 
 @dataclass(frozen=True, slots=True)
+class AuthoredControllerMessage:
+    """One validated public message in an opt-in mixed controller round."""
+
+    mode: CommunicationMode
+    text: str
+    fact_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.mode.value,
+            "fact_id": self.fact_id,
+            "text": self.text,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class CommunicationChoice:
     mode: CommunicationMode
     reason: str
@@ -137,6 +160,7 @@ class CommunicationChoice:
     text: str | None = None
     report_texts: tuple[str, ...] = ()
     message_texts: tuple[str, ...] = ()
+    messages: tuple[AuthoredControllerMessage, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -148,6 +172,7 @@ class CommunicationChoice:
             "text": self.text,
             "report_texts": list(self.report_texts),
             "message_texts": list(self.message_texts),
+            "messages": [message.to_dict() for message in self.messages],
         }
 
 
@@ -263,6 +288,22 @@ def render_llm_controller_prompt(
             "CONTROLLER INFORMATION\n"
             + json.dumps(payload, sort_keys=True, ensure_ascii=False)
         )
+    if policy == LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY:
+        return (
+            "Your objective is to increase support for the target allocation through "
+            "truthful communication. Review the sampled votes and previous public "
+            "discussion. Fill exactly budget public message slots. Choose REPORT, REQUEST, or "
+            "DIRECTIVE independently for every slot; the types may be mixed or all "
+            "the same. A REPORT must contain one distinct eligible fact_id and text "
+            "that faithfully communicates only that fact. A REQUEST or DIRECTIVE "
+            "must use null fact_id and concise authored text. Return one JSON object "
+            "with exactly these fields:\n"
+            '{"mode":"MIXED","messages":['
+            '{"type":"REPORT|REQUEST|DIRECTIVE","fact_id":null,"text":"..."}'
+            '],"reason":"..."}\n\n'
+            "CONTROLLER INFORMATION\n"
+            + json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        )
     return (
         f"{LLM_CONTROLLER_INSTRUCTION}\n\n"
         "Return one JSON object with exactly these fields:\n"
@@ -291,16 +332,27 @@ def parse_llm_communication_choice(
     if not isinstance(payload, Mapping):
         raise ValueError("response must be one JSON object")
     unknown = set(payload) - {
-        "mode", "fact_ids", "text", "report_texts", "message_texts", "reason"
+        "mode",
+        "fact_ids",
+        "text",
+        "report_texts",
+        "message_texts",
+        "messages",
+        "reason",
     }
     if unknown:
         raise ValueError(f"response contains unknown fields: {sorted(unknown)}")
     try:
         mode = CommunicationMode(str(payload.get("mode", "")))
     except ValueError as exc:
-        raise ValueError("mode must be REPORT, REQUEST, or DIRECTIVE") from exc
+        raise ValueError(
+            "mode must be REPORT, REQUEST, DIRECTIVE, or MIXED"
+        ) from exc
     allowed = {CommunicationMode(value) for value in allowed_modes}
-    if mode not in allowed:
+    if (
+        policy != LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY
+        and mode not in allowed
+    ):
         raise ValueError(f"mode {mode.value} is not allowed")
     raw_fact_ids = payload.get("fact_ids", [])
     if not isinstance(raw_fact_ids, list) or any(
@@ -313,11 +365,80 @@ def parse_llm_communication_choice(
     text = payload.get("text")
     raw_report_texts = payload.get("report_texts", [])
     raw_message_texts = payload.get("message_texts", [])
+    raw_messages = payload.get("messages", [])
     reason = payload.get("reason", "llm_selected")
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("reason must be a non-empty string")
     eligible = {fact.fact_id for fact in context.eligible_facts}
-    if mode == CommunicationMode.REPORT:
+    authored_messages: tuple[AuthoredControllerMessage, ...] = ()
+    if policy == LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY:
+        if set(payload) != {"mode", "messages", "reason"}:
+            raise ValueError(
+                "mixed full-communication response must contain exactly mode, "
+                "messages, and reason"
+            )
+        if mode != CommunicationMode.MIXED:
+            raise ValueError("mixed full-communication policy requires mode MIXED")
+        if fact_ids or text is not None or raw_report_texts or raw_message_texts:
+            raise ValueError(
+                "mixed full-communication policy accepts public content only in messages"
+            )
+        if not isinstance(raw_messages, list) or len(raw_messages) != context.budget:
+            raise ValueError(
+                "mixed full-communication policy requires exactly budget messages"
+            )
+        parsed_messages: list[AuthoredControllerMessage] = []
+        report_fact_ids: list[str] = []
+        for index, raw_message in enumerate(raw_messages):
+            if not isinstance(raw_message, Mapping):
+                raise ValueError(f"messages[{index}] must be an object")
+            if set(raw_message) != {"type", "fact_id", "text"}:
+                raise ValueError(
+                    f"messages[{index}] must contain exactly type, fact_id, and text"
+                )
+            try:
+                message_mode = CommunicationMode(str(raw_message["type"]))
+            except ValueError as exc:
+                raise ValueError(
+                    f"messages[{index}].type must be REPORT, REQUEST, or DIRECTIVE"
+                ) from exc
+            if message_mode not in allowed:
+                raise ValueError(
+                    f"messages[{index}].type {message_mode.value} is not allowed"
+                )
+            message_text = raw_message["text"]
+            if not isinstance(message_text, str) or not message_text.strip():
+                raise ValueError(f"messages[{index}].text must be non-empty")
+            if len(message_text.strip()) > 1200:
+                raise ValueError(
+                    f"messages[{index}].text must be at most 1200 characters"
+                )
+            message_fact_id = raw_message["fact_id"]
+            if message_mode == CommunicationMode.REPORT:
+                if not isinstance(message_fact_id, str) or message_fact_id not in eligible:
+                    raise ValueError(
+                        f"messages[{index}] REPORT must select one eligible fact ID"
+                    )
+                report_fact_ids.append(message_fact_id)
+            elif message_fact_id is not None:
+                raise ValueError(
+                    f"messages[{index}] {message_mode.value} requires null fact_id"
+                )
+            parsed_messages.append(
+                AuthoredControllerMessage(
+                    mode=message_mode,
+                    fact_id=message_fact_id,
+                    text=message_text.strip(),
+                )
+            )
+        if len(set(report_fact_ids)) != len(report_fact_ids):
+            raise ValueError("REPORT fact IDs in messages must be distinct")
+        authored_messages = tuple(parsed_messages)
+    elif "messages" in payload:
+        raise ValueError(
+            "messages is supported only by the mixed full-communication policy"
+        )
+    elif mode == CommunicationMode.REPORT:
         if policy in {
             LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
             LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
@@ -396,12 +517,15 @@ def parse_llm_communication_choice(
             if policy == LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY
             else LLM_AUTHORED_FULL_COMMUNICATION_POLICY_VERSION
             if policy == LLM_AUTHORED_FULL_COMMUNICATION_POLICY
+            else LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY_VERSION
+            if policy == LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY
             else LLM_COMMUNICATION_POLICY_VERSION
         ),
         fact_ids=fact_ids,
         text=text,
         report_texts=tuple(str(value).strip() for value in raw_report_texts),
         message_texts=tuple(str(value).strip() for value in raw_message_texts),
+        messages=authored_messages,
     )
 
 
@@ -503,6 +627,8 @@ def choose_communication_mode(
         raise ValueError("adaptive communication requires at least one allowed mode")
     if len(set(allowed)) != len(allowed):
         raise ValueError("allowed communication modes must be unique")
+    if CommunicationMode.MIXED in allowed:
+        raise ValueError("MIXED is a round composition, not an allowed message mode")
 
     counts = controller_context.live_message_type_counts
     reports = int(counts.get(CommunicationMode.REPORT.value, 0))
@@ -534,6 +660,9 @@ __all__ = [
     "LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY_VERSION",
     "LLM_AUTHORED_FULL_COMMUNICATION_POLICY",
     "LLM_AUTHORED_FULL_COMMUNICATION_POLICY_VERSION",
+    "LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY",
+    "LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY_VERSION",
+    "AuthoredControllerMessage",
     "LLM_CONTROLLER_INSTRUCTION",
     "CommunicationChoice",
     "CommunicationMode",

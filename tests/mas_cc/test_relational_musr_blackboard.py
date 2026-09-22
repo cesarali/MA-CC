@@ -26,6 +26,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.controller impor
 from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (
     LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
     LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+    LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
     LLM_AUTHORED_REPORT_ONLY_POLICY,
     LLM_COMMUNICATION_POLICY,
     CommunicationChoice,
@@ -1029,6 +1030,90 @@ def test_full_communication_llm_handle_authors_exactly_budget_requests():
     assert [message.text for message in controller_posts] == texts
 
 
+def test_full_communication_llm_handle_can_opt_into_mixed_message_types():
+    config = _llm_adaptive_task3_config(rounds=1)
+    game_options = dict(config.game.options)
+    board = dict(game_options["board"])
+    board.pop("allow_participant_requests", None)
+    board["communication_profile"] = "full_communication"
+    game_options.update(
+        {
+            "board": board,
+            "task_dataset_dir": "/shared/home/cesar/work/results/studies/"
+            "musr_truthful_selective_task_calibration_01/tasks",
+        }
+    )
+    control_options = dict(config.control.options)
+    for legacy in (
+        "controller_communication_policy",
+        "controller_communication_policy_version",
+        "controller_communication_fallback_policy",
+        "allow_controller_requests",
+        "allow_controller_directives",
+    ):
+        control_options.pop(legacy, None)
+    control_options.update(
+        {
+            "controller_authoring": "llm_authored",
+            "controller_allow_mixed_message_types": True,
+        }
+    )
+    config = replace(
+        config,
+        game=replace(config.game, options=game_options),
+        control=replace(config.control, options=control_options),
+    )
+    task = create_game(config.game).load_task(config.game)
+    fact_id = task.controller_reportable_fact_ids[0]
+    authored = [
+        {"type": "REPORT", "fact_id": fact_id, "text": "Grounded report."},
+        {"type": "REQUEST", "fact_id": None, "text": "Please verify this."},
+        {"type": "DIRECTIVE", "fact_id": None, "text": "Compare the options."},
+    ]
+    provider = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "MIXED",
+                    "messages": authored,
+                    "reason": "combine evidence gathering and coordination",
+                }
+            )
+        ],
+        [],
+    )
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            provider,
+            control=RelationalRoundBudgetedControl.from_options(control_options),
+        )
+    )
+    event = result.rounds[0].event
+    assert event["requested_b"] == event["actual_controller_posts"] == 3
+    assert event["chosen_message_mode"] == "MIXED"
+    assert event["controller_allow_mixed_message_types"] is True
+    assert event["controller_communication_choice_source"] == "llm"
+    assert event["controller_reports_admitted"] == 1
+    assert event["request_topics"] == ["Please verify this."]
+    assert event["directive_topics"] == ["Compare the options."]
+    controller_posts = [
+        message
+        for message in result.final_state.blackboard.messages
+        if message.author_kind == "controller"
+    ]
+    assert [message.message_type for message in controller_posts] == [
+        "REPORT",
+        "REQUEST",
+        "DIRECTIVE",
+    ]
+    assert [message.text for message in controller_posts] == [
+        message["text"] for message in authored
+    ]
+
+
 def test_full_communication_deterministic_handle_keeps_exact_budget_without_controller_llm():
     config = _llm_adaptive_task3_config(rounds=1)
     game_options = dict(config.game.options)
@@ -1277,6 +1362,48 @@ def test_full_communication_authored_factless_modes_fill_exact_budget(mode):
             context=context,
             allowed_modes=(CommunicationMode.REPORT,),
         )
+
+
+def test_mixed_full_communication_choice_fills_budget_with_independent_types():
+    facts = (
+        ControllerVisibleFact("fact-1", "Verified one.", 0, None),
+        ControllerVisibleFact("fact-2", "Verified two.", 0, None),
+    )
+    context = ControllerCommunicationContext(
+        round_index=0,
+        target="ALLOCATION_2",
+        sampled_opinion_counts={},
+        live_message_type_counts={},
+        eligible_facts=facts,
+        budget=3,
+    )
+    choice = parse_llm_communication_choice(
+        json.dumps(
+            {
+                "mode": "MIXED",
+                "messages": [
+                    {"type": "REPORT", "fact_id": "fact-1", "text": "One."},
+                    {"type": "REQUEST", "fact_id": None, "text": "Please check."},
+                    {"type": "DIRECTIVE", "fact_id": None, "text": "Compare these."},
+                ],
+                "reason": "use complementary acts",
+            }
+        ),
+        context=context,
+        allowed_modes=(
+            CommunicationMode.REPORT,
+            CommunicationMode.REQUEST,
+            CommunicationMode.DIRECTIVE,
+        ),
+        policy=LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
+    )
+    assert choice.mode == CommunicationMode.MIXED
+    assert [message.mode for message in choice.messages] == [
+        CommunicationMode.REPORT,
+        CommunicationMode.REQUEST,
+        CommunicationMode.DIRECTIVE,
+    ]
+    assert choice.to_dict()["messages"][0]["fact_id"] == "fact-1"
 
 
 def test_llm_failure_uses_reproducible_isolated_fallback():

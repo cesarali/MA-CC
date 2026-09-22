@@ -73,6 +73,40 @@ def test_controller_authoring_handle_is_validated(authoring):
         }
     )
     assert control.controller_authoring == authoring
+    assert control.controller_allow_mixed_message_types is False
+
+
+def test_mixed_controller_message_types_are_explicitly_opt_in():
+    control = RelationalRoundBudgetedControl.from_options(
+        {
+            "target": "correct",
+            "sensor_sample_size": 1,
+            "threshold": 0.5,
+            "beta": 4.0,
+            "intervention_budget": 3,
+            "controller_actuation_mode": "adaptive_communication",
+            "controller_timing": "dawn_only",
+            "controller_authoring": CONTROLLER_AUTHORING_LLM,
+            "controller_allow_mixed_message_types": True,
+        }
+    )
+    assert control.controller_allow_mixed_message_types is True
+
+
+def test_mixed_controller_message_types_require_llm_authoring():
+    with pytest.raises(ValueError, match="requires controller_authoring"):
+        RelationalRoundBudgetedControl.from_options(
+            {
+                "target": "correct",
+                "sensor_sample_size": 1,
+                "threshold": 0.5,
+                "beta": 4.0,
+                "intervention_budget": 3,
+                "controller_actuation_mode": "adaptive_communication",
+                "controller_timing": "dawn_only",
+                "controller_allow_mixed_message_types": True,
+            }
+        )
 
 
 @pytest.mark.parametrize(

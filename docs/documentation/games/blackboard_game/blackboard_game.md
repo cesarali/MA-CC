@@ -381,6 +381,7 @@ game:
 control:
   options:
     controller_authoring: llm_authored     # or deterministic
+    controller_allow_mixed_message_types: true  # optional; default false
 ```
 
 Ordinary agents are always LLM-authored. Under `report_only` they may choose
@@ -391,6 +392,16 @@ configured budget remain external to authorship: an inactive round posts zero
 controller messages and an active round fills exactly `b` controller message
 slots. Legacy low-level flags below remain supported for replaying historical
 configs and retain their historical maximum-budget semantics.
+
+By default, an LLM-authored `full_communication` controller preserves the
+single-mode contract: it chooses one of `REPORT`, `REQUEST`, or `DIRECTIVE` and
+fills all $b$ slots with that type. Setting
+`controller_allow_mixed_message_types: true` explicitly changes only the
+LLM-authored `full_communication` path. The controller then chooses the type of
+each slot independently, so one dawn may contain any composition of reports,
+requests, and directives while still producing exactly $b$ posts. In a
+`report_only` cell the option has no effect, and omitting it retains the
+historical behavior.
 
 The adaptive study sets:
 

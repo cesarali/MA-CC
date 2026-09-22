@@ -199,6 +199,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     controller_communication_max_retries: int = 2
     controller_report_max_posts_per_fact: int = 3
     controller_authoring: str | None = None
+    controller_allow_mixed_message_types: bool = False
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -801,6 +802,29 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                     )
                 )
         values["controller_authoring"] = controller_authoring
+
+        allow_mixed_message_types = options.get(
+            "controller_allow_mixed_message_types", False
+        )
+        if not isinstance(allow_mixed_message_types, bool):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_allow_mixed_message_types",
+                    "must be a boolean",
+                )
+            )
+            allow_mixed_message_types = False
+        if (
+            allow_mixed_message_types
+            and controller_authoring != CONTROLLER_AUTHORING_LLM
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_allow_mixed_message_types",
+                    "requires controller_authoring: llm_authored",
+                )
+            )
+        values["controller_allow_mixed_message_types"] = allow_mixed_message_types
 
         fallback_policy = options.get(
             "controller_communication_fallback_policy", COMMUNICATION_POLICY
