@@ -1,0 +1,65 @@
+{
+  "typed_configs_valid": 4,
+  "seed_checks": [
+    {
+      "config": "q3_rho070.yaml",
+      "derivation": "standalone",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q3_rho070.yaml",
+      "derivation": "grid-cell-0",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q3_rho100.yaml",
+      "derivation": "standalone",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q3_rho100.yaml",
+      "derivation": "grid-cell-0",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q12_rho070.yaml",
+      "derivation": "standalone",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q12_rho070.yaml",
+      "derivation": "grid-cell-0",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q12_rho100.yaml",
+      "derivation": "standalone",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    },
+    {
+      "config": "q12_rho100.yaml",
+      "derivation": "grid-cell-0",
+      "old_count": 40,
+      "new_count": 60,
+      "overlap": 0
+    }
+  ],
+  "full_preflight": "blocked: original task dataset absent in local checkout",
+  "missing_path": "results/studies/musr_truthful_selective_task_calibration_01/tasks/task_003/base_task.json",
+  "provider_calls": 0,
+  "submitted": false
+}
