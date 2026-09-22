@@ -1,6 +1,6 @@
 # Preflight: 21-09-2026-full-vs-report-v1
 
-Credential-free study preflight on 2026-09-21: **PASS / permitted**.
+Credential-free study preflight rerun on 2026-09-22: **PASS / permitted**.
 
 ## Workload
 
@@ -43,7 +43,7 @@ and pricing must be refreshed before a paid submission.
 - configured coordinator initial / maximum concurrency: 100 / 100
 - target RPM: 500
 - planning latency: 15 seconds, informed by the v0 observed provider latency
-- requested resources per shard: 5 CPUs, 12 GiB, 24 hours
+- requested resources per shard: 4 CPUs, 12 GiB, 24 hours
 - estimated dashboard-semantic storage: 2,113,816,320 bytes
 
 ## Remaining launch prerequisite
