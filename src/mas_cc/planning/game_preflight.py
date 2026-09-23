@@ -76,8 +76,11 @@ def call_plan_for_run(game: Any, config: Any) -> GameCallPlan:
     if (
         config.game.type != "relational_imitation_round_feedback"
         or options.get("controller_actuation_mode") != "adaptive_communication"
-        or options.get("controller_communication_policy")
-        not in {"llm_structured_v1", "llm_authored_report_only_v1"}
+        or (
+            options.get("controller_authoring") != "llm_authored"
+            and options.get("controller_communication_policy")
+            not in {"llm_structured_v1", "llm_authored_report_only_v1"}
+        )
     ):
         return plan
     from mas_cc.games.relational_reasoning.imitation_round_feedback.adaptive_communication import (

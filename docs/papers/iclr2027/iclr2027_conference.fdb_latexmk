@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex iclr2027_conference"] 1789909727.00866 "iclr2027_conference.aux" "iclr2027_conference.bbl" "iclr2027_conference" 1789909907.66411 0
-  "./iclr2027_conference.bib" 1789909716.27699 6485 55d00dfbc7745174c98d524e43d53d8b ""
+["bibtex iclr2027_conference"] 1789978427.25611 "iclr2027_conference.aux" "iclr2027_conference.bbl" "iclr2027_conference" 1790006165.45262 0
+  "./iclr2027_conference.bib" 1789928579.48409 21005 a295b84e5c2718b792bec97d96c4bfeb ""
   "./iclr2027_conference.bst" 1750852748 26973 af983813ca1a1414954dbceae7baa2a1 ""
-  "iclr2027_conference.aux" 1789909907.56745 27904 caf3d681958b96f49c6a53b4d67697b5 "pdflatex"
+  "iclr2027_conference.aux" 1790006165.36927 35485 0600fc0de4c244b8bd2504283f3bac7e "pdflatex"
   (generated)
   "iclr2027_conference.bbl"
   "iclr2027_conference.blg"
   (rewritten before read)
-["pdflatex"] 1789909906.44899 "/home/cesarali/LanguageGames/MA-CC/docs/papers/iclr2027/iclr2027_conference.tex" "iclr2027_conference.pdf" "iclr2027_conference" 1789909907.66428 0
+["pdflatex"] 1790006164.27569 "/home/cesarali/LanguageGames/MA-CC/docs/papers/iclr2027/iclr2027_conference.tex" "iclr2027_conference.pdf" "iclr2027_conference" 1790006165.45278 0
   "/etc/texmf/web2c/texmf.cnf" 1755788686.08642 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/home/cesarali/LanguageGames/MA-CC/docs/papers/iclr2027/iclr2027_conference.tex" 1787328090 1323 8aa5c114206cd1d202c5960ff990b7da ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
@@ -242,9 +242,9 @@
   "figures/fig_efficiencies_all.png" 1787729902 252378 8f743d18e7ecb9273baf09ba65ca7014 ""
   "figures/fig_state_local_landscapes.png" 1787723692 221271 1a0a63e2985fc8bd283ac2ac79f4c32f ""
   "figures/fig_susceptibility_empirical_theory.png" 1787723322 212563 cabe3016432342b97fc131f3caf0f2ec ""
-  "iclr2027_conference.aux" 1789909907.56745 27904 caf3d681958b96f49c6a53b4d67697b5 "pdflatex"
-  "iclr2027_conference.bbl" 1789909727.02294 4773 3f27f51fffe4bf6d07ec2d966cecd990 "bibtex iclr2027_conference"
-  "iclr2027_conference.out" 1789909907.57157 10135 2200c3cf01af379bbd9f9046c0c12533 "pdflatex"
+  "iclr2027_conference.aux" 1790006165.36927 35485 0600fc0de4c244b8bd2504283f3bac7e "pdflatex"
+  "iclr2027_conference.bbl" 1789978427.27137 20667 d6ff87e2b71db36ef90bc6baff2a8d95 "bibtex iclr2027_conference"
+  "iclr2027_conference.out" 1790006165.36931 10271 d37bcd7853ba3e06c875e9254ff4ff7b "pdflatex"
   "iclr2027_conference.sty" 1785233888 9025 1b4bb9c2e12c712c56f4eb1232b88dd6 ""
   "iclr2027_conference.tex" 1787328090 1323 8aa5c114206cd1d202c5960ff990b7da ""
   "math_commands.tex" 1750852748 12284 a71653715108dc62b66e3a0bde0307d8 ""
@@ -253,15 +253,16 @@
   "sections/21082026_feedback_control_efficiency_theory.tex" 1789482715.72788 14981 bd9b66cb4a6ce88e8bda3a28f13dfbcd ""
   "sections/21082026_methods_data_generation_and_game.tex" 1789480749.15474 9629 31ec82ac0f77dbfb8d38e4173ac88d7b ""
   "sections/abstract.tex" 1787729840 2150 1c98ef78dd30f57a51e2ede6374e37d4 ""
-  "sections/appendix.tex" 1787729698 230 2894ab1da06a71dcbe5c80b8119e4a97 ""
+  "sections/appendix.tex" 1789978415.5898 266 a62c120e4ebf8e64deed717e0dcc128b ""
   "sections/appendix_D_resource_constrained_control_design.tex" 1787931754.407 8432 cb2c134032304314d5b1b38e52f59561 ""
   "sections/background.tex" 1787289694 59 a0a17f738a133a413f7104b1bec6c0dc ""
   "sections/conclusion.tex" 1787289694 60 70218235191ab0ad53546ccbb1658bac ""
   "sections/controlled_susceptibility_study.tex" 1787316716 319 d68ef8bc3ad316fb000ad527f78e0679 ""
+  "sections/full_related_work.tex" 1789978415.13913 10241 e67f9e460fe4ba701b0d8939d0102802 ""
   "sections/information_response_bound_appendix.tex" 1787723452 8720 ab1ae8721447761a01f4686b67003141 ""
-  "sections/introduction.tex" 1789909906.1847 5516 9b475ca092916f700ddacea4552577e3 ""
+  "sections/introduction.tex" 1790006164.04716 5503 867ea52b5d66ba81d7feedcbe3f7838c ""
   "sections/method.tex" 1787296680 114 4b5266188e04a52e47ff9d69c0d76717 ""
-  "sections/related_work.tex" 1787289694 62 1cfcc53f5676d28cc04dc97da293f837 ""
+  "sections/related_work.tex" 1789978415.75478 3970 06de50f6d70c4acfa9ff0dc0795c96ff ""
   "sections/relational_prompt_appendix.tex" 1787901761.42945 15322 ebf67c68cb0bb4ab335404c374a2ba64 ""
   "sections/results.tex" 1787931754.407 12786 12414ef87e5bfe58703cc92f348d4f96 ""
   "sections/state_matched_response_appendix_bundle/appendix_state_matched_response.tex" 1787303098 3483 e5cc912209bf3df6768414155314ee4c ""

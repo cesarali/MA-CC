@@ -38,7 +38,7 @@ game:
       message_lifetime_rounds: 1
       exclude_self_authored: true
       allow_no_post: true
-      allow_participant_requests: false
+      communication_profile: report_only
       require_grounded_reports: true
       report_citation_scope: active_or_observed
       no_citable_fact_action: none

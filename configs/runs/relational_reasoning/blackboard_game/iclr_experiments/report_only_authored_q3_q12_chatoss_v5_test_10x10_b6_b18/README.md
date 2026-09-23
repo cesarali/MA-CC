@@ -8,6 +8,10 @@ Version-5 grounded report-only Task-003 study (10-round, 10-repetition test stud
 - public controller identity: Agent N+1 (internal controller provenance remains private/auditable)
 - participant public actions: REPORT or NONE
 - controller public actions: REPORT only (or no post when no intervention is selected)
+- communication handles: `communication_profile: report_only` and
+  `controller_authoring: llm_authored`; ordinary agents are always LLM-authored
+- fixed-dose invariant: an inactive control round posts 0 messages; an active
+  control round posts exactly the configured intervention budget `b`
 - citation scope: active memory plus grounded REPORT facts sampled in the current update
 - empty citable set: deterministic NONE without discarding the private vote/reason
 - q: 3 and 12; controlled arms set both `social_group_size` and `sensor_sample_size` to q

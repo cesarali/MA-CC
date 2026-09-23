@@ -85,6 +85,12 @@ BOARD_SAMPLING_MODES = (BOARD_SAMPLING_UNIFORM, BOARD_SAMPLING_FULL)
 MESSAGE_REQUEST = "REQUEST"
 MESSAGE_REPORT = "REPORT"
 MESSAGE_NONE = "NONE"
+COMMUNICATION_PROFILE_REPORT_ONLY = "report_only"
+COMMUNICATION_PROFILE_FULL = "full_communication"
+COMMUNICATION_PROFILES = (
+    COMMUNICATION_PROFILE_REPORT_ONLY,
+    COMMUNICATION_PROFILE_FULL,
+)
 MESSAGE_DIRECTIVE = "DIRECTIVE"
 ORDINARY_MESSAGE_TYPES = (MESSAGE_REQUEST, MESSAGE_REPORT)
 ORDINARY_ACTION_TYPES = (*ORDINARY_MESSAGE_TYPES, MESSAGE_NONE)
@@ -745,6 +751,7 @@ class RelationalRules:
     board_message_lifetime_rounds: int
     board_exclude_self_authored: bool
     board_allow_no_post: bool
+    communication_profile: str
     allow_participant_requests: bool
     require_grounded_reports: bool
     report_citation_scope: str
@@ -815,7 +822,31 @@ class RelationalRules:
         )
         exclude_self = board.get("exclude_self_authored", True)
         allow_no_post = board.get("allow_no_post", True)
-        allow_participant_requests = board.get("allow_participant_requests", True)
+        communication_profile = board.get("communication_profile")
+        if communication_profile is not None:
+            communication_profile = str(communication_profile)
+            if communication_profile not in COMMUNICATION_PROFILES:
+                raise ValueError(
+                    "game.options.board.communication_profile must be one of "
+                    f"{list(COMMUNICATION_PROFILES)}"
+                )
+            profile_requests = communication_profile == COMMUNICATION_PROFILE_FULL
+            if (
+                "allow_participant_requests" in board
+                and board["allow_participant_requests"] is not profile_requests
+            ):
+                raise ValueError(
+                    "game.options.board.allow_participant_requests conflicts with "
+                    "communication_profile"
+                )
+            allow_participant_requests = profile_requests
+        else:
+            allow_participant_requests = board.get("allow_participant_requests", True)
+            communication_profile = (
+                COMMUNICATION_PROFILE_FULL
+                if allow_participant_requests
+                else COMMUNICATION_PROFILE_REPORT_ONLY
+            )
         require_grounded_reports = board.get("require_grounded_reports", False)
         if not isinstance(exclude_self, bool):
             raise ValueError(
@@ -1161,6 +1192,7 @@ class RelationalRules:
             board_message_lifetime_rounds=lifetime,
             board_exclude_self_authored=exclude_self,
             board_allow_no_post=allow_no_post,
+            communication_profile=communication_profile,
             allow_participant_requests=allow_participant_requests,
             require_grounded_reports=require_grounded_reports,
             report_citation_scope=report_citation_scope,
@@ -1205,6 +1237,9 @@ class RelationalRules:
 
 __all__ = [
     "ACTIVE_FACT_IDS",
+    "COMMUNICATION_PROFILE_FULL",
+    "COMMUNICATION_PROFILE_REPORT_ONLY",
+    "COMMUNICATION_PROFILES",
     "COMMITTED_ACTION",
     "CONTROLLER_SOURCE",
     "CitationContext",

@@ -269,10 +269,11 @@ def adapt_relational_round_record(
     epistemic = epistemic_conditioning_values(record)
     total = sum(before)
 
-    # The controller senses a *scalar*: how many of its q_c sampled agents
-    # voted for the target.  The runtime records the whole sampled count
-    # vector, so the scalar coordinate the single-affinity theory needs is
-    # projected out here once rather than re-derived at every call site.
+    # The policy consumes one scalar target-support count.  In legacy mode it
+    # comes from q_c privately sampled votes; in board mode it is the adapter's
+    # count of target recommendations in the previous night's public-message
+    # sample.  Keep the mode on `event`: only the former has a hypergeometric
+    # analytic sensor law, while both remain usable by empirical estimators.
     sensor_vector = record.get("sensor_count_vector")
     sensor_target_count = (
         None

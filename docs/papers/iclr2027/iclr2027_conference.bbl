@@ -1,9 +1,25 @@
-\begin{thebibliography}{12}
+\begin{thebibliography}{51}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Abhyankar et~al.(2026)Abhyankar, Kabra, Desai, and
+  Reddy]{abhyankar2026llema}
+Nikhil Abhyankar, Sanchit Kabra, Saaketh Desai, and Chandan~K. Reddy.
+\newblock {LLEMA}: Evolutionary search with {LLM}s for multi-objective
+  materials discovery.
+\newblock In \emph{International Conference on Learning Representations}, 2026.
+\newblock URL
+  \url{https://proceedings.iclr.cc/paper_files/paper/2026/hash/e1afaedf81656c0b5e12f4508bed96ad-Abstract-Conference.html}.
+
+\bibitem[Almanza-Marrero et~al.(2026)Almanza-Marrero, Rold{\'a}n, and
+  Manzano]{almanza2026pareto}
+Jos{\'e}~A. Almanza-Marrero, {\'E}dgar Rold{\'a}n, and Gonzalo Manzano.
+\newblock Pareto fronts and trade-off relations from exact multi-objective
+  optimization of thermal machines, 2026.
+\newblock URL \url{https://arxiv.org/abs/2603.19885}.
 
 \bibitem[{Anthropic}(2026)]{anthropic2026multiagent}
 {Anthropic}.
@@ -18,6 +34,22 @@ Ariel~Flint Ashery, Luca~Maria Aiello, and Andrea Baronchelli.
 \newblock \doi{10.1126/sciadv.adu9368}.
 \newblock URL \url{https://doi.org/10.1126/sciadv.adu9368}.
 
+\bibitem[Baronchelli et~al.(2006)Baronchelli, Felici, Loreto, Caglioti, and
+  Steels]{baronchelli2006sharp}
+Andrea Baronchelli, Maddalena Felici, Vittorio Loreto, Emanuele Caglioti, and
+  Luc Steels.
+\newblock Sharp transition towards shared vocabularies in multi-agent systems.
+\newblock \emph{Journal of Statistical Mechanics: Theory and Experiment},
+  2006\penalty0 (06):\penalty0 P06014, 2006.
+\newblock \doi{10.1088/1742-5468/2006/06/P06014}.
+
+\bibitem[Becker et~al.(2017)Becker, Brackbill, and Centola]{becker2017network}
+Joshua Becker, Devon Brackbill, and Damon Centola.
+\newblock Network dynamics of social influence in the wisdom of crowds.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 114\penalty0
+  (26):\penalty0 E5070--E5076, 2017.
+\newblock \doi{10.1073/pnas.1615978114}.
+
 \bibitem[Castellano et~al.(2009)Castellano, Fortunato, and
   Loreto]{castellano2009statistical}
 Claudio Castellano, Santo Fortunato, and Vittorio Loreto.
@@ -27,12 +59,44 @@ Claudio Castellano, Santo Fortunato, and Vittorio Loreto.
 \newblock \doi{10.1103/RevModPhys.81.591}.
 \newblock URL \url{https://doi.org/10.1103/RevModPhys.81.591}.
 
+\bibitem[Chang et~al.(2026)Chang, Xu, Jia, Wang, and He]{chang2026robust}
+Ningkang Chang, Chenyu Xu, Ziying Jia, Yue Wang, and Sihong He.
+\newblock Robust constrained {Markov} games: Multi-agent decision-making under
+  model uncertainty and constraints.
+\newblock In \emph{Proceedings of the 42nd Conference on Uncertainty in
+  Artificial Intelligence}, volume 337 of \emph{Proceedings of Machine Learning
+  Research}, pp.\  1003--1033, 2026.
+\newblock URL \url{https://proceedings.mlr.press/v337/chang26a.html}.
+
+\bibitem[Chen et~al.(2026)Chen, Xie, Meng, Fang, Chen, Kurths, Nagler, and
+  Fan]{chen2026community}
+Xiaojie Chen, Meiling Xie, Jun Meng, Sheng Fang, Xiaosong Chen, J{\"u}rgen
+  Kurths, Jan Nagler, and Jingfang Fan.
+\newblock Community structure--regulation coupling reveals optimal information
+  diffusion.
+\newblock \emph{Nature Communications}, 17:\penalty0 4879, 2026.
+\newblock \doi{10.1038/s41467-026-73665-1}.
+
 \bibitem[Chopra(2026)]{chopra2026interaction}
 Ayush Chopra.
 \newblock Intelligence is in the interaction.
 \newblock MIT Media Lab, February 2026.
 \newblock URL
   \url{https://www.media.mit.edu/articles/intelligence-is-in-the-interaction/}.
+
+\bibitem[Cornelius et~al.(2013)Cornelius, Kath, and
+  Motter]{cornelius2013realistic}
+Sean~P. Cornelius, William~L. Kath, and Adilson~E. Motter.
+\newblock Realistic control of network dynamics.
+\newblock \emph{Nature Communications}, 4:\penalty0 1942, 2013.
+\newblock \doi{10.1038/ncomms2939}.
+
+\bibitem[Dall'Asta et~al.(2006)Dall'Asta, Baronchelli, Barrat, and
+  Loreto]{dallasta2006nonequilibrium}
+Luca Dall'Asta, Andrea Baronchelli, Alain Barrat, and Vittorio Loreto.
+\newblock Nonequilibrium dynamics of language games on complex networks.
+\newblock \emph{Physical Review E}, 74\penalty0 (3):\penalty0 036105, 2006.
+\newblock \doi{10.1103/PhysRevE.74.036105}.
 
 \bibitem[El et~al.(2026)El, Paeng, Dinc, Su, Erdogan, Pappu, Ye, Zhao, Ganguli,
   and Zou]{el2026physics}
@@ -41,6 +105,15 @@ Batu El, Jinhee Paeng, Fatih Dinc, Shiye Su, Mete Erdogan, Aneesh Pappu,
 \newblock Physics of agents: Statistical mechanics predicts collective behavior
   of ai agents, 2026.
 \newblock URL \url{https://arxiv.org/abs/2608.16578}.
+
+\bibitem[Fontana et~al.(2025)Fontana, Pierri, and Aiello]{fontana2025nicer}
+Nicol{\`o} Fontana, Francesco Pierri, and Luca~Maria Aiello.
+\newblock Nicer than humans: How do large language models behave in the
+  prisoner's dilemma?
+\newblock In \emph{Proceedings of the International AAAI Conference on Web and
+  Social Media}, volume~19, pp.\  522--535, 2025.
+\newblock \doi{10.1609/icwsm.v19i1.35829}.
+\newblock URL \url{https://doi.org/10.1609/icwsm.v19i1.35829}.
 
 \bibitem[{Google DeepMind} et~al.(2026){Google DeepMind}, {Schmidt Sciences},
   {Cooperative AI Foundation}, {Advanced Research and Invention Agency}, and
@@ -60,6 +133,64 @@ Ryan Greenblatt, Ajeya Cotra, and Hjalmar Wijk.
 \newblock URL
   \url{https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/}.
 
+\bibitem[Guzman~Piedrahita et~al.(2025)Guzman~Piedrahita, Yang, Sachan,
+  Ramponi, Sch{\"o}lkopf, and Jin]{guzman2025corrupted}
+David Guzman~Piedrahita, Yongjin Yang, Mrinmaya Sachan, Giorgia Ramponi,
+  Bernhard Sch{\"o}lkopf, and Zhijing Jin.
+\newblock Corrupted by reasoning: Reasoning language models become free-riders
+  in public goods games.
+\newblock In \emph{Second Conference on Language Modeling}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=kH6LOHGjEl}.
+
+\bibitem[Hammond et~al.(2025)]{hammond2025risks}
+Lewis Hammond et~al.
+\newblock Multi-agent risks from advanced {AI}.
+\newblock Technical Report Technical Report 1, Cooperative AI Foundation, 2025.
+\newblock URL \url{https://arxiv.org/abs/2502.14143}.
+
+\bibitem[He et~al.(2026)He, Shen, Mou, Bossens, Chen, Tsang, and
+  Ong]{he2026belief}
+Xin He, Junxi Shen, Yuchen Mou, David~M. Bossens, Caishun Chen, Ivor~W. Tsang,
+  and Yew~Soon Ong.
+\newblock {LLM} agents make collective belief dynamics programmable: Challenges
+  and research directions, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.19915}.
+
+\bibitem[Horowitz \& Sandberg(2014)Horowitz and Sandberg]{horowitz2014second}
+Jordan~M Horowitz and Henrik Sandberg.
+\newblock Second-law-like inequalities with information and their
+  interpretations.
+\newblock \emph{New Journal of Physics}, 16\penalty0 (12):\penalty0 125007,
+  2014.
+
+\bibitem[Huang et~al.(2025)Huang, Zhou, Jin, Zhou, Chen, Wang, Yuan, Lyu, and
+  Sap]{huang2025resilience}
+Jen-tse Huang, Jiaxu Zhou, Tailin Jin, Xuhui Zhou, Zixi Chen, Wenxuan Wang,
+  Youliang Yuan, Michael~R. Lyu, and Maarten Sap.
+\newblock On the resilience of {LLM}-based multi-agent collaboration with
+  faulty agents.
+\newblock In \emph{Proceedings of the 42nd International Conference on Machine
+  Learning}, volume 267 of \emph{Proceedings of Machine Learning Research},
+  2025.
+\newblock URL \url{https://arxiv.org/abs/2408.00989}.
+
+\bibitem[Irisarri et~al.(2026)Irisarri, Trigal, Toral, and
+  Manzano]{irisarri2026stochastic}
+Luis Irisarri, Lucas Trigal, Ra{\'u}l Toral, and Gonzalo Manzano.
+\newblock Stochastic thermodynamics of social imitation beyond energetics.
+\newblock \emph{Nature Communications}, 2026.
+
+\bibitem[Jaques et~al.(2019)Jaques, Lazaridou, Hughes, Gulcehre, Ortega,
+  Strouse, Leibo, and de~Freitas]{jaques2019social}
+Natasha Jaques, Angeliki Lazaridou, Edward Hughes, Caglar Gulcehre, Pedro
+  Ortega, DJ~Strouse, Joel~Z. Leibo, and Nando de~Freitas.
+\newblock Social influence as intrinsic motivation for multi-agent deep
+  reinforcement learning.
+\newblock In \emph{Proceedings of the 36th International Conference on Machine
+  Learning}, volume~97 of \emph{Proceedings of Machine Learning Research}, pp.\
+   3040--3049, 2019.
+\newblock URL \url{https://proceedings.mlr.press/v97/jaques19a.html}.
+
 \bibitem[Jiang et~al.(2026)Jiang, Zhang, Shen, Backes, and
   Zhang]{jiang2026moltbook}
 Yukun Jiang, Yage Zhang, Xinyue Shen, Michael Backes, and Yang Zhang.
@@ -67,6 +198,76 @@ Yukun Jiang, Yage Zhang, Xinyue Shen, Michael Backes, and Yang Zhang.
   Network Moltbook}.
 \newblock \emph{CoRR}, abs/2602.10127, 2026.
 \newblock URL \url{https://arxiv.org/abs/2602.10127}.
+
+\bibitem[Kavathekar et~al.(2026)Kavathekar, Jain, Rathod, Kumaraguru, and
+  Ganu]{kavathekar2026tamas}
+Ishan Kavathekar, Hemang Jain, Ameya Rathod, Ponnurangam Kumaraguru, and Tanuja
+  Ganu.
+\newblock {TAMAS}: Benchmarking adversarial risks in multi-agent {LLM} systems.
+\newblock In \emph{Proceedings of the 64th Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  31238--31268, 2026.
+\newblock \doi{10.18653/v1/2026.acl-long.1442}.
+\newblock URL \url{https://aclanthology.org/2026.acl-long.1442/}.
+
+\bibitem[Ko et~al.(2026)Ko, Shin, Song, Lee, Hwang, and Park]{ko2026social}
+Changgeon Ko, Jisu Shin, Hoyun Song, Huije Lee, Eui~Jun Hwang, and Jong~C.
+  Park.
+\newblock Social dynamics as critical vulnerabilities that undermine objective
+  decision-making in {LLM} collectives.
+\newblock In \emph{Proceedings of the 64th Annual Meeting of the Association
+  for Computational Linguistics}, pp.\  37865--37890, 2026.
+\newblock \doi{10.18653/v1/2026.acl-long.1756}.
+\newblock URL \url{https://aclanthology.org/2026.acl-long.1756/}.
+
+\bibitem[Kouwenhoven et~al.(2025)Kouwenhoven, Peeperkorn, and
+  Verhoef]{kouwenhoven2025searching}
+Tom Kouwenhoven, Max Peeperkorn, and Tessa Verhoef.
+\newblock Searching for structure: Investigating emergent communication with
+  large language models.
+\newblock In \emph{Proceedings of the 31st International Conference on
+  Computational Linguistics}, pp.\  9977--9991, 2025.
+\newblock URL \url{https://aclanthology.org/2025.coling-main.667/}.
+
+\bibitem[Kwon et~al.(2016)Kwon, Um, and Park]{kwon2016feedback}
+Chulan Kwon, Jaegon Um, and Hyunggyu Park.
+\newblock Information thermodynamics for a multi-feedback process with time
+  delay, 2016.
+\newblock URL \url{https://arxiv.org/abs/1606.03177}.
+
+\bibitem[Li et~al.(2026{\natexlab{a}})Li, Liu, Zhao, Wu, Meng, Han, Chen, Meng,
+  Chen, and Zhao]{li2026blueprint}
+Dong Li, Yanchi Liu, Xujiang Zhao, Xintao Wu, Baoluo Meng, Yufei Han, Zhong
+  Chen, Rui Meng, Haifeng Chen, and Chen Zhao.
+\newblock The evolving blueprint: A survey on automated optimization of
+  {LLM}-based multi-agent systems, 2026{\natexlab{a}}.
+\newblock URL \url{https://doi.org/10.20944/preprints202605.2011.v1}.
+
+\bibitem[Li et~al.(2026{\natexlab{b}})Li, Naito, and Shirado]{hiddenbench2026}
+Y.~Li, A.~Naito, and H.~Shirado.
+\newblock Systematic failures in collective reasoning under distributed
+  information in multi-agent llms.
+\newblock In \emph{Proceedings of the International Conference on Machine
+  Learning}, 2026{\natexlab{b}}.
+
+\bibitem[Liu \& Barab{\'a}si(2016)Liu and Barab{\'a}si]{liu2016control}
+Yang-Yu Liu and Albert-L{\'a}szl{\'o} Barab{\'a}si.
+\newblock Control principles of complex systems.
+\newblock \emph{Reviews of Modern Physics}, 88\penalty0 (3):\penalty0 035006,
+  2016.
+\newblock \doi{10.1103/RevModPhys.88.035006}.
+
+\bibitem[Lo~Iudice et~al.(2015)Lo~Iudice, Garofalo, and
+  Sorrentino]{loiudice2015structural}
+Francesco Lo~Iudice, Franco Garofalo, and Francesco Sorrentino.
+\newblock Structural permeability of complex networks to control signals.
+\newblock \emph{Nature Communications}, 6:\penalty0 8349, 2015.
+\newblock \doi{10.1038/ncomms9349}.
+
+\bibitem[Masuda(2015)]{masuda2015opinion}
+Naoki Masuda.
+\newblock Opinion control in complex networks.
+\newblock \emph{New Journal of Physics}, 17:\penalty0 033031, 2015.
+\newblock \doi{10.1088/1367-2630/17/3/033031}.
 
 \bibitem[Meulemans et~al.(2026)Meulemans, Wo{\l}czyk, Weis, Nasser, Rocca,
   Kobayashi, Lajoie, Steger, Richards, Hutter, Manyika, Saurous, Sacramento,
@@ -79,16 +280,82 @@ Alexander Meulemans, Maciej Wo{\l}czyk, Marissa~A. Weis, Rajai Nasser, Roberta
   cooperation through similarity inference, 2026.
 \newblock URL \url{https://arxiv.org/abs/2608.03958}.
 
+\bibitem[Nakamura et~al.(2026)Nakamura, Kumar, Das, Abdelnabi, Mahmud,
+  Fioretto, Zilberstein, and Bagdasarian]{nakamura2026colosseum}
+Mason Nakamura, Abhinav Kumar, Saswat Das, Sahar Abdelnabi, Saaduddin Mahmud,
+  Ferdinando Fioretto, Shlomo Zilberstein, and Eugene Bagdasarian.
+\newblock {COLOSSEUM}: Auditing collusion in cooperative multi-agent systems,
+  2026.
+\newblock URL \url{https://arxiv.org/abs/2602.15198}.
+
+\bibitem[Novikov et~al.(2025)Novikov, V{\~u}, Eisenberger, Dupont, Huang,
+  Wagner, Shirobokov, Kozlovskii, Ruiz, Mehrabian, Kumar, See, Chaudhuri,
+  Holland, Davies, Nowozin, Kohli, and Balog]{novikov2025alphaevolve}
+Alexander Novikov, Ng{\^a}n V{\~u}, Marvin Eisenberger, Emilien Dupont, Po-Sen
+  Huang, Adam~Zsolt Wagner, Sergey Shirobokov, Borislav Kozlovskii, Francisco
+  J.~R. Ruiz, Abbas Mehrabian, M.~Pawan Kumar, Abigail See, Swarat Chaudhuri,
+  George Holland, Alex Davies, Sebastian Nowozin, Pushmeet Kohli, and Matej
+  Balog.
+\newblock {AlphaEvolve}: A coding agent for scientific and algorithmic
+  discovery, 2025.
+\newblock URL \url{https://arxiv.org/abs/2506.13131}.
+
 \bibitem[{OpenAI}(2026)]{openai2026navierstokes}
 {OpenAI}.
 \newblock On the navier--stokes millennium prize problem, September 2026.
 \newblock URL \url{https://openai.com/index/navier-stokes-solution/}.
+
+\bibitem[Piatti et~al.(2024)Piatti, Jin, Kleiman-Weiner, Sch{\"o}lkopf, Sachan,
+  and Mihalcea]{piatti2024cooperate}
+Giorgio Piatti, Zhijing Jin, Max Kleiman-Weiner, Bernhard Sch{\"o}lkopf,
+  Mrinmaya Sachan, and Rada Mihalcea.
+\newblock Cooperate or collapse: Emergence of sustainable cooperation in a
+  society of {LLM} agents.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~37, pp.\  111715--111759, 2024.
+\newblock URL
+  \url{https://proceedings.neurips.cc/paper_files/paper/2024/hash/ca9567d8ef6b2ea2da0d7eed57b933ee-Abstract-Conference.html}.
+
+\bibitem[Ray et~al.(2023)Ray, Boyd, Guarnieri, and
+  Crutchfield]{ray2023uncertainty}
+Kyle~J. Ray, Alexander~B. Boyd, Giacomo Guarnieri, and James~P. Crutchfield.
+\newblock Thermodynamic uncertainty theorem.
+\newblock \emph{Physical Review E}, 108\penalty0 (5):\penalty0 054126, 2023.
+\newblock \doi{10.1103/PhysRevE.108.054126}.
 
 \bibitem[Riedl(2026)]{riedl2026emergent}
 Christoph Riedl.
 \newblock Emergent coordination in multi-agent language models.
 \newblock In \emph{International Conference on Learning Representations}, 2026.
 \newblock URL \url{https://arxiv.org/abs/2510.05174}.
+
+\bibitem[Ruths \& Ruths(2014)Ruths and Ruths]{ruths2014control}
+Justin Ruths and Derek Ruths.
+\newblock Control profiles of complex networks.
+\newblock \emph{Science}, 343\penalty0 (6177):\penalty0 1373--1376, 2014.
+\newblock \doi{10.1126/science.1242063}.
+
+\bibitem[Schroeder et~al.(2026)Schroeder, Cha, Baronchelli, Bostrom,
+  Christakis, Garcia, Goldenberg, Kyrychenko, Leyton-Brown, Lutz, Marcus,
+  Menczer, Pennycook, Rand, Ressa, Schweitzer, Song, Summerfield, Tang,
+  Van~Bavel, van~der Linden, and Kunst]{schroeder2026swarms}
+Daniel~Thilo Schroeder, Meeyoung Cha, Andrea Baronchelli, Nick Bostrom,
+  Nicholas~A. Christakis, David Garcia, Amit Goldenberg, Yara Kyrychenko, Kevin
+  Leyton-Brown, Nina Lutz, Gary Marcus, Filippo Menczer, Gordon Pennycook,
+  David~G. Rand, Maria Ressa, Frank Schweitzer, Dawn Song, Christopher
+  Summerfield, Audrey Tang, Jay~J. Van~Bavel, Sander van~der Linden, and
+  Jonas~R. Kunst.
+\newblock How malicious {AI} swarms can threaten democracy.
+\newblock \emph{Science}, 391\penalty0 (6783):\penalty0 354--357, 2026.
+\newblock \doi{10.1126/science.adz1697}.
+
+\bibitem[Song et~al.(2026)Song, Gore, and Kleiman-Weiner]{song2026empowerment}
+Jinyeop Song, Jeff Gore, and Max Kleiman-Weiner.
+\newblock Estimating the empowerment of language model agents.
+\newblock In \emph{Proceedings of the 43rd International Conference on Machine
+  Learning}, volume 306 of \emph{Proceedings of Machine Learning Research},
+  2026.
+\newblock URL \url{https://arxiv.org/abs/2509.22504}.
 
 \bibitem[Sprague et~al.(2024)Sprague, Ye, Bostrom, Chaudhuri, and
   Durrett]{sprague2024musr}
@@ -98,5 +365,57 @@ Zayne Sprague, Xi~Ye, Kaj Bostrom, Swarat Chaudhuri, and Greg Durrett.
 \newblock In \emph{International Conference on Learning Representations}, 2024.
 \newblock URL
   \url{https://proceedings.iclr.cc/paper_files/paper/2024/hash/3f8c7eb848ffec848f3ed2b7ca44915d-Abstract-Conference.html}.
+
+\bibitem[Tom{\'e} et~al.(2023)Tom{\'e}, Fiore, and
+  de~Oliveira]{tome2023opinion}
+T{\^a}nia Tom{\'e}, Carlos~E. Fiore, and M{\'a}rio~J. de~Oliveira.
+\newblock Stochastic thermodynamics of opinion dynamics models.
+\newblock \emph{Physical Review E}, 107\penalty0 (6):\penalty0 064135, 2023.
+\newblock \doi{10.1103/PhysRevE.107.064135}.
+
+\bibitem[Touchette \& Lloyd(2000)Touchette and Lloyd]{touchette2000limits}
+Hugo Touchette and Seth Lloyd.
+\newblock Information-theoretic limits of control.
+\newblock \emph{Physical Review Letters}, 84\penalty0 (6):\penalty0 1156--1159,
+  2000.
+\newblock \doi{10.1103/PhysRevLett.84.1156}.
+
+\bibitem[Touchette \& Lloyd(2004)Touchette and Lloyd]{touchette2004approach}
+Hugo Touchette and Seth Lloyd.
+\newblock Information-theoretic approach to the study of control systems.
+\newblock \emph{Physica A: Statistical Mechanics and its Applications},
+  331\penalty0 (1--2):\penalty0 140--172, 2004.
+\newblock \doi{10.1016/j.physa.2003.09.007}.
+
+\bibitem[Triantafyllou et~al.(2024)Triantafyllou, Sukovic, Mandal, and
+  Radanovic]{triantafyllou2024agent}
+Stelios Triantafyllou, Aleksa Sukovic, Debmalya Mandal, and Goran Radanovic.
+\newblock Agent-specific effects: A causal effect propagation analysis in
+  multi-agent {MDP}s.
+\newblock In \emph{Proceedings of the 41st International Conference on Machine
+  Learning}, volume 235 of \emph{Proceedings of Machine Learning Research},
+  2024.
+\newblock URL \url{https://arxiv.org/abs/2310.11334}.
+
+\bibitem[Xu et~al.(2026)Xu, Zhang, Li, and Zou]{xu2026lyapunov}
+Zeling Xu, Qianqi Zhang, Dagang Li, and Yuntao Zou.
+\newblock Lyapunov-guided cooperative games enable stable constraint fusion in
+  {LLM}-based multi-agent autonomous systems.
+\newblock \emph{npj Artificial Intelligence}, 2:\penalty0 60, 2026.
+\newblock \doi{10.1038/s44387-026-00110-5}.
+\newblock URL \url{https://doi.org/10.1038/s44387-026-00110-5}.
+
+\bibitem[Yaida(2019)]{yaida2019fluctuation}
+Sho Yaida.
+\newblock Fluctuation-dissipation relations for stochastic gradient descent.
+\newblock In \emph{International Conference on Learning Representations}, 2019.
+\newblock URL \url{https://openreview.net/forum?id=SkNksoRctQ}.
+
+\bibitem[Yan et~al.(2012)Yan, Ren, Lai, Lai, and Li]{yan2012energy}
+Gang Yan, Jie Ren, Ying-Cheng Lai, Choy-Heng Lai, and Baowen Li.
+\newblock Controlling complex networks: How much energy is needed?
+\newblock \emph{Physical Review Letters}, 108\penalty0 (21):\penalty0 218703,
+  2012.
+\newblock \doi{10.1103/PhysRevLett.108.218703}.
 
 \end{thebibliography}

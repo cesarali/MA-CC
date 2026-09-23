@@ -1,0 +1,4 @@
+interface:
+  display_name: "MA-CC Cygnus Study Workflow"
+  short_description: "Launch and aggregate MA-CC studies on Cygnus"
+  default_prompt: "Use $ma-cc-cygnus-study-workflow to preflight, launch, monitor, or aggregate this MA-CC study on Cygnus."

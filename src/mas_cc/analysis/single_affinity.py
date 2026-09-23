@@ -371,7 +371,23 @@ def target_sensing_information(rows: Sequence[Any]) -> dict[str, Any]:
         "target_sensing_information_rounds": 0,
         "target_sensing_valid": False,
         "target_sensing_per_round_nats": {},
+        "target_sensing_theory_status": "not_available",
+        "target_sensing_theory_skip_reason": None,
     }
+    if any(
+        row.event.get("controller_sensing_mode", "votes") == "board"
+        for row in eligible
+    ):
+        return {
+            **blank,
+            "target_sensing_theory_status": (
+                "not_applicable_board_observation_channel"
+            ),
+            "target_sensing_theory_skip_reason": (
+                "the hypergeometric private-vote sensor kernel does not apply "
+                "to endogenous public board messages"
+            ),
+        }
     if N is None or q_c is None or not 1 <= q_c <= N:
         return blank
     S = sensor_kernel(N, q_c)
@@ -396,6 +412,8 @@ def target_sensing_information(rows: Sequence[Any]) -> dict[str, Any]:
         "target_sensing_information_rounds": len(per_round),
         "target_sensing_valid": True,
         "target_sensing_per_round_nats": per_round,
+        "target_sensing_theory_status": "hypergeometric_vote_sensor",
+        "target_sensing_theory_skip_reason": None,
     }
 
 

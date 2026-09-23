@@ -776,6 +776,7 @@ def _render_budget_metric(package, spec, section, *, mode, figures_dir, ledger):
         raise ValueError(f"duplicate budget coordinates for {metric_id}; filter the source rows")
     fig, ax = plt.subplots(figsize=(7.2, 4.3), constrained_layout=True)
     grouped = frame.groupby(groups, dropna=False) if groups else [((), frame)]
+    show_ci = bool(spec.get("show_ci", True))
     count = 0
     for key, rows in grouped:
         rows = rows.sort_values(x)
@@ -794,6 +795,8 @@ def _render_budget_metric(package, spec, section, *, mode, figures_dir, ledger):
                 ledger.add(location=f"budget:{metric_id}:{mode}", table=source,
                            row_index=row._source_row, field=field, value=value)
             low, high = row.get("ci_low"), row.get("ci_high")
+            if not show_ci:
+                continue
             if pd.notna(low) and pd.notna(high) and np.isfinite(float(low)) and np.isfinite(float(high)):
                 ax.vlines(xs[i], float(low), float(high), color=line.get_color(), alpha=0.5)
                 for field, value in [("ci_low", low), ("ci_high", high)]:
