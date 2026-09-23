@@ -1,0 +1,72 @@
+{
+  "CONTROLLER_b03": {
+    "Hbar": 0.7628166874158006,
+    "M": 0.5439227139968547,
+    "compatible_worlds": 4451,
+    "informative_facts_in_prefix": 3,
+    "informative_prefix_exhausted": false,
+    "p_false": 0.41024488878903614,
+    "p_truth": 0.5439227139968547,
+    "posterior_vector": [
+      0.5439227139968547,
+      0.045832397214109186,
+      0.41024488878903614
+    ]
+  },
+  "CONTROLLER_b06": {
+    "Hbar": 0.6338241693498411,
+    "M": 0.515697137580794,
+    "compatible_worlds": 2166,
+    "informative_facts_in_prefix": 6,
+    "informative_prefix_exhausted": false,
+    "p_false": 0.515697137580794,
+    "p_truth": 0.4838411819021237,
+    "posterior_vector": [
+      0.4838411819021237,
+      0.0004616805170821791,
+      0.515697137580794
+    ]
+  },
+  "CONTROLLER_b09": {
+    "Hbar": 0.5807752054331553,
+    "M": 0.6644394951744618,
+    "compatible_worlds": 1347,
+    "informative_facts_in_prefix": 9,
+    "informative_prefix_exhausted": false,
+    "p_false": 0.6644394951744618,
+    "p_truth": 0.33556050482553823,
+    "posterior_vector": [
+      0.33556050482553823,
+      0.0,
+      0.6644394951744618
+    ]
+  },
+  "CONTROLLER_b12": {
+    "Hbar": 0.5610783550542139,
+    "M": 0.6933333333333334,
+    "compatible_worlds": 75,
+    "informative_facts_in_prefix": 12,
+    "informative_prefix_exhausted": false,
+    "p_false": 0.6933333333333334,
+    "p_truth": 0.30666666666666664,
+    "posterior_vector": [
+      0.30666666666666664,
+      0.0,
+      0.6933333333333334
+    ]
+  },
+  "CONTROLLER_b24": {
+    "Hbar": 0.5618376711211266,
+    "M": 0.6923076923076923,
+    "compatible_worlds": 13,
+    "informative_facts_in_prefix": 12,
+    "informative_prefix_exhausted": true,
+    "p_false": 0.6923076923076923,
+    "p_truth": 0.3076923076923077,
+    "posterior_vector": [
+      0.3076923076923077,
+      0.0,
+      0.6923076923076923
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "candidate_allocations": [
+    {
+      "assignment": {
+        "build the data pipeline": [
+          "Alice"
+        ],
+        "conduct stakeholder interviews": [
+          "Bruno",
+          "Chandra"
+        ]
+      },
+      "pair": [
+        "Bruno",
+        "Chandra"
+      ],
+      "singleton": "Alice"
+    },
+    {
+      "assignment": {
+        "build the data pipeline": [
+          "Bruno"
+        ],
+        "conduct stakeholder interviews": [
+          "Alice",
+          "Chandra"
+        ]
+      },
+      "pair": [
+        "Alice",
+        "Chandra"
+      ],
+      "singleton": "Bruno"
+    },
+    {
+      "assignment": {
+        "build the data pipeline": [
+          "Chandra"
+        ],
+        "conduct stakeholder interviews": [
+          "Alice",
+          "Bruno"
+        ]
+      },
+      "pair": [
+        "Alice",
+        "Bruno"
+      ],
+      "singleton": "Chandra"
+    }
+  ],
+  "candidate_scores": [
+    8,
+    4,
+    6
+  ],
+  "cooperation_matrix": {
+    "Alice|Bruno": 1,
+    "Alice|Chandra": 1,
+    "Bruno|Chandra": 2
+  },
+  "gold_allocation": {
+    "assignment": {
+      "build the data pipeline": [
+        "Alice"
+      ],
+      "conduct stakeholder interviews": [
+        "Bruno",
+        "Chandra"
+      ]
+    },
+    "pair": [
+      "Bruno",
+      "Chandra"
+    ],
+    "singleton": "Alice"
+  },
+  "gold_index": 0,
+  "margin_to_second_best": 2,
+  "people": [
+    "Alice",
+    "Bruno",
+    "Chandra"
+  ],
+  "skill_matrix": {
+    "Alice": [
+      3,
+      1
+    ],
+    "Bruno": [
+      1,
+      2
+    ],
+    "Chandra": [
+      2,
+      1
+    ]
+  },
+  "skills": [
+    "software engineering",
+    "interpersonal communication"
+  ],
+  "tasks": [
+    {
+      "name": "build the data pipeline",
+      "skill": "software engineering"
+    },
+    {
+      "name": "conduct stakeholder interviews",
+      "skill": "interpersonal communication"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# theoretical_reference must be none for finite epistemic persistence
+# (rho = 0.75); aggregation.py:3636 rejects any other reference.
+theoretical_reference: none

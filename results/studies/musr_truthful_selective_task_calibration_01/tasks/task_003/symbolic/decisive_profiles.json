@@ -1,0 +1,13 @@
+{
+  "DECISIVE": {
+    "Hbar": 0.0,
+    "M": 1.0,
+    "compatible_worlds": 1803,
+    "posterior_vector": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "valid_probability_mass": 0.09160188995579939
+  }
+}

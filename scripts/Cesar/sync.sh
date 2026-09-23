@@ -75,9 +75,43 @@ if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
 fi
 sha="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
-rsync -az --delete "${dry[@]}" "${excludes[@]}" \
-  -e "ssh ${SSH_OPTS[*]}" \
-  "${repo_root}/" "${CESAR_HOST}:${CESAR_REPO}/"
+# The login node is a Kubernetes pod and its image is not stable: rsync was
+# present in one revision and absent from the next. Fall back to streaming a
+# tarball over ssh, which needs only tar on both ends.
+if ssh "${SSH_OPTS[@]}" "${CESAR_HOST}" 'command -v rsync >/dev/null 2>&1'; then
+  rsync -az --delete "${dry[@]}" "${excludes[@]}" \
+    -e "ssh ${SSH_OPTS[*]}" \
+    "${repo_root}/" "${CESAR_HOST}:${CESAR_REPO}/"
+elif [[ ${#dry[@]} -gt 0 ]]; then
+  echo "remote has no rsync; --dry-run cannot itemize over the tar fallback." >&2
+  echo "tar excludes: ${excludes[*]//--exclude /}" >&2
+else
+  echo "remote has no rsync; streaming a tarball instead."
+  tar_excludes=()
+  for item in "${excludes[@]}"; do
+    [[ "${item}" == "--exclude" ]] && continue
+    tar_excludes+=(--exclude "${item}")
+  done
+  staging="${CESAR_REPO}.staging.$$"
+  # Extract into staging, carry the credential across, then swap. A swap
+  # rather than an in-place extract is what gives rsync's --delete semantics:
+  # a file deleted locally must not linger in the tree workers import from.
+  tar -czf - -C "${repo_root}" "${tar_excludes[@]}" . \
+    | ssh "${SSH_OPTS[@]}" "${CESAR_HOST}" "
+        set -e
+        rm -rf '${staging}' && mkdir -p '${staging}'
+        tar -xzf - -C '${staging}'
+        if [ -f '${CESAR_REPO}/.env' ]; then
+          cp -p '${CESAR_REPO}/.env' '${staging}/.env'
+        fi
+        if [ -d '${CESAR_REPO}' ]; then
+          rm -rf '${CESAR_REPO}.previous'
+          mv '${CESAR_REPO}' '${CESAR_REPO}.previous'
+        fi
+        mv '${staging}' '${CESAR_REPO}'
+        rm -rf '${CESAR_REPO}.previous'
+      "
+fi
 
 if [[ ${#dry[@]} -eq 0 ]]; then
   # Leave a breadcrumb the cluster cannot derive on its own.

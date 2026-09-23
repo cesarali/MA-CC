@@ -26,6 +26,7 @@ from mas_cc.llm_runtime.prompts import CompiledPrompt
 from mas_cc.llm_runtime.messages import Message, MessageRole
 from mas_cc.llm_runtime.exceptions import ValidationError
 from mas_cc.llm_runtime.validation import ValidationIssue
+from mas_cc.llm_runtime import tracing
 
 if TYPE_CHECKING:
     # Deferred: `mas_cc.games` imports this module (via `runner.py` and
@@ -126,31 +127,45 @@ async def run_validated_decision(
             seed=seed_for_attempt(attempt_index),
             metadata=metadata,
         )
-        try:
-            response = await provider.complete(completion_request)
-        except Exception as exc:
-            failed = ValidationAttempt(attempt_index + 1, completion_request, None, None, None, str(exc))
-            if on_attempt is not None:
-                on_attempt(failed)
-            raise
-        action: Action | None = None
-        validation_error: str | None = None
-        validation_issues: tuple[ValidationIssue, ...] = ()
-        try:
-            prompt.response_contract.validate(response.content).raise_for_errors(
-                context=f"{game.spec.game_type} response contract"
-            )
-            action = game.parse_action(request, response.content)
-            game.validate_action(state, request, action, game_config).raise_for_errors(
-                context=f"{game.spec.game_type} action"
-            )
-        except (TypeError, ValueError) as exc:
-            validation_error = str(exc)
-            last_error = validation_error
-            if isinstance(exc, ValidationError):
-                validation_issues = tuple(
-                    issue for issue in exc.issues if isinstance(issue, ValidationIssue)
+        # One span per attempt, covering the call *and* the validation of its
+        # answer: a completion the provider accepted but the game rejected is
+        # the case worth seeing, and only this scope knows about both.
+        with tracing.llm_span(
+            provider=getattr(provider, "name", "provider"),
+            model=str(getattr(provider, "model", "")),
+            request=completion_request,
+        ) as trace:
+            try:
+                response = await provider.complete(completion_request)
+            except Exception as exc:
+                failed = ValidationAttempt(attempt_index + 1, completion_request, None, None, None, str(exc))
+                if on_attempt is not None:
+                    on_attempt(failed)
+                raise
+            trace.record(response)
+            action: Action | None = None
+            validation_error: str | None = None
+            validation_issues: tuple[ValidationIssue, ...] = ()
+            try:
+                prompt.response_contract.validate(response.content).raise_for_errors(
+                    context=f"{game.spec.game_type} response contract"
                 )
+                action = game.parse_action(request, response.content)
+                game.validate_action(state, request, action, game_config).raise_for_errors(
+                    context=f"{game.spec.game_type} action"
+                )
+            except (TypeError, ValueError) as exc:
+                validation_error = str(exc)
+                last_error = validation_error
+                if isinstance(exc, ValidationError):
+                    validation_issues = tuple(
+                        issue for issue in exc.issues if isinstance(issue, ValidationIssue)
+                    )
+            trace.decision(
+                valid=validation_error is None,
+                action=action,
+                validation_error=validation_error,
+            )
         attempt = ValidationAttempt(
             attempt_index + 1, completion_request, response, action, validation_error, None,
             validation_issues,

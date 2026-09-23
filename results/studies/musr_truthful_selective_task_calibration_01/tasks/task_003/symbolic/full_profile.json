@@ -1,0 +1,11 @@
+{
+  "Hbar": 0.0,
+  "M": 1.0,
+  "compatible_worlds": 1,
+  "posterior_vector": [
+    1.0,
+    0.0,
+    0.0
+  ],
+  "valid_probability_mass": 5.080526342529084e-05
+}

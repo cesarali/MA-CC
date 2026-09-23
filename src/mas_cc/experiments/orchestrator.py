@@ -35,6 +35,7 @@ from mas_cc.core.random import Seed
 from mas_cc.games import Game, create_game, game_metrics
 from mas_cc.games.naming_convention.runtime import run_naming_convention_game
 from mas_cc.games.runner import run_game
+from mas_cc.llm_runtime import tracing
 from mas_cc.llm_runtime.providers import (
     AtomicBudgetStateStore,
     BUDGET_STOP_CODES,
@@ -1756,6 +1757,38 @@ async def _execute_episode(
     return len(result.interactions), result.termination_reason
 
 
+def _trace_attributes(task: _EpisodeTask) -> dict[str, Any]:
+    """The few episode facts worth filtering traces by in Phoenix.
+
+    Deliberately a short list, not the whole config: every entry becomes a
+    searchable attribute on every span in the episode.
+    """
+
+    options = task.config.game.options
+    control = task.config.control.options
+    attributes: dict[str, Any] = {
+        "experiment": task.config.experiment.name,
+        "game_type": task.config.game.type,
+        "model": task.config.llm_provider.model,
+    }
+    for key in ("study", "arm", "task_id", "ground_truth", "target_semantics"):
+        value = task.config.experiment.metadata.get(key)
+        if value is not None:
+            attributes[key] = value
+    for key in ("epistemic_persistence", "dynamics_mode"):
+        if options.get(key) is not None:
+            attributes[key] = options[key]
+    profile = (options.get("board") or {}).get("communication_profile")
+    if profile is not None:
+        attributes["communication_profile"] = profile
+    if task.config.control.mechanism:
+        attributes["control_mechanism"] = task.config.control.mechanism
+    for key in ("target", "intervention_budget"):
+        if control.get(key) is not None:
+            attributes[f"control_{key}"] = control[key]
+    return attributes
+
+
 async def _run_episode_task(
     task: _EpisodeTask,
     *,
@@ -1912,26 +1945,31 @@ async def _run_episode_task(
             return outcome
         timing_token = _TIMING_EPISODE.set((task.cell_id, task.episode_id))
         try:
-            interactions, termination_reason = await _execute_episode(
-                game,
-                task.config,
-                guarded_provider,
-                guard,
-                task.episode_dir,
-                label,
-                policy=policy,
-                metrics=metrics,
-                to_round_view=to_round_view,
-                price_hash=price_hash,
-                checkpoint_enabled=checkpoint_enabled,
-                progress=progress,
-                retention_policy=task.config.storage.retention_policy,
-                scientific_identity=task.scientific_identity,
-                scientific_path=task.scientific_path,
-                prompt_sampler=prompt_sampler,
-                prompt_cell_dir=task.cell_dir or task.episode_dir,
-                prompt_episode_id=task.episode_id,
-            )
+            with tracing.episode_span(
+                episode_id=task.episode_id,
+                cell_id=task.cell_id,
+                attributes=_trace_attributes(task),
+            ):
+                interactions, termination_reason = await _execute_episode(
+                    game,
+                    task.config,
+                    guarded_provider,
+                    guard,
+                    task.episode_dir,
+                    label,
+                    policy=policy,
+                    metrics=metrics,
+                    to_round_view=to_round_view,
+                    price_hash=price_hash,
+                    checkpoint_enabled=checkpoint_enabled,
+                    progress=progress,
+                    retention_policy=task.config.storage.retention_policy,
+                    scientific_identity=task.scientific_identity,
+                    scientific_path=task.scientific_path,
+                    prompt_sampler=prompt_sampler,
+                    prompt_cell_dir=task.cell_dir or task.episode_dir,
+                    prompt_episode_id=task.episode_id,
+                )
             outcome = EpisodeOutcome(
                 task.episode_id,
                 task.seed,

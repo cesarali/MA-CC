@@ -1,0 +1,56 @@
+# Local trace run: autonomous baseline, the v0 cell-0001 (no_control) condition.
+#
+# Reproduces 21-09-2026-full-vs-report-v0 config-0000~cell-0001 with agent
+# reasoning retained. Shares the paired initialization artifacts with
+# controlled.yaml, so both arms start from identical initial votes and differ
+# only in whether a controller acts. Three things differ from that cell:
+#
+#   storage.artifact_profile: full   - v0 used dashboard_semantic, which drops
+#     verbose_episode_history and per_episode_prompt_files, so the agents'
+#     private_reason (game.py:617) and the controller's
+#     communication_choice_reason plus controller_visible_input
+#     (runtime.py:2389) were never written to disk.
+#   llm_provider.request_concurrency: 4 - v0 used 10. The DeepInfra account is
+#     shared with a 384-concurrency cluster run against a 400 cap, so this run
+#     takes the remaining headroom and no more.
+#   execution.repetitions: 10 - v0 ran 5 per cell and they ranged 0.08 to 1.00.
+llm_provider: {type: deepinfra, model: openai/gpt-oss-120b, credentials_env: DEEPINFRA_API_KEY, timeout_seconds: 180, max_retries: 2, request_concurrency: 4, temperature: 1.0, max_output_tokens: 512, options: {estimated_latency_seconds: 15.0}}
+prompt: {schema_version: 2, prompt_family: relational_blackboard_ballot, prompt_version: 4, response_contract: {type: relational_blackboard_ballot, allowed_values: [A, B, C]}}
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24
+  horizon: 10
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: results/studies/musr_truthful_selective_task_calibration_01/tasks
+    task_id: task_003
+    dynamics_mode: reasoning
+    rounds: 10
+    social_group_size: 12
+    social_mode: board
+    board: {sampling: uniform, message_lifetime_rounds: 1, exclude_self_authored: true, allow_no_post: true, allow_participant_requests: true, communication_profile: full_communication, require_grounded_reports: true, report_citation_scope: active_or_observed, no_citable_fact_action: none}
+    epistemic_persistence: 0.75
+    vote_visibility: public
+    prompt_version: 4
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 4
+    expected_validation_failure_rate: 0.15
+    initialization: {mode: paired_local_vote, artifact_dir: results/studies/task003_trace_local_initializations, require_artifact: true}
+control: {mechanism: none, options: {}}
+execution: {seed: 20260907, repetitions: 10, parallelism: 4, fail_fast: false}
+pricing: {mode: offline, require_fresh_at_launch: false, fallback_policy: deny, explicit_unknown_price_override: false}
+budget: {accounting_unit: USD, system_max_cost_per_run: 25.0, max_cost_per_run: 25.0, max_provider_requests: 20000, max_input_tokens: 50000000, max_output_tokens: 50000000, allow_unbounded_paid_requests: false}
+logging: {level: INFO, console: true, audit: true, comet: false, options: {prompt_examples: {count: 24, scope: episode}}}
+storage: {output_dir: results, format: jsonl, artifact_profile: full, checkpoint_mode: episode, overwrite: false}
+analysis: {enabled: false, estimators: []}
+metrics: {enabled: true, comet_export: []}
+observability: {schema_version: 1, comet: {writer: master_only, heartbeat_seconds: 20, progress_metrics: [episodes_done], grid_image_every_n_episodes: 1, sweep_experiment: false, cell_reporting: master, metric_plots: true}}
+experiment:
+  name: task003-trace-local-no-control
+  description: Task-003 autonomous baseline at rho=0.75, full communication, matched to the controlled arm by paired initialization.
+  tags: [musr, blackboard, task003, no-control, trace, local]
+  metadata: {study: task003_trace_local, arm: no_control, task_id: task_003, candidate_id: 130, task_file_sha256: 1ec61ccc9578e2bcbd6a027035231dcd1ee39d44892d95b8b6ae2e9f18fdfbdb, private_assignment_sha256: aad3e64f7a713534667e04984c9911423b94c96381ec9b8ff21f90714aaea0a4, controller_pool_sha256: b90a3267c26212194e916777795db0751008d8802d45e35a67088fb8a0ce49d0, ground_truth: ALLOCATION_0, controller_target: null, controller_target_is_truth: null, target_semantics: none, population_size: 24, population_rounds: 10, social_group_size: 12, sensor_sample_size: 12, beta: 4.0, theta: 0.5, repetitions: 10, common_random_numbers_across_grid: true, paired_initialization_across_grid: true}
+grid:
+  game.options.epistemic_persistence: [0.75]

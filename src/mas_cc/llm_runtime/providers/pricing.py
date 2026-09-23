@@ -718,6 +718,24 @@ def default_pricing_catalog() -> PricingCatalog:
                          "https://developers.openai.com/api/docs/pricing", cached_input_per_million=0.075,
                          **common),
             ModelPricing(
+                # Live catalogue metadata on 2026-09-22: 0.15 USD per million
+                # input and 0.60 per million output, 1M context.
+                #
+                # This is a reasoning model with an adjustable effort control
+                # (options.reasoning_effort). A live probe on the production
+                # blackboard ballot prompt spent its entire 512-token budget on
+                # reasoning and returned no answer; it needs max_output_tokens
+                # >= 2048. At effort=low it answered 5/6 with ~962 output
+                # tokens, at default ~1,438 and only 2/6. Size the output
+                # budget and the effort together or episodes will fail.
+                "neuralwatt", "deepseek-v4.1-flash", 0.15, 0.60, "USD",
+                "NeuralWatt authenticated model-catalog pricing metadata",
+                "https://portal.neuralwatt.com/models/deepseek-v4.1-flash",
+                retrieved_at="2026-09-22T00:00:00Z",
+                version="2026-09-22-neuralwatt-catalog-v1",
+                limits=ProviderLimits(maximum_input_tokens=1_048_560),
+            ),
+            ModelPricing(
                 "neuralwatt", "deepseek-v4-flash", 0.14, 0.28, "USD",
                 "NeuralWatt authenticated model-catalog pricing metadata",
                 "https://portal.neuralwatt.com/models/deepseek-v4-flash",

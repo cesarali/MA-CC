@@ -16,6 +16,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+from mas_cc.llm_runtime import tracing
 from mas_cc.llm_runtime.config import LLMProviderConfig
 from ..errors import ProviderError
 
@@ -511,6 +512,25 @@ class OpenAICompatibleProvider:
         )
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Trace the call, then make it.
+
+        ``skip_if_active`` keeps this from double-counting: when the shared
+        decision loop already opened a span for this same logical request, it
+        stands down, so only calls made outside that loop (the controller's own
+        completions, the probes) get a span here.
+        """
+
+        with tracing.llm_span(
+            provider=self.name,
+            model=self.model,
+            request=request,
+            skip_if_active=True,
+        ) as trace:
+            response = await self._complete(request)
+            trace.record(response)
+            return response
+
+    async def _complete(self, request: CompletionRequest) -> CompletionResponse:
         if self._closed:
             raise ProviderError(
                 f"{self.name} provider is closed.", provider=self.name, code="closed"

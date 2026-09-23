@@ -1,0 +1,32 @@
+{
+  "artifact_files": [
+    "controller/ranked_fact_pool.json",
+    "controller/selected_C12.json",
+    "controller/selected_C24.json",
+    "controller/selected_C3.json",
+    "controller/selected_C6.json",
+    "facts/all_true_facts.json",
+    "facts/controller_reportable_facts.json",
+    "facts/decisive_facts.json",
+    "facts/neutral_facts.json",
+    "hidden_world.json",
+    "private/N24_assignment.json",
+    "symbolic/controller_profiles.json",
+    "symbolic/decisive_profiles.json",
+    "symbolic/full_profile.json",
+    "symbolic/individual_controller_fact_audit.json",
+    "symbolic/mixed_profiles.json",
+    "symbolic/private_profiles.json",
+    "symbolic/robustness_by_subset.json",
+    "symbolic/zero_profile.json"
+  ],
+  "candidate_id": 130,
+  "controller_eligible_fact_count": 24,
+  "decisive_fact_count": 6,
+  "false_target": "ALLOCATION_2",
+  "gold_target": "ALLOCATION_0",
+  "schema_version": "musr_team_allocation_selective_v1",
+  "seed": 799958051727831532,
+  "task_hash": "4444e7a0ff88c657f941e4e2a9551219195f5df8b9c76d5f7c507a1e111c447d",
+  "task_id": "task_003"
+}

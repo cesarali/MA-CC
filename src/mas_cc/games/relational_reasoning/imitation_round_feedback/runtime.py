@@ -64,6 +64,7 @@ from mas_cc.llm_runtime.prompts import (
     ResponseContract,
     TokenCounter,
 )
+from mas_cc.llm_runtime import tracing
 from mas_cc.llm_runtime.providers import LLMProvider, ProviderError
 from mas_cc.runtime import (
     DecisionLoopExhausted,
@@ -1158,9 +1159,14 @@ async def run_relational_imitation_round_feedback_game(
     if rules.initialization_only:
         run_rounds = 0
     branch_metadata = dict(continuation_metadata or {})
+    # Handle for the open round trace span. Passing it back into round_begin
+    # closes any span an aborted round left open, so a crash mid-round cannot
+    # strand one.
+    round_trace: Any = None
     for round_index in range(first_round, first_round + run_rounds):
         if state.terminated:
             break
+        round_trace = tracing.round_begin(round_index, previous=round_trace)
         round_logical_decisions_before = logical_decisions
         round_validation_attempts_before = validation_attempts
         options = tuple(state.possible_answers)
@@ -2803,6 +2809,12 @@ async def run_relational_imitation_round_feedback_game(
             "correct_answer": state.correct_answer,
             "correct_relation": state.task["correct_relation"],
         }
+        tracing.round_end(
+            round_trace,
+            event=round_event,
+            board=state.blackboard.live_messages(round_index),
+        )
+        round_trace = None
         round_record = RelationalRoundRecord(round_index=round_index, event=round_event)
         round_records.append(round_record)
         _notify(observer, "record_round_trajectory", record=round_record)

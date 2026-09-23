@@ -68,6 +68,25 @@
       ]
     },
     {
+      "provider_type": "neuralwatt",
+      "model": "deepseek-v4.1-flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-22T00:00:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "NeuralWatt's authenticated catalogue listed deepseek-v4.1-flash on 2026-09-22 with 0.15/0.60 USD per million and a 1M context.",
+        "Reasoning model with options.reasoning_effort. On the production blackboard ballot prompt it returned 0/6 at max_output_tokens 512 (whole budget spent reasoning), 2/6 at 2048 default effort, and 5/6 at 2048 with effort=low.",
+        "NeuralWatt admits roughly 5 concurrent requests per key regardless of the configured request_concurrency; excess returns HTTP 429."
+      ]
+    },
+    {
       "provider_type": "deepinfra",
       "model": "deepseek-ai/DeepSeek-V4-Flash",
       "family": "deepseek",

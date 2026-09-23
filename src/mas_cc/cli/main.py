@@ -538,6 +538,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=4,
         help="bins per axis for the coarse (kappa, phi) diagnostic conditioning",
     )
+    relational_analysis.add_argument(
+        "--theoretical-reference",
+        choices=("single_affinity_revised", "none", "matched_qvoter_null"),
+        default="single_affinity_revised",
+        help=(
+            "closed-form curve to compare against; must be 'none' for a "
+            "finite-memory board run or finite epistemic persistence, whose "
+            "dynamics the single-affinity theory does not describe"
+        ),
+    )
 
     benchmark = commands.add_parser(
         "benchmark",
@@ -1187,6 +1197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 confidence=args.confidence,
                 seed=args.seed,
                 epistemic_bins=args.epistemic_bins,
+                theoretical_reference=args.theoretical_reference,
             )
         except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
             print(str(exc), file=sys.stderr)
