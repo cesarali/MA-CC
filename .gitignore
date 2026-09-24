@@ -38,3 +38,23 @@ data/
 
 # Preflight / inspection artifacts (regenerable, provider-free)
 inspection/
+
+# LaTeX build artifacts under docs/papers (regenerable; they differ between TeX
+# installations, which made every cross-machine pull conflict).  Sources -- .tex,
+# .bib, .sty, .bst, .bbl and figures -- stay tracked.
+docs/papers/**/*.aux
+docs/papers/**/*.blg
+docs/papers/**/*.fdb_latexmk
+docs/papers/**/*.fls
+docs/papers/**/*.log
+docs/papers/**/*.out
+docs/papers/**/*.synctex.gz
+docs/papers/**/*.toc
+docs/papers/**/*.lof
+docs/papers/**/*.lot
+docs/papers/**/*.nav
+docs/papers/**/*.snm
+docs/papers/**/*.vrb
+# compiled papers are regenerable; figure PDFs are source and stay tracked
+docs/papers/**/*.pdf
+!docs/papers/**/figures/**/*.pdf
