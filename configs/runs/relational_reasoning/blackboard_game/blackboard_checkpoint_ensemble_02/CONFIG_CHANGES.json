@@ -1,0 +1,219 @@
+[
+  {
+    "source": "/Users/rsanchez/Projects/MA-CC/configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_ensemble_01/study.yaml",
+    "source_sha256": "1456cdb1f12502fd6ffbe7ae10c0a45306000d84bdcb1e316d600d033207edcd",
+    "file": "study.yaml",
+    "changes": [
+      {
+        "field": "execution.results_root",
+        "old": "/work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/blackboard_checkpoint_ensemble_01",
+        "new": "/work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/blackboard_checkpoint_ensemble_02"
+      },
+      {
+        "field": "study.name",
+        "old": "blackboard-checkpoint-ensemble-01",
+        "new": "blackboard-checkpoint-ensemble-02"
+      }
+    ]
+  },
+  {
+    "source": "/Users/rsanchez/Projects/MA-CC/configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_ensemble_01/q12_rho070.yaml",
+    "source_sha256": "b1133732aa828c8de227970d4a22048cbb6e894d57e7c5b5b8b597ec00b2d33e",
+    "file": "q12_rho070.yaml",
+    "changes": [
+      {
+        "field": "ensemble.parent_count",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.repetitions",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.seed",
+        "old": 20260916,
+        "new": 20260922
+      },
+      {
+        "field": "experiment.description",
+        "old": "Parent-checkpoint ensemble for task 003 at q=12 and rho=0.70.",
+        "new": "Parent-checkpoint ensemble for task 003 at q=12 and rho=0.70. Additional independent-parent batch 02; augments ensemble 01."
+      },
+      {
+        "field": "experiment.metadata.augmentation_of",
+        "old": null,
+        "new": "blackboard_checkpoint_ensemble_01"
+      },
+      {
+        "field": "experiment.metadata.batch_id",
+        "old": null,
+        "new": "paired_parent_exp_2"
+      },
+      {
+        "field": "experiment.metadata.study",
+        "old": "blackboard_checkpoint_ensemble_01",
+        "new": "blackboard_checkpoint_ensemble_02"
+      },
+      {
+        "field": "experiment.name",
+        "old": "blackboard-checkpoint-ensemble-q12-rho070",
+        "new": "blackboard-checkpoint-ensemble-02-q12-rho070"
+      }
+    ]
+  },
+  {
+    "source": "/Users/rsanchez/Projects/MA-CC/configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_ensemble_01/q12_rho100.yaml",
+    "source_sha256": "818025470d3d39476a84fd91288683aeee4f21cd341626deb376dab572fab234",
+    "file": "q12_rho100.yaml",
+    "changes": [
+      {
+        "field": "ensemble.parent_count",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.repetitions",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.seed",
+        "old": 20260916,
+        "new": 20260922
+      },
+      {
+        "field": "experiment.description",
+        "old": "Parent-checkpoint ensemble for task 003 at q=12 and rho=1.00.",
+        "new": "Parent-checkpoint ensemble for task 003 at q=12 and rho=1.00. Additional independent-parent batch 02; augments ensemble 01."
+      },
+      {
+        "field": "experiment.metadata.augmentation_of",
+        "old": null,
+        "new": "blackboard_checkpoint_ensemble_01"
+      },
+      {
+        "field": "experiment.metadata.batch_id",
+        "old": null,
+        "new": "paired_parent_exp_2"
+      },
+      {
+        "field": "experiment.metadata.study",
+        "old": "blackboard_checkpoint_ensemble_01",
+        "new": "blackboard_checkpoint_ensemble_02"
+      },
+      {
+        "field": "experiment.name",
+        "old": "blackboard-checkpoint-ensemble-q12-rho100",
+        "new": "blackboard-checkpoint-ensemble-02-q12-rho100"
+      }
+    ]
+  },
+  {
+    "source": "/Users/rsanchez/Projects/MA-CC/configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_ensemble_01/q3_rho070.yaml",
+    "source_sha256": "bed47eb70c1125a399f822bce4f97ae3307a3cbd72ab234f87ff41f869ed188f",
+    "file": "q3_rho070.yaml",
+    "changes": [
+      {
+        "field": "ensemble.parent_count",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.repetitions",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.seed",
+        "old": 20260916,
+        "new": 20260922
+      },
+      {
+        "field": "experiment.description",
+        "old": "Parent-checkpoint ensemble for task 003 at q=3 and rho=0.70.",
+        "new": "Parent-checkpoint ensemble for task 003 at q=3 and rho=0.70. Additional independent-parent batch 02; augments ensemble 01."
+      },
+      {
+        "field": "experiment.metadata.augmentation_of",
+        "old": null,
+        "new": "blackboard_checkpoint_ensemble_01"
+      },
+      {
+        "field": "experiment.metadata.batch_id",
+        "old": null,
+        "new": "paired_parent_exp_2"
+      },
+      {
+        "field": "experiment.metadata.study",
+        "old": "blackboard_checkpoint_ensemble_01",
+        "new": "blackboard_checkpoint_ensemble_02"
+      },
+      {
+        "field": "experiment.name",
+        "old": "blackboard-checkpoint-ensemble-q3-rho070",
+        "new": "blackboard-checkpoint-ensemble-02-q3-rho070"
+      }
+    ]
+  },
+  {
+    "source": "/Users/rsanchez/Projects/MA-CC/configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_ensemble_01/q3_rho100.yaml",
+    "source_sha256": "312693509225c73814e6a406afc6502e08c9e78c4beaf3cd931213da272e9a37",
+    "file": "q3_rho100.yaml",
+    "changes": [
+      {
+        "field": "ensemble.parent_count",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.repetitions",
+        "old": 40,
+        "new": 60
+      },
+      {
+        "field": "execution.seed",
+        "old": 20260916,
+        "new": 20260922
+      },
+      {
+        "field": "experiment.description",
+        "old": "Parent-checkpoint ensemble for task 003 at q=3 and rho=1.00.",
+        "new": "Parent-checkpoint ensemble for task 003 at q=3 and rho=1.00. Additional independent-parent batch 02; augments ensemble 01."
+      },
+      {
+        "field": "experiment.metadata.augmentation_of",
+        "old": null,
+        "new": "blackboard_checkpoint_ensemble_01"
+      },
+      {
+        "field": "experiment.metadata.batch_id",
+        "old": null,
+        "new": "paired_parent_exp_2"
+      },
+      {
+        "field": "experiment.metadata.study",
+        "old": "blackboard_checkpoint_ensemble_01",
+        "new": "blackboard_checkpoint_ensemble_02"
+      },
+      {
+        "field": "experiment.name",
+        "old": "blackboard-checkpoint-ensemble-q3-rho100",
+        "new": "blackboard-checkpoint-ensemble-02-q3-rho100"
+      }
+    ]
+  },
+  {
+    "source": "/Users/rsanchez/Projects/MA-CC/configs/runs/relational_reasoning/blackboard_game/blackboard_checkpoint_ensemble_01/analysis.yaml",
+    "source_sha256": "149a2c87b633183a2fe81e6d45e5e645c0671ae33f210d3dc6be61f251f6a696",
+    "file": "analysis.yaml",
+    "changes": [
+      {
+        "field": "checkpoint_ensemble_outputs.expected_parents",
+        "old": 160,
+        "new": 240
+      }
+    ]
+  }
+]

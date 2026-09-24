@@ -1,0 +1,6 @@
+report:
+  title: Full communication vs report only
+  source_analysis: ../../../results/aggregation_results_local/21-09-2026-full-vs-report-v0_analysis
+  output_dir: ../../../results/reports/21-09-2026-full-vs-report-v0
+  renderer: scripts/analysis/report_communication_comparison.py
+  mode: saved_results_only
