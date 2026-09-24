@@ -220,6 +220,98 @@ def test_completed_cells_reuse_only_missing_repetition_indices(tmp_path):
     } == {0, 1, 2, 3}
 
 
+def test_partial_canonical_analysis_reuses_completed_unsealed_episodes(tmp_path):
+    study_dir, config_dir = _legacy_study(tmp_path, repetitions=2, values=(1, 2))
+    index_existing_study(study_dir)
+    initial = plan_extension(study_dir, config_dir)
+    retained_episode = initial.episodes[0]
+
+    analysis = study_dir / "analysis"
+    tables = analysis / "tables"
+    tables.mkdir(parents=True)
+    (analysis / "validation.json").write_text(
+        json.dumps(
+            {
+                "valid": False,
+                "complete": False,
+                "allow_incomplete": True,
+                "counts": {
+                    "artifact_hash_mismatches": 0,
+                    "config_mismatches": 0,
+                    "missing_scientific_events": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (analysis / "analysis_manifest.json").write_text(
+        json.dumps({"study_id": study_dir.name}), encoding="utf-8"
+    )
+    import pandas as pd
+
+    pd.DataFrame(
+        [
+            {
+                "cell_key": retained_episode.cell_key,
+                "episode_key": retained_episode.episode_key,
+                "episode_seed": retained_episode.episode_seed,
+                "repetition_index": retained_episode.repetition_index,
+                "status": "completed",
+            }
+        ]
+    ).to_parquet(tables / "episodes.parquet", index=False)
+
+    recovered = plan_extension(study_dir, config_dir)
+    assert recovered.retained_episode_count == 1
+    assert recovered.missing_episode_count == 3
+    assert retained_episode.episode_key not in {
+        episode.episode_key for episode in recovered.episodes
+    }
+
+
+def test_partial_canonical_analysis_rejects_seed_conflict(tmp_path):
+    study_dir, config_dir = _legacy_study(tmp_path, repetitions=1, values=(1,))
+    index_existing_study(study_dir)
+    initial = plan_extension(study_dir, config_dir)
+    retained_episode = initial.episodes[0]
+    analysis = study_dir / "analysis"
+    tables = analysis / "tables"
+    tables.mkdir(parents=True)
+    (analysis / "validation.json").write_text(
+        json.dumps(
+            {
+                "allow_incomplete": True,
+                "counts": {
+                    "artifact_hash_mismatches": 0,
+                    "config_mismatches": 0,
+                    "missing_scientific_events": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (analysis / "analysis_manifest.json").write_text(
+        json.dumps({"study_id": study_dir.name}), encoding="utf-8"
+    )
+    import pandas as pd
+
+    pd.DataFrame(
+        [
+            {
+                "cell_key": retained_episode.cell_key,
+                "episode_key": retained_episode.episode_key,
+                "episode_seed": retained_episode.episode_seed + 1,
+                "repetition_index": retained_episode.repetition_index,
+                "status": "completed",
+            }
+        ]
+    ).to_parquet(tables / "episodes.parquet", index=False)
+
+    recovered = plan_extension(study_dir, config_dir)
+    assert recovered.retained_episode_count == 0
+    assert recovered.conflicts == (retained_episode.episode_key,)
+
+
 def test_completed_checkpoint_parent_bundle_is_retained_before_cell_compaction(tmp_path):
     study_dir, config_dir = _legacy_study(tmp_path, repetitions=2, values=(1, 2))
     index_existing_study(study_dir)

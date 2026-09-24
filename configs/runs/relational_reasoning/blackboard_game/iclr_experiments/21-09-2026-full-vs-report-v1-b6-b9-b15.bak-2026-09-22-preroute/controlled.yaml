@@ -4,7 +4,7 @@ llm_provider:
   credentials_env: DEEPINFRA_API_KEY
   timeout_seconds: 180
   max_retries: 2
-  request_concurrency: 16
+  request_concurrency: 10
   temperature: 1.0
   max_output_tokens: 4096
   options:
@@ -72,7 +72,7 @@ control:
 execution:
   seed: 20260907
   repetitions: 60
-  parallelism: 16
+  parallelism: 5
   fail_fast: false
   semantic_failure_guard:
     minimum_finished_episodes: 2

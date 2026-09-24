@@ -348,8 +348,108 @@ def _repetition_index(episode_id: str) -> int:
     return int(match.group(1))
 
 
+def _retained_canonical_analysis_episodes(
+    study_dir: Path,
+    target_cells: Sequence[TargetCell],
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Recover completed episode identities from an integrity-checked package.
+
+    A provisional aggregation can canonicalize completed episodes from cells
+    that were interrupted before their cell seal was written.  Those completed
+    rows are safe extension inputs when aggregation found no artifact, config,
+    or scientific-event integrity errors.  Interrupted prefixes remain absent
+    from ``episodes.parquet`` and are therefore never treated as complete.
+    """
+
+    analysis = study_dir / "analysis"
+    validation_path = analysis / "validation.json"
+    manifest_path = analysis / "analysis_manifest.json"
+    episodes_path = analysis / "tables" / "episodes.parquet"
+    if not (
+        validation_path.is_file()
+        and manifest_path.is_file()
+        and episodes_path.is_file()
+    ):
+        return {}, []
+    try:
+        validation = _read_json(validation_path)
+        manifest = _read_json(manifest_path)
+    except ValueError:
+        return {}, []
+    counts = validation.get("counts", {})
+    if not isinstance(counts, Mapping):
+        return {}, []
+    integrity_fields = (
+        "artifact_hash_mismatches",
+        "config_mismatches",
+        "missing_scientific_events",
+    )
+    if not all(field in counts for field in integrity_fields):
+        return {}, []
+    try:
+        integrity_ok = all(int(counts[field]) == 0 for field in integrity_fields)
+    except (TypeError, ValueError):
+        return {}, []
+    if not integrity_ok or manifest.get("study_id") != study_dir.name:
+        return {}, []
+    try:
+        frame = pd.read_parquet(episodes_path)
+    except (OSError, ValueError):
+        return {}, []
+    required = {
+        "cell_key",
+        "episode_key",
+        "episode_seed",
+        "repetition_index",
+        "status",
+    }
+    if frame.empty or not required.issubset(frame.columns):
+        return {}, []
+    if frame["episode_key"].isna().any() or frame["episode_key"].duplicated().any():
+        return {}, []
+
+    cells = {cell.cell_key: cell for cell in target_cells}
+    retained: dict[str, dict[str, Any]] = {}
+    conflicts: list[str] = []
+    completed = frame[frame["status"].isin(("completed", "skipped_resumed"))]
+    for row in completed.to_dict(orient="records"):
+        cell_key = str(row["cell_key"])
+        target = cells.get(cell_key)
+        if target is None:
+            continue
+        try:
+            repetition = int(row["repetition_index"])
+            episode_seed = int(row["episode_seed"])
+        except (TypeError, ValueError):
+            continue
+        if repetition < 0 or repetition >= target.repetitions:
+            continue
+        key = episode_key(cell_key, repetition)
+        if str(row["episode_key"]) != key:
+            conflicts.append(key)
+            continue
+        if target.common_random_numbers and episode_seed != _seed(target, repetition):
+            conflicts.append(key)
+            continue
+        record = {
+            "episode_key": key,
+            "cell_key": cell_key,
+            "repetition_index": repetition,
+            "episode_seed": episode_seed,
+            "content_hash": canonical_hash(row),
+            "source": str(episodes_path),
+            "source_kind": "canonical_analysis",
+        }
+        previous = retained.get(key)
+        if previous is not None and previous["episode_seed"] != episode_seed:
+            conflicts.append(key)
+        else:
+            retained[key] = record
+    return retained, conflicts
+
+
 def _retained_episodes(study_dir: Path, target_cells: Sequence[TargetCell]) -> tuple[dict[str, dict[str, Any]], list[str]]:
-    """Read valid compact episodes and completed checkpoint parent bundles."""
+    """Read valid compact, canonical-analysis, and checkpoint episodes."""
 
     by_local: dict[tuple[str, str], TargetCell] = {}
     for cell in target_cells:
@@ -517,6 +617,16 @@ def _retained_episodes(study_dir: Path, target_cells: Sequence[TargetCell]) -> t
                 and previous["content_hash"] != record["content_hash"]
             ):
                 conflicts.append(key)
+    canonical, canonical_conflicts = _retained_canonical_analysis_episodes(
+        study_dir, target_cells
+    )
+    conflicts.extend(canonical_conflicts)
+    for key, record in canonical.items():
+        previous = retained.get(key)
+        if previous is None:
+            retained[key] = record
+        elif previous["episode_seed"] != record["episode_seed"]:
+            conflicts.append(key)
     return retained, conflicts
 
 
