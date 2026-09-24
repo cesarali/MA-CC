@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,8 @@ from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.storage import canonical_hash
 
 from .manifest import StudySpec, discover_study
+from .drain import _atomic_json
+from .site import default_study_launcher
 
 
 SUBMISSION_COLUMNS = (
@@ -310,6 +313,22 @@ def submit_study(
             raise ValueError(
                 f"study results must be stored under {required_root}, got {study_dir}"
             ) from exc
+    prior_submission = study_dir / "submission.json"
+    if prior_submission.is_file():
+        previous = json.loads(prior_submission.read_text(encoding="utf-8"))
+        old_job = previous.get("job_id") if previous.get("status") == "submitted" else None
+        if old_job:
+            try:
+                active = subprocess.run(
+                    ["squeue", "-h", "-j", str(old_job), "-o", "%A"],
+                    check=True, capture_output=True, text=True, timeout=10,
+                )
+            except OSError:
+                active = None
+            if active is not None and str(old_job) in active.stdout.split():
+                raise ValueError(
+                    f"study result root already has active SLURM job {old_job}"
+                )
     entries = build_submission_entries(spec, study_dir)
 
     # Preflight in a temporary root so a failed member cannot leave a study that
@@ -394,9 +413,7 @@ def submit_study(
             json.dumps(execution_plan, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        script = Path(
-            job_script or "scripts/Potsdam/SLURM/run_study_cell_array.job"
-        ).resolve()
+        script = Path(job_script or default_study_launcher(cell_array=True)).resolve()
         array = f"0-{plan.shard_count - 1}%{plan.array_throttle}"
         command = (
             "sbatch",
@@ -417,9 +434,7 @@ def submit_study(
         from .execution import plan_config_execution
 
         plan = plan_config_execution(spec, len(entries))
-        script = Path(
-            job_script or "scripts/Potsdam/SLURM/run_config_array.job"
-        ).resolve()
+        script = Path(job_script or default_study_launcher(cell_array=False)).resolve()
         if throttle is not None:
             if throttle < 1:
                 raise ValueError("SLURM array throttle must be a positive integer")
@@ -464,49 +479,46 @@ def submit_study(
         )
     if not script.is_file():
         raise ValueError(f"SLURM study job script does not exist: {script}")
+    drain_policy = dict((execution_plan or {}).get("graceful_drain") or {})
+    signal_option = (
+        (f"--signal=B:{drain_policy['signal']}@{drain_policy['lead_seconds']}",)
+        if drain_policy.get("enabled") else ()
+    )
+    attempt = uuid.uuid4().hex
+    command = (
+        *command[:-2],
+        *signal_option,
+        *command[-2:],
+    )
     started = _now()
     try:
         completed = runner(command, check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError) as exc:
-        (study_dir / "submission.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "status": "failed",
-                    "submitted_at": started,
-                    "command": list(command),
-                    "error": str(exc),
-                },
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        _atomic_json(study_dir / "submission.json", {
+            "schema_version": 1,
+            "status": "failed",
+            "submitted_at": started,
+            "command": list(command),
+            "error": str(exc),
+        })
         raise ValueError(f"SLURM submission failed: {exc}") from exc
     stdout = completed.stdout.strip()
     match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", stdout, flags=re.IGNORECASE)
     if match is None:
         raise ValueError(f"could not parse SLURM job ID from sbatch output: {stdout!r}")
     job_id = match.group(1)
-    (study_dir / "submission.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "status": "submitted",
-                "submitted_at": started,
-                "job_id": job_id,
-                "array": array,
-                "command": list(command),
-                "stdout": stdout,
-                "execution_plan": execution_plan,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _atomic_json(study_dir / "submission.json", {
+        "schema_version": 1,
+        "status": "submitted",
+        "submitted_at": started,
+        "job_id": job_id,
+        "submission_attempt": attempt,
+        "study_manifest_hash": _file_hash(study_dir / "study_manifest.json"),
+        "array": array,
+        "command": list(command),
+        "stdout": stdout,
+        "execution_plan": execution_plan,
+    })
     return SubmissionResult(
         study_dir, manifest_path, job_id, entries, command, execution_plan
     )

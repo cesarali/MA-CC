@@ -20,5 +20,22 @@ readonly REPOSITORY_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
 # on sbatch inheriting the caller's working directory.
 cd "$REPOSITORY_ROOT"
 
-exec "$CONDA_EXE" run -n MA-CC --live-stream \
-  python -m mas_cc.studies.array_worker "$1"
+request_drain() {
+  drain_signal_seen=1
+  echo "[drain] early USR1 received; requesting graceful study drain" >&2
+  "$CONDA_EXE" run -n MA-CC --live-stream python -m mas_cc.cli.main study drain \
+    --study-dir "$(dirname "$1")" --job-id "${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}" \
+    --reason walltime_signal || echo "[drain] request failed" >&2
+}
+drain_signal_seen=0
+trap 'request_drain "$1"' USR1
+"$CONDA_EXE" run -n MA-CC --live-stream python -m mas_cc.studies.array_worker "$1" &
+child=$!
+while true; do
+  if wait "$child"; then status=0; else status=$?; fi
+  if [[ "$drain_signal_seen" -eq 1 && "$status" -eq 138 ]]; then
+    drain_signal_seen=0
+    continue
+  fi
+  exit "$status"
+done

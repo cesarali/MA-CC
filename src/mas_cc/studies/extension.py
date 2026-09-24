@@ -29,6 +29,8 @@ from .execution import (
     write_execution_manifest,
 )
 from .execution import read_execution_manifest
+from .drain import manifest_hash
+from .site import default_study_launcher
 from .identity import (
     PROTOCOL_FINGERPRINT_VERSION,
     SEED_CONTRACT_LEGACY_GRID_V1,
@@ -1224,9 +1226,14 @@ def extend_study(
     attempt = plan.submission_attempt
     logs = extension_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
-    script = Path(job_script or "scripts/Potsdam/SLURM/run_study_cell_array.job").resolve()
+    script = Path(job_script or default_study_launcher(cell_array=True)).resolve()
     if not script.is_file():
         raise ValueError(f"SLURM study job script does not exist: {script}")
+    drain_policy = dict(plan_payload.get("graceful_drain") or {})
+    signal_option = (
+        (f"--signal=B:{drain_policy['signal']}@{drain_policy['lead_seconds']}",)
+        if drain_policy.get("enabled") else ()
+    )
     command = (
         "sbatch",
         f"--partition={execution_plan.partition}",
@@ -1239,6 +1246,7 @@ def extend_study(
         f"--time={execution_plan.time_limit}",
         f"--output={logs / 'slurm-%A_%a.out'}",
         f"--error={logs / 'slurm-%A_%a.err'}",
+        *signal_option,
         str(script),
         str(execution_manifest),
     )
@@ -1266,6 +1274,7 @@ def extend_study(
             "status": status,
             "submitted_at": started,
             "job_id": job_id,
+            "study_manifest_hash": manifest_hash(root),
             "command": list(command),
             "error": error,
         },

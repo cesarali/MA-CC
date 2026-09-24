@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,9 +18,11 @@ from dotenv import load_dotenv
 from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.config.grid import GridAxis, GridCell
 from mas_cc.experiments import run_experiment_grid_sync
+from mas_cc.storage import validate_cell_artifact
 
 from .execution import read_execution_manifest
 from .runtime import configure_study_provider_load_control
+from .drain import worker_drain
 
 
 @dataclass(frozen=True)
@@ -50,7 +53,7 @@ class _GridCellShard:
         }
 
 
-def _run_entry(entry: Any) -> None:
+def _run_entry(entry: Any) -> str:
     source = load_run_config_or_grid(entry.config_path)
     if isinstance(source, GridSpec):
         cell = source.cells[entry.cell_index]
@@ -94,7 +97,20 @@ def _run_entry(entry: Any) -> None:
         f"[shard] config={entry.config_index} cell={cell.cell_id} "
         f"index={cell.index} output={output}", flush=True,
     )
-    run_experiment_grid_sync(shard, output, show_progress=False, episode_plan=episode_plan)
+    result = run_experiment_grid_sync(shard, output, show_progress=False, episode_plan=episode_plan)
+    if result is None:
+        return "finished"
+    statuses = {outcome.status for cell_result in result.cells for outcome in cell_result.outcomes}
+    if "failed" in statuses or "skipped_aborted" in statuses:
+        return "failed"
+    if "drained" in statuses:
+        return "drained"
+    if base.storage.retention_policy.compact_scientific:
+        seals = list(output.rglob("cell_complete.json"))
+        if len(seals) != 1:
+            return "finished"
+        validate_cell_artifact(seals[0].parent)
+    return "scientifically_complete"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,17 +132,25 @@ def main(argv: list[str] | None = None) -> int:
         if not selected:
             raise ValueError(f"SLURM array index {index} has no execution entries")
         load_dotenv(Path.cwd() / ".env", override=False)
-        if len(selected) == 1:
-            _run_entry(selected[0])
-        else:
-            print(
-                f"[bundle] array_index={index} cells={len(selected)}",
-                flush=True,
-            )
-            with ThreadPoolExecutor(max_workers=len(selected)) as executor:
-                futures = [executor.submit(_run_entry, entry) for entry in selected]
-                for future in futures:
-                    future.result()
+        with worker_drain(args[0], index) as controller:
+            if len(selected) == 1:
+                states = [_run_entry(selected[0])]
+            else:
+                print(
+                    f"[bundle] array_index={index} cells={len(selected)}",
+                    flush=True,
+                )
+                with ThreadPoolExecutor(max_workers=len(selected)) as executor:
+                    futures = [executor.submit(copy_context().run, _run_entry, entry)
+                               for entry in selected]
+                    states = [future.result() for future in futures]
+            if controller is not None:
+                controller.final_state = (
+                    "failed" if "failed" in states else
+                    "drained" if "drained" in states else "scientifically_complete"
+                )
+            if "failed" in states:
+                return 1
         return 0
     except (OSError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

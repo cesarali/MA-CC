@@ -85,6 +85,11 @@ coordinator state between providers.
 For read-only experiment monitoring and pace summaries, use the
 `report-job-pace` skill at `.codex/skills/report-job-pace/SKILL.md`.
 
+For requesting or inspecting a cooperative drain of a study submission or
+extension, use the `ma-cc-study-drain` skill at
+`.codex/skills/ma-cc-study-drain/SKILL.md`. A drain request is distinct from
+Slurm cancellation and does not authorize a new submission.
+
 Do not create study-specific SLURM job files unless the scheduler topology
 genuinely cannot be represented by the generic study launchers.
 

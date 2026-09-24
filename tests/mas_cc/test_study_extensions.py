@@ -135,7 +135,8 @@ def test_extension_dry_run_plans_complete_new_target_without_mutation(tmp_path):
     assert not (study_dir / "study_lineage.json").exists()
 
 
-def test_real_extension_writes_exact_episode_plans_and_submits_once(tmp_path):
+def test_real_extension_writes_exact_episode_plans_and_submits_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLURM_CLUSTER_NAME", "cygnus")
     study_dir, _ = _legacy_study(tmp_path, repetitions=2, values=(1, 2))
     index_existing_study(study_dir)
     target_dir = tmp_path / "configs-target"
@@ -143,7 +144,8 @@ def test_real_extension_writes_exact_episode_plans_and_submits_once(tmp_path):
     _config(target_dir / "grid.yaml", repetitions=4, values=(2, 1, 3))
     (target_dir / "study.yaml").write_text(
         "study: {name: extension-test}\nconfigs: [grid.yaml]\n"
-        "execution: {mode: auto, target_rpm: 60, assumed_latency_seconds: 1}\n",
+        "execution: {mode: auto, target_rpm: 60, assumed_latency_seconds: 1, "
+        "graceful_drain: {enabled: true, signal: USR1, lead_time: '01:00:00'}}\n",
         encoding="utf-8",
     )
     calls = []
@@ -155,6 +157,9 @@ def test_real_extension_writes_exact_episode_plans_and_submits_once(tmp_path):
     result = extend_study(study_dir, target_dir, run=fake_run)
     assert result.job_id == "99"
     assert len(calls) == 1
+    assert "scripts/Cygnus/SLURM/run_study_cell_array.job" in calls[0][-2]
+    assert "--signal=B:USR1@3600" in calls[0]
+    assert not any(option.startswith("--export") for option in calls[0])
     assert result.plan.extension_index == 1
     extension = study_dir / "extensions" / "extension-0001"
     assert (extension / "target_manifest.json").is_file()

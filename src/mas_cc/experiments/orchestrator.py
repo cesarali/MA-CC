@@ -80,6 +80,7 @@ from mas_cc.storage import (
     validate_episode_frame,
     validate_semantic_stream,
 )
+from mas_cc.studies.drain import Drained, current_controller
 
 from .aggregation import GridAggregator, aggregation_ground_truth
 from .comet_monitor import CellLayout, MasterMonitor, SweepLayout, sweep_parameters
@@ -955,12 +956,16 @@ class _RoundTickingObserver:
             **payload, budget_status=self.guard.checkpoint_state()
         )
 
+    @property
+    def drain_controller(self) -> Any:
+        return current_controller()
+
 
 @dataclass(frozen=True, slots=True)
 class EpisodeOutcome:
     episode_id: str
     seed: int
-    status: str  # "completed" | "failed" | "skipped_resumed" | "skipped_aborted"
+    status: str  # "completed" | "failed" | "skipped_resumed" | "skipped_aborted" | "drained"
     interactions: int | None = None
     termination_reason: str | None = None
     error_type: str | None = None
@@ -1604,6 +1609,13 @@ async def _execute_episode(
     """Run one episode; return ``(interaction_count, termination_reason)``."""
 
     runtime = _observer_runtime(game, episode_config, guarded_provider)
+    controller = current_controller()
+    if controller is not None:
+        controller.set_safe_point(
+            "branch" if getattr(episode_config.ensemble, "enabled", False) else
+            "round_replay" if episode_config.game.type == "relational_imitation_round_feedback"
+            else "episode"
+        )
     if runtime is not None:
         recorder_dir = (
             scientific_path.parent
@@ -1696,6 +1708,9 @@ async def _execute_episode(
         )
         try:
             result = await runtime(observer)
+        except Drained:
+            recorder.finalize(status="drained", budget_status=guard.checkpoint_state())
+            raise
         except Exception as exc:
             recorder.event(
                 "run_failed",
@@ -1910,7 +1925,17 @@ async def _run_episode_task(
             _finished(outcome)
             await _maybe_close_cell()
             return outcome
+        controller = current_controller()
+        if controller is not None and controller.requested:
+            outcome = _timed(EpisodeOutcome(task.episode_id, task.seed, "drained",
+                                            cell_id=task.cell_id,
+                                            termination_reason="drain_before_start"))
+            _persist(outcome)
+            _finished(outcome)
+            return outcome
         timing_token = _TIMING_EPISODE.set((task.cell_id, task.episode_id))
+        if controller is not None:
+            controller.work_started("episode")
         try:
             interactions, termination_reason = await _execute_episode(
                 game,
@@ -1940,6 +1965,9 @@ async def _run_episode_task(
                 termination_reason=termination_reason,
                 cell_id=task.cell_id,
             )
+        except Drained as exc:
+            outcome = EpisodeOutcome(task.episode_id, task.seed, "drained",
+                                     cell_id=task.cell_id, termination_reason=exc.boundary)
         except Exception as exc:
             if fail_fast:
                 abort.set()
@@ -1979,6 +2007,8 @@ async def _run_episode_task(
                     "episode %s failed: %s: %s", label, type(exc).__name__, exc
                 )
         finally:
+            if controller is not None:
+                controller.work_finished("episode")
             _TIMING_EPISODE.reset(timing_token)
         outcome = _timed(outcome)
         _persist(outcome)
@@ -1991,7 +2021,8 @@ async def _run_episode_task(
             )
     # Outside the semaphore: aggregating a completed cell must not hold a slot
     # that a queued episode of another cell could be running in.
-    await _maybe_close_cell()
+    if outcome.status != "drained":
+        await _maybe_close_cell()
     return outcome
 
 

@@ -79,6 +79,10 @@ cat $RESULTS/submission.json            # records the exact sbatch command and j
 squeue -u $USER
 ```
 What it submitted for b9/b15: `--array=0-5%6 --cpus-per-task=8 --mem=12G --time=36:00:00`.
+With the drain-capable submitter, `--job-script` is optional for ordinary
+studies: it detects Slurm cluster `cygnus` and selects the corresponding
+generic config or cell launcher. Keep an explicit path when intentionally
+overriding that choice.
 
 ### 2.4 Watch
 ```bash
@@ -88,6 +92,33 @@ find $RESULTS/runs -name cell_complete.json | wc -l      # sealed cells
 Measured: 360 episodes in 5 h 48 min with 6 shards; per call ≈ 25.5 s client-side
 against 8.6 s model time (the gap is runner-side). Episode runtime statistics and the
 per-round latency breakdown are in the bucket next to the run.
+
+### 2.5 Graceful drain and same-root resume
+
+For a study submitted with this drain-capable code and the matching generic
+Cygnus launcher, request a resumable stop with:
+
+```bash
+$PY -m mas_cc.cli.main study drain --study-dir "$RESULTS" --job-id <array-job-id> --reason manual --wait
+$PY -m mas_cc.cli.main study status --study-dir "$RESULTS" --job-id <array-job-id>
+```
+
+The same manual command works for a newly submitted `study extend` array:
+use that extension's new job ID in both commands. It requires no YAML change. Extension
+submission selects the Cygnus cell-array launcher and records its own attempt;
+after a drain, reconcile extension state and resume the same target with
+`study extend` before starting another target for that study root.
+
+`--wait` observes every planned shard. Check for `drained_incomplete` or
+`scientifically_complete` before considering `scancel`; the command itself
+never cancels. A later authorized `study submit` with the same config folder
+and result root reuses valid scientific seals. To ask Slurm to initiate the
+same drain before wall time, add `execution.graceful_drain: {enabled: true,
+signal: USR1, lead_time: '04:00:00'}` to `study.yaml`; the lead must be shorter
+than the job time limit. Workers read the submission attempt from the study
+root or extension attempt record. Do not pass `sbatch --export`, which this cluster holds. Jobs
+started before the drain-capable worker and launcher code was installed cannot
+be retrofitted while running.
 
 ## 3 · Aggregate
 
