@@ -1,0 +1,278 @@
+{
+ "agent_assignments": {
+  "agent_001": [
+   "cf_x07_le_2"
+  ],
+  "agent_002": [
+   "cf_x01_le_2"
+  ],
+  "agent_003": [
+   "cf_x03_le_x04"
+  ],
+  "agent_004": [
+   "cf_x01_eq_x05"
+  ],
+  "agent_005": [
+   "cf_x08_eq_2"
+  ],
+  "agent_006": [
+   "cf_x04_eq_2"
+  ],
+  "agent_007": [
+   "cf_x02_ge_x05"
+  ],
+  "agent_008": [
+   "cf_x00_ge_2"
+  ],
+  "agent_009": [
+   "cf_x08_ge_2"
+  ],
+  "agent_010": [
+   "cf_x03_ge_x05"
+  ],
+  "agent_011": [
+   "cf_x01_le_x02"
+  ],
+  "agent_012": [
+   "cf_x02_le_x04"
+  ],
+  "agent_013": [
+   "cf_x05_le_2"
+  ],
+  "agent_014": [
+   "cf_x08_le_2"
+  ],
+  "agent_015": [
+   "cf_x04_le_2"
+  ]
+ },
+ "population_size": 15,
+ "profiles": [
+  {
+   "Hbar": 0.9643208582544454,
+   "M": 0.3966579634464752,
+   "agent_id": "agent_001",
+   "compatible_worlds": 9575,
+   "posterior_vector": [
+    0.3966579634464752,
+    0.20668407310704962,
+    0.3966579634464752
+   ],
+   "private_fact_ids": [
+    "cf_x07_le_2"
+   ],
+   "source_agent_id": "agent_007"
+  },
+  {
+   "Hbar": 0.9745771144918033,
+   "M": 0.4473048229484081,
+   "agent_id": "agent_002",
+   "compatible_worlds": 9517,
+   "posterior_vector": [
+    0.4473048229484081,
+    0.27634758852579594,
+    0.27634758852579594
+   ],
+   "private_fact_ids": [
+    "cf_x01_le_2"
+   ],
+   "source_agent_id": "agent_008"
+  },
+  {
+   "Hbar": 0.9817612299404918,
+   "M": 0.37922780726402333,
+   "agent_id": "agent_003",
+   "compatible_worlds": 9609,
+   "posterior_vector": [
+    0.24154438547195337,
+    0.37922780726402333,
+    0.37922780726402333
+   ],
+   "private_fact_ids": [
+    "cf_x03_le_x04"
+   ],
+   "source_agent_id": "agent_009"
+  },
+  {
+   "Hbar": 0.9944189694703461,
+   "M": 0.3861597607859889,
+   "agent_id": "agent_004",
+   "compatible_worlds": 4682,
+   "posterior_vector": [
+    0.30692011960700555,
+    0.3861597607859889,
+    0.30692011960700555
+   ],
+   "private_fact_ids": [
+    "cf_x01_eq_x05"
+   ],
+   "source_agent_id": "agent_010"
+  },
+  {
+   "Hbar": 0.9984616167249638,
+   "M": 0.3469387755102041,
+   "agent_id": "agent_005",
+   "compatible_worlds": 4704,
+   "posterior_vector": [
+    0.30612244897959184,
+    0.3469387755102041,
+    0.3469387755102041
+   ],
+   "private_fact_ids": [
+    "cf_x08_eq_2"
+   ],
+   "source_agent_id": "agent_011"
+  },
+  {
+   "Hbar": 0.9984616167249638,
+   "M": 0.3469387755102041,
+   "agent_id": "agent_006",
+   "compatible_worlds": 4704,
+   "posterior_vector": [
+    0.3469387755102041,
+    0.3469387755102041,
+    0.30612244897959184
+   ],
+   "private_fact_ids": [
+    "cf_x04_eq_2"
+   ],
+   "source_agent_id": "agent_014"
+  },
+  {
+   "Hbar": 0.9817612299404918,
+   "M": 0.37922780726402333,
+   "agent_id": "agent_007",
+   "compatible_worlds": 9609,
+   "posterior_vector": [
+    0.24154438547195337,
+    0.37922780726402333,
+    0.37922780726402333
+   ],
+   "private_fact_ids": [
+    "cf_x02_ge_x05"
+   ],
+   "source_agent_id": "agent_015"
+  },
+  {
+   "Hbar": 0.9745771144918033,
+   "M": 0.4473048229484081,
+   "agent_id": "agent_008",
+   "compatible_worlds": 9517,
+   "posterior_vector": [
+    0.4473048229484081,
+    0.27634758852579594,
+    0.27634758852579594
+   ],
+   "private_fact_ids": [
+    "cf_x00_ge_2"
+   ],
+   "source_agent_id": "agent_016"
+  },
+  {
+   "Hbar": 0.9745771144918033,
+   "M": 0.4473048229484081,
+   "agent_id": "agent_009",
+   "compatible_worlds": 9517,
+   "posterior_vector": [
+    0.4473048229484081,
+    0.27634758852579594,
+    0.27634758852579594
+   ],
+   "private_fact_ids": [
+    "cf_x08_ge_2"
+   ],
+   "source_agent_id": "agent_017"
+  },
+  {
+   "Hbar": 0.9570945603526985,
+   "M": 0.448977451494494,
+   "agent_id": "agent_010",
+   "compatible_worlds": 9535,
+   "posterior_vector": [
+    0.346303093864709,
+    0.20471945464079708,
+    0.448977451494494
+   ],
+   "private_fact_ids": [
+    "cf_x03_ge_x05"
+   ],
+   "source_agent_id": "agent_018"
+  },
+  {
+   "Hbar": 0.9817612299404918,
+   "M": 0.37922780726402333,
+   "agent_id": "agent_011",
+   "compatible_worlds": 9609,
+   "posterior_vector": [
+    0.37922780726402333,
+    0.37922780726402333,
+    0.24154438547195337
+   ],
+   "private_fact_ids": [
+    "cf_x01_le_x02"
+   ],
+   "source_agent_id": "agent_019"
+  },
+  {
+   "Hbar": 0.9570945603526985,
+   "M": 0.448977451494494,
+   "agent_id": "agent_012",
+   "compatible_worlds": 9535,
+   "posterior_vector": [
+    0.346303093864709,
+    0.20471945464079708,
+    0.448977451494494
+   ],
+   "private_fact_ids": [
+    "cf_x02_le_x04"
+   ],
+   "source_agent_id": "agent_020"
+  },
+  {
+   "Hbar": 0.9745771144918033,
+   "M": 0.4473048229484081,
+   "agent_id": "agent_013",
+   "compatible_worlds": 9517,
+   "posterior_vector": [
+    0.27634758852579594,
+    0.27634758852579594,
+    0.4473048229484081
+   ],
+   "private_fact_ids": [
+    "cf_x05_le_2"
+   ],
+   "source_agent_id": "agent_021"
+  },
+  {
+   "Hbar": 0.9643208582544454,
+   "M": 0.3966579634464752,
+   "agent_id": "agent_014",
+   "compatible_worlds": 9575,
+   "posterior_vector": [
+    0.20668407310704962,
+    0.3966579634464752,
+    0.3966579634464752
+   ],
+   "private_fact_ids": [
+    "cf_x08_le_2"
+   ],
+   "source_agent_id": "agent_022"
+  },
+  {
+   "Hbar": 0.9643208582544454,
+   "M": 0.3966579634464752,
+   "agent_id": "agent_015",
+   "compatible_worlds": 9575,
+   "posterior_vector": [
+    0.3966579634464752,
+    0.3966579634464752,
+    0.20668407310704962
+   ],
+   "private_fact_ids": [
+    "cf_x04_le_2"
+   ],
+   "source_agent_id": "agent_024"
+  }
+ ],
+ "schema_version": "musr_truthful_selective_private_v1"
+}

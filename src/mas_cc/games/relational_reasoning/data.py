@@ -646,8 +646,8 @@ def _load_musr_truthful_selective_task(
     from mas_cc.musr_team_allocation_generator.schemas import LatentProblem
     from mas_cc.musr_team_allocation_generator.symbolic_facts import CanonicalFact
 
-    if population_size != 24:
-        raise RelationalTaskError("truthful-selective tasks require population_size 24")
+    if population_size < 2:
+        raise RelationalTaskError("truthful-selective tasks require at least 2 agents")
     expected_hash = _sha256_object(
         {key: value for key, value in task.items() if key != "task_hash"}
     )
@@ -661,7 +661,7 @@ def _load_musr_truthful_selective_task(
         "controller/selected_C6.json",
         "controller/selected_C12.json",
         "controller/selected_C24.json",
-        "private/N24_assignment.json",
+        f"private/N{population_size}_assignment.json",
     )
     missing = [name for name in required if not (root / name).is_file()]
     if missing:
@@ -715,13 +715,12 @@ def _load_musr_truthful_selective_task(
         for fact in canonical
     }
     order = tuple(fact.fact_id for fact in canonical)
-    private = json.loads(
-        (root / "private/N24_assignment.json").read_text(encoding="utf-8")
-    )
+    assignment_name = f"private/N{population_size}_assignment.json"
+    private = json.loads((root / assignment_name).read_text(encoding="utf-8"))
     assignments_raw = _mapping(
         private.get("agent_assignments"),
         "agent_assignments",
-        root / "private/N24_assignment.json",
+        root / assignment_name,
     )
     assignments = {
         str(agent): tuple(str(fact_id) for fact_id in fact_ids)

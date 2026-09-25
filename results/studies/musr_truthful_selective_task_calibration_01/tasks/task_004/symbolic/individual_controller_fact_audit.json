@@ -1,0 +1,676 @@
+[
+  {
+    "Hbar": 0.8792749414858525,
+    "M": 0.5852898400166217,
+    "canonical_fact_text": "Chandra's skill for conduct stakeholder interviews is limited.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4813,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        5
+      ]
+    },
+    "fact_id": "cf_x05_eq_1",
+    "posterior_vector": [
+      0.20735507999168917,
+      0.20735507999168917,
+      0.5852898400166217
+    ],
+    "valid_probability_mass": 0.24452573286592483
+  },
+  {
+    "Hbar": 0.956683576057787,
+    "M": 0.4828428768724105,
+    "canonical_fact_text": "Chandra's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9413,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p2_t0",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        4,
+        5
+      ]
+    },
+    "fact_id": "cf_x04_ge_x05",
+    "posterior_vector": [
+      0.2585785615637948,
+      0.2585785615637948,
+      0.4828428768724105
+    ],
+    "valid_probability_mass": 0.4782299446222627
+  },
+  {
+    "Hbar": 0.9570945603526985,
+    "M": 0.448977451494494,
+    "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9535,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t1",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        1,
+        5
+      ]
+    },
+    "fact_id": "cf_x01_ge_x05",
+    "posterior_vector": [
+      0.20471945464079708,
+      0.346303093864709,
+      0.448977451494494
+    ],
+    "valid_probability_mass": 0.4844281867601482
+  },
+  {
+    "Hbar": 0.9570945603526985,
+    "M": 0.448977451494494,
+    "canonical_fact_text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for build the data pipeline.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9535,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t0",
+        "skill_p2_t0"
+      ],
+      "latent_indices": [
+        2,
+        4
+      ]
+    },
+    "fact_id": "cf_x02_le_x04",
+    "posterior_vector": [
+      0.346303093864709,
+      0.20471945464079708,
+      0.448977451494494
+    ],
+    "valid_probability_mass": 0.4844281867601482
+  },
+  {
+    "Hbar": 0.9570945603526985,
+    "M": 0.448977451494494,
+    "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9535,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t1",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        3,
+        5
+      ]
+    },
+    "fact_id": "cf_x03_ge_x05",
+    "posterior_vector": [
+      0.346303093864709,
+      0.20471945464079708,
+      0.448977451494494
+    ],
+    "valid_probability_mass": 0.4844281867601482
+  },
+  {
+    "Hbar": 0.9570945603526985,
+    "M": 0.448977451494494,
+    "canonical_fact_text": "The cooperation of alice and bruno is at least as strong as the cooperation of Alice and Chandra.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9535,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p0_p1",
+        "coop_p0_p2"
+      ],
+      "latent_indices": [
+        6,
+        7
+      ]
+    },
+    "fact_id": "cf_x06_ge_x07",
+    "posterior_vector": [
+      0.346303093864709,
+      0.20471945464079708,
+      0.448977451494494
+    ],
+    "valid_probability_mass": 0.4844281867601482
+  },
+  {
+    "Hbar": 0.9745771144918033,
+    "M": 0.4473048229484081,
+    "canonical_fact_text": "Chandra's skill for build the data pipeline is at least moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9517,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p2_t0"
+      ],
+      "latent_indices": [
+        4
+      ]
+    },
+    "fact_id": "cf_x04_ge_2",
+    "posterior_vector": [
+      0.27634758852579594,
+      0.27634758852579594,
+      0.4473048229484081
+    ],
+    "valid_probability_mass": 0.483513692018493
+  },
+  {
+    "Hbar": 0.9745771144918033,
+    "M": 0.4473048229484081,
+    "canonical_fact_text": "Chandra's skill for conduct stakeholder interviews is at most moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9517,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        5
+      ]
+    },
+    "fact_id": "cf_x05_le_2",
+    "posterior_vector": [
+      0.27634758852579594,
+      0.27634758852579594,
+      0.4473048229484081
+    ],
+    "valid_probability_mass": 0.483513692018493
+  },
+  {
+    "Hbar": 0.8777704655561077,
+    "M": 0.44467255183740506,
+    "canonical_fact_text": "Bruno's skill for build the data pipeline is limited.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4871,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t0"
+      ],
+      "latent_indices": [
+        2
+      ]
+    },
+    "fact_id": "cf_x02_eq_1",
+    "posterior_vector": [
+      0.44467255183740506,
+      0.1106548963251899,
+      0.44467255183740506
+    ],
+    "valid_probability_mass": 0.2474724381445917
+  },
+  {
+    "Hbar": 0.8777704655561077,
+    "M": 0.44467255183740506,
+    "canonical_fact_text": "The cooperation of alice and chandra is poor.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4871,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p0_p2"
+      ],
+      "latent_indices": [
+        7
+      ]
+    },
+    "fact_id": "cf_x07_eq_1",
+    "posterior_vector": [
+      0.44467255183740506,
+      0.1106548963251899,
+      0.44467255183740506
+    ],
+    "valid_probability_mass": 0.2474724381445917
+  },
+  {
+    "Hbar": 0.9909907460567596,
+    "M": 0.4006413571945795,
+    "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at least as strong as Bruno's skill for build the data pipeline.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9667,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t1",
+        "skill_p1_t0"
+      ],
+      "latent_indices": [
+        1,
+        2
+      ]
+    },
+    "fact_id": "cf_x01_ge_x02",
+    "posterior_vector": [
+      0.29967932140271025,
+      0.29967932140271025,
+      0.4006413571945795
+    ],
+    "valid_probability_mass": 0.49113448153228656
+  },
+  {
+    "Hbar": 0.9643208582544454,
+    "M": 0.3966579634464752,
+    "canonical_fact_text": "Bruno's skill for build the data pipeline is at most moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9575,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t0"
+      ],
+      "latent_indices": [
+        2
+      ]
+    },
+    "fact_id": "cf_x02_le_2",
+    "posterior_vector": [
+      0.3966579634464752,
+      0.20668407310704962,
+      0.3966579634464752
+    ],
+    "valid_probability_mass": 0.48646039729715984
+  },
+  {
+    "Hbar": 0.9643208582544454,
+    "M": 0.3966579634464752,
+    "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at least moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9575,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t1"
+      ],
+      "latent_indices": [
+        3
+      ]
+    },
+    "fact_id": "cf_x03_ge_2",
+    "posterior_vector": [
+      0.3966579634464752,
+      0.20668407310704962,
+      0.3966579634464752
+    ],
+    "valid_probability_mass": 0.48646039729715984
+  },
+  {
+    "Hbar": 0.9643208582544454,
+    "M": 0.3966579634464752,
+    "canonical_fact_text": "The cooperation of alice and chandra is at most moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9575,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p0_p2"
+      ],
+      "latent_indices": [
+        7
+      ]
+    },
+    "fact_id": "cf_x07_le_2",
+    "posterior_vector": [
+      0.3966579634464752,
+      0.20668407310704962,
+      0.3966579634464752
+    ],
+    "valid_probability_mass": 0.48646039729715984
+  },
+  {
+    "Hbar": 0.9643208582544454,
+    "M": 0.3966579634464752,
+    "canonical_fact_text": "The cooperation of bruno and chandra is at most moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9575,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p1_p2"
+      ],
+      "latent_indices": [
+        8
+      ]
+    },
+    "fact_id": "cf_x08_le_2",
+    "posterior_vector": [
+      0.20668407310704962,
+      0.3966579634464752,
+      0.3966579634464752
+    ],
+    "valid_probability_mass": 0.48646039729715984
+  },
+  {
+    "Hbar": 0.9817612299404918,
+    "M": 0.37922780726402333,
+    "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9609,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t0",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        0,
+        5
+      ]
+    },
+    "fact_id": "cf_x00_ge_x05",
+    "posterior_vector": [
+      0.37922780726402333,
+      0.24154438547195337,
+      0.37922780726402333
+    ],
+    "valid_probability_mass": 0.4881877762536197
+  },
+  {
+    "Hbar": 0.9817612299404918,
+    "M": 0.37922780726402333,
+    "canonical_fact_text": "Bruno's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9609,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t0",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        2,
+        5
+      ]
+    },
+    "fact_id": "cf_x02_ge_x05",
+    "posterior_vector": [
+      0.24154438547195337,
+      0.37922780726402333,
+      0.37922780726402333
+    ],
+    "valid_probability_mass": 0.4881877762536197
+  },
+  {
+    "Hbar": 0.9817612299404918,
+    "M": 0.37922780726402333,
+    "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9609,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t1",
+        "skill_p2_t0"
+      ],
+      "latent_indices": [
+        3,
+        4
+      ]
+    },
+    "fact_id": "cf_x03_le_x04",
+    "posterior_vector": [
+      0.24154438547195337,
+      0.37922780726402333,
+      0.37922780726402333
+    ],
+    "valid_probability_mass": 0.4881877762536197
+  },
+  {
+    "Hbar": 0.995291729165619,
+    "M": 0.35699672667757776,
+    "canonical_fact_text": "Bruno's skill for build the data pipeline is at the same level as Chandra's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4888,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t0",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        2,
+        5
+      ]
+    },
+    "fact_id": "cf_x02_eq_x05",
+    "posterior_vector": [
+      0.28600654664484454,
+      0.35699672667757776,
+      0.35699672667757776
+    ],
+    "valid_probability_mass": 0.24833612762282165
+  },
+  {
+    "Hbar": 0.995291729165619,
+    "M": 0.35699672667757776,
+    "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at the same level as Chandra's skill for build the data pipeline.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4888,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t1",
+        "skill_p2_t0"
+      ],
+      "latent_indices": [
+        3,
+        4
+      ]
+    },
+    "fact_id": "cf_x03_eq_x04",
+    "posterior_vector": [
+      0.28600654664484454,
+      0.35699672667757776,
+      0.35699672667757776
+    ],
+    "valid_probability_mass": 0.24833612762282165
+  },
+  {
+    "Hbar": 0.9984616167249638,
+    "M": 0.3469387755102041,
+    "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is moderate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4704,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t1"
+      ],
+      "latent_indices": [
+        3
+      ]
+    },
+    "fact_id": "cf_x03_eq_2",
+    "posterior_vector": [
+      0.3469387755102041,
+      0.30612244897959184,
+      0.3469387755102041
+    ],
+    "valid_probability_mass": 0.23898795915256812
+  },
+  {
+    "Hbar": 0.9984616167249638,
+    "M": 0.3469387755102041,
+    "canonical_fact_text": "The cooperation of bruno and chandra is adequate.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 4704,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p1_p2"
+      ],
+      "latent_indices": [
+        8
+      ]
+    },
+    "fact_id": "cf_x08_eq_2",
+    "posterior_vector": [
+      0.30612244897959184,
+      0.3469387755102041,
+      0.3469387755102041
+    ],
+    "valid_probability_mass": 0.23898795915256812
+  },
+  {
+    "Hbar": 0.9570945603526985,
+    "M": 0.448977451494494,
+    "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for build the data pipeline.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9535,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t0",
+        "skill_p1_t0"
+      ],
+      "latent_indices": [
+        0,
+        2
+      ]
+    },
+    "fact_id": "cf_x00_ge_x02",
+    "posterior_vector": [
+      0.448977451494494,
+      0.20471945464079708,
+      0.346303093864709
+    ],
+    "valid_probability_mass": 0.4844281867601482
+  },
+  {
+    "Hbar": 0.9570945603526985,
+    "M": 0.448977451494494,
+    "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Bruno's skill for conduct stakeholder interviews.",
+    "compatible_allocations": [
+      "ALLOCATION_0",
+      "ALLOCATION_1",
+      "ALLOCATION_2"
+    ],
+    "compatible_worlds": 9535,
+    "exact_provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t1",
+        "skill_p1_t1"
+      ],
+      "latent_indices": [
+        1,
+        3
+      ]
+    },
+    "fact_id": "cf_x01_le_x03",
+    "posterior_vector": [
+      0.448977451494494,
+      0.20471945464079708,
+      0.346303093864709
+    ],
+    "valid_probability_mass": 0.4844281867601482
+  }
+]

@@ -1,0 +1,2954 @@
+[
+  {
+    "audit_prompt_hash": "d7ebb3a1b2f2cf5fb0a2ab06dbaf9b4cba5890adc679827cc0f6b18152bd4d1b",
+    "audit_seed": 5640466019405894397,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is strong.",
+      "fact_id": "cf_x00_eq_3",
+      "kind": "skill_exact",
+      "logical_signature": [
+        "eq_value",
+        0,
+        null,
+        3
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 3
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0"
+        ],
+        "latent_indices": [
+          0
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_eq_3",
+    "generated_card_text": [
+      "During the customer-analytics rollout, Alice connected four vendor feeds, added schema checks, and resolved the overnight duplicate-record failures before the launch date.",
+      "In the following quarter, the operations team kept using Alice's monitoring dashboard because it identified delayed file deliveries early enough for them to rerun the affected jobs."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card gives concrete evidence that Alice successfully built and operated data-pipeline-related systems, including feed integration, schema checks, duplicate-resolution, and monitoring. It supports a strong skill characterization without stating an exact level, score, allocation, or any stronger certainty than the evidence warrants. The two statements are coherent parts of the same customer-analytics and subsequent operational-use context."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "483025f60e9f54a6a9ae99e77280ede106bdf59f627dc42456d34d4b3b7701b5",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "73dd6685b0ea7ac1d9062b0fee3f61ad191dccd255ae0c5a8dbef1280b1ec8da",
+    "audit_seed": 195179977520447004,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is at least moderate.",
+      "fact_id": "cf_x00_ge_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "ge_threshold",
+        0,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "ge_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0"
+        ],
+        "latent_indices": [
+          0
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_ge_2",
+    "generated_card_text": [
+      "During last quarter's reporting migration, Alice wrote a script that pulled daily CSV exports from three vendors, normalized their date and currency fields, and loaded the cleaned records into the analytics warehouse.",
+      "When one vendor changed its column headers midweek, Alice updated the transformation logic, reran the affected loads, and documented the fix for the rest of the project team."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides concrete evidence of Alice building and maintaining an ETL-style data pipeline, including extraction, normalization, loading, adaptation to schema changes, reruns, and documentation. It supports at-least-moderate skill without stating an exact level, stronger guarantee, allocation outcome, or hidden score."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "8a9d3ca7acd40ca3720db0b8da379e103b19e361f237bdaa2601483bb6bd5796",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "3f099e24b2ca45f5a71279ac2f85d050f7d6f72407b26ae5cdc3c45bbe2f33e0",
+    "audit_seed": 3738730578541593199,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is limited.",
+      "fact_id": "cf_x01_eq_1",
+      "kind": "skill_exact",
+      "logical_signature": [
+        "eq_value",
+        1,
+        null,
+        1
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 1
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1"
+        ],
+        "latent_indices": [
+          1
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_eq_1",
+    "generated_card_text": [
+      "During last quarter's vendor-feedback meeting, Alice relied on a prepared script and moved to the next topic after several short answers.",
+      "The project lead later scheduled follow-up conversations because the meeting notes contained few details about the vendors' priorities or concerns."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides coherent, concrete evidence of weak stakeholder interviewing: reliance on a script, superficial responses, and follow-up meetings due to missing vendor-priority details. It supports a limited skill characterization without stating an exact level, reversing meaning, adding unsupported conclusions, or exposing hidden allocation data."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "363d02d260dc1cb8b937adf9b19d56f85c8bc10ae831e60b79d12f2566fc8240",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "cd4137ebfcb76461c9d57a6d1490ecdeb92d9e5361d41712a56ef316dfdb389a",
+    "audit_seed": 9042824401557203307,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at most moderate.",
+      "fact_id": "cf_x01_le_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "le_threshold",
+        1,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1"
+        ],
+        "latent_indices": [
+          1
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_le_2",
+    "generated_card_text": [
+      "During the April discovery meeting, Alice led the conversation with the regional operations director, but the director repeatedly redirected questions to a project analyst for clarification.",
+      "The follow-up notes recorded that no decision owner, timeline, or next step had been confirmed by the end of the meeting."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The meeting behavior and unresolved follow-up provide plausible qualitative evidence that Alice's stakeholder-interview skill is not above a moderate level. The card does not assert an exact skill level, reverse the at-most direction, make a definitive causal claim, or disclose hidden scores, allocations, or answers. Both statements concern the same April discovery meeting and its follow-up."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "c3dd6d280f2bfc7725cc4e8457c17760b02db4769b802281f1315cc3ba340276",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "07d5d843b13410fb19526d6e8da8ed5c3a1b4cd1bb85ee2c0034be08d34dcabd",
+    "audit_seed": 1026676942134292431,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is limited.",
+      "fact_id": "cf_x02_eq_1",
+      "kind": "skill_exact",
+      "logical_signature": [
+        "eq_value",
+        2,
+        null,
+        1
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 1
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0"
+        ],
+        "latent_indices": [
+          2
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_eq_1",
+    "generated_card_text": [
+      "During the April reporting-system rollout, Bruno submitted a data import script that duplicated several customer records after a rerun.",
+      "Alice spent the following day tracing the duplicate logic, revising the script, and documenting a safer restart procedure before the release could continue."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The script failure, duplicated records, and need for Alice to diagnose and repair Bruno's work provide plausible evidence of limited pipeline-building skill. The card does not state any numeric level, exact score, allocation, or stronger certainty than the incident supports, and both statements describe the same rollout event."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "5a400a34832a6f23c5ef7f9b0efb8bb06859065a8bf1dd7024b61f528e81792f",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "f27c54e85bc4618d837a1dc52ce3de1eb74933da553040749b0f942d3f36c5b2",
+    "audit_seed": 3895208191326920870,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is at most moderate.",
+      "fact_id": "cf_x02_le_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "le_threshold",
+        2,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0"
+        ],
+        "latent_indices": [
+          2
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_le_2",
+    "generated_card_text": [
+      "During the customer-records migration last spring, Bruno implemented the first extraction-and-loading workflow for the reporting database.",
+      "After the initial run produced duplicated records and missing date fields, Alice replaced the loading logic before the migration could be completed."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Bruno's initial pipeline workflow produced material data-quality failures and was replaced by Alice, providing plausible evidence that his relevant skill was not above moderate. The card states no exact level or stronger conclusion, preserves the at-most direction, contains no hidden-state information, and describes one coherent migration incident."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "bcfe9ec06d0fbcf612003d3bba1be1857c0eb13987db2dd0fbe7eb70420b8d8e",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "946619480aad53a52fa70822f1cf95d1eb0247f28e7abbf0e78c8c7f24103cd3",
+    "audit_seed": 3704568371981487275,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is moderate.",
+      "fact_id": "cf_x03_eq_2",
+      "kind": "skill_exact",
+      "logical_signature": [
+        "eq_value",
+        3,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1"
+        ],
+        "latent_indices": [
+          3
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_eq_2",
+    "generated_card_text": [
+      "During the April billing-system discovery session, Bruno used a prepared question list to capture the finance team’s approval steps and circulated notes that the attendees confirmed as accurate.",
+      "When the same group raised conflicting exception-handling requests the following week, Bruno asked the project lead to join a follow-up meeting to clarify priorities and resolve the disagreement."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides calibrated behavioral evidence of moderate stakeholder-interview skill: Bruno conducts structured interviews and documents accurately, while escalating conflicting requirements for clarification rather than independently resolving them. It states no numeric level, allocation, score, or stronger certainty claim, and the two statements form a coherent sequence involving the same stakeholder group."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "a9e3a5d4a0926e21377868f2d5d62ea02138906cb9144fcccd0318734278716a",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "7c91835011b4e48116b76114c162c963d1e4b2ab6afddadecb4adde7066b87d4",
+    "audit_seed": 2547002874405272557,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at least moderate.",
+      "fact_id": "cf_x03_ge_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "ge_threshold",
+        3,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "ge_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1"
+        ],
+        "latent_indices": [
+          3
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_ge_2",
+    "generated_card_text": [
+      "During a March vendor discovery meeting, Bruno asked the operations lead to describe the approval process step by step and followed up on two exceptions the lead mentioned.",
+      "After the meeting, the product owner used Bruno's notes to create a checklist of open questions for the next discussion."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Bruno’s structured questioning, follow-up on exceptions, and notes being useful for a subsequent checklist are plausible evidence of at least moderate stakeholder-interview skill. The card does not state a numeric level, exact score, allocation, or stronger certainty, and both statements concern the same meeting and its immediate follow-up."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "2f71f855cf4507b505c3aa0bdac413556d1ee48ae7fdda98efacce534ae0c96f",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "564c26add6a004cb1604ca86111b46794f5f97ad4824af4af81aef92accf9dec",
+    "audit_seed": 5368943755072266015,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at most moderate.",
+      "fact_id": "cf_x03_le_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "le_threshold",
+        3,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1"
+        ],
+        "latent_indices": [
+          3
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_le_2",
+    "generated_card_text": [
+      "At the April customer-discovery session, Bruno led the stakeholder interviews while the project manager observed.",
+      "Afterward, the manager had to repeat several conversations because Bruno's notes omitted key decision criteria and mixed together comments from different participants."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides concrete, negative performance evidence from Bruno's stakeholder-interview session: incomplete notes and conflated participant feedback required repeated conversations. This plausibly supports an at-most-moderate interview skill assessment without asserting an exact level, reversing the bound, revealing hidden state, or making an allocation recommendation."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "694eda88a66f619b386e766f914f1ca200a796ef3fb4b8c5f2a15f4ac9ca8356",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "ca3a3ce4e31f121db8bc2c0040932880012c9fa29c0d9a809029999632ee48a6",
+    "audit_seed": 6200530012080408090,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Chandra's skill for build the data pipeline is moderate.",
+      "fact_id": "cf_x04_eq_2",
+      "kind": "skill_exact",
+      "logical_signature": [
+        "eq_value",
+        4,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 4,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x04_eq_2",
+    "generated_card_text": [
+      "During the customer-import project, Chandra implemented the scripts that pulled records from three external systems and loaded them into the warehouse.",
+      "After the first production run exposed duplicate records and failed retries, a teammate helped Chandra revise the error-handling and monitoring setup."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card presents mixed evidence: Chandra implemented a multi-system data pipeline, while needing teammate assistance to address production error handling and monitoring. This plausibly supports a moderate skill assessment without asserting an exact level, reversing any meaning, leaking hidden values, or making an unsupported allocation conclusion. Both statements concern the same customer-import project and its production follow-up."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "64e4a609511ccd5dbc5b07a402b5fd180e2331ff1d43ab13b1fbc022c5fbe60b",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "1aa8c990593d183f848a3269882e9867e3eb43f42d74f57c084061220fe0a4ef",
+    "audit_seed": 8775866133292453837,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Chandra's skill for build the data pipeline is at least moderate.",
+      "fact_id": "cf_x04_ge_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "ge_threshold",
+        4,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 4,
+        "operator": "ge_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x04_ge_2",
+    "generated_card_text": [
+      "During an April vendor-file pilot, Chandra wrote a script that loaded weekly CSV exports into a staging table, standardized date formats, and flagged duplicate rows.",
+      "After Chandra documented the rerun steps, the operations lead used the script for three consecutive weekly refreshes without needing changes to its core logic."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides concrete, plausible evidence that Chandra can build and operationalize a data-pipeline script, supporting at least moderate skill. It does not state an exact skill level, stronger guarantee, allocation outcome, score, or hidden option identity, and the pilot and subsequent refreshes form one coherent event sequence."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "0238d23ec8505a5bb5c80b6cb517fb35883812684dfafab6f651f9fe55d2a0e8",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "78d5acc81ac653df45ae801b1825e07b7093d4779ea5ea6135aeb6f0eb2304a6",
+    "audit_seed": 1178754907965332350,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Chandra's skill for build the data pipeline is at most moderate.",
+      "fact_id": "cf_x04_le_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "le_threshold",
+        4,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 4,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x04_le_2",
+    "generated_card_text": [
+      "During the April reporting pilot, Chandra’s extraction job produced duplicate customer records after a schema change.",
+      "Bruno rebuilt the transformation step and added validation checks before the pilot data could be shared with analysts."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Chandra’s pipeline-related extraction failure after a schema change, followed by Bruno rebuilding and validating the transformation, is plausible evidence that Chandra’s relevant skill is not above moderate. The card does not state an exact skill level, reverse the at-most direction, make a definitive skill claim, reveal hidden scores or allocation information, and both statements describe the same pilot incident."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "ab2b80eba4818de901bf74d98f9f63521e38479d0220d9abd6a8f441ebd809f7",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "a615335546aa78805985f9a0888427ad67d95f6131d90ec3f6bc8f98bc6e48a9",
+    "audit_seed": 6379418139934077065,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Chandra's skill for conduct stakeholder interviews is limited.",
+      "fact_id": "cf_x05_eq_1",
+      "kind": "skill_exact",
+      "logical_signature": [
+        "eq_value",
+        5,
+        null,
+        1
+      ],
+      "predicate": {
+        "left_index": 5,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 1
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x05_eq_1",
+    "generated_card_text": [
+      "During last month’s vendor discovery meeting, Chandra followed the prepared questions but did not ask why the finance lead rejected the proposed reporting format.",
+      "A follow-up conversation led by Bruno later revealed that the finance lead’s main concern was an approval bottleneck that was absent from Chandra’s notes."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The two statements provide a coherent example of Chandra missing an important stakeholder concern during an interview, which plausibly supports limited interview skill. They do not state or imply a numeric level, allocation outcome, exact score, or stronger certainty than the evidence supports."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "f294a65dfc9f2cffe9cbe81b0feee374984c2157f5e6a758c08ebb4f634012ca",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "c0828a23c86e47c155e850bc2934bb1d2fa889ab48efb44865ad927e720a18b7",
+    "audit_seed": 791404815114437277,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Chandra's skill for conduct stakeholder interviews is at most moderate.",
+      "fact_id": "cf_x05_le_2",
+      "kind": "skill_threshold",
+      "logical_signature": [
+        "le_threshold",
+        5,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 5,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x05_le_2",
+    "generated_card_text": [
+      "During the March discovery call with the regional operations group, Chandra moved through the prepared questions without asking follow-ups when two managers gave conflicting descriptions of the approval process.",
+      "After the call, Alice held a separate conversation with the managers and documented the missing disagreement, which later changed the project requirements."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Chandra's failure to pursue conflicting manager accounts is plausible evidence of interview-conduct skill no higher than moderate. The card does not assert an exact level or stronger conclusion, preserves the at-most direction, leaks no hidden-state information, and describes a coherent call-and-follow-up sequence."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "43a23f6df67324e748f0ec9127c3119d457d98a6246b429fa4edd4c53fa4a31b",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "91cc0948692cb0c1b7623cf1d74308ce9758e491c91fbb726291784a47769fe8",
+    "audit_seed": 1059889752824519771,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and bruno is poor.",
+      "fact_id": "cf_x06_eq_1",
+      "kind": "cooperation_exact",
+      "logical_signature": [
+        "eq_value",
+        6,
+        null,
+        1
+      ],
+      "predicate": {
+        "left_index": 6,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 1
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p1"
+        ],
+        "latent_indices": [
+          6
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x06_eq_1",
+    "generated_card_text": [
+      "During the April reporting sprint, Alice replaced Bruno's transformation script after their review meeting ended without agreement on the required fields.",
+      "At the following retrospective, Bruno said he had stopped asking Alice for status updates because their previous exchanges had led to conflicting revisions."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Both statements describe repeated conflict and breakdowns in collaboration between Alice and Bruno, which plausibly supports poor cooperation. They do not state or imply a numeric level, allocation, score, or stronger exact claim beyond the qualitative proposition."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "f5be0c36516b29afa311f09987fd6cf0e10d72938d01bd8d7f50e5754592818b",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "fec6df1abb688dfef9e3812abab6d86ef3a07befea6296a961e91ea6ed05455d",
+    "audit_seed": 5724387679031643776,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and bruno is at most moderate.",
+      "fact_id": "cf_x06_le_2",
+      "kind": "cooperation_threshold",
+      "logical_signature": [
+        "le_threshold",
+        6,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 6,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p1"
+        ],
+        "latent_indices": [
+          6
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x06_le_2",
+    "generated_card_text": [
+      "During the customer-records migration last spring, Alice and Bruno produced separate field-mapping documents that used different definitions for account status.",
+      "The project lead held two reconciliation meetings after their conflicting mappings delayed the handoff to the engineering team."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The conflicting field mappings and resulting reconciliation meetings plausibly evidence limited cooperation between Alice and Bruno, consistent with cooperation being at most moderate. The card does not assert an exact level, reverse the bound, introduce unsupported conclusions, or reveal hidden allocation or scoring information. Both statements describe the same migration-related incident."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "570df9bf9a9185c1fddb589edacfcd9afa1138df50ad5a7ba656d56d84a64886",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "85d9e1499eea5e705d720275e66805b097eb3c5c52d4e160308db27ecb9f0d62",
+    "audit_seed": 5650502705371051618,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and chandra is poor.",
+      "fact_id": "cf_x07_eq_1",
+      "kind": "cooperation_exact",
+      "logical_signature": [
+        "eq_value",
+        7,
+        null,
+        1
+      ],
+      "predicate": {
+        "left_index": 7,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 1
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p2"
+        ],
+        "latent_indices": [
+          7
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x07_eq_1",
+    "generated_card_text": [
+      "During the March requirements workshop, Alice circulated a revised intake template without incorporating Chandra's tracked comments.",
+      "At the follow-up meeting, Chandra declined to use that template and recorded stakeholder needs in a separate document."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The linked workshop and follow-up incidents show Alice and Chandra failing to incorporate each other's input and using separate documentation, which plausibly supports poor cooperation. The card does not state hidden values, scores, allocations, or stronger/exact numeric conclusions."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "33bd2644e633390e6efa921e61907fa3a8540bc6ba78778c56ed2d46449ac338",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "e8c01d846e465b55b4952fa0a1746f085779b71e6503eacfe6055a8eb1bdb23e",
+    "audit_seed": 604890333030999367,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and chandra is at most moderate.",
+      "fact_id": "cf_x07_le_2",
+      "kind": "cooperation_threshold",
+      "logical_signature": [
+        "le_threshold",
+        7,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 7,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p2"
+        ],
+        "latent_indices": [
+          7
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x07_le_2",
+    "generated_card_text": [
+      "During last spring’s reporting project, Alice and Chandra were paired to reconcile the same customer records, but their conflicting file conventions left several entries unresolved at the end of the week.",
+      "Their manager held two separate check-ins with them before the reconciliation was completed and reassigned the final review to Bruno."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card gives a coherent account of Alice and Chandra struggling to coordinate, with unresolved work, managerial intervention, and reassignment. This plausibly supports cooperation being no better than moderate without asserting an exact level, reversing the bound, or exposing hidden-state information."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "8919055e289219774d5f111af552e4388d2c13d9dd4c0486b22c31b963b37a46",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "3ce4f6808d3d0dcd50aa512963f5846577ab95bc40a1be418f35ba63a95a769b",
+    "audit_seed": 1138978131294970744,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of bruno and chandra is adequate.",
+      "fact_id": "cf_x08_eq_2",
+      "kind": "cooperation_exact",
+      "logical_signature": [
+        "eq_value",
+        8,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 8,
+        "operator": "eq_value",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p1_p2"
+        ],
+        "latent_indices": [
+          8
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x08_eq_2",
+    "generated_card_text": [
+      "During last month's discovery workshop, Bruno captured the stakeholders' open questions and sent Chandra a same-day summary with the requested owners and deadlines.",
+      "Chandra used Bruno's summary to prepare the follow-up notes, and the stakeholders received a single consolidated response before the next meeting."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The two statements provide coherent, concrete evidence of effective collaboration between Bruno and Chandra: timely handoff, coordinated follow-up, and a consolidated stakeholder response. They support adequate cooperation without asserting an exact level, stronger certainty, hidden score, allocation, or other hidden-state information."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "a7056704af5f7cfc82e4c8e7224a5baf8215960e4f416ef523f98b9a44812796",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "84736bc03034ec3d51e607886ca4767c51801c68c1ec621e55d6a2604e026391",
+    "audit_seed": 9217917740737928103,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of bruno and chandra is at least moderate.",
+      "fact_id": "cf_x08_ge_2",
+      "kind": "cooperation_threshold",
+      "logical_signature": [
+        "ge_threshold",
+        8,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 8,
+        "operator": "ge_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p1_p2"
+        ],
+        "latent_indices": [
+          8
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x08_ge_2",
+    "generated_card_text": [
+      "During the customer-feedback dashboard rollout, Bruno drafted the data definitions while Chandra gathered clarification notes from account managers, and they reconciled conflicting terminology in a shared review session.",
+      "After the review, Bruno incorporated Chandra's notes into the final specification, and Chandra told the project lead that the handoff had been clear and timely."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The shared reconciliation, incorporation of notes, and clear handoff provide plausible evidence of at least moderate cooperation between Bruno and Chandra without asserting an exact level, stronger relationship, allocation outcome, or hidden numeric information."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "a543a8a66fa10aa3f617ed7494d72d8af4ac14c8178dfb49384d3614308a27ef",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "9536adfc78ab6bc7cef4dcc3713c047015ff1c82637c316bd07414cee8ff42e2",
+    "audit_seed": 2356744739535425301,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of bruno and chandra is at most moderate.",
+      "fact_id": "cf_x08_le_2",
+      "kind": "cooperation_threshold",
+      "logical_signature": [
+        "le_threshold",
+        8,
+        null,
+        2
+      ],
+      "predicate": {
+        "left_index": 8,
+        "operator": "le_threshold",
+        "right_index": null,
+        "threshold": 2
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p1_p2"
+        ],
+        "latent_indices": [
+          8
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x08_le_2",
+    "generated_card_text": [
+      "During a customer-discovery sprint, Bruno and Chandra were asked to prepare one interview guide, but each submitted a different version with incompatible question sequences.",
+      "The sprint facilitator combined the two drafts and resolved the disagreements before the guide could be used."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The incompatible independently produced guides and facilitator-mediated resolution are plausible evidence that Bruno and Chandra's cooperation did not exceed a moderate level. The card states no numeric level, exact rating, allocation outcome, or stronger conclusion, and both statements describe the same sprint event."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "db617e0c7fc77632886a7e78d0e777f5f05859e808d8a7863ba83285c101f7e4",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "8550b4facc4870e05d47548446fd83f64f01f01509744d47be108e6b596fea2d",
+    "audit_seed": 7104346542667134023,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Alice's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x00_ge_x01",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        0,
+        1,
+        null
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "ge",
+        "right_index": 1,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0",
+          "skill_p0_t1"
+        ],
+        "latent_indices": [
+          0,
+          1
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_ge_x01",
+    "generated_card_text": [
+      "During the customer-data pilot, Alice connected the billing and support exports, documented the transformations, and the team used her daily refresh without rework through the final review.",
+      "For the earlier stakeholder-discovery round, Alice’s draft discussion guide was returned twice because several questions mixed multiple topics and did not identify who needed to answer them."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The pipeline example shows strong execution and reliable results, while the stakeholder-interview example shows concrete deficiencies in Alice's interview preparation. This plausibly supports the intended at-least-as-strong comparison without reversing it, asserting exact skill levels, exposing hidden-state information, or making an allocation recommendation. The two statements are coherent as earlier and later work episodes in the same customer-data effort."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "6faaeafdad2bebef70b619e06b575fdf9ac030db491eccb0602f10f4422ce063",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "67df63e1face01cc6841bc5567e61efe36124306a297aee5e6e1b713e6745c17",
+    "audit_seed": 2491749154255294797,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for build the data pipeline.",
+      "fact_id": "cf_x00_ge_x02",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        0,
+        2,
+        null
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "ge",
+        "right_index": 2,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0",
+          "skill_p1_t0"
+        ],
+        "latent_indices": [
+          0,
+          2
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_ge_x02",
+    "generated_card_text": [
+      "During last quarter's CRM migration rehearsal, Alice's ingestion job quarantined malformed records, completed the remaining loads, and produced a reconciliation report without manual repair.",
+      "In the same rehearsal, Bruno's import process stopped on malformed records, and the operations team spent the afternoon restarting batches and correcting duplicates."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The paired CRM-migration ingestion/import outcomes provide plausible comparative evidence that Alice is at least as capable as Bruno at building a data pipeline. The card preserves the intended direction without asserting equality, exact skill levels, certainty, allocation advice, or hidden-state information, and both statements concern the same rehearsal event."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "868252736e5beebac961d60e1fc1fde8f4b68f5a5971b90ad8df61447c5201d9",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "3a10989dad8dd9aa7c7df58bd1eb416138fc706b597451fe1ca1782f90084fe5",
+    "audit_seed": 3323442218964760737,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x00_ge_x03",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        0,
+        3,
+        null
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "ge",
+        "right_index": 3,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0",
+          "skill_p1_t1"
+        ],
+        "latent_indices": [
+          0,
+          3
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_ge_x03",
+    "generated_card_text": [
+      "During the spring pilot, Alice repaired the failing customer-data ingestion flow, added automated validation checks, and kept the daily feed running through launch without manual rework.",
+      "In that same pilot, Bruno's stakeholder sessions had to be repeated after the first round of notes omitted several decisions and did not identify the responsible contacts."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides task-relevant positive performance evidence for Alice on the data pipeline and negative performance evidence for Bruno in stakeholder interviews, supporting the intended Alice >= Bruno comparison without stating a stronger conclusion, numeric level, allocation, or hidden answer."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "f6067aa6f49d60df1f81580eb1d40d2b949c39f951b9a1bec037570b19a5550a",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "0c0e00596f58a8ac863d9c51701f4be62e9365221246461ff3e73c23132ebcb5",
+    "audit_seed": 3302210308028917865,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x00_ge_x04",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        0,
+        4,
+        null
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "ge",
+        "right_index": 4,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0",
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          0,
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_ge_x04",
+    "generated_card_text": [
+      "During the March reporting-system migration, Alice converted weekly raw exports into a scheduled process that produced validated tables before the finance deadline.",
+      "Chandra’s earlier version of the same migration was retired after duplicate records and failed refreshes required manual correction."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "decisive",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Alice’s successful automated, validated migration outcome and Chandra’s earlier version failing with duplicates and refresh problems provide coherent comparative evidence that Alice is at least as strong at building the data pipeline. The card does not state an exact level, equality, allocation recommendation, or hidden score."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "3fa748cb9342d599d23a91c2bdf52119686153850a90dad3c51ec772854740bd",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "4d8e58088d3f8ebd321d2b2c5838b8fa74471681f161a398373f9659251301b0",
+    "audit_seed": 6301032679832622961,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x00_ge_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        0,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 0,
+        "operator": "ge",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t0",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          0,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x00_ge_x05",
+    "generated_card_text": [
+      "During the Northstar rollout, Alice rebuilt a failing ingestion workflow before launch, restored the daily reporting feed, and left operating notes that the support team used without requesting revisions.",
+      "In that rollout's discovery phase, Chandra's interview summary omitted two required customer groups, and the product team delayed its decision until follow-up conversations were completed."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides qualitative performance evidence favoring Alice on the pipeline task and indicating shortcomings in Chandra's stakeholder-interview work, which supports the intended at-least-as-strong comparison without stating a stronger conclusion, numeric level, allocation, or answer. Both statements concern phases of the same Northstar rollout."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "5c09f2058fee408e891a1ed3fd4ed508ff9f8037b72a80cb4b17428073343704",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "026eff7ff843a6442db3957fca67318e26e8e7a2fef59f6d1ca6da2c7783692f",
+    "audit_seed": 7076023350915124172,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Bruno's skill for build the data pipeline.",
+      "fact_id": "cf_x01_le_x02",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        1,
+        2,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "le",
+        "right_index": 2,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p1_t0"
+        ],
+        "latent_indices": [
+          1,
+          2
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_le_x02",
+    "generated_card_text": [
+      "During the spring pilot, Alice's interview notes left several stakeholder approval conditions unresolved, and the follow-up meeting was needed to clarify them.",
+      "In the same pilot, Bruno's pipeline prototype passed the agreed handoff checks and was used by the reporting team without rework."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides task-relevant qualitative evidence consistent with Alice being no stronger at stakeholder interviews than Bruno is at pipeline building: Alice required follow-up clarification, while Bruno's prototype passed checks without rework. It does not state or imply exact levels, equality, a stronger absolute conclusion, allocation advice, or hidden answer information, and both statements are coherently situated in the same pilot."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "259f83807eed0603ecb657a742b84e8b41c5117a691458261bd2d4a63177aaca",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "172a093ea97d4f31f55599cfe77025d95cd064b47d876aebddf75d0b7b921728",
+    "audit_seed": 555113700635409327,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at the same level as Bruno's skill for build the data pipeline.",
+      "fact_id": "cf_x01_eq_x02",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "eq",
+        1,
+        2,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "eq",
+        "right_index": 2,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p1_t0"
+        ],
+        "latent_indices": [
+          1,
+          2
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_eq_x02",
+    "generated_card_text": [
+      "An independent assessment compared Alice's skill for conduct stakeholder interviews with Bruno's skill for build the data pipeline using one shared categorical proficiency rubric.",
+      "That assessment placed Alice's skill for conduct stakeholder interviews and Bruno's skill for build the data pipeline in the same proficiency category."
+    ],
+    "model_id": null,
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Exact deterministic equality template directly states a shared unnamed category.",
+      "validation_method": "deterministic_canonical_equality_v1"
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "4c4f4fe1bd640f6937bc50fdff619c9c165e18f6cdabc2fe86a2a92ba3d9ae76",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "5fdbd8a7514d3d7c7982fedc488a36c30c5aa60bbdfd7671e4621feb9b7bb100",
+    "audit_seed": 9079968775971481168,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at least as strong as Bruno's skill for build the data pipeline.",
+      "fact_id": "cf_x01_ge_x02",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        1,
+        2,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "ge",
+        "right_index": 2,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p1_t0"
+        ],
+        "latent_indices": [
+          1,
+          2
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_ge_x02",
+    "generated_card_text": [
+      "At the April pilot kickoff, Alice met with six department leads and returned with a signed list of reporting needs, unresolved questions, and contact owners for every item.",
+      "In that pilot's first week, Bruno's ingestion job stopped when it encountered duplicate customer IDs, and the team postponed the dashboard review while the source records were cleaned."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides task-relevant performance evidence: Alice successfully elicited and organized stakeholder requirements, while Bruno's pipeline work encountered a failure that delayed review. It does not state or reverse the comparison, claim exact skill levels or certainty, reveal hidden scores or allocations, or add a stronger conclusion than the intended at-least comparison. Both statements are coherently situated in the same April pilot."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "64c5d732925c0fb93b9c15387e84ab8057a793b911c32de219886d9946ec9752",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "d037c326e26c309a9d009805d58b5d6a82492026dce079df91d1f32ae9cdff9f",
+    "audit_seed": 7617605236758621232,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Bruno's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x01_le_x03",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        1,
+        3,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "le",
+        "right_index": 3,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p1_t1"
+        ],
+        "latent_indices": [
+          1,
+          3
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_le_x03",
+    "generated_card_text": [
+      "During the Orion discovery workshop, Bruno led the follow-up conversation with two skeptical department heads and secured their agreement to provide detailed process notes.",
+      "Alice joined that follow-up meeting after asking Bruno to take the lead because she was unsure how to address the department heads' objections."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card provides coherent, task-specific qualitative evidence that Bruno was more capable or at least not less capable than Alice in handling stakeholder interviews: he led and secured agreement, while Alice deferred to him due to uncertainty about objections. It does not state numeric levels, exact scores, equality, a gold answer, or an allocation recommendation."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "0fd8ad268088e7e61f89316e3880ca5da9fbc083ac8ee5bd017cd38b129da006",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "eb9f7a691b8cb6f8661e6aacf15c8830a392f5ebd408d0788bd66cd43023ba51",
+    "audit_seed": 4034284159113466995,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x01_le_x04",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        1,
+        4,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "le",
+        "right_index": 4,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          1,
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_le_x04",
+    "generated_card_text": [
+      "During the Atlas rollout, Alice's stakeholder interview notes left two department-specific approval requirements unrecorded, and the team reopened those discussions after the pilot began.",
+      "In the same rollout, Chandra delivered the data pipeline connector before the pilot and traced a late source-system format change without interrupting the scheduled data load."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "decisive",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Alice's missed stakeholder-interview requirements and Chandra's successful pipeline delivery/troubleshooting provide aligned qualitative evidence that Alice's interview skill is no stronger than Chandra's pipeline skill. The card states neither exact skill values nor a stronger equality/certainty claim, and both observations occur within the same Atlas rollout."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "10e3c3c289dc39924e265bf50dcd23f3a89147f5e3b81b7879620753b4ca4048",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "81a09171801d6caaff7bddbcc5e80f78f79a774bc83c4d3f14c185bc147cf36c",
+    "audit_seed": 1505076056360458947,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x01_le_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        1,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "le",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          1,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_le_x05",
+    "generated_card_text": [
+      "During a joint customer-listening session for the library redesign, Chandra noticed that a hesitant patron kept referring to “the after-school rush” and followed up until the patron described the checkout bottleneck in detail.",
+      "At the same session, Alice moved on after receiving a similar vague comment about busy afternoons, and the issue was only clarified later when Chandra revisited it."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "decisive",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The paired observations directly support that Chandra demonstrated at least as strong stakeholder-interviewing skill as Alice: Chandra elicited detail through follow-up, while Alice did not. The card does not claim equality, exact skill levels, scores, allocation, or any hidden-answer information, and both statements concern the same session."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "af6b4748af0653a725c4200583894ee5df77b305598b0d00691d214d8aafde37",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "7319c18e5422517ab869cadda1f60df8b1f8fe3607ca73e290aecddd0d7ba947",
+    "audit_seed": 7471600294346519024,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at the same level as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x01_eq_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "eq",
+        1,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "eq",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          1,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_eq_x05",
+    "generated_card_text": [
+      "An independent assessment compared Alice's skill for conduct stakeholder interviews with Chandra's skill for conduct stakeholder interviews using one shared categorical proficiency rubric.",
+      "That assessment placed Alice's skill for conduct stakeholder interviews and Chandra's skill for conduct stakeholder interviews in the same proficiency category."
+    ],
+    "model_id": null,
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Exact deterministic equality template directly states a shared unnamed category.",
+      "validation_method": "deterministic_canonical_equality_v1"
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "29e1acf30ceda95500d13a8b4dad683b1b60f61a95718f23aeb72e09684848fa",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "71daa6bd69b1a78acaef78e378c55896fdac50e7aaf03e231f23c5ca1f4e54fd",
+    "audit_seed": 797403542934081591,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x01_ge_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        1,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 1,
+        "operator": "ge",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p0_t1",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          1,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x01_ge_x05",
+    "generated_card_text": [
+      "During the April discovery sessions, Alice asked the finance director follow-up questions that uncovered an unreported approval step, which was added to the requirements notes before the meeting ended.",
+      "In the same round of sessions, Chandra accepted the operations manager’s initial answer about approvals; the omitted step surfaced only after the manager reviewed the draft notes the next day."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The paired observations concern stakeholder-interview performance in comparable discovery sessions and provide plausible evidence that Alice is at least as strong as Chandra. They do not reverse the comparison, assert an exact skill level or certainty, disclose hidden scores or allocation outcomes, or introduce an unrelated conclusion."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "96b36acfa907faddd40c37dea5052f980ec1b0ab36a6aae17eeb7c780d92609c",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "7ef1b4c06f149b1f3aef6be56578d06cfdf75ac0810b8cb113979df44b9f254b",
+    "audit_seed": 55687989870947502,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is no stronger than Bruno's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x02_le_x03",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        2,
+        3,
+        null
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "le",
+        "right_index": 3,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0",
+          "skill_p1_t1"
+        ],
+        "latent_indices": [
+          2,
+          3
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_le_x03",
+    "generated_card_text": [
+      "During the April customer pilot, Bruno's notes from conversations with procurement managers identified an approval bottleneck, and the product team revised onboarding materials around that finding.",
+      "In the same pilot, Bruno's ingestion job did not handle duplicate account IDs, and the release was held until another engineer replaced that portion of the job."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "decisive",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The interview evidence shows Bruno effectively identified a stakeholder-derived issue that informed a product change, while the pipeline evidence shows his implementation failed and required replacement. Together these plausibly support that his pipeline-building skill is no stronger than his stakeholder-interview skill, without stating an exact level, equality, allocation, or hidden answer."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "b27d49ceb24970e44dcaf8e2f154083265075b559e383349c1caf99f2d581a1a",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "4db000bc2af9dc7448fd0c6898e1043b224b04477ec5cedd7bd006492db6ca33",
+    "audit_seed": 7821181233148498402,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x02_le_x04",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        2,
+        4,
+        null
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "le",
+        "right_index": 4,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0",
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          2,
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_le_x04",
+    "generated_card_text": [
+      "During the April ingestion outage, Chandra traced the duplicate-record problem to a malformed transformation step and deployed a corrected version that cleared the backlog before the next reporting run.",
+      "In that same incident, Bruno had earlier restored the previous transformation version, but the duplicate records continued until Chandra replaced the faulty logic."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The incident provides comparative evidence that Chandra handled and corrected the transformation logic successfully where Bruno's earlier rollback did not resolve the duplicate-record issue, supporting Bruno being no stronger than Chandra for the pipeline-building task. It does not state numeric skills, an exact ranking beyond the intended weak comparison, allocation guidance, or hidden-answer information, and both statements concern the same outage."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "5e2d5a9782b7833a7adcc05cf71d683a86bd1390459b32f5ef20ebbc2f5c1582",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "6efd0283826648a6452bc3e653a7b936bab5094afe1a86bd6fb8de27d8e96c03",
+    "audit_seed": 2348939928029325690,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x02_le_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        2,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "le",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          2,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_le_x05",
+    "generated_card_text": [
+      "During the spring reporting rollout, Bruno's pipeline prototype was set aside after it repeatedly broke when source teams changed their file schemas.",
+      "Later that quarter, Chandra ran discovery interviews with the affected source teams, and the resulting requirements summary was approved by every team lead."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Bruno’s failed pipeline prototype under schema changes and Chandra’s unanimously approved interview-derived requirements provide plausible comparative evidence that Bruno is not stronger at the pipeline task than Chandra is at stakeholder interviews. The card does not reverse the comparison, assert equality or exact skill levels, add a stronger conclusion, disclose hidden state, or recommend an allocation; both statements are coherently situated in the same reporting rollout period."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "67ae8773186853d48d67895f5a453da4acd301773371f1550ed8e0a5996c6a22",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "fb58ed23090757a3ff493c95e58da2ef5a667db41d6c1bf341ed0fa90a8af2a1",
+    "audit_seed": 349145640179435155,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is at the same level as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x02_eq_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "eq",
+        2,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "eq",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          2,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_eq_x05",
+    "generated_card_text": [
+      "An independent assessment compared Bruno's skill for build the data pipeline with Chandra's skill for conduct stakeholder interviews using one shared categorical proficiency rubric.",
+      "That assessment placed Bruno's skill for build the data pipeline and Chandra's skill for conduct stakeholder interviews in the same proficiency category."
+    ],
+    "model_id": null,
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Exact deterministic equality template directly states a shared unnamed category.",
+      "validation_method": "deterministic_canonical_equality_v1"
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "afd14ab2a3de311b819649af3eac35d4f4851242e88162c5fbc8939b75321ef4",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "91d61e99706cd81c1d43a3b7f462eb52ebb69c1ac104b8a5fa21dc80aa1e7530",
+    "audit_seed": 3420391151180068450,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x02_ge_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        2,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 2,
+        "operator": "ge",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t0",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          2,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x02_ge_x05",
+    "generated_card_text": [
+      "During the CRM migration, Bruno's ingestion workflow was released on schedule and remained in use without a repair ticket during the following month.",
+      "After Chandra led a stakeholder-discovery round for the same migration, the team repeated several sessions because participants said key requirements had been recorded inaccurately."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Bruno's successful, stable ingestion-workflow delivery plausibly evidences stronger data-pipeline skill, while Chandra's inaccurately recorded requirements and repeated sessions plausibly evidence weaker stakeholder-interview skill. The card preserves the intended Bruno-at-least-as-strong-as-Chandra direction without asserting exact levels, equality, allocation outcomes, or hidden scores, and both statements concern the same CRM migration."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "c0ece46f3672952c1e2cda9747a1b7fa456ca4fd6a75f9b39b9cc489700fd259",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "954957409d0ea0b05637b81e86587ec8a376716e2b534a749e7c0cfdb8c0b627",
+    "audit_seed": 5568454053959462235,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x03_le_x04",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "le",
+        3,
+        4,
+        null
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "le",
+        "right_index": 4,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1",
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          3,
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_le_x04",
+    "generated_card_text": [
+      "During the customer-data pilot, Bruno led the stakeholder sessions, but the project team later had to schedule follow-up calls because several source-system requirements were missing from his notes.",
+      "On the same pilot, Chandra assembled the ingestion workflow, added validation for the identified data sources, and delivered a working run for the review meeting."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card presents weaker interview-related performance evidence for Bruno (missing requirements requiring follow-up) and stronger pipeline-building evidence for Chandra (validated workflow and successful delivery), supporting Bruno's skill as no stronger than Chandra's. It does not state equality, numeric levels, allocation outcomes, or any reversed comparison, and both statements concern the same customer-data pilot."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "fe67f036782d8c3a7643cef913b6a1a70f5cdd76b9370bbd1596e3390d9c05f0",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "bd1f5bf2d34b5028da137720b4d0bc5eb20ee82c2e5f709a56c369a99c747eea",
+    "audit_seed": 356295630142026928,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at the same level as Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x03_eq_x04",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "eq",
+        3,
+        4,
+        null
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "eq",
+        "right_index": 4,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1",
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          3,
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_eq_x04",
+    "generated_card_text": [
+      "An independent assessment compared Bruno's skill for conduct stakeholder interviews with Chandra's skill for build the data pipeline using one shared categorical proficiency rubric.",
+      "That assessment placed Bruno's skill for conduct stakeholder interviews and Chandra's skill for build the data pipeline in the same proficiency category."
+    ],
+    "model_id": null,
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Exact deterministic equality template directly states a shared unnamed category.",
+      "validation_method": "deterministic_canonical_equality_v1"
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "0493d53198dbc642fc1c8ea9040bd6656da9d5f133c5ef9f481d26aa4798b312",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "5c02c561406c4124e165a143fe1f3d2fe5df8139a46827ab033139a7c7d82fbb",
+    "audit_seed": 6554943819446781682,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x03_ge_x04",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        3,
+        4,
+        null
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "ge",
+        "right_index": 4,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1",
+          "skill_p2_t0"
+        ],
+        "latent_indices": [
+          3,
+          4
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_ge_x04",
+    "generated_card_text": [
+      "During the May pilot, Chandra’s first data-feed deployment created duplicate records, and another engineer replaced it before the release.",
+      "For the same pilot, Bruno’s meetings with department leads produced a signed requirements summary that the project team used unchanged to set the release scope."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card presents favorable evidence of Bruno's stakeholder-interview performance and unfavorable evidence of Chandra's data-pipeline performance, supporting the intended Bruno-at-least-as-strong comparison without reversing it, asserting exact levels, or disclosing hidden scores/allocation information. Both statements are coherently situated in the same May pilot."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "e56ec5ffa1253760720bcb64a563e8556dcb1b27cd15465910512f5e0b7b8cdb",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "ce2c649edb0418f347622d90a0ffd6d472514c911d4c9129c3bf98015f5e553b",
+    "audit_seed": 5146018028303216710,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Bruno's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x03_ge_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        3,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 3,
+        "operator": "ge",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p1_t1",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          3,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x03_ge_x05",
+    "generated_card_text": [
+      "During last quarter's customer-discovery project, Bruno's interview notes identified a previously unreported approval bottleneck that the product team later confirmed with account records.",
+      "In the same project, Chandra's interview summary grouped several requests together, and the team had to schedule follow-up conversations before it could determine which issue each stakeholder meant."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The paired observations from the same customer-discovery project plausibly support Bruno being at least as effective as Chandra at stakeholder interviews: Bruno identified a confirmed bottleneck, while Chandra's summary required follow-up clarification. The card does not state an exact skill level, equality, allocation outcome, or hidden score, and it preserves the intended non-strict comparison direction."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "275de988d441d6d5c719acb2cb68adaed9a15abae82de273d9c9f81851403d71",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "6c0e6bec3815dae7be04502515fbe4491a4aa81f6aaf6c2bc8573ba64c4b27ee",
+    "audit_seed": 8044158709703681978,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "Chandra's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "fact_id": "cf_x04_ge_x05",
+      "kind": "skill_comparison",
+      "logical_signature": [
+        "ge",
+        4,
+        5,
+        null
+      ],
+      "predicate": {
+        "left_index": 4,
+        "operator": "ge",
+        "right_index": 5,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "skill_p2_t0",
+          "skill_p2_t1"
+        ],
+        "latent_indices": [
+          4,
+          5
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x04_ge_x05",
+    "generated_card_text": [
+      "In May, Chandra rebuilt a failed ingestion job, added validation checks, and the nightly run completed without manual repair for three weeks.",
+      "During June customer discovery, Chandra missed two scheduled follow-up calls, and the notes from the calls they attended lacked the agreed decision summaries."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The first statement provides positive evidence of Chandra's data-pipeline capability, while the second provides negative evidence about stakeholder-interview follow-through and documentation. Together they plausibly support the intended at-least-as-strong comparison without stating hidden values, an exact ranking, or an allocation outcome."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "018e2c5ee0f64df00dc5b95a3049bbd59c69c6f68da42d728eca501ffe3d837c",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "1575b6f9b190a6d8171a4953435173dc010549b270005987c261214995520a29",
+    "audit_seed": 815111990243052531,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and bruno is no stronger than the cooperation of Alice and Chandra.",
+      "fact_id": "cf_x06_le_x07",
+      "kind": "cooperation_comparison",
+      "logical_signature": [
+        "le",
+        6,
+        7,
+        null
+      ],
+      "predicate": {
+        "left_index": 6,
+        "operator": "le",
+        "right_index": 7,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p1",
+          "coop_p0_p2"
+        ],
+        "latent_indices": [
+          6,
+          7
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x06_le_x07",
+    "generated_card_text": [
+      "At the June requirements workshop, Alice and Bruno worked through a reconciliation exercise, but their draft still had unresolved ownership conflicts after two review rounds.",
+      "Later in the same workshop, Alice and Chandra completed the identical reconciliation exercise, and the facilitator accepted their draft without requesting revisions."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The two outcomes from an identical exercise provide coherent qualitative evidence that Alice and Bruno's cooperation was not stronger than Alice and Chandra's. The card does not reverse the comparison, assert an exact or equality-level claim, reveal hidden scores or allocations, or make an unsupported allocation conclusion."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "21f3d4285bb88754493dd8ec10f380810857f7eacf7a829b11179507b5ac88dd",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "1c023acff3f9504d3e3db65aaf84b8db5e6635084d151c354de1020675f86d4b",
+    "audit_seed": 1553945772214533489,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and bruno is at the same level as the cooperation of Alice and Chandra.",
+      "fact_id": "cf_x06_eq_x07",
+      "kind": "cooperation_comparison",
+      "logical_signature": [
+        "eq",
+        6,
+        7,
+        null
+      ],
+      "predicate": {
+        "left_index": 6,
+        "operator": "eq",
+        "right_index": 7,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p1",
+          "coop_p0_p2"
+        ],
+        "latent_indices": [
+          6,
+          7
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x06_eq_x07",
+    "generated_card_text": [
+      "An independent teamwork assessment compared the cooperation of Alice and Bruno with the cooperation of Alice and Chandra using one shared categorical rubric.",
+      "That assessment placed the cooperation of Alice and Bruno and the cooperation of Alice and Chandra in the same category."
+    ],
+    "model_id": null,
+    "passed": true,
+    "role": "neutral",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "Exact deterministic equality template directly states a shared unnamed category.",
+      "validation_method": "deterministic_canonical_equality_v1"
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "33e1ce0efe8c629a03e0ebecab28a2507627bc22ffdd61aaec76dece0fa0f706",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "6351cd69bc4de14620f3daec344e93a647dd85d6ccc81b09771dcd2b81c8be65",
+    "audit_seed": 8060979787667039738,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and bruno is at least as strong as the cooperation of Alice and Chandra.",
+      "fact_id": "cf_x06_ge_x07",
+      "kind": "cooperation_comparison",
+      "logical_signature": [
+        "ge",
+        6,
+        7,
+        null
+      ],
+      "predicate": {
+        "left_index": 6,
+        "operator": "ge",
+        "right_index": 7,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p1",
+          "coop_p0_p2"
+        ],
+        "latent_indices": [
+          6,
+          7
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x06_ge_x07",
+    "generated_card_text": [
+      "During the April vendor-data rollout, Alice and Bruno divided the cleanup and validation work in a morning check-in, exchanged their draft outputs that afternoon, and merged the changes without reopening either section.",
+      "In the same rollout, Alice and Chandra needed two additional meetings to reconcile incompatible field definitions before their shared report could be finalized."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "controller-compatible",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The card gives coherent qualitative evidence that Alice and Bruno collaborated more smoothly and efficiently than Alice and Chandra, supporting the at-least-as-strong comparison without asserting equality, exact levels, scores, allocations, or hidden-state details."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "cd679b8d0af30a562e1cc5d10ac66868c822e04500efe6ec1545b56f1b182bac",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "388c5493b98ad1735238359e4eaeeb2cc40b4f1249247afff93243fcb3d8aece",
+    "audit_seed": 3216352982748143660,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and bruno is no stronger than the cooperation of Bruno and Chandra.",
+      "fact_id": "cf_x06_le_x08",
+      "kind": "cooperation_comparison",
+      "logical_signature": [
+        "le",
+        6,
+        8,
+        null
+      ],
+      "predicate": {
+        "left_index": 6,
+        "operator": "le",
+        "right_index": 8,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p1",
+          "coop_p1_p2"
+        ],
+        "latent_indices": [
+          6,
+          8
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x06_le_x08",
+    "generated_card_text": [
+      "During the May reporting-dashboard rollout, Alice and Bruno agreed to exchange the cleaned source file before the review meeting, but Bruno arrived without the version Alice had prepared and the review was postponed.",
+      "At the same rollout, Bruno and Chandra used a shared change log for their interview-summary updates; each incorporated the other’s revisions before the scheduled stakeholder check-in."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "decisive",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The first statement provides plausible evidence of weaker cooperation between Alice and Bruno, while the second provides plausible evidence of stronger cooperation between Bruno and Chandra. The card preserves the intended <= direction without asserting equality, exact levels, or any hidden allocation-related information, and both statements fit the same rollout context."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "9acd55129c291304d400d559351e43693aefa31f955627c4db4bc1a9d6d004a0",
+    "validator_version": "truthful_selective_semantic_v2"
+  },
+  {
+    "audit_prompt_hash": "6d59beddae44545ba927712cb907bad32238976c4cf819dcde47cba59f000e5c",
+    "audit_seed": 9134960761528116233,
+    "canonical_exact_fact": {
+      "canonical_fact_text": "The cooperation of alice and chandra is no stronger than the cooperation of Bruno and Chandra.",
+      "fact_id": "cf_x07_le_x08",
+      "kind": "cooperation_comparison",
+      "logical_signature": [
+        "le",
+        7,
+        8,
+        null
+      ],
+      "predicate": {
+        "left_index": 7,
+        "operator": "le",
+        "right_index": 8,
+        "threshold": null
+      },
+      "provenance": {
+        "derivation": "deterministic predicate over the exact hidden latent values",
+        "latent_fact_ids": [
+          "coop_p0_p2",
+          "coop_p1_p2"
+        ],
+        "latent_indices": [
+          7,
+          8
+        ]
+      }
+    },
+    "deterministic_checks": {
+      "no_answer_or_option_leakage": true,
+      "no_certainty_language": true,
+      "no_duplicate_statements": true,
+      "no_explicit_numeric_level": true,
+      "no_score_leakage": true,
+      "nonempty": true
+    },
+    "fact_id": "cf_x07_le_x08",
+    "generated_card_text": [
+      "At last month's reporting workshop, Alice and Chandra paused twice to ask the project lead to reconcile conflicting assumptions before they could combine their sections.",
+      "In the same workshop, Bruno and Chandra merged their draft sections without escalation and delivered the combined version before the review meeting."
+    ],
+    "model_id": "microsoft/gpt-5.6-terra",
+    "passed": true,
+    "role": "decisive",
+    "semantic_audit": {
+      "coherent": "PASS",
+      "faithfulness": "PASS",
+      "no_hidden_state_leakage": "PASS",
+      "no_strengthening": "PASS",
+      "no_unsupported_implication": "PASS",
+      "passed": true,
+      "polarity_preserved": "PASS",
+      "reason": "The contrast between Alice–Chandra requiring reconciliation before combining work and Bruno–Chandra merging smoothly without escalation plausibly supports that the former cooperation is no stronger than the latter. It preserves the weaker-or-equal direction, states no exact level or equality, adds no allocation conclusion, leaks no hidden state, and describes the same workshop context coherently."
+    },
+    "task_id": "task_003",
+    "validated_content_sha256": "9c6b25766cae339505f43e0d176e065ba86a6ba8196578e648733fa5723dde71",
+    "validator_version": "truthful_selective_semantic_v2"
+  }
+]

@@ -446,11 +446,19 @@ class RelationalImitationRoundFeedbackGame(Game):
                 allow_participant_requests=rules.allow_participant_requests,
                 require_grounded_reports=rules.require_grounded_reports,
                 force_none=citation_context.communication_action_masked,
+                # Only facts the agent does not already hold. Printing a fact
+                # it already has under YOUR VERIFIED EVIDENCE a second time here
+                # duplicated ~400 characters per fact and blurred the very
+                # distinction this block exists to draw: held versus received.
                 observed_facts=tuple(
                     render_own_fact(fact_id, state.fact_text(fact_id))
                     for fact_id in citation_context.observed_fact_ids
+                    if fact_id not in set(self._citable_fact_ids(state, agent))
                 ),
                 report_citation_scope=rules.report_citation_scope,
+                population_size=rules.n_agents,
+                round_index=state.turn // rules.n_agents + 1,
+                rounds=rules.rounds,
                 allowed_message_types=(
                     (MESSAGE_REQUEST, MESSAGE_NONE)
                     if not citation_context.citable_fact_ids

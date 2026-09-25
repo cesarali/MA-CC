@@ -1,0 +1,147 @@
+{
+  "budget_status": {
+    "active_reservations": 0,
+    "approved_limits": {
+      "allow_unbounded_paid_requests": false,
+      "max_cost": {
+        "amount": 20.0,
+        "model": "microsoft/gpt-5.6-terra",
+        "provider": "university",
+        "retrieved_at": "2026-09-04T19:24:36.854976Z",
+        "source": "MuSR truthful selective evidence generation",
+        "unit": "proxy_accounting_unit",
+        "unit_source": "truthful-selective config",
+        "version": "truthful-selective-v1"
+      },
+      "max_input_tokens": 4000000,
+      "max_output_tokens": 2400000,
+      "max_requests": 1200
+    },
+    "preflight_expectation": {
+      "input_tokens": 157704,
+      "output_tokens": 671744,
+      "requests": 328
+    },
+    "provider_account_spend": null,
+    "schema_version": 2,
+    "stop_count": 0,
+    "stop_reason": null,
+    "used_and_reserved": {
+      "cost": {
+        "amount": 0.14293399999999995,
+        "unit": "proxy_accounting_unit"
+      },
+      "input_tokens": 12757,
+      "output_tokens": 9785,
+      "requests": 25
+    }
+  },
+  "evidence_generation_logical_calls": 321,
+  "fingerprint_sha256": "86955c98f0e91c4b5ccd34f0a3116add4aec103aba053e2a68d0f4fb5aa532e0",
+  "generation_validation_status": "PASS",
+  "logical_calls": 665,
+  "model": "microsoft/gpt-5.6-terra",
+  "prompt_version": "musr_team_allocation_evidence_v1",
+  "provider": "university",
+  "provider_attempts": 665,
+  "retry_count": 501,
+  "schema_version": 1,
+  "semantic_validation_logical_calls": 344,
+  "status": "complete",
+  "tasks": [
+    {
+      "attempts": 55,
+      "facts": 55,
+      "leakage_validation_errors": [],
+      "semantic_repair_rounds": 0,
+      "semantic_validation": {
+        "all_passed": true,
+        "by_role": {
+          "controller-compatible": {
+            "cards": 24,
+            "passed": 24
+          },
+          "decisive": {
+            "cards": 6,
+            "passed": 6
+          },
+          "neutral": {
+            "cards": 25,
+            "passed": 25
+          }
+        },
+        "cards": 55,
+        "failed": 0,
+        "passed": 55,
+        "task_id": "task_001",
+        "validation_method": "deterministic leakage/format checks plus independent Terra semantic self-audit; strong screening, not a formal proof of natural-language entailment"
+      },
+      "task_id": "task_001",
+      "validation_failures": []
+    },
+    {
+      "attempts": 69,
+      "facts": 60,
+      "leakage_validation_errors": [],
+      "semantic_repair_rounds": 2,
+      "semantic_validation": {
+        "all_passed": true,
+        "by_role": {
+          "controller-compatible": {
+            "cards": 26,
+            "passed": 26
+          },
+          "decisive": {
+            "cards": 6,
+            "passed": 6
+          },
+          "neutral": {
+            "cards": 28,
+            "passed": 28
+          }
+        },
+        "cards": 60,
+        "failed": 0,
+        "passed": 60,
+        "task_id": "task_002",
+        "validation_method": "deterministic leakage/format checks plus independent Terra semantic self-audit; strong screening, not a formal proof of natural-language entailment"
+      },
+      "task_id": "task_002",
+      "validation_failures": []
+    },
+    {
+      "attempts": 49,
+      "facts": 49,
+      "leakage_validation_errors": [],
+      "semantic_repair_rounds": 0,
+      "semantic_validation": {
+        "all_passed": true,
+        "by_role": {
+          "controller-compatible": {
+            "cards": 24,
+            "passed": 24
+          },
+          "decisive": {
+            "cards": 6,
+            "passed": 6
+          },
+          "neutral": {
+            "cards": 19,
+            "passed": 19
+          }
+        },
+        "cards": 49,
+        "failed": 0,
+        "passed": 49,
+        "task_id": "task_003",
+        "validation_method": "deterministic leakage/format checks plus independent Terra semantic self-audit; strong screening, not a formal proof of natural-language entailment"
+      },
+      "task_id": "task_003",
+      "validation_failures": []
+    }
+  ],
+  "usage": {
+    "input_tokens": 332706,
+    "output_tokens": 218676
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "all_passed": true,
+  "by_role": {
+    "controller-compatible": {
+      "cards": 24,
+      "passed": 24
+    },
+    "decisive": {
+      "cards": 6,
+      "passed": 6
+    },
+    "neutral": {
+      "cards": 19,
+      "passed": 19
+    }
+  },
+  "cards": 49,
+  "failed": 0,
+  "passed": 49,
+  "task_id": "task_003",
+  "validation_method": "deterministic leakage/format checks plus independent Terra semantic self-audit; strong screening, not a formal proof of natural-language entailment"
+}

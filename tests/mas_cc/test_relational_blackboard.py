@@ -884,7 +884,13 @@ def test_blackboard_v3_prompt_guidance_and_json_contract_are_surgical():
     assert "YOUR PREVIOUS VOTE" in rendered
     assert "You may keep or revise this vote" in rendered
     assert "Some participants may have objectives" not in rendered
-    assert "rather than by repetition, confidence" in rendered
+    # The vigilant board framing now states that evidence is split across
+    # participants and asks them to exchange it. The earlier anti-conformity
+    # clause was removed deliberately: instructing agents how to weigh social
+    # information biases the very thing these studies measure.
+    assert "divided among the participants" in rendered
+    assert "exchange evidence with the other participants" in rendered
+    assert "rather than by repetition, confidence" not in rendered
     assert "REQUEST asks for specific missing evidence or information" in rendered
     assert "missing or ambiguous" in rendered
     assert "Prefer REQUEST over NONE" in rendered

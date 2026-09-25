@@ -1,0 +1,1767 @@
+[
+  {
+    "branch_id": "cf_x00_eq_3_b00",
+    "latent_fact_id": "cf_x00_eq_3",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_eq_3_b00_explicit_0",
+              "text": "During the customer-analytics rollout, Alice connected four vendor feeds, added schema checks, and resolved the overnight duplicate-record failures before the launch date."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_eq_3_b00_explicit_1",
+              "text": "In the following quarter, the operations team kept using Alice's monitoring dashboard because it identified delayed file deliveries early enough for them to rerun the affected jobs."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_eq_3_b00_commonsense_0",
+              "text": "Repeated successful delivery of integrations, validation safeguards, and operational monitoring is evidence of capability in the kind of technical work needed to create and maintain data flows."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_eq_3_b00_deduced_0",
+          "text": "Alice has a record of delivering dependable data-integration work under production constraints."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_eq_3_b00_root",
+      "text": "Alice's skill for build the data pipeline is strong."
+    }
+  },
+  {
+    "branch_id": "cf_x00_ge_2_b00",
+    "latent_fact_id": "cf_x00_ge_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_2_b00_explicit_0",
+              "text": "During last quarter's reporting migration, Alice wrote a script that pulled daily CSV exports from three vendors, normalized their date and currency fields, and loaded the cleaned records into the analytics warehouse."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_2_b00_explicit_1",
+              "text": "When one vendor changed its column headers midweek, Alice updated the transformation logic, reran the affected loads, and documented the fix for the rest of the project team."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_2_b00_commonsense_0",
+              "text": "Successfully creating, maintaining, and repairing an automated ingestion-and-transformation workflow is evidence of practical capability with data-pipeline work."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_ge_2_b00_deduced_0",
+          "text": "Alice has previously completed a practical data-processing implementation with limited supervision."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_ge_2_b00_root",
+      "text": "Alice's skill for build the data pipeline is at least moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x01_eq_1_b00",
+    "latent_fact_id": "cf_x01_eq_1",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_eq_1_b00_explicit_0",
+              "text": "During last quarter's vendor-feedback meeting, Alice relied on a prepared script and moved to the next topic after several short answers."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_eq_1_b00_explicit_1",
+              "text": "The project lead later scheduled follow-up conversations because the meeting notes contained few details about the vendors' priorities or concerns."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_eq_1_b00_commonsense_0",
+              "text": "Effective stakeholder interviews typically require adapting questions and probing brief responses to uncover relevant priorities and concerns."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_eq_1_b00_deduced_0",
+          "text": "Alice had difficulty drawing out actionable input during a prior stakeholder session."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_eq_1_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is limited."
+    }
+  },
+  {
+    "branch_id": "cf_x01_le_2_b00",
+    "latent_fact_id": "cf_x01_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_2_b00_explicit_0",
+              "text": "During the April discovery meeting, Alice led the conversation with the regional operations director, but the director repeatedly redirected questions to a project analyst for clarification."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_2_b00_explicit_1",
+              "text": "The follow-up notes recorded that no decision owner, timeline, or next step had been confirmed by the end of the meeting."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_le_2_b00_commonsense_0",
+              "text": "When an interviewer cannot obtain clear ownership or next steps despite leading a stakeholder conversation, that outcome is evidence against strong interview-conducting capability."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_le_2_b00_deduced_0",
+          "text": "Alice's prior interview lead did not produce a clear stakeholder commitment."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_le_2_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x02_eq_1_b00",
+    "latent_fact_id": "cf_x02_eq_1",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_eq_1_b00_explicit_0",
+              "text": "During the April reporting-system rollout, Bruno submitted a data import script that duplicated several customer records after a rerun."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_eq_1_b00_explicit_1",
+              "text": "Alice spent the following day tracing the duplicate logic, revising the script, and documenting a safer restart procedure before the release could continue."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_eq_1_b00_commonsense_0",
+              "text": "A person whose data-processing work repeatedly needs another teammate to diagnose and repair it has shown difficulty handling that kind of technical implementation independently."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x02_eq_1_b00_deduced_0",
+          "text": "Bruno's earlier technical handoff required substantial remediation."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_eq_1_b00_root",
+      "text": "Bruno's skill for build the data pipeline is limited."
+    }
+  },
+  {
+    "branch_id": "cf_x02_le_2_b00",
+    "latent_fact_id": "cf_x02_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_2_b00_explicit_0",
+              "text": "During the customer-records migration last spring, Bruno implemented the first extraction-and-loading workflow for the reporting database."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_2_b00_explicit_1",
+              "text": "After the initial run produced duplicated records and missing date fields, Alice replaced the loading logic before the migration could be completed."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_le_2_b00_commonsense_0",
+              "text": "When a person’s initial implementation of a comparable workflow causes material data-quality failures and another person must replace it, that event is evidence of limited demonstrated capability for independently building such a pipeline."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x02_le_2_b00_deduced_0",
+          "text": "Bruno’s previous data-engineering work did not progress independently to a reliable result."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_le_2_b00_root",
+      "text": "Bruno's skill for build the data pipeline is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x03_eq_2_b00",
+    "latent_fact_id": "cf_x03_eq_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_eq_2_b00_explicit_0",
+              "text": "During the April billing-system discovery session, Bruno used a prepared question list to capture the finance team’s approval steps and circulated notes that the attendees confirmed as accurate."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_eq_2_b00_explicit_1",
+              "text": "When the same group raised conflicting exception-handling requests the following week, Bruno asked the project lead to join a follow-up meeting to clarify priorities and resolve the disagreement."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_eq_2_b00_commonsense_0",
+              "text": "Accurate capture of routine information indicates dependable performance in structured conversations."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_eq_2_b00_commonsense_1",
+              "text": "Needing help to navigate conflicting priorities suggests limits in handling the most complex stakeholder interactions."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_eq_2_b00_commonsense_2",
+              "text": "Together, these observations support an intermediate level rather than either extreme."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x03_eq_2_b00_deduced_0",
+          "text": "Bruno has previously handled straightforward stakeholder conversations successfully, while more complex follow-up required support."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_eq_2_b00_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x03_ge_2_b00",
+    "latent_fact_id": "cf_x03_ge_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_ge_2_b00_explicit_0",
+              "text": "During a March vendor discovery meeting, Bruno asked the operations lead to describe the approval process step by step and followed up on two exceptions the lead mentioned."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_ge_2_b00_explicit_1",
+              "text": "After the meeting, the product owner used Bruno's notes to create a checklist of open questions for the next discussion."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_ge_2_b00_commonsense_0",
+              "text": "Leading a structured conversation, asking relevant follow-up questions, and producing notes that others can use are evidence of practical competence in gathering stakeholder information."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x03_ge_2_b00_deduced_0",
+          "text": "Bruno has previously led a requirements-focused conversation that produced usable follow-up material."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_ge_2_b00_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is at least moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x03_le_2_b00",
+    "latent_fact_id": "cf_x03_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_le_2_b00_explicit_0",
+              "text": "At the April customer-discovery session, Bruno led the stakeholder interviews while the project manager observed."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_le_2_b00_explicit_1",
+              "text": "Afterward, the manager had to repeat several conversations because Bruno's notes omitted key decision criteria and mixed together comments from different participants."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_le_2_b00_commonsense_0",
+              "text": "When interview records omit important distinctions and require repeated conversations, the original interviewing work did not reliably produce usable findings."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x03_le_2_b00_deduced_0",
+          "text": "Bruno's stakeholder-interview deliverable required substantial follow-up before it could be used."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_le_2_b00_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x04_eq_2_b00",
+    "latent_fact_id": "cf_x04_eq_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_eq_2_b00_explicit_0",
+              "text": "During the customer-import project, Chandra implemented the scripts that pulled records from three external systems and loaded them into the warehouse."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_eq_2_b00_explicit_1",
+              "text": "After the first production run exposed duplicate records and failed retries, a teammate helped Chandra revise the error-handling and monitoring setup."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x04_eq_2_b00_commonsense_0",
+              "text": "Completing the core integration work demonstrates relevant practical capability, while needing help with reliability issues indicates neither effortless mastery nor an absence of capability."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x04_eq_2_b00_deduced_0",
+          "text": "Chandra handled a substantial portion of a prior data integration effort, with some later technical support needed."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x04_eq_2_b00_root",
+      "text": "Chandra's skill for build the data pipeline is moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x04_ge_2_b00",
+    "latent_fact_id": "cf_x04_ge_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_ge_2_b00_explicit_0",
+              "text": "During an April vendor-file pilot, Chandra wrote a script that loaded weekly CSV exports into a staging table, standardized date formats, and flagged duplicate rows."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_ge_2_b00_explicit_1",
+              "text": "After Chandra documented the rerun steps, the operations lead used the script for three consecutive weekly refreshes without needing changes to its core logic."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x04_ge_2_b00_commonsense_0",
+              "text": "Creating and documenting a repeatable ingestion, cleaning, and validation workflow provides evidence of practical capability with foundational data-pipeline work."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x04_ge_2_b00_deduced_0",
+          "text": "Chandra has demonstrated hands-on data workflow implementation."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x04_ge_2_b00_root",
+      "text": "Chandra's skill for build the data pipeline is at least moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x04_le_2_b00",
+    "latent_fact_id": "cf_x04_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_le_2_b00_explicit_0",
+              "text": "During the April reporting pilot, Chandra’s extraction job produced duplicate customer records after a schema change."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_le_2_b00_explicit_1",
+              "text": "Bruno rebuilt the transformation step and added validation checks before the pilot data could be shared with analysts."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x04_le_2_b00_commonsense_0",
+              "text": "A pipeline implementation that breaks under a routine schema change and requires another person to rebuild core processing and validation indicates limited demonstrated capability with that kind of work."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x04_le_2_b00_deduced_0",
+          "text": "Chandra’s earlier pipeline prototype needed substantial corrective work before it could be used."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x04_le_2_b00_root",
+      "text": "Chandra's skill for build the data pipeline is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x05_eq_1_b00",
+    "latent_fact_id": "cf_x05_eq_1",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x05_eq_1_b00_explicit_0",
+              "text": "During last month’s vendor discovery meeting, Chandra followed the prepared questions but did not ask why the finance lead rejected the proposed reporting format."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x05_eq_1_b00_explicit_1",
+              "text": "A follow-up conversation led by Bruno later revealed that the finance lead’s main concern was an approval bottleneck that was absent from Chandra’s notes."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x05_eq_1_b00_commonsense_0",
+              "text": "When an interviewer misses the underlying reason behind a stakeholder’s stated position, the resulting interview record may omit information needed for planning."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x05_eq_1_b00_deduced_0",
+          "text": "Chandra’s earlier interview session did not capture several decision-critical concerns."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x05_eq_1_b00_root",
+      "text": "Chandra's skill for conduct stakeholder interviews is limited."
+    }
+  },
+  {
+    "branch_id": "cf_x05_le_2_b00",
+    "latent_fact_id": "cf_x05_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x05_le_2_b00_explicit_0",
+              "text": "During the March discovery call with the regional operations group, Chandra moved through the prepared questions without asking follow-ups when two managers gave conflicting descriptions of the approval process."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x05_le_2_b00_explicit_1",
+              "text": "After the call, Alice held a separate conversation with the managers and documented the missing disagreement, which later changed the project requirements."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x05_le_2_b00_commonsense_0",
+              "text": "When an interviewer does not probe conflicting stakeholder accounts, important requirements can remain undiscovered."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x05_le_2_b00_commonsense_1",
+              "text": "Needing a later conversation to uncover a central disagreement is evidence that the original interview did not fully surface stakeholder needs."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x05_le_2_b00_deduced_0",
+          "text": "Chandra has shown difficulty drawing out stakeholder priorities in interviews."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x05_le_2_b00_root",
+      "text": "Chandra's skill for conduct stakeholder interviews is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x06_eq_1_b00",
+    "latent_fact_id": "cf_x06_eq_1",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_eq_1_b00_explicit_0",
+              "text": "During the April reporting sprint, Alice replaced Bruno's transformation script after their review meeting ended without agreement on the required fields."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_eq_1_b00_explicit_1",
+              "text": "At the following retrospective, Bruno said he had stopped asking Alice for status updates because their previous exchanges had led to conflicting revisions."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x06_eq_1_b00_commonsense_0",
+              "text": "Repeated replacement of each other's work and avoidance of routine coordination are signs that a pair's collaboration is not functioning smoothly."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x06_eq_1_b00_deduced_0",
+          "text": "Alice and Bruno have had difficulty sustaining a shared workflow."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x06_eq_1_b00_root",
+      "text": "The cooperation of alice and bruno is poor."
+    }
+  },
+  {
+    "branch_id": "cf_x06_le_2_b00",
+    "latent_fact_id": "cf_x06_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_le_2_b00_explicit_0",
+              "text": "During the customer-records migration last spring, Alice and Bruno produced separate field-mapping documents that used different definitions for account status."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_le_2_b00_explicit_1",
+              "text": "The project lead held two reconciliation meetings after their conflicting mappings delayed the handoff to the engineering team."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x06_le_2_b00_commonsense_0",
+              "text": "Repeatedly incompatible work products and manager-led reconciliation meetings are evidence of limited ease in working together."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x06_le_2_b00_deduced_0",
+          "text": "Alice and Bruno’s prior joint work showed recurring coordination friction."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x06_le_2_b00_root",
+      "text": "The cooperation of alice and bruno is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x07_eq_1_b00",
+    "latent_fact_id": "cf_x07_eq_1",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x07_eq_1_b00_explicit_0",
+              "text": "During the March requirements workshop, Alice circulated a revised intake template without incorporating Chandra's tracked comments."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x07_eq_1_b00_explicit_1",
+              "text": "At the follow-up meeting, Chandra declined to use that template and recorded stakeholder needs in a separate document."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x07_eq_1_b00_commonsense_0",
+              "text": "When two people working on the same material stop incorporating each other's input and maintain parallel records, their coordination is likely strained."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x07_eq_1_b00_deduced_0",
+          "text": "Alice and Chandra's joint workflow has recently become unreliable."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x07_eq_1_b00_root",
+      "text": "The cooperation of alice and chandra is poor."
+    }
+  },
+  {
+    "branch_id": "cf_x07_le_2_b00",
+    "latent_fact_id": "cf_x07_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x07_le_2_b00_explicit_0",
+              "text": "During last spring’s reporting project, Alice and Chandra were paired to reconcile the same customer records, but their conflicting file conventions left several entries unresolved at the end of the week."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x07_le_2_b00_explicit_1",
+              "text": "Their manager held two separate check-ins with them before the reconciliation was completed and reassigned the final review to Bruno."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x07_le_2_b00_commonsense_0",
+              "text": "Repeated managerial intervention and transfer of a joint task’s final review are signs that a pair’s collaboration was limited rather than consistently strong."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x07_le_2_b00_deduced_0",
+          "text": "Alice and Chandra’s previous joint deliverable did not proceed smoothly without outside support."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x07_le_2_b00_root",
+      "text": "The cooperation of alice and chandra is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x08_eq_2_b00",
+    "latent_fact_id": "cf_x08_eq_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x08_eq_2_b00_explicit_0",
+              "text": "During last month's discovery workshop, Bruno captured the stakeholders' open questions and sent Chandra a same-day summary with the requested owners and deadlines."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x08_eq_2_b00_explicit_1",
+              "text": "Chandra used Bruno's summary to prepare the follow-up notes, and the stakeholders received a single consolidated response before the next meeting."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x08_eq_2_b00_commonsense_0",
+              "text": "When two people exchange usable handoff information promptly and produce a unified follow-up without rework, their collaboration is functioning reliably."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x08_eq_2_b00_deduced_0",
+          "text": "Their prior joint follow-up showed smooth coordination."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x08_eq_2_b00_root",
+      "text": "The cooperation of bruno and chandra is adequate."
+    }
+  },
+  {
+    "branch_id": "cf_x08_ge_2_b00",
+    "latent_fact_id": "cf_x08_ge_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x08_ge_2_b00_explicit_0",
+              "text": "During the customer-feedback dashboard rollout, Bruno drafted the data definitions while Chandra gathered clarification notes from account managers, and they reconciled conflicting terminology in a shared review session."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x08_ge_2_b00_explicit_1",
+              "text": "After the review, Bruno incorporated Chandra's notes into the final specification, and Chandra told the project lead that the handoff had been clear and timely."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x08_ge_2_b00_commonsense_0",
+              "text": "People who resolve ambiguities together, incorporate each other's input, and describe handoffs as clear and timely show evidence of functional collaboration."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x08_ge_2_b00_deduced_0",
+          "text": "Bruno and Chandra have demonstrated a workable collaborative pattern."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x08_ge_2_b00_root",
+      "text": "The cooperation of bruno and chandra is at least moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x08_le_2_b00",
+    "latent_fact_id": "cf_x08_le_2",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x08_le_2_b00_explicit_0",
+              "text": "During a customer-discovery sprint, Bruno and Chandra were asked to prepare one interview guide, but each submitted a different version with incompatible question sequences."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x08_le_2_b00_explicit_1",
+              "text": "The sprint facilitator combined the two drafts and resolved the disagreements before the guide could be used."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x08_le_2_b00_commonsense_0",
+              "text": "When a pair cannot converge on a shared work product without a third party resolving conflicts, their collaboration has clear limits."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x08_le_2_b00_deduced_0",
+          "text": "Their prior joint work required external reconciliation."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x08_le_2_b00_root",
+      "text": "The cooperation of bruno and chandra is at most moderate."
+    }
+  },
+  {
+    "branch_id": "cf_x00_ge_x01_b00",
+    "latent_fact_id": "cf_x00_ge_x01",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x01_b00_explicit_0",
+              "text": "During the customer-data pilot, Alice connected the billing and support exports, documented the transformations, and the team used her daily refresh without rework through the final review."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x01_b00_explicit_1",
+              "text": "For the earlier stakeholder-discovery round, Alice’s draft discussion guide was returned twice because several questions mixed multiple topics and did not identify who needed to answer them."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x01_b00_commonsense_0",
+              "text": "A completed, reusable deliverable that passes review with no rework is evidence of dependable performance in the work that produced it."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x01_b00_commonsense_1",
+              "text": "Repeated revision of an interview guide indicates that the related work required more support and refinement than the successful delivery."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_ge_x01_b00_deduced_0",
+          "text": "Alice’s recent delivery record shows a smoother outcome in data-integration work than in interview preparation."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_ge_x01_b00_root",
+      "text": "Alice's skill for build the data pipeline is at least as strong as Alice's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x00_ge_x02_b00",
+    "latent_fact_id": "cf_x00_ge_x02",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x02_b00_explicit_0",
+              "text": "During last quarter's CRM migration rehearsal, Alice's ingestion job quarantined malformed records, completed the remaining loads, and produced a reconciliation report without manual repair."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x02_b00_explicit_1",
+              "text": "In the same rehearsal, Bruno's import process stopped on malformed records, and the operations team spent the afternoon restarting batches and correcting duplicates."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x02_b00_commonsense_0",
+              "text": "When two people face the same pipeline-related failure condition, the implementation that continues safely and produces reconciled output is stronger evidence of dependable pipeline capability than one requiring manual recovery."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_ge_x02_b00_deduced_0",
+          "text": "In a comparable data-migration exercise, Alice's implementation proved more reliable."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_ge_x02_b00_root",
+      "text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x00_ge_x03_b00",
+    "latent_fact_id": "cf_x00_ge_x03",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x03_b00_explicit_0",
+              "text": "During the spring pilot, Alice repaired the failing customer-data ingestion flow, added automated validation checks, and kept the daily feed running through launch without manual rework."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x03_b00_explicit_1",
+              "text": "In that same pilot, Bruno's stakeholder sessions had to be repeated after the first round of notes omitted several decisions and did not identify the responsible contacts."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x03_b00_commonsense_0",
+              "text": "Successfully restoring and stabilizing a data flow under launch conditions is evidence of effective pipeline-building capability."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x03_b00_commonsense_1",
+              "text": "Needing to repeat interviews because key decisions and contacts were missing is evidence of weaker interview execution in that event."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x03_b00_commonsense_2",
+              "text": "A strong success in one task contrasted with a substantive failure in the other can support a relative capability inference."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_ge_x03_b00_deduced_0",
+          "text": "The pilot provides a clear cross-task contrast in demonstrated outcomes."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_ge_x03_b00_root",
+      "text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x00_ge_x04_b00",
+    "latent_fact_id": "cf_x00_ge_x04",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x04_b00_explicit_0",
+              "text": "During the March reporting-system migration, Alice converted weekly raw exports into a scheduled process that produced validated tables before the finance deadline."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x04_b00_explicit_1",
+              "text": "Chandra’s earlier version of the same migration was retired after duplicate records and failed refreshes required manual correction."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x04_b00_commonsense_0",
+              "text": "When two people work on comparable data-processing implementations, the workflow that is retained and meets the deadline with validation is evidence of at least comparable capability to the one that is retired after recurring operational failures."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_ge_x04_b00_deduced_0",
+          "text": "Alice’s migration workflow proved more dependable in a comparable implementation effort."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_ge_x04_b00_root",
+      "text": "Alice's skill for build the data pipeline is at least as strong as Chandra's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x00_ge_x05_b00",
+    "latent_fact_id": "cf_x00_ge_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x05_b00_explicit_0",
+              "text": "During the Northstar rollout, Alice rebuilt a failing ingestion workflow before launch, restored the daily reporting feed, and left operating notes that the support team used without requesting revisions."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x00_ge_x05_b00_explicit_1",
+              "text": "In that rollout's discovery phase, Chandra's interview summary omitted two required customer groups, and the product team delayed its decision until follow-up conversations were completed."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x05_b00_commonsense_0",
+              "text": "Restoring a failed operational workflow and producing a usable handoff are signs of successful execution on a technical delivery task."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x00_ge_x05_b00_commonsense_1",
+              "text": "An interview deliverable that misses required participant groups and forces follow-up work indicates a less complete outcome for that event."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x00_ge_x05_b00_deduced_0",
+          "text": "The Northstar rollout records a stronger completed deliverable on Alice's side than on Chandra's side."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x00_ge_x05_b00_root",
+      "text": "Alice's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x01_le_x02_b00",
+    "latent_fact_id": "cf_x01_le_x02",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x02_b00_explicit_0",
+              "text": "During the spring pilot, Alice's interview notes left several stakeholder approval conditions unresolved, and the follow-up meeting was needed to clarify them."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x02_b00_explicit_1",
+              "text": "In the same pilot, Bruno's pipeline prototype passed the agreed handoff checks and was used by the reporting team without rework."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_le_x02_b00_commonsense_0",
+              "text": "When two contributions from the same project are reviewed against agreed deliverables, unresolved core requirements indicate less demonstrated effectiveness than work accepted without rework."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_le_x02_b00_deduced_0",
+          "text": "The pilot records give a relative basis for judging the two demonstrated contributions."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_le_x02_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is no stronger than Bruno's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x01_eq_x02_canonical_equality",
+    "latent_fact_id": "cf_x01_eq_x02",
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x01_eq_x02_canonical_equality_explicit_0",
+          "text": "An independent assessment compared Alice's skill for conduct stakeholder interviews with Bruno's skill for build the data pipeline using one shared categorical proficiency rubric."
+        },
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x01_eq_x02_canonical_equality_explicit_1",
+          "text": "That assessment placed Alice's skill for conduct stakeholder interviews and Bruno's skill for build the data pipeline in the same proficiency category."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_eq_x02_canonical_equality_root",
+      "text": "Alice's skill for conduct stakeholder interviews is at the same level as Bruno's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x01_ge_x02_b00",
+    "latent_fact_id": "cf_x01_ge_x02",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_ge_x02_b00_explicit_0",
+              "text": "At the April pilot kickoff, Alice met with six department leads and returned with a signed list of reporting needs, unresolved questions, and contact owners for every item."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_ge_x02_b00_explicit_1",
+              "text": "In that pilot's first week, Bruno's ingestion job stopped when it encountered duplicate customer IDs, and the team postponed the dashboard review while the source records were cleaned."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_ge_x02_b00_commonsense_0",
+              "text": "A completed, validated discovery record and a blocked technical deliverable from the same pilot provide comparable evidence about how effectively each person handled the work they were given."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_ge_x02_b00_deduced_0",
+          "text": "During the same pilot, Alice produced a more complete deliverable in her role than Bruno did in his."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_ge_x02_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is at least as strong as Bruno's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x01_le_x03_b00",
+    "latent_fact_id": "cf_x01_le_x03",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x03_b00_explicit_0",
+              "text": "During the Orion discovery workshop, Bruno led the follow-up conversation with two skeptical department heads and secured their agreement to provide detailed process notes."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x03_b00_explicit_1",
+              "text": "Alice joined that follow-up meeting after asking Bruno to take the lead because she was unsure how to address the department heads' objections."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_le_x03_b00_commonsense_0",
+              "text": "Someone who independently addresses stakeholders' objections and obtains their cooperation demonstrates at least as much relevant interview-facing capability as a colleague who defers that conversation to them."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_le_x03_b00_deduced_0",
+          "text": "Bruno handled a demanding stakeholder-facing situation with greater independence than Alice did in the same project setting."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_le_x03_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is no stronger than Bruno's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x01_le_x04_b00",
+    "latent_fact_id": "cf_x01_le_x04",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x04_b00_explicit_0",
+              "text": "During the Atlas rollout, Alice's stakeholder interview notes left two department-specific approval requirements unrecorded, and the team reopened those discussions after the pilot began."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x04_b00_explicit_1",
+              "text": "In the same rollout, Chandra delivered the data pipeline connector before the pilot and traced a late source-system format change without interrupting the scheduled data load."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_le_x04_b00_commonsense_0",
+              "text": "Avoiding missed requirements in stakeholder conversations and resolving production-relevant data changes are concrete indicators of effective performance in their respective kinds of work."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_le_x04_b00_commonsense_1",
+              "text": "A comparison can be inferred from the relative outcomes described without stating an assignment or an ability verdict."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_le_x04_b00_deduced_0",
+          "text": "The project retrospective provides more favorable execution evidence for Chandra's technical delivery than for Alice's interview-led discovery work."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_le_x04_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x01_le_x05_b00",
+    "latent_fact_id": "cf_x01_le_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x05_b00_explicit_0",
+              "text": "During a joint customer-listening session for the library redesign, Chandra noticed that a hesitant patron kept referring to “the after-school rush” and followed up until the patron described the checkout bottleneck in detail."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_le_x05_b00_explicit_1",
+              "text": "At the same session, Alice moved on after receiving a similar vague comment about busy afternoons, and the issue was only clarified later when Chandra revisited it."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_le_x05_b00_commonsense_0",
+              "text": "When people face comparable conversational cues, drawing out relevant detail through follow-up questions is evidence of stronger stakeholder-interviewing performance."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_le_x05_b00_deduced_0",
+          "text": "indirect inference"
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_le_x05_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is no stronger than Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x01_eq_x05_canonical_equality",
+    "latent_fact_id": "cf_x01_eq_x05",
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x01_eq_x05_canonical_equality_explicit_0",
+          "text": "An independent assessment compared Alice's skill for conduct stakeholder interviews with Chandra's skill for conduct stakeholder interviews using one shared categorical proficiency rubric."
+        },
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x01_eq_x05_canonical_equality_explicit_1",
+          "text": "That assessment placed Alice's skill for conduct stakeholder interviews and Chandra's skill for conduct stakeholder interviews in the same proficiency category."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_eq_x05_canonical_equality_root",
+      "text": "Alice's skill for conduct stakeholder interviews is at the same level as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x01_ge_x05_b00",
+    "latent_fact_id": "cf_x01_ge_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_ge_x05_b00_explicit_0",
+              "text": "During the April discovery sessions, Alice asked the finance director follow-up questions that uncovered an unreported approval step, which was added to the requirements notes before the meeting ended."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x01_ge_x05_b00_explicit_1",
+              "text": "In the same round of sessions, Chandra accepted the operations manager’s initial answer about approvals; the omitted step surfaced only after the manager reviewed the draft notes the next day."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x01_ge_x05_b00_commonsense_0",
+              "text": "When interviewers face similarly incomplete answers, uncovering a missing process detail through timely follow-up is stronger evidence of effective stakeholder interviewing than leaving the detail undiscovered until later review."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x01_ge_x05_b00_deduced_0",
+          "text": "The interview debriefs showed a contrast in how the two handled unclear stakeholder responses."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x01_ge_x05_b00_root",
+      "text": "Alice's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x02_le_x03_b00",
+    "latent_fact_id": "cf_x02_le_x03",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_x03_b00_explicit_0",
+              "text": "During the April customer pilot, Bruno's notes from conversations with procurement managers identified an approval bottleneck, and the product team revised onboarding materials around that finding."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_x03_b00_explicit_1",
+              "text": "In the same pilot, Bruno's ingestion job did not handle duplicate account IDs, and the release was held until another engineer replaced that portion of the job."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_le_x03_b00_commonsense_0",
+              "text": "Useful findings that are adopted by a team are evidence of effective performance in the activity that produced them."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_le_x03_b00_commonsense_1",
+              "text": "A technical deliverable requiring replacement after delaying a release is weaker performance evidence than a stakeholder-work product that directly informs a successful revision."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x02_le_x03_b00_deduced_0",
+          "text": "The pilot provided more favorable evidence from Bruno's stakeholder-facing work than from his pipeline implementation."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_le_x03_b00_root",
+      "text": "Bruno's skill for build the data pipeline is no stronger than Bruno's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x02_le_x04_b00",
+    "latent_fact_id": "cf_x02_le_x04",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_x04_b00_explicit_0",
+              "text": "During the April ingestion outage, Chandra traced the duplicate-record problem to a malformed transformation step and deployed a corrected version that cleared the backlog before the next reporting run."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_x04_b00_explicit_1",
+              "text": "In that same incident, Bruno had earlier restored the previous transformation version, but the duplicate records continued until Chandra replaced the faulty logic."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_le_x04_b00_commonsense_0",
+              "text": "When two people address the same technical failure, the person whose intervention resolves the underlying cause provides at least as strong evidence of relevant capability as the person whose intervention does not resolve it."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x02_le_x04_b00_deduced_0",
+          "text": "The production incident offers a direct comparison of their handling of pipeline work."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_le_x04_b00_root",
+      "text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x02_le_x05_b00",
+    "latent_fact_id": "cf_x02_le_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_x05_b00_explicit_0",
+              "text": "During the spring reporting rollout, Bruno's pipeline prototype was set aside after it repeatedly broke when source teams changed their file schemas."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_le_x05_b00_explicit_1",
+              "text": "Later that quarter, Chandra ran discovery interviews with the affected source teams, and the resulting requirements summary was approved by every team lead."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_le_x05_b00_commonsense_0",
+              "text": "A prototype abandoned because it could not handle recurring source changes is weaker evidence of effective pipeline work than a completed stakeholder process that produced an approved requirements summary."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x02_le_x05_b00_deduced_0",
+          "text": "The documented outcomes show stronger evidence of success from Chandra's stakeholder-facing work than from Bruno's pipeline prototype."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_le_x05_b00_root",
+      "text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x02_eq_x05_canonical_equality",
+    "latent_fact_id": "cf_x02_eq_x05",
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x02_eq_x05_canonical_equality_explicit_0",
+          "text": "An independent assessment compared Bruno's skill for build the data pipeline with Chandra's skill for conduct stakeholder interviews using one shared categorical proficiency rubric."
+        },
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x02_eq_x05_canonical_equality_explicit_1",
+          "text": "That assessment placed Bruno's skill for build the data pipeline and Chandra's skill for conduct stakeholder interviews in the same proficiency category."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_eq_x05_canonical_equality_root",
+      "text": "Bruno's skill for build the data pipeline is at the same level as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x02_ge_x05_b00",
+    "latent_fact_id": "cf_x02_ge_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_ge_x05_b00_explicit_0",
+              "text": "During the CRM migration, Bruno's ingestion workflow was released on schedule and remained in use without a repair ticket during the following month."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x02_ge_x05_b00_explicit_1",
+              "text": "After Chandra led a stakeholder-discovery round for the same migration, the team repeated several sessions because participants said key requirements had been recorded inaccurately."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x02_ge_x05_b00_commonsense_0",
+              "text": "A completed deliverable that works without follow-up repairs is stronger evidence of successful execution than work that must be repeated because its results are unreliable."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x02_ge_x05_b00_deduced_0",
+          "text": "The project records show a cleaner completed outcome for Bruno's work than for Chandra's."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x02_ge_x05_b00_root",
+      "text": "Bruno's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x03_le_x04_b00",
+    "latent_fact_id": "cf_x03_le_x04",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_le_x04_b00_explicit_0",
+              "text": "During the customer-data pilot, Bruno led the stakeholder sessions, but the project team later had to schedule follow-up calls because several source-system requirements were missing from his notes."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_le_x04_b00_explicit_1",
+              "text": "On the same pilot, Chandra assembled the ingestion workflow, added validation for the identified data sources, and delivered a working run for the review meeting."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_le_x04_b00_commonsense_0",
+              "text": "A completed technical deliverable that works in review demonstrates stronger task execution than interview output that requires substantial follow-up to become usable."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x03_le_x04_b00_deduced_0",
+          "text": "Chandra’s completed work showed stronger execution than Bruno’s interview output during the pilot."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_le_x04_b00_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x03_eq_x04_canonical_equality",
+    "latent_fact_id": "cf_x03_eq_x04",
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x03_eq_x04_canonical_equality_explicit_0",
+          "text": "An independent assessment compared Bruno's skill for conduct stakeholder interviews with Chandra's skill for build the data pipeline using one shared categorical proficiency rubric."
+        },
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x03_eq_x04_canonical_equality_explicit_1",
+          "text": "That assessment placed Bruno's skill for conduct stakeholder interviews and Chandra's skill for build the data pipeline in the same proficiency category."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_eq_x04_canonical_equality_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is at the same level as Chandra's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x03_ge_x04_b00",
+    "latent_fact_id": "cf_x03_ge_x04",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_ge_x04_b00_explicit_0",
+              "text": "During the May pilot, Chandra’s first data-feed deployment created duplicate records, and another engineer replaced it before the release."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_ge_x04_b00_explicit_1",
+              "text": "For the same pilot, Bruno’s meetings with department leads produced a signed requirements summary that the project team used unchanged to set the release scope."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_ge_x04_b00_commonsense_0",
+              "text": "A completed deliverable adopted without revision is stronger evidence of effective prior work than a deliverable that had to be replaced after failing in use."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x03_ge_x04_b00_deduced_0",
+          "text": "The pilot’s documented outcomes favor Bruno’s prior result over Chandra’s prior result."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_ge_x04_b00_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for build the data pipeline."
+    }
+  },
+  {
+    "branch_id": "cf_x03_ge_x05_b00",
+    "latent_fact_id": "cf_x03_ge_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_ge_x05_b00_explicit_0",
+              "text": "During last quarter's customer-discovery project, Bruno's interview notes identified a previously unreported approval bottleneck that the product team later confirmed with account records."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x03_ge_x05_b00_explicit_1",
+              "text": "In the same project, Chandra's interview summary grouped several requests together, and the team had to schedule follow-up conversations before it could determine which issue each stakeholder meant."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x03_ge_x05_b00_commonsense_0",
+              "text": "Interview findings that are later confirmed and immediately usable for decisions provide stronger evidence of effective stakeholder-interview work than findings that require clarification before use."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x03_ge_x05_b00_deduced_0",
+          "text": "Bruno's prior interview evidence was more decision-ready than Chandra's."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x03_ge_x05_b00_root",
+      "text": "Bruno's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x04_ge_x05_b00",
+    "latent_fact_id": "cf_x04_ge_x05",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_ge_x05_b00_explicit_0",
+              "text": "In May, Chandra rebuilt a failed ingestion job, added validation checks, and the nightly run completed without manual repair for three weeks."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x04_ge_x05_b00_explicit_1",
+              "text": "During June customer discovery, Chandra missed two scheduled follow-up calls, and the notes from the calls they attended lacked the agreed decision summaries."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x04_ge_x05_b00_commonsense_0",
+              "text": "Successfully restoring and stabilizing a recurring technical process is evidence of effective work on data-oriented implementation."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x04_ge_x05_b00_commonsense_1",
+              "text": "Missed follow-ups and incomplete decision records indicate weaker execution in stakeholder-interaction work."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x04_ge_x05_b00_commonsense_2",
+              "text": "Comparing the outcomes of the two events supports a relative inference without stating it directly."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x04_ge_x05_b00_deduced_0",
+          "text": "Chandra's recent engineering delivery was more dependable than their interview follow-through."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x04_ge_x05_b00_root",
+      "text": "Chandra's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews."
+    }
+  },
+  {
+    "branch_id": "cf_x06_le_x07_b00",
+    "latent_fact_id": "cf_x06_le_x07",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_le_x07_b00_explicit_0",
+              "text": "At the June requirements workshop, Alice and Bruno worked through a reconciliation exercise, but their draft still had unresolved ownership conflicts after two review rounds."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_le_x07_b00_explicit_1",
+              "text": "Later in the same workshop, Alice and Chandra completed the identical reconciliation exercise, and the facilitator accepted their draft without requesting revisions."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x06_le_x07_b00_commonsense_0",
+              "text": "When pairs complete the same collaborative exercise under the same conditions, unresolved conflicts and revision requests are evidence of weaker coordination than a smooth, accepted result."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x06_le_x07_b00_deduced_0",
+          "text": "In the matched workshop exercise, Alice and Bruno showed more collaboration friction than Alice and Chandra."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x06_le_x07_b00_root",
+      "text": "The cooperation of alice and bruno is no stronger than the cooperation of Alice and Chandra."
+    }
+  },
+  {
+    "branch_id": "cf_x06_eq_x07_canonical_equality",
+    "latent_fact_id": "cf_x06_eq_x07",
+    "root": {
+      "children": [
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x06_eq_x07_canonical_equality_explicit_0",
+          "text": "An independent teamwork assessment compared the cooperation of Alice and Bruno with the cooperation of Alice and Chandra using one shared categorical rubric."
+        },
+        {
+          "children": [],
+          "kind": "explicit",
+          "node_id": "cf_x06_eq_x07_canonical_equality_explicit_1",
+          "text": "That assessment placed the cooperation of Alice and Bruno and the cooperation of Alice and Chandra in the same category."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x06_eq_x07_canonical_equality_root",
+      "text": "The cooperation of alice and bruno is at the same level as the cooperation of Alice and Chandra."
+    }
+  },
+  {
+    "branch_id": "cf_x06_ge_x07_b00",
+    "latent_fact_id": "cf_x06_ge_x07",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_ge_x07_b00_explicit_0",
+              "text": "During the April vendor-data rollout, Alice and Bruno divided the cleanup and validation work in a morning check-in, exchanged their draft outputs that afternoon, and merged the changes without reopening either section."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_ge_x07_b00_explicit_1",
+              "text": "In the same rollout, Alice and Chandra needed two additional meetings to reconcile incompatible field definitions before their shared report could be finalized."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x06_ge_x07_b00_commonsense_0",
+              "text": "Pairs that coordinate responsibilities, exchange compatible work, and complete a joint deliverable with fewer revisions generally show stronger collaboration than pairs whose work requires repeated reconciliation."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x06_ge_x07_b00_deduced_0",
+          "text": "Past collaboration records show a smoother working rhythm between Alice and Bruno than in Alice and Chandra's joint work."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x06_ge_x07_b00_root",
+      "text": "The cooperation of alice and bruno is at least as strong as the cooperation of Alice and Chandra."
+    }
+  },
+  {
+    "branch_id": "cf_x06_le_x08_b00",
+    "latent_fact_id": "cf_x06_le_x08",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_le_x08_b00_explicit_0",
+              "text": "During the May reporting-dashboard rollout, Alice and Bruno agreed to exchange the cleaned source file before the review meeting, but Bruno arrived without the version Alice had prepared and the review was postponed."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x06_le_x08_b00_explicit_1",
+              "text": "At the same rollout, Bruno and Chandra used a shared change log for their interview-summary updates; each incorporated the other’s revisions before the scheduled stakeholder check-in."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x06_le_x08_b00_commonsense_0",
+              "text": "A pair that completes reciprocal handoffs and integrates each other’s updates on time demonstrates dependable coordination, whereas a missed agreed handoff and postponed review provide weaker evidence of it."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x06_le_x08_b00_deduced_0",
+          "text": "Bruno’s past coordination with Chandra appears at least as dependable as his coordination with Alice."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x06_le_x08_b00_root",
+      "text": "The cooperation of alice and bruno is no stronger than the cooperation of Bruno and Chandra."
+    }
+  },
+  {
+    "branch_id": "cf_x07_le_x08_b00",
+    "latent_fact_id": "cf_x07_le_x08",
+    "root": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x07_le_x08_b00_explicit_0",
+              "text": "At last month's reporting workshop, Alice and Chandra paused twice to ask the project lead to reconcile conflicting assumptions before they could combine their sections."
+            },
+            {
+              "children": [],
+              "kind": "explicit",
+              "node_id": "cf_x07_le_x08_b00_explicit_1",
+              "text": "In the same workshop, Bruno and Chandra merged their draft sections without escalation and delivered the combined version before the review meeting."
+            },
+            {
+              "children": [],
+              "kind": "commonsense",
+              "node_id": "cf_x07_le_x08_b00_commonsense_0",
+              "text": "Pairs that require repeated outside reconciliation during a shared task generally exhibit less smooth coordination than pairs that independently integrate their work and meet the deadline."
+            }
+          ],
+          "kind": "deduced",
+          "node_id": "cf_x07_le_x08_b00_deduced_0",
+          "text": "The two pairings showed different levels of ease in coordinating a shared piece of work."
+        }
+      ],
+      "kind": "hidden",
+      "node_id": "cf_x07_le_x08_b00_root",
+      "text": "The cooperation of alice and chandra is no stronger than the cooperation of Bruno and Chandra."
+    }
+  }
+]
