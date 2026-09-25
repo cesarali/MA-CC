@@ -81,13 +81,36 @@ def _events(path: pathlib.Path) -> list[dict[str, Any]]:
     return out
 
 
-def fact_order(task_dir: pathlib.Path) -> tuple[list[str], set[str]]:
+def fact_order(
+    task_dir: pathlib.Path, population: int, with_controller: bool
+) -> tuple[list[str], set[str]]:
+    """The facts that could actually reach this task's board, decisive first.
+
+    Not every fact in the task file is in play. task_004 removes the decisive
+    facts by dropping the agents that held them, so listing them would show six
+    rows that no participant could ever post. The corpus is what agents hold,
+    plus the controller pool only when a controller is running.
+    """
+
     def ids(name: str) -> list[str]:
         payload = json.loads((task_dir / "facts" / f"{name}.json").read_text())
         return [f["fact_id"] if isinstance(f, dict) else f for f in payload]
 
-    decisive = ids("decisive_facts")
-    return decisive + ids("controller_reportable_facts") + ids("neutral_facts"), set(decisive)
+    assignment = task_dir / "private" / f"N{population}_assignment.json"
+    held: set[str] = set()
+    if assignment.is_file():
+        payload = json.loads(assignment.read_text())
+        held = {f for v in payload.get("agent_assignments", {}).values() for f in v}
+
+    corpus = set(held)
+    if with_controller:
+        corpus |= set(ids("controller_reportable_facts"))
+    if not corpus:                       # no assignment on disk: fall back
+        corpus = set(ids("controller_reportable_facts")) | set(ids("neutral_facts"))
+
+    decisive = [f for f in ids("decisive_facts") if f in corpus]
+    rest = [f for f in ids("all_true_facts") if f in corpus and f not in set(decisive)]
+    return decisive + rest, set(decisive)
 
 
 def overrides_of(episode: pathlib.Path) -> dict[str, Any]:
@@ -313,8 +336,9 @@ def draw(
                 bottom.plot(r, n, marker="o", markersize=5.5, markerfacecolor="none",
                             markeredgecolor=CONTROLLER_RING, markeredgewidth=1.2)
     n_dec = sum(1 for i in rows if order[i] in decisive)
-    bottom.axhline(n_dec - 0.5, color=DECISIVE_LABEL, linewidth=0.7,
-                   linestyle=(0, (4, 3)))
+    if n_dec:
+        bottom.axhline(n_dec - 0.5, color=DECISIVE_LABEL, linewidth=0.7,
+                       linestyle=(0, (4, 3)))
     bottom.set_xticks(range(1, rounds + 1))
     bottom.tick_params(labelsize=7)
     if show_x:
@@ -349,9 +373,10 @@ def main() -> int:
     args = parser.parse_args()
 
     TEX = (not args.no_latex) and use_latex()
-    order, decisive = fact_order(args.task_dir)
 
     if args.zip:
+        # A study archive always carries controller arms.
+        order, decisive = fact_order(args.task_dir, args.population, True)
         preloaded = load_from_zip(args.zip, order, args.per_profile)
         groups = {k: None for k in preloaded}
     else:
@@ -362,6 +387,11 @@ def main() -> int:
         groups = collections.defaultdict(list)
         for ep in sorted({p.parent for p in args.grid_dir.rglob("trajectory.jsonl")}):
             groups[condition(ep)].append(ep)
+        # The controller pool only belongs in the corpus if a controller ran.
+        order, decisive = fact_order(
+            args.task_dir, args.population,
+            any(key[0] != "no-controller" for key in groups),
+        )
     if not groups:
         print("no episodes found", file=sys.stderr)
         return 1
@@ -379,8 +409,7 @@ def main() -> int:
             continue
         # One row set and one colour scale for the whole figure, so panels are
         # directly comparable.
-        used = {i for _, a, c, _, _ in loaded for (i, _r) in list(a) + list(c)}
-        rows = [i for i, f in enumerate(order) if i in used or f in decisive]
+        rows = list(range(len(order)))
         vmax = max((max(a.values()) if a else 0) for _, a, _, _, _ in loaded) or 1
         rounds = max(r for _, _, _, r, _ in loaded)
 
