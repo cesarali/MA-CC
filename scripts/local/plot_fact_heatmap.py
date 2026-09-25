@@ -101,7 +101,20 @@ def overrides_of(episode: pathlib.Path) -> dict[str, Any]:
 def condition(episode: pathlib.Path) -> tuple[str, Any, Any]:
     """(arm, rho, budget) - the grouping key, one figure per distinct value."""
 
-    o = overrides_of(episode)
+    o = dict(overrides_of(episode))
+    if "game.options.epistemic_persistence" not in o:
+        # Single-run output has no overrides.json; the round record carries the
+        # same settings, so fall back to it rather than labelling the figure None.
+        events = _events(episode / "round_trajectory.jsonl")
+        if events:
+            o.setdefault("game.options.epistemic_persistence",
+                         events[-1].get("epistemic_persistence"))
+            o.setdefault("game.options.board.communication_profile",
+                         events[-1].get("communication_profile"))
+            budget = events[-1].get("intervention_budget")
+            if budget:
+                o.setdefault("control.options.intervention_budget", budget)
+            o.setdefault("control.options.target", events[-1].get("controller_target"))
     target = o.get("control.options.target")
     arm = ("no-controller" if target is None
            else "truth-controller" if target == "correct"

@@ -1,0 +1,18 @@
+theoretical_reference: none
+slurm:
+  task_throttle: 4
+  cpus_per_task: 1
+  memory: 16G
+  time_limit: '04:00:00'
+  prepare_memory: 16G
+  prepare_time_limit: '01:00:00'
+  finalizer_cpus: 4
+  finalizer_memory: 32G
+  finalizer_time_limit: '04:00:00'
+estimators: []
+resampling:
+  bootstrap_resamples: 1000
+  null_permutations: 1000
+  confidence: 0.95
+  seed: 1
+blackboard_population_outputs: true
