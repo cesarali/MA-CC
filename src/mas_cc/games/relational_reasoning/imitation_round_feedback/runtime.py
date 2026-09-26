@@ -178,6 +178,13 @@ class _RecoveryLedger:
         runtime = {} if payload is None else dict(payload)
         if runtime and int(runtime.get("schema_version", -1)) != self.schema_version:
             raise RecoveryCheckpointError("unsupported provider failure checkpoint")
+        if runtime.get("content_hash") is not None:
+            expected_hash = canonical_hash({key: value for key, value in runtime.items()
+                                            if key != "content_hash"})
+            if runtime["content_hash"] != expected_hash:
+                raise RecoveryCheckpointError("recovery checkpoint content hash mismatch")
+            if int(runtime.get("replay_version", -1)) != 1:
+                raise RecoveryCheckpointError("unsupported recovery replay version")
         self._decisions = {
             str(key): dict(value)
             for key, value in dict(runtime.get("decisions", {})).items()
@@ -281,16 +288,19 @@ class _RecoveryLedger:
     def checkpoint(
         self, failed_call: Mapping[str, Any], *, interruption_type: str
     ) -> None:
+        runtime = {
+            "schema_version": self.schema_version,
+            "replay_version": 1,
+            "interruption_type": interruption_type,
+            "decisions": self._decisions,
+            "controller_choices": self._controller_choices,
+            "failed_call": dict(failed_call),
+        }
+        runtime["content_hash"] = canonical_hash(runtime)
         _notify(
             self._observer,
             "record_failure_checkpoint",
-            runtime={
-                "schema_version": self.schema_version,
-                "interruption_type": interruption_type,
-                "decisions": self._decisions,
-                "controller_choices": self._controller_choices,
-                "failed_call": dict(failed_call),
-            },
+            runtime=runtime,
         )
 
 
@@ -3223,6 +3233,12 @@ async def run_relational_imitation_round_feedback_game(
             prompt_definitions={update.request.stage: update.prompt_definition_hash},
         )
         _notify(observer, "event", "relational_round_feedback", **round_event)
+        drain = getattr(observer, "drain_controller", None)
+        if not continuing and drain is not None and drain.requested:
+            recovery.checkpoint(
+                {"next_round": round_index + 1}, interruption_type="graceful_drain"
+            )
+            drain.raise_if_safe("round_replay")
 
     termination = state.termination_reason or "max_rounds_reached"
     _notify(

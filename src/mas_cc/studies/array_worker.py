@@ -6,8 +6,11 @@ import os
 import sys
 from pathlib import Path
 
+from mas_cc.storage import validate_cell_artifact
+
 from .submission import array_task_command, resolve_array_entry
 from .runtime import configure_study_provider_load_control
+from .drain import worker_drain
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +28,20 @@ def main(argv: list[str] | None = None) -> int:
         from mas_cc.cli.main import main as cli_main
 
         command = array_task_command(entry)
-        return int(cli_main(command[3:]))
+        with worker_drain(arguments[0], int(raw_index)) as controller:
+            code = int(cli_main(command[3:]))
+            if controller is not None:
+                seals = list(Path(entry.output_dir).rglob("cell_complete.json")) if code == 0 else []
+                sealed = len(seals) == entry.expected_cell_count
+                if sealed:
+                    for seal in seals:
+                        validate_cell_artifact(seal.parent)
+                controller.final_state = (
+                    "failed" if code else
+                    "scientifically_complete" if sealed else
+                    "drained" if controller.requested else "finished"
+                )
+            return code
     except (OSError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 2

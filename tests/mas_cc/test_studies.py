@@ -650,6 +650,34 @@ def test_auto_submission_falls_back_to_resource_aware_config_array(
     assert "--time=02:00:00" in calls[0]
 
 
+def test_submission_passes_generic_early_drain_signal(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLURM_CLUSTER_NAME", "cygnus")
+    _standalone_config(tmp_path / "a.yaml", name="a")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: drain-plan}\nconfigs: [a.yaml]\n"
+        "execution:\n  mode: config_array\n  time_limit: '24:00:00'\n"
+        "  graceful_drain: {enabled: true, signal: USR1, lead_time: '04:00:00'}\n",
+        encoding="utf-8",
+    )
+
+    def fake_preflight(_config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    calls = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 4245\n", "")
+
+    result = submit_study(tmp_path, tmp_path / "results", run=fake_run)
+    assert "--signal=B:USR1@14400" in calls[0]
+    assert not any(part.startswith("--export") for part in calls[0])
+    assert calls[0][-2].endswith("scripts/Cygnus/SLURM/run_config_array.job")
+    assert result.execution_plan["graceful_drain"]["enabled"] is True
+
+
 def test_required_results_root_rejects_home_repository_destination(tmp_path):
     _standalone_config(tmp_path / "config.yaml")
     permitted = tmp_path / "work" / "results"

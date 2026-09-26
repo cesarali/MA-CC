@@ -478,6 +478,7 @@ class ParentBundleWorker:
             [ParentCheckpoint, ContinuationBranch, Path],
             Mapping[str, Any] | Awaitable[Mapping[str, Any]],
         ],
+        drain_controller: Any | None = None,
     ) -> Mapping[str, Any]:
         unique = {branch.branch_id: branch for branch in branches}
         if len(unique) != len(branches):
@@ -506,28 +507,38 @@ class ParentBundleWorker:
                     raise ValueError("completed branch seal hash mismatch")
                 completed[branch_id] = seal
                 continue
+            if drain_controller is not None:
+                drain_controller.raise_if_safe("branch")
             branch_dir.mkdir(parents=True, exist_ok=True)
-            result = execute_branch(checkpoint, branch, branch_dir)
-            if inspect.isawaitable(result):
-                result = await result
-            seed, stream = branch.derive_stream(checkpoint)
-            seal = {
-                "schema_version": PARENT_BUNDLE_SCHEMA_VERSION,
-                "status": "complete",
-                "parent_id": checkpoint.parent_id,
-                "checkpoint_id": checkpoint.checkpoint_id,
-                "checkpoint_hash": checkpoint.checkpoint_hash,
-                "branch_id": branch_id,
-                "branch_policy": branch.policy,
-                "posting_budget": branch.posting_budget,
-                "copy_id": branch.copy_id,
-                "continuation_seed": seed,
-                "continuation_stream": stream,
-                "result": dict(result),
-            }
-            seal["branch_hash"] = canonical_hash(seal)
-            _atomic_json(seal_path, seal)
+            if drain_controller is not None:
+                drain_controller.work_started("branch")
+            try:
+                result = execute_branch(checkpoint, branch, branch_dir)
+                if inspect.isawaitable(result):
+                    result = await result
+                seed, stream = branch.derive_stream(checkpoint)
+                seal = {
+                    "schema_version": PARENT_BUNDLE_SCHEMA_VERSION,
+                    "status": "complete",
+                    "parent_id": checkpoint.parent_id,
+                    "checkpoint_id": checkpoint.checkpoint_id,
+                    "checkpoint_hash": checkpoint.checkpoint_hash,
+                    "branch_id": branch_id,
+                    "branch_policy": branch.policy,
+                    "posting_budget": branch.posting_budget,
+                    "copy_id": branch.copy_id,
+                    "continuation_seed": seed,
+                    "continuation_stream": stream,
+                    "result": dict(result),
+                }
+                seal["branch_hash"] = canonical_hash(seal)
+                _atomic_json(seal_path, seal)
+            finally:
+                if drain_controller is not None:
+                    drain_controller.work_finished("branch")
             completed[branch_id] = seal
+            if drain_controller is not None and len(completed) < len(unique):
+                drain_controller.raise_if_safe("branch")
         bundle = {
             "schema_version": PARENT_BUNDLE_SCHEMA_VERSION,
             "status": "complete",
@@ -569,6 +580,9 @@ async def run_checkpoint_parent_bundle(
     and retry boundary. This function only supplies the reusable one-parent /
     many-descendants topology within that ordinary episode.
     """
+    drain_controller = getattr(observer, "drain_controller", None)
+    if drain_controller is not None:
+        drain_controller.raise_if_safe("branch")
 
     from mas_cc.storage import prompt_definition_hash
 
@@ -708,7 +722,7 @@ async def run_checkpoint_parent_bundle(
         }
 
     bundle = await ParentBundleWorker(bundle_dir).run(
-        checkpoint, branches, execute_branch
+        checkpoint, branches, execute_branch, drain_controller=drain_controller
     )
     if not ensemble.retain_parent_artifacts:
         store.path_for(checkpoint.checkpoint_hash).unlink(missing_ok=True)

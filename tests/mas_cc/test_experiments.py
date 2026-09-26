@@ -153,6 +153,39 @@ def test_run_experiment_resume_skips_only_completed_episodes(tmp_path: Path):
     assert third.skipped_resumed == 0
 
 
+def test_drain_stops_queued_episode_after_active_episode_completes(tmp_path: Path, monkeypatch):
+    config = _with_ample_budget(_toy_config(repetitions=3, parallelism=1))
+    from mas_cc.games.runner import run_game as real_run_game
+
+    class Controller:
+        requested = False
+
+        def set_safe_point(self, _capability):
+            pass
+
+        def work_started(self, _kind):
+            pass
+
+        def work_finished(self, _kind):
+            pass
+
+    controller = Controller()
+    calls = []
+
+    async def draining_run_game(game, episode_config, provider, **kwargs):
+        calls.append(episode_config.execution.seed)
+        result = await real_run_game(game, episode_config, provider, **kwargs)
+        controller.requested = True
+        return result
+
+    monkeypatch.setattr("mas_cc.experiments.orchestrator.current_controller", lambda: controller)
+    monkeypatch.setattr("mas_cc.experiments.orchestrator.run_game", draining_run_game)
+    result = run_experiment_sync(config, tmp_path, resume=False, show_progress=False)
+    assert len(calls) == 1
+    assert [outcome.status for outcome in result.outcomes].count("completed") == 1
+    assert [outcome.status for outcome in result.outcomes].count("drained") == 2
+
+
 def test_run_experiment_fail_fast_aborts_remaining_episodes(tmp_path: Path, monkeypatch):
     config = _with_ample_budget(_toy_config(repetitions=3, parallelism=1, fail_fast=True))
 

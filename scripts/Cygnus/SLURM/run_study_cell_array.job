@@ -36,4 +36,22 @@ export DEEPINFRA_BASE_URL="${DEEPINFRA_BASE_URL:-${LLM_BASE}/v1}"
 # the cluster runs a Valkey for exactly this, so no in-job redis-server is needed.
 export MAS_CC_PROVIDER_CONTROL_REDIS_URL="${MAS_CC_PROVIDER_CONTROL_REDIS_URL:-redis://provider-control-redis.slurm-cluster.svc.cluster.local:6379/0}"
 
-exec "$MA_CC_PYTHON" -m mas_cc.studies.cell_worker "$1"
+request_drain() {
+  drain_signal_seen=1
+  echo "[drain] early USR1 received; requesting graceful study drain" >&2
+  "$MA_CC_PYTHON" -m mas_cc.cli.main study drain \
+    --study-dir "$(dirname "$1")" --job-id "${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}" \
+    --reason walltime_signal || echo "[drain] request failed" >&2
+}
+drain_signal_seen=0
+trap 'request_drain "$1"' USR1
+"$MA_CC_PYTHON" -m mas_cc.studies.cell_worker "$1" &
+child=$!
+while true; do
+  if wait "$child"; then status=0; else status=$?; fi
+  if [[ "$drain_signal_seen" -eq 1 && "$status" -eq 138 ]]; then
+    drain_signal_seen=0
+    continue
+  fi
+  exit "$status"
+done

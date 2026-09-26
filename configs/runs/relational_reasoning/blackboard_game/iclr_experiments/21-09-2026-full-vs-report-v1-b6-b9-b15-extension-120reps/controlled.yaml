@@ -71,7 +71,7 @@ control:
     controller_report_selection_strategy: target_preserving_v1
 execution:
   seed: 20260907
-  repetitions: 60
+  repetitions: 120
   parallelism: 16
   fail_fast: false
   semantic_failure_guard:
@@ -85,11 +85,11 @@ pricing:
   explicit_unknown_price_override: false
 budget:
   accounting_unit: USD
-  system_max_cost_per_run: 2500.0
-  max_cost_per_run: 2500.0
-  max_provider_requests: 3000000
-  max_input_tokens: 4000000000
-  max_output_tokens: 16000000000
+  system_max_cost_per_run: 4500.0
+  max_cost_per_run: 4500.0
+  max_provider_requests: 6000000
+  max_input_tokens: 7000000000
+  max_output_tokens: 25000000000
   allow_unbounded_paid_requests: false
 logging:
   level: INFO

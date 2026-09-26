@@ -241,6 +241,53 @@ def test_failed_branch_retry_keeps_parent_and_completed_siblings(prepared, tmp_p
     )["checkpoint_hash"] == checkpoint.checkpoint_hash
 
 
+def test_graceful_branch_drain_seals_active_branch_and_resumes(prepared, tmp_path):
+    from mas_cc.studies.drain import Drained
+
+    _, _, _, checkpoint = prepared
+    branches = standard_continuation_branches()
+    worker = ParentBundleWorker(tmp_path / "drained-bundle")
+
+    class Controller:
+        requested = False
+
+        def raise_if_safe(self, boundary):
+            if self.requested:
+                raise Drained(boundary)
+
+        def work_started(self, _kind):
+            pass
+
+        def work_finished(self, _kind):
+            pass
+
+    controller = Controller()
+    calls = []
+
+    async def execute(_parent, branch, _branch_dir):
+        calls.append(branch.branch_id)
+        controller.requested = True
+        return {"observation_count": 1}
+
+    with pytest.raises(Drained, match="branch"):
+        asyncio.run(worker.run(checkpoint, branches, execute, drain_controller=controller))
+    assert calls == [branches[0].branch_id]
+    first_seal = (tmp_path / "drained-bundle" / "branches" /
+                  branches[0].branch_id / "branch_seal.json")
+    original = first_seal.read_bytes()
+    assert not (tmp_path / "drained-bundle" / "parent_bundle_seal.json").exists()
+    controller.requested = False
+
+    async def resume(_parent, branch, _branch_dir):
+        calls.append(branch.branch_id)
+        return {"observation_count": 1}
+
+    bundle = asyncio.run(worker.run(checkpoint, branches, resume, drain_controller=controller))
+    assert bundle["status"] == "complete"
+    assert first_seal.read_bytes() == original
+    assert calls.count(branches[0].branch_id) == 1
+
+
 def test_downscaled_mock_parent_seals_all_nine_real_continuations(prepared, tmp_path):
     config, _, _, checkpoint = prepared
     state = checkpoint.validate()
