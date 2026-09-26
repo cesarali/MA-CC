@@ -193,5 +193,18 @@ Planning writes scripts and copies recipes but does not submit jobs. After both
 jobs finish, refresh the beta report with:
 
 ```bash
-python -m santa_fe.beta_cmi --config configs/santa_fe/beta_cmi_sweep.yaml --sample-size-summary "$ROOT/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/sample_size_cmi_summary.csv"
+python -m santa_fe.beta_cmi --config configs/santa_fe/beta_cmi_sweep.yaml --sample-size-summary "/shared/home/cesar/work/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/sample_size_cmi_summary.csv"
 ```
+
+## Completed Cygnus sweeps, 2026-09-26
+
+The targeted beta/CMI sweep, its sample-size calibration, and the independent
+11-point rho sweep in `configs/santa_fe/rho_phase_sweep.yaml` completed on
+Cygnus. Their outputs are under `/shared/home/cesar/work/results/studies/`.
+The rho sweep retains the five beta pairs, nine budgets, 100 episodes per cell,
+and information-analysis settings while varying rho from 0.4 to 1.0 in steps
+of 0.06. It produced 495 sealed simulation cells, 495 sealed information cells,
+1,534,500 round rows, and 60 rho-by-budget phase diagram PNGs. The scientific
+summary, exact recipes, and a PDF containing all generated plots are archived
+in `docs/theory/santa_fe_cygnus_20260926/`. See the dated handoffs for job IDs
+and validation details.

@@ -55,7 +55,7 @@ model:
   sensing_fraction: 0.5
   truth_fact_fraction: 0.7
 output:
-  results_dir: ~/MA-CC-cygnus/results/studies/santa_fe_sample_size_cmi
+  results_dir: /shared/home/cesar/work/results/studies/santa_fe_sample_size_cmi
   save_micro_trajectories: false
   save_plots: true
   save_reports: true

@@ -1,0 +1,297 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=18mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,longtable,array,graphicx,verbatim,url,hyperref}
+\usepackage[T1]{fontenc}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+\newcommand{\sigm}{\operatorname{sigmoid}}
+\title{Santa Fe synthetic control: measured results and a mean-field starting point}
+\author{Reproducible analysis of the Cygnus runs}
+\date{26 September 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+This report describes two completed Santa Fe sweeps and a separate sample-size
+calibration. It records the exact simulation and analysis parameters, summarizes
+the observed finite-population outcomes, gives equations suitable for a
+mean-field approximation, and embeds every generated PNG in an indexed atlas.
+The model is synthetic and makes no LLM or provider calls. The information
+statistics are descriptive; they do not establish a causal controller effect.
+\end{abstract}
+\tableofcontents
+\clearpage
+
+\section{Run inventory and provenance}
+The original sweep covered 5 named beta pairs, 2 memory values, and 9 controller
+budgets: 90 cells, 100 independent episodes per cell, 9,000 episodes, and
+279,000 canonical round rows. The expanded rho sweep used the same five beta
+pairs, budgets, episodes, and analysis settings at 11 memory values: 495 cells,
+49,500 episodes, and 1,534,500 round rows. Each episode stores rounds 0--30.
+Both runs have a simulation seal and an information seal for every cell.
+The original run has 360 detectability rows; the expanded run has 1,980
+(four conditioning variants per cell). Slurm finalizers 347 and 550 completed
+successfully. The calibration contains 2,800 subsampling repetitions and
+14 summary rows; replacement finalizer 456 completed successfully after a
+concurrent recipe-write race was fixed. All values below are read from the
+saved Parquet or CSV results rather than inferred from plot colors.
+
+\begin{center}\begin{tabular}{lll}\toprule
+Run & Result root below \path{/shared/home/cesar/work/results/studies/} & Final job\\\midrule
+Original beta/CMI & \path{santa_fe_beta_cmi/} & 347\\
+Sample-size calibration & \path{santa_fe_sample_size_cmi/} & 456\\
+Rho phase sweep & \path{santa_fe_rho_phase/} & 550\\\bottomrule
+\end{tabular}\end{center}
+
+The complete recipes are reproduced in Appendix~\ref{sec:recipes}. Each
+simulation cell uses the same root seed, 20260925, but the episode seeds are
+generated from \texttt{SeedSequence([root seed, cell ID])}. Thus different
+parameter cells have independent random streams; cross-cell differences are
+not paired by a common episode realization.
+
+\section{Microscopic model and update order}
+There are $N=24$ agents and $F=10$ binary-signed facts. In each episode, seven
+facts have weight $+1$ (truth) and three have weight $-1$, shuffled across fact
+identities. Each fact starts with three distinct random holders. An agent's
+initial vote is drawn from its private evidence, without sampled messages.
+Truth is vote $+1$; the controller advocates target vote $-1$.
+
+At every round there are $N$ asynchronous microscopic updates. Each slot picks
+one focal agent uniformly \emph{with replacement}. The focal agent independently
+retains each active fact with probability $\rho$, samples $q=3$ messages without
+replacement from the \emph{previous} board, and acquires any facts attached to
+those messages. If $A_i$ is its active fact set after this update and $w_f$ is a
+fact's signed weight, its evidence signal is
+\begin{align*}
+e_i&=\begin{cases}|A_i|^{-1}\sum_{f\in A_i}w_f,&|A_i|>0,\\0,&|A_i|=0,\end{cases}\\
+s_i&=\frac{1}{q}\sum_{m\in\text{sample}}v_m,\\
+\Pr(v_i=+1\mid e_i,s_i)&=\sigm(\beta_e e_i+\beta_s s_i),
+\qquad \sigm(z)=\frac{1}{1+e^{-z}}.
+\end{align*}
+The agent posts one public vote and one randomly selected active fact, if any.
+The $N$ posts made during the round form the closed board. After all updates,
+the controller senses 12 of these posts without replacement
+($\texttt{sensing\_fraction}=0.5$) and observes their target-vote share $Y_t$.
+It draws $U_t\sim\mathrm{Bernoulli}(\sigm[8(0.5-Y_t)])$. If $U_t=1$ and the
+budget is positive, it appends $b$ target-vote recommendations with \emph{no
+facts} to the next board. No recommendation is posted at $b=0$, even if the
+policy draw says act. The previous board remains fixed during the next round's
+$N$ updates; the new board replaces it only at round close.
+
+The exact integer budget is $b=\operatorname{round}(24b_{\rm frac})$. The sweep
+uses $b=0,3,6,9,12,15,18,21,24$. Board size after a round is $24+bU_t$;
+controller posts can change both the mean sampled vote and the fraction of
+sampled messages that carry facts. The controller never directly changes an
+agent's private facts. Round zero records the initialized population and
+board; rounds 1--30 record the evolving state.
+
+\section{Parameter ledger}
+\begin{center}\begin{tabular}{p{47mm}p{105mm}}\toprule
+Parameter & Value and role\\\midrule
+$N,F,q,R$ & 24 agents; 10 facts; 3 previous-board messages per focal update; 30 rounds.\\
+Initial fact redundancy & 3 distinct holders per fact at initialization.\\
+Truth fact fraction & 0.7, giving 7 positive and 3 negative facts in each episode.\\
+$\rho$ & Original: 0.75, 1.0. Expanded: 0.40, 0.46, 0.52, 0.58, 0.64, 0.70, 0.76, 0.82, 0.88, 0.94, 1.0. Per-fact retention probability on a focal update.\\
+Budget fraction and $b$ & 0, 0.125, \ldots, 1.0; integer posts 0, 3, \ldots, 24.\\
+Controller & Target $-1$; sense 12/24 closed-board messages; policy slope 8.0; target-share threshold 0.5.\\
+Episodes and seed & 100 per sweep cell; root seed 20260925; 4 simulation processes per task.\\
+Retention & Canonical round trajectories saved; microscopic trajectories not saved; plots and reports saved.\\
+\bottomrule\end{tabular}\end{center}
+
+\begin{center}\begin{tabular}{lrr}\toprule
+Named beta pair & $\beta_e$ & $\beta_s$\\\midrule
+Competition low & 0.75 & 1.00\\
+Competition baseline & 1.00 & 1.30\\
+Competition high & 1.25 & 1.60\\
+Evidence dominated & 2.00 & 0.50\\
+Social dominated & 0.50 & 2.00\\\bottomrule
+\end{tabular}\end{center}
+These five \emph{pairs} are not a Cartesian grid of beta values. The fixed
+\texttt{model.rho}, beta, and budget entries in each YAML are base defaults;
+the listed sweep axes override them for physical cells.
+
+\subsection{Information analysis and scheduler settings}
+Current and next target counts are exact integer counts; fact-coverage
+coordinates are discretized into six bins. The pooled actuation statistic is
+$I(U_t;X_{t+1}\mid X_t)$ for $t=1,\ldots,29$. The additional variants condition
+on binned mean agent fact coverage, binned population fact coverage, or both.
+The latter population coordinate occupies the shared estimator's \texttt{phi}
+slot as a synthetic alias; it does not have HiddenBench phi semantics.
+Sensing MI is also computed for rounds 1--30. The recipe requests nine round
+statistics: sensing MI, target sensing MI, sensor/action MI, population,
+target, truth, mean-coverage-conditioned, population-coverage-conditioned,
+and jointly coverage-conditioned actuation CMI.
+
+The shared estimator uses 200 whole-episode bootstrap resamples and 999 null
+draws per available pooled/per-round estimate, 95\% confidence level, and
+analysis seed 20260925, with four analysis processes per task. The actuation
+null resamples actions from the recorded policy probability; its finite-draw
+$p$-value is $(1+\#\{T^*\ge T\})/(1+999)$. A separate legacy bootstrap
+(1000 draws, seed 43) and a separate legacy permutation null (1000 draws,
+seed 42) are both disabled. Histogram computation is disabled, though the
+configuration retains \texttt{save\_null\_histograms: true}. The configured
+sample-size section is disabled in both sweeps. Simulation and information
+arrays each request four CPUs and throttle at eight tasks; they request 8G
+for one hour and 12G for eight hours respectively. Finalizers request two
+CPUs, 32G, and two hours. These are execution settings, not scientific
+coordinates.
+
+\section{Measured outcomes}
+\subsection{Budget response across beta regimes}
+The table shows final target-vote share averaged over the 11 rho values in the
+expanded sweep. Each entry is first averaged over 100 episodes within a
+cell, then averaged equally over the 11 rho cells. The last column is the
+mean of within-rho differences between $b=24$ and $b=0$; it is a descriptive
+finite-population contrast, without a cross-cell confidence interval.
+\begin{center}\begin{tabular}{lrrr}\toprule
+Beta regime & $b=0$ & $b=24$ & Difference\\\midrule
+Competition Low & 0.373 & 0.498 & +0.124\\
+Competition Baseline & 0.312 & 0.489 & +0.177\\
+Competition High & 0.252 & 0.494 & +0.242\\
+Evidence Dominated & 0.287 & 0.356 & +0.069\\
+Social Dominated & 0.332 & 0.614 & +0.282\\
+\bottomrule\end{tabular}\end{center}
+The social-dominated pair has the largest mean budget contrast ($+0.282$);
+the evidence-dominated pair has the smallest ($+0.069$). The competition
+baseline is $+0.177$. The original two-rho sweep shows the same broad order,
+but it is a separate simulation with different cell IDs and random streams.
+Across all regimes and rho values, the expanded sweep's mean target share is
+0.312 at $b=0$ and 0.490 at $b=24$; the original sweep gives 0.306 and 0.489.
+
+\subsection{Memory, coverage, and target share}
+Across all five beta pairs and nine budgets, mean final individual fact
+coverage rises from 0.241 at $\rho=0.4$ to 0.996 at $\rho=1.0$; mean final
+population fact coverage rises from 0.441 to 1.000. In the same equal-cell
+average, final target share changes from 0.440 to 0.422. Thus memory strongly
+changes the epistemic state while the aggregate target-share response is much
+smaller and depends on beta regime and budget. These cell averages are not a
+thermodynamic order parameter or evidence of a sharp transition at $N=24$.
+For example, at $b=24$ the social-dominated target share is 0.585 at
+$\rho=0.4$ and 0.614 at $\rho=1.0$, while the evidence-dominated values are
+0.355 and 0.337. The complete rho-by-budget maps are in the figure atlas.
+
+\subsection{Controller information and action support}
+At positive budget, all 440 expanded-sweep cells have both recorded action
+values, so pooled action CMI is defined. With 999 policy-null draws and an
+uncorrected $p<0.05$ threshold, the number of detectable cells varies with
+the conditioning set:
+\begin{center}\begin{tabular}{lrr}\toprule
+Conditioning & Detectable/440 & Mean CMI minus null (bits)\\\midrule
+Plain & 318/440 & 0.035\\
+Mean & 294/440 & 0.032\\
+Population & 301/440 & 0.032\\
+Both & 274/440 & 0.028\\
+\bottomrule\end{tabular}\end{center}
+These are counts across a parameter sweep, not a multiple-testing-adjusted
+discovery count. The plain variant is detectable in 318/440 positive-budget
+cells; the joint coverage variant in 274/440. Corrected pooled CMI is often
+positive but can be slightly negative after null subtraction. The minimum
+null $p$-value is 0.001 at 999 draws. At $b=0$ the physical action never
+occurs, so actuation CMI, susceptibility, and its $p$-value are undefined.
+The effective-action field, not the policy's latent $U$ draw, is used.
+Conditional response $\chi$ is the observed within-bin difference in next
+target share between action states, weighted by supported strata. Feedback
+confounding remains possible, so neither $\chi$ nor CMI is a causal effect.
+
+\subsection{Sample-size calibration}
+The separate baseline-pair ($\beta_e=1.0,\beta_s=1.3$), $b=6$ calibration
+simulated 400 reference episodes at each of $\rho=0.75$ and 1.0. At each rho,
+200 repeated subsamples were drawn at $n=10,20,30,50,75,100,200$. Each
+repetition requested 100 episode-bootstrap and 199 policy-null draws for
+plain target CMI. Detection means unadjusted null $p<0.05$. Selected results:
+\begin{center}\begin{tabular}{rrrr}\toprule
+$n$ episodes & Detection at $\rho=.75$ & Detection at $\rho=1$ & Note\\\midrule
+10 & 0.050 & 0.040 & 200 subsamples/rho\\
+50 & 0.195 & 0.385 & 200 subsamples/rho\\
+100 & 0.395 & 0.790 & 200 subsamples/rho\\
+200 & 0.880 & 1.000 & 200 subsamples/rho\\
+\bottomrule\end{tabular}\end{center}
+At $n=100$, detection is 0.395 at rho 0.75 and 0.790 at rho 1.0 in this
+calibration, despite the main sweep using 999 rather than 199 null draws.
+The 200 subsamples repeatedly reuse one 400-episode reference population per
+rho, so these fractions quantify detection in that reference, not universal
+power. They also do not calibrate the other nine rho values.
+
+\section{A mean-field approximation to try}
+Let $p_t$ be the population truth-vote fraction, $h_{f,t}$ the probability
+that a randomly chosen agent holds fact $f$, and $m_t$ the mean vote among the
+$N$ regular posts on the closed board. Tracking $m_t$ separately from $p_t$
+matters because the $N$ posts come from asynchronous draws with replacement.
+Given an effective controller action $u_t\in\{0,1\}$, an approximate mean
+vote of the next board is
+\[
+S_{t+1}\approx\frac{N m_t-bu_t}{N+bu_t},\qquad
+\Pr(u_t=1\mid y_t)=\sigm\!\left[8(0.5-y_t)\right],\qquad
+y_t\approx\frac{1-m_t}{2}.
+\]
+The last approximation neglects sensor sampling noise. A useful first
+closure can retain its binomial or hypergeometric distribution rather than
+replacing $Y_t$ by its mean, because the sigmoid is nonlinear.
+
+Suppose $M_{f,t}$ of the $B_t=N+bu_t$ previous-board messages carry fact $f$.
+The exact probability that a three-message sample contains fact $f$ is
+\[
+A_{f,t}=1-\frac{\binom{B_t-M_{f,t}}{q}}{\binom{B_t}{q}},\quad q=3.
+\]
+An independence closure for one focal update is
+\[
+h_{f,t}^{\rm new}\approx \rho h_{f,t}+
+  (1-\rho h_{f,t})A_{f,t}.
+\]
+This is the right place to model fact dilution by controller posts: they
+increase $B_t$ but never $M_{f,t}$. It is also necessary to track at least the
+distribution of evidence balances, not only mean coverage, because
+$\mathbb E[\sigm(\beta_e e+\beta_s s)]$ generally differs from the sigmoid
+at the means. With a closure for that expectation, an approximate population
+equation over one round is
+\[
+\frac{dp}{d\tau}=\mathbb E_{e,s}\bigl[\sigm(\beta_e e+\beta_s s)\bigr]-p,
+\quad 0\le\tau\le1,
+\]
+where one unit of $\tau$ means $N$ asynchronous slots. If the update target
+probability were constant during a round, this reduces to
+$p_{t+1}\approx e^{-1}p_t+(1-e^{-1})\mathbb E[\sigm(\beta_e e+\beta_s s)]$.
+That constant-field approximation is only a starting point: the code changes
+facts and votes during the round, even though it samples a fixed previous
+board. A stronger closure tracks vote/fact correlations and the distribution
+of regular posts as well as $p_t$ and $h_{f,t}$. Fit or check such a closure
+against the saved time-resolved trajectories, not just the final heatmaps.
+
+\section{Interpretive limits}
+The finite design has $N=24$ and 100 episodes per cell. No thermodynamic
+limit, critical exponent, or sharp phase boundary was estimated. The
+rho-by-budget heatmaps are empirical response maps. Plot colors should be
+compared against the tables because each image can have its own color scale.
+Pooled CMI is calculated from pooled observations, not by averaging per-round
+estimates. Fact-coverage bins are six-level coarse variables, and the
+population coverage alias is specific to this synthetic adapter. The null
+test samples actions from the recorded stochastic policy; it does not
+randomize the controller itself. Statistical significance across hundreds
+of cells is unadjusted for multiplicity. The calibration reference is small
+relative to a universal power study. These limits matter when using the
+results to choose a mean-field closure or a future experiment.
+
+\section{Selected figures}
+The complete 634-image atlas is in the companion \path{santa_fe_results.pdf}; its index is \path{figure_manifest.csv}.
+\begin{figure}[htbp]\centering
+\includegraphics[width=.85\textwidth,height=.37\textheight,keepaspectratio]{\detokenize{/shared/home/cesar/work/results/studies/santa_fe_rho_phase/plots/beta_cmi/rho_phase_diagrams/final_target_share_plain_social_dominated.png}}
+\caption{Final target share over rho and budget in the social-dominated beta regime.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=.85\textwidth,height=.37\textheight,keepaspectratio]{\detokenize{/shared/home/cesar/work/results/studies/santa_fe_rho_phase/plots/beta_cmi/rho_phase_diagrams/estimate_minus_null_plain_competition_baseline.png}}
+\caption{Plain target CMI minus policy-null mean in the baseline beta regime.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=.85\textwidth,height=.37\textheight,keepaspectratio]{\detokenize{/shared/home/cesar/work/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/detection_rho_0.75.png}}
+\caption{Sample-size detection curve at rho 0.75.}\end{figure}
+\clearpage
+\appendix
+\section{Exact input recipes}\label{sec:recipes}
+The full submitted YAML files follow. The analysis recipe and scheduler
+requests are retained here so fixed defaults, disabled switches, seeds, and
+resource requests remain visible alongside the scientific axes.
+\subsection{beta\_cmi\_sweep.yaml}
+\begingroup\footnotesize\verbatiminput{recipes/beta_cmi_sweep.yaml}\endgroup
+\subsection{sample\_size\_cmi.yaml}
+\begingroup\footnotesize\verbatiminput{recipes/sample_size_cmi.yaml}\endgroup
+\subsection{rho\_phase\_sweep.yaml}
+\begingroup\footnotesize\verbatiminput{recipes/rho_phase_sweep.yaml}\endgroup
+\end{document}

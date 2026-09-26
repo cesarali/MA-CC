@@ -1,6 +1,6 @@
 # Santa Fe targeted beta/CMI study: Cygnus handoff
 
-Prepared locally on 2026-09-25. **No Cygnus job was submitted.** The synthetic
+Prepared locally on 2026-09-25; Cygnus execution completed on 2026-09-26. The synthetic
 model makes no LLM/provider calls. This package includes repository-relative
 source, configs, docs and tests; it excludes unrelated local edits and results.
 
@@ -44,7 +44,7 @@ request four CPUs per task and throttle at eight; Slurm resources are in the
 YAML. Cell trajectories and per-cell information outputs carry SHA-256 seals.
 Aggregation refuses missing or changed cells. Raw null draws stay in each
 cell; compact estimates are joined centrally. The targeted results are under
-`results/studies/santa_fe_beta_cmi/`, including:
+`/shared/home/cesar/work/results/studies/santa_fe_beta_cmi/`, including:
 
 ```text
 config.yaml
@@ -57,7 +57,7 @@ information/beta_cmi/{detectability.csv,detectability.parquet,beta_cmi_report.md
 plots/beta_cmi/*.png
 ```
 
-The calibration root is `results/studies/santa_fe_sample_size_cmi/`, with
+The calibration root is `/shared/home/cesar/work/results/studies/santa_fe_sample_size_cmi/`, with
 `sample_size_cmi/sample_size_cmi_repetitions.parquet`,
 `sample_size_cmi_summary.csv`, the copied recipe and detection plots. The
 report reads those completed results; it does not claim a scientific answer
@@ -80,7 +80,7 @@ before they exist.
    expected layout:
 
    ```bash
-   export ROOT="$HOME/MA-CC-cygnus"
+   export ROOT="$HOME/LanguageGames/MA-CC"
    export PYTHONPATH="$ROOT/src"
    export PY="$HOME/.local/share/mamba/envs/MA-CC/bin/python"
    "$PY" -m pytest "$ROOT/tests/mas_cc/test_santa_fe.py" -q
@@ -88,8 +88,8 @@ before they exist.
    "$PY" -m santa_fe.cli --config "$ROOT/configs/santa_fe/sample_size_cmi.yaml" --dry-run
    "$PY" -m santa_fe.cluster plan-cygnus --config "$ROOT/configs/santa_fe/beta_cmi_sweep.yaml" --python "$PY" --repository-root "$ROOT"
    "$PY" -m santa_fe.sample_size_cmi plan-cygnus --config "$ROOT/configs/santa_fe/sample_size_cmi.yaml" --python "$PY" --repository-root "$ROOT"
-   bash -n "$ROOT/results/studies/santa_fe_beta_cmi/submit_cygnus.sh"
-   bash -n "$ROOT/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/submit_sample_size_cygnus.sh"
+   bash -n "$HOME/work/results/studies/santa_fe_beta_cmi/submit_cygnus.sh"
+   bash -n "$HOME/work/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/submit_sample_size_cygnus.sh"
    ```
 
 4. Inspect both generated launchers and recipes for paths, arrays, throttle,
@@ -105,10 +105,35 @@ before they exist.
 7. After calibration completes, refresh the beta report:
 
    ```bash
-   "$PY" -m santa_fe.beta_cmi --config "$ROOT/configs/santa_fe/beta_cmi_sweep.yaml" --sample-size-summary "$ROOT/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/sample_size_cmi_summary.csv"
+   "$PY" -m santa_fe.beta_cmi --config "$ROOT/configs/santa_fe/beta_cmi_sweep.yaml" --sample-size-summary "$HOME/work/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/sample_size_cmi_summary.csv"
    ```
 
 The generic MA-CC `mas-cc study` launcher cannot consume this synthetic
 config or its cell files. These dedicated array commands use the existing
 Santa Fe cell runner and the existing MA-CC information engine; there is no
 study-specific `.job` file.
+
+## Cygnus execution update, 2026-09-26
+
+The checked-in checkout at `/shared/home/cesar/LanguageGames/MA-CC` was used
+directly; the transfer archive mentioned above is not present on this host.
+Both targeted recipes now write beneath `/shared/home/cesar/work/results/studies/`.
+The focused Santa Fe tests, both dry plans, shell syntax checks, and the Cygnus
+Python import check passed before submission.
+
+- Sweep: simulation array `344`, cell aggregation `345`, information array
+  `346`, finalizer `347`.
+- Calibration: reference array `356`, calibration array `357`. Task `357_8`
+  failed because concurrent tasks could observe a partial `analysis_recipe.yaml`.
+  Atomic recipe writing fixed that race; replacement task `455` completed,
+  followed by replacement finalizer `456`. The original finalizer `358` was
+  cancelled because its failed dependency could not be satisfied.
+- Report refresh `457` waits for sweep finalizer `347` and calibration finalizer
+  `456`. The original refresh `389` was cancelled with finalizer `358`.
+
+Final status: sweep finalizer `347` and report refresh `457` completed with
+exit code 0. The sweep has 90 simulation seals, 90 information seals,
+279,000 canonical round rows, and 360 beta/CMI detectability rows.
+Calibration has all 14 task outputs, 2,800 repetitions, and 14 summary rows.
+The complete result report is archived in
+`docs/theory/santa_fe_cygnus_20260926/`.

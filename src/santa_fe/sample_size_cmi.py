@@ -9,6 +9,7 @@ from multiprocessing import get_context
 import os
 from pathlib import Path
 import shlex
+import tempfile
 
 import matplotlib
 matplotlib.use("Agg")
@@ -36,7 +37,15 @@ def _check_recipe(config) -> None:
     recipe = root / "analysis_recipe.yaml"
     if recipe.is_file() and recipe.read_bytes() != config.path.read_bytes():
         raise ValueError("sample-size result root belongs to a different config")
-    recipe.write_bytes(config.path.read_bytes())
+    # Concurrent array tasks must never observe a partially written recipe.
+    with tempfile.NamedTemporaryFile(dir=root, prefix=".analysis_recipe_", delete=False) as handle:
+        temporary = Path(handle.name)
+        try:
+            handle.write(config.path.read_bytes())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    os.replace(temporary, recipe)
 
 
 def prepare_reference(config, cell_id: int) -> dict:

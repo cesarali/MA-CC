@@ -3,7 +3,7 @@ experiment:
   processes: 4
   seed: 20260925
 output:
-  results_dir: ~/MA-CC-cygnus/results/studies/santa_fe_beta_cmi
+  results_dir: /shared/home/cesar/work/results/studies/santa_fe_beta_cmi
   save_round_trajectories: true
   save_micro_trajectories: false
   save_plots: true

@@ -87,6 +87,36 @@ def _heatmaps(table: pd.DataFrame, root: Path) -> None:
             plt.close(fig)
 
 
+def _rho_phase_diagrams(table: pd.DataFrame, root: Path) -> None:
+    """Plot physical-cell outcomes over rho and controller budget per beta regime."""
+    if table.rho.nunique() < 2:
+        return
+    root.mkdir(parents=True, exist_ok=True)
+    metrics = {
+        "plain": ("final_target_share", "final_truth_share", "chi_empirical",
+                  "action_support_fraction", "observed_cmi", "estimate_minus_null"),
+        "mean": ("observed_cmi", "estimate_minus_null"),
+        "population": ("observed_cmi", "estimate_minus_null"),
+        "both": ("observed_cmi", "estimate_minus_null"),
+    }
+    for (regime, conditioning), rows in table.groupby(["beta_regime", "conditioning"]):
+        for metric in metrics[conditioning]:
+            pivot = rows.pivot(index="rho", columns="budget_fraction", values=metric)
+            if pivot.isna().all().all():
+                continue
+            fig, ax = plt.subplots(figsize=(9, 6))
+            image = ax.imshow(np.ma.masked_invalid(pivot.to_numpy(dtype=float)),
+                              origin="lower", aspect="auto", interpolation="nearest")
+            ax.set_xticks(range(len(pivot.columns)), [f"{value:g}" for value in pivot.columns])
+            ax.set_yticks(range(len(pivot.index)), [f"{value:g}" for value in pivot.index])
+            ax.set(xlabel="budget fraction b/N", ylabel="rho",
+                   title=f"{metric}; {regime}; {conditioning}")
+            fig.colorbar(image, ax=ax, label=metric)
+            fig.tight_layout()
+            fig.savefig(root / f"{metric}_{conditioning}_{regime}.png", dpi=150)
+            plt.close(fig)
+
+
 def _report(table: pd.DataFrame, root: Path, sample_summary: Path | None = None) -> None:
     active = table.loc[(table.conditioning == "plain") & (table.budget > 0)].copy()
     lines = ["# Targeted Santa Fe beta/CMI study", "",
@@ -162,6 +192,7 @@ def produce_beta_outputs(config, rounds: pd.DataFrame, final: pd.DataFrame,
     plots.mkdir(parents=True, exist_ok=True)
     _lines(table, plots)
     _heatmaps(table, plots)
+    _rho_phase_diagrams(table, plots / "rho_phase_diagrams")
     _report(table, root, config.results_dir.parent / "santa_fe_sample_size_cmi" / "sample_size_cmi" / "sample_size_cmi_summary.csv")
     (root / "analysis_recipe.yaml").write_bytes(config.path.read_bytes())
     return table

@@ -189,6 +189,8 @@ def test_targeted_beta_cmi_outputs_and_sample_size(tmp_path: Path):
     assert table.loc[table.budget.gt(0), "observed_cmi"].notna().all()
     assert table.loc[table.budget.gt(0), "null_q95"].notna().all()
     assert (config.results_dir / "plots" / "beta_cmi" / "heatmap_observed_cmi_plain_rho_0.75.png").is_file()
+    assert (config.results_dir / "plots" / "beta_cmi" / "rho_phase_diagrams" /
+            "observed_cmi_plain_competition_low.png").is_file()
 
     sample = yaml.safe_load(Path("configs/santa_fe/sample_size_cmi.yaml").read_text())
     sample["output"]["results_dir"] = str(tmp_path / "sample")
@@ -219,3 +221,15 @@ def test_targeted_scientific_recipe_is_paired():
     assert len(sample.cells) == 2
     assert {(c.params.beta_evidence, c.params.beta_social, c.params.budget) for c in sample.cells} == {(1.0, 1.3, 6)}
     assert sample.sample_size["episode_counts"] == [10, 20, 30, 50, 75, 100, 200]
+
+
+def test_rho_phase_recipe_keeps_other_sweep_axes():
+    original = load_config("configs/santa_fe/beta_cmi_sweep.yaml")
+    phase = load_config("configs/santa_fe/rho_phase_sweep.yaml")
+    assert len(phase.cells) == 495
+    assert {cell.params.rho for cell in phase.cells} == {0.4, 0.46, 0.52, 0.58, 0.64,
+                                                        0.7, 0.76, 0.82, 0.88, 0.94, 1.0}
+    assert {cell.params.budget for cell in phase.cells} == {cell.params.budget for cell in original.cells}
+    assert {(cell.params.beta_evidence, cell.params.beta_social) for cell in phase.cells} == {
+        (cell.params.beta_evidence, cell.params.beta_social) for cell in original.cells}
+    assert phase.episodes == original.episodes
