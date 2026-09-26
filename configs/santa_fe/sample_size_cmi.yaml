@@ -1,0 +1,102 @@
+analysis:
+  beta_cmi:
+    enabled: false
+  bins: 6
+  bootstrap:
+    confidence_level: 0.95
+    enabled: false
+    n_bootstrap: 1000
+    seed: 43
+    unit: episode
+  epistemic_coordinate: mean_coverage
+  histograms:
+    enabled: false
+    save_null_histograms: true
+  llm_parallel:
+    bootstrap_resamples: 200
+    confidence: 0.95
+    null_permutations: 999
+    processes: 4
+    seed: 20260925
+    statistics:
+    - round_sensing_mi
+    - round_target_sensing_mi
+    - round_sensor_action_mi
+    - round_population_actuation_cmi
+    - round_target_actuation_cmi
+    - round_truth_actuation_cmi
+    - round_kappa_target_actuation_cmi
+    - round_phi_target_actuation_cmi
+    - round_epistemic_target_actuation_cmi
+  mutual_information:
+    enabled: true
+  permutation_null:
+    enabled: false
+    n_permutations: 1000
+    preserve_conditioning_state: true
+    seed: 42
+experiment:
+  episodes: 400
+  processes: 4
+  seed: 20260925
+model:
+  F: 10
+  N: 24
+  beta_evidence: 2.0
+  beta_social: 1.0
+  budget_fraction: 0.125
+  controller_target: -1
+  initial_fact_redundancy: 3
+  policy_beta: 8.0
+  policy_threshold: 0.5
+  q: 3
+  rho: 0.75
+  rounds: 30
+  sensing_fraction: 0.5
+  truth_fact_fraction: 0.7
+output:
+  results_dir: ~/MA-CC-cygnus/results/studies/santa_fe_sample_size_cmi
+  save_micro_trajectories: false
+  save_plots: true
+  save_reports: true
+  save_round_trajectories: true
+sample_size_study:
+  enabled: true
+  reference_episodes: 400
+  episode_counts:
+  - 10
+  - 20
+  - 30
+  - 50
+  - 75
+  - 100
+  - 200
+  repetitions: 200
+  n_bootstrap: 100
+  n_permutations: 199
+  statistic: round_target_actuation_cmi
+slurm:
+  finalize:
+    cpus_per_task: 2
+    memory: 32G
+    time_limit: 02:00:00
+  information:
+    cpus_per_task: 4
+    memory: 12G
+    throttle: 8
+    time_limit: 08:00:00
+  simulation:
+    cpus_per_task: 4
+    memory: 8G
+    throttle: 8
+    time_limit: 01:00:00
+sweep:
+  beta_pairs:
+  - name: competition_baseline
+    beta_evidence: 1.0
+    beta_social: 1.3
+  rho:
+  - 0.75
+  - 1.0
+  budget_fraction:
+  - 0.25

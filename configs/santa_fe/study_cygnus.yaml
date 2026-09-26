@@ -1,0 +1,74 @@
+experiment:
+  episodes: 100
+  processes: 4
+  seed: 20260925
+output:
+  results_dir: ~/MA-CC-cygnus/results/studies/santa_fe_full
+  save_round_trajectories: true
+  save_micro_trajectories: false
+  save_plots: true
+  save_reports: true
+model:
+  N: 24
+  F: 10
+  q: 3
+  rounds: 30
+  initial_fact_redundancy: 3
+  truth_fact_fraction: 0.70
+  rho: 0.75
+  beta_evidence: 2.0
+  beta_social: 1.0
+  sensing_fraction: 0.50
+  controller_target: -1
+  policy_beta: 8.0
+  policy_threshold: 0.50
+  budget_fraction: 0.125
+sweep:
+  beta_evidence: [0.5, 1.0, 2.0, 4.0]
+  beta_social: [0.5, 1.0, 2.0, 4.0]
+  budget_fraction: [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0]
+analysis:
+  bins: 6
+  epistemic_coordinate: mean_coverage
+  mutual_information: {enabled: true}
+  permutation_null: {enabled: true, n_permutations: 1000, seed: 42, preserve_conditioning_state: true}
+  bootstrap: {enabled: true, n_bootstrap: 1000, unit: episode, confidence_level: 0.95, seed: 43}
+  llm_parallel:
+    processes: 4
+    bootstrap_resamples: 1000
+    null_permutations: 1000
+    confidence: 0.95
+    seed: 20260925
+    statistics:
+      - round_sensing_mi
+      - round_target_sensing_mi
+      - round_sensor_action_mi
+      - round_population_actuation_cmi
+      - round_target_actuation_cmi
+      - round_truth_actuation_cmi
+      - round_kappa_target_actuation_cmi
+      - round_epistemic_target_actuation_cmi
+  histograms: {enabled: true, save_null_histograms: true}
+sample_size_study:
+  enabled: false
+  reference_episodes: 1000
+  episode_counts: [10, 20, 30, 50, 75, 100]
+  repetitions: 200
+  n_bootstrap: 100
+  n_permutations: 100
+
+slurm:
+  simulation:
+    cpus_per_task: 4
+    memory: 8G
+    time_limit: "01:00:00"
+    throttle: 8
+  information:
+    cpus_per_task: 4
+    memory: 12G
+    time_limit: "04:00:00"
+    throttle: 8
+  finalize:
+    cpus_per_task: 2
+    memory: 32G
+    time_limit: "02:00:00"

@@ -10,10 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from mas_cc.config import load_run_config
+from mas_cc.config import load_run_config, load_run_config_or_grid
 from mas_cc.control import RoundControlSignal
 from mas_cc.games import create_game
 from mas_cc.games.relational_reasoning.data import load_musr_team_allocation_task
+from mas_cc.musr_team_allocation_generator.ambiguity import (
+    TeamAllocationCompletionIndex,
+)
+from mas_cc.musr_team_allocation_generator.symbolic_facts import CanonicalFact
 from mas_cc.games.relational_reasoning.imitation_round_feedback.controller import (
     ADAPTIVE_COMMUNICATION,
     RECOMMENDATION_ONLY,
@@ -421,6 +425,153 @@ def test_selective_task3_candidate_130_loads_from_frozen_local_assets():
     assert len(task.agent_ids) == 24
     assert len(task.controller_reportable_fact_ids) == 24
     assert task.controller_reportable_fact_ids[0] == "cf_x01_le_x03"
+
+
+def test_selective_task3_target_aligned_report_pools_are_disjoint():
+    task = load_musr_team_allocation_task(
+        SELECTIVE_DATASET, "task_003", population_size=24
+    )
+    audit = json.loads(
+        Path(
+            "configs/runs/relational_reasoning/blackboard_game/"
+            "iclr_experiments/report_only_authored_q3_q12_chatoss_v5_target_aligned/"
+            "truth_pool_audit.json"
+        ).read_text()
+    )
+    options = {
+        "target": "correct",
+        "intervention_budget": 18,
+        "controller_actuation_mode": "adaptive_communication",
+        "controller_report_pool_mode": "target_aligned_v1",
+        "controller_report_pool_fact_ids": audit["ordered_pool_ids"],
+        "controller_timing": "dawn_only",
+    }
+    truth = RelationalRoundBudgetedControl.from_options(options)
+    false = RelationalRoundBudgetedControl.from_options(
+        {
+            **options,
+            "target": "ALLOCATION_2",
+            "controller_report_pool_fact_ids": [],
+        }
+    )
+
+    truth_pool = truth.reportable_fact_ids_for_target(task, 17)
+    false_pool = false.reportable_fact_ids_for_target(task, 17)
+    assert len(truth_pool) == 23
+    assert len(false_pool) == 24
+    assert set(truth_pool).isdisjoint(false_pool)
+    assert set(task.decisive_fact_ids).issubset(truth_pool)
+    missing_pool = RelationalRoundBudgetedControl.from_options(
+        {**options, "controller_report_pool_fact_ids": []}
+    )
+    with pytest.raises(ValueError, match="audited"):
+        missing_pool.reportable_fact_ids_for_target(task, 17)
+    truth.validate_truthful_report_task(task, 17)
+    false.validate_truthful_report_task(task, 17)
+
+    selected = truth.select_truthful_reports(
+        task,
+        episode_seed=17,
+        round_index=0,
+        live_fact_counts={},
+        selected_rounds={},
+    )
+    assert len(selected) == 18
+    assert {row.fact_id for row in selected[:6]} == set(task.decisive_fact_ids)
+    assert all(row.fact_id in truth_pool for row in selected)
+    assert all(row.strategy_class == "decisive" for row in selected[:6])
+    for q in (3, 12):
+        config = load_run_config_or_grid(
+            "configs/runs/relational_reasoning/blackboard_game/"
+            "iclr_experiments/report_only_authored_q3_q12_chatoss_v5_target_aligned/"
+            f"truth_control_q{q}.yaml"
+        ).cells[0].config
+        assert tuple(config.control.options["controller_report_pool_fact_ids"]) == truth_pool
+        assert (
+            config.experiment.metadata["effective_controller_pool_sha256"]
+            == audit["ordered_pool_sha256"]
+        )
+    rows = json.loads(
+        (
+            Path(SELECTIVE_DATASET)
+            / "task_003/facts/all_true_facts.json"
+        ).read_text()
+    )
+    facts = {
+        row["fact_id"]: CanonicalFact.from_dict(row) for row in rows
+    }
+    index = TeamAllocationCompletionIndex()
+    prior = index.metrics_for_facts(()).probabilities[0]
+    for row in audit["facts"]:
+        posterior = index.metrics_for_facts(
+            (facts[row["fact_id"]],)
+        ).probabilities[0]
+        assert posterior > prior
+        assert posterior - prior == pytest.approx(
+            row["individual_target_lift"]
+        )
+    false_prior = index.metrics_for_facts(()).probabilities[2]
+    for fact_id in false_pool:
+        assert (
+            index.metrics_for_facts((facts[fact_id],)).probabilities[2]
+            > false_prior
+        )
+
+
+def test_target_aligned_truth_controller_runtime_sees_corrective_facts():
+    config = _llm_adaptive_task3_config(rounds=1)
+    audit = json.loads(
+        Path(
+            "configs/runs/relational_reasoning/blackboard_game/"
+            "iclr_experiments/report_only_authored_q3_q12_chatoss_v5_target_aligned/"
+            "truth_pool_audit.json"
+        ).read_text()
+    )
+    control_options = {
+        **dict(config.control.options),
+        "target": "correct",
+        "controller_report_pool_mode": "target_aligned_v1",
+        "controller_report_pool_fact_ids": audit["ordered_pool_ids"],
+        "controller_communication_policy": LLM_AUTHORED_REPORT_ONLY_POLICY,
+        "allow_controller_requests": False,
+        "allow_controller_directives": False,
+    }
+    config = replace(config, control=replace(config.control, options=control_options))
+    task = create_game(config.game).load_task(config.game)
+    fact_id = task.decisive_fact_ids[0]
+    provider = _llm_controller_provider(
+        config,
+        [
+            json.dumps(
+                {
+                    "mode": "REPORT",
+                    "fact_ids": [fact_id],
+                    "text": None,
+                    "report_texts": [task.controller_report_texts[fact_id]],
+                    "reason": "corrective evidence",
+                }
+            )
+        ],
+        [],
+    )
+
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            provider,
+            control=RelationalRoundBudgetedControl.from_options(control_options),
+        )
+    )
+    event = result.rounds[0].event
+    visible_ids = {
+        fact["fact_id"] for fact in event["controller_visible_input"]["eligible_facts"]
+    }
+    assert len(visible_ids) == 23
+    assert set(task.decisive_fact_ids).issubset(visible_ids)
+    assert visible_ids.isdisjoint(task.controller_reportable_fact_ids)
+    assert event["controller_report_pool_mode"] == "target_aligned_v1"
+    assert fact_id in event["selected_fact_ids"]
 
 
 def test_truth_aligned_controller_design_is_symbolically_valid():

@@ -1558,7 +1558,11 @@ async def run_relational_imitation_round_feedback_game(
             )
             all_ranked = replace(
                 resolved_control,
-                intervention_budget=len(task.controller_reportable_fact_ids),
+                intervention_budget=len(
+                    resolved_control.reportable_fact_ids_for_target(
+                        task, config.execution.seed
+                    )
+                ),
             ).select_truthful_reports(
                 task,
                 episode_seed=config.execution.seed,
@@ -2858,6 +2862,9 @@ async def run_relational_imitation_round_feedback_game(
             ),
             "controller_report_selection_strategy": getattr(
                 resolved_control, "controller_report_selection_strategy", None
+            ),
+            "controller_report_pool_mode": getattr(
+                resolved_control, "controller_report_pool_mode", None
             ),
             "protocol": (
                 "board_sensing_night_dawn_day_v1"

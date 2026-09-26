@@ -102,6 +102,9 @@ CONTROLLER_ACTUATION_MODES = (
 
 STRATEGIC_REPORT_SELECTION_V1 = "target_preserving_v1"
 STRATEGIC_REPORT_SELECTION_STRATEGIES = (STRATEGIC_REPORT_SELECTION_V1,)
+REPORT_POOL_FROZEN = "frozen"
+REPORT_POOL_TARGET_ALIGNED = "target_aligned_v1"
+REPORT_POOL_MODES = (REPORT_POOL_FROZEN, REPORT_POOL_TARGET_ALIGNED)
 
 TIMING_MICROSCOPIC = "microscopic"
 TIMING_DAWN_ONLY = "dawn_only"
@@ -191,6 +194,8 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     sensing_mode: str = SENSING_VOTES
     controller_report_cooldown_rounds: int = 1
     controller_report_selection_strategy: str = STRATEGIC_REPORT_SELECTION_V1
+    controller_report_pool_mode: str = REPORT_POOL_FROZEN
+    controller_report_pool_fact_ids: tuple[str, ...] = ()
     allow_controller_requests: bool = True
     allow_controller_directives: bool = True
     controller_communication_policy: str = COMMUNICATION_POLICY
@@ -442,6 +447,43 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             "including both ability and cooperation evidence, before deciding."
         )
 
+    def reportable_fact_ids_for_target(
+        self, task: RelationalTask, episode_seed: int = 0
+    ) -> tuple[str, ...]:
+        """Use a frozen, audited target-specific pool when explicitly requested."""
+
+        frozen_pool = task.controller_reportable_fact_ids
+        if self.controller_report_pool_mode == REPORT_POOL_FROZEN:
+            return frozen_pool
+        target = self.resolved_target_for_task(task, episode_seed)
+        if target != task.correct_relation or target == task.controller_target:
+            if self.controller_report_pool_fact_ids:
+                raise ValueError(
+                    "explicit corrective facts require a truth target distinct "
+                    "from the task's frozen controller target"
+                )
+            return frozen_pool
+        corrective = self.controller_report_pool_fact_ids
+        if not corrective:
+            raise ValueError(
+                "target-aligned truth control requires an audited "
+                "controller_report_pool_fact_ids list"
+            )
+        if len(corrective) != len(set(corrective)):
+            raise ValueError("target-aligned truth pool contains duplicate fact IDs")
+        decisive = set(task.decisive_fact_ids)
+        if not decisive or not decisive.issubset(corrective):
+            raise ValueError(
+                "target-aligned truth pool must include every decisive fact"
+            )
+        if set(corrective) & set(frozen_pool):
+            raise ValueError(
+                "target-aligned truth pool overlaps the frozen false-target pool"
+            )
+        if set(corrective) - set(task.facts):
+            raise ValueError("target-aligned truth pool contains unknown fact IDs")
+        return corrective
+
     def validate_truthful_report_task(
         self, task: RelationalTask, episode_seed: int = 0
     ) -> None:
@@ -472,7 +514,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 f"{task.controller_target!r} or ground truth "
                 f"{task.correct_relation!r}"
             )
-        pool = task.controller_reportable_fact_ids
+        pool = self.reportable_fact_ids_for_target(task, episode_seed)
         if self.intervention_budget > len(pool):
             raise ValueError(
                 "control.options.intervention_budget exceeds the distinct "
@@ -503,8 +545,11 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             return ()
         classes = task.controller_fact_classes or {}
         base_scores = task.controller_fact_scores or {}
+        pool = self.reportable_fact_ids_for_target(task, episode_seed)
+        decisive = set(task.decisive_fact_ids)
+        frozen_pool = set(task.controller_reportable_fact_ids)
         ranked: list[tuple[tuple[Any, ...], str, float, bool, bool]] = []
-        for fact_id in task.controller_reportable_fact_ids:
+        for fact_id in pool:
             prior_rounds = tuple(
                 int(value) for value in selected_rounds.get(fact_id, ())
             )
@@ -516,6 +561,8 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             novel = live_count == 0
             reuse_count = len(prior_rounds)
             base_score = float(base_scores.get(fact_id, 0.0))
+            if fact_id in decisive and fact_id not in frozen_pool:
+                base_score = 1.0
             score = base_score + float(novel) - live_count - reuse_count
             tie = hashlib.sha256(
                 f"{episode_seed}:{task.task_id}:{round_index}:{fact_id}".encode("utf-8")
@@ -542,7 +589,11 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             StrategicReportSelection(
                 fact_id=fact_id,
                 score=score,
-                strategy_class=str(classes[fact_id]),
+                strategy_class=str(
+                    classes.get(
+                        fact_id, "decisive" if fact_id in decisive else "neutral"
+                    )
+                ),
                 novel_on_live_board=novel,
                 cooldown_eligible=cooldown_eligible,
                 rank=rank,
@@ -573,7 +624,10 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         """Return at most b useful reports under bounded repetition and cooldown."""
 
         selected = replace(
-            self, intervention_budget=len(task.controller_reportable_fact_ids)
+            self,
+            intervention_budget=len(
+                self.reportable_fact_ids_for_target(task, episode_seed)
+            ),
         ).select_truthful_reports(
             task,
             episode_seed=episode_seed,
@@ -914,6 +968,42 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             )
             report_strategy = STRATEGIC_REPORT_SELECTION_V1
         values["controller_report_selection_strategy"] = str(report_strategy)
+
+        pool_mode = options.get("controller_report_pool_mode", REPORT_POOL_FROZEN)
+        if pool_mode not in REPORT_POOL_MODES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_report_pool_mode",
+                    f"must be one of {list(REPORT_POOL_MODES)}",
+                )
+            )
+            pool_mode = REPORT_POOL_FROZEN
+        values["controller_report_pool_mode"] = str(pool_mode)
+
+        explicit_pool = options.get("controller_report_pool_fact_ids", ())
+        if (
+            isinstance(explicit_pool, (str, bytes))
+            or not isinstance(explicit_pool, (list, tuple))
+            or any(
+                not isinstance(value, str) or not value.strip()
+                for value in explicit_pool
+            )
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_report_pool_fact_ids",
+                    "must be a list of non-empty fact IDs",
+                )
+            )
+            explicit_pool = ()
+        if explicit_pool and pool_mode != REPORT_POOL_TARGET_ALIGNED:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_report_pool_fact_ids",
+                    "requires controller_report_pool_mode: target_aligned_v1",
+                )
+            )
+        values["controller_report_pool_fact_ids"] = tuple(explicit_pool)
 
         evidence_sources = sum(
             bool(value)
