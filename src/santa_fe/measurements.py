@@ -48,8 +48,11 @@ def encoded(d: pd.DataFrame, bins: int, coordinate: str) -> dict[str, np.ndarray
     u = d["controller_effective_U"].to_numpy(dtype=int)
     k1 = bin01(d["kappa_mean_coverage"], bins)
     k2 = bin01(d["kappa_population_coverage"], bins)
-    k = {"mean_coverage": k1[:, None], "population_coverage": k2[:, None],
-         "both": np.column_stack([k1, k2])}[coordinate]
+    if coordinate == "signed_coverage":
+        k = np.column_stack([bin01(d["kappa_plus"], bins), bin01(d["kappa_minus"], bins)])
+    else:
+        k = {"mean_coverage": k1[:, None], "population_coverage": k2[:, None],
+             "both": np.column_stack([k1, k2])}[coordinate]
     return {"x": x, "xp": xp, "y": y, "u": u, "k": k, "z": np.column_stack([x, k])}
 
 

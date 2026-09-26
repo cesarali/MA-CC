@@ -1,0 +1,117 @@
+# Planned 12-cell Santa Fe v3 theory pilot; no jobs are launched by this file.
+experiment:
+  episodes: 64
+  processes: 2
+  seed: 20260927
+output:
+  results_dir: results/santa_fe_v3_theory_pilot
+  save_round_trajectories: true
+  save_micro_trajectories: true
+  save_plots: true
+  save_reports: true
+model:
+  N: 24
+  F: 10
+  F_plus: 7
+  q: 3
+  rounds: 60
+  initial_fact_redundancy: 3
+  truth_fact_fraction: 0.7
+  rho: 0.7
+  beta_evidence: 1.0
+  beta_social: 1.3
+  sensing_fraction: 0.5
+  controller_target: -1
+  policy_beta: 8.0
+  policy_threshold: 0.55
+  budget_fraction: 0.25
+  model_version: santa_fe_epistemic_feedback_v3
+  persistence_clock: round_boundary
+  peer_posting_mode: vote_aligned_fact
+  controller_message_mode: target_aligned_fact
+  board_clock: frozen_front_page
+  controller_fact_selection: uniform_with_replacement
+sweep:
+  beta_pairs:
+  - name: competition_baseline
+    beta_evidence: 1.0
+    beta_social: 1.3
+  rho:
+  - 0.4
+  - 0.7
+  - 0.95
+  - 1.0
+  budget_fraction:
+  - 0
+  - 0.25
+  - 1.0
+analysis:
+  bins: 6
+  epistemic_coordinate: signed_coverage
+  mutual_information:
+    enabled: true
+  permutation_null:
+    enabled: false
+    n_permutations: 1000
+    seed: 42
+    preserve_conditioning_state: true
+  bootstrap:
+    enabled: false
+    n_bootstrap: 1000
+    unit: episode
+    confidence_level: 0.95
+    seed: 43
+  llm_parallel:
+    processes: 2
+    bootstrap_resamples: 99
+    null_permutations: 99
+    confidence: 0.95
+    seed: 20260925
+    statistics:
+    - round_target_sensing_mi
+    - round_sensor_action_mi
+    - round_controller_action_entropy
+    - round_target_actuation_cmi
+    - round_kappa_target_actuation_cmi
+    - round_phi_target_actuation_cmi
+    - round_epistemic_target_actuation_cmi
+    - round_kappa_plus_actuation_cmi
+    - round_kappa_minus_actuation_cmi
+    - round_kappa_ctrl_actuation_cmi
+    - round_target_susceptibility
+    - round_kappa_plus_signed_response
+    - round_kappa_minus_signed_response
+    - round_kappa_ctrl_signed_response
+  histograms:
+    enabled: false
+    save_null_histograms: true
+  beta_cmi:
+    enabled: false
+sample_size_study:
+  enabled: false
+  reference_episodes: 1000
+  episode_counts:
+  - 10
+  - 20
+  - 30
+  - 50
+  - 75
+  - 100
+  repetitions: 200
+  n_bootstrap: 100
+  n_permutations: 100
+slurm:
+  simulation:
+    cpus_per_task: 4
+    memory: 8G
+    time_limit: 01:00:00
+    throttle: 8
+  information:
+    cpus_per_task: 4
+    memory: 12G
+    time_limit: 08:00:00
+    throttle: 8
+  finalize:
+    cpus_per_task: 2
+    memory: 32G
+    time_limit: 02:00:00

@@ -1,0 +1,132 @@
+# Synthetic v3 only; planned study. Do not submit the complete design without review.
+analysis:
+  beta_cmi:
+    enabled: false
+  bins: 6
+  bootstrap:
+    confidence_level: 0.95
+    enabled: false
+    n_bootstrap: 1000
+    seed: 43
+    unit: episode
+  epistemic_coordinate: signed_coverage
+  histograms:
+    enabled: false
+    save_null_histograms: true
+  llm_parallel:
+    bootstrap_resamples: 99
+    confidence: 0.95
+    null_permutations: 99
+    processes: 4
+    seed: 20261021
+    statistics:
+    - round_target_sensing_mi
+    - round_sensor_action_mi
+    - round_controller_action_entropy
+    - round_target_actuation_cmi
+    - round_kappa_ctrl_actuation_cmi
+    - round_target_susceptibility
+    - round_kappa_ctrl_signed_response
+  mutual_information:
+    enabled: true
+  permutation_null:
+    enabled: false
+    n_permutations: 1000
+    preserve_conditioning_state: true
+    seed: 42
+experiment:
+  episodes: 256
+  processes: 4
+  seed: 20261001
+model:
+  F: 10
+  F_plus: 7
+  N: 24
+  beta_evidence: 1.0
+  beta_social: 1.3
+  board_clock: frozen_front_page
+  budget_fraction: 0.25
+  controller_fact_selection: uniform_with_replacement
+  controller_message_mode: target_aligned_fact
+  controller_target: -1
+  initial_fact_redundancy: 3
+  model_version: santa_fe_epistemic_feedback_v3
+  peer_posting_mode: vote_aligned_fact
+  persistence_clock: round_boundary
+  policy_beta: 8.0
+  policy_threshold: 0.55
+  q: 1
+  rho: 0.7
+  rounds: 60
+  sensing_fraction: 0.041666666666666664
+  truth_fact_fraction: 0.7
+output:
+  results_dir: results/study_A_theory_validation/full_unrun
+  save_micro_trajectories: true
+  save_plots: true
+  save_reports: true
+  save_round_trajectories: true
+sample_size_study:
+  enabled: false
+  episode_counts:
+  - 10
+  - 20
+  - 30
+  - 50
+  - 75
+  - 100
+  n_bootstrap: 100
+  n_permutations: 100
+  reference_episodes: 1000
+  repetitions: 200
+slurm:
+  finalize:
+    cpus_per_task: 2
+    memory: 32G
+    time_limit: 02:00:00
+  information:
+    cpus_per_task: 4
+    memory: 16G
+    throttle: 8
+    time_limit: '12:00:00'
+  simulation:
+    cpus_per_task: 4
+    memory: 12G
+    throttle: 8
+    time_limit: 04:00:00
+sweep:
+  beta_pairs:
+  - name: evidence_weighted
+    beta_evidence: 2.0
+    beta_social: 0.5
+  - name: balanced
+    beta_evidence: 1.0
+    beta_social: 1.3
+  - name: social_weighted
+    beta_evidence: 0.5
+    beta_social: 2.0
+  rho:
+  - 0.0
+  - 0.4
+  - 0.7
+  - 0.85
+  - 0.95
+  - 1.0
+  budget_fraction:
+  - 0.0
+  - 0.08333333333333333
+  - 0.16666666666666666
+  - 0.25
+  - 0.5
+  - 1.0
+  q:
+  - 1
+  - 3
+  - 6
+  - 12
+  sensing_fraction:
+  - 0.041666666666666664
+  - 0.125
+  - 0.25
+  - 0.5
+  - 1.0

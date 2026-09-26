@@ -198,3 +198,13 @@ jobs finish, refresh the beta report with:
 ```bash
 python -m santa_fe.beta_cmi --config configs/santa_fe/beta_cmi_sweep.yaml --sample-size-summary "$ROOT/results/studies/santa_fe_sample_size_cmi/sample_size_cmi/sample_size_cmi_summary.csv"
 ```
+
+## Versioned v3 microscopic model
+
+The earlier sections document the historical `santa_fe_legacy_v2` studies.
+The opt-in v3 model changes the persistence clock and makes peer and controller
+facts vote-aligned. Read the [v3 game mechanics](santa_fe_game_mechanics.md)
+and the [v3 implementation handoff](../../../handoff/santa_fe_v3_implementation.md)
+before interpreting its retained trajectories or designing a new sweep. The
+small `configs/santa_fe/v3_pilot.yaml` recipe has a local validation report;
+the earlier 90-cell Cygnus beta/CMI recipe remains a legacy-v2 recipe.

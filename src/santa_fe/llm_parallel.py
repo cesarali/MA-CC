@@ -80,8 +80,9 @@ def adapt_trajectories(rounds: pd.DataFrame, *, bins: int) -> list:
             controlled = int(current["budget"]) > 0 and future is not None
             action = (ADVOCATE_TARGET if int(current["controller_effective_U"]) else NO_OP) if controlled else None
             probability = float(current["controller_p_act"]) if controlled else None
-            k_mean = int(bin01([current["kappa_mean_coverage"]], bins)[0])
-            k_pop = int(bin01([current["kappa_population_coverage"]], bins)[0])
+            v3 = current.get("model_version") == "santa_fe_epistemic_feedback_v3"
+            k_mean = int(bin01([current["kappa_plus"] if v3 else current["kappa_mean_coverage"]], bins)[0])
+            k_pop = int(bin01([current["kappa_minus"] if v3 else current["kappa_population_coverage"]], bins)[0])
             record = {
                 "round_index": time,
                 "has_successor": future is not None,
@@ -94,13 +95,21 @@ def adapt_trajectories(rounds: pd.DataFrame, *, bins: int) -> list:
                 "truth_count_after": truth_next,
                 "sensor_count_vector": [sensed_target, sensed - sensed_target],
                 "sensor_target_count": sensed_target,
+                "sensor_source_target_count": (int(current["peer_board_target_count"])
+                    if v3 else target_now),
                 "controller_action": action,
                 "controller_advocate_probability": probability,
+                "sensor_target_share": float(current["controller_observed_target_share"]),
+                "delta_p_ctrl": float(future["target_share"] - current["target_share"]) if future is not None else None,
                 # Synthetic fact-coverage coordinates; they are not the LLM game's phi/kappa semantics.
                 "conditioning_kappa_bin": k_mean,
                 "conditioning_phi_bin": k_pop,
                 "conditioning_epistemic_state": [k_mean, k_pop],
             }
+            if v3 and future is not None:
+                for key in ("plus", "minus", "ctrl"):
+                    record[f"outcome_kappa_{key}_bin"] = int(bin01([future[f"kappa_{key}"]], bins)[0])
+                    record[f"delta_kappa_{key}"] = float(future[f"kappa_{key}"] - current[f"kappa_{key}"])
             events.append(adapt_round_record(record, cell_id=str(int(cell))))
     return events
 

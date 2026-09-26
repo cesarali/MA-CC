@@ -219,3 +219,192 @@ def test_targeted_scientific_recipe_is_paired():
     assert len(sample.cells) == 2
     assert {(c.params.beta_evidence, c.params.beta_social, c.params.budget) for c in sample.cells} == {(1.0, 1.3, 6)}
     assert sample.sample_size["episode_counts"] == [10, 20, 30, 50, 75, 100, 200]
+
+
+def test_v3_semantic_clock_and_event_ledger():
+    import json
+    from dataclasses import replace
+    base = SimulationParameters(
+        model_version="santa_fe_epistemic_feedback_v3", persistence_clock="round_boundary",
+        peer_posting_mode="vote_aligned_fact", controller_message_mode="target_aligned_fact",
+        controller_fact_selection="uniform_with_replacement", N=8, F=4, q=2,
+        rounds=4, rho=0.0, sensing_fraction=.5, budget_fraction=.25, save_micro=True)
+    result = SyntheticGame(base).run_episode(42)
+    assert result.rounds == SyntheticGame(base).run_episode(42).rounds
+    assert result.micro == SyntheticGame(base).run_episode(42).micro
+    assert len(result.micro) == base.N * base.rounds
+    weights = result.fact_weights
+    for row in result.rounds[1:]:
+        persistence = json.loads(row["persistence_events_json"])
+        assert len(persistence) == base.N
+        assert all(not event["after_fact_ids"] for event in persistence)
+        assert sum(len(event["lost_fact_ids"]) for event in persistence) == sum(
+            len(event["before_fact_ids"]) for event in persistence)
+        assert row["controller_sensed_messages"] == 4
+        assert len(json.loads(row["sensor_sample_ids_json"])) == 4
+        peer = json.loads(row["peer_board_json"])
+        controller = json.loads(row["controller_board_json"])
+        from math import comb
+        target_posts = sum(m["vote"] == base.controller_target for m in peer)
+        y = row["controller_sensor_target_count"]
+        assert row["peer_board_target_count"] == target_posts
+        assert abs(row["p_sensor_outcome"] -
+                   comb(target_posts, y) * comb(base.N-target_posts, 4-y) / comb(base.N, 4)) < 1e-12
+        pool_size = len(json.loads(row["controller_fact_pool_json"]))
+        assert abs(row["p_controller_fact_selection"] - pool_size ** (-len(controller))) < 1e-12
+        assert len(peer) == base.N
+        assert len(controller) == row["budget_used"] == base.budget * row["controller_effective_U"]
+        assert all(m["fact_sign"] in (0, m["vote"]) for m in peer)
+        assert all(m["vote"] == m["fact_sign"] == base.controller_target for m in controller)
+        assert all(weights[m["fact_id"]] == base.controller_target for m in controller)
+        assert all(m["fact_id"] is not None for m in controller)
+        assert sum(json.loads(row["B_peer_counts_json"]).values()) == base.N
+        assert sum(json.loads(row["B_total_counts_json"]).values()) == base.N + len(controller)
+    for event in result.micro:
+        sampled = json.loads(event["sampled_message_ids_json"])
+        assert all(not mid.startswith(f'r{event["round"]}-peer-') for mid in sampled)
+        assert event["p_fact_acquisition_given_sample"] == 1.0
+        assert set(json.loads(event["controller_only_acquired_fact_ids_json"])).issubset(
+            json.loads(event["controller_exposed_fact_ids_json"]))
+        if event["sampled_controller_messages"] == 0:
+            assert json.loads(event["controller_only_acquired_fact_ids_json"]) == []
+        assert event["posted_fact_sign"] in (0, event["vote_after"])
+        assert (event["posted_fact_id"] is None) == (not json.loads(event["eligible_post_fact_ids_json"]))
+        assert event["p_vote_realized"] > 0
+    no_control = SyntheticGame(replace(base, budget_fraction=0)).run_episode(42)
+    assert all(row["budget_used"] == 0 for row in no_control.rounds)
+    assert all(json.loads(row["controller_board_json"]) == [] for row in no_control.rounds[1:])
+
+
+def test_v3_config_requires_explicit_semantics(tmp_path: Path):
+    data = yaml.safe_load(Path("configs/santa_fe/v3_pilot.yaml").read_text())
+    data["output"]["results_dir"] = str(tmp_path / "out")
+    data["model"]["peer_posting_mode"] = "random_active_fact"
+    path = tmp_path / "invalid.yaml"
+    path.write_text(yaml.safe_dump(data))
+    import pytest
+    with pytest.raises(ValueError, match="requires peer_posting_mode"):
+        load_config(path)
+
+
+def test_v3_exact_kernel_and_validation_tables(tmp_path: Path):
+    import json
+    from santa_fe.runner import save_trajectories
+    from santa_fe.v3_validation import exact_one_step, validate, finite_size_scaling, sensing_sample_size
+    from santa_fe.llm_parallel import analyze_existing
+    data = yaml.safe_load(Path("configs/santa_fe/v3_pilot.yaml").read_text())
+    data["experiment"].update(episodes=3, processes=1)
+    data["model"].update(N=8, F=4, F_plus=3, rounds=3)
+    data["sweep"]["budget_fraction"] = [.25]
+    data["output"]["results_dir"] = str(tmp_path / "results")
+    data["analysis"]["llm_parallel"].update(processes=1, bootstrap_resamples=2, null_permutations=3)
+    path = tmp_path / "v3.yaml"
+    path.write_text(yaml.safe_dump(data))
+    config = load_config(path)
+    rounds, micro = run(config)
+    save_trajectories(config, rounds, micro)
+    row = rounds.loc[rounds["round"] == 1].iloc[0]
+    event = micro.loc[micro["round"] == 1].iloc[0]
+    classes, emissions, joint = exact_one_step(
+        set(json.loads(event.facts_before_json)), int(event.vote_before),
+        json.loads(row.front_page_json), json.loads(row.fact_weights_json),
+        int(row.q), float(row.beta_evidence), float(row.beta_social))
+    assert abs(sum(classes.values()) - 1) < 1e-12
+    assert abs(sum(emissions.values()) - 1) < 1e-12
+    assert abs(sum(joint.values()) - 1) < 1e-12
+    assert not any(category in emissions for category in ("+1_-1", "-1_+1"))
+    analyze_existing(config)
+    result = validate(config, max_events=15)
+    assert result["invariants_passed"]
+    assert result["checked_events"] == 15
+    assert (config.results_dir / "validation" / "transition_kernel_validation.parquet").is_file()
+    assert (config.results_dir / "validation" / "sensing_validation.csv").is_file()
+    assert (config.results_dir / "validation" / "response_estimates.parquet").is_file()
+    assert pd.read_csv(config.results_dir / "validation" / "path_replay_validation.csv").agents_match.all()
+    scaling = finite_size_scaling(config, sizes=(8, 16), repetitions=3, checkpoint_round=1)
+    assert len(scaling["slopes"]) >= 2
+    sensing = sensing_sample_size(config, counts=(2, 3), repetitions=2, null_permutations=3)
+    assert sensing["repetitions"] == 4
+
+
+def test_v3_sampling_laws_and_local_closure():
+    import math
+    from santa_fe.v3_validation import (
+        fact_encounter_probability, hmf_one_step, hypergeometric_category_law,
+        multinomial_category_law, sensor_averaged_propensity,
+    )
+    counts = {"+1_+1": 2, "+1_0": 0, "-1_-1": 1, "-1_0": 0}
+    exact = hypergeometric_category_law(counts, 2)
+    approx = multinomial_category_law(counts, 2)
+    assert math.isclose(sum(exact.values()), 1)
+    assert math.isclose(sum(approx.values()), 1)
+    assert exact.get((2, 0, 0, 0)) == 1 / 3
+    assert approx.get((2, 0, 0, 0)) == 4 / 9
+    assert fact_encounter_probability(3, 2, 2) == 1
+    assert math.isclose(fact_encounter_probability(3, 2, 2, replacement=True), 8 / 9)
+    assert fact_encounter_probability(0, 0, 2) == 0
+    assert hypergeometric_category_law({}, 2) == {(0, 0, 0, 0): 1}
+    assert math.isclose(sensor_averaged_propensity(2, 4, 4, 8, .5), .5)
+    for sampling in ("hypergeometric", "multinomial"):
+        transitions, emissions = hmf_one_step((0, 0, 1), counts, 3, 2, 2, 1, 1,
+                                              sampling=sampling)
+        assert math.isclose(sum(transitions.values()), 1)
+        assert math.isclose(sum(emissions.values()), 1)
+        assert not {"+1_-1", "-1_+1"}.intersection(emissions)
+
+
+def test_v3_explicit_fact_split_and_zero_budget(tmp_path: Path):
+    import json
+    from santa_fe.v3_validation import _paired_counterfactuals
+    data = yaml.safe_load(Path("configs/santa_fe/v3_pilot.yaml").read_text())
+    data["experiment"].update(episodes=2, processes=1)
+    data["model"].update(N=8, F=5, F_plus=3, rounds=2)
+    data["sweep"]["budget_fraction"] = [0]
+    data["output"]["results_dir"] = str(tmp_path / "zero_budget")
+    path = tmp_path / "zero_budget.yaml"
+    path.write_text(yaml.safe_dump(data))
+    config = load_config(path)
+    rounds, _ = run(config)
+    assert all(json.loads(value).count(1) == 3 for value in rounds.fact_weights_json)
+    paired, replay, branch_laws = _paired_counterfactuals(rounds, config, 2, 4, 11)
+    assert replay.agents_match.all()
+    assert (paired.chi_target == 0).all()
+    assert (paired.T_pi_nats == 0).all()
+    assert (branch_laws.Q0 == branch_laws.Q1).all()
+
+
+def test_v3_shared_information_engine_and_sensing_source(monkeypatch):
+    import json
+    from mas_cc.games.hidden_bench.imitation_round_feedback import analysis
+    from santa_fe.llm_parallel import adapt_trajectories
+    params = SimulationParameters(
+        model_version="santa_fe_epistemic_feedback_v3", persistence_clock="round_boundary",
+        peer_posting_mode="vote_aligned_fact", controller_message_mode="target_aligned_fact",
+        controller_fact_selection="uniform_with_replacement", N=8, F=4, q=2,
+        rounds=4, budget_fraction=.25, save_micro=True)
+    rows = []
+    for seed in range(6):
+        result = SyntheticGame(params).run_episode(100 + seed)
+        for row in result.rounds:
+            rows.append({"cell_id": 0, "seed": seed, "N": params.N, "budget": params.budget,
+                         "controller_target": params.controller_target, "model_version": params.model_version,
+                         **row})
+    events = adapt_trajectories(pd.DataFrame(rows), bins=4)
+    first = events[0]
+    assert first.sensor_source_target_count == sum(
+        m["vote"] == params.controller_target for m in json.loads(rows[1]["peer_board_json"]))
+    stats = ("round_target_sensing_mi", "round_target_actuation_cmi",
+             "round_kappa_plus_actuation_cmi", "round_kappa_minus_actuation_cmi",
+             "round_kappa_ctrl_actuation_cmi", "round_kappa_plus_signed_response")
+    monkeypatch.setattr(analysis, "_INFORMATION_ENGINE", "rows")
+    reference, reference_nulls = analysis.round_information_analysis(
+        events, statistics=stats, bootstrap_resamples=3, null_permutations=4, seed=3)
+    monkeypatch.setattr(analysis, "_INFORMATION_ENGINE", "fast")
+    fast, fast_nulls = analysis.round_information_analysis(
+        events, statistics=stats, bootstrap_resamples=3, null_permutations=4, seed=3)
+    assert [row["statistic"] for row in fast] == [row["statistic"] for row in reference]
+    for before, after in zip(reference, fast):
+        assert abs(before["estimate"] - after["estimate"]) < 1e-10 or (
+            pd.isna(before["estimate"]) and pd.isna(after["estimate"]))
+        assert before["round_dual_action_event_fraction"] == after["round_dual_action_event_fraction"]
+    assert len(reference_nulls) == len(fast_nulls)

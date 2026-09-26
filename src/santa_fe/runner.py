@@ -52,6 +52,8 @@ def save_trajectories(config: Config, rounds: pd.DataFrame, micro: pd.DataFrame)
     metadata = {"source_config": str(config.path), "cells": len(config.cells),
                 "episodes_per_cell": config.episodes, "total_episodes": len(config.cells) * config.episodes,
                 "seed": config.seed, "schema_version": 1,
+                "model_semantics": {key: getattr(config.params, key) for key in ("model_version", "persistence_clock",
+                    "peer_posting_mode", "controller_message_mode", "board_clock", "controller_fact_selection")},
                 "budget_map": {str(c.params.budget_fraction): c.params.budget for c in config.cells}}
     (root / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     path = root / "trajectories"

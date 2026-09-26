@@ -69,6 +69,24 @@ by talk) even though the arithmetic is a reflection.  Since CMI is invariant
 under relabelling of `z`, the two estimates coincide wherever the two binnings
 induce the same partition; that is expected, and the relational adapter reports
 whether it happened rather than hiding it."""
+ROUND_EPISTEMIC_OUTCOME_KEYS: Mapping[str, str] = {
+    "round_kappa_plus_actuation_cmi": "outcome_kappa_plus_bin",
+    "round_kappa_minus_actuation_cmi": "outcome_kappa_minus_bin",
+    "round_kappa_ctrl_actuation_cmi": "outcome_kappa_ctrl_bin",
+}
+ROUND_EPISTEMIC_OUTCOME_STATISTICS = tuple(ROUND_EPISTEMIC_OUTCOME_KEYS)
+ROUND_EPISTEMIC_RESPONSE_KEYS: Mapping[str, str] = {
+    "round_kappa_plus_signed_response": "delta_kappa_plus",
+    "round_kappa_minus_signed_response": "delta_kappa_minus",
+    "round_kappa_ctrl_signed_response": "delta_kappa_ctrl",
+}
+
+ROUND_EPISTEMIC_RESPONSE_SOURCE = dict(zip(
+    ROUND_EPISTEMIC_RESPONSE_KEYS,
+    ROUND_EPISTEMIC_OUTCOME_STATISTICS,
+    strict=True,
+))
+
 ROUND_MEMORY_STATISTICS = tuple(ROUND_MEMORY_CONDITIONING_KEYS)
 ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS = tuple(
     name.replace("_actuation_cmi", "_signed_response")
@@ -146,16 +164,20 @@ ROUND_ANALYSIS_STATISTICS = (
     *ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS,
     *ROUND_SINGLE_AFFINITY_STATISTICS,
     *ROUND_SENSOR_POLICY_STATISTICS,
+    *ROUND_EPISTEMIC_OUTCOME_STATISTICS,
+    *ROUND_EPISTEMIC_RESPONSE_KEYS,
 )
 ROUND_ACTUATION_STATISTICS = (
     *ROUND_INFORMATION_STATISTICS[1:],
     *ROUND_MEMORY_STATISTICS,
+    *ROUND_EPISTEMIC_OUTCOME_STATISTICS,
 )
 """Everything that conditions on a current state and admits the policy null."""
 
 _BITS_STATISTICS = (
     frozenset(ROUND_INFORMATION_STATISTICS)
     | frozenset(ROUND_MEMORY_STATISTICS)
+    | frozenset(ROUND_EPISTEMIC_OUTCOME_STATISTICS)
     | frozenset({"round_target_sensing_mi", "round_sensor_action_mi"})
 )
 _RESPONSE_UNITS: Mapping[str, str] = {
@@ -166,6 +188,7 @@ _RESPONSE_UNITS: Mapping[str, str] = {
         name: "target_fraction_per_cycle"
         for name in ROUND_MEMORY_SIGNED_RESPONSE_STATISTICS
     },
+    **{name: "fact_coverage_fraction_per_cycle" for name in ROUND_EPISTEMIC_RESPONSE_KEYS},
     # Read off `delta_m_*`: the same motion in ALIGNED MAGNETIZATION,
     # `m = (K p - 1)/(K - 1)`, and therefore larger by `K/(K-1)`.
     "round_target_signed_actuation": "aligned_magnetization_per_cycle",
@@ -286,6 +309,12 @@ class RoundEvent:
         return None
 
     @property
+    def sensor_source_target_count(self) -> int:
+        """Target posts in the board actually sampled by the sensor, if supplied."""
+        value = self.event.get("sensor_source_target_count")
+        return self.target_before if value is None else int(value)
+
+    @property
     def sensor_target_count(self) -> int | None:
         """`Y_Z,k` - sampled agents voting for the target, or `None`.
 
@@ -389,6 +418,8 @@ ROUND_CONDITIONING_STATE: Mapping[str, Callable[[RoundEvent], Hashable]] = {
         name: _augmented_conditioning(key)
         for name, key in ROUND_MEMORY_CONDITIONING_KEYS.items()
     },
+    **{name: _augmented_conditioning("conditioning_epistemic_state")
+       for name in ROUND_EPISTEMIC_OUTCOME_STATISTICS},
 }
 """`Z` in `I(U_k ; . | Z)`, per statistic - the single place the conditioning
 state of an actuation estimate is defined.  Also what the entropy ceiling
@@ -403,6 +434,8 @@ _ROUND_OUTCOME: Mapping[str, Callable[[RoundEvent], Hashable]] = {
     # Every augmented conditioning measures the same opinion channel; only the
     # conditioning differs, which is what makes the family comparable.
     **{name: (lambda row: row.target_after) for name in ROUND_MEMORY_STATISTICS},
+    **{name: (lambda row, key=key: int(row.event[key]))
+       for name, key in ROUND_EPISTEMIC_OUTCOME_KEYS.items()},
 }
 
 
@@ -413,7 +446,7 @@ def _estimate_for(name: str, rows: Sequence[RoundEvent]) -> Estimate:
         # The single-affinity sensing channel: scalar count in, scalar count
         # out.  Deliberately NOT the full occupation/sensor vectors.
         return mutual_information(
-            [row.target_before for row in rows],
+            [getattr(row, "sensor_source_target_count", row.target_before) for row in rows],
             [row.sensor_target_count for row in rows],
         )
     if name == "round_sensor_action_mi":
@@ -606,6 +639,12 @@ def _diagnostic_for(name: str, rows: Sequence[RoundEvent]) -> float:
             state=lambda row: 0,
             delta=lambda row: float(row.event["delta_p_ctrl"]),
         )
+    if name in ROUND_EPISTEMIC_RESPONSE_KEYS:
+        return _signed_response(
+            controlled,
+            state=_augmented_conditioning("conditioning_epistemic_state"),
+            delta=lambda row: float(row.event[ROUND_EPISTEMIC_RESPONSE_KEYS[name]]),
+        )
     if name in _SIGNED_RESPONSE_SOURCE:
         # The same difference, stratified on the SAME conditioning state as the
         # CMI of the same stem - so "the controller moved the target" and "the
@@ -745,7 +784,7 @@ def _bits_sequences(name: str, rows: Sequence[RoundEvent]) -> tuple[list, list, 
     if name == "round_sensing_mi":
         return [row.N_k for row in rows], [row.Y_k for row in rows], None
     if name == "round_target_sensing_mi":
-        return [row.target_before for row in rows], [row.sensor_target_count for row in rows], None
+        return [getattr(row, "sensor_source_target_count", row.target_before) for row in rows], [row.sensor_target_count for row in rows], None
     if name == "round_sensor_action_mi":
         return [row.Y_k for row in rows], [str(row.U_k) for row in rows], None
     outcome = _ROUND_OUTCOME.get(name)
@@ -868,10 +907,18 @@ def round_information_analysis(
         # A statistic that needs a state or a delta the game does not record
         # drops out here rather than raising, which is what keeps the augmented
         # conditioning and the share-unit responses inert on runs without them.
-        source = _SIGNED_RESPONSE_SOURCE.get(name, name)
+        source = _SIGNED_RESPONSE_SOURCE.get(name, ROUND_EPISTEMIC_RESPONSE_SOURCE.get(name, name))
         key = ROUND_MEMORY_CONDITIONING_KEYS.get(source)
         if key is not None:
             eligible = [row for row in eligible if row.augmented_state(key) is not None]
+        if name in ROUND_EPISTEMIC_OUTCOME_STATISTICS:
+            eligible = [row for row in eligible
+                        if row.augmented_state("conditioning_epistemic_state") is not None
+                        and row.event.get(ROUND_EPISTEMIC_OUTCOME_KEYS[name]) is not None]
+        if name in ROUND_EPISTEMIC_RESPONSE_KEYS:
+            eligible = [row for row in eligible
+                        if row.augmented_state("conditioning_epistemic_state") is not None
+                        and row.event.get(ROUND_EPISTEMIC_RESPONSE_KEYS[name]) is not None]
         if name in _SHARE_RESPONSE_STATISTICS:
             eligible = [
                 row for row in eligible if row.event.get("delta_p_ctrl") is not None
@@ -935,6 +982,14 @@ def round_information_analysis(
                     permutations=null_permutations,
                     seed=seed + 100_000 * (name_index + 1),
                 )
+            null_type = "policy_conditional_randomization"
+        elif name in ROUND_EPISTEMIC_RESPONSE_KEYS:
+            # Reuse the established policy resampler for signed v3 responses.
+            null_values = tuple(
+                _diagnostic_for(name, _policy_resample(
+                    eligible, np.random.default_rng(seed + 100_000 * (name_index + 1) + permutation)))
+                for permutation in range(null_permutations)
+            )
             null_type = "policy_conditional_randomization"
         elif name in {
             "round_sensing_mi",

@@ -60,26 +60,31 @@ def prepare_reference(config, cell_id: int) -> dict:
 _REP_CONTEXT = None
 
 
-def _init_replicates(ids, groups, statistic, n_boot, n_perm, confidence, seed, cell_id, n):
+def _init_replicates(ids, groups, statistics, n_boot, n_perm, confidence, seed, cell_id, n):
     global _REP_CONTEXT
-    _REP_CONTEXT = (ids, groups, statistic, n_boot, n_perm, confidence, seed, cell_id, n)
+    _REP_CONTEXT = (ids, groups, statistics, n_boot, n_perm, confidence, seed, cell_id, n)
 
 
 def _replicate(rep):
-    ids, groups, statistic, n_boot, n_perm, confidence, seed, cell_id, n = _REP_CONTEXT
+    ids, groups, statistics, n_boot, n_perm, confidence, seed, cell_id, n = _REP_CONTEXT
     replicate_seed = seed + cell_id * 1_000_003 + n * 10_000 + rep
     rng = np.random.default_rng(replicate_seed)
     chosen = rng.choice(ids, n, replace=False)
     events = [event for episode_id in chosen for event in groups[episode_id]]
-    estimates, nulls = round_information_analysis(events, statistics=(statistic,),
+    estimates, nulls = round_information_analysis(events, statistics=statistics,
         bootstrap_resamples=n_boot, null_permutations=n_perm, confidence=confidence,
         seed=replicate_seed)
-    row = _summarize_nulls(estimates, nulls)[0]
-    return {"cell_id": cell_id, "n_episodes": n, "repetition": rep, "statistic": statistic,
-            "estimate": row["estimate"], "null_mean": row["null_mean"],
-            "estimate_minus_null": row["estimate_minus_null"], "null_p_value": row["null_p_value"],
-            "ci_width": row["bootstrap_ci_high"] - row["bootstrap_ci_low"],
-            "detected": bool(row["null_p_value"] < .05), "n_rounds": row["n_rounds"]}
+    by_name = {row["statistic"]: row for row in _summarize_nulls(estimates, nulls)}
+    missing = set(statistics) - set(by_name)
+    if missing:
+        raise ValueError(f"unsupported sample-size statistic(s) in cell {cell_id}: {sorted(missing)}")
+    return [{"cell_id": cell_id, "n_episodes": n, "repetition": rep, "statistic": statistic,
+             "estimate": row["estimate"], "null_mean": row["null_mean"],
+             "estimate_minus_null": row["estimate_minus_null"], "null_p_value": row["null_p_value"],
+             "ci_width": row["bootstrap_ci_high"] - row["bootstrap_ci_low"],
+             "detected": bool(row["null_p_value"] < .05), "n_rounds": row["n_rounds"],
+             "round_dual_action_event_fraction": row.get("round_dual_action_event_fraction")}
+            for statistic in statistics for row in [by_name[statistic]]]
 
 
 def run_task(config, task_id: int) -> dict:
@@ -90,7 +95,13 @@ def run_task(config, task_id: int) -> dict:
         raise ValueError("sample-size task ID outside array")
     n = int(counts[index])
     output = _root(config) / f"cell_{cell_id}_n_{n}.parquet"
-    if output.is_file() and len(pd.read_parquet(output)) == int(config.sample_size["repetitions"]):
+    settings = config.sample_size
+    statistics = settings.get("statistics")
+    if statistics is None:
+        statistics = [settings.get("statistic", "round_target_actuation_cmi")]
+    if not isinstance(statistics, list) or not statistics or len(set(statistics)) != len(statistics):
+        raise ValueError("sample_size_study.statistics must be a nonempty unique list")
+    if output.is_file() and len(pd.read_parquet(output)) == int(settings["repetitions"]) * len(statistics):
         return {"task_id": task_id, "status": "already_complete"}
     path = _reference(config, cell_id)
     if not path.is_file():
@@ -103,26 +114,30 @@ def run_task(config, task_id: int) -> dict:
     ids = list(groups)
     if n > len(ids):
         raise ValueError("episode count exceeds reference episodes")
-    settings = config.sample_size
-    context = (ids, groups, settings.get("statistic", "round_target_actuation_cmi"),
+    context = (ids, groups, tuple(statistics),
                int(settings["n_bootstrap"]), int(settings["n_permutations"]), .95,
                config.seed, cell_id, n)
     repetitions = int(settings["repetitions"])
     cpus = min(config.processes, int(os.environ.get("SLURM_CPUS_PER_TASK", config.processes)))
     if cpus == 1:
         _init_replicates(*context)
-        rows = list(map(_replicate, range(repetitions)))
+        batches = list(map(_replicate, range(repetitions)))
     else:
         with ProcessPoolExecutor(max_workers=cpus, mp_context=get_context("spawn"),
                                  initializer=_init_replicates, initargs=context) as pool:
-            rows = list(pool.map(_replicate, range(repetitions), chunksize=1))
-    table = pd.DataFrame(rows)
+            batches = list(pool.map(_replicate, range(repetitions), chunksize=1))
+    table = pd.DataFrame([row for batch in batches for row in batch])
     table["rho"] = config.cells[cell_id].params.rho
+    table["beta_regime"] = config.cells[cell_id].beta_regime
+    table["budget"] = config.cells[cell_id].params.budget
+    table["q"] = config.cells[cell_id].params.q
+    table["q_c"] = min(config.cells[cell_id].params.N,
+                        max(1, round(config.cells[cell_id].params.sensing_fraction * config.cells[cell_id].params.N)))
     temporary = output.with_suffix(".tmp.parquet")
     table.to_parquet(temporary, index=False)
     os.replace(temporary, output)
     return {"task_id": task_id, "cell_id": cell_id, "n_episodes": n,
-            "repetitions": len(table), "path": str(output)}
+            "repetitions": repetitions, "statistics": list(statistics), "path": str(output)}
 
 
 def aggregate(config) -> dict:
@@ -134,25 +149,30 @@ def aggregate(config) -> dict:
     if missing:
         raise FileNotFoundError(f"incomplete sample-size tasks: {missing}")
     details = pd.concat([pd.read_parquet(path) for path in paths], ignore_index=True)
-    expected = len(paths) * int(config.sample_size["repetitions"])
+    statistics = config.sample_size.get("statistics", [config.sample_size.get("statistic", "round_target_actuation_cmi")])
+    expected = len(paths) * int(config.sample_size["repetitions"]) * len(statistics)
     if len(details) != expected:
         raise ValueError(f"expected {expected} sample-size repetitions, got {len(details)}")
     details.to_parquet(root / "sample_size_cmi_repetitions.parquet", index=False)
     details.to_csv(root / "sample_size_cmi_repetitions.csv", index=False)
-    summary = details.groupby(["cell_id", "rho", "n_episodes"], as_index=False).agg(
+    summary = details.groupby(["cell_id", "beta_regime", "rho", "budget", "q", "q_c",
+                               "statistic", "n_episodes"], as_index=False).agg(
         estimate_mean=("estimate", "mean"), estimator_variance=("estimate", "var"),
         corrected_mean=("estimate_minus_null", "mean"), corrected_variance=("estimate_minus_null", "var"),
         p_value_median=("null_p_value", "median"), p_value_q025=("null_p_value", lambda x: x.quantile(.025)),
         p_value_q975=("null_p_value", lambda x: x.quantile(.975)),
-        mean_ci_width=("ci_width", "mean"), detection_probability=("detected", "mean"))
+        mean_ci_width=("ci_width", "mean"), detection_probability=("detected", "mean"),
+        mean_dual_action_fraction=("round_dual_action_event_fraction", "mean"),
+        mean_round_events=("n_rounds", "mean"))
     summary.to_csv(root / "sample_size_cmi_summary.csv", index=False)
-    for rho, rows in summary.groupby("rho"):
+    for (cell_id, statistic), rows in summary.groupby(["cell_id", "statistic"]):
         fig, ax = plt.subplots(figsize=(7, 4.5))
         ax.plot(rows.n_episodes, rows.detection_probability, marker="o")
-        ax.axvline(50, linestyle="--", color="gray")
-        ax.set(xlabel="episodes per cell", ylabel="P(null p<0.05)", ylim=(0, 1), title=f"CMI detection; rho={rho:g}")
+        ax.axhline(.05, linestyle="--", color="gray", label="nominal null rate")
+        ax.set(xlabel="independent episodes per cell", ylabel="P(null p<0.05)",
+               ylim=(0, 1), title=f"cell {cell_id}: {statistic}")
         fig.tight_layout()
-        fig.savefig(root / f"detection_rho_{rho:g}.png", dpi=150)
+        fig.savefig(root / f"detection_cell_{cell_id}_{statistic}.png", dpi=150)
         plt.close(fig)
     (root / "analysis_recipe.yaml").write_bytes(config.path.read_bytes())
     return {"repetitions": len(details), "summary_rows": len(summary), "path": str(root)}
