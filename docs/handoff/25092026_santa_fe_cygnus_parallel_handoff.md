@@ -4,6 +4,9 @@ Prepared locally on 2026-09-25; Cygnus execution completed on 2026-09-26. The sy
 model makes no LLM/provider calls. This package includes repository-relative
 source, configs, docs and tests; it excludes unrelated local edits and results.
 
+The generic game mechanics are explained in
+`docs/documentation/santa_fe_game_mechanics.md`.
+
 ## Scientific recipes
 
 `configs/santa_fe/beta_cmi_sweep.yaml` is the final sweep:

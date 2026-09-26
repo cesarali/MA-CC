@@ -4,6 +4,9 @@ This is a synthetic reference model. It makes no LLM or provider calls. The simu
 is in `src/santa_fe/game.py`; it generates trajectories only. Analysis modules read
 the saved round trajectories after generation.
 
+For a step-by-step explanation of the generic game, read
+[How the Santa Fe synthetic-control game works](santa_fe_game_mechanics.md).
+
 ## Run
 
 Use the local `MA-CC` Conda environment:
