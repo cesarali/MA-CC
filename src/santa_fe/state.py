@@ -4,9 +4,18 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class SimulationParameters:
+    # Historical configs keep v2 semantics; v3 opts in explicitly.
+    model_version: str = "santa_fe_legacy_v2"
+    persistence_clock: str = "focal_update"
+    peer_posting_mode: str = "random_active_fact"
+    controller_message_mode: str = "recommendation_only"
+    board_clock: str = "frozen_front_page"
+    controller_fact_selection: str = "none"
+
     # Population / synthetic task
     N: int = 24
     F: int = 10
+    F_plus: Optional[int] = None  # explicit v3 truth-fact count; overrides fraction
     q: int = 3
     rounds: int = 30
 
@@ -43,6 +52,7 @@ class Message:
     vote: int
     fact_id: Optional[int]
     is_controller: bool = False
+    message_id: str = ""
 
 
 @dataclass

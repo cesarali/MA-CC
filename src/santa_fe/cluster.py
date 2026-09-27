@@ -30,6 +30,25 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _v3_code_hashes() -> dict[str, str]:
+    source = Path(__file__).resolve().parent
+    repository = source.parent
+    def digest(paths):
+        h = hashlib.sha256()
+        for path in paths:
+            h.update(path.name.encode())
+            h.update(path.read_bytes())
+        return h.hexdigest()
+    return {
+        "simulator_sha256": digest([source / "state.py", source / "game.py", source / "v3_game.py"]),
+        "information_engine_sha256": digest([source / "llm_parallel.py", repository / "mas_cc/games/hidden_bench/imitation_round_feedback/analysis.py"]),
+    }
+
+
+def _v3(config: Config) -> bool:
+    return config.params.model_version == "santa_fe_epistemic_feedback_v3"
+
+
 def _json(path: Path, data: dict) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -55,6 +74,10 @@ def _load_manifest(config: Config) -> dict:
         raise ValueError("config changed after cluster preparation")
     if manifest["parameter_cells"] != len(config.cells):
         raise ValueError("cell count changed after cluster preparation")
+    if _v3(config):
+        for key, value in _v3_code_hashes().items():
+            if manifest.get(key) != value:
+                raise ValueError(f"v3 {key} changed after preparation; run prepare again")
     return manifest
 
 
@@ -89,7 +112,11 @@ def prepare(config: Config) -> dict:
                 "parameter_cells": len(config.cells), "episodes_per_cell": config.episodes,
                 "total_episodes": len(config.cells) * config.episodes,
                 "round_rows_expected": len(config.cells) * config.episodes * (config.params.rounds + 1),
+                "model_semantics": {key: getattr(config.params, key) for key in ("model_version", "persistence_clock",
+                    "peer_posting_mode", "controller_message_mode", "board_clock", "controller_fact_selection")},
                 "slurm": policy}
+    if _v3(config):
+        manifest.update(_v3_code_hashes())
     _json(root / "execution_plan.json", manifest)
     return manifest
 
@@ -119,6 +146,8 @@ def run_cell(config: Config, cell_id: int) -> dict:
     seal_path = destination / "cell_complete.json"
     expected = {"config_sha256": manifest["config_sha256"], "cell_id": cell_id,
                 "episodes": config.episodes, "round_rows": config.episodes * (config.params.rounds + 1)}
+    if _v3(config):
+        expected["simulator_sha256"] = manifest["simulator_sha256"]
     if _valid_seal(seal_path, expected):
         return {"cell_id": cell_id, "status": "already_complete", "path": str(destination)}
     cell_config = replace(config, cells=(config.cells[cell_id],), processes=min(config.processes, int(os.environ.get("SLURM_CPUS_PER_TASK", config.processes))))
@@ -133,6 +162,7 @@ def run_cell(config: Config, cell_id: int) -> dict:
         _parquet(micro_path, micro)
         files[micro_path.name] = _sha(micro_path)
     _json(seal_path, {**expected, "files": files,
+                      "model_version": config.cells[cell_id].params.model_version,
                       "beta_evidence": config.cells[cell_id].params.beta_evidence,
                       "beta_social": config.cells[cell_id].params.beta_social,
                       "beta_regime": config.cells[cell_id].beta_regime,
@@ -147,6 +177,8 @@ def _sealed_rounds(config: Config, cell_id: int) -> pd.DataFrame:
     destination = _cell_dir(config, cell_id)
     expected = {"config_sha256": manifest["config_sha256"], "cell_id": cell_id,
                 "episodes": config.episodes, "round_rows": config.episodes * (config.params.rounds + 1)}
+    if _v3(config):
+        expected["simulator_sha256"] = manifest["simulator_sha256"]
     if not _valid_seal(destination / "cell_complete.json", expected):
         raise ValueError(f"cell {cell_id} is incomplete or its files changed")
     rounds = pd.read_parquet(destination / "rounds.parquet")
@@ -203,6 +235,8 @@ def run_information_cell(config: Config, cell_id: int) -> dict:
     destination.mkdir(exist_ok=True)
     seal_path = destination / "information_complete.json"
     expected = {"config_sha256": _sha(config.path), "source_sha256": _sha(source), "cell_id": cell_id}
+    if _v3(config):
+        expected["information_engine_sha256"] = _v3_code_hashes()["information_engine_sha256"]
     if _valid_seal(seal_path, expected):
         return {"cell_id": cell_id, "status": "already_complete", "path": str(destination)}
     events = adapt_trajectories(rounds, bins=config.bins)
@@ -243,6 +277,8 @@ def aggregate_information(config: Config) -> dict:
         source = _cell_dir(config, cell_id) / "rounds.parquet"
         destination = _cell_dir(config, cell_id) / "information"
         expected = {"config_sha256": _sha(config.path), "source_sha256": _sha(source), "cell_id": cell_id}
+        if _v3(config):
+            expected["information_engine_sha256"] = _v3_code_hashes()["information_engine_sha256"]
         seal = destination / "information_complete.json"
         if not _valid_seal(seal, expected):
             raise ValueError(f"information cell {cell_id} is incomplete or changed")

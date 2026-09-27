@@ -1,6 +1,15 @@
 # Santa Fe targeted beta/CMI study: Cygnus handoff
 
+<<<<<<< HEAD
 Prepared locally on 2026-09-25; Cygnus execution completed on 2026-09-26. The synthetic
+=======
+**Version scope:** This handoff launches the historical
+`santa_fe_legacy_v2` beta/CMI sweep. It does not launch the opt-in v3 model.
+For v3 semantics and the local validation pilot, use
+[the v3 implementation handoff](santa_fe_v3_implementation.md).
+
+Prepared locally on 2026-09-25. **No Cygnus job was submitted.** The synthetic
+>>>>>>> f5ad4ef0dd572062917686249173e365f72766dd
 model makes no LLM/provider calls. This package includes repository-relative
 source, configs, docs and tests; it excludes unrelated local edits and results.
 

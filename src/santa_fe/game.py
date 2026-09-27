@@ -23,13 +23,18 @@ def make_fact_weights(
     F: int,
     truth_fact_fraction: float,
     rng: np.random.Generator,
+    *,
+    n_truth: int | None = None,
 ) -> np.ndarray:
     """
     Every fact has signed evidence +/-1.
     The complete fact set is guaranteed to favor truth.
     """
-    n_truth = max(F // 2 + 1, int(round(F * truth_fact_fraction)))
-    n_truth = min(n_truth, F)
+    if n_truth is None:
+        n_truth = max(F // 2 + 1, int(round(F * truth_fact_fraction)))
+        n_truth = min(n_truth, F)
+    elif not F // 2 < n_truth <= F:
+        raise ValueError("explicit F_plus must be a strict majority no greater than F")
     w = np.array([1] * n_truth + [-1] * (F - n_truth), dtype=int)
     rng.shuffle(w)
     return w
@@ -179,6 +184,9 @@ class SyntheticGame:
         return U, p_act
 
     def run_episode(self, seed: int) -> EpisodeResult:
+        if self.p.model_version == "santa_fe_epistemic_feedback_v3":
+            from .v3_game import run_v3_episode
+            return run_v3_episode(self, seed)
         rng = np.random.default_rng(seed)
         weights = make_fact_weights(
             self.p.F,
