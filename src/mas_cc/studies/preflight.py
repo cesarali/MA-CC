@@ -1235,10 +1235,14 @@ def run_study_preflight(
         **design,
         "provider_calls": calls,
         "total_cells": design.get(
-            "total_cells", sum(int(row["cell_count"]) for row in estimates)
+            "total_cells", sum(int(row.get("cell_count", 1)) for row in estimates)
         ),
         "total_episodes": design.get(
-            "total_episodes", sum(int(row["total_episode_count"]) for row in estimates)
+            "total_episodes",
+            sum(
+                int(row.get("total_episode_count", row.get("episode_count", 0)))
+                for row in estimates
+            ),
         ),
     }
     from mas_cc.config import GridSpec, load_run_config_or_grid

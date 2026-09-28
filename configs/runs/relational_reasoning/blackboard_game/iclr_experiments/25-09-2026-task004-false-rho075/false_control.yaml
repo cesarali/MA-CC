@@ -1,0 +1,185 @@
+llm_provider:
+  type: deepinfra
+  model: openai/gpt-oss-120b
+  credentials_env: DEEPINFRA_API_KEY
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 200
+  temperature: 1.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 15.0
+    reasoning_effort: low
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 5
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values: [A, B, C]
+game:
+  type: relational_imitation_round_feedback
+  population_size: 15
+  horizon: 30
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: /shared/MA-CC/results/studies/musr_truthful_selective_task_calibration_01/tasks
+    task_id: task_004
+    dynamics_mode: reasoning
+    rounds: 30
+    social_group_size: 7
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+      communication_profile: report_only
+      require_grounded_reports: true
+      report_citation_scope: active_or_observed
+      no_citable_fact_action: none
+    epistemic_persistence: 0.75
+    vote_visibility: public
+    prompt_version: 5
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 4
+    expected_validation_failure_rate: 0.15
+    initialization:
+      mode: paired_local_vote
+      artifact_dir: /shared/MA-CC-results/24-09-2026-task004-rho075_initializations
+      require_artifact: true
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_2
+    # Up to 15 agent posts plus 24 distinct controller facts can appear in one
+    # day. A 100-message sensor therefore sees the full previous-day board.
+    sensor_sample_size: 100
+    sensing_mode: board
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    # A whole-game allowance, not a per-round quota: 30 messages to place
+    # anywhere across the 30 rounds.
+    intervention_budget: 30
+    controller_budget_scope: episode
+    # The actuation gate is off, so the controller is asked every round and
+    # decides for itself whether to speak. It declines with mode HOLD, which
+    # posts nothing and leaves the allowance untouched.
+    advocacy_schedule: always
+    message_mode: recommendation_only
+    controller_actuation_mode: adaptive_communication
+    controller_timing: dawn_only
+    controller_authoring: llm_authored
+    controller_communication_max_retries: 2
+    # Both per-fact repost limits removed. max_posts_per_fact must be a
+    # positive integer, so it is set to the whole budget, which it cannot
+    # exceed; the prompt omits any mention of a limit that cannot bind.
+    controller_report_cooldown_rounds: 0
+    controller_report_max_posts_per_fact: 30
+    controller_report_selection_strategy: target_preserving_v1
+execution:
+  seed: 20260907
+  repetitions: 10
+  parallelism: 10
+  fail_fast: false
+  semantic_failure_guard:
+    minimum_finished_episodes: 2
+    maximum_failure_fraction: 0.25
+    minimum_failures: 2
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 1500.0
+  max_cost_per_run: 1500.0
+  max_provider_requests: 3000000
+  max_input_tokens: 2000000000
+  max_output_tokens: 8000000000
+  allow_unbounded_paid_requests: false
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+  options:
+    comet_project: mas-cc
+    prompt_examples:
+      count: 720
+      scope: episode
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  enabled: true
+  comet_export: []
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics: [episodes_done]
+    grid_image_every_n_episodes: 1
+    sweep_experiment: true
+    cell_reporting: master
+    metric_plots: true
+experiment:
+  name: 25-09-2026-task004-false-rho075
+  description: >-
+    Task-004 false controller. 15 agents, q=7, 30 rounds, rho=0.75.
+    Whole-game budget of 30 messages, full previous-day board observation,
+    no daily posting cap, actuation gate off, and no per-fact repost limits;
+    the controller chooses when and whether to spend.
+  tags:
+  - iclr-experiments
+  - musr
+  - blackboard
+  - task003
+  - false-control
+  - q7
+  - rounds30
+  - prompts-retained
+  - deepinfra
+  - gpt-oss-120b
+  - communication-profile-comparison
+  - prompt-v5
+  metadata:
+    study: 25-09-2026-task004-false-rho075
+    arm: false_control
+    task_id: task_004
+    candidate_id: 130
+    task_file_sha256: 333a6fb173d77ecffed856e35aa0be2a0991fb283e8c350468c6c97f7281f30f
+    private_assignment_sha256: 987808df2048b3262a8806e72f8100ff7e836e646d2b1d4d0c6a5d638daf44ba
+    controller_pool_sha256: b90a3267c26212194e916777795db0751008d8802d45e35a67088fb8a0ce49d0
+    ground_truth: ALLOCATION_0
+    controller_target: ALLOCATION_2
+    controller_target_is_truth: false
+    target_semantics: false
+    sensor_sample_size: 100
+    intervention_budget: 30
+    controller_budget_scope: episode
+    controller_sees_task_context: true
+    controller_context_note: >-
+      The controller receives the scenario, the question and all three
+      allocation meanings. v0/v1 controllers received none of these and
+      were told to push a label they could not interpret.
+    population_size: 15
+    population_rounds: 30
+    social_group_size: 7
+    repetitions: 10
+    common_random_numbers_across_grid: true
+    paired_initialization_across_grid: true
+    paired_initialization_across_targets: true
+grid:
+  game.options.board.communication_profile: [report_only]

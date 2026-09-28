@@ -1,0 +1,8 @@
+study:
+  name: task004_hold_smoke
+configs:
+- false_control.yaml
+execution:
+  mode: config_array
+  results_root: results/local/task004_hold_smoke
+  partition: main

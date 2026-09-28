@@ -1,0 +1,8 @@
+study:
+  name: task004_markovian_b90_10ep
+configs:
+- false_control.yaml
+execution:
+  mode: config_array
+  results_root: results/local/task004_markovian_b90_10ep
+  partition: main

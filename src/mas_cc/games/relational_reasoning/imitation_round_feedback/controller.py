@@ -103,6 +103,13 @@ CONTROLLER_ACTUATION_MODES = (
 STRATEGIC_REPORT_SELECTION_V1 = "target_preserving_v1"
 STRATEGIC_REPORT_SELECTION_STRATEGIES = (STRATEGIC_REPORT_SELECTION_V1,)
 
+CONTROLLER_FACT_POOL_FROZEN = "frozen"
+CONTROLLER_FACT_POOL_ALL_NONDECISIVE = "all_nondecisive"
+CONTROLLER_FACT_POOL_MODES = (
+    CONTROLLER_FACT_POOL_FROZEN,
+    CONTROLLER_FACT_POOL_ALL_NONDECISIVE,
+)
+
 TIMING_MICROSCOPIC = "microscopic"
 TIMING_DAWN_ONLY = "dawn_only"
 CONTROLLER_TIMINGS = (TIMING_MICROSCOPIC, TIMING_DAWN_ONLY)
@@ -116,6 +123,13 @@ CONTROLLER_AUTHORING_MODES = (
 SENSING_VOTES = "votes"
 SENSING_BOARD = "board"
 CONTROLLER_SENSING_MODES = (SENSING_VOTES, SENSING_BOARD)
+
+CONTROLLER_MEMORY_NONE = "none"
+CONTROLLER_MEMORY_PUBLIC_LEDGER = "public_ledger"
+CONTROLLER_MEMORY_MODES = (
+    CONTROLLER_MEMORY_NONE,
+    CONTROLLER_MEMORY_PUBLIC_LEDGER,
+)
 
 _DIRECTION_VECTORS = {
     "NORTH": (0, 1),
@@ -177,6 +191,14 @@ class StrategicReportSelection:
         }
 
 
+BUDGET_SCOPE_PER_ROUND = "per_round"
+BUDGET_SCOPE_EPISODE = "episode"
+BUDGET_SCOPES = (BUDGET_SCOPE_PER_ROUND, BUDGET_SCOPE_EPISODE)
+ROUND_BUDGET_EXACT = "exact"
+ROUND_BUDGET_ZERO_OR_EXACT = "zero_or_exact"
+ROUND_BUDGET_MODES = (ROUND_BUDGET_EXACT, ROUND_BUDGET_ZERO_OR_EXACT)
+
+
 @dataclass(frozen=True, slots=True)
 class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     """Soft target policy, exact per-round slot budget, explicit evidence choice."""
@@ -191,6 +213,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     sensing_mode: str = SENSING_VOTES
     controller_report_cooldown_rounds: int = 1
     controller_report_selection_strategy: str = STRATEGIC_REPORT_SELECTION_V1
+    controller_fact_pool_mode: str = CONTROLLER_FACT_POOL_FROZEN
     allow_controller_requests: bool = True
     allow_controller_directives: bool = True
     controller_communication_policy: str = COMMUNICATION_POLICY
@@ -198,8 +221,14 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
     controller_communication_fallback_policy: str = COMMUNICATION_POLICY
     controller_communication_max_retries: int = 2
     controller_report_max_posts_per_fact: int = 3
+    controller_budget_scope: str = BUDGET_SCOPE_PER_ROUND
+    controller_round_budget_mode: str = ROUND_BUDGET_EXACT
+    # Optional ceiling on one day's use of a whole-episode allowance. Task 004
+    # leaves this unset to test whether the controller paces its own spending.
+    controller_max_posts_per_round: int | None = None
     controller_authoring: str | None = None
     controller_allow_mixed_message_types: bool = False
+    controller_memory_mode: str = CONTROLLER_MEMORY_NONE
 
     policy: ClassVar[str] = "soft_target"
     default_template_version: ClassVar[int] = 3
@@ -472,8 +501,15 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 f"{task.controller_target!r} or ground truth "
                 f"{task.correct_relation!r}"
             )
-        pool = task.controller_reportable_fact_ids
-        if self.intervention_budget > len(pool):
+        pool = self.reportable_fact_ids(task)
+        # The bound exists because a single round's reports must be distinct,
+        # so a per-round quota cannot exceed the pool. A whole-game allowance
+        # is spent across rounds and may reuse facts, so it legitimately can;
+        # the runtime caps each round's offer at the pool instead.
+        if (
+            self.controller_budget_scope == BUDGET_SCOPE_PER_ROUND
+            and self.intervention_budget > len(pool)
+        ):
             raise ValueError(
                 "control.options.intervention_budget exceeds the distinct "
                 f"controller-reportable pool ({self.intervention_budget} > {len(pool)})"
@@ -483,6 +519,16 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             raise ValueError(
                 f"controller-reportable pool references unknown facts: {sorted(missing)}"
             )
+
+    def reportable_fact_ids(self, task: RelationalTask) -> tuple[str, ...]:
+        """Resolve the controller's fact pool without changing agent evidence."""
+
+        if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_FROZEN:
+            return task.controller_reportable_fact_ids
+        if not task.decisive_fact_ids:
+            raise ValueError("all_nondecisive requires declared decisive facts")
+        decisive = set(task.decisive_fact_ids)
+        return tuple(fact_id for fact_id in task.fact_order if fact_id not in decisive)
 
     def select_truthful_reports(
         self,
@@ -504,7 +550,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         classes = task.controller_fact_classes or {}
         base_scores = task.controller_fact_scores or {}
         ranked: list[tuple[tuple[Any, ...], str, float, bool, bool]] = []
-        for fact_id in task.controller_reportable_fact_ids:
+        for fact_id in self.reportable_fact_ids(task):
             prior_rounds = tuple(
                 int(value) for value in selected_rounds.get(fact_id, ())
             )
@@ -515,7 +561,11 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             live_count = int(live_fact_counts.get(fact_id, 0))
             novel = live_count == 0
             reuse_count = len(prior_rounds)
-            base_score = float(base_scores.get(fact_id, 0.0))
+            base_score = (
+                0.0
+                if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_ALL_NONDECISIVE
+                else float(base_scores.get(fact_id, 0.0))
+            )
             score = base_score + float(novel) - live_count - reuse_count
             tie = hashlib.sha256(
                 f"{episode_seed}:{task.task_id}:{round_index}:{fact_id}".encode("utf-8")
@@ -542,7 +592,11 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             StrategicReportSelection(
                 fact_id=fact_id,
                 score=score,
-                strategy_class=str(classes[fact_id]),
+                strategy_class=(
+                    "all-nondecisive"
+                    if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_ALL_NONDECISIVE
+                    else str(classes[fact_id])
+                ),
                 novel_on_live_board=novel,
                 cooldown_eligible=cooldown_eligible,
                 rank=rank,
@@ -573,7 +627,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
         """Return at most b useful reports under bounded repetition and cooldown."""
 
         selected = replace(
-            self, intervention_budget=len(task.controller_reportable_fact_ids)
+            self, intervention_budget=len(self.reportable_fact_ids(task))
         ).select_truthful_reports(
             task,
             episode_seed=episode_seed,
@@ -658,6 +712,61 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             )
             schedule = SCHEDULE_SOFT
         values["advocacy_schedule"] = str(schedule)
+
+        # per_round keeps intervention_budget as a per-round quota, the meaning
+        # v0 and v1 used. episode makes it the whole-game allowance, spent
+        # however the controller likes and then gone.
+        max_per_round = options.get("controller_max_posts_per_round")
+        if max_per_round is not None:
+            if (
+                isinstance(max_per_round, bool)
+                or not isinstance(max_per_round, int)
+                or max_per_round < 1
+            ):
+                issues.append(
+                    ValidationIssue(
+                        "control.options.controller_max_posts_per_round",
+                        "must be a positive integer",
+                    )
+                )
+                max_per_round = None
+            else:
+                max_per_round = int(max_per_round)
+        values["controller_max_posts_per_round"] = max_per_round
+
+        budget_scope = options.get("controller_budget_scope", BUDGET_SCOPE_PER_ROUND)
+        if budget_scope not in BUDGET_SCOPES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_budget_scope",
+                    f"must be one of {list(BUDGET_SCOPES)}",
+                )
+            )
+            budget_scope = BUDGET_SCOPE_PER_ROUND
+        values["controller_budget_scope"] = str(budget_scope)
+
+        round_budget_mode = options.get(
+            "controller_round_budget_mode", ROUND_BUDGET_EXACT
+        )
+        if round_budget_mode not in ROUND_BUDGET_MODES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_round_budget_mode",
+                    f"must be one of {list(ROUND_BUDGET_MODES)}",
+                )
+            )
+            round_budget_mode = ROUND_BUDGET_EXACT
+        if (
+            budget_scope == BUDGET_SCOPE_EPISODE
+            and round_budget_mode != ROUND_BUDGET_EXACT
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_round_budget_mode",
+                    "zero_or_exact requires controller_budget_scope: per_round",
+                )
+            )
+        values["controller_round_budget_mode"] = str(round_budget_mode)
 
         actuation_mode = options.get("controller_actuation_mode", DIRECT_RECOMMENDATION)
         if actuation_mode not in CONTROLLER_ACTUATION_MODES:
@@ -803,6 +912,29 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 )
         values["controller_authoring"] = controller_authoring
 
+        memory_mode = options.get("controller_memory_mode", CONTROLLER_MEMORY_NONE)
+        if memory_mode not in CONTROLLER_MEMORY_MODES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_memory_mode",
+                    f"must be one of {list(CONTROLLER_MEMORY_MODES)}",
+                )
+            )
+            memory_mode = CONTROLLER_MEMORY_NONE
+        if memory_mode == CONTROLLER_MEMORY_PUBLIC_LEDGER and (
+            sensing_mode != SENSING_BOARD
+            or actuation_mode != ADAPTIVE_COMMUNICATION
+            or controller_authoring != CONTROLLER_AUTHORING_LLM
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_memory_mode",
+                    "public_ledger requires board sensing and llm_authored "
+                    "adaptive_communication",
+                )
+            )
+        values["controller_memory_mode"] = str(memory_mode)
+
         allow_mixed_message_types = options.get(
             "controller_allow_mixed_message_types", False
         )
@@ -822,6 +954,18 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 ValidationIssue(
                     "control.options.controller_allow_mixed_message_types",
                     "requires controller_authoring: llm_authored",
+                )
+            )
+        if round_budget_mode == ROUND_BUDGET_ZERO_OR_EXACT and (
+            controller_authoring != CONTROLLER_AUTHORING_LLM
+            or actuation_mode != ADAPTIVE_COMMUNICATION
+            or allow_mixed_message_types
+        ):
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_round_budget_mode",
+                    "zero_or_exact requires llm_authored adaptive_communication "
+                    "without mixed message types",
                 )
             )
         values["controller_allow_mixed_message_types"] = allow_mixed_message_types
@@ -914,6 +1058,19 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             )
             report_strategy = STRATEGIC_REPORT_SELECTION_V1
         values["controller_report_selection_strategy"] = str(report_strategy)
+
+        fact_pool_mode = options.get(
+            "controller_fact_pool_mode", CONTROLLER_FACT_POOL_FROZEN
+        )
+        if fact_pool_mode not in CONTROLLER_FACT_POOL_MODES:
+            issues.append(
+                ValidationIssue(
+                    "control.options.controller_fact_pool_mode",
+                    f"must be one of {list(CONTROLLER_FACT_POOL_MODES)}",
+                )
+            )
+            fact_pool_mode = CONTROLLER_FACT_POOL_FROZEN
+        values["controller_fact_pool_mode"] = str(fact_pool_mode)
 
         evidence_sources = sum(
             bool(value)

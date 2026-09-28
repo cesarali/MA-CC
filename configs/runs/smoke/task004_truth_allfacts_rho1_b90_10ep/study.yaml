@@ -1,0 +1,13 @@
+study:
+  name: task004_truth_allfacts_rho1_b90_10ep
+configs:
+- truth_allfacts_rho1.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/task004-truth-allfacts-rho1-b90-20260925
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 150
+  assumed_latency_seconds: 12.5
+  throttle: 1

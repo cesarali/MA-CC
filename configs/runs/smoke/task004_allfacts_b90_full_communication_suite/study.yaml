@@ -1,0 +1,16 @@
+study:
+  name: task004_allfacts_b90_full_communication_suite
+configs:
+- false_allfacts_rho075.yaml
+- truth_allfacts_rho075.yaml
+- false_allfacts_rho1.yaml
+- truth_allfacts_rho1.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/task004-allfacts-b90-full-communication-suite-20260925
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 300
+  assumed_latency_seconds: 12.5
+  throttle: 4
