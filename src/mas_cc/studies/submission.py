@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,8 @@ from mas_cc.storage import canonical_hash
 
 from .manifest import StudySpec, discover_study
 from .runtime import EXECUTION_SITES
+from .drain import _atomic_json
+from .site import active_cluster, default_study_launcher
 
 
 SUBMISSION_COLUMNS = (
@@ -334,7 +337,7 @@ def submit_study(
     throttle: int | None = None,
     job_script: str | Path | None = None,
     require_results_under: str | Path | None = None,
-    execution_site: str = "potsdam",
+    execution_site: str | None = None,
     run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> SubmissionResult:
     """Preflight all configs, publish manifests, then call ``sbatch`` exactly once."""
@@ -347,11 +350,20 @@ def submit_study(
             "`mas-cc study prepare` followed by `scripts/nersc/run_study.sh` "
             "so the allocation uses --qos=interactive"
         )
-    if execution_site not in EXECUTION_SITES:
+    if execution_site is not None and execution_site not in EXECUTION_SITES:
         raise ValueError(
             "execution_site must be one of "
             + ", ".join(repr(site) for site in EXECUTION_SITES)
         )
+    # An explicit site selects that site's launchers. With none, the launcher
+    # comes from main's detection of the active cluster (Cygnus or Potsdam),
+    # and preparation.json records the site that launcher declares: the
+    # Cygnus launcher declares none, the Potsdam one declares "potsdam".
+    # A mismatch would make validate_study_execution_site refuse to start.
+    if execution_site is not None:
+        recorded_site = execution_site
+    else:
+        recorded_site = "unspecified" if active_cluster() == "cygnus" else "potsdam"
     spec = discover_study(config_dir)
     from .preflight import validate_study_preflight_contract
 
@@ -410,6 +422,22 @@ def submit_study(
                     "require_results_under": str(required_root),
                 },
             )
+    prior_submission = study_dir / "submission.json"
+    if prior_submission.is_file():
+        previous = json.loads(prior_submission.read_text(encoding="utf-8"))
+        old_job = previous.get("job_id") if previous.get("status") == "submitted" else None
+        if old_job:
+            try:
+                active = subprocess.run(
+                    ["squeue", "-h", "-j", str(old_job), "-o", "%A"],
+                    check=True, capture_output=True, text=True, timeout=10,
+                )
+            except OSError:
+                active = None
+            if active is not None and str(old_job) in active.stdout.split():
+                raise ValueError(
+                    f"study result root already has active SLURM job {old_job}"
+                )
     entries = build_submission_entries(spec, study_dir)
 
     # Preflight in a temporary root so a failed member cannot leave a study that
@@ -495,7 +523,13 @@ def submit_study(
             encoding="utf-8",
         )
         script = _absolute_path(
-            job_script or _default_job_script(execution_site, cell_array=True),
+            job_script
+            or (
+                _default_job_script(execution_site, cell_array=True)
+                if execution_site is not None
+                # No explicit site: main's detection of the active cluster.
+                else default_study_launcher(cell_array=True)
+            ),
             preserve_symlinks=execution_site == "amarel",
         )
         array = f"0-{plan.shard_count - 1}%{plan.array_throttle}"
@@ -546,7 +580,13 @@ def submit_study(
 
         plan = plan_config_execution(spec, len(entries))
         script = _absolute_path(
-            job_script or _default_job_script(execution_site, cell_array=False),
+            job_script
+            or (
+                _default_job_script(execution_site, cell_array=False)
+                if execution_site is not None
+                # No explicit site: main's detection of the active cluster.
+                else default_study_launcher(cell_array=False)
+            ),
             preserve_symlinks=execution_site == "amarel",
         )
         if throttle is not None:
@@ -614,7 +654,7 @@ def submit_study(
                 "schema_version": 1,
                 "status": "prepared",
                 "prepared_at": _now(),
-                "execution_site": execution_site,
+                "execution_site": recorded_site,
                 "array": array,
                 "worker_manifest": str(execution_manifest or manifest_path),
                 "execution_plan": execution_plan,
@@ -625,49 +665,46 @@ def submit_study(
         + "\n",
         encoding="utf-8",
     )
+    drain_policy = dict((execution_plan or {}).get("graceful_drain") or {})
+    signal_option = (
+        (f"--signal=B:{drain_policy['signal']}@{drain_policy['lead_seconds']}",)
+        if drain_policy.get("enabled") else ()
+    )
+    attempt = uuid.uuid4().hex
+    command = (
+        *command[:-2],
+        *signal_option,
+        *command[-2:],
+    )
     started = _now()
     try:
         completed = runner(command, check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError) as exc:
-        (study_dir / "submission.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "status": "failed",
-                    "submitted_at": started,
-                    "command": list(command),
-                    "error": str(exc),
-                },
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        _atomic_json(study_dir / "submission.json", {
+            "schema_version": 1,
+            "status": "failed",
+            "submitted_at": started,
+            "command": list(command),
+            "error": str(exc),
+        })
         raise ValueError(f"SLURM submission failed: {exc}") from exc
     stdout = completed.stdout.strip()
     match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", stdout, flags=re.IGNORECASE)
     if match is None:
         raise ValueError(f"could not parse SLURM job ID from sbatch output: {stdout!r}")
     job_id = match.group(1)
-    (study_dir / "submission.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "status": "submitted",
-                "submitted_at": started,
-                "job_id": job_id,
-                "array": array,
-                "command": list(command),
-                "stdout": stdout,
-                "execution_plan": execution_plan,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _atomic_json(study_dir / "submission.json", {
+        "schema_version": 1,
+        "status": "submitted",
+        "submitted_at": started,
+        "job_id": job_id,
+        "submission_attempt": attempt,
+        "study_manifest_hash": _file_hash(study_dir / "study_manifest.json"),
+        "array": array,
+        "command": list(command),
+        "stdout": stdout,
+        "execution_plan": execution_plan,
+    })
     return SubmissionResult(
         study_dir, manifest_path, job_id, entries, command, execution_plan
     )
@@ -680,7 +717,7 @@ def prepare_study(
     throttle: int | None = None,
     job_script: str | Path | None = None,
     require_results_under: str | Path | None = None,
-    execution_site: str = "potsdam",
+    execution_site: str | None = None,
 ) -> SubmissionResult:
     """Prepare manifests and a scheduler command without contacting SLURM."""
 

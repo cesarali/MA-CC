@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "task_id": "task_003",
+  "target": "ALLOCATION_0",
+  "prior_probability": 0.3333333333333333,
+  "criterion": "positive individual symbolic target lift > 1e-12",
+  "ordered_pool_ids": [
+    "cf_x00_ge_x04",
+    "cf_x01_le_x04",
+    "cf_x01_le_x05",
+    "cf_x02_le_x03",
+    "cf_x06_le_x08",
+    "cf_x07_le_x08",
+    "cf_x00_eq_3",
+    "cf_x01_eq_1",
+    "cf_x00_ge_x01",
+    "cf_x00_ge_2",
+    "cf_x01_le_2",
+    "cf_x08_ge_2",
+    "cf_x06_eq_1",
+    "cf_x02_le_x05",
+    "cf_x03_ge_x04",
+    "cf_x04_le_2",
+    "cf_x06_le_2",
+    "cf_x06_eq_x07",
+    "cf_x00_ge_x03",
+    "cf_x01_le_x02",
+    "cf_x01_eq_x02",
+    "cf_x04_eq_2",
+    "cf_x06_le_x07"
+  ],
+  "ordered_pool_sha256": "48e6d5160f78a177b7a7f16c26a7ff8426f4725bedc4430bb221a04e7508aaf8",
+  "facts": [
+    {
+      "fact_id": "cf_x00_ge_x04",
+      "role": "decisive",
+      "individual_target_lift": 0.11564411816116066
+    },
+    {
+      "fact_id": "cf_x01_le_x04",
+      "role": "decisive",
+      "individual_target_lift": 0.045894473930690016
+    },
+    {
+      "fact_id": "cf_x01_le_x05",
+      "role": "decisive",
+      "individual_target_lift": 0.11564411816116066
+    },
+    {
+      "fact_id": "cf_x02_le_x03",
+      "role": "decisive",
+      "individual_target_lift": 0.08986448728695168
+    },
+    {
+      "fact_id": "cf_x06_le_x08",
+      "role": "decisive",
+      "individual_target_lift": 0.11564411816116066
+    },
+    {
+      "fact_id": "cf_x07_le_x08",
+      "role": "decisive",
+      "individual_target_lift": 0.11564411816116066
+    },
+    {
+      "fact_id": "cf_x00_eq_3",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.25195650668328834
+    },
+    {
+      "fact_id": "cf_x01_eq_1",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.25195650668328834
+    },
+    {
+      "fact_id": "cf_x00_ge_x01",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.1495095435390772
+    },
+    {
+      "fact_id": "cf_x00_ge_2",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.1139714896150748
+    },
+    {
+      "fact_id": "cf_x01_le_2",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.1139714896150748
+    },
+    {
+      "fact_id": "cf_x08_ge_2",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.1139714896150748
+    },
+    {
+      "fact_id": "cf_x06_eq_1",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.11133921850407175
+    },
+    {
+      "fact_id": "cf_x02_le_x05",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.06730802386124618
+    },
+    {
+      "fact_id": "cf_x03_ge_x04",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.06730802386124618
+    },
+    {
+      "fact_id": "cf_x04_le_2",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.06332463011314188
+    },
+    {
+      "fact_id": "cf_x06_le_2",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.06332463011314188
+    },
+    {
+      "fact_id": "cf_x06_eq_x07",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.05282642745265559
+    },
+    {
+      "fact_id": "cf_x00_ge_x03",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.045894473930690016
+    },
+    {
+      "fact_id": "cf_x01_le_x02",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.045894473930690016
+    },
+    {
+      "fact_id": "cf_x01_eq_x02",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.023663393344244443
+    },
+    {
+      "fact_id": "cf_x04_eq_2",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.013605442176870763
+    },
+    {
+      "fact_id": "cf_x06_le_x07",
+      "role": "truth_supporting",
+      "individual_target_lift": 0.012969760531375663
+    }
+  ],
+  "excluded_nonpositive_neutral_facts": [
+    {
+      "fact_id": "cf_x03_le_2",
+      "individual_target_lift": -0.056985744807537375
+    },
+    {
+      "fact_id": "cf_x01_eq_x05",
+      "individual_target_lift": -0.026413213726327767
+    }
+  ]
+}

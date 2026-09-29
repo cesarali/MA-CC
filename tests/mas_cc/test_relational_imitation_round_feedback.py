@@ -60,6 +60,7 @@ from mas_cc.games.relational_reasoning.imitation_round_feedback.metrics import (
 from mas_cc.games.relational_reasoning.imitation_round_feedback.runtime import (
     CONTROL_SOURCE_ID,
     RelationalDecisionFailed,
+    RecoveryCheckpointError,
     apply_epistemic_persistence,
     build_social_sources,
     run_relational_imitation_round_feedback_game,
@@ -302,6 +303,59 @@ def test_provider_failure_replays_validated_choices_and_resumes_at_missing_call(
     assert [row.transition.event for row in resumed.interactions] == [
         row.transition.event for row in baseline.interactions
     ]
+
+
+def test_graceful_round_drain_replays_without_provider_calls():
+    from mas_cc.studies.drain import Drained
+
+    config = _config(
+        path="configs/runs/relational_reasoning/misselaneous/relational_imitation_round_feedback_no_control_smoke.yaml",
+        rounds=2,
+        initialization={"mode": "uniform_random"},
+    )
+
+    class Controller:
+        requested = False
+
+        def raise_if_safe(self, boundary):
+            raise Drained(boundary)
+
+    class Observer(_FailureRecoveryObserver):
+        drain_controller = Controller()
+        arm = True
+
+        def record_round_boundary(self, **_payload):
+            if self.arm:
+                self.drain_controller.requested = True
+
+    observer = Observer()
+    first_ballots = _Ballots(votes=("A",))
+    with pytest.raises(Drained, match="round_replay"):
+        asyncio.run(run_relational_imitation_round_feedback_game(
+            create_game(config.game), config,
+            first_ballots.provider(config.llm_provider), observer=observer,
+        ))
+    assert observer.runtime["interruption_type"] == "graceful_drain"
+    assert observer.runtime["replay_version"] == 1
+    first_calls = len(first_ballots.prompts)
+    observer.arm = False
+    observer.drain_controller.requested = False
+    resumed_ballots = _Ballots(votes=("A",))
+    resumed_ballots.prompts = ["replayed"] * first_calls
+    resumed = asyncio.run(run_relational_imitation_round_feedback_game(
+        create_game(config.game), config,
+        resumed_ballots.provider(config.llm_provider), observer=observer,
+    ))
+    baseline, baseline_ballots = _run(config, ballots=_Ballots(votes=("A",)))
+    assert first_calls + len(resumed_ballots.prompts) - first_calls == len(baseline_ballots.prompts)
+    assert resumed.final_state.to_dict() == baseline.final_state.to_dict()
+
+    observer.runtime["failed_call"]["next_round"] = 999
+    with pytest.raises(RecoveryCheckpointError, match="content hash"):
+        asyncio.run(run_relational_imitation_round_feedback_game(
+            create_game(config.game), config,
+            _Ballots(votes=("A",)).provider(config.llm_provider), observer=observer,
+        ))
 
 
 def _with_persistence(config, value):

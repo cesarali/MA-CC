@@ -1,0 +1,11 @@
+report:
+  title: Full communication vs report only — combined budget sweep
+  source_analyses:
+    - ../../../results/aggregation_results_local/21-09-2026-full-vs-report-v1_analysis
+    - ../../../results/aggregation_results_local/21-09-2026-full-vs-report-v1-b6-b9-b15_analysis
+  output_dir: ../../../results/reports/21-09-2026-full-vs-report-v1-combined
+  renderer: scripts/analysis/report_communication_comparison.py
+  mode: saved_results_only
+  rho_aggregate_maps: true
+  extension_budgets: [6, 9, 15]
+  comparison_note: "CONFIGURATION DIFFERENCE: budgets 3/12/18 explicitly enable controller_allow_mixed_message_types. The extension at budgets 6/9/15 omits it (default false). Extension budget ticks carry *. This is a descriptive comparison of both archives, not a strictly matched budget-only sweep; changes cannot be attributed to budget alone. Saved cell estimates remain unchanged."

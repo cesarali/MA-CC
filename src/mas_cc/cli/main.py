@@ -240,7 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
     study_prepare.add_argument(
         "--execution-site",
         choices=("amarel", "cesar", "nersc", "potsdam"),
-        default="potsdam",
+        default=None,
+        help="scheduler adapter; omit to use the launcher for the active Slurm cluster "
+        "(on Cygnus, which is Cesar, pass cesar to run from this checkout)",
     )
     study_preflight = study_commands.add_parser(
         "preflight", help="validate every config and the optional strict study contract"
@@ -272,19 +274,30 @@ def build_parser() -> argparse.ArgumentParser:
     study_submit.add_argument(
         "--job-script",
         type=Path,
-        help="override the generic job script selected by --execution-site",
+        help="override the launcher chosen by --execution-site, or by the active Slurm "
+        "cluster when no site is given",
     )
     study_submit.add_argument(
         "--execution-site",
         choices=("amarel", "cesar", "potsdam"),
-        default="potsdam",
-        help="scheduler adapter used for the one batch submission",
+        default=None,
+        help="scheduler adapter; omit to use the launcher for the active Slurm cluster "
+        "(on Cygnus, which is Cesar, pass cesar to run from this checkout)",
     )
     study_submit.add_argument(
         "--require-results-under",
         type=Path,
         help="explicit site result boundary recorded in the prepared manifest",
     )
+    study_drain = study_commands.add_parser("drain", help="request a resumable stop of an active study job")
+    study_drain.add_argument("--study-dir", type=Path, required=True)
+    study_drain.add_argument("--job-id", required=True)
+    study_drain.add_argument("--reason", choices=("manual", "operator_signal", "walltime_signal"), default="manual")
+    study_drain.add_argument("--wait", action="store_true")
+    study_drain.add_argument("--timeout", type=float, default=3600.0)
+    study_status = study_commands.add_parser("status", help="show study job and drain state")
+    study_status.add_argument("--study-dir", type=Path, required=True)
+    study_status.add_argument("--job-id", help="select a specific submission, including an extension")
     study_extend = study_commands.add_parser(
         "extend", help="reuse compatible episodes and submit only missing target work"
     )
@@ -939,6 +952,39 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"  Resources: {plan['cpus_per_task']} CPU(s), {plan['memory']}, "
                 f"{plan['time_limit']} per active shard"
             )
+        return 0
+    if args.command == "study" and args.study_command == "drain":
+        import time
+        from mas_cc.studies.drain import drain_status, request_study_drain, study_status
+
+        try:
+            request = request_study_drain(args.study_dir, args.job_id, reason=args.reason)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"Study drain refused: {exc}", file=sys.stderr)
+            return 2
+        print(f"Drain requested for {args.study_dir.resolve()} job {args.job_id} "
+              f"at {request['requested_at']}")
+        if args.wait:
+            deadline = time.monotonic() + args.timeout
+            while time.monotonic() < deadline:
+                status = drain_status(args.study_dir, args.job_id)
+                shards = status["shards"]
+                print(f"Drain acknowledgements: {json.dumps(shards, sort_keys=True)}", flush=True)
+                expected = study_status(args.study_dir, args.job_id)["expected_shards"]
+                if len(shards) >= expected and all(row["state"] in {"drained", "scientifically_complete"}
+                                  for row in shards.values()):
+                    return 0
+                time.sleep(2)
+            print("Timed out waiting for drain acknowledgements", file=sys.stderr)
+            return 1
+        return 0
+    if args.command == "study" and args.study_command == "status":
+        from mas_cc.studies.drain import study_status
+        try:
+            print(json.dumps(study_status(args.study_dir, args.job_id), indent=2, sort_keys=True))
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"Study status unavailable: {exc}", file=sys.stderr)
+            return 2
         return 0
     if args.command == "study" and args.study_command == "merge":
         from mas_cc.studies.merge import merge_studies

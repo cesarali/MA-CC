@@ -6,7 +6,7 @@ import csv
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.llm_runtime.providers.load_control import ProviderLoadControlConfig
@@ -53,9 +53,36 @@ class ExecutionPlan:
     partition: str
     qos: str
     provider_load_control: dict[str, object]
+    graceful_drain: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+def graceful_drain_policy(policy: Mapping[str, Any], time_limit: str) -> dict[str, object]:
+    raw = dict(policy.get("graceful_drain", {}) or {})
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("graceful_drain.enabled must be a boolean")
+    signal_name = str(raw.get("signal", "USR1"))
+    lead_time = str(raw.get("lead_time", "04:00:00"))
+    def seconds(value: str) -> int:
+        days = 0
+        if "-" in value:
+            day_part, value = value.split("-", 1)
+            if not day_part.isdigit():
+                raise ValueError("invalid SLURM time or drain lead_time")
+            days = int(day_part)
+        parts = value.split(":")
+        if (len(parts) != 3 or any(not part.isdigit() for part in parts)
+                or int(parts[1]) >= 60 or int(parts[2]) >= 60):
+            raise ValueError("SLURM time and drain lead_time must be HH:MM:SS")
+        return days * 86400 + int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    lead_seconds = seconds(lead_time)
+    if enabled and (signal_name != "USR1" or lead_seconds < 1 or lead_seconds >= seconds(time_limit)):
+        raise ValueError("graceful_drain requires USR1 and a positive lead_time shorter than time_limit")
+    return {"enabled": enabled, "signal": signal_name, "lead_time": lead_time,
+            "lead_seconds": lead_seconds}
 
 
 def build_cell_execution_entries(
@@ -146,6 +173,7 @@ def plan_cell_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
         partition=str(policy.get("partition", "all")),
         qos=str(policy.get("qos", "normal")),
         provider_load_control=control.to_dict(),
+        graceful_drain=graceful_drain_policy(policy, str(policy.get("time_limit", "04:00:00"))),
     )
 
 
@@ -207,6 +235,7 @@ def plan_config_execution(spec: StudySpec, shard_count: int) -> ExecutionPlan:
         partition=str(policy.get("partition", "all")),
         qos=str(policy.get("qos", "normal")),
         provider_load_control=control.to_dict(),
+        graceful_drain=graceful_drain_policy(policy, str(policy.get("time_limit", "04:00:00"))),
     )
 
 

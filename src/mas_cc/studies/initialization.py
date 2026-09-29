@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict, dataclass, replace
 import json
+import os
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -96,13 +97,23 @@ async def materialize_initializations(
     config_paths: Sequence[str | Path],
     artifact_dir: str | Path,
     provider_factory: Callable[[RunConfig], Any],
+    *,
+    artifact_parallelism: int = 1,
 ) -> tuple[InitializationPlanEntry, ...]:
     """Generate every repetition once; this command is a prerequisite, not a race."""
 
+    if (
+        isinstance(artifact_parallelism, bool)
+        or not isinstance(artifact_parallelism, int)
+        or artifact_parallelism < 1
+    ):
+        raise ValueError("artifact_parallelism must be a positive integer")
     configs = _representative_configs(config_paths)
     representative = configs[0]
     plan = build_initialization_plan(config_paths, artifact_dir)
-    for entry in plan:
+    semaphore = asyncio.Semaphore(artifact_parallelism)
+
+    async def materialize(entry: InitializationPlanEntry) -> None:
         episode_config = replace(
             representative,
             execution=replace(representative.execution, seed=entry.episode_seed),
@@ -113,43 +124,53 @@ async def materialize_initializations(
             read_initialization_artifact(
                 destination, game, episode_config, entry.episode_seed
             )
-            continue
-        state = game.initialize(episode_config.game, entry.episode_seed)
-        provider = provider_factory(episode_config)
-        recovery = _RecoveryLedger(None)
-        try:
-            decisions = tuple(
-                await asyncio.gather(
-                    *(
-                        _execute_decision(
-                            game,
-                            request,
-                            state,
-                            episode_config,
-                            provider,
-                            RegexTokenCounter(),
-                            Seed(entry.episode_seed),
-                            None,
-                            recovery,
-                        )
-                        for request in game.initial_vote_requests(
-                            state, episode_config.game
+            return
+        async with semaphore:
+            # A previous bounded worker may have completed this destination
+            # while this coroutine waited for admission.
+            if destination.is_file():
+                read_initialization_artifact(
+                    destination, game, episode_config, entry.episode_seed
+                )
+                return
+            state = game.initialize(episode_config.game, entry.episode_seed)
+            provider = provider_factory(episode_config)
+            recovery = _RecoveryLedger(None)
+            try:
+                decisions = tuple(
+                    await asyncio.gather(
+                        *(
+                            _execute_decision(
+                                game,
+                                request,
+                                state,
+                                episode_config,
+                                provider,
+                                RegexTokenCounter(),
+                                Seed(entry.episode_seed),
+                                None,
+                                recovery,
+                            )
+                            for request in game.initial_vote_requests(
+                                state, episode_config.game
+                            )
                         )
                     )
                 )
+            finally:
+                close = getattr(provider, "close", None)
+                if close is not None:
+                    close()
+            artifact = artifact_from_actions(
+                game,
+                episode_config,
+                entry.episode_seed,
+                tuple(decision.action for decision in decisions),
+                repetition_index=entry.repetition_index,
             )
-        finally:
-            close = getattr(provider, "close", None)
-            if close is not None:
-                close()
-        artifact = artifact_from_actions(
-            game,
-            episode_config,
-            entry.episode_seed,
-            tuple(decision.action for decision in decisions),
-            repetition_index=entry.repetition_index,
-        )
-        write_initialization_artifact(destination, artifact)
+            write_initialization_artifact(destination, artifact)
+
+    await asyncio.gather(*(materialize(entry) for entry in plan))
     return plan
 
 
@@ -179,7 +200,14 @@ def materialize_study_initializations(
         )
 
     plan = asyncio.run(
-        materialize_initializations(config_paths, output_dir, provider_factory)
+        materialize_initializations(
+            config_paths,
+            output_dir,
+            provider_factory,
+            artifact_parallelism=int(
+                os.environ.get("MAS_CC_INITIALIZATION_PARALLELISM", "1")
+            ),
+        )
     )
     destination = Path(output_dir).expanduser().resolve()
     (destination / "initialization_manifest.json").write_text(

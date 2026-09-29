@@ -12,15 +12,22 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def build(path):
     path=path.resolve();config=yaml.safe_load(path.read_text())['report']
-    source=(path.parent/config['source_analysis']).resolve();out=(path.parent/config['output_dir']).resolve()
+    source_paths=config.get('source_analyses') or [config['source_analysis']]
+    sources=[(path.parent/p).resolve() for p in source_paths]
+    source=sources[0];out=(path.parent/config['output_dir']).resolve()
+    def read_table(name):
+        frames=[pd.read_parquet(root/'tables'/f'{name}.parquet') for root in sources]
+        return pd.concat(frames,ignore_index=True) if len(frames)>1 else frames[0]
     figures=out/'figures';figures.mkdir(parents=True,exist_ok=True)
-    cells=pd.read_parquet(source/'tables/cells.parquet')
+    cells=read_table('cells')
     cells['arm']=cells.target.map({'correct':'truth','ALLOCATION_2':'false'}).fillna('none')
     assert cells.loc[cells.arm.eq('none'),'target'].isna().all()
     cells['budget']=cells.intervention_budget.fillna(0)
+    assert not cells.cell_id.duplicated().any(), 'Overlapping cell IDs across report sources'
+    assert not cells.duplicated(['arm','budget','epistemic_persistence','communication_profile']).any(), 'Overlapping scientific plot coordinates'
     coords=['cell_id','arm','budget','epistemic_persistence','communication_profile']
-    raw=pd.read_parquet(source/'tables/rounds.parquet')
-    episodes=pd.read_parquet(source/'tables/episodes.parquet')
+    raw=read_table('rounds')
+    episodes=read_table('episodes')
     episodes=episodes[episodes.status.eq('completed')]
     fields=['cell_id','episode_id','round_index','controller_target_share_before','controller_target_share','truth_vote_share_before','truth_vote_share']
     r=raw[fields].merge(episodes[['cell_id','episode_id']],on=['cell_id','episode_id'],validate='many_to_one').merge(cells[coords],on='cell_id',validate='many_to_one')
@@ -33,9 +40,11 @@ def build(path):
         assert r['share_'+boundary].between(0,1).all()
     profiles=['report_only','full_communication'];colors=['#3678a8','#dc8740']
     budgets=sorted(cells.loc[cells.arm.ne('none'),'budget'].unique())
+    budget_labels=[str(int(b))+('*' if b in config.get('extension_budgets',[]) else '') for b in budgets]
     panels=[('none',0)]+[(arm,b) for arm in ['truth','false'] for b in budgets]
     rhos=sorted(cells.epistemic_persistence.unique());pages=[];summaries=[];examples=[]
-    v=json.loads((source/'validation.json').read_text())
+    validations=[json.loads((root/'validation.json').read_text()) for root in sources]
+    v=validations[0] if len(sources)==1 else dict(complete=all(x['complete'] for x in validations),counts={k:sum(x['counts'].get(k,0) for x in validations) for k in validations[0]['counts']},source_validations=validations,report_only_collection=True)
     notes=[
       f"Status: {'COMPLETE' if v['complete'] else 'PROVISIONAL'}. {v['counts']['completed_episodes']}/{v['counts']['expected_episodes']} completed episodes; {v['counts']['found_cells']}/{v['counts']['expected_cells']} cells present. {int(cells.population_rounds.iloc[0])} rounds per episode. Interrupted prefixes are excluded. Missing comparisons are gaps, not zero.",
       'Bars compare report-only and full-communication profiles within the same arm, budget and persistence. No budgets or control arms are pooled. Target share means truth-target share under truth control and ALLOCATION_2 share under false control. No-control panels show truth share.',
@@ -44,6 +53,7 @@ def build(path):
       'The archive contains empty causal-response effect tables. Its causal validation labels controlled episodes incomplete despite the canonical completed-episode count; no causal-response claim is made here. Occupancy bars use canonical completed episodes and recorded shares.',
       'Trajectory examples use the first sorted episode in each cell, independently of outcome. Examples across profiles are not assumed to be matched. Complete archive validation warnings are retained in report_manifest.json.'
     ]
+    if config.get('comparison_note'):notes.insert(1,config['comparison_note'])
     with PdfPages(out/'report.pdf') as pdf:
         def save(fig,name):
             fig.savefig(figures/(name+'.png'),dpi=160);pdf.savefig(fig);plt.close(fig);pages.append(name)
@@ -70,7 +80,7 @@ def build(path):
                     ax.bar_label(bars,fmt='%.1f%%',fontsize=9,padding=3)
                     valid=data.mean_share.notna() & data.episode_sd.notna()
                     ax.errorbar(x[valid],data.mean_share[valid]*100,yerr=data.episode_sd[valid]*100,fmt='none',ecolor='black',capsize=4,elinewidth=1.2,zorder=3)
-                ax.set(xticks=np.arange(len(rhos)),xticklabels=rhos,ylim=(min(0,float((summary.mean_share-summary.episode_sd).min()*100)-5),max(112,float((summary.mean_share+summary.episode_sd).max()*100)+5)),xlabel='Persistence rho',ylabel='Share (%)',title='No control: truth share' if arm=='none' else f'{arm.title()}-target share, b={budget}')
+                ax.set(xticks=np.arange(len(rhos)),xticklabels=rhos,ylim=(min(0,float((summary.mean_share-summary.episode_sd).min()*100)-5),max(112,float((summary.mean_share+summary.episode_sd).max()*100)+5)),xlabel='Persistence rho',ylabel='Share (%)',title='No control: truth share' if arm=='none' else f'{arm.title()}-target share, b={budget}'+(' [extension]' if budget in config.get('extension_budgets',[]) else ''))
                 ax.grid(axis='y',alpha=.15)
             axes.flat[0].legend(fontsize=8)
             for empty_ax in list(axes.flat)[len(panels):]:empty_ax.axis('off')
@@ -78,7 +88,7 @@ def build(path):
             fig.suptitle({'before':'Mean start-of-round target share','after':'Mean end-of-round target share','final':'Final-episode target share'}[mode],fontsize=18)
             save(fig,'target_share_'+mode)
         # All saved whole-cell estimates remain separate by physical cell.
-        estimates=pd.read_parquet(source/'tables/primary_estimates.parquet')
+        estimates=read_table('primary_estimates')
         estimates=estimates[estimates.target_fraction_bin_index.isna()] if 'target_fraction_bin_index' in estimates else estimates
         estimates=estimates.drop(columns=[c for c in coords if c!='cell_id' and c in estimates]).merge(cells[coords],on='cell_id',validate='many_to_one')
         estimates.to_parquet(out/'saved_whole_cell_estimates.parquet',index=False)
@@ -90,12 +100,12 @@ def build(path):
             for row in f.itertuples():
                 values=[row.budget,row.epistemic_persistence,row.communication_profile,row.estimate,row.null_mean,row.null_std,row.estimate-row.null_mean,row.p_value,row.null_permutations]
                 rows.append([str(x) if isinstance(x,str) else ('N/A' if pd.isna(x) else f'{x:.4g}') for x in values])
-            fig,ax=plt.subplots(figsize=(13,8));ax.axis('off')
+            fig,ax=plt.subplots(figsize=(13,max(8,len(rows)*.34+2)));ax.axis('off')
             table=ax.table(cellText=rows,colLabels=['b','rho','Profile','T [bits]','Null mean','Null SD','T - null','p','Draws'],loc='center',colWidths=[.05,.06,.20,.10,.10,.10,.10,.10,.07])
-            table.auto_set_font_size(False);table.set_fontsize(10);table.scale(1,2)
+            table.auto_set_font_size(False);table.set_fontsize(9);table.scale(1,1.3 if len(rows)>14 else 2)
             ax.set_title(f'{arm.title()} control: saved whole-cell information and null comparisons\nUnadjusted permutation p-values; null SD is not an estimate confidence interval',fontsize=14)
             save(fig,'null_'+arm)
-        derived=pd.read_parquet(source/'tables/derived_observables.parquet')
+        derived=read_table('derived_observables')
         whole=derived[derived.target_fraction_bin_index.isna()] if 'target_fraction_bin_index' in derived else derived
         whole=whole.drop(columns=[c for c in coords if c!='cell_id' and c in whole]).merge(cells[coords],on='cell_id',validate='many_to_one')
         whole.to_parquet(out/'saved_derived_estimates.parquet',index=False)
@@ -121,7 +131,7 @@ def build(path):
                             lo=pd.to_numeric(f.ci_low,errors='coerce');hi=pd.to_numeric(f.ci_high,errors='coerce')
                             valid=np.isfinite(y)&np.isfinite(lo)&np.isfinite(hi)
                             ax.vlines(np.array(budgets)[valid],lo[valid],hi[valid],color=color,alpha=.6)
-                    ax.set(title=f'{arm} control, rho={rho}',xlabel='Budget b',ylabel=label,xticks=budgets);ax.grid(alpha=.2)
+                    ax.set(title=f'{arm} control, rho={rho}',xlabel='Budget b',ylabel=label,xticks=budgets);ax.set_xticklabels(budget_labels);ax.grid(alpha=.2)
                     if not has_finite:ax.text(.5,.5,'No supported finite saved estimate',transform=ax.transAxes,ha='center')
             axes[0,0].legend(fontsize=8)
             fig.suptitle(label+' — aggregated over observed states, separate rho panels\nSaved estimates and intervals; no pooling across rho, arms or profiles',fontsize=13)
@@ -131,7 +141,7 @@ def build(path):
         aggregate_table.to_csv(out/'aggregated_over_x_metrics.csv',index=False)
         (out/'metric_availability.json').write_text(json.dumps(availability,indent=2))
         # Reshape saved state-local estimates; no estimator or bin recomputation.
-        primary_local=pd.read_parquet(source/'tables/primary_estimates.parquet')
+        primary_local=read_table('primary_estimates')
         for metric,label,slug,table,diverging in [
             ('round_target_actuation_cmi','T_pi [bits]','T_pi_state_local',primary_local,False),
             ('round_target_susceptibility','chi','chi_state_local',primary_local,True),
@@ -155,7 +165,7 @@ def build(path):
                         matrix=f.pivot(index='target_fraction_bin_index',columns='budget',values='estimate').reindex(index=range(8),columns=budgets)
                         cmap=plt.get_cmap('RdBu_r' if diverging else 'viridis').copy();cmap.set_bad('#dddddd')
                         im=ax.imshow(matrix.to_numpy(dtype=float),origin='lower',aspect='auto',vmin=vmin,vmax=vmax,cmap=cmap)
-                        ax.set(xticks=range(len(budgets)),xticklabels=budgets,yticks=range(8),yticklabels=[f'{(k+.5)/8:.2f}' for k in range(8)],xlabel='Budget b',ylabel='Target-share bin center',title=f'{profile}, rho={rho}')
+                        ax.set(xticks=range(len(budgets)),xticklabels=budget_labels,yticks=range(8),yticklabels=[f'{(k+.5)/8:.2f}' for k in range(8)],xlabel='Budget b',ylabel='Target-share bin center',title=f'{profile}, rho={rho}')
                 fig.colorbar(im,ax=axes,label='Saved state-local '+label)
                 fig.suptitle(f'{arm} control: state-local {label} — gray is missing or unsupported')
                 save(fig,slug+'_'+arm)
@@ -197,10 +207,10 @@ def build(path):
                         ax=axes[i,j];matrix=matrices[arm,profile]
                         cmap=plt.get_cmap('RdBu_r' if diverging else 'viridis').copy();cmap.set_bad('#dddddd')
                         im=ax.imshow(matrix,origin='lower',aspect='auto',vmin=-vmax if diverging else 0,vmax=vmax,cmap=cmap)
-                        ax.set(xticks=range(len(budgets)),xticklabels=budgets,yticks=range(8),yticklabels=[f'{(k+.5)/8:.2f}' for k in range(8)],xlabel='Budget b',ylabel='Target-share bin center',title=f'{arm} control, {profile}')
+                        ax.set(xticks=range(len(budgets)),xticklabels=budget_labels,yticks=range(8),yticklabels=[f'{(k+.5)/8:.2f}' for k in range(8)],xlabel='Budget b',ylabel='Target-share bin center',title=f'{arm} control, {profile}')
                         if not np.isfinite(matrix).any():ax.text(.5,.5,'No complete supported rho pair',transform=ax.transAxes,ha='center',bbox=dict(facecolor='white',alpha=.8))
                 fig.colorbar(im,ax=axes,label='Equal-rho descriptive mean: '+label)
-                fig.suptitle('RHO-AGGREGATED PHASE DIAGRAM: '+label+'\nEqual weights for '+', '.join(map(str,rhos))+'; gray if either rho missing/unsupported\nDescriptive average of saved estimates, not a pooled estimator; no new CI',fontsize=13)
+                fig.suptitle('RHO-AGGREGATED PHASE DIAGRAM: '+label+'\nEqual weights for '+', '.join(map(str,rhos))+'; gray if either rho missing/unsupported\nDescriptive average of saved estimates, not a pooled estimator; no new CI'+('\n* Extension budgets: different mixed-message setting; see overview' if config.get('extension_budgets') else ''),fontsize=12)
                 save(fig,'rho_aggregated_'+metric)
             pd.DataFrame(aggregate_rows).to_csv(out/'rho_aggregated_phase_maps.csv',index=False)
         for rho in rhos:
@@ -221,7 +231,7 @@ def build(path):
     pd.concat(summaries).to_csv(out/'target_share_bars.csv',index=False)
     (out/'report.md').write_text('# '+config['title']+'\n\n'+'\n\n'.join(notes)+'\n\n'+'\n\n'.join(f'![{p}](figures/{p}.png)' for p in pages))
     paths=['tables/cells.parquet','tables/episodes.parquet','tables/rounds.parquet','tables/primary_estimates.parquet','tables/derived_observables.parquet','validation.json']
-    manifest=dict(source=str(source),source_sha256={p:hashlib.sha256((source/p).read_bytes()).hexdigest() for p in paths},validation=v,pages=pages,examples=examples,estimator_calls=0,resampling_calls=0,renderer_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),config_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+    manifest=dict(source=str(source),source_sha256={str(root/p):hashlib.sha256((root/p).read_bytes()).hexdigest() for root in sources for p in paths},sources=[str(root) for root in sources],validation=v,pages=pages,examples=examples,estimator_calls=0,resampling_calls=0,renderer_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),config_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     (out/'report_manifest.json').write_text(json.dumps(manifest,indent=2))
     print(f'Built {len(pages)} pages: {out / "report.pdf"}')
 

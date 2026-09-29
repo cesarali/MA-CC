@@ -1,0 +1,91 @@
+experiment:
+  episodes: 128
+  processes: 4
+  seed: 20260927
+output:
+  results_dir: /shared/home/cesar/work/results/santa_fe_live_board_v4_pilot
+  save_round_trajectories: true
+  save_micro_trajectories: true
+  save_plots: false
+  save_reports: true
+model:
+  model_version: santa_fe_live_board_v4
+  persistence_clock: round_boundary
+  peer_posting_mode: vote_aligned_fact
+  controller_message_mode: target_aligned_fact
+  board_clock: live_board
+  controller_fact_selection: uniform_with_replacement
+  N: 24
+  F: 12
+  F_plus: 8
+  initial_fact_redundancy: 2
+  rounds: 60
+  q: 3
+  sensing_fraction: 0.125
+  budget_fraction: 0.0
+  controller_target: 1
+  rho: 0.25
+  beta_evidence: 1.0
+  beta_social: 1.3
+  policy_beta: 4.0
+  policy_threshold: 0.5
+  overload_threshold: 7
+  overload_alpha: 0.2
+sweep:
+  controller_target: [1, -1]
+  beta_pairs:
+    - {name: balanced, beta_evidence: 1.0, beta_social: 1.3}
+    - {name: evidence_weighted, beta_evidence: 2.0, beta_social: 0.5}
+    - {name: social_weighted, beta_evidence: 0.5, beta_social: 2.0}
+  rho: [0.25, 1.0]
+  budget_fraction: [0.0, 0.5, 1.0]
+  q: [3, 24]
+  sensing_fraction: [0.125, 1.0]
+  include:
+    - {beta_regime: balanced, rho: 0.25, budget: 0, q: 3, q_c: 3}
+    - {beta_regime: balanced, rho: 0.25, budget: 12, q: 24, q_c: 24}
+    - {beta_regime: balanced, rho: 1.0, budget: 24, q: 24, q_c: 3}
+    - {beta_regime: evidence_weighted, rho: 1.0, budget: 12, q: 3, q_c: 24}
+    - {beta_regime: social_weighted, rho: 0.25, budget: 24, q: 24, q_c: 3}
+    - {beta_regime: social_weighted, rho: 1.0, budget: 0, q: 3, q_c: 24}
+analysis:
+  bins: 3
+  epistemic_coordinate: signed_coverage
+  mutual_information: {enabled: true}
+  llm_parallel:
+    processes: 4
+    per_round: false
+    bootstrap_resamples: 99
+    null_permutations: 99
+    confidence: 0.95
+    seed: 20260927
+    statistics:
+      - round_sensing_mi
+      - round_target_sensing_mi
+      - round_sensor_action_mi
+      - round_controller_action_entropy
+      - round_controller_action_entropy_given_population
+      - round_population_actuation_cmi
+      - round_target_actuation_cmi
+      - round_truth_actuation_cmi
+      - round_order_actuation_cmi
+      - round_memory_target_actuation_cmi
+      - round_kappa_target_actuation_cmi
+      - round_phi_target_actuation_cmi
+      - round_susceptible_target_actuation_cmi
+      - round_epistemic_target_actuation_cmi
+      - round_target_susceptibility
+      - round_memory_target_signed_response
+      - round_kappa_target_signed_response
+      - round_phi_target_signed_response
+      - round_susceptible_target_signed_response
+      - round_epistemic_target_signed_response
+      - round_target_information_fraction
+      - round_dual_action_state_fraction
+      - round_dual_action_event_fraction
+      - round_conditioning_state_count
+      - round_singleton_fraction
+slurm:
+  simulation: {cpus_per_task: 4, memory: 12G, time_limit: '04:00:00', throttle: 12}
+  information: {cpus_per_task: 4, memory: 16G, time_limit: '08:00:00', throttle: 6}
+  finalize: {cpus_per_task: 4, memory: 24G, time_limit: '02:00:00'}

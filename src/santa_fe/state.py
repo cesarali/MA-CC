@@ -1,0 +1,75 @@
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass(frozen=True)
+class SimulationParameters:
+    # Historical configs keep v2 semantics; v3 opts in explicitly.
+    model_version: str = "santa_fe_legacy_v2"
+    persistence_clock: str = "focal_update"
+    peer_posting_mode: str = "random_active_fact"
+    controller_message_mode: str = "recommendation_only"
+    board_clock: str = "frozen_front_page"
+    controller_fact_selection: str = "none"
+
+    # Population / synthetic task
+    N: int = 24
+    F: int = 10
+    F_plus: Optional[int] = None  # explicit v3 truth-fact count; overrides fraction
+    q: int = 3
+    rounds: int = 30
+
+    # Initial fact distribution
+    initial_fact_redundancy: int = 3
+    truth_fact_fraction: float = 0.70
+
+    # Memory / epistemic dynamics
+    rho: float = 0.75
+
+    # Decision strengths
+    beta_evidence: float = 2.0
+    beta_social: float = 1.0
+
+    # Controller
+    budget_fraction: float = 0.125
+    sensing_fraction: float = 0.50
+    controller_target: int = -1  # -1 false, +1 truth
+    policy_beta: float = 8.0
+    policy_threshold: float = 0.50
+
+    # Version 4 live-board reasoning load. Inert for earlier versions.
+    overload_threshold: int = 7
+    overload_alpha: float = 0.2
+
+    # Logging
+    save_micro: bool = False
+
+    @property
+    def budget(self) -> int:
+        """Integer per-round budget induced by population-relative budget."""
+        return int(round(self.budget_fraction * self.N))
+
+
+@dataclass(frozen=True)
+class Message:
+    author: int
+    vote: int
+    fact_id: Optional[int]
+    is_controller: bool = False
+    message_id: str = ""
+
+
+@dataclass
+class AgentState:
+    vote: int
+    active_facts: set[int] = field(default_factory=set)
+
+
+@dataclass
+class EpisodeResult:
+    seed: int
+    params: dict
+    fact_weights: list[int]
+    rounds: list[dict]
+    micro: list[dict]
+
