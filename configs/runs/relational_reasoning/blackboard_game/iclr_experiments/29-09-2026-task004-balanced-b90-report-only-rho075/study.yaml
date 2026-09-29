@@ -1,0 +1,15 @@
+study:
+  name: 29-09-2026-task004-balanced-b90-report-only-rho075
+configs:
+- false_balanced_b90_report_only_rho075.yaml
+- truth_balanced_b90_report_only_rho075.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/29-09-2026-task004-balanced-b90-report-only-rho075
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 200
+  assumed_latency_seconds: 12.5
+  throttle: 4
+  memory: 32G
