@@ -105,9 +105,13 @@ STRATEGIC_REPORT_SELECTION_STRATEGIES = (STRATEGIC_REPORT_SELECTION_V1,)
 
 CONTROLLER_FACT_POOL_FROZEN = "frozen"
 CONTROLLER_FACT_POOL_ALL_NONDECISIVE = "all_nondecisive"
+# Equal numbers of facts leaning to each allocation, strength-matched, frozen
+# per task in controller/balanced_fact_pool.json.
+CONTROLLER_FACT_POOL_BALANCED = "balanced"
 CONTROLLER_FACT_POOL_MODES = (
     CONTROLLER_FACT_POOL_FROZEN,
     CONTROLLER_FACT_POOL_ALL_NONDECISIVE,
+    CONTROLLER_FACT_POOL_BALANCED,
 )
 
 TIMING_MICROSCOPIC = "microscopic"
@@ -525,6 +529,12 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
 
         if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_FROZEN:
             return task.controller_reportable_fact_ids
+        if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_BALANCED:
+            if not task.controller_balanced_fact_ids:
+                raise ValueError(
+                    "balanced fact pool requires controller/balanced_fact_pool.json"
+                )
+            return task.controller_balanced_fact_ids
         if not task.decisive_fact_ids:
             raise ValueError("all_nondecisive requires declared decisive facts")
         decisive = set(task.decisive_fact_ids)
@@ -563,7 +573,7 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             reuse_count = len(prior_rounds)
             base_score = (
                 0.0
-                if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_ALL_NONDECISIVE
+                if self.controller_fact_pool_mode != CONTROLLER_FACT_POOL_FROZEN
                 else float(base_scores.get(fact_id, 0.0))
             )
             score = base_score + float(novel) - live_count - reuse_count
@@ -593,8 +603,8 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
                 fact_id=fact_id,
                 score=score,
                 strategy_class=(
-                    "all-nondecisive"
-                    if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_ALL_NONDECISIVE
+                    self.controller_fact_pool_mode.replace("_", "-")
+                    if self.controller_fact_pool_mode != CONTROLLER_FACT_POOL_FROZEN
                     else str(classes[fact_id])
                 ),
                 novel_on_live_board=novel,

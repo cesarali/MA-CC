@@ -32,6 +32,7 @@ _CONTROLLER_ONLY_TASK_FIELDS = frozenset(
         "controller_fact_scores",
         "controller_report_texts",
         "controller_design_path",
+        "controller_balanced_fact_ids",
     }
 )
 

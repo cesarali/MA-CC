@@ -129,6 +129,10 @@ class RelationalTask:
     controller_fact_scores: Mapping[str, float] | None = None
     controller_report_texts: Mapping[str, str] | None = None
     controller_design_path: str | None = None
+    # An alternative controller menu with no built-in lean toward any
+    # allocation (see scripts/local/build_balanced_controller_pool.py). Empty
+    # for tasks that do not ship controller/balanced_fact_pool.json.
+    controller_balanced_fact_ids: tuple[str, ...] = ()
 
     def fact(self, fact_id: str) -> RelationalFact:
         try:
@@ -223,6 +227,12 @@ class RelationalTask:
             projection["controller_report_texts"] = dict(
                 self.controller_report_texts or {}
             )
+            # Emitted only when present, like the other MuSR additions, so no
+            # task without a balanced pool changes its serialized form.
+            if self.controller_balanced_fact_ids:
+                projection["controller_balanced_fact_ids"] = list(
+                    self.controller_balanced_fact_ids
+                )
             projection["controller_design_path"] = self.controller_design_path
         return projection
 
@@ -744,6 +754,24 @@ def _load_musr_truthful_selective_task(
             (root / "facts/decisive_facts.json").read_text(encoding="utf-8")
         )
     )
+    balanced: tuple[str, ...] = ()
+    balanced_path = root / "controller/balanced_fact_pool.json"
+    if balanced_path.is_file():
+        balanced = tuple(
+            str(fact_id)
+            for fact_id in json.loads(balanced_path.read_text(encoding="utf-8"))[
+                "fact_ids"
+            ]
+        )
+        if (
+            not balanced
+            or len(balanced) != len(set(balanced))
+            or set(balanced) - set(facts)
+            or set(balanced) & set(decisive)
+        ):
+            raise RelationalTaskError(
+                "MuSR balanced controller pool must be unique, non-decisive task facts"
+            )
     options = tuple(f"ALLOCATION_{index}" for index in range(3))
     display = {
         option: problem.candidate_allocations[index].to_dict(problem.tasks)[
@@ -797,6 +825,7 @@ def _load_musr_truthful_selective_task(
             fact.fact_id: fact.canonical_text for fact in canonical
         },
         controller_design_path=str(root / "controller/ranked_fact_pool.json"),
+        controller_balanced_fact_ids=balanced,
     )
 
 

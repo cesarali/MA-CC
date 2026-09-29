@@ -1,0 +1,357 @@
+{
+  "fact_ids": [
+    "cf_x00_eq_3",
+    "cf_x00_ge_2",
+    "cf_x00_ge_x02",
+    "cf_x00_ge_x03",
+    "cf_x01_eq_x02",
+    "cf_x01_eq_x05",
+    "cf_x01_ge_x02",
+    "cf_x01_ge_x05",
+    "cf_x01_le_2",
+    "cf_x01_le_x03",
+    "cf_x02_eq_x05",
+    "cf_x02_ge_x05",
+    "cf_x02_le_2",
+    "cf_x02_le_x04",
+    "cf_x03_eq_2",
+    "cf_x03_eq_x04",
+    "cf_x03_ge_x05",
+    "cf_x03_le_2",
+    "cf_x03_le_x04",
+    "cf_x04_ge_2",
+    "cf_x04_ge_x05",
+    "cf_x05_eq_1",
+    "cf_x05_le_2",
+    "cf_x06_ge_x07",
+    "cf_x06_le_x07",
+    "cf_x08_eq_2",
+    "cf_x08_le_2"
+  ],
+  "facts": [
+    {
+      "fact_id": "cf_x00_eq_3",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.58529,
+        0.207355,
+        0.207355
+      ],
+      "strength": 0.251957
+    },
+    {
+      "fact_id": "cf_x00_ge_2",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.447305,
+        0.276348,
+        0.276348
+      ],
+      "strength": 0.113971
+    },
+    {
+      "fact_id": "cf_x00_ge_x02",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.448977,
+        0.204719,
+        0.346303
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x00_ge_x03",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.379228,
+        0.379228,
+        0.241544
+      ],
+      "strength": 0.045894
+    },
+    {
+      "fact_id": "cf_x01_eq_x02",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.356997,
+        0.356997,
+        0.286007
+      ],
+      "strength": 0.023663
+    },
+    {
+      "fact_id": "cf_x01_eq_x05",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.30692,
+        0.38616,
+        0.30692
+      ],
+      "strength": 0.052826
+    },
+    {
+      "fact_id": "cf_x01_ge_x02",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.299679,
+        0.299679,
+        0.400641
+      ],
+      "strength": 0.067308
+    },
+    {
+      "fact_id": "cf_x01_ge_x05",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.204719,
+        0.346303,
+        0.448977
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x01_le_2",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.447305,
+        0.276348,
+        0.276348
+      ],
+      "strength": 0.113971
+    },
+    {
+      "fact_id": "cf_x01_le_x03",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.448977,
+        0.204719,
+        0.346303
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x02_eq_x05",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.286007,
+        0.356997,
+        0.356997
+      ],
+      "strength": 0.023663
+    },
+    {
+      "fact_id": "cf_x02_ge_x05",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.241544,
+        0.379228,
+        0.379228
+      ],
+      "strength": 0.045894
+    },
+    {
+      "fact_id": "cf_x02_le_2",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.396658,
+        0.206684,
+        0.396658
+      ],
+      "strength": 0.063325
+    },
+    {
+      "fact_id": "cf_x02_le_x04",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.346303,
+        0.204719,
+        0.448977
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x03_eq_2",
+      "lean": "ALLOCATION_0",
+      "posterior": [
+        0.346939,
+        0.306122,
+        0.346939
+      ],
+      "strength": 0.013605
+    },
+    {
+      "fact_id": "cf_x03_eq_x04",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.286007,
+        0.356997,
+        0.356997
+      ],
+      "strength": 0.023663
+    },
+    {
+      "fact_id": "cf_x03_ge_x05",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.346303,
+        0.204719,
+        0.448977
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x03_le_2",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.276348,
+        0.447305,
+        0.276348
+      ],
+      "strength": 0.113971
+    },
+    {
+      "fact_id": "cf_x03_le_x04",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.241544,
+        0.379228,
+        0.379228
+      ],
+      "strength": 0.045894
+    },
+    {
+      "fact_id": "cf_x04_ge_2",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.276348,
+        0.276348,
+        0.447305
+      ],
+      "strength": 0.113971
+    },
+    {
+      "fact_id": "cf_x04_ge_x05",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.258579,
+        0.258579,
+        0.482843
+      ],
+      "strength": 0.14951
+    },
+    {
+      "fact_id": "cf_x05_eq_1",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.207355,
+        0.207355,
+        0.58529
+      ],
+      "strength": 0.251957
+    },
+    {
+      "fact_id": "cf_x05_le_2",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.276348,
+        0.276348,
+        0.447305
+      ],
+      "strength": 0.113971
+    },
+    {
+      "fact_id": "cf_x06_ge_x07",
+      "lean": "ALLOCATION_2",
+      "posterior": [
+        0.346303,
+        0.204719,
+        0.448977
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x06_le_x07",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.346303,
+        0.448977,
+        0.204719
+      ],
+      "strength": 0.115644
+    },
+    {
+      "fact_id": "cf_x08_eq_2",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.306122,
+        0.346939,
+        0.346939
+      ],
+      "strength": 0.013605
+    },
+    {
+      "fact_id": "cf_x08_le_2",
+      "lean": "ALLOCATION_1",
+      "posterior": [
+        0.206684,
+        0.396658,
+        0.396658
+      ],
+      "strength": 0.063325
+    }
+  ],
+  "gold_target": "ALLOCATION_0",
+  "joint_posterior": {
+    "leaning_ALLOCATION_1": [
+      0.277108,
+      0.674699,
+      0.048193
+    ],
+    "leaning_ALLOCATION_2": [
+      0.066798,
+      0.0,
+      0.933202
+    ],
+    "truth_leaning": [
+      0.814136,
+      0.044503,
+      0.141361
+    ],
+    "whole_pool": [
+      1.0,
+      0.0,
+      0.0
+    ]
+  },
+  "lean_counts": {
+    "ALLOCATION_0": 9,
+    "ALLOCATION_1": 9,
+    "ALLOCATION_2": 9
+  },
+  "mean_strength": {
+    "rival_leaning": 0.092099,
+    "truth_leaning_available": 0.090131,
+    "truth_leaning_selected": 0.095297
+  },
+  "prior": [
+    0.333333,
+    0.333333,
+    0.333333
+  ],
+  "rule": "keep_all_rival_leaning__wasserstein_matched_truth_leaning_v1",
+  "schema_version": 1,
+  "source_pool": {
+    "definition": "all true facts minus decisive facts",
+    "lean_counts": {
+      "ALLOCATION_0": 25,
+      "ALLOCATION_1": 9,
+      "ALLOCATION_2": 9
+    },
+    "size": 43
+  },
+  "strength_match": {
+    "abs_mean_gap": 0.003198333333,
+    "wasserstein_1": 0.008184666667
+  },
+  "task_id": "task_004"
+}
