@@ -27,7 +27,8 @@ def run(config: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
     rounds: list[dict] = []
     micro: list[dict] = []
     for cell in tqdm(config.cells, desc="parameter cells"):
-        seeds = np.random.SeedSequence([config.seed, cell.cell_id]).generate_state(config.episodes, dtype=np.uint64)
+        seed_coordinate = cell.seed_group if cell.seed_group is not None else cell.cell_id
+        seeds = np.random.SeedSequence([config.seed, seed_coordinate]).generate_state(config.episodes, dtype=np.uint64)
         payloads = [(cell.cell_id, asdict(cell.params), int(seed), cell.beta_regime) for seed in seeds]
         if config.processes == 1:
             iterator = map(_worker, payloads)

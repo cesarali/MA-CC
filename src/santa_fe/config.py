@@ -18,6 +18,7 @@ class Cell:
     cell_id: int
     params: SimulationParameters
     beta_regime: str = ""
+    seed_group: int | None = None
 
 
 @dataclass(frozen=True)
@@ -76,19 +77,24 @@ def load_config(path: str | Path) -> Config:
     if unknown:
         raise ValueError(f"unknown model parameters: {sorted(unknown)}")
     params = SimulationParameters(**model)
-    if params.model_version not in {"santa_fe_legacy_v2", "santa_fe_epistemic_feedback_v3"}:
+    if params.model_version not in {"santa_fe_legacy_v2", "santa_fe_epistemic_feedback_v3",
+                                    "santa_fe_live_board_v4"}:
         raise ValueError("unknown Santa Fe model_version")
     expected_v3 = {"persistence_clock": "round_boundary", "peer_posting_mode": "vote_aligned_fact",
                    "controller_message_mode": "target_aligned_fact", "board_clock": "frozen_front_page",
                    "controller_fact_selection": "uniform_with_replacement"}
+    expected_v4 = {"persistence_clock": "round_boundary", "peer_posting_mode": "vote_aligned_fact",
+                   "controller_message_mode": "target_aligned_fact", "board_clock": "live_board",
+                   "controller_fact_selection": "uniform_with_replacement"}
     expected_legacy = {"persistence_clock": "focal_update", "peer_posting_mode": "random_active_fact",
                        "controller_message_mode": "recommendation_only", "board_clock": "frozen_front_page",
                        "controller_fact_selection": "none"}
-    expected = expected_v3 if params.model_version == "santa_fe_epistemic_feedback_v3" else expected_legacy
+    expected = (expected_v4 if params.model_version == "santa_fe_live_board_v4" else
+                expected_v3 if params.model_version == "santa_fe_epistemic_feedback_v3" else expected_legacy)
     for key, value in expected.items():
         if getattr(params, key) != value:
             raise ValueError(f"{params.model_version} requires {key}: {value}")
-    if params.model_version == "santa_fe_epistemic_feedback_v3":
+    if params.model_version in {"santa_fe_epistemic_feedback_v3", "santa_fe_live_board_v4"}:
         if params.F_plus is not None and (isinstance(params.F_plus, bool) or
                                           not isinstance(params.F_plus, int) or
                                           not params.F // 2 < params.F_plus < params.F):
@@ -102,6 +108,15 @@ def load_config(path: str | Path) -> Config:
             raise ValueError("v3 controller target has no aligned fact in the fact pool")
         if not bool(output.get("save_micro_trajectories", False)):
             raise ValueError("v3 requires save_micro_trajectories for transition and path validation")
+    if params.model_version == "santa_fe_live_board_v4":
+        if params.N != params.F * params.initial_fact_redundancy:
+            raise ValueError("v4 requires exactly one initial fact per agent")
+        if isinstance(params.overload_threshold,bool) or not isinstance(params.overload_threshold,int) or params.overload_threshold<0:
+            raise ValueError("v4 overload_threshold must be nonnegative integer")
+        if not math.isfinite(params.overload_alpha) or params.overload_alpha<0:
+            raise ValueError("v4 overload_alpha must be finite and nonnegative")
+        if not bool(output.get("save_round_trajectories",True)) or not bool(output.get("save_micro_trajectories",False)):
+            raise ValueError("v4 requires full round and micro trajectories")
     if params.model_version == "santa_fe_legacy_v2" and params.F_plus is not None:
         raise ValueError("explicit F_plus is supported only in v3")
     for key in ("N", "F", "rounds"):
@@ -196,43 +211,52 @@ def load_config(path: str | Path) -> Config:
                 raise ValueError(f"sweep.{key} entries must be finite")
             axes.append(values)
         entries = [(f"be_{be:g}_bs_{bs:g}", float(be), float(bs)) for be, bs in product(*axes)]
+    targets = sweep.get("controller_target", [params.controller_target])
+    if (not isinstance(targets,list) or not targets or len(set(targets))!=len(targets)
+            or any(t not in (-1,1) for t in targets)):
+        raise ValueError("sweep.controller_target must contain unique -1/+1 labels")
     inclusions = sweep.get("include")
     if inclusions is not None and (not isinstance(inclusions, list) or not inclusions or
-            any(not isinstance(item, dict) or set(item) !=
-                {"q", "q_c", "rho", "budget", "beta_regime"} for item in inclusions)):
+            any(not isinstance(item, dict) or set(item) not in (
+                {"q", "q_c", "rho", "budget", "beta_regime"},
+                {"q", "q_c", "rho", "budget", "beta_regime", "controller_target"}) for item in inclusions)):
         raise ValueError("sweep.include must contain full physical coordinate mappings")
     include_keys = (set((item["beta_regime"], item["rho"], item["budget"],
-                         item["q"], item["q_c"]) for item in inclusions)
+                         item["q"], item["q_c"], item.get("controller_target")) for item in inclusions)
                     if inclusions is not None else None)
     if include_keys is not None and len(include_keys) != len(inclusions):
         raise ValueError("sweep.include contains duplicate physical cells")
     exclusions = sweep.get("exclude", [])
     if not isinstance(exclusions, list) or any(not isinstance(item, dict) or not item or
-            set(item) - {"q", "q_c", "rho", "budget", "beta_regime"} for item in exclusions):
+            set(item) - {"q", "q_c", "rho", "budget", "beta_regime", "controller_target"} for item in exclusions):
         raise ValueError("sweep.exclude must contain nonempty coordinate mappings")
     cells = []
-    for name, be, bs in entries:
-        for rho, bf, q_value, sf in product(rhos, budgets, q_values, sensing_values):
+    for regime_index, (name, be, bs) in enumerate(entries):
+        for base_index, (rho, bf, q_value, sf, target) in enumerate(product(rhos, budgets, q_values, sensing_values, targets)):
             candidate = replace(params, beta_evidence=be, beta_social=bs,
                                 rho=float(rho), budget_fraction=float(bf), q=int(q_value),
-                                sensing_fraction=float(sf), save_micro=save_micro)
+                                sensing_fraction=float(sf), controller_target=int(target), save_micro=save_micro)
             coordinates = {"q": candidate.q,
                            "q_c": min(candidate.N, max(1, round(candidate.sensing_fraction*candidate.N))),
                            "rho": candidate.rho, "budget": candidate.budget,
-                           "beta_regime": name}
-            physical_key = (name, candidate.rho, candidate.budget, candidate.q, coordinates["q_c"])
-            if include_keys is not None and physical_key not in include_keys:
+                           "beta_regime": name, "controller_target": candidate.controller_target}
+            physical_key = (name, candidate.rho, candidate.budget, candidate.q,
+                            coordinates["q_c"],candidate.controller_target)
+            if include_keys is not None and physical_key not in include_keys and physical_key[:-1]+(None,) not in include_keys:
                 continue
             if any(all(coordinates[key] == value for key, value in rule.items()) for rule in exclusions):
                 continue
-            cells.append(Cell(len(cells), candidate, name))
+            cells.append(Cell(len(cells), candidate, name,
+                              regime_index*len(rhos)*len(budgets)*len(q_values)*len(sensing_values)
+                              + base_index//len(targets) if len(targets)>1 else None))
     if not cells:
         raise ValueError("sweep selection removed every physical cell")
-    if include_keys is not None and len(cells) != len(include_keys):
+    if include_keys is not None and len(cells) != sum(len(targets) if key[-1] is None else 1 for key in include_keys):
         raise ValueError("sweep.include names physical cells outside the declared axes")
     physical_keys = [(cell.beta_regime, cell.params.rho, cell.params.budget,
                       cell.params.q, min(cell.params.N,
-                      max(1, round(cell.params.sensing_fraction*cell.params.N)))) for cell in cells]
+                      max(1, round(cell.params.sensing_fraction*cell.params.N))),
+                      cell.params.controller_target) for cell in cells]
     if len(set(physical_keys)) != len(physical_keys):
         raise ValueError("sweep produces duplicate resolved physical cells after integer rounding")
     return Config(path, raw, params, episodes, processes, seed, results_dir.resolve(), save_round, save_micro,

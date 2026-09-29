@@ -1,5 +1,11 @@
 # Santa Fe live-board simulation: revised mechanics and study specification
 
+**Execution update (29 September 2026):** this is the original design document.
+The v4 implementation and full-grid run are complete; see the
+[implementation and results guide](../../documentation/games/santa_fe/live_board_v4_implementation_and_results.md)
+for the resolved configuration, code map, artifact paths, coverage, and limits.
+The status line below records the document's status **when written**, before launch.
+
 Date: 27 September 2026. Revision: whole-decision overload correction. Status: implementation specification; no experiments launched.
 
 ## 1. Scope and decisions

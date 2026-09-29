@@ -184,6 +184,9 @@ class SyntheticGame:
         return U, p_act
 
     def run_episode(self, seed: int) -> EpisodeResult:
+        if self.p.model_version == "santa_fe_live_board_v4":
+            from .live_board import run_live_board_episode
+            return run_live_board_episode(self, seed)
         if self.p.model_version == "santa_fe_epistemic_feedback_v3":
             from .v3_game import run_v3_episode
             return run_v3_episode(self, seed)
@@ -342,5 +345,4 @@ class SyntheticGame:
             rounds=round_rows,
             micro=micro_rows,
         )
-
 

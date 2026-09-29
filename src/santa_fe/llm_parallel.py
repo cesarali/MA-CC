@@ -49,6 +49,8 @@ def _count(share: float, population: int) -> int:
 
 def adapt_trajectories(rounds: pd.DataFrame, *, bins: int) -> list:
     """Build pre-action round events; only rounds with a successor are eligible."""
+    if "model_version" in rounds and (rounds["model_version"] == "santa_fe_live_board_v4").all():
+        return adapt_live_board_trajectories(rounds)
     needed = {"cell_id", "seed", "round", "N", "budget", "controller_target",
               "target_share", "truth_share", "controller_observed_target_share",
               "controller_sensed_messages", "controller_effective_U", "controller_p_act",
@@ -114,6 +116,54 @@ def adapt_trajectories(rounds: pd.DataFrame, *, bins: int) -> list:
     return events
 
 
+def adapt_live_board_trajectories(rounds: pd.DataFrame) -> list:
+    """Map v4 start-of-round records to the shared one-lag information engine."""
+    required={"cell_id","seed","round","N","controller_target","target_count",
+              "next_target_count","controller_sensor_target_count","controller_sensed_messages",
+              "controller_U","controller_p_act","kappa_plus","phi_plus",
+              "memory_histogram_json"}
+    missing=required-set(rounds)
+    if missing:raise ValueError(f"v4 trajectories are missing fields: {sorted(missing)}")
+    events=[]
+    for (cell,seed),episode in rounds.groupby(["cell_id","seed"],sort=False):
+        rows=episode.sort_values("round")
+        valid=rows.loc[rows.time_stage=="pre_action"]
+        if not (valid["round"].to_numpy()==np.arange(len(valid))).all() or len(rows)!=len(valid)+1:
+            raise ValueError("v4 requires consecutive pre-action rows plus a terminal row")
+        for current in valid.to_dict("records"):
+            n=int(current["N"]);z=int(current["controller_target"])
+            before=int(current["target_count"]);after=int(current["next_target_count"])
+            truth_before=before if z==1 else n-before
+            truth_after=after if z==1 else n-after
+            sensor=int(current["controller_sensor_target_count"])
+            q_c=int(current["controller_sensed_messages"])
+            k=float(current["kappa_plus"]);phi=float(current["phi_plus"])
+            kbin=int(bin01([k],3)[0]);pbin=int(bin01([phi],3)[0])
+            record={"round_index":int(current["round"]),"has_successor":True,
+                "episode_id":str(int(seed)),"possible_answers":[str(z),str(-z)],
+                "analysis_target":str(z),
+                "occupation_counts_before":[before,n-before],
+                "occupation_counts_after":[after,n-after],
+                "target_count_before":before,"target_count_after":after,
+                "truth_count_before":truth_before,"truth_count_after":truth_after,
+                "sensor_count_vector":[sensor,q_c-sensor],"sensor_target_count":sensor,
+                "sensor_source_target_count":before,
+                "controller_action":ADVOCATE_TARGET if int(current["controller_U"]) else NO_OP,
+                "controller_advocate_probability":float(current["controller_p_act"]),
+                "sensor_target_share":float(current["controller_observed_target_share"]),
+                "delta_p_ctrl":(after-before)/n,
+                "delta_m_ctrl":2*(after-before)/n,
+                "delta_m_truth":2*(truth_after-truth_before)/n,
+                "delta_m_order":2*(max(after,n-after)-max(before,n-before))/n,
+                "conditioning_memory_state":json.loads(current["memory_histogram_json"]),
+                "conditioning_kappa_bin":kbin,"conditioning_phi_bin":pbin,
+                "conditioning_susceptible_bin":int(bin01([1-phi],3)[0]),
+                "conditioning_epistemic_state":[int(bin01([k],4)[0]),int(bin01([phi],4)[0])],
+            }
+            events.append(adapt_round_record(record,cell_id=str(int(cell))))
+    return events
+
+
 def _summarize_nulls(estimate_rows: list[dict], null_rows: list[dict]) -> list[dict]:
     by_stat: dict[str, list[float]] = {}
     for row in null_rows:
@@ -168,6 +218,17 @@ def _report(estimates: pd.DataFrame, config: Config, root: Path) -> None:
              "- Zero-budget cells have no physical controller action, so actuation information is unavailable there.",
              "- Round 0 has no sensor record. Sensing MI uses rounds 1 through R; transfer CMI uses rounds 1 through R−1.",
              "", "## Cell-wide estimates", ""]
+    if config.params.model_version == "santa_fe_live_board_v4":
+        lines = ["# Santa Fe live-board information", "",
+                 "Shared MA-CC round-information engine applied to v4 pre-action records.",
+                 "Each t=0..59 row holds current population votes, a sample of current agent votes,",
+                 "the virtual or physical controller gate, its known propensity, and the t+1 outcome.",
+                 "All 60 action–outcome transitions are eligible. B=0 retains the randomized",
+                 "virtual gate and physical no-posting null. Bits use base-2 logarithms.",
+                 "Memory conditioning is the exact truth-fact-count histogram; kappa and phi",
+                 "refer to truth-favoring facts in both target arms. Actuation CMI is observational",
+                 "one-step transfer information with a policy-redraw null, not a causal branch estimate.",
+                 "", "## Cell-wide estimates", ""]
     pooled = estimates.loc[estimates.scope == "pooled"].sort_values(["cell_id", "statistic"])
     lines += [f"| cell | statistic | estimate (bits) | bootstrap {confidence:.0%} CI | null mean | p | episodes | rounds |",
               "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |"]

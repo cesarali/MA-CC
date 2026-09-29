@@ -37,6 +37,10 @@ class SimulationParameters:
     policy_beta: float = 8.0
     policy_threshold: float = 0.50
 
+    # Version 4 live-board reasoning load. Inert for earlier versions.
+    overload_threshold: int = 7
+    overload_alpha: float = 0.2
+
     # Logging
     save_micro: bool = False
 
@@ -68,5 +72,4 @@ class EpisodeResult:
     fact_weights: list[int]
     rounds: list[dict]
     micro: list[dict]
-
 

@@ -1,5 +1,11 @@
 # How the Santa Fe synthetic-control game works
 
+**Version note:** this guide primarily describes the legacy and v3 **frozen-board**
+simulators. The implemented v4 **live-board** simulator and the completed
+September 2026 experiment are documented in the
+[v4 implementation and results guide](live_board_v4_implementation_and_results.md).
+The v4 run is microscopic simulation only; it has no matching mean-field-theory run.
+
 The Santa Fe game is a finite population of agents voting on a binary question.
 Agents exchange votes and fact IDs through a public board. A feedback controller
 can add messages favoring a chosen answer. The code samples individual agents,
@@ -18,12 +24,13 @@ provider calls.
 | --- | --- | --- | --- |
 | `santa_fe_legacy_v2` | Each time an agent is selected for an update | A random active fact, possibly contrary to its vote | Target vote without a fact |
 | `santa_fe_epistemic_feedback_v3` | Once for **every agent** at the start of each round | An active fact supporting its **new vote**, or no fact | Target vote **with a target-aligned fact** |
+| `santa_fe_live_board_v4` | Once for every agent at the round boundary | Vote-aligned fact; posts are immediately visible to later slots | Target-aligned fact, posted at dawn when the gate activates |
 
 Existing configs default to the legacy version. A v3 YAML must opt in with
 `model_version: santa_fe_epistemic_feedback_v3` and its corresponding semantic
 switches. The simulator rejects mixed settings. The
 [v3 pilot recipe](../../../../configs/santa_fe/v3_pilot.yaml) shows the required
-keys. The frozen front-page board is used in both versions. The rest of this
+keys. The frozen front-page board is used in legacy and v3. The rest of this
 guide describes **v3**, followed by a note on legacy behavior.
 
 ## What exists in one episode?
