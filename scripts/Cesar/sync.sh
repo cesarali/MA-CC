@@ -48,6 +48,7 @@ excludes=(
   --exclude '*.pyc'
   --exclude '*.egg-info'
   --exclude '.DS_Store'
+  --exclude '._*'
 )
 
 if ! ssh "${SSH_OPTS[@]}" "${CESAR_HOST}" true 2>/dev/null; then
@@ -96,7 +97,11 @@ else
   # Extract into staging, carry the credential across, then swap. A swap
   # rather than an in-place extract is what gives rsync's --delete semantics:
   # a file deleted locally must not linger in the tree workers import from.
-  tar -czf - -C "${repo_root}" "${tar_excludes[@]}" . \
+  # COPYFILE_DISABLE stops macOS tar writing a "._name" metadata sidecar for
+  # every file with extended attributes. Unchecked, the tree on the cluster
+  # filled with thousands of them, and anything that globs a directory (for
+  # example "*.json" over an initialization folder) read them as data.
+  COPYFILE_DISABLE=1 tar -czf - -C "${repo_root}" "${tar_excludes[@]}" . \
     | ssh "${SSH_OPTS[@]}" "${CESAR_HOST}" "
         set -e
         rm -rf '${staging}' && mkdir -p '${staging}'
