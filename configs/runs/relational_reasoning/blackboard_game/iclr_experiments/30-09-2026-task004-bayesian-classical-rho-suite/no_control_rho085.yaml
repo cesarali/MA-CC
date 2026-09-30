@@ -1,0 +1,136 @@
+llm_provider:
+  type: mock
+  model: bayesian-symbolic-no-inference
+  temperature: 0.0
+  max_output_tokens: 128
+  request_concurrency: 1
+  options:
+    response: 'UNEXPECTED PROVIDER CALL: Bayesian and deterministic policies must not infer.'
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 5
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values:
+    - A
+    - B
+    - C
+game:
+  type: relational_imitation_round_feedback
+  population_size: 15
+  horizon: 30
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: /shared/MA-CC/results/studies/musr_truthful_selective_task_calibration_01/tasks
+    task_id: task_004
+    dynamics_mode: reasoning
+    rounds: 30
+    social_group_size: 7
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+      communication_profile: report_only
+      require_grounded_reports: true
+      report_citation_scope: active_or_observed
+      no_citable_fact_action: none
+    epistemic_persistence: 0.85
+    vote_visibility: public
+    prompt_version: 5
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 0
+    expected_validation_failure_rate: 0.0
+    initialization:
+      mode: paired_local_vote
+      artifact_dir: /shared/MA-CC-results/30-09-2026-task004-bayesian-classical-rho-suite_initializations
+      require_artifact: true
+    agent_decision_mode: bayesian
+control:
+  mechanism: none
+  options: {}
+execution:
+  seed: 20260907
+  repetitions: 10
+  parallelism: 10
+  fail_fast: true
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 1500.0
+  max_cost_per_run: 1500.0
+  max_provider_requests: 1
+  max_input_tokens: 1
+  max_output_tokens: 1
+  allow_unbounded_paid_requests: true
+logging:
+  level: INFO
+  console: false
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 0
+      scope: episode
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  enabled: true
+  comet_export: []
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics:
+    - episodes_done
+    grid_image_every_n_episodes: 1
+    sweep_experiment: false
+    cell_reporting: master
+    metric_plots: false
+experiment:
+  name: task004_bayesian_no_control_rho085
+  description: 'Ten provider-free task_004 episodes at rho=0.85: Bayesian agents, report-only; no controller.'
+  tags:
+  - task004
+  - bayesian-agents
+  - no-llm
+  - report-only
+  - no_control
+  - rounds30
+  - q7
+  metadata:
+    task_file_sha256: 333a6fb173d77ecffed856e35aa0be2a0991fb283e8c350468c6c97f7281f30f
+    private_assignment_sha256: 987808df2048b3262a8806e72f8100ff7e836e646d2b1d4d0c6a5d638daf44ba
+    study: 30-09-2026-task004-bayesian-classical-rho-suite
+    arm: no_control
+    task_id: task_004
+    ground_truth: ALLOCATION_0
+    population_size: 15
+    population_rounds: 30
+    social_group_size: 7
+    repetitions: 10
+    epistemic_persistence: 0.85
+    agent_decision_mode: bayesian
+    initialization_policy: exact_bayesian_local_vote
+    paired_initialization_source: /shared/MA-CC-results/30-09-2026-task004-bayesian-classical-rho-suite_initializations
+    paired_initialization_across_grid: true
+    paired_initialization_across_targets: true
+    llm_calls_expected: 0
+    canonical_fact_dictionary_sha256: 2df80b85f6d4dcd407c206ff72385cc431fb64712c7661c7f17599fd95622ff7
+    balanced_pool_file_sha256: 204c1ab6e8c1edee27585f9e22eeb86321b43fac27abcbd7470e440b6929ecc9

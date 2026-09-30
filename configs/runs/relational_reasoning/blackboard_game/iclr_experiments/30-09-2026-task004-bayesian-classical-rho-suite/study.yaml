@@ -1,0 +1,33 @@
+study:
+  name: 30-09-2026-task004-bayesian-classical-rho-suite
+configs:
+- no_control_rho06.yaml
+- truth_control_rho06.yaml
+- false_control_rho06.yaml
+- no_control_rho075.yaml
+- truth_control_rho075.yaml
+- false_control_rho075.yaml
+- no_control_rho085.yaml
+- truth_control_rho085.yaml
+- false_control_rho085.yaml
+- no_control_rho095.yaml
+- truth_control_rho095.yaml
+- false_control_rho095.yaml
+- no_control_rho1.yaml
+- truth_control_rho1.yaml
+- false_control_rho1.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/30-09-2026-task004-bayesian-classical-rho-suite
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 900
+  assumed_latency_seconds: 1.0
+  throttle: 15
+  max_active_nodes: 15
+  cpus_per_task: 1
+  memory: 4G
+  time_limit: 01:00:00
+  provider_load_control:
+    mode: 'off'
