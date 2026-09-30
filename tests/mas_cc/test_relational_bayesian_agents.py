@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+from pathlib import Path
 from dataclasses import replace
 
 import pytest
+import yaml
 
 from mas_cc.config import load_run_config
 from mas_cc.experiments import run_experiment_sync
@@ -35,6 +37,7 @@ from mas_cc.musr_team_allocation_generator.selective_design import (
     build_selective_design,
 )
 from mas_cc.probes.musr_truthful_selective.symbolic import write_design_artifacts
+from mas_cc.studies.initialization import materialize_initializations
 
 
 @pytest.fixture(scope="module")
@@ -139,6 +142,33 @@ def test_experiment_recorder_persists_bayesian_metadata_without_provider_audits(
     assert all(row["decisions"][0]["action"]["metadata"]["agent_decision_mode"] == "bayesian" for row in rows)
     assert all(row["decisions"][0]["validation_attempts"] == 0 for row in rows)
     assert all(not path.read_text().strip() for path in run.output_dir.rglob("audit_traces.jsonl"))
+
+
+def test_paired_initializations_are_generated_without_inference(symbolic_task, tmp_path):
+    configs = []
+    paths = []
+    artifact_dir = tmp_path / "initializations"
+    for rho in (0.75, 1.0):
+        config = _config(symbolic_task, rho=rho, rounds=1)
+        config = replace(config, execution=replace(config.execution, repetitions=2),
+                         game=replace(config.game, options={
+            **dict(config.game.options), "initialization": {
+                "mode": "paired_local_vote", "artifact_dir": str(artifact_dir), "require_artifact": True,
+            },
+        }))
+        path = tmp_path / f"rho{rho}.yaml"
+        path.write_text(yaml.safe_dump(config.to_dict()))
+        paths.append(path)
+        configs.append(config)
+    plan = asyncio.run(materialize_initializations(paths, artifact_dir, lambda config: NoInference()))
+    assert len(plan) == 2
+    for entry in plan:
+        artifact = json.loads(Path(entry.artifact_path).read_text())
+        assert all(action["metadata"]["agent_decision_mode"] == "bayesian" for action in artifact["actions"])
+    low, high = (_run(replace(config, execution=replace(config.execution, seed=plan[0].episode_seed)))
+                 for config in configs)
+    assert low.initial_state.initial_votes == high.initial_state.initial_votes
+    assert low.initial_decisions == high.initial_decisions == ()
 
 
 def test_grounded_sample_used_immediately_but_other_claims_ignored(symbolic_task):
