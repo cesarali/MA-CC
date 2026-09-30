@@ -111,10 +111,14 @@ CONTROLLER_FACT_POOL_ALL_NONDECISIVE = "all_nondecisive"
 # Equal numbers of facts leaning to each allocation, strength-matched, frozen
 # per task in controller/balanced_fact_pool.json.
 CONTROLLER_FACT_POOL_BALANCED = "balanced"
+# Only the balanced-pool facts leaning toward the controller's own target: the
+# "biased" menu, same facts and strengths, one third of the pool.
+CONTROLLER_FACT_POOL_BALANCED_TARGET = "balanced_target"
 CONTROLLER_FACT_POOL_MODES = (
     CONTROLLER_FACT_POOL_FROZEN,
     CONTROLLER_FACT_POOL_ALL_NONDECISIVE,
     CONTROLLER_FACT_POOL_BALANCED,
+    CONTROLLER_FACT_POOL_BALANCED_TARGET,
 )
 
 TIMING_MICROSCOPIC = "microscopic"
@@ -490,6 +494,19 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
             # controller_fact_pool_mode (frozen / all_nondecisive / balanced)
             # applies here; with both options at their defaults this is the
             # same frozen pool as before.
+            if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_BALANCED_TARGET:
+                target = self.resolved_target_for_task(task, episode_seed)
+                leans = task.controller_balanced_fact_leans or {}
+                pool = tuple(
+                    fact_id
+                    for fact_id in self.reportable_fact_ids(task)
+                    if leans.get(fact_id) == target
+                )
+                if not pool:
+                    raise ValueError(
+                        f"balanced_target pool has no facts leaning to {target!r}"
+                    )
+                return pool
             return self.reportable_fact_ids(task)
         target = self.resolved_target_for_task(task, episode_seed)
         if target != task.correct_relation or target == task.controller_target:
@@ -574,7 +591,10 @@ class RelationalRoundBudgetedControl(RoundSoftTargetBudgetedControl):
 
         if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_FROZEN:
             return task.controller_reportable_fact_ids
-        if self.controller_fact_pool_mode == CONTROLLER_FACT_POOL_BALANCED:
+        if self.controller_fact_pool_mode in {
+            CONTROLLER_FACT_POOL_BALANCED,
+            CONTROLLER_FACT_POOL_BALANCED_TARGET,
+        }:
             if not task.controller_balanced_fact_ids:
                 raise ValueError(
                     "balanced fact pool requires controller/balanced_fact_pool.json"

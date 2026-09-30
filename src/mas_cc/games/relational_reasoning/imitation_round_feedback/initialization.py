@@ -33,6 +33,7 @@ _CONTROLLER_ONLY_TASK_FIELDS = frozenset(
         "controller_report_texts",
         "controller_design_path",
         "controller_balanced_fact_ids",
+        "controller_balanced_fact_leans",
     }
 )
 

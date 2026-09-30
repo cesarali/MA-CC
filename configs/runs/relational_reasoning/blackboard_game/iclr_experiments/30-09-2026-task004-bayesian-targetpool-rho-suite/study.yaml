@@ -1,0 +1,28 @@
+study:
+  name: 30-09-2026-task004-bayesian-targetpool-rho-suite
+configs:
+- truth_control_targetpool_rho06.yaml
+- false_control_targetpool_rho06.yaml
+- truth_control_targetpool_rho075.yaml
+- false_control_targetpool_rho075.yaml
+- truth_control_targetpool_rho085.yaml
+- false_control_targetpool_rho085.yaml
+- truth_control_targetpool_rho095.yaml
+- false_control_targetpool_rho095.yaml
+- truth_control_targetpool_rho1.yaml
+- false_control_targetpool_rho1.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/30-09-2026-task004-bayesian-targetpool-rho-suite
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 600
+  assumed_latency_seconds: 1.0
+  throttle: 10
+  max_active_nodes: 10
+  cpus_per_task: 1
+  memory: 4G
+  time_limit: 02:00:00
+  provider_load_control:
+    mode: 'off'

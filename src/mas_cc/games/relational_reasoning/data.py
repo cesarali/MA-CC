@@ -133,6 +133,9 @@ class RelationalTask:
     # allocation (see scripts/local/build_balanced_controller_pool.py). Empty
     # for tasks that do not ship controller/balanced_fact_pool.json.
     controller_balanced_fact_ids: tuple[str, ...] = ()
+    # The allocation each balanced-pool fact leans toward (fact_id -> option),
+    # used to restrict the menu to the facts favouring the controller's target.
+    controller_balanced_fact_leans: Mapping[str, str] | None = None
 
     def fact(self, fact_id: str) -> RelationalFact:
         try:
@@ -232,6 +235,10 @@ class RelationalTask:
             if self.controller_balanced_fact_ids:
                 projection["controller_balanced_fact_ids"] = list(
                     self.controller_balanced_fact_ids
+                )
+            if self.controller_balanced_fact_leans:
+                projection["controller_balanced_fact_leans"] = dict(
+                    self.controller_balanced_fact_leans
                 )
             projection["controller_design_path"] = self.controller_design_path
         return projection
@@ -755,14 +762,16 @@ def _load_musr_truthful_selective_task(
         )
     )
     balanced: tuple[str, ...] = ()
+    balanced_leans: dict[str, str] = {}
     balanced_path = root / "controller/balanced_fact_pool.json"
     if balanced_path.is_file():
-        balanced = tuple(
-            str(fact_id)
-            for fact_id in json.loads(balanced_path.read_text(encoding="utf-8"))[
-                "fact_ids"
-            ]
-        )
+        balanced_design = json.loads(balanced_path.read_text(encoding="utf-8"))
+        balanced = tuple(str(fact_id) for fact_id in balanced_design["fact_ids"])
+        balanced_leans = {
+            str(row["fact_id"]): str(row["lean"])
+            for row in balanced_design.get("facts", ())
+            if row.get("lean") is not None
+        }
         if (
             not balanced
             or len(balanced) != len(set(balanced))
@@ -773,6 +782,13 @@ def _load_musr_truthful_selective_task(
                 "MuSR balanced controller pool must be unique, non-decisive task facts"
             )
     options = tuple(f"ALLOCATION_{index}" for index in range(3))
+    if balanced_leans and (
+        set(balanced_leans) != set(balanced)
+        or set(balanced_leans.values()) - set(options)
+    ):
+        raise RelationalTaskError(
+            "MuSR balanced controller pool leans must cover the pool and name task options"
+        )
     display = {
         option: problem.candidate_allocations[index].to_dict(problem.tasks)[
             "assignment"
@@ -826,6 +842,7 @@ def _load_musr_truthful_selective_task(
         },
         controller_design_path=str(root / "controller/ranked_fact_pool.json"),
         controller_balanced_fact_ids=balanced,
+        controller_balanced_fact_leans=balanced_leans or None,
     )
 
 

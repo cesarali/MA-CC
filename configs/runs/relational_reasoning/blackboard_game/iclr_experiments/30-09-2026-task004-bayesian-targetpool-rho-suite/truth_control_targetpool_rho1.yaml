@@ -1,0 +1,181 @@
+llm_provider:
+  type: mock
+  model: bayesian-symbolic-no-inference
+  temperature: 0.0
+  max_output_tokens: 128
+  request_concurrency: 1
+  options:
+    response: 'UNEXPECTED PROVIDER CALL: Bayesian and deterministic policies must not infer.'
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 5
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values:
+    - A
+    - B
+    - C
+game:
+  type: relational_imitation_round_feedback
+  population_size: 15
+  horizon: 30
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: /shared/MA-CC/results/studies/musr_truthful_selective_task_calibration_01/tasks
+    task_id: task_004
+    dynamics_mode: reasoning
+    rounds: 30
+    social_group_size: 7
+    social_mode: board
+    board:
+      sampling: uniform
+      message_lifetime_rounds: 1
+      exclude_self_authored: true
+      allow_no_post: true
+      communication_profile: report_only
+      require_grounded_reports: true
+      report_citation_scope: active_or_observed
+      no_citable_fact_action: none
+    epistemic_persistence: 1.0
+    vote_visibility: public
+    prompt_version: 5
+    receiver_epistemic_disposition: vigilant
+    stop_on_consensus: false
+    invalid_response_retries: 0
+    expected_validation_failure_rate: 0.0
+    initialization:
+      mode: paired_local_vote
+      artifact_dir: /shared/MA-CC-results/30-09-2026-task004-bayesian-classical-rho-suite_initializations
+      require_artifact: true
+    agent_decision_mode: bayesian
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_0
+    sensor_sample_size: 100
+    sensing_mode: board
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+    intervention_budget: 3
+    controller_budget_scope: per_round
+    advocacy_schedule: soft
+    message_mode: recommendation_only
+    controller_actuation_mode: adaptive_communication
+    controller_timing: dawn_only
+    controller_authoring: deterministic
+    controller_memory_mode: none
+    controller_fact_pool_mode: balanced_target
+    controller_communication_max_retries: 2
+    controller_report_cooldown_rounds: 0
+    controller_report_max_posts_per_fact: 90
+    controller_report_selection_strategy: target_preserving_v1
+    controller_round_budget_mode: exact
+execution:
+  seed: 20260907
+  repetitions: 10
+  parallelism: 10
+  fail_fast: true
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: true
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 25.0
+  max_cost_per_run: 25.0
+  max_provider_requests: 1
+  max_input_tokens: 1
+  max_output_tokens: 1
+  allow_unbounded_paid_requests: true
+logging:
+  level: INFO
+  console: false
+  audit: true
+  comet: false
+  options:
+    prompt_examples:
+      count: 0
+      scope: episode
+storage:
+  output_dir: results
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+analysis:
+  enabled: false
+  estimators: []
+metrics:
+  enabled: true
+  comet_export: []
+observability:
+  schema_version: 1
+  comet:
+    writer: master_only
+    heartbeat_seconds: 20
+    progress_metrics:
+    - episodes_done
+    sweep_experiment: false
+    cell_reporting: master
+    metric_plots: false
+experiment:
+  name: task004_bayesian_truth_control_targetpool_rho1
+  description: 'Ten provider-free task_004 episodes at rho=1.0: exact Bayesian agents; ALLOCATION_0 classical
+    controller; sigmoid-gated exactly b=3 daily posts from its nine target-leaning balanced-pool facts.'
+  tags:
+  - task004
+  - bayesian-agents
+  - no-llm
+  - report-only
+  - truth_control
+  - rounds30
+  - q7
+  - target-pool
+  - pool9
+  metadata:
+    task_file_sha256: 333a6fb173d77ecffed856e35aa0be2a0991fb283e8c350468c6c97f7281f30f
+    private_assignment_sha256: 987808df2048b3262a8806e72f8100ff7e836e646d2b1d4d0c6a5d638daf44ba
+    controller_pool_ids_sha256: 5c45484bf75945119740d3955667b57ccccab39bbb19dbe9ff5d73bbad1b4b13
+    study: 30-09-2026-task004-bayesian-targetpool-rho-suite
+    arm: truth_control
+    task_id: task_004
+    ground_truth: ALLOCATION_0
+    population_size: 15
+    population_rounds: 30
+    social_group_size: 7
+    repetitions: 10
+    epistemic_persistence: 1.0
+    agent_decision_mode: bayesian
+    initialization_policy: exact_bayesian_local_vote
+    paired_initialization_source: /shared/MA-CC-results/30-09-2026-task004-bayesian-classical-rho-suite_initializations
+    paired_initialization_across_grid: true
+    paired_initialization_across_targets: true
+    llm_calls_expected: 0
+    controller_authoring: deterministic
+    controller_target: ALLOCATION_0
+    controller_target_is_truth: true
+    controller_pool_mode: balanced_target
+    controller_pool_size: 9
+    controller_budget_scope: per_round
+    intervention_budget: 3
+    advocacy_schedule: soft
+    canonical_fact_dictionary_sha256: 2df80b85f6d4dcd407c206ff72385cc431fb64712c7661c7f17599fd95622ff7
+    balanced_pool_file_sha256: 204c1ab6e8c1edee27585f9e22eeb86321b43fac27abcbd7470e440b6929ecc9
+    controller_pool_target: ALLOCATION_0
+    controller_pool_fact_ids:
+    - cf_x00_eq_3
+    - cf_x00_ge_2
+    - cf_x00_ge_x02
+    - cf_x00_ge_x03
+    - cf_x01_eq_x02
+    - cf_x01_le_2
+    - cf_x01_le_x03
+    - cf_x02_le_2
+    - cf_x03_eq_2
+    comparison_study: 30-09-2026-task004-bayesian-classical-rho-suite
+    controlled_forgetting_timing: dawn_including_day1
+    no_controller_baseline_reused: true

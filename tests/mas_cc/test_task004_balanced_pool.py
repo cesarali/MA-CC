@@ -100,3 +100,27 @@ def test_balanced_selections_stay_in_pool_and_say_so(task):
     assert selections
     assert all(s.fact_id in pool for s in selections)
     assert {s.strategy_class for s in selections} == {"balanced"}
+
+
+@pytest.mark.parametrize("target", ["ALLOCATION_2", "correct"])
+def test_balanced_target_pool_keeps_only_the_targets_nine_facts(task, target):
+    lean = {row["fact_id"]: row["lean"] for row in json.loads(POOL.read_text())["facts"]}
+    controller = RelationalRoundBudgetedControl.from_options(
+        {**OPTIONS, "target": target, "controller_fact_pool_mode": "balanced_target"}
+    )
+    resolved = controller.resolved_target_for_task(task, 1)
+    ids = controller.reportable_fact_ids_for_target(task, 1)
+    assert len(ids) == 9
+    assert {lean[i] for i in ids} == {resolved}
+    selections = controller.select_truthful_reports(
+        task, episode_seed=1, round_index=3, live_fact_counts={}, selected_rounds={}
+    )
+    assert selections and all(s.fact_id in ids for s in selections)
+    assert {s.strategy_class for s in selections} == {"balanced-target"}
+
+
+def test_balanced_target_leans_do_not_change_initialization_pairing(task):
+    assert task.controller_balanced_fact_leans
+    assert canonical_hash(_initial_vote_task_projection(task)) == (
+        TASK004_INITIAL_VOTE_HASH
+    )
