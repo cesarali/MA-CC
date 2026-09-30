@@ -1,5 +1,8 @@
 # MuSR public-blackboard game
 
+For the optional provider-free population policy, see
+[exact Bayesian agents](bayesian_agents.md).
+
 This document is a tutorial for the public-blackboard game used by:
 
 - [`blackboard_truthful_reports_q3_deepinfra`](../../../../configs/runs/relational_reasoning/blackboard_game/blackboard_truthful_reports_q3_deepinfra/README.md);

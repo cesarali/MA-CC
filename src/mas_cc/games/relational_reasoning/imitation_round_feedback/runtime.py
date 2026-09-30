@@ -87,6 +87,7 @@ from .adaptive_communication import (
     choose_communication_mode,
     choose_llm_communication,
 )
+from .bayesian import BayesianAgentPolicy
 from .controller import (
     ADAPTIVE_COMMUNICATION,
     COORDINATION_REQUEST,
@@ -228,6 +229,9 @@ class _RecoveryLedger:
                 "saved decision identity or prompt hash does not match replay"
             )
         saved_action = dict(entry["action"])
+        saved_mode = dict(saved_action.get("metadata", {})).get("agent_decision_mode", "llm")
+        if saved_mode != game.rules(config.game).agent_decision_mode:
+            raise RecoveryCheckpointError("saved agent decision mode does not match replay")
         action = Action(
             agent_id=AgentId(str(saved_action["agent_id"])),
             value=str(saved_action["value"]),
@@ -490,7 +494,7 @@ def _signal_from_dict(value: Any) -> RoundControlSignal | None:
 
 
 async def _execute_decision(
-    game: Game,
+    game: RelationalImitationRoundFeedbackGame,
     logical: DecisionRequest,
     state: RelationalGameState,
     config: RunConfig,
@@ -499,8 +503,9 @@ async def _execute_decision(
     root_seed: Seed,
     observer: Any | None,
     recovery: _RecoveryLedger,
+    agent_policy: BayesianAgentPolicy | None = None,
 ) -> RelationalDecision:
-    """Run one logical decision through the shared ask/validate/retry loop."""
+    """Validate a Bayesian decision or use the shared LLM ask/retry loop."""
 
     prompt = logical.prompt.compile(token_counter)
     replayed = recovery.replay_decision(
@@ -516,6 +521,29 @@ async def _execute_decision(
                 f"{logical.agent_id}:{attempt_index + 1}"
             )
         )
+
+    if agent_policy is not None:
+        agent = state.relational_agent(logical.agent_id)
+        context = game.citation_context(
+            state, agent, tuple(logical.observation.visible_state.get("social_sources", ())),
+            config.game,
+        )
+        response, metadata = agent_policy.ballot(
+            logical, context, agent.memory,
+            {fact_id: state.fact_text(fact_id) for fact_id in context.citable_fact_ids},
+            seed=_seed_for_attempt(0),
+        )
+        prompt.response_contract.validate(response).raise_for_errors(
+            context="Bayesian agent ballot contract"
+        )
+        action = game.parse_action(logical, response)
+        action = replace(action, metadata={**dict(action.metadata), **metadata})
+        game.validate_action(state, logical, action, config.game).raise_for_errors(
+            context="Bayesian agent action"
+        )
+        result = RelationalDecision(logical, action, prompt, attempts=())
+        recovery.record_decision(logical, prompt, result)
+        return result
 
     def _metadata_for_attempt(attempt_index: int) -> dict[str, Any]:
         return {
@@ -1175,12 +1203,18 @@ async def run_relational_imitation_round_feedback_game(
     evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
     state = game.initialize(config.game, config.execution.seed) if initial_state is None else initial_state
     task = game.load_task(config.game)
+    agent_policy = (
+        BayesianAgentPolicy.load(rules.task_dataset_dir, task.task_id, state.fact_ids)
+        if rules.agent_decision_mode == "bayesian" else None
+    )
     if continuing:
         if state.terminated:
             raise ValueError("cannot continue a terminated relational state")
         if canonical_hash(state.to_dict()["task"]) != canonical_hash(task.to_dict()):
             raise ValueError("restored state task does not match continuation config")
         state_rules = dict(state.data.get("rules", {}))
+        if state_rules.get("agent_decision_mode", "llm") != rules.agent_decision_mode:
+            raise ValueError("restored state agent decision mode does not match continuation config")
         if int(state_rules.get("social_group_size", -1)) != rules.social_group_size:
             raise ValueError("restored state q does not match continuation config")
         if float(state_rules.get("epistemic_persistence", -1.0)) != rules.epistemic_persistence:
@@ -1234,6 +1268,7 @@ async def run_relational_imitation_round_feedback_game(
                         root,
                         observer,
                         recovery,
+                        agent_policy,
                     )
                     for request in requests
                 )
@@ -1242,7 +1277,7 @@ async def run_relational_imitation_round_feedback_game(
         state = game.apply_initial_votes(
             state, tuple(decision.action for decision in initial_decisions)
         )
-        initialization_source = "provider_local_vote"
+        initialization_source = ("bayesian_local_vote" if agent_policy else "provider_local_vote")
     initial_state = state
     physical_initial_state_hash = canonical_hash(
         physical_initial_state_projection(initial_state)
@@ -1282,7 +1317,7 @@ async def run_relational_imitation_round_feedback_game(
         "event",
         "relational_round_feedback_initialized",
         initial_votes=list(state.initial_votes),
-        provider_decisions=len(initial_decisions),
+        provider_decisions=(0 if agent_policy else len(initial_decisions)),
         initialization_source=initialization_source,
         initialization_artifact_hash=initialization_artifact_hash,
         physical_initial_state_hash=physical_initial_state_hash,
@@ -2248,6 +2283,7 @@ async def run_relational_imitation_round_feedback_game(
                 root,
                 observer,
                 recovery,
+                agent_policy,
             )
             logical_decisions += 1
             validation_attempts += update.validation_attempts

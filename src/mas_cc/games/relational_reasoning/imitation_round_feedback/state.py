@@ -778,6 +778,7 @@ class RelationalRules:
     invalid_response_retries: int
     expected_validation_failure_rate: float
     epistemic_persistence: float
+    agent_decision_mode: str = "llm"
 
     @property
     def social_distrust(self) -> bool:
@@ -888,6 +889,17 @@ class RelationalRules:
                 "game.options.task_family must be spatial_relational or "
                 "musr_team_allocation"
             )
+        agent_decision_mode = str(options.get("agent_decision_mode", "llm"))
+        if agent_decision_mode not in {"llm", "bayesian"}:
+            raise ValueError("game.options.agent_decision_mode must be llm or bayesian")
+        if agent_decision_mode == "bayesian" and (
+            task_family != "musr_team_allocation" or social_mode != SOCIAL_MODE_BOARD
+        ):
+            raise ValueError(
+                "Bayesian agents require task_family musr_team_allocation and social_mode board"
+            )
+        if agent_decision_mode == "bayesian" and not allow_no_post:
+            raise ValueError("Bayesian agents require board.allow_no_post true for empty memory")
         if task_family == "musr_team_allocation" and task_id is None:
             raise ValueError("MuSR Team Allocation requires game.options.task_id")
         task_distribution = _mapping(
@@ -1219,6 +1231,7 @@ class RelationalRules:
             invalid_response_retries=int(retries),
             expected_validation_failure_rate=expected_failure,
             epistemic_persistence=persistence,
+            agent_decision_mode=agent_decision_mode,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -1232,6 +1245,9 @@ class RelationalRules:
         ):
             values.pop("report_citation_scope")
             values.pop("no_citable_fact_action")
+        # Preserve legacy LLM state/checkpoint hashes when the option is absent.
+        if self.agent_decision_mode == "llm":
+            values.pop("agent_decision_mode")
         return values
 
 
