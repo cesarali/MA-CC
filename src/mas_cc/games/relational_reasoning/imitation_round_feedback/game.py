@@ -1369,7 +1369,7 @@ class RelationalImitationRoundFeedbackGame(Game):
     # ---- provider demand ------------------------------------------------
 
     def call_plan(self, config: GameConfig) -> GameCallPlan:
-        """One provider call per focal update, controlled or not.
+        """Agent provider demand; Bayesian decisions require no LLM requests.
 
         Control replaces a social slot rather than adding a call, so a
         controlled and an uncontrolled update are priced identically.
@@ -1443,7 +1443,8 @@ class RelationalImitationRoundFeedbackGame(Game):
         )
         initialization_calls = (
             rules.n_agents
-            if rules.initial_votes is None and rules.initialization_mode == "local_vote"
+            if rules.agent_decision_mode == "llm"
+            and rules.initial_votes is None and rules.initialization_mode == "local_vote"
             else 0
         )
         expected_attempts = (
@@ -1462,6 +1463,11 @@ class RelationalImitationRoundFeedbackGame(Game):
                 DecisionStagePlan(
                     name="local_initialization",
                     requests_per_interaction=initialization_calls,
+                    provider_free_decisions_per_interaction=(
+                        rules.n_agents if rules.agent_decision_mode == "bayesian"
+                        and rules.initial_votes is None and rules.initialization_mode == "local_vote"
+                        else 0
+                    ),
                     retry_bound=rules.invalid_response_retries,
                     expected_attempts_per_request=expected_attempts,
                     concurrency_within_stage=max(1, rules.n_agents),
@@ -1478,7 +1484,12 @@ class RelationalImitationRoundFeedbackGame(Game):
                 DecisionStagePlan(
                     name="relational_ballot_update",
                     requests_per_interaction=(
-                        0 if rules.initialization_only else rules.horizon
+                        0 if rules.initialization_only or rules.agent_decision_mode == "bayesian"
+                        else rules.horizon
+                    ),
+                    provider_free_decisions_per_interaction=(
+                        rules.horizon if rules.agent_decision_mode == "bayesian"
+                        and not rules.initialization_only else 0
                     ),
                     retry_bound=rules.invalid_response_retries,
                     expected_attempts_per_request=expected_attempts,
@@ -1488,6 +1499,8 @@ class RelationalImitationRoundFeedbackGame(Game):
                     maximum_prompt=update,
                     prompt_scenarios=(update,),
                     assumptions=(
+                        "Bayesian agent decisions make no provider requests."
+                        if rules.agent_decision_mode == "bayesian" else
                         "Exactly one provider call per focal update, controlled or "
                         "not: control replaces one social slot rather than adding "
                         "a call.",
@@ -1501,6 +1514,8 @@ class RelationalImitationRoundFeedbackGame(Game):
             metadata={
                 "population_size": rules.n_agents,
                 "dynamics_mode": rules.dynamics_mode,
+                **({"agent_decision_mode": "bayesian"}
+                   if rules.agent_decision_mode == "bayesian" else {}),
                 "interactions_per_episode": rules.horizon,
                 "population_rounds": rules.rounds,
                 "initialization_only": rules.initialization_only,
