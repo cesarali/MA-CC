@@ -1,0 +1,47 @@
+# Observables and efficiencies for the 21-09-2026-full-vs-report-v1 study.
+# Run: caffeinate -dimsu .venv/bin/python -m rnd_init_metrics.run \
+#        --config configs/analysis/rnd_init_metrics/new_rnd_init_experiment.yaml --stage all
+# The source archive is opened read-only; nothing here writes to agents_control.
+
+output_dir: results/bound_estimators/new_rnd_init_experiment
+horizon: 15          # Y_0 .. Y_15; rounds 1..14 carry a randomized controller gate
+seed: 20260923
+workers: 12
+
+folds: {outer: 5, inner: 3}
+# 1200 epochs with early stopping: the reference's starting choice is 1000, and a
+# 3000-epoch pilot cost ~30 min for a single h=15 path job without changing selection.
+training: {lr: 0.001, max_epochs: 1200, clip_norm: 1.0, eval_every: 10, patience: 15,
+           min_delta: 0.0001, seeds: [0, 1, 2]}
+
+# I(Z; Y_h) at every horizon: the endpoint problem is cheap.
+endpoint:
+  horizons: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: mlp, width: [4, 8], lam: [0.01, 0.1]}
+
+# Trajectory problems (K_pi^z, KL(Q||base), I(Z;Gamma_h)) on a coarser horizon grid:
+# these fit sequence critics and dominate the run time.
+path:
+  horizons: [1, 3, 5, 8, 11, 15]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: flat, width: [4, 8], lam: [0.01, 0.1]}
+    - {family: gru, width: [4], lam: [0.01, 0.1]}
+
+# Exchangeability null: swap the two target branches within an initialization.
+swaps:
+  n: 200
+  horizons: [1, 8, 15]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
+
+bootstrap: {resamples: 2000}
+resource_lambdas: [0, 0.1, 1.0]

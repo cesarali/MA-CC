@@ -1,0 +1,63 @@
+# Offline bound estimators for blackboard_checkpoint_ensemble_01.
+# Run:  .venv/bin/python -m bound_estimators.run --config configs/analysis/bound_estimators/blackboard_checkpoint_ensemble_01.yaml
+# Inputs are immutable archives; nothing here sends provider requests.
+
+archive: /Users/rsanchez/Projects/agents_control/new_experiment_setup/results/blackboard-checkpoint-ensemble-01_analysis.zip
+archive_sha256: 248a28daf90f17e55ca7105782895c2c333e41b976252e58100bf4545e43fdeb
+frozen_inputs_archive: /Users/rsanchez/Projects/agents_control/new_experiment_setup/results/blackboard_checkpoint_ensemble_01_frozen_aggregation_inputs_20260918.zip
+frozen_inputs_sha256: c501afc668fe7dc5578e06e158f6a50dd64a9800dd2866873224358c64fdd395
+work_dir: results/bound_estimators/blackboard_checkpoint_ensemble_01/extract
+output_dir: results/bound_estimators/blackboard_checkpoint_ensemble_01
+horizon: 10
+master_seed: 20260921
+workers: 10
+
+folds: {outer: 5, inner: 3, repeats: 1}
+training: {lr: 0.001, max_epochs: 1000, clip_norm: 1.0, eval_every: 10, patience: 10, min_delta: 0.0001, seeds: [0, 1, 2]}
+
+endpoint:
+  horizons: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: mlp, width: [4, 8], lam: [0.01, 0.1]}
+
+cost:
+  horizons: [1, 5, 10]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: flat, width: [4, 8], lam: [0.01, 0.1]}
+    - {family: gru, width: [4, 8], lam: [0.01, 0.1]}
+    - {family: gru_mean, width: [4], lam: [0.01, 0.1]}
+  direct_horizons: [10]
+  direct_candidates:
+    - {family: gru_direct, width: [4], lam: [0.01, 0.1], cap: 5.0}
+  memory:
+    horizon: 10
+    histories: [1, 2, 4]
+    candidates:
+      - {family: constant}
+      - {family: gru, width: [4], lam: [0.01, 0.1]}
+
+diagnostics:
+  pathinfo_horizons: [1, 5, 10]
+  mixture_horizons: [1, 5, 10]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: gru, width: [4], lam: [0.01, 0.1]}
+
+bootstrap: {resamples: 2000}
+
+label_swaps:
+  n: 200
+  horizons: [1, 10]
+  problems: [endpoint, cost0, cost2]
+  candidates:
+    - {family: constant}
+    - {family: linear, lam: [0.01, 0.1, 1.0, 10.0]}
+    - {family: quadratic, lam: [0.01, 0.1, 1.0, 10.0]}
