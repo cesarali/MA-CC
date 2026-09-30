@@ -43,11 +43,14 @@ def call_plan_for_run(game: Any, config: Any) -> GameCallPlan:
                     requests_per_interaction=(
                         focal_updates
                         if stage.name == "relational_ballot_update"
+                        and stage.provider_free_decisions_per_interaction == 0
                         else stage.requests_per_interaction
                     ),
                     forced_decisions_per_interaction=stage.forced_decisions_per_interaction,
                     provider_free_decisions_per_interaction=(
-                        stage.provider_free_decisions_per_interaction
+                        focal_updates if stage.name == "relational_ballot_update"
+                        and stage.provider_free_decisions_per_interaction > 0
+                        else stage.provider_free_decisions_per_interaction
                     ),
                     retry_bound=stage.retry_bound,
                     expected_attempts_per_request=stage.expected_attempts_per_request,
