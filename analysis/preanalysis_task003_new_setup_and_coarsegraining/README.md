@@ -17,6 +17,7 @@ and the generator source in `src/mas_cc/musr_team_allocation_generator`.
 | **20** | [`20_controller_redesign/`](20_controller_redesign/) | Why is the truth-vs-decoy comparison unfair, and what replaces it? |
 | **30** | [`30_coarse_graining/`](30_coarse_graining/) | Can we compress the population state enough to estimate anything? Is the result Markovian? |
 | **40** | [`40_information_estimates/`](40_information_estimates/) | The actual path divergences, mutual informations and efficiencies |
+| **50** | [`50_next_experiment/`](50_next_experiment/) | **Preliminary.** Planning the next study: what Darius already built on `darius-MA-v1`, how plan v0.4 fits, which controller to use, how many episodes |
 
 Shared: [`scripts/`](scripts/) reproduces 30 and 40; [`results/`](results/) holds the
 per-round state files and run logs (gitignored).
