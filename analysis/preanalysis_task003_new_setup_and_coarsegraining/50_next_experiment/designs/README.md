@@ -116,7 +116,13 @@ Three files, one per setup:
 task003_symmetric_v0_reference.json
 task003_symmetric_v2.json
 task003_nosolution_v2.json
+config_template.yaml                 <- the settings for BOTH experiments
 ```
+
+`config_template.yaml` is annotated and shared: **only `task_id` differs between
+the two experiments.** Lines marked `<<VARY>>` are the factor grid, lines marked
+`<<DARIUS>>` need `origin/darius-MA-v1` merged. The reasoning for each setting is
+in `../protocols_2026-10-02.md` §2, §3 and §5b.
 
 Each has the same shape. The fields you need to build a setup:
 
