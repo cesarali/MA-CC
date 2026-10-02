@@ -6,7 +6,8 @@
 # every protocol setting identical is what makes the two comparable.
 #
 # Lines marked  <<VARY>>  are the factor grid.
-# Lines marked  <<DARIUS>> need origin/darius-MA-v1 merged first.
+# As written this runs on dev/rsanchez UNMERGED. origin/darius-MA-v1 is needed
+# only for phase 4 (episode-scope budget B). See ../EXPERIMENTS.md section 3c.
 #
 # Rationale for every choice: ../protocols_2026-10-02.md sections 2, 3 and 5b.
 # Property tables for the two setups:   ./README.md
@@ -118,12 +119,19 @@ control:
                                       # our earlier dose-response result
 
     # --- which facts are on the menu ---
-    controller_fact_pool_mode: balanced          # <<DARIUS>> reads
-                                      # controller/balanced_fact_pool.json: our 12-fact
-                                      # pool, lean 4/4/4, proving no allocation.
-                                      # Target-INDEPENDENT, so both arms get the same
-                                      # menu and any directional difference is the
-                                      # selection policy, not the menu
+    controller_report_pool_mode: frozen          # NO MERGE NEEDED. `frozen` returns
+                                      # task.controller_reportable_fact_ids with no
+                                      # reference to the target -- already
+                                      # target-independent, so both arms get the same
+                                      # 12-fact menu and any directional difference is
+                                      # the selection policy, not the menu.
+                                      # Write our 12 facts into
+                                      # facts/controller_reportable_facts.json.
+                                      #
+                                      # Do NOT use controller_fact_pool_mode: balanced
+                                      # with deterministic authoring: it forces
+                                      # base_score = 0, which makes the fact choice
+                                      # target-blind. See ../EXPERIMENTS.md section 3c
     controller_report_selection_strategy: target_preserving_v1   # the only value
 
     # --- sensing ---
@@ -144,13 +152,13 @@ control:
 
     # --- how much it may say ---
     intervention_budget: 3            # <<VARY>>  b = 3, 6 per round
-    controller_budget_scope: per_round           # <<DARIUS>> per_round first: an episode
-                                      # reservoir makes the remaining budget a hidden
-                                      # state variable, a second memory channel on top
-                                      # of the one our coarse-graining already fails to
-                                      # capture at rho = 0.75
-    controller_round_budget_mode: exact          # <<DARIUS>>
-    controller_memory_mode: none                 # <<DARIUS>>
+    # controller_budget_scope: per_round         # OMIT on dev/rsanchez: the option does
+                                      # not exist there and is SILENTLY DISCARDED.
+                                      # Per-round is the only behaviour and the default.
+                                      # Set it explicitly only after merging
+                                      # darius-MA-v1, and only for phase 4 (episode B).
+    # controller_round_budget_mode: exact        # same: darius-only, `exact` is default
+    # controller_memory_mode: none               # same: darius-only, `none` is default
     controller_report_cooldown_rounds: 0         # a cooldown is a hidden timing constraint
     controller_report_max_posts_per_fact: 30     # must be >= the budget actually spent
 

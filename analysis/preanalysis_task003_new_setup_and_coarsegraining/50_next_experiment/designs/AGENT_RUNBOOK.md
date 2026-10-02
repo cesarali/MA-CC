@@ -27,40 +27,40 @@ of the correct answer. Plain explanation in [`../EXPERIMENTS.md`](../EXPERIMENTS
 
 ## 1. Blockers — check these first, stop if either fails
 
-### 1a. `origin/darius-MA-v1` must be merged
+### 1a. The merge is NOT required for phase 1
 
-Four controller options do **not** exist on `dev/rsanchez`:
+*(Corrected 2026-10-03: an earlier version of this runbook said it was.)*
 
-| option | needed for |
-|---|---|
-| `controller_fact_pool_mode` | the target-independent 12-fact menu |
-| `controller_budget_scope` | per-round vs episode budget |
-| `controller_round_budget_mode` | — |
-| `controller_memory_mode` | — |
+Phase 1 runs on `dev/rsanchez` unmerged. Use the **frozen-pool route**:
 
-Verify:
+- `controller_report_pool_mode: frozen` (the default) returns
+  `task.controller_reportable_fact_ids` **with no reference to the target** — it
+  is already target-independent, on both branches.
+- So write our 12 neutral facts into `facts/controller_reportable_facts.json`
+  (§2 step 5) and the shared pool works unmerged.
+- `validate_truthful_report_task` permits the target to be the task's declared
+  target **or** the ground truth, so both arms pass.
+- `intervention_budget: 3` is per-round on `dev/rsanchez` and is the only
+  behaviour there.
 
-```bash
-grep -c CONTROLLER_FACT_POOL_BALANCED \
-  src/mas_cc/games/relational_reasoning/imitation_round_feedback/controller.py
-```
+**Do not use `controller_fact_pool_mode: balanced` for a `deterministic`
+controller.** Darius's change forces `base_score = 0.0` whenever the pool mode
+is not `frozen`, which makes the deterministic fact choice **target-blind** — both
+arms then post the same facts in the same order and differ only in the
+recommendation text. See `../EXPERIMENTS.md` §3c.
 
-`0` means not merged. **There is no workaround** —
-`controller_report_pool_mode: target_aligned_v1` cannot express a shared pool
-(it is a truth-arm-only override, and it raises unless the pool contains every
-decisive fact, which ours does not).
-
-**And an unmerged branch fails silently, not loudly.** Confirm on the resolved
-control object, not just by reading the config:
+**Merge `origin/darius-MA-v1` before phase 4** (episode-scope `B`), which needs
+`controller_budget_scope`. That option does not exist on `dev/rsanchez` and is
+**silently discarded** if set — verified by direct call, no error. So if phase 4
+is ever configured, assert it took effect:
 
 ```python
 c = RelationalRoundBudgetedControl.from_options(opts)
-assert hasattr(c, "controller_fact_pool_mode"), "darius-MA-v1 not merged"
-assert hasattr(c, "controller_budget_scope"),   "darius-MA-v1 not merged"
+assert hasattr(c, "controller_budget_scope"), "darius-MA-v1 not merged"
 ```
 
-Without the merge both keys are accepted and thrown away, and the run uses the
-task's frozen pool and a per-round budget while the config claims otherwise.
+Without that check a config asking for an episode reservoir runs per-round while
+claiming otherwise.
 
 ### 1b. The two task directories do not exist yet
 
@@ -94,18 +94,31 @@ For each of `task003_symmetric_v2` and `task003_nosolution_v2`:
    replacing the copied `task_003` version, and update
    `controller_eligible_fact_count` in `task.json` from 24 to 12.
 
-   **This step is a safety net, not bookkeeping.** `from_options` on
-   `dev/rsanchez` silently accepts and discards keys it does not know — verified
-   by direct call, no error and no warning. So if the merge in §1a is missing or
-   incomplete, `controller_fact_pool_mode: balanced` is ignored, the pool falls
-   back to `controller_report_pool_mode: frozen`, and `frozen` returns
-   `facts/controller_reportable_facts.json`. Copied from `task_003` unchanged
-   that is **the original defective 24-fact pool** — the bug this redesign
-   exists to fix, reintroduced invisibly with no error. Writing our 12 facts
-   there makes the fallback land on the right pool.
+   **This is the mechanism, not bookkeeping.** With
+   `controller_report_pool_mode: frozen` this file *is* the controller's pool,
+   target-independently, which is exactly what the design wants — and it needs
+   no merge. Leaving `task_003`'s version in place would hand the controller
+   **the original defective 24-fact pool**, the bug this redesign exists to fix,
+   with no error raised.
 
-   The same trap applies to `controller_budget_scope: episode`, which on
-   `dev/rsanchez` is silently ignored and runs **per-round** instead.
+6. **Decide the scoring question — this changes what the experiment measures.**
+   `task.controller_fact_scores` drives which facts a `deterministic` controller
+   picks (`-base_score` in the ranking key). The tie-break hash does **not**
+   depend on the target, so with absent or equal scores the fact choice is
+   **target-blind** and the two arms differ only in the recommendation text.
+
+   There is one score field per task, so it cannot encode two opposite targets.
+   Either:
+
+   - **two task directories per setup** (four total), identical facts and pool,
+     differing *only* in the score field — one scored toward `ALLOCATION_0`, one
+     toward `ALLOCATION_2`. This is what the design intends; a diff shows exactly
+     one field changed. Or
+   - **accept target-blind fact choice**, giving the narrower experiment *does a
+     recommendation steer with evidence held constant?*
+
+   Ask rsanchez which, or run both — the contrast separates evidence selection
+   from bare recommendation. See `../EXPERIMENTS.md` §3c.
 
 ### Verify before going further
 

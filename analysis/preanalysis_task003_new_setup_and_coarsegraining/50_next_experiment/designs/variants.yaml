@@ -6,6 +6,12 @@
 #
 # PRELIMINARY. Rationale: ../EXPERIMENTS.md section 3.
 
+# NOTE: phase 1-3 all run on dev/rsanchez UNMERGED, via
+# controller_report_pool_mode: frozen with our 12 facts written into
+# facts/controller_reportable_facts.json. Only phase 4 (episode budget) needs the
+# merge. Do NOT use controller_fact_pool_mode: balanced with deterministic
+# authoring -- it forces base_score = 0 and makes the fact choice target-blind.
+
 phase_1_report_only_deterministic:
   description: >
     The clean measurement. Reports are the only channel carrying facts and facts
@@ -15,12 +21,22 @@ phase_1_report_only_deterministic:
     deterministic authoring is genuinely deterministic.
   derived_controller_policy: contextual_weighted_v1
   overrides: {}                       # this is the template as written
+  requires_merge: false
+  target_alignment_comes_from: >
+    task.controller_fact_scores, which drives -base_score in the ranking key. One
+    score field per task, so it cannot encode two opposite targets: either use two
+    task directories per setup differing only in that field, or accept target-blind
+    fact choice where the arms differ only in the recommendation text.
 
 phase_2_report_only_llm:
   description: >
     Adds the language-model controller, changing exactly one thing. Phase 1 is
     the reference it has to be scored against.
   derived_controller_policy: llm_authored_fixed_report_only_v1
+  requires_merge: false
+  target_alignment_comes_from: >
+    the model, which is told the target and picks from the ranked eligible set, so
+    target-blind scores are fine here.
   overrides:
     game.options.board.communication_profile: report_only    # unchanged
     control.options.controller_authoring: llm_authored

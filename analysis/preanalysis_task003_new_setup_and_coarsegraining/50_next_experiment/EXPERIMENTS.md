@@ -214,6 +214,110 @@ machinery is already there — `../30_coarse_graining/` and
 at half. An uninterpretable episode-scope result is worth nothing, and that is
 precisely what happened to the last batch.
 
+## 3c. Do we need the merge? — corrected
+
+**No, not for `b = 3`, and not for phase 1 either.** An earlier version of these
+notes said the merge was a prerequisite. That was wrong, and tracing why turned
+up a design decision that had been hidden.
+
+### `b = 3` needs nothing
+
+`intervention_budget: 3` is per-round on `dev/rsanchez` and it is the *only*
+behaviour there. The merge adds the *choice* of scope, not the per-round
+protocol.
+
+### The shared neutral pool does not need the merge either
+
+`controller_report_pool_mode: frozen` — the default on both branches — returns
+`task.controller_reportable_fact_ids` **with no reference to the target**. It is
+already target-independent. The archived bug was never in this mechanism; it was
+in the pool's *content*, which had been selected for `ALLOCATION_2` and then
+reused.
+
+So writing our 12 neutral facts into
+`facts/controller_reportable_facts.json` gives the shared pool directly, on
+`dev/rsanchez`, unmerged. And `validate_truthful_report_task` explicitly permits
+the target to be either the task's declared target *or* the ground truth, so
+both arms pass. Its code comment is the original justification:
+
+> A frozen adversarial pool is also scientifically valid for the ground-truth
+> counterpart: every report remains a true task fact and the decisive subset
+> proves the ground truth.
+
+That reasoning is what allowed a decoy-selected pool to serve the truth arm.
+With a *neutral* pool the same permission becomes legitimate.
+
+### The thing that actually matters: where target alignment comes from
+
+With **`deterministic`** authoring the facts are chosen by
+`select_truthful_reports`, ranked on
+
+```
+(not cooldown_eligible, reuse_count, live_count, -base_score, tie_hash, fact_id)
+```
+
+where `base_score` comes from `task.controller_fact_scores`. The tie hash is
+over `(episode_seed, task_id, round_index, fact_id)` — **not the target.** So if
+the scores are absent or equal, **the fact choice is target-blind**: both arms
+rotate through the same 12 facts in the same order, and only the recommendation
+text differs.
+
+With **`llm_authored`** the model is told the target and picks from the ranked
+eligible set, so alignment comes from the model and target-blind scores are
+fine.
+
+### And this is what Darius's `balanced` mode does
+
+His change **forces the score to zero** whenever the pool mode is not `frozen`:
+
+```python
+base_score = (
+    0.0
+    if self.controller_fact_pool_mode != CONTROLLER_FACT_POOL_FROZEN
+    else float(base_scores.get(fact_id, 0.0))
+)
+```
+
+That is deliberate and defensible — the task's stored scores were computed for
+its declared false target, so reusing them with a balanced pool would re-import
+the slant. But the consequence is that **`controller_fact_pool_mode: balanced`
+plus `deterministic` authoring cannot select facts toward a target at all.**
+
+Which means his `29-09-2026-task004-classical-b3-gated-balanced` truth and false
+arms differ only in the recommendation text, not in which facts get posted.
+That may be exactly what he intended; it is worth asking him, and it is worth us
+not inheriting it by accident.
+
+### So, concretely
+
+| what we want to run | merge needed? |
+|---|---|
+| `b = 3` per round | **no** |
+| shared neutral 12-fact pool, both arms | **no** — `frozen` mode plus our own `facts/controller_reportable_facts.json` |
+| `deterministic` authoring that **selects facts toward its target** | **no**, and in fact the merge's `balanced` mode would *prevent* it. Needs per-target `controller_fact_scores` |
+| `llm_authored` authoring | **no** |
+| **`B`, episode-scope budget** | **yes** |
+| `all_nondecisive` pool, `public_ledger` controller memory | yes (we want neither) |
+
+**Phase 1 runs on `dev/rsanchez` today.** The merge is for phase 4.
+
+### The one real cost of going unmerged
+
+`controller_fact_scores` is a **single field per task**, so it cannot encode
+alignment toward two opposite targets at once. Two options:
+
+1. **Two task directories per setup** — four in total — with identical facts and
+   identical pool, differing *only* in the score field (one scored toward A0,
+   one toward A2). Ugly but fully auditable: a diff shows one field changed.
+2. **Accept target-blind fact choice** and let the arms differ only in the
+   recommendation. That is a narrower but perfectly clean experiment — *does a
+   recommendation steer, with evidence held constant?* — and it is what Darius's
+   balanced configs already do.
+
+Option 1 is what our design intends. Option 2 is worth running *as well*,
+because the contrast between them separates **evidence selection** from **bare
+recommendation**, which is a question neither setup currently answers.
+
 ## 4. How many runs is that?
 
 A **cell** = one (setup, arm, ρ, settings) combination.
@@ -274,11 +378,11 @@ uninterpretable.
 
 ## 6. Two prerequisites
 
-1. **Merge `origin/darius-MA-v1`.** Four controller options do not exist on
-   `dev/rsanchez`: `controller_fact_pool_mode` (the target-independent menu),
-   `controller_budget_scope`, `controller_round_budget_mode`,
-   `controller_memory_mode`. There is no workaround.
-2. **Build the two task directories.** Each needs exactly two new files —
-   `private/N24_assignment.json` and `controller/balanced_fact_pool.json` — both
-   already generated in `designs/*.json`. Everything else is copied from
-   `task_003` unchanged.
+1. **Build the two task directories** — see §3c: phase 1 needs **no merge**.
+   Use `controller_report_pool_mode: frozen` with our 12 facts written into
+   `facts/controller_reportable_facts.json`. Merge `origin/darius-MA-v1` before
+   phase 4 (episode-scope `B`), which needs `controller_budget_scope`.
+2. **Decide the scoring question in §3c** — per-target
+   `controller_fact_scores` in two task directories per setup, or target-blind
+   fact choice. This determines whether the arms differ in *which facts* get
+   posted or only in the *recommendation*.
