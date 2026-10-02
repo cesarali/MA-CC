@@ -14,19 +14,30 @@ facts removed from the agents. Six experiments.
 
 **Two of those three choices should change.**
 
-**Drop the two target-specific pools.** Use Darius's single *balanced* pool
-instead: one 27-fact pool, 9 facts leaning to each allocation, strength-matched
+**Drop the two target-specific pools.** *(Superseded 2026-10-02: use the
+neutral shared pool in [`designs/`](designs/), not Darius's balanced pool
+directly — his whole pool has joint posterior 1.0 for the truth and contains a
+size-6 proof, so his truth controller could simply hand over a proof. The
+reasoning below for preferring one shared pool over two still holds.)*
+Use a single *balanced* pool instead: one 27-fact pool, 9 facts leaning to each allocation, strength-matched
 across halves. Two pools means the A0 and A2 arms differ in both *what the
 controller may say* and *what it chooses to say*, and those cannot then be
 separated. One pool makes the menu identical and attributes every directional
 difference to the selection policy. It is also already built, frozen and
 audited, and excluded from the pairing hash so the baseline is reusable.
 
-**Keep the decisive-fact factor.** This is the part of the sketch that is
-genuinely new — it is in neither v0.4 nor Darius's studies. Removing the six
-decisive facts from the agents removes the population's ability to reach
-certainty on its own, so control is no longer competing against an available
-proof. That is a clean mechanism question and it is cheap to run.
+**Keep the decisive-fact factor — but it is not new.** *(Corrected
+2026-10-02: an earlier version of this document called it novel. It is not.)*
+`task_004` on `darius-MA-v1` **is** `task_003` with the decisive facts removed;
+its `task.json` records `derived_from: {task_id: task_003, change: "decisive
+facts removed with their holders"}`, and the set arithmetic checks exactly.
+
+The factor is still worth keeping, because Darius's version removes the decisive
+facts **together with their holders**, dropping the population from 24 agents to
+15. That confounds proof availability with population size, with the number of
+distinct facts (21 → 15), and with per-fact redundancy. Holding the population at
+24 and *replacing* the six facts isolates the factor. Both corrected setups are
+in [`designs/`](designs/).
 
 So the design is **3 arms × 2 decisive conditions**, not 6 separate experiments:
 
@@ -163,12 +174,12 @@ Unchanged from the archived setup, which worked:
 - `communication_profile: report_only` for the first pass. `full` (reports plus
   requests) is a second factor, and v0.4 postpones it to priorities 3–4.
 
-**The one change: the decisive-fact factor.** In the withheld condition the six
-decisive facts are removed from the agents' packets. The replacement facts must
-be drawn so that packet *size* is unchanged — otherwise the condition confounds
-"no proof available" with "less evidence available". This needs a small offline
-construction and an audit of the resulting pooled posterior, in the manner of
-`audit_target_pools.py`. **Not yet written.**
+**The one change: the decisive-fact factor.** *(Updated 2026-10-02: this is now
+built.)* Each agent holds **exactly one fact**, not a packet — 24 agents, 24
+slots. Both setups hold the population at 24 agents with slot-level lean balance
+8/8/8, and differ only in whether the decisive facts are present. See
+[`designs/`](designs/) for the fact lists, and [`builders/`](builders/) for the
+search that produced them.
 
 ### Controller
 

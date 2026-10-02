@@ -1,0 +1,225 @@
+{
+  "name": "task003-symmetric-v0-reference",
+  "status": "ARCHIVED - this is what was actually run",
+  "note": "The configuration behind study 21-09-2026-full-vs-report-v1 and all of our coarse-graining calibration. Kept as the comparison baseline: it is the only setup with data (20,730 per-round rows) and validated estimators. Its controller pool is the DEFECTIVE one - admission was evaluated once for ALLOCATION_2 and reused for both targets, so both arms quote the same 24 facts.",
+  "task": "task_003",
+  "world": [
+    3,
+    1,
+    1,
+    2,
+    2,
+    1,
+    1,
+    1,
+    2
+  ],
+  "gold_target": "ALLOCATION_0",
+  "population_size": 24,
+  "facts_per_agent": 1,
+  "agents": {
+    "distinct_facts": [
+      "cf_x00_ge_2",
+      "cf_x00_ge_x04",
+      "cf_x01_eq_x05",
+      "cf_x01_le_2",
+      "cf_x01_le_x02",
+      "cf_x01_le_x04",
+      "cf_x01_le_x05",
+      "cf_x02_ge_x05",
+      "cf_x02_le_x03",
+      "cf_x02_le_x04",
+      "cf_x03_ge_x05",
+      "cf_x03_le_x04",
+      "cf_x04_eq_2",
+      "cf_x04_le_2",
+      "cf_x05_le_2",
+      "cf_x06_le_x08",
+      "cf_x07_le_2",
+      "cf_x07_le_x08",
+      "cf_x08_eq_2",
+      "cf_x08_ge_2",
+      "cf_x08_le_2"
+    ],
+    "n_distinct": 21,
+    "distinct_lean_A0_A1_A2": [
+      13,
+      5,
+      3
+    ],
+    "slot_lean_A0_A1_A2": [
+      16,
+      5,
+      3
+    ],
+    "slot_multiplicity": {
+      "cf_x00_ge_2": 1,
+      "cf_x00_ge_x04": 2,
+      "cf_x01_eq_x05": 1,
+      "cf_x01_le_2": 1,
+      "cf_x01_le_x02": 1,
+      "cf_x01_le_x04": 1,
+      "cf_x01_le_x05": 1,
+      "cf_x02_ge_x05": 1,
+      "cf_x02_le_x03": 2,
+      "cf_x02_le_x04": 1,
+      "cf_x03_ge_x05": 1,
+      "cf_x03_le_x04": 1,
+      "cf_x04_eq_2": 1,
+      "cf_x04_le_2": 1,
+      "cf_x05_le_2": 1,
+      "cf_x06_le_x08": 1,
+      "cf_x07_le_2": 1,
+      "cf_x07_le_x08": 2,
+      "cf_x08_eq_2": 1,
+      "cf_x08_ge_2": 1,
+      "cf_x08_le_2": 1
+    },
+    "multiplicity_range": [
+      1,
+      2
+    ],
+    "joint_posterior": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "decisive_held": [
+      "cf_x00_ge_x04",
+      "cf_x01_le_x04",
+      "cf_x01_le_x05",
+      "cf_x02_le_x03",
+      "cf_x06_le_x08",
+      "cf_x07_le_x08"
+    ],
+    "minimal_proofs_assemblable": 4,
+    "agent_assignments": {
+      "agent_001": [
+        "cf_x07_le_x08"
+      ],
+      "agent_002": [
+        "cf_x01_le_x05"
+      ],
+      "agent_003": [
+        "cf_x00_ge_x04"
+      ],
+      "agent_004": [
+        "cf_x02_le_x03"
+      ],
+      "agent_005": [
+        "cf_x06_le_x08"
+      ],
+      "agent_006": [
+        "cf_x01_le_x04"
+      ],
+      "agent_007": [
+        "cf_x07_le_2"
+      ],
+      "agent_008": [
+        "cf_x01_le_2"
+      ],
+      "agent_009": [
+        "cf_x03_le_x04"
+      ],
+      "agent_010": [
+        "cf_x01_eq_x05"
+      ],
+      "agent_011": [
+        "cf_x08_eq_2"
+      ],
+      "agent_012": [
+        "cf_x00_ge_x04"
+      ],
+      "agent_013": [
+        "cf_x02_le_x03"
+      ],
+      "agent_014": [
+        "cf_x04_eq_2"
+      ],
+      "agent_015": [
+        "cf_x02_ge_x05"
+      ],
+      "agent_016": [
+        "cf_x00_ge_2"
+      ],
+      "agent_017": [
+        "cf_x08_ge_2"
+      ],
+      "agent_018": [
+        "cf_x03_ge_x05"
+      ],
+      "agent_019": [
+        "cf_x01_le_x02"
+      ],
+      "agent_020": [
+        "cf_x02_le_x04"
+      ],
+      "agent_021": [
+        "cf_x05_le_2"
+      ],
+      "agent_022": [
+        "cf_x08_le_2"
+      ],
+      "agent_023": [
+        "cf_x07_le_x08"
+      ],
+      "agent_024": [
+        "cf_x04_le_2"
+      ]
+    }
+  },
+  "controller_pool": {
+    "fact_ids": [
+      "cf_x00_ge_x02",
+      "cf_x00_ge_x05",
+      "cf_x01_ge_x02",
+      "cf_x01_ge_x05",
+      "cf_x01_le_x03",
+      "cf_x02_eq_1",
+      "cf_x02_eq_x05",
+      "cf_x02_ge_x05",
+      "cf_x02_le_2",
+      "cf_x02_le_x04",
+      "cf_x03_eq_2",
+      "cf_x03_eq_x04",
+      "cf_x03_ge_2",
+      "cf_x03_ge_x05",
+      "cf_x03_le_x04",
+      "cf_x04_ge_2",
+      "cf_x04_ge_x05",
+      "cf_x05_eq_1",
+      "cf_x05_le_2",
+      "cf_x06_ge_x07",
+      "cf_x07_eq_1",
+      "cf_x07_le_2",
+      "cf_x08_eq_2",
+      "cf_x08_le_2"
+    ],
+    "size": 24,
+    "lean_A0_A1_A2": [
+      9,
+      6,
+      9
+    ],
+    "joint_posterior": [
+      0.307692,
+      0.0,
+      0.692308
+    ],
+    "proves_any_allocation": false,
+    "minimal_proofs_inside": 0,
+    "shared_by_both_targets": true,
+    "defect": "admission evaluated once for ALLOCATION_2 and reused for the ALLOCATION_0 arm"
+  },
+  "overlap_agents_pool": [
+    "cf_x02_ge_x05",
+    "cf_x02_le_x04",
+    "cf_x03_ge_x05",
+    "cf_x03_le_x04",
+    "cf_x05_le_2",
+    "cf_x07_le_2",
+    "cf_x08_eq_2",
+    "cf_x08_le_2"
+  ],
+  "n_overlap": 8
+}
