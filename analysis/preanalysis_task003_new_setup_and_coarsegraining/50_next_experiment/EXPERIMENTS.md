@@ -131,6 +131,89 @@ a reviewer asks for it.
 
 ---
 
+## 3b. The budget protocol — decided
+
+### Which branch has what
+
+| | meaning | available |
+|---|---|---|
+| **`b`, per round** | the controller gets a fresh allowance of `b` facts every round | **both branches.** On `dev/rsanchez` this is the *only* behaviour and the default: the module docstring describes "an exact budget `b` of randomly placed controlled positions", one decision per round |
+| **`B`, per episode** | one reservoir for all 30 rounds; the controller decides when to spend it | **`darius-MA-v1` only** (`controller_budget_scope: episode`) |
+
+So per-round `b` does work on `dev/rsanchez`. What is missing there is the
+*option to choose* — `controller_budget_scope` does not exist, so per-round is
+simply what you get.
+
+> ### ⚠️ A silent-failure trap
+>
+> `from_options` on `dev/rsanchez` **accepts and discards** keys it does not
+> know, with no error and no warning. Verified by direct call. So on that branch:
+>
+> - `controller_budget_scope: episode` is **silently ignored** and the run
+>   executes **per-round** — a config that looks like v0.4's priority-1
+>   experiment but is actually priority-2.
+> - `controller_fact_pool_mode: balanced` is **silently ignored**, and the pool
+>   falls back to `controller_report_pool_mode: frozen`, which returns the
+>   task's `facts/controller_reportable_facts.json`. If that file is copied from
+>   `task_003` unchanged, the run uses **the original defective 24-fact pool** —
+>   the exact bug this whole redesign exists to fix, reintroduced invisibly.
+>
+> Mitigation, and it is cheap: write our 12-fact pool into **both**
+> `controller/balanced_fact_pool.json` *and*
+> `facts/controller_reportable_facts.json` in the new task directories, so even
+> a silent fallback lands on the right pool. See
+> [`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) §2.
+
+### Decision: `b = 3` per round for phases 1–3
+
+Two reasons, and the first is about our estimator rather than about control.
+
+**An episode reservoir breaks the exact path-KL calculation.** The remaining
+budget is a state variable that evolves over the episode and is *not* in our
+4-state coarse-graining. It is also strongly non-Markov in a specific way: it
+only ever decreases, so it carries the episode's entire intervention history.
+The four Markov tests already found about 0.015 nats/step of unexplained memory
+at ρ = 0.75 with a *fixed* per-round dose; an episode reservoir adds a second
+memory channel on top of that.
+
+To stay Markov we would have to add remaining-budget to the state. At B = 90
+that is 91 values; binned to three levels it gives 4 × 3 = 12 states. Our bin
+sweep showed **8** states already leaves thinly-estimated rows at ~1,800
+transitions per cell, so 12 needs substantially more episodes.
+
+**It also makes the dose endogenous.** A controller that spends early produces
+different exposure from one that spends late, so comparing the truth and false
+arms would confound policy *timing* with evidence *content* — the same class of
+confound as the activation gate we are switching off.
+
+### But yes, `B` is worth pursuing — as phase 4, and for a specific reason
+
+v0.4 is right that it is the richer object: with a reservoir, *temporal
+allocation becomes part of the controller policy*. "The controller learned when
+to intervene" is a stronger result than "the controller posted three facts every
+round."
+
+The clean way to get it is **the matched pair**, which is v0.4's own design:
+
+```
+b = 3  per round   over 30 rounds  =  90 total
+B = 90 per episode over 30 rounds  =  90 total
+```
+
+Total capacity is identical, so the contrast isolates **one thing: whether the
+controller may choose its own timing.** That is a publishable comparison and it
+needs no new factor beyond the scope flag. Likewise `b = 6` against `B = 180`.
+
+**Conditions before trusting any path quantity from it:** augment the
+coarse-grained state with a 3-level remaining-budget coordinate, and **re-run
+the four Markov tests on the augmented chain** before reporting anything. The
+machinery is already there — `../30_coarse_graining/` and
+`../scripts/run_four_tests.py`.
+
+**If we can only afford one**, run per-round at full precision rather than both
+at half. An uninterpretable episode-scope result is worth nothing, and that is
+precisely what happened to the last batch.
+
 ## 4. How many runs is that?
 
 A **cell** = one (setup, arm, ρ, settings) combination.

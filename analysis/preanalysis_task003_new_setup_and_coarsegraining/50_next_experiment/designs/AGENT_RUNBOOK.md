@@ -50,6 +50,18 @@ grep -c CONTROLLER_FACT_POOL_BALANCED \
 (it is a truth-arm-only override, and it raises unless the pool contains every
 decisive fact, which ours does not).
 
+**And an unmerged branch fails silently, not loudly.** Confirm on the resolved
+control object, not just by reading the config:
+
+```python
+c = RelationalRoundBudgetedControl.from_options(opts)
+assert hasattr(c, "controller_fact_pool_mode"), "darius-MA-v1 not merged"
+assert hasattr(c, "controller_budget_scope"),   "darius-MA-v1 not merged"
+```
+
+Without the merge both keys are accepted and thrown away, and the run uses the
+task's frozen pool and a per-round budget while the config claims otherwise.
+
 ### 1b. The two task directories do not exist yet
 
 Build them per §2 before writing any config.
@@ -78,6 +90,22 @@ For each of `task003_symmetric_v2` and `task003_nosolution_v2`:
    `scripts/local/build_balanced_controller_pool.py` emits, but set `rule` to
    name *our* construction — ours adds a "proves no allocation" constraint that
    Darius's does not have.
+5. **Write the same 12 fact IDs into `facts/controller_reportable_facts.json`**,
+   replacing the copied `task_003` version, and update
+   `controller_eligible_fact_count` in `task.json` from 24 to 12.
+
+   **This step is a safety net, not bookkeeping.** `from_options` on
+   `dev/rsanchez` silently accepts and discards keys it does not know — verified
+   by direct call, no error and no warning. So if the merge in §1a is missing or
+   incomplete, `controller_fact_pool_mode: balanced` is ignored, the pool falls
+   back to `controller_report_pool_mode: frozen`, and `frozen` returns
+   `facts/controller_reportable_facts.json`. Copied from `task_003` unchanged
+   that is **the original defective 24-fact pool** — the bug this redesign
+   exists to fix, reintroduced invisibly with no error. Writing our 12 facts
+   there makes the fallback land on the right pool.
+
+   The same trap applies to `controller_budget_scope: episode`, which on
+   `dev/rsanchez` is silently ignored and runs **per-round** instead.
 
 ### Verify before going further
 
@@ -139,6 +167,7 @@ silent runs because the agents' communication profile changed, plus 8 controlled
 | `controller_authoring` requires `adaptive_communication` | keep `controller_actuation_mode: adaptive_communication` |
 | the top-level `budget:` block is **money**, not control | the control budget is `intervention_budget` + `controller_budget_scope` |
 | `controller_report_max_posts_per_fact` | must be ≥ the budget actually spent |
+| **unknown option keys are silently discarded** on `dev/rsanchez` — no error | after any config change, assert the *resolved* control object actually carries `controller_fact_pool_mode` and `controller_budget_scope`; if `hasattr` is false, the merge is missing and the run will quietly use the wrong pool |
 
 Copy `pricing`, `budget`, `logging`, `storage`, `analysis`, `metrics`,
 `observability` and `experiment` from an existing study config unchanged.

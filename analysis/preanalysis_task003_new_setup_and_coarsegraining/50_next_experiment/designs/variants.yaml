@@ -102,6 +102,20 @@ later_factors:
   budget_scope:
     control.options.controller_budget_scope: episode
     control.options.intervention_budget: [90, 180]   # v0.4's B
+    matched_pairs:
+      - {per_round: 3, episode: 90}    # 30 rounds x 3 = 90: identical total capacity
+      - {per_round: 6, episode: 180}   # 30 rounds x 6 = 180
+    why_worth_running: >
+      The matched pair holds TOTAL capacity fixed and varies only whether the
+      controller may choose its own timing, which is a clean contrast and is
+      v0.4's own design. With a reservoir, temporal allocation becomes part of
+      the controller policy -- the richer object.
+    required_before_trusting_path_quantities: >
+      Augment the coarse-grained state with a 3-level remaining-budget
+      coordinate and re-run the four Markov tests on the augmented chain
+      (../30_coarse_graining/, ../scripts/run_four_tests.py). The remaining
+      budget only ever decreases, so it carries the whole intervention history
+      and is strongly non-Markov if left out of the state.
     note: >
       An episode reservoir makes the remaining budget a hidden state variable, a
       second memory channel on top of the one the coarse-graining already fails
