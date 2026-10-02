@@ -5,6 +5,16 @@ been launched.
 
 ## Read in this order
 
+**If you just want to know what we are running:**
+[`EXPERIMENTS.md`](EXPERIMENTS.md) — the two setups, their arms, the three
+phases of settings, and the cell counts.
+
+**If you are building the configs:**
+[`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) — step by step.
+
+The rest, in order:
+
+
 | # | file | what it is |
 |---|---|---|
 | 1 | [`prior_art_2026-10-02.md`](prior_art_2026-10-02.md) | What already exists: Darius's balanced controller pool and `task_004` studies on `darius-MA-v1`, plan v0.4, and how the two externally-written files in `../10_task_and_facts/` fit |

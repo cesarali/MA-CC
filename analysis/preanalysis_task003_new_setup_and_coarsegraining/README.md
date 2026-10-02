@@ -2,10 +2,14 @@
 
 > ## Building the next experiment? Go straight here.
 >
-> **[`50_next_experiment/designs/`](50_next_experiment/designs/)** — the two new
-> setups, `task003-symmetric` and `task003-nosolution`, with every property
-> tabulated, the fact lists as JSON, and step-by-step build instructions. Its
-> `README.md` is the single source of truth; read it in full before building.
+> **What are we running?** →
+> [`50_next_experiment/EXPERIMENTS.md`](50_next_experiment/EXPERIMENTS.md)
+>
+> **Building the configs?** →
+> [`50_next_experiment/designs/AGENT_RUNBOOK.md`](50_next_experiment/designs/AGENT_RUNBOOK.md)
+>
+> **Every property and fact list?** →
+> [`50_next_experiment/designs/`](50_next_experiment/designs/)
 >
 > Neither setup exists yet. Each needs exactly two files written: a 24-agent
 > private assignment and a 12-fact controller pool. Everything else is reused

@@ -55,13 +55,16 @@ This routing instruction does not authorize automatic uploads.
 
 ### The next MuSR blackboard-control setups
 
-Two candidate setups, `task003-symmetric` and `task003-nosolution`, are
-specified in
-`analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/README.md`.
-Read that file in full before building or configuring either. It is the single
-source of truth: it tabulates every property, says which setup already exists
-and which must be built, explains how to read the JSON fact lists beside it, and
-gives the build steps.
+Two candidate setups, `task003-symmetric-v2` and `task003-nosolution-v2`, are
+specified under
+`analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/`.
+
+- **To build or launch them**, read
+  `50_next_experiment/designs/AGENT_RUNBOOK.md` in full first. It lists the
+  blockers, the build steps, the configuration traps, and what not to do.
+- **For what the experiments are**, `50_next_experiment/EXPERIMENTS.md`.
+- The settings live in `50_next_experiment/designs/config_template.yaml`, with
+  per-phase overrides in `variants.yaml`.
 
 Two things that are easy to get wrong and are covered there: the
 `balanced` controller pool mode does not exist on `dev/rsanchez` (it is on
