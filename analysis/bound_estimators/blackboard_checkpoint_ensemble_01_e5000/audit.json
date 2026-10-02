@@ -1,0 +1,78 @@
+{
+ "n_round_rows": 14440,
+ "n_parents_total": 160,
+ "complete_paths": 1428,
+ "exclusions": [
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0026",
+   "comparison": "q12_rho1.00_always_b3",
+   "reason": "missing target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0032",
+   "comparison": "q12_rho1.00_always_b3",
+   "reason": "missing target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0026",
+   "comparison": "q12_rho1.00_always_b12",
+   "reason": "missing target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0032",
+   "comparison": "q12_rho1.00_always_b12",
+   "reason": "missing target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0026",
+   "comparison": "q12_rho1.00_sensing_b3",
+   "reason": "missing target0,target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0032",
+   "comparison": "q12_rho1.00_sensing_b3",
+   "reason": "missing target0,target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0026",
+   "comparison": "q12_rho1.00_sensing_b12",
+   "reason": "missing target0,target2"
+  },
+  {
+   "parent_id": "b7f7faabcc80dc4c650ce4574db97e12631e1f8e2319accf0f662fd135fc92eb::run:run/run-0032",
+   "comparison": "q12_rho1.00_sensing_b12",
+   "reason": "missing target0,target2"
+  }
+ ],
+ "comparison_counts": {
+  "q3_rho0.70_always_b3": 40,
+  "q3_rho0.70_always_b12": 40,
+  "q3_rho0.70_sensing_b3": 40,
+  "q3_rho0.70_sensing_b12": 40,
+  "q3_rho1.00_always_b3": 40,
+  "q3_rho1.00_always_b12": 40,
+  "q3_rho1.00_sensing_b3": 40,
+  "q3_rho1.00_sensing_b12": 40,
+  "q12_rho0.70_always_b3": 40,
+  "q12_rho0.70_always_b12": 40,
+  "q12_rho0.70_sensing_b3": 40,
+  "q12_rho0.70_sensing_b12": 40,
+  "q12_rho1.00_always_b3": 38,
+  "q12_rho1.00_always_b12": 38,
+  "q12_rho1.00_sensing_b3": 38,
+  "q12_rho1.00_sensing_b12": 38
+ },
+ "per_setting_parents": {
+  "q3_rho0.70": 40,
+  "q3_rho1.00": 40,
+  "q12_rho0.70": 40,
+  "q12_rho1.00": 40
+ },
+ "provenance": {
+  "package_version": "0.1.0",
+  "archive": "/Users/rsanchez/Projects/agents_control/paired_parent_exp/simulation_data/archives/blackboard-checkpoint-ensemble-01_analysis.zip",
+  "archive_sha256": "248a28daf90f17e55ca7105782895c2c333e41b976252e58100bf4545e43fdeb",
+  "config": "configs/analysis/bound_estimators/blackboard_checkpoint_ensemble_01_e5000.yaml",
+  "frozen_inputs_sha256": "c501afc668fe7dc5578e06e158f6a50dd64a9800dd2866873224358c64fdd395"
+ }
+}

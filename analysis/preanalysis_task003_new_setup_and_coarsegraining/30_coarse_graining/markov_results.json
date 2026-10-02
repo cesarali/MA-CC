@@ -1,0 +1,74 @@
+[
+ {
+  "variable": "V",
+  "n_states": 3,
+  "n_test_transitions": 2769,
+  "weighted_TV": 0.1462135282557818,
+  "loglik_silent_kernel": -2756.7379367103977,
+  "loglik_own_kernel": -2093.1109957584317,
+  "LR_statistic": 1327.2538819039319,
+  "dof": 6,
+  "LR_per_dof": 221.208980317322,
+  "contrast": "silent -> A2 gate-OFF (should MATCH)"
+ },
+ {
+  "variable": "V",
+  "n_states": 3,
+  "n_test_transitions": 3292,
+  "weighted_TV": 0.16573284704360042,
+  "loglik_silent_kernel": -3516.561494312349,
+  "loglik_own_kernel": -2702.3564624951027,
+  "LR_statistic": 1628.4100636344929,
+  "dof": 6,
+  "LR_per_dof": 271.4016772724155,
+  "contrast": "silent -> A2 gate-ON (should DIFFER)"
+ },
+ {
+  "variable": "M",
+  "n_states": 4,
+  "n_test_transitions": 2769,
+  "weighted_TV": 0.161644977153725,
+  "loglik_silent_kernel": -2423.7150746561274,
+  "loglik_own_kernel": -1619.3600644150051,
+  "LR_statistic": 1608.7100204822445,
+  "dof": 12,
+  "LR_per_dof": 134.05916837352038,
+  "contrast": "silent -> A2 gate-OFF (should MATCH)"
+ },
+ {
+  "variable": "M",
+  "n_states": 4,
+  "n_test_transitions": 3292,
+  "weighted_TV": 0.11184318520796858,
+  "loglik_silent_kernel": -2639.3617509818514,
+  "loglik_own_kernel": -2007.0968404274588,
+  "LR_statistic": 1264.5298211087852,
+  "dof": 12,
+  "LR_per_dof": 105.37748509239877,
+  "contrast": "silent -> A2 gate-ON (should DIFFER)"
+ },
+ {
+  "variable": "MV",
+  "n_states": 10,
+  "n_test_transitions": 2769,
+  "weighted_TV": 0.24341999476502388,
+  "loglik_silent_kernel": -7173.399297287089,
+  "loglik_own_kernel": -3462.5787436159812,
+  "LR_statistic": 7421.641107342216,
+  "dof": 90,
+  "LR_per_dof": 82.46267897046907,
+  "contrast": "silent -> A2 gate-OFF (should MATCH)"
+ },
+ {
+  "variable": "MV",
+  "n_states": 12,
+  "n_test_transitions": 3292,
+  "weighted_TV": 0.26085887596300367,
+  "loglik_silent_kernel": -10155.593176459632,
+  "loglik_own_kernel": -4447.840385419844,
+  "LR_statistic": 11415.505582079575,
+  "dof": 110,
+  "LR_per_dof": 103.77732347345068,
+  "contrast": "silent -> A2 gate-ON (should DIFFER)"
+ }
+]

@@ -58,3 +58,26 @@ docs/papers/**/*.vrb
 # compiled papers are regenerable; figure PDFs are source and stay tracked
 docs/papers/**/*.pdf
 !docs/papers/**/figures/**/*.pdf
+
+# ---------------------------------------------------------------------------
+# analysis/ — offline analysis projects.
+#
+# Rule: code, prose, LaTeX sources, the small finding tables and the final
+# report PDF are versioned, so collaborators can read the findings without
+# the raw inputs. Everything a script regenerates stays local.
+#
+#   analysis/<project>/results/   regenerable bulk: parquets, job caches,
+#                                 extracted data, run logs. Never versioned.
+#   analysis/<project>/report/    main.tex and the built PDF are versioned;
+#                                 LaTeX intermediates and figures are not
+#                                 (build_report.py regenerates them from the
+#                                 tracked CSVs).
+# ---------------------------------------------------------------------------
+analysis/**/results/
+analysis/**/report/figures/
+analysis/**/report/*.aux
+analysis/**/report/*.out
+analysis/**/report/*.toc
+analysis/**/report/*.log
+analysis/**/report/main.pdf
+analysis/**/*.log

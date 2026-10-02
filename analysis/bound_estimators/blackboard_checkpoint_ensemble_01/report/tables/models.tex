@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Candidate models. Endpoint models output $P(Z=0\mid Y_h)$; path models output a logit that serves as the critic $f$. All standardisation is fitted on training parents only.}\label{tab:models}
+\begin{tabular}{l l p{5.2cm} c p{3.6cm}}
+\toprule
+model & problem & inputs & params & notes \\
+\midrule
+constant & endpoint / path & -- & 0 & $g=\tfrac12$ or $f=0$; scores exactly zero \\
+linear logistic & endpoint & $u=N_0/24,\ v=N_2/24$ & 3 & $\lambda\in\{0.01,0.1,1,10\}$ \\
+quadratic logistic & endpoint & $u,v,u^2,uv,v^2$ & 6 & same $\lambda$ grid \\
+MLP & endpoint & $u,v \to \tanh(4\ \text{or}\ 8) \to \sigma$ & 17 / 33 & $\lambda\in\{0.01,0.1\}$, 3 seeds averaged \\
+linear logistic & path & $Y_0/24,\ Y_h/24,\ \overline{Y_{1:h}}/24$ (6 numbers) & 7 & same $\lambda$ grid \\
+quadratic logistic & path & the 6 summaries and their 21 products & 28 & same $\lambda$ grid \\
+flat MLP & path & $(u_t,v_t,t/10)_{t=0..h}$ flattened $\to \tanh(4/8)$ & 141 / 281 & $\lambda\in\{0.01,0.1\}$ \\
+GRU & path & sequence $(u_t,v_t,t/10)$, hidden 4 / 8, last state $\to$ linear & 113 / 321 & $\lambda\in\{0.01,0.1\}$ \\
+GRU-mean & path & as GRU, mean-pooled hidden states, hidden 4 & 113 & RNEEP-style comparison \\
+GRU-direct & path & GRU-4 trained on $L_{\rm NWJ}$, $f = 5\tanh(s/5)$ & 113 & separate output \\
+\bottomrule
+\end{tabular}
+\end{table}

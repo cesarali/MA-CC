@@ -1,0 +1,11 @@
+{
+ "message_lifetime_rounds": [
+  1
+ ],
+ "surviving_message_count_max": 0.0,
+ "board_mean_size": 12.051695409229781,
+ "board_peak_size": 21.3269657501206,
+ "messages_created_per_round": 21.3269657501206,
+ "n_agent_updates_with_controller_message": 212589,
+ "exposure_rate": 0.9939413610299687
+}

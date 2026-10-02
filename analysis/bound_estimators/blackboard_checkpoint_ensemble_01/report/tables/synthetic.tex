@@ -1,0 +1,23 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Synthetic known-law benchmark (8 agents, horizon 3, two replicates per size; mean $\pm$ spread over replicates). Exact values by path enumeration. $\widehat I_{\rm freq}$ is the in-sample raw frequency estimate. The efficiency is shown when the bootstrap supported it in at least one replicate.}\label{tab:synthetic}
+\begin{tabular}{l c cc c cc cc cc c}
+\toprule
+scenario & $m$ & $I(Z;Y_3)$ & $\widehat L_I$ & $\widehat I_{\rm freq}$ & $\mathcal C$ & $\widehat{\mathcal C}$ & $I(Z;\Gamma)$ & $\widehat L_\Gamma$ & $\eta_{\rm end}$ & $\widehat\eta_{\rm end}$ & gain$\to$0 \\
+\midrule
+identical & 40 & 0.000 & 0.001 $\pm$ 0.001 & 0.323 & 0.00 & -0.01 $\pm$ 0.09 & 0.000 & 0.002 &  &  & -0.01 \\
+identical & 200 & 0.000 & 0.001 $\pm$ 0.001 & 0.058 & 0.00 & -0.01 $\pm$ 0.02 & 0.000 & -0.001 &  &  & +0.03 \\
+generic & 40 & 0.000 & 0.006 $\pm$ 0.003 & 0.095 & 2.58 & 1.29 $\pm$ 0.26 & 0.000 & -0.007 & 0.000 & 0.002 & -0.29 \\
+generic & 200 & 0.000 & -0.001 $\pm$ 0.001 & 0.039 & 2.58 & 2.08 $\pm$ 0.12 & 0.000 & -0.002 & 0.000 & -0.001 & -0.24 \\
+opposite & 40 & 0.489 & 0.443 $\pm$ 0.023 & 0.627 & 1.46 & 1.15 $\pm$ 0.20 & 0.542 & 0.469 & 0.335 & 0.403 & +0.33 \\
+opposite & 200 & 0.489 & 0.444 $\pm$ 0.024 & 0.523 & 1.46 & 1.08 $\pm$ 0.01 & 0.542 & 0.499 & 0.335 & 0.411 & +0.39 \\
+reversed & 40 & 0.489 & 0.481 $\pm$ 0.042 & 0.636 & 1.46 & 1.27 $\pm$ 0.35 & 0.542 & 0.512 & 0.335 & 0.400 & -0.24 \\
+reversed & 200 & 0.489 & 0.458 $\pm$ 0.012 & 0.549 & 1.46 & 1.28 $\pm$ 0.01 & 0.542 & 0.538 & 0.335 & 0.357 & -0.23 \\
+transient & 40 & -0.000 & -0.004 $\pm$ 0.003 & 0.201 & 1.22 & 0.45 $\pm$ 0.11 & 0.481 & 0.344 & -0.000 &  & -0.01 \\
+transient & 200 & -0.000 & -0.000 $\pm$ 0.001 & 0.060 & 1.22 & 0.97 $\pm$ 0.08 & 0.481 & 0.455 & -0.000 & -0.000 & +0.01 \\
+rare\_tail & 40 & 0.693 & 0.642 $\pm$ 0.000 & 0.693 & 6.64 & 3.13 $\pm$ 0.15 & 0.693 & 0.665 & 0.104 & 0.205 & +0.56 \\
+rare\_tail & 200 & 0.693 & 0.642 $\pm$ 0.000 & 0.693 & 6.64 & 3.56 $\pm$ 0.13 & 0.693 & 0.667 & 0.104 & 0.181 & +0.56 \\
+\bottomrule
+\end{tabular}
+\end{table}

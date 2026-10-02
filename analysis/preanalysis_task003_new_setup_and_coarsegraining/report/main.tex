@@ -1,0 +1,453 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black,
+            citecolor=blue!55!black}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+\graphicspath{{figures/}}
+
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Ex}{\mathbb{E}}
+\newcommand{\KL}[2]{D\!\left(#1 \,\|\, #2\right)}
+\newcommand{\A}[1]{\texttt{ALLOCATION\_#1}}
+
+\title{\textbf{Pre-analysis of \texttt{task\_003}: the task, the controller
+defect, and a coarse-graining that makes information quantities estimable}}
+\author{MA-CC blackboard-control study}
+\date{2 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This report consolidates an offline re-analysis of the first batch of
+blackboard-control simulations (study \texttt{21-09-2026-full-vs-report-v1}, 60
+initializations of \texttt{task\_003} with \texttt{gpt-oss-120b}). It reaches
+three conclusions. First, \texttt{task\_003} is fully reconstructible from its
+nine hidden latent values, and the population of agents collectively holds the
+only short proof of the correct answer. Second, the controller used in that
+batch is \emph{not} what its configuration claims: fact admission was evaluated
+once for the decoy target and reused for both steering directions, so the
+truth-targeting arm recommends \A{0} while quoting evidence selected to
+undermine it. Measured target information is $0.022$ bits --- essentially zero.
+Third, the raw population state (a 325-valued vote vector) defeats every
+estimator we tried; binning the mean agent posterior into four states makes the
+path divergence \emph{exactly} computable, but four independent tests agree the
+resulting chain is Markovian only in the silent arm at persistence $\rho = 1$.
+No simulations were run and no provider requests made.
+\end{abstract}
+
+\tableofcontents
+
+\section{Scope and vocabulary}
+
+Three terms recur and are defined once here.
+
+\paragraph{Blackboard.} A shared message board. Each round, every agent may post
+a statement; all posts are visible to all agents in that round, and the board is
+cleared before the next round. Nothing persists on the board itself.
+
+\paragraph{Epistemic persistence $\rho$.} Each agent remembers each fact it holds
+with probability $\rho$, independently per agent, per fact, per round. At
+$\rho = 1$ memory is perfect; at $\rho = 0.75$ a quarter of each agent's
+knowledge decays every round and must be re-acquired from the board to survive.
+
+\paragraph{Controller.} An extra participant that may post selected true facts to
+steer the population toward a named allocation (its \emph{target}). It is
+\emph{silent} in the baseline arm. In the intervention arms its target is either
+\A{0} (the correct answer, called the \emph{truth} direction) or \A{2} (an
+incorrect answer, the \emph{decoy} direction).
+
+\section{What \texttt{task\_003} is}
+
+\subsection{The underlying problem}
+
+The task is a Team Allocation problem in the style of MuSR. Three people must be
+split between two jobs: one person works alone on the first job, the remaining
+two work jointly on the second. There are therefore exactly three candidate
+allocations, one per choice of the lone worker.
+
+Nine hidden integers in $\{1,2,3\}$ describe the world: for each of the three
+people, a skill level at each of the two jobs (six numbers), plus a cooperation
+level for each of the three possible pairs (three numbers). An allocation's score
+is
+\begin{equation}
+  \text{score} = \underbrace{s_{\text{singleton},1}}_{\text{lone worker's skill at job 1}}
+  \;+\; \underbrace{\sum_{p \,\in\, \text{pair}} s_{p,2}}_{\text{pair's skills at job 2}}
+  \;+\; \underbrace{c_{\text{pair}}}_{\text{how well the pair cooperates}} .
+\end{equation}
+The highest-scoring allocation is the correct answer.
+
+\subsection{The specific world}
+
+\texttt{task\_003} is the latent vector
+\begin{equation}
+  V = (3,1,1,2,2,1,\;1,1,2),
+\end{equation}
+reading the six skills first (person by person, job by job) then the three
+cooperation values. Scoring gives \A{0} as the unique winner. We rebuilt the task
+locally from $V$ alone and verified the result is bit-identical to the archived
+frozen task: the cluster copies are not needed to reproduce anything in this
+report.
+
+\subsection{Facts}
+
+A \emph{fact} is a true natural-language proposition about the world, drawn from
+a fixed catalog of 99 propositions: 45 \emph{threshold} statements (``person $p$
+has at least moderate skill at job $j$'') and 54 \emph{comparison} statements
+(``$p$ is better than $p'$ at job $j$''). Of these, \textbf{49 are true in
+\texttt{task\_003}} and only those can ever be posted. Nobody lies in these
+simulations; steering is done purely by \emph{which} true facts get said.
+
+\subsection{Exact posterior}
+
+Because the world is only nine ternary numbers, we enumerate all
+$3^9 = 19{,}683$ candidate worlds, keep the $14{,}388$ with a unique winner, and
+for any set $S$ of facts compute the posterior exactly by filtering:
+\begin{equation}
+  \Prob(\A{k} \mid S) = \frac{\#\{w : w \models S,\; \text{winner}(w) = k\}}
+                            {\#\{w : w \models S\}} .
+  \label{eq:posterior}
+\end{equation}
+This is a count, not an estimate. It is the ground truth against which every
+agent's belief is scored. Implementation: \texttt{10\_task\_and\_facts/engine.py}.
+
+\subsection{Who can prove the answer}
+
+A set $S$ \emph{solves} the task if every surviving world has \A{0} as winner,
+i.e.\ $\Prob(\A{0} \mid S) = 1$. Enumerating minimal solving sets:
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+quantity & value \\
+\midrule
+smallest solving set & \textbf{4 facts} \\
+number of 4-fact proofs & 24 \\
+minimal proofs up to size 6 & 7{,}694 \\
+minimal proofs the agents can jointly assemble & \textbf{4} \\
+minimal proofs the controller's pool can assemble & \textbf{0} \\
+facts held by nobody & 12 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The fact \texttt{cf\_x00\_eq\_3} appears in \emph{every} 4-fact proof and is in
+nobody's starting hand. The population therefore holds the only short route to
+certainty, and barely: four proofs out of 7{,}694.
+
+\paragraph{Private-eligibility.} A fact is eligible to be handed out privately
+when it is individually weak: $\max_k \Prob(\A{k} \mid \{f\}) \le 0.45$
+\emph{and} its normalized posterior entropy is $\ge 0.90$. Both conditions must
+hold. 41 of the 49 facts qualify; the remaining 8 are too revealing to
+distribute and are given to no one.
+
+\paragraph{The decisive set.} A greedy search over the 41 private-eligible facts
+produces a 6-fact set reaching $\Prob(\A{0}) = 1$. These six are the
+\emph{decisive} facts. They are a \emph{subset} of the private-eligible ones ---
+the two categories are nested, not disjoint, which is easy to double-count.
+
+\section{The controller defect}
+
+\subsection{What went wrong}
+
+Admission of a fact into the controller's pool is decided by whether it moves the
+posterior toward the target, $\Delta\Prob(\text{target} \mid f) > 0$, together with
+a non-decisiveness condition. In the archived batch this test was evaluated
+\textbf{once, for the decoy target \A{2}}, and the resulting 24-fact pool was
+reused for both configurations. Excluding decisive facts removes only 3 of them,
+all \A{2}-favouring.
+
+The consequence is stark: in the truth arm the controller \emph{recommends} \A{0}
+while \emph{citing} facts chosen to push the population toward \A{2}. The two
+arms differ mainly in how often the controller fires at all --- 32\% of rounds in
+the truth arm against 54\% in the decoy arm --- not in what they say.
+
+\begin{quote}
+\textbf{Standing caveat.} The \A{0} arm is confounded. Its numbers must not be
+read as evidence about truth-directed steering. Its recorded \emph{dynamics} are
+sound and are used wherever only dynamics matter.
+\end{quote}
+
+\subsection{The replacement}
+
+A corrected design uses two \emph{matched symmetric pools}: 12 facts each,
+disjoint, built by running the admission test separately per target, and
+verified so that neither pool can prove its own target (otherwise the controller
+would simply hand over the answer). These are stored in
+\texttt{10\_task\_and\_facts/symmetric\_pools.json}.
+
+\section{Coarse-graining the population state}
+
+\subsection{Why the raw state fails}
+
+The natural state --- the vector of which allocation each agent currently
+favours --- takes 325 values in these runs. With 1{,}800 to 5{,}000 transitions
+per cell, most of those states are visited once or never. Critic-based
+(variational) estimators of the path divergence on this space failed every
+reliability check we applied: the estimates did not stabilize with more data and
+their confidence intervals did not cover their own point estimates.
+
+\subsection{The epistemic coordinate}
+
+We replace the vote vector with a single number: the average correctness of
+belief across the population,
+\begin{equation}
+  e_t \;=\; \frac{1}{N}\sum_{j=1}^{N} \Prob\!\left(\A{0} \mid K_j(t)\right),
+  \label{eq:ecoord}
+\end{equation}
+where $K_j(t)$ is the set of facts agent $j$ currently remembers and the
+posterior is the exact count of Eq.~\eqref{eq:posterior}. So $e_t$ is not a
+vote share and not an opinion average; it is ``how close to the truth the
+population's evidence actually puts it,'' measured on the exact posterior.
+
+We then bin $e_t$ into \textbf{four states} with cut points at
+$0.33$, $0.50$, $0.75$. The cuts are semantic rather than data-driven: $1/3$ is
+the prior (knowing nothing), $0.5$ is a bare majority of surviving worlds, and
+$0.75$ is near-certainty. A sweep over 2--6 bins and over quantile versus
+semantic cuts (Fig.~\ref{fig:bins}) shows 3, 4 and 5 bins are statistically
+indistinguishable once resampled across 12 seeds; 4 was chosen for data budget.
+An 8-state version that also tracks knowledge \emph{spread} repairs the
+$\rho = 1$ cells but leaves three rows of the transition matrix estimated from
+too few transitions, so 4 states are used everywhere.
+
+\begin{quote}
+\textbf{Never pool persistence levels.} The binning and the fitted kernel are
+estimated separately for each $\rho$ and each arm.
+\end{quote}
+
+\subsection{Why this buys exactness}
+
+On a finite state space the divergence between two \emph{trajectory laws} has a
+closed form. If $P$ has initial distribution $p_0$ and kernel $T^P$, and $Q$ has
+$q_0, T^Q$, then over $h$ steps
+\begin{equation}
+  \KL{P}{Q} \;=\; \KL{p_0}{q_0}
+  \;+\; \sum_{t=0}^{h-1} \sum_{i} \mu_t(i) \, \KL{T^P(\cdot \mid i)}{T^Q(\cdot \mid i)},
+  \label{eq:pathkl}
+\end{equation}
+with $\mu_t$ the occupancy of $P$ at time $t$. Every term is a finite sum over
+four states. \textbf{There is no critic and no variational bound} --- that is the
+entire point of the coarse-graining.
+
+\section{Is the coarse-grained process Markov?}
+
+Equation~\eqref{eq:pathkl} is exact \emph{for a Markov chain}. Whether the binned
+process is one is an empirical question, and we test it four independent ways.
+
+\begin{enumerate}
+  \item \textbf{Order comparison.} Fit a first-order and a second-order kernel;
+        report the held-out log-likelihood gain per step. A Markov process gains
+        nothing.
+  \item \textbf{Chapman--Kolmogorov.} Compare the empirical $n$-step transition
+        matrix with the $n$-th matrix power of the one-step kernel, in total
+        variation. A Markov process agrees at all $n$.
+  \item \textbf{Conditional independence.} Estimate
+        $I(s_{t+1}; s_{t-1} \mid s_t)$ and compare it with a permutation null.
+        A Markov process has zero.
+  \item \textbf{Lumpability.} Check whether states that were merged behave
+        identically, by splitting each bin on an extra coordinate and measuring
+        how far the two halves' outgoing rows differ.
+\end{enumerate}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_tests}
+  \caption{The first three tests, per persistence level and arm. Green marks the
+  one cell that passes: silent at $\rho = 1$. Test 1 is negative there (a
+  second-order model fits \emph{worse} out of sample), the
+  Chapman--Kolmogorov gap stays near $0.03$ out to five steps, and the
+  conditional mutual information is within noise of its permutation null
+  ($p = 0.15$; every other cell gives $p \approx 0.005$).}
+  \label{fig:tests}
+\end{figure}
+
+\begin{table}[t]
+  \centering
+  \small
+  \begin{tabular}{llrrrrr}
+    \toprule
+    $\rho$ & arm & $n$ & order-2 gain & CK gap ($n{=}5$) & CMI excess (bits) & $p$ \\
+    \midrule
+    0.75 & silent & 1800 & $0.0161$ & $0.106$ & $0.0284$ & 0.005 \\
+    0.75 & A2     & 5055 & $0.0146$ & $0.109$ & $0.0261$ & 0.005 \\
+    0.75 & A0     & 5205 & $0.0139$ & $0.110$ & $0.0225$ & 0.005 \\
+    1.00 & silent & 1800 & $\mathbf{-0.0050}$ & $\mathbf{0.033}$ & $\mathbf{0.0017}$ & \textbf{0.154} \\
+    1.00 & A2     & 2520 & $0.0060$ & $0.078$ & $0.0130$ & 0.005 \\
+    1.00 & A0     & 4350 & $0.0025$ & $0.068$ & $0.0074$ & 0.005 \\
+    \bottomrule
+  \end{tabular}
+  \caption{All four tests agree. Only $\rho = 1$ / silent is Markovian in the
+  four-state coordinate. At $\rho = 0.75$ roughly $0.015$ nats per step of
+  memory is unexplained.}
+  \label{tab:tests}
+\end{table}
+
+\subsection{Why lower persistence makes this harder, not easier}
+
+The intuition that forgetting destroys memory, and so should \emph{help}
+Markovianity, is the wrong way round. Forgetting destroys memory in the agents;
+it does not destroy memory in the \emph{coarse variable}. Two populations with
+the same average correctness $e_t$ can differ in how that correctness is
+distributed --- one where every agent knows a little, one where a few agents know
+a lot. Under perfect memory that difference is frozen and does not affect the
+next step. Under decay the concentrated population loses more, because its
+information sits in fewer places, so the two populations move differently from
+the same value of $e_t$. The hidden coordinate is knowledge \emph{spread}, and
+decay is exactly what makes it matter. The lumpability test confirms it:
+splitting on spread gives the largest row discrepancy in the silent arm
+($0.130$ at $\rho = 0.75$), while under control the worst offender is instead
+the survival of decisive facts.
+
+\section{Information estimates}
+
+\subsection{Quantities}
+
+\paragraph{Path divergence.} $K = \KL{P^{\text{ctl}}}{P^{\text{silent}}}$ from
+Eq.~\eqref{eq:pathkl}: how far intervention displaces the trajectory law from
+silence. Units: nats.
+
+\paragraph{Intervention information.} $I(\text{intervention}; s_{0:h})$, at most
+1 bit: can you tell from the trajectory alone whether a controller was running?
+
+\paragraph{Target information.} $I(\text{target}; s_{0:h})$, also at most 1 bit
+given two targets: can you tell \emph{which way} it was steering? This is the
+quantity a control-efficiency claim rests on.
+
+\paragraph{Efficiency.} $\eta = I(\text{target};\cdot) / C_\pi$, where $C_\pi$ is
+the control cost measured as the accumulated divergence. Bits of achieved
+steering per nat of intervention.
+
+\subsection{Results at horizon $h = 14$}
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{lrrrrr}
+    \toprule
+    $\rho$ & $K(\text{A2} \| \text{silent})$ [nats]
+           & $I(\text{interv.}; s)$ [bits]
+           & $I(\text{target}; s)$ [bits]
+           & $\eta$
+           & posts/episode \\
+    \midrule
+    0.75 & $\mathbf{3.045}$ \,[2.77, 3.28] & $\mathbf{0.294}$ \,[0.26, 0.33] & 0.022 & 0.006 & 69.1 \\
+    1.00 & $\mathbf{1.931}$ \,[1.60, 2.31] & $\mathbf{0.154}$ \,[0.12, 0.19] & 0.004 & 0.001 & 83.9 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Bias-corrected cluster-bootstrap intervals (300 resamples, clustered
+  by initialization). Target information and $\eta$ are \emph{confounded} by the
+  pool defect and are reported for completeness only.}
+  \label{tab:estimates}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_pathkl}
+  \caption{Path divergence from silence as a function of horizon. Intervention is
+  \emph{more} displacing at $\rho = 0.75$ than at $\rho = 1$ despite fewer posts
+  per episode, consistent with a refresh mechanism: at finite persistence the
+  controller's facts keep being re-injected into decaying memories, whereas under
+  perfect memory one post is enough and further posts are redundant.}
+  \label{fig:pathkl}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_mi}
+  \caption{Left: intervention is clearly visible in the coarse state ($0.29$ bits
+  of a possible $1$ at $\rho = 0.75$). Right: the \emph{direction} of steering is
+  not --- note the axis scale. This is the quantitative signature of the pool
+  defect: both arms quote the same facts, so the trajectory cannot tell you which
+  target was configured.}
+  \label{fig:mi}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.62\textwidth]{fig_bins}
+  \caption{Choosing the number of bins. Held-out order-2 gain (lower is more
+  Markovian) against bin count, for quantile and semantic cut points. Dotted line
+  marks the chosen value. Differences among 3, 4 and 5 bins do not survive
+  resampling across seeds.}
+  \label{fig:bins}
+\end{figure}
+
+\subsection{Three warnings about these numbers}
+
+\paragraph{Validity is cell-specific.} Only $\rho = 1$ / silent passes all four
+Markov tests. At $\rho = 0.75$ the numbers carry about $0.015$ nats/step of
+unexplained memory and a Chapman--Kolmogorov gap reaching $0.11$ at five steps.
+Long-horizon path quantities there are indicative, not exact.
+
+\paragraph{\texttt{EP} is not physical dissipation.} The column we compute is the
+Markov-chain irreversibility
+$\sum_{ij} p_i T_{ij} \ln (p_i T_{ij} / p_j T_{ji})$. No reverse protocol has
+been justified for this system, and a sequence-reversal score must not be
+relabelled entropy production. It also \emph{decreases} with horizon here, which
+is what one expects of a transient chain rather than a stationary one.
+
+\paragraph{The bootstrap needed a bias correction.} Resampling episodes with
+replacement duplicates them, which smooths the refitted kernel and pulls any
+divergence systematically toward zero. Raw percentile intervals therefore
+excluded their own point estimates. The intervals in
+Table~\ref{tab:estimates} are shifted by (bootstrap mean $-$ point estimate).
+
+\section{What this means for the next experiment}
+
+\begin{enumerate}
+  \item \textbf{Re-run with matched symmetric pools.} Target information cannot
+        be interpreted until the two arms quote different, comparably strong
+        evidence.
+  \item \textbf{Keep $\rho = 1$ as the primary cell.} It is the only one where
+        the path divergence is exact rather than approximate. Finite persistence
+        remains interesting --- it is where intervention bites hardest --- but
+        needs either the 8-state coordinate or substantially more episodes.
+  \item \textbf{Decide the controller's role deliberately.} It currently holds a
+        pool that can prove nothing (0 of 7{,}694 minimal proofs), while the
+        agents jointly hold 4. Whether the controller should be able to prove its
+        target is a design choice, not a detail, and it determines whether the
+        experiment measures persuasion or disclosure.
+  \item \textbf{Budget for the estimator, not just the simulation.} The binding
+        constraint on every quantity in Table~\ref{tab:estimates} is transitions
+        per (arm, $\rho$) cell, not episodes.
+\end{enumerate}
+
+\section*{Reproducing this}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+step & command \\
+\midrule
+per-round states & \texttt{scripts/build\_states.py} \\
+epistemic coordinate & \texttt{scripts/add\_coordinates.py} \\
+the four tests & \texttt{scripts/run\_four\_tests.py} \\
+bin sweep & \texttt{scripts/bin\_sweep.py} \\
+estimates & \texttt{scripts/estimate.py} \\
+this document & \texttt{scripts/build\_report.py} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+Inputs: the archived study under
+\texttt{agents\_control/new\_rnd\_init\_experiment} (read-only) and the generator
+source in \texttt{src/mas\_cc/musr\_team\_allocation\_generator}. This analysis lives under
+\texttt{analysis/preanalysis\_task003\_new\_setup\_and\_coarsegraining/} and is versioned on
+branch \texttt{dev/rsanchez}; its \texttt{results/} subdirectory (per-round state
+files, logs) is not.
+
+\end{document}

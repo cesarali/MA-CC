@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Frequency / smoothing comparison, averaged over the 16 comparisons (nats). In-sample plug-in MI from (smoothed) endpoint frequencies versus the held-out score of the same smoothed densities used as a Bayes posterior, and the held-out selected-classifier score.}\label{tab:frequency}
+\begin{tabular}{c cccc ccc c}
+\toprule
+& \multicolumn{4}{c}{in-sample $\widehat I_{\rm freq}$, pseudocount $\alpha$} & \multicolumn{3}{c}{held-out smoothed posterior} & \\ \cmidrule(lr){2-5}\cmidrule(lr){6-8}
+$h$ & 0 & 1 & 10 & 100 & 1 & 10 & 100 & classifier \\
+\midrule
+1 & 0.346 & 0.331 & 0.246 & 0.055 & -0.677 & -0.351 & -0.091 & 0.002 \\
+5 & 0.255 & 0.245 & 0.187 & 0.048 & -0.530 & -0.266 & -0.051 & 0.041 \\
+10 & 0.276 & 0.267 & 0.207 & 0.057 & -0.391 & -0.166 & 0.016 & 0.100 \\
+\bottomrule
+\end{tabular}
+\end{table}

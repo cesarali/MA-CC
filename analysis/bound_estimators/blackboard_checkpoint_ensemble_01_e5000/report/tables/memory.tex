@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Memory comparison at $h=10$ over the 32 cost problems (16 comparisons $\times$ 2 targets): GRU-4 critic fed $Y_0$ (to the readout) plus the last $\ell$ vote vectors, versus the full-path selected model.}\label{tab:memory}
+\begin{tabular}{l ccc l}
+\toprule
+observation & mean NWJ$_5$ & median NWJ$_5$ & median NWJ & typical model \\
+\midrule
+$Y_0$ + last 1 & 1.92 & 2.07 & 2.11 & GRU-4, $\lambda$=0.01 \\
+$Y_0$ + last 2 & 1.96 & 1.99 & 1.92 & GRU-4, $\lambda$=0.01 \\
+$Y_0$ + last 4 & 1.90 & 1.77 & 1.69 & GRU-4, $\lambda$=0.01 \\
+full path (selected model) & 2.04 & 1.97 & 1.92 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}

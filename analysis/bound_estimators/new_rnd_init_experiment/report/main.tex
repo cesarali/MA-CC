@@ -1,0 +1,789 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,longtable,adjustbox,microtype}
+\usepackage[dvipsnames]{xcolor}   % hyperref's colour names need xcolor loaded first
+\usepackage{hyperref}
+\usepackage[labelfont=bf,font=small]{caption}
+\graphicspath{{figures/}}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\newcommand{\Chat}{\widehat{\mathcal C}}
+\newcommand{\DKL}{D_{\mathrm{KL}}}
+\title{Observables and efficiencies for the \texttt{21-09-2026-full-vs-report-v1} study\\
+\large A first coherent account of what the controller does to the population}
+\author{Offline analysis, MA-CC}
+\date{2026-09-23}
+\begin{document}
+\maketitle
+\tableofcontents
+\clearpage
+
+\section{What this report is}
+This is an offline analysis of the archived study \texttt{21-09-2026-full-vs-report-v1}.
+No simulation was run and no provider request was made; the source directory was opened
+read-only. Every quantity follows the definitions in
+\texttt{shared\_references/BLACKBOARD\_OBSERVABLES\_AND\_EFFICIENCIES.md}, and the section
+numbers quoted below are that document's.
+
+The purpose is narrative, not just tabulation: to say what the controller actually does to
+this population, and which of the many available numbers are load-bearing for that story.
+Section~\ref{sec:story} states the account; everything before it is the evidence, and
+Section~\ref{sec:limits} is what would falsify it.
+
+\section{Design, data and the unit of independence}
+\subsection{Design}
+A population of $N=24$ LLM agents discusses one fixed MuSR team-allocation task
+(\texttt{task\_003}) on a shared message board for 15 rounds. Truth is
+\texttt{ALLOCATION\_0}; the designated false target is \texttt{ALLOCATION\_2};
+\texttt{ALLOCATION\_1} is the remaining wrong answer. Writing $n_{a,t}$ for the number of
+agents voting for allocation $a$ after round $t$,
+\begin{equation}
+Y_t=(n_{0,t},n_{1,t},n_{2,t}),\qquad x_{a,t}=n_{a,t}/N,\qquad
+\Gamma_h=(Y_0,Y_1,\dots,Y_h),
+\end{equation}
+with $Y_0$ the initialization state. Counts sum to $N$ at every round; this was checked on
+every trajectory rather than assumed.
+
+Two experimental factors distinguish this study from the earlier paired-parent archive, and
+both matter for the interpretation:
+\begin{description}
+\item[Communication profile.] \emph{Report-only} (RO) permits only REPORT messages;
+\emph{full communication} (FC) permits the richer message set. This changes what the
+\emph{population} can do among itself, not only what the controller can do.
+\item[Randomized activation.] The controller's decision to act in round $t$ is drawn with a
+logged probability $e_t=P(U_t=1\mid\text{pre-action information})$, a sigmoid with threshold
+$0.5$ and slope $4$. Realized $e_t$ lies in $[0.119,0.881]$, bounded away from $0$ and $1$.
+\end{description}
+That second point is the important methodological gain over the paired archive. Because the
+gate is genuinely randomized with known and non-degenerate propensities, the
+inverse-probability-weighted causal estimator of reference section~3 is \emph{available}
+here. It was not available for a deterministic always-policy. We therefore report a causal
+one-round response alongside the observational one, and they can be compared.
+
+The first physical round carries no controller decision by design; rounds $1..14$ do. Posts
+satisfy $c_t=b\,U_t$ exactly in every trajectory, with $b\in\{3,12,18\}$, which was verified
+rather than assumed.
+
+\subsection{The independent unit}
+The archive holds 1382 complete trajectories, all of which passed validation
+(0 exclusions). They come from only 60 distinct physical initializations,
+reused across settings and arms. \textbf{The initialization is the only independent unit.}
+Neither the 1382 trajectories, nor the 24 votes inside a population, nor the
+rounds within a trajectory are independent replicates. Every split and every bootstrap in
+this report resamples whole initializations with all their arms attached.
+
+A \emph{comparison} fixes a communication profile, a persistence $\rho$ and a budget $b$,
+and retains the initializations having all three arms --- silence, the truth request and the
+false request --- complete. This yields 9 comparisons with $m$ between 49 and
+60 (Table~\ref{tab:sample}). The four full-communication/$\rho{=}1$ cells with a false
+target are absent from the archive, so no two-target comparison exists there; that block is
+simply missing, and is not imputed.
+
+\begin{table}[htbp]\centering\small
+\caption{Initializations with a complete silent / target-0 / target-2 triple.}\label{tab:sample}
+\begin{tabular}{llrr}
+\toprule
+communication profile & $\rho$ & $b$ & initializations $m$ \\
+\midrule
+full communication & 0.75 & 3 & 60 \\
+full communication & 0.75 & 12 & 53 \\
+full communication & 0.75 & 18 & 49 \\
+report only & 0.75 & 3 & 59 \\
+report only & 0.75 & 12 & 51 \\
+report only & 0.75 & 18 & 53 \\
+report only & 1.00 & 3 & 56 \\
+report only & 1.00 & 12 & 55 \\
+report only & 1.00 & 18 & 52 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The silent arm carries no budget, so one silent trajectory is shared by the three budgets
+within a setting. That shared randomness is real and is preserved by resampling whole
+initializations.
+
+\section{Effects on the vote: shared and directional components}
+\subsection{Definitions}
+For a measured answer $a$, the paired policy susceptibility of reference section~3 is the
+finite contrast between running the whole procedure and running nothing,
+\begin{equation}
+G_h^{\pm,a}=\mathbb E\big[x_{a,h}^{\pm}-x_{a,h}^{\rm base}\big],
+\end{equation}
+where $+$ requests truth and $-$ requests the false target. This is not a derivative with
+respect to budget. Reference section~4 splits it into a shared component and a directional
+half-contrast,
+\begin{equation}
+M_h^{(a)}=\tfrac12\big(G_h^{+,a}+G_h^{-,a}\big),\qquad
+D_h^{(a)}=\tfrac12\big(G_h^{+,a}-G_h^{-,a}\big),
+\end{equation}
+so $G^{\pm,a}_h=M^{(a)}_h\pm D^{(a)}_h$ and the full effect of switching the requested
+target is $2D^{(a)}_h$. We export both conventions. $M$ answers ``what does having a
+controller at all do?''; $D$ answers ``does it matter which answer we asked for?''. The
+identities $\sum_a M^{(a)}_h=\sum_a D^{(a)}_h=0$ and $M^{(\rm err)}=-M^{(0)}$ were verified
+numerically.
+
+\subsection{What the data show}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_trajectories.pdf}
+\caption{Mean truth share against round, by setting. Black: silence. Blue: truth requested.
+Red: false target requested. Line style encodes the posting budget. The silent curve is the
+same in every panel of a setting because the silent arm is shared across budgets.}
+\label{fig:traj}
+\end{figure}
+
+Figure~\ref{fig:traj} is the single most informative picture in this report, and it already
+contains the main result. Under silence the population is \emph{good at this task}: the
+report-only baseline reaches 95.0\% truth by $h=15$ and the full-communication
+baseline 68.7\%. Control almost always moves it away from that.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_md.pdf}
+\caption{Shared component $M$ and directional half-contrast $D$ against horizon, in
+percentage points. Left and centre: truth coordinate. Right: the false-target coordinate.}
+\label{fig:md}
+\end{figure}
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_gains.pdf}
+\caption{Own-target gains against horizon with 95\% paired-initialization bootstrap bands:
+truth gain when truth is requested (left) and false-target gain when the false target is
+requested (right).}\label{fig:gains}
+\end{figure}
+
+\begin{table}[htbp]\centering\small
+\caption{Effects on the vote at $h=15$, in percentage points. ``base'' is the mean silent
+truth share. $D^{(0)}$ carries its 95\% paired bootstrap interval.}\label{tab:effects}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llrr rrr rlrr}
+\toprule
+prof. & $\rho$ & $b$ & $m$ & base & $G^{+,0}$ & $G^{-,0}$ & $M^{(0)}$ & $D^{(0)}$ [95\%] & $M^{(2)}$ & $D^{(2)}$ \\
+\midrule
+FC & 0.75 & 3 & 60 & 68.7 & 4.9 & -4.4 & 0.2 & 4.6 [-1.3, 10.4] & 7.7 & -5.5 \\
+FC & 0.75 & 12 & 53 & 70.5 & -22.7 & -15.8 & -19.3 & -3.5 [-11.0, 4.6] & 27.4 & 2.5 \\
+FC & 0.75 & 18 & 49 & 69.6 & -23.2 & -19.2 & -21.2 & -2.0 [-9.3, 5.0] & 30.6 & 1.7 \\
+RO & 0.75 & 3 & 59 & 95.0 & -14.3 & -44.8 & -29.5 & 15.3 [9.5, 21.3] & 31.2 & -14.9 \\
+RO & 0.75 & 12 & 51 & 92.4 & -28.1 & -57.0 & -42.6 & 14.5 [8.4, 20.4] & 44.8 & -14.4 \\
+RO & 0.75 & 18 & 53 & 94.4 & -30.7 & -55.1 & -42.9 & 12.2 [7.1, 17.4] & 43.3 & -11.9 \\
+RO & 1.00 & 3 & 56 & 99.5 & -2.2 & -22.3 & -12.2 & 10.1 [6.7, 13.5] & 11.6 & -9.2 \\
+RO & 1.00 & 12 & 55 & 99.5 & -14.8 & -33.7 & -24.3 & 9.4 [5.4, 13.3] & 23.4 & -8.9 \\
+RO & 1.00 & 18 & 52 & 99.6 & -8.2 & -38.8 & -23.5 & 15.3 [11.5, 19.3] & 22.7 & -14.8 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Three facts stand out in Table~\ref{tab:effects} and Figure~\ref{fig:md}.
+
+\paragraph{The shared component is negative almost everywhere, and grows with budget.}
+$M^{(0)}_{15}$ is negative in 8 of the 9 comparisons, ranging from
+-42.9 to 0.2 points. Within the report-only setting at $\rho=0.75$ it
+deepens monotonically with the budget: -29.5 points at $b=3$ and -42.9 at
+$b=18$. Posting more does not steer better; it damages more. The corresponding
+$M^{(2)}$ is positive throughout, so the mass leaving truth arrives largely at the
+false target regardless of which target was requested.
+
+\paragraph{But the directional component is real, and larger than in the paired archive.}
+$D^{(0)}_{15}$ is positive in 7 of 9 comparisons, spanning
+-3.5 to 15.3 points. In report-only at $b=3$, $D^{(0)}=15.3$ points
+with a bootstrap interval excluding zero. Requesting truth really does preserve more truth
+than requesting the false target, even though both requests are harmful on net. The
+controller is not merely a target-independent disturbance here --- which is what the
+paired always-policies looked like --- but a disturbance with a genuine directional
+component riding on top.
+
+\paragraph{One cell is different, and it is the informative one.}
+Full communication at $\rho=0.75$, $b=3$ has $G^{+,0}_{15}=+4.9$ points
+(95\% interval $[-7.4, 16.1]$) and $M^{(0)}\approx0$: at low
+budget, in the setting where the population is \emph{worse} on its own
+(68.7\% versus 95.0\%), a truth-targeted controller is roughly neutral
+to mildly helpful. Raise the budget in that same setting and the benefit disappears:
+$M^{(0)}=-21.2$ points at $b=18$. Helpfulness is confined to the corner where the
+population has room to improve and the controller speaks quietly.
+
+\subsection{How the effects build with the horizon}\label{sec:horizon}
+Because every quantity in this report is computed at each $h$, the horizon axis is itself a
+finding rather than a presentational choice. Three patterns recur across
+Figures~\ref{fig:traj}, \ref{fig:md}, \ref{fig:gains} and \ref{fig:cmd}.
+
+\paragraph{Nothing happens immediately.} At $h=1$ both $M^{(0)}$ and $D^{(0)}$ are within a
+point or two of zero in every comparison. One round of posting does not move a population of
+24 agents measurably. Any analysis that stopped at the first horizon would conclude the
+controller does nothing.
+
+\paragraph{Damage accumulates without saturating.} $M^{(0)}$ falls steadily across the whole
+range and is still falling at $h=15$ in the larger-budget comparisons. This is the shape
+of a process that erodes rather than one that shifts an equilibrium. Figure~\ref{fig:traj}
+makes the mechanism visible in the report-only panels: the controlled branches track the
+silent curve upward for roughly the first five rounds, reach a peak, and only then decline.
+The controller does not prevent the population from finding the answer; it degrades a
+consensus the population has already reached.
+
+\paragraph{Direction saturates early.} $D^{(0)}$ rises steeply to about $h=7$ and then
+flattens or drifts. Command information $I(Z;V_h)$ behaves the same way. So the target-specific
+part of the signal is delivered in the first half of the run and does not grow after that,
+while the target-independent damage keeps compounding. That divergence in timescales is the
+cleanest dynamical statement this archive supports, and it is what drives the efficiency
+ratios down at long horizons: the numerator plateaus while the denominator grows.
+
+A practical consequence: the measured ``efficiency'' of this controller is a function of when
+you stop looking. Quoting any of these ratios without its horizon is meaningless.
+
+\section{One-round response: observational and causal}\label{sec:sus}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_susceptibility.pdf}
+\caption{Left: state-matched response $\bar\chi_0$, weighted by visited states. Centre: the
+inverse-probability-weighted causal response $\hat\tau_{0,1}$. Right: one-round activation
+information against horizon.}\label{fig:sus}
+\end{figure}
+
+\begin{table}[htbp]\centering\small
+\caption{Response families for the truth coordinate. $P(U{=}1)$ is the realized activation
+rate; $\bar\chi_0$ is the state-matched contrast; $\hat\tau_{0,\ell}$ is the IPW causal
+response at lag $\ell$; ``avail.'' is the cell-ratio available-susceptibility;
+$\max|W|$ is the largest inverse-probability weight.}\label{tab:sus}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llrr rrr rr rr}
+\toprule
+prof. & $\rho$ & $b$ & $z$ & $P(U{=}1)$ & $\bar\chi_0$ & uncond. & $\hat\tau_{0,1}$ & $\hat\tau_{0,5}$ & avail. & $\max|W|$ \\
+\midrule
+FC & 0.75 & 3 & 0 & 0.380 & -0.0054 & 0.0283 & -0.0018 & -0.0658 & 0.0015 & 8.4 \\
+FC & 0.75 & 3 & 2 & 0.605 & -0.0195 & -0.0346 & -0.0317 & -0.0089 & -0.0750 & 8.4 \\
+FC & 0.75 & 12 & 0 & 0.446 & -0.0635 & -0.0026 & -0.0574 & -0.0356 & -0.0763 & 8.4 \\
+FC & 0.75 & 12 & 2 & 0.487 & -0.0229 & -0.0481 & -0.0248 & 0.0215 & -0.0536 & 8.4 \\
+FC & 0.75 & 18 & 0 & 0.420 & -0.0658 & -0.0385 & -0.0848 & -0.0307 & -0.1492 & 8.4 \\
+FC & 0.75 & 18 & 2 & 0.458 & -0.0592 & -0.0841 & -0.0597 & 0.0030 & -0.1018 & 8.4 \\
+RO & 0.75 & 3 & 0 & 0.317 & -0.0625 & -0.0135 & -0.0771 & -0.1221 & -0.2248 & 8.4 \\
+RO & 0.75 & 3 & 2 & 0.608 & -0.0697 & -0.1128 & -0.0962 & -0.1322 & -0.2358 & 8.4 \\
+RO & 0.75 & 12 & 0 & 0.329 & -0.1784 & -0.0982 & -0.1801 & -0.1052 & -0.3913 & 8.4 \\
+RO & 0.75 & 12 & 2 & 0.434 & -0.2205 & -0.2841 & -0.2291 & -0.0365 & -0.4079 & 8.4 \\
+RO & 0.75 & 18 & 0 & 0.314 & -0.2209 & -0.1286 & -0.2352 & -0.0927 & -0.5550 & 8.4 \\
+RO & 0.75 & 18 & 2 & 0.418 & -0.2233 & -0.3057 & -0.2162 & -0.0093 & -0.3564 & 8.4 \\
+RO & 1.00 & 3 & 0 & 0.195 & -0.0298 & 0.0214 & -0.0359 & -0.0365 & -0.1382 & 8.4 \\
+RO & 1.00 & 3 & 2 & 0.718 & -0.1020 & -0.1635 & -0.0975 & -0.0060 & -0.4032 & 8.4 \\
+RO & 1.00 & 12 & 0 & 0.269 & -0.1858 & -0.0976 & -0.1951 & -0.0467 & -0.5405 & 8.4 \\
+RO & 1.00 & 12 & 2 & 0.556 & -0.3050 & -0.3842 & -0.2941 & 0.0467 & -0.6991 & 8.4 \\
+RO & 1.00 & 18 & 0 & 0.228 & -0.2423 & -0.1601 & -0.2504 & -0.0167 & -0.7769 & 8.4 \\
+RO & 1.00 & 18 & 2 & 0.530 & -0.3720 & -0.4757 & -0.3672 & 0.0366 & -0.8213 & 8.4 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Because activation is randomized with logged propensities, we can ask the causal question
+directly: what does forcing the controller to act \emph{this} round do to truth support?
+The estimator is
+\begin{equation}
+W_t=\frac{U_t}{e_t}-\frac{1-U_t}{1-e_t},\qquad
+\hat\tau_{a,\ell}=\frac1{L_\ell}\sum_{t}W_t\,(x_{a,t+\ell}-x_{a,t}).
+\end{equation}
+Realized activation rates are 0.20 to 0.72, and the largest
+weight is 8.4, so no single round dominates. At lag~1 the causal truth response is
+negative in 9 of the 9 truth-request rows, and the range across
+all rows is -0.367 to -0.002. By lag~5 it is -0.132 to
++0.047: the damage accumulates rather than reverting.
+
+This is worth pausing on. The observational state-matched contrast $\bar\chi_0$ and the
+causal $\hat\tau_{0,1}$ agree in sign and rough magnitude. In the paired archive we could
+only compute the observational version and had to caveat it heavily. Here the randomized
+gate lets us say the stronger thing: \emph{acting causally reduces truth support on the very
+next round}, and this is not an artifact of the controller choosing to act when the
+population was already drifting.
+
+The right panel of Figure~\ref{fig:sus} shows the one-round activation information
+$I(U_h;n_{0,h}\mid n_{0,h-1})$ of reference section~6, which reads between 0.127 and
+0.321 bits at $h=15$. \textbf{These numbers should not be interpreted as
+transmitted information.} They are frequency plug-in estimates of a conditional mutual
+information computed from $m\approx60$ observations spread over many
+$(n_{0,h-1},n_{0,h})$ cells, so most cells hold one or two observations and the estimator is
+dominated by upward bias --- the same pathology Table~\ref{tab:freq} exhibits for the
+endpoint, where the in-sample plug-in overstates the held-out score by 0.252 bits.
+The declining trend with horizon is also consistent with bias rather than signal: as the
+population converges, the conditioning variable takes fewer distinct values and the bias
+falls. We report the quantity because the reference defines it, and we decline to read
+anything into its magnitude. The honest one-round statements in this archive are the
+state-matched and IPW responses in the left two panels, which are differences of means
+rather than nonlinear functionals and do not carry this bias.
+
+\section{The command channel: does the population hear which answer was requested?}
+Reference section~9 defines the single-agent command channel by drawing $Z\in\{0,2\}$
+balanced, running the target-conditioned policy, and reading one uniformly chosen agent's
+final vote $V_h$:
+\begin{equation}
+p_h(v\mid z)=\mathbb E\big[x_{v,h}^{z}\big],\qquad
+I(Z;V_h)=\tfrac12\sum_{z}\sum_{v}p_h(v|z)\log_2\frac{p_h(v|z)}{\bar p_h(v)},
+\end{equation}
+with $\eta_{\rm command}=I(Z;V_h)/\mathcal H(Z)$ numerically equal to the information in
+bits because $\mathcal H(Z)=1$. Following is $F_h=\tfrac12[p_h(0|0)+p_h(2|2)]$ against the
+matched silent benchmark $F^{\rm base}_h=\tfrac12\mathbb E[x^{\rm base}_{0,h}+x^{\rm base}_{2,h}]$.
+Marginalizing a uniformly chosen agent is exact from the vote fractions, so no classifier is
+used here and none is needed.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_command.pdf}
+\caption{Command information, following probability and information per post against
+horizon.}\label{fig:cmd}
+\end{figure}
+
+\begin{table}[htbp]\centering\small
+\caption{Command transmission and resources at $h=15$. Posts and senses are averaged over
+the two target branches. $\mathcal E_\lambda$ is bits per post-equivalent with sensing
+charged at $\lambda$.}\label{tab:cmd}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llr rrr rr rr}
+\toprule
+prof. & $\rho$ & $b$ & $I(Z;V_h)$ & $F_h$ & $F_h-F^{\rm base}_h$ & posts & senses & $10^3 \mathcal E_{\lambda=0}$ & $10^3\mathcal E_{\lambda=1}$ \\
+\midrule
+FC & 0.75 & 3 & 0.0120 & 0.539 & 0.090 & 20.7 & 149 & 0.581 & 0.0710 \\
+FC & 0.75 & 12 & 0.0073 & 0.463 & 0.011 & 78.3 & 150 & 0.093 & 0.0320 \\
+FC & 0.75 & 18 & 0.0015 & 0.475 & 0.028 & 110.6 & 147 & 0.014 & 0.0060 \\
+RO & 0.75 & 3 & 0.0764 & 0.648 & 0.159 & 19.4 & 168 & 3.933 & 0.4078 \\
+RO & 0.75 & 12 & 0.0612 & 0.642 & 0.155 & 64.1 & 168 & 0.955 & 0.2639 \\
+RO & 0.75 & 18 & 0.0438 & 0.618 & 0.123 & 92.2 & 168 & 0.475 & 0.1685 \\
+RO & 1.00 & 3 & 0.0757 & 0.592 & 0.093 & 19.2 & 168 & 3.946 & 0.4045 \\
+RO & 1.00 & 12 & 0.0353 & 0.586 & 0.087 & 69.3 & 168 & 0.510 & 0.1488 \\
+RO & 1.00 & 18 & 0.0992 & 0.645 & 0.147 & 95.5 & 168 & 1.038 & 0.3763 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Command information at $h=15$ ranges from 0.0015 to 0.0992 bits, and
+following from 0.463 to 0.648. In report-only at $b=3$, $I(Z;V_{15})=
+0.0764$ bits with $F=0.648$ against a silent benchmark, an improvement of
++0.159.
+
+The exact identity of reference section~9,
+\begin{equation}
+F_h-F^{\rm base}_h=\tfrac12\big(G^{+,0}_h+G^{-,2}_h\big),
+\end{equation}
+explains why following can improve while truth collapses: it is the average of the two
+\emph{own-target} gains, and the false branch's large gain on its own target carries it.
+A controller that is very good at installing the false answer, and mildly bad at defending
+the true one, still scores well on ``following''. Following is not a measure of benefit.
+
+Sensing is charged honestly. The controller reads sampled votes on every gated round whether
+or not it posts, so sensing expenditure is the same in all controlled branches and is not a
+cost specific to a sensing policy. The $\lambda=1$ column of Table~\ref{tab:cmd} shows what
+happens to apparent efficiency once those reads are priced at one post each: the numbers
+drop by roughly an order of magnitude without anything having changed about what was
+transmitted.
+
+\section{Endpoint and trajectory information}
+\subsection{Estimators}
+$I(Z;Y_h)$ has 325 possible endpoint states and cannot be read off a frequency table at
+$m\approx50$. Following reference section~12 we fit a balanced target classifier
+$g(Z\mid Y_h)$ and score the held-out
+\begin{equation}
+\widehat L_I(h)=\mathbb E\big[\log_2 2g(Z\mid Y_h)\big],
+\end{equation}
+whose population gap from $I(Z;Y_h)$ is the expected KL between the true and fitted
+posteriors --- a lower bound in expectation, with negative realized values permitted.
+Candidates are a constant prior, L2 logistic regression on the two vote fractions, quadratic
+logistic features, and a one-hidden-layer MLP of width 4 or 8; selection is by nested
+held-out log loss inside training initializations only.
+
+\begin{table}[htbp]\centering\small
+\caption{Frequency plug-in versus held-out estimates of $I(Z;Y_{15})$, in bits.}
+\label{tab:freq}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llr rrrr rl}
+\toprule
+prof. & $\rho$ & $b$ & freq. $\alpha{=}0$ & freq. $\alpha{=}1$ & held out $\alpha{=}1$ & held out $\alpha{=}10$ & classifier & selected \\
+\midrule
+FC & 0.75 & 3 & 0.180 & 0.174 & -0.527 & -0.283 & 0.005 & mlp-w4-l0.1 \\
+FC & 0.75 & 12 & 0.238 & 0.230 & -0.602 & -0.307 & -0.005 & constant \\
+FC & 0.75 & 18 & 0.312 & 0.301 & -0.404 & -0.176 & -0.002 & constant \\
+RO & 0.75 & 3 & 0.374 & 0.364 & -0.270 & -0.043 & 0.087 & linear-l0.1 \\
+RO & 0.75 & 12 & 0.362 & 0.352 & -0.420 & -0.135 & 0.108 & quadratic-l0.1 \\
+RO & 0.75 & 18 & 0.379 & 0.368 & -0.483 & -0.167 & 0.075 & linear-l0.1 \\
+RO & 1.00 & 3 & 0.392 & 0.381 & 0.214 & 0.231 & 0.145 & mlp-w4-l0.01 \\
+RO & 1.00 & 12 & 0.347 & 0.337 & -0.508 & -0.202 & 0.119 & quadratic-l0.1 \\
+RO & 1.00 & 18 & 0.443 & 0.430 & -0.095 & 0.054 & 0.222 & quadratic-l0.1 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Table~\ref{tab:freq} is a warning about the frequency estimator. The in-sample plug-in
+averages 0.336 bits; the held-out classifier averages 0.084,
+a gap of 0.252 bits of pure optimism. With nearly unique endpoints the raw
+frequency MI is mostly counting its own noise. Only the held-out column should be quoted.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_information.pdf}
+\caption{Left: held-out endpoint target information against horizon. Right: observed score
+against the 95th percentile of 200 within-initialization target-label swaps.}
+\label{fig:info}
+\end{figure}
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_models.pdf}
+\caption{Held-out score of every candidate for $\widehat I(Z;Y_{15})$.}\label{fig:models}
+\end{figure}
+
+\subsection{Trajectory cost and its decomposition}
+For the divergence terms we fit balanced controlled-versus-silent critics and report the
+NWJ objective $\mathbb E_P f-\mathbb E_{\rm base}e^{f}+1$ and the Donsker--Varadhan objective
+$\mathbb E_P f-\log\mathbb E_{\rm base}e^{f}$, both population lower bounds in nats, with a
+capped critic and baseline-tail diagnostics. Candidates add path summaries, a flat MLP over
+the whole path, and small GRUs. The target-averaged cost and its exact decomposition
+(reference section~11) are
+\begin{equation}
+\mathcal C_\pi=\tfrac12K^0_\pi+\tfrac12K^2_\pi
+= I_{\rm nat}(Z;\Gamma)+\DKL\!\left(Q\,\Vert\,P_{\rm base}\right),
+\qquad Q=\tfrac12P^0_\pi+\tfrac12P^2_\pi,
+\end{equation}
+with the data-processing chain
+\begin{equation}
+I_{\rm nat}(Z;V_h)\le I_{\rm nat}(Z;Y_h)\le I_{\rm nat}(Z;\Gamma)\le\mathcal C_\pi
+\end{equation}
+and the efficiencies $\eta_{\rm end}=I_{\rm nat}(Z;Y_h)/\mathcal C_\pi$,
+$\eta_{\rm ctl}=I_{\rm nat}(Z;\Gamma)/\mathcal C_\pi$. The three terms are fitted
+independently, so their sum need not reconcile exactly; the gap is a diagnostic.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_cost.pdf}
+\caption{Trajectory cost and the two terms of its decomposition against horizon.}
+\label{fig:cost}
+\end{figure}
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_efficiency.pdf}
+\caption{Efficiency ratios against horizon, shown only where no bootstrap draw of the cost
+is non-positive.}\label{fig:eta}
+\end{figure}
+
+\begin{table}[htbp]\centering\small
+\caption{Divergences, decomposition and efficiencies at $h=15$, in nats. Entries are
+blank where the cost bootstrap is not bounded away from zero, or, for $\eta_{\rm task}$,
+where $K_{\min}$ is not identified from the silent sample.}\label{tab:cost}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llr rrr rrr r rrr}
+\toprule
+prof. & $\rho$ & $b$ & $K^0$ & $K^2$ & $\mathcal C_\pi$ & $I(Z;\Gamma)$ & $D_Q$ & sum & $I(Z;Y)$ & $\eta_{\rm end}$ & $\eta_{\rm ctl}$ & $\eta_{\rm task}$ \\
+\midrule
+FC & 0.75 & 3 & -0.003 & 0.024 & 0.010 & 0.003 & -0.020 & -0.017 & 0.004 & -- & -- & -- \\
+FC & 0.75 & 12 & 0.205 & 0.176 & 0.190 & -0.015 & 0.174 & 0.159 & -0.003 & -- & -- & -- \\
+FC & 0.75 & 18 & -0.153 & -0.921 & -0.537 & -0.005 & -0.420 & -0.425 & -0.001 & -- & -- & -- \\
+RO & 0.75 & 3 & 0.465 & 1.791 & 1.128 & 0.046 & 0.567 & 0.613 & 0.061 & -- & -- & -- \\
+RO & 0.75 & 12 & 0.770 & 2.729 & 1.750 & 0.167 & 1.477 & 1.644 & 0.075 & 0.043 & 0.095 & 0.675 \\
+RO & 0.75 & 18 & 1.409 & 2.182 & 1.795 & 0.123 & 1.761 & 1.884 & 0.052 & -- & -- & -- \\
+RO & 1.00 & 3 & 0.080 & 3.506 & 1.793 & 0.271 & 1.363 & 1.633 & 0.101 & 0.056 & 0.151 & -- \\
+RO & 1.00 & 12 & 2.119 & 4.694 & 3.406 & 0.157 & 2.970 & 3.127 & 0.083 & 0.024 & 0.046 & -- \\
+RO & 1.00 & 18 & 2.293 & 4.761 & 3.527 & 0.276 & 2.939 & 3.215 & 0.154 & 0.044 & 0.078 & -- \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\subsection{Why $\eta_{\rm task}$ is mostly unavailable}
+Reference section~11 defines the minimum displacement needed to move a reward by $\delta$ as
+the Legendre transform of the baseline log moment generating function,
+$K_{\min}(\delta)=\sup_\lambda[\lambda\delta-\psi(\lambda)]$, and
+$\eta_{\rm task}=K_{\min}(\delta)/K_\pi\le1$.
+
+Computed naively this returns numbers like 33, 66 and 158 nats for the report-only
+$\rho=1$ comparisons, which would give $\eta_{\rm task}\approx10$ --- impossible for a
+quantity bounded by one. The cause is a support failure, not a large cost. Across all
+initializations of that setting the silent truth share never falls below $0.917$; the
+controlled arms shift the mean to below that. The requested mean therefore lies outside the
+observed baseline range, the empirical moment generating function has no mass there, and the
+optimal tilt runs to whatever bound the $\lambda$ grid happens to impose. The reported value
+is then an artifact of the grid, not an estimate.
+
+We detect this explicitly --- requested mean inside the observed baseline support, and the
+optimizer interior rather than at the grid edge --- and report $K_{\min}$ as unidentified
+when either test fails. It is identified in 46 of 54 rows, and
+combined with the requirement that the cost bootstrap be bounded away from zero this leaves
+8 usable $\eta_{\rm task}$ values. This is the same missing-baseline-event
+problem the reference warns about, and it is worth stating plainly: \emph{the controller
+drives this population somewhere silence never goes}, and that is precisely why the
+information-theoretic minimum cost cannot be estimated from the silent sample.
+
+\section{Null diagnostics}
+\begin{table}[htbp]\centering\small
+\caption{Within-initialization target-label swaps (200 per cell, full refit).}\label{tab:swaps}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrr}
+\toprule
+comparison & $h$ & observed & null mean & null p95 & $p$ \\
+\midrule
+full communication rho0.75 b12 & 1 & -0.001 & -0.001 & 0.003 & 0.687 \\
+full communication rho0.75 b12 & 8 & -0.003 & -0.002 & 0.004 & 0.806 \\
+full communication rho0.75 b12 & 15 & 0.000 & -0.002 & 0.005 & 0.537 \\
+full communication rho0.75 b18 & 1 & -0.016 & -0.002 & 0.005 & 0.955 \\
+full communication rho0.75 b18 & 8 & 0.000 & -0.002 & 0.004 & 0.478 \\
+full communication rho0.75 b18 & 15 & -0.002 & -0.002 & 0.003 & 0.756 \\
+full communication rho0.75 b3 & 1 & 0.001 & -0.002 & 0.001 & 0.080 \\
+full communication rho0.75 b3 & 8 & -0.001 & -0.001 & 0.004 & 0.617 \\
+full communication rho0.75 b3 & 15 & -0.002 & -0.001 & 0.006 & 0.701 \\
+report only rho0.75 b12 & 1 & -0.004 & -0.001 & 0.002 & 0.900 \\
+report only rho0.75 b12 & 8 & 0.070 & -0.002 & 0.007 & 0.005 \\
+report only rho0.75 b12 & 15 & 0.108 & -0.001 & 0.009 & 0.005 \\
+report only rho0.75 b18 & 1 & 0.000 & -0.001 & 0.003 & 0.194 \\
+report only rho0.75 b18 & 8 & 0.113 & -0.001 & 0.005 & 0.005 \\
+report only rho0.75 b18 & 15 & 0.066 & -0.002 & 0.005 & 0.005 \\
+report only rho0.75 b3 & 1 & -0.001 & -0.001 & 0.002 & 0.716 \\
+report only rho0.75 b3 & 8 & 0.007 & -0.001 & 0.003 & 0.015 \\
+report only rho0.75 b3 & 15 & 0.083 & -0.001 & 0.005 & 0.005 \\
+report only rho1.00 b12 & 1 & -0.004 & -0.000 & 0.003 & 0.910 \\
+report only rho1.00 b12 & 8 & 0.085 & -0.001 & 0.004 & 0.005 \\
+report only rho1.00 b12 & 15 & 0.109 & -0.002 & 0.004 & 0.005 \\
+report only rho1.00 b18 & 1 & 0.001 & -0.001 & 0.003 & 0.134 \\
+report only rho1.00 b18 & 8 & 0.251 & -0.003 & 0.007 & 0.005 \\
+report only rho1.00 b18 & 15 & 0.207 & -0.003 & 0.004 & 0.005 \\
+report only rho1.00 b3 & 1 & 0.003 & -0.001 & 0.003 & 0.055 \\
+report only rho1.00 b3 & 8 & 0.016 & -0.003 & 0.006 & 0.020 \\
+report only rho1.00 b3 & 15 & 0.077 & -0.001 & 0.005 & 0.005 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Swapping the two target branches within an initialization destroys target identity while
+preserving everything else about the pair. Under that exchangeability null the observed
+endpoint score should sit inside the permutation distribution. 12 of
+27 cells exceed their null at the 5\% level, and at $h=15$ it is
+6 of 9. This is an exchangeability diagnostic, not a proof of
+causality: it says the target label carries information the vote endpoint can see.
+
+\section{Evidence: what the controller does to what agents know}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_evidence.pdf}
+\caption{Mean active supporting-fact coverage $\kappa_h$ against horizon, under the truth
+request and under silence.}\label{fig:ev}
+\end{figure}
+
+Reference section~5 defines $\kappa_t$ as mean active proof coverage and $\phi_t$ as the
+share of agents holding a full configured proof. This section contains the result that most
+constrains the mechanism, and it is not the one we expected.
+
+\paragraph{The controller substantially increases evidence coverage.} At $h=15$, mean
+$\kappa$ is 0.056 under silence, 0.178 under the truth request and
+0.238 under the false request. Per comparison the truth-request arm carries
+1.72 to 5.35 times the silent coverage, rising with the
+posting budget. The controller is not starving the population
+of information. It is demonstrably \emph{delivering} verified facts, and delivering more of
+them as it posts more.
+
+\paragraph{The false-target controller delivers about as much as the truth-target one.}
+$\kappa_{t2}\ge\kappa_{t0}$ at the final horizon in 8 of the 9
+comparisons, and the exception is close to a tie. This is exactly what
+the design implies and is easy to miss: the controller posts \emph{true} facts drawn from
+the task pool together with a vote for its assigned target. A true fact accompanied by a vote
+for \texttt{ALLOCATION\_2} still raises measured proof coverage. Coverage counts facts held,
+not conclusions correctly drawn.
+
+\paragraph{No agent ever completes a proof.} $\phi_h$ is exactly zero (maximum observed
+0.0 over all 135 arm-horizon rows) in every arm, comparison and horizon,
+including under silence. Not one of the 24 agents ever holds a
+full configured proof at any point in this archive. The population is voting on fragments
+throughout.
+
+Those three facts together rule out the simplest explanation of the damage --- that the
+controller crowds out peer information --- and point at a different one. Evidence supply goes
+\emph{up} while truth support goes \emph{down}. What the controller adds alongside the facts
+is a salient, repeated, explicit vote; and because no agent can verify a conclusion from a
+complete proof, that vote is cheap to copy relative to the cost of assembling fragments. The
+controller's influence appears to run through the \emph{vote} it attaches, not through the
+\emph{evidence} it supplies, and the evidence it supplies is not sufficient to protect an
+agent against the vote.
+
+That was our reading when only these observables were available. Section~\ref{sec:micro}
+carries out the message-level test it calls for --- linking which agents read which posts to
+how they then voted --- and the result does \emph{not} support the simplest version of it. At
+the margin, within a population and a round, agents who read more of the controller were no
+likelier to adopt its target. The vote-copying story survives only in a collective form, in
+which the controller moves a few agents and the population carries the rest; it is not
+supported as direct per-message persuasion. The observables here constrain the mechanism;
+they do not identify it, and neither does the micro test.
+
+\section{Does the controller persuade agent by agent?}\label{sec:micro}
+The evidence observables above constrain the mechanism but do not identify it. The
+micro-update records can go further: for each of the 497,520 agent updates they record that
+agent's vote before and after, and the identifiers of the messages it actually read. This
+section reports that test. It returns a null, and the way it returns a null is informative.
+
+\subsection{Two features of the board that shape the test}
+First, \textbf{the board is erased every round}: \texttt{message\_lifetime\_rounds} is
+1 in all cells and the maximum \texttt{surviving\_message\_count} over the whole
+archive is 0.0. About 21 messages are created per round and the same
+number expire. Message dose therefore measures the current round's output only; nothing
+accumulates.
+
+Second, \textbf{agents update sequentially and post as they go}. The controller posts first,
+so its share of the board decays across the 24 update slots within a round
+(Figure~\ref{fig:dose}, left). An agent updating in the first slots reads about
+8.0 controller messages out of 8.9; one updating in the last slots
+reads 4.2 out of 12.0, because peers have filled the board meanwhile.
+The number of controller messages available is constant at about 10.2 throughout ---
+what changes is competition for the agent's fixed reading allowance.
+
+That matters because the outcome moves with update order too. Both dose and the probability
+of ending the update on the controller's target decline across slots, so any unadjusted
+dose-response will report an effect of ordering as though it were an effect of messages.
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=\textwidth]{fig_dose.pdf}
+\caption{Left: within a round the controller's messages are progressively crowded out of the
+agent's fixed reading sample, and the outcome declines with them. Right: the estimated slope
+of adoption on controller messages read, before adjustment, after holding the population and
+round fixed, and after additionally removing the update-order trend. Bars are 95\% cluster
+bootstrap intervals over 60 initializations.}\label{fig:dose}
+\end{figure}
+
+\subsection{The estimator}
+Restrict to agent updates where a controller message was on the board and the agent was
+\emph{not} already voting the target, so the outcome is adoption rather than retention. Let
+$d_{jt}$ be the number of controller messages agent $j$ read at that update and $y_{jt}$ an
+indicator that it ends on the target. We report three slopes of $y$ on $d$:
+
+\begin{description}
+\item[raw] no adjustment; pools across budgets, rounds and update order.
+\item[population adjusted] $d$ and $y$ residualised on (episode $\times$ round), so the
+comparison is between agents facing the same board in the same population at the same moment.
+\item[order adjusted] additionally residualised on \texttt{micro\_slot\_index}, removing the
+dilution trend.
+\end{description}
+
+Board sampling is uniform and excludes self-authored messages, so after these adjustments the
+remaining variation in $d$ is close to which messages an agent happened to draw. Residual
+dose standard deviation is 1.20 against a raw 3.26, so the adjustments do
+not exhaust the variation. Intervals are a cluster bootstrap over initializations.
+
+\subsection{Result}
+\begin{table}[htbp]\centering\small
+\caption{Change in the probability of adopting the controller's target per additional
+controller message read, with 95\% cluster bootstrap intervals over
+60 initializations.}\label{tab:dose}
+\begin{tabular}{llrlr}
+\toprule
+outcome & adjustment & slope & 95\% interval & $n$ updates \\
+\midrule
+same round & raw & +0.0206 & [+0.0169, +0.0241] & 130647 \\
+same round & population adjusted & +0.0054 & [+0.0039, +0.0069] & 130647 \\
+same round & order adjusted & -0.0002 & [-0.0019, +0.0014] & 130647 \\
+next round & raw & +0.0126 & [+0.0092, +0.0159] & 92413 \\
+next round & population adjusted & -0.0002 & [-0.0013, +0.0011] & 92413 \\
+next round & order adjusted & -0.0012 & [-0.0025, -0.0001] & 92413 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The raw slope is 0.0206 [+0.0169, +0.0241]: reading one more controller message is
+associated with about two percentage points more adoption. Holding the population and round
+fixed cuts it to 0.0054 [+0.0039, +0.0069]. Removing the update-order trend as well
+leaves -0.0002 [-0.0019, +0.0014] --- indistinguishable from zero, and tightly bounded
+rather than merely imprecise, on 130647 agent updates.
+
+Repeating the test with the agent's vote at the end of the \emph{following} round as the
+outcome gives -0.0012 [-0.0025, -0.0001]. There is no delayed individual
+adoption either.
+
+\subsection{What this does and does not establish}
+It does not mean the controller has no effect. The population-level effects are large and
+causally established in Section~\ref{sec:sus}. It means the effect \textbf{does not appear as
+a within-round, within-population dose gradient}: among agents sitting in the same population
+at the same moment, the ones who happened to read more of the controller were not more likely
+to adopt its target.
+
+Two readings are consistent with that, and this archive cannot separate them.
+
+\emph{Saturation.} Exposure is near-universal --- 99.4\% of agents read at least one
+controller message when one is available, and the mean dose is 5.9. Everybody is
+already well past any threshold, so the margin carries no information even if the first
+message matters a great deal.
+
+\emph{Mediation.} If the controller works by shifting a few agents, who then post and shift
+others, the (episode $\times$ round) adjustment absorbs exactly that propagation channel by
+construction. Conditioning on a mediator removes the effect one is trying to measure. This
+reading fits the horizon evidence of Section~\ref{sec:horizon}: controlled branches track
+silence for roughly five rounds before diverging, which is the signature of a slow collective
+process rather than immediate per-agent persuasion, and a within-round contrast is blind to it.
+
+The honest summary is that the simplest mechanical story --- each controller message directly
+pulls its readers toward the target --- is \emph{not} supported at the margin, while the
+collective story remains open. Distinguishing them needs either an experiment that randomizes
+exposure within a population, or one that varies the vote attached to a fixed set of facts.
+
+\section{The account}\label{sec:story}
+Putting the pieces together, the following story is consistent with every table above.
+
+\paragraph{1. The population is competent, and competence is the baseline to beat.}
+Left alone these agents converge on the correct allocation: 95.0\% truth in
+report-only, 68.7\% in full communication. Any controller is competing against a
+process that mostly works. This single fact reframes every efficiency number: the
+denominator of ``how much did control help'' is small by construction.
+
+\paragraph{2. Intervening is mostly disruption, and disruption scales with volume.}
+The shared component $M^{(0)}$ is negative in 8 of 9 comparisons and
+deepens monotonically with the posting budget. The causal IPW estimator confirms this is
+not selection: forcing an action lowers truth support at the next round and further by lag~5.
+The mixture term $\DKL(Q\Vert P_{\rm base})$ accounts for most of the fitted trajectory cost,
+which is the same statement in divergence form --- the bulk of the statistical displacement
+the controller produces is target-independent.
+
+\paragraph{3. Yet the command does get through, weakly but measurably.}
+$D^{(0)}$ is positive in 7 of 9 comparisons and reaches 15.3
+points; command information reaches 0.0992 bits; the label-swap null is exceeded in
+most cells. So this is not the paired-archive picture of a purely target-blind perturbation.
+The controller transmits a real, small directional signal on top of a large non-directional
+one. The ratio of the two is what the efficiencies measure, and it is small.
+
+\paragraph{4. The damage is not an information shortage.}
+Evidence coverage rises by a factor of 1.7 to 5.3 under
+control and grows with budget, the false-target controller supplies about as much coverage as
+the truth-target one, and no agent ever
+holds a complete proof in any arm. So the controller is supplying genuine facts while making
+collective inference worse. What it adds besides facts is a salient repeated vote. The
+natural next step is to say that agents copy that vote, but Section~\ref{sec:micro} tests
+that directly and cannot find it: holding the population and the update order fixed, reading
+more controller messages does not raise adoption. So the damage is neither an information
+shortage nor, apparently, direct per-message persuasion. What remains is a collective route
+--- the controller shifts a few agents, whose posts then shift others --- which the
+horizon evidence supports and which the micro test is structurally unable to see. The one
+benign corner, full communication at $\rho=0.75$ and $b=3$, is where autonomous performance
+is weakest and the controller speaks least; raising the budget there reverses the sign.
+
+\paragraph{5. ``Following'' is a trap.}
+Following improves in every comparison, because it averages the two own-target gains and the
+false branch is very good at installing the false answer. A metric can rise while the thing
+one cares about falls. This is the clearest single argument in the report for keeping
+signed, outcome-specific effects rather than a scalar success score.
+
+\section{What would falsify this, and what is not established}\label{sec:limits}
+\begin{itemize}
+\item \textbf{The sample is 60 initializations.} Not 1382 trajectories, not
+$24\times$ that in votes. Every interval here is a 49--60 unit bootstrap and
+is correspondingly wide. The bootstrap intervals on fitted information and divergence scores
+are conditional on the fitted predictions: they resample held-out contributions, not the
+whole training pipeline, and so omit training variability.
+\item \textbf{The snapshot is incomplete and its own validation is marked invalid.} Four
+full-communication/$\rho{=}1$ cells are missing, so the profile $\times$ persistence
+interaction is only identified at $\rho=0.75$. Claim~4 above rests on a single setting and
+should be treated as a hypothesis to test, not a finding.
+\item \textbf{Divergence estimates are lower bounds from fitted critics.} A ratio of two
+lower bounds has no guaranteed ordering with respect to the true efficiency. Ratios are
+suppressed wherever the cost bootstrap touches zero.
+\item \textbf{The mechanism is not established, and the micro test is not decisive against
+it either.} Exposure is near-universal in this design, so a null at the margin is also what
+saturation would produce; and the (episode $\times$ round) adjustment absorbs the collective
+propagation channel by construction. Separating saturation from mediation needs a design that
+randomizes exposure within a population, or that varies the target vote attached to a fixed
+set of facts.
+\item \textbf{No thermodynamic reading is offered.} $\mathcal C_\pi$ is a statistical
+displacement in nats, not heat, and no reverse process has been justified.
+\end{itemize}
+
+\section*{Reproduction}
+\begin{small}
+\begin{verbatim}
+.venv/bin/python -m rnd_init_metrics.run \
+  --config configs/analysis/rnd_init_metrics/\
+new_rnd_init_experiment.yaml --stage all
+\end{verbatim}
+\end{small}
+\noindent Source archive, opened read-only:\\
+\texttt{\small /Users/rsanchez/Projects/agents\_control/new\_rnd\_init\_experiment}\\
+Rounds table SHA-256: \texttt{\small 24425dd979098fc480102dfd40ee2f2e}
+
+\end{document}
