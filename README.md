@@ -128,6 +128,19 @@ Evaluator logs and private histories are never placed in later prompts. The
 real API client is stateless with respect to conversations; the shared client
 contains only HTTP pooling, endpoint, semaphore, and aggregate request metrics.
 
+### Offline analyses
+
+`analysis/` holds self-contained offline studies — code, prose and findings,
+versioned, unlike `results/`. See [`analysis/README.md`](analysis/README.md) for
+what is tracked and what is not.
+
+**The next MuSR blackboard-control experiments** (`task003-symmetric` and
+`task003-nosolution`) are specified in
+[`analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/`](analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/).
+That directory's `README.md` is the single source of truth: every property
+tabulated, the fact lists as JSON, which setup exists and which must be built,
+and the build steps. Both are marked PRELIMINARY.
+
 ## Tests
 
 ```bash

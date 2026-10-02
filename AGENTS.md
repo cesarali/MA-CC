@@ -53,6 +53,25 @@ This routing instruction does not authorize automatic uploads.
 
 ## Experiments
 
+### The next MuSR blackboard-control setups
+
+Two candidate setups, `task003-symmetric` and `task003-nosolution`, are
+specified in
+`analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/README.md`.
+Read that file in full before building or configuring either. It is the single
+source of truth: it tabulates every property, says which setup already exists
+and which must be built, explains how to read the JSON fact lists beside it, and
+gives the build steps.
+
+Two things that are easy to get wrong and are covered there: the
+`balanced` controller pool mode does not exist on `dev/rsanchez` (it is on
+`darius-MA-v1`), and `controller_fact_pool_mode` is a different option from
+`controller_report_pool_mode`.
+
+Both setups are marked PRELIMINARY. Do not freeze a study configuration from
+them without confirming with the author.
+
+
 For combining complementary completed studies before aggregation, use
 `mas-cc study merge` and read
 `docs/documentation/metrics/merging_complementary_studies.md`. Merge into a

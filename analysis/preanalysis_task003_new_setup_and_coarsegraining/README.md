@@ -1,5 +1,20 @@
 # preanalysis_task003_new_setup_and_coarsegraining — fixing the first batch of simulations and estimators
 
+> ## Building the next experiment? Go straight here.
+>
+> **[`50_next_experiment/designs/`](50_next_experiment/designs/)** — the two new
+> setups, `task003-symmetric` and `task003-nosolution`, with every property
+> tabulated, the fact lists as JSON, and step-by-step build instructions. Its
+> `README.md` is the single source of truth; read it in full before building.
+>
+> Neither setup exists yet. Each needs exactly two files written: a 24-agent
+> private assignment and a 12-fact controller pool. Everything else is reused
+> from `task_003` unchanged.
+>
+> The rest of this directory is the **analysis those designs came out of**. You
+> do not need it to build them, but §10 of that README says which part answers
+> what.
+
 **Start here.** One goal, three strands: understand what the task actually is,
 fix the controller so the two steering directions are comparable, and find a
 state representation in which information quantities can be estimated at all.
