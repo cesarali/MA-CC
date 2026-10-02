@@ -323,7 +323,7 @@ rules, and holding communication fixed is what lets the two be compared.
 # ---- agents ----
 game.options:
   social_mode: board
-  social_group_size: 24                 # see note
+  social_group_size: 23                 # max is population_size - 1; inert under sampling: full
   board:
     sampling: full                      # see note
     message_lifetime_rounds: 1
@@ -360,18 +360,55 @@ treatment is measured rather than estimated; and it is the reference the
 mechanism — an agent may cite a fact it saw on the board. `active_only` would
 stop facts spreading past their original holder and make the board inert.
 
-**`board.sampling: full` with `social_group_size` = population — a change from
-Darius.** His studies use `uniform` with `social_group_size: 7`, so each agent
+**`board.sampling: full` — a change from Darius.** Under `full` the agent reads
+**every** eligible board message and `social_group_size` is ignored entirely
+(`runtime.py`: `eligible_messages if rules.board_sampling == BOARD_SAMPLING_FULL`).
+It is still validated, and **must be between 1 and `population_size - 1`** — so
+23, never 24. His studies use `uniform` with `social_group_size: 7`, so each agent
 reads a random 7 of 15 board messages. That adds a per-round sampling lottery on
 top of epistemic decay, and it was inherited rather than chosen. Our designs
 control *exactly* what each agent holds; a reading lottery partly undoes that,
-and it is a second noise source for the estimator to absorb. Start with `full`,
-and add partial reading later as a deliberate factor if we want it. **Note the
-default `social_group_size` is 1**, so it must be set explicitly.
+and it is a second noise source for the estimator to absorb. Start with `full`, and add partial reading later as a deliberate factor if we
+want it. **Note the default `board.sampling` is `uniform` and the default
+`social_group_size` is 1** — leaving both unset means each agent reads one
+message per round.
 
-**`message_mode: recommendation_only`.** With `recommendation_plus_fact` the
-controller attaches a fact to a *privately targeted* message as well as posting
-publicly, which mixes a private channel into a public-board experiment.
+**`message_mode: recommendation_only`.** This option governs a *different
+channel* from the fact pool, and the distinction matters.
+
+The controller has **two separate ways to reach agents**:
+
+| channel | governed by | how many facts |
+|---|---|---|
+| **peer-slot substitution** — the controller occupies a focal agent's peer slot | `message_mode` | at most **one fact, fixed for the whole episode** |
+| **public board** — the controller posts REPORTs everyone can read | `controller_actuation_mode` + the pool options | many, re-selected each round |
+
+`message_mode` values, from the module docstring:
+
+- `recommendation_only` — the slot carries a recommendation and **no evidence**;
+  no fact reaches anyone through *this* channel.
+- `recommendation_plus_fact` — the recommendation plus **exactly one fact of the
+  frozen task, chosen before the episode and fixed for its duration**. Requires
+  `controller_evidence_strategy` (or legacy `controller_fact_id` /
+  `controller_fact_selector`).
+- `silent` — the **occlusion placebo**: the slot is consumed but nothing is put
+  in it, so the focal agent simply sees one peer fewer. Run against
+  `recommendation_only` at the same budget, the difference isolates the
+  directional effect of the recommendation from the loss of a peer.
+
+Our designs use the **board** channel, so `recommendation_only` is right: it
+keeps the peer-slot channel factless so that every fact the population receives
+from the controller arrives through the pool, where we control it.
+`recommendation_plus_fact` would add a second, one-fact-per-episode channel on
+top and confound the two.
+
+A documentation caveat: the module docstring says `recommendation_only` means
+"no fact enters anybody's `K_i` from the controller, ever". That was written
+before the board pathway existed and is now true only of the peer-slot channel.
+`FACTLESS_MESSAGE_MODES` also forbids setting
+`controller_fact_id`/`controller_fact_selector`/`controller_evidence_strategy`
+alongside `recommendation_only` — those belong to the peer-slot channel only and
+do not affect the pool.
 
 ## 6. What this leaves to decide
 
