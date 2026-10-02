@@ -188,20 +188,39 @@ control:
 `darius-MA-v1` (`CONTROLLER_FACT_POOL_BALANCED` in `controller.py`,
 `controller_balanced_fact_ids` in `data.py`). So:
 
-- **Route A, preferred** — merge that change from `darius-MA-v1` first. It is
-  small, tested, and reuses working code.
-- **Route B, no merge** — use `controller_report_pool_mode: target_aligned_v1`
-  with an explicit `controller_report_pool_fact_ids` list. This works on
-  `dev/rsanchez` today, **but `target_aligned_v1` carries extra behaviour**: per
-  `../../10_task_and_facts/task_003_redesign.md` it requires all six decisive
-  facts, excludes overlap with the false pool, and boosts decisive facts during
-  deterministic selection. All three would corrupt these designs. Verify against
-  the code before using Route B.
+**Merging `darius-MA-v1` is a prerequisite, not a preference.** There is no
+workaround. *(Corrected 2026-10-02: an earlier version of this file offered
+`target_aligned_v1` as a fallback. It cannot work — see below.)*
 
-Note the two option names are different things and are easy to confuse:
-`controller_fact_pool_mode` ∈ {`frozen`, `all_nondecisive`, `balanced`} selects
-the *menu*; `controller_report_pool_mode` ∈ {`frozen`, `target_aligned_v1`}
-selects *how the menu is resolved against the target*.
+`controller_report_pool_mode: target_aligned_v1`, the only alternative on
+`dev/rsanchez`, is a **truth-arm-only override**: it substitutes an explicit
+fact list when the resolved target is the truth target, and otherwise falls back
+to the task's frozen pool. It therefore produces **two different menus**, which
+is exactly what rule 2 in §6 forbids. It also enforces three hard checks that
+these designs violate — each a `raise ValueError`, not a warning:
+
+1. the explicit pool **must contain every decisive fact** — ours contains none,
+   by construction;
+2. it **must not overlap the frozen false-target pool**;
+3. the target must be a truth target **distinct from** the task's declared
+   controller target.
+
+See `reportable_fact_ids_for_target` in
+`src/mas_cc/games/relational_reasoning/imitation_round_feedback/controller.py`.
+
+The two option names are different things and are easy to confuse:
+
+| option | what it selects | target-aware? | values |
+|---|---|---|---|
+| `controller_fact_pool_mode` *(darius only)* | **which facts are on the menu** | **no** — `reportable_fact_ids(task)` takes no target | `frozen`, `all_nondecisive`, `balanced` |
+| `controller_report_pool_mode` *(both branches)* | **how the menu resolves against the target** | **yes** | `frozen`, `target_aligned_v1` |
+
+`controller_report_pool_mode: frozen` returns the task's frozen pool whatever the
+target — **that is the original defect**. Our designs need the target-independent
+option, which only exists on `darius-MA-v1`.
+
+**The budget protocol is also darius-only**, and so is v0.4's experimental
+design. See `../protocols_2026-10-02.md` §4.
 
 ### Step 5 — set population size and verify
 
