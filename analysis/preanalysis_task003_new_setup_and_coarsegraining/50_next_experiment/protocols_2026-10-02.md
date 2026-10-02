@@ -255,15 +255,133 @@ That is what makes the shared baseline v0.4 asks for actually reusable.
 
 ---
 
+## 5b. Which communication modes to use — the recommendation
+
+### First, the thing that is not obvious: the controller's mode is *derived*
+
+You do not choose the controller's communication policy directly. The runtime
+**derives** it from two things you do choose — `controller_authoring` and the
+agents' `board.communication_profile`:
+
+| `controller_authoring` | agents' profile | derived controller policy |
+|---|---|---|
+| `deterministic` | either | `contextual_weighted_v1` |
+| `llm_authored` | `report_only` | `llm_authored_fixed_report_only_v1` |
+| `llm_authored` | `full_communication` | `llm_authored_full_communication_v1` |
+| `llm_authored` | `full_communication` + `controller_allow_mixed_message_types` | `llm_authored_mixed_full_communication_v1` |
+
+See `runtime.py`, the `effective_communication_policy` block. Two hard rules
+there:
+
+1. **Controlled runs must set `communication_profile` and
+   `controller_authoring` together** — setting one without the other raises
+   `"controlled runs must set communication_profile and controller_authoring
+   together"`.
+2. **The agents' profile caps the controller's message types.** Under
+   `report_only` the controller may post only `REPORT`; under
+   `full_communication` it may also post `REQUEST` and `DIRECTIVE`.
+
+So "agent communication mode" and "controller communication mode" are not two
+independent choices. There is one choice — the profile — plus the authoring
+mode.
+
+### Second: only two actuation modes can post facts at all
+
+`controller_actuation_mode` has four values, but
+`select_truthful_reports` returns `()` unless the mode is
+`truthful_strategic_report` or `adaptive_communication`. The other two —
+`direct_recommendation`, `coordination_request` — never put a pool fact on the
+board.
+
+**Both our designs are entirely about which facts the controller selects from a
+12-fact pool. So anything other than those two modes makes the design
+meaningless.** And `controller_authoring` additionally *requires*
+`adaptive_communication`.
+
+Also: `controller_timing: dawn_only` is incompatible with
+`direct_recommendation`.
+
+### Third: two mutually exclusive controller interfaces
+
+| | interface | set by | status |
+|---|---|---|---|
+| **A** | `controller_authoring` ∈ {`deterministic`, `llm_authored`} | requires `controller_actuation_mode: adaptive_communication` | the maintained path; Darius's studies use it |
+| **B** | `controller_communication_policy` ∈ {`contextual_weighted_v1`, `llm_structured_v1`, `llm_authored_report_only_v1`} | — | legacy; the archived `task_003` study used it |
+
+Setting `controller_authoring` makes five fields illegal —
+`controller_communication_policy`, `_version`, `_fallback_policy`,
+`allow_controller_requests`, `allow_controller_directives` — each a separate
+validation error. **Pick one interface. Use A.**
+
+### The recommendation
+
+Identical for both setups, and the reason is that the two setups differ only in
+*who holds which facts*. Nothing about them argues for different communication
+rules, and holding communication fixed is what lets the two be compared.
+
+```yaml
+# ---- agents ----
+game.options:
+  social_mode: board
+  social_group_size: 24                 # see note
+  board:
+    sampling: full                      # see note
+    message_lifetime_rounds: 1
+    communication_profile: report_only
+    require_grounded_reports: true
+    report_citation_scope: active_or_observed
+    exclude_self_authored: true
+    allow_no_post: true
+
+# ---- controller ----
+control.options:
+  controller_actuation_mode: adaptive_communication
+  controller_authoring: deterministic   # llm_authored in the second pass
+  message_mode: recommendation_only
+  controller_timing: dawn_only
+  controller_fact_pool_mode: balanced   # DARIUS ONLY
+  controller_report_selection_strategy: target_preserving_v1
+```
+
+**`communication_profile: report_only`, not `full_communication`.** Reports are
+the channel that carries facts, and facts are the entire treatment. Requests add
+a second channel whose content is not a fact, so it adds variance without
+adding anything to the quantity being measured. Plan v0.4 agrees on ordering:
+it puts report-only ahead of full communication in its priority list. Add
+`full_communication` later as a factor, not now.
+
+**`controller_authoring: deterministic` first.** Reasons in
+`design_preliminary_2026-10-02.md` §2: it makes the posting sequence a known
+function of the sensed state rather than something a model improvises, so the
+treatment is measured rather than estimated; and it is the reference the
+`llm_authored` controller has to be compared against.
+
+**`report_citation_scope: active_or_observed`, keep it.** It is the propagation
+mechanism — an agent may cite a fact it saw on the board. `active_only` would
+stop facts spreading past their original holder and make the board inert.
+
+**`board.sampling: full` with `social_group_size` = population — a change from
+Darius.** His studies use `uniform` with `social_group_size: 7`, so each agent
+reads a random 7 of 15 board messages. That adds a per-round sampling lottery on
+top of epistemic decay, and it was inherited rather than chosen. Our designs
+control *exactly* what each agent holds; a reading lottery partly undoes that,
+and it is a second noise source for the estimator to absorb. Start with `full`,
+and add partial reading later as a deliberate factor if we want it. **Note the
+default `social_group_size` is 1**, so it must be set explicitly.
+
+**`message_mode: recommendation_only`.** With `recommendation_plus_fact` the
+controller attaches a fact to a *privately targeted* message as well as posting
+publicly, which mixes a private channel into a public-board experiment.
+
 ## 6. What this leaves to decide
 
 1. **Merge `darius-MA-v1` first.** Not optional; nothing else can proceed.
    Scope of what we need: `controller_fact_pool_mode` (+ `balanced` and the
    `data.py` loader), `controller_budget_scope`, `controller_round_budget_mode`,
    `controller_memory_mode`, and the episode-scope budget relaxation.
-2. **Agent board sampling: keep `uniform` at 7 of 15, or switch to `full`?**
-   Partial agent observation is a mechanism nobody has decided on — it is
-   inherited, not chosen. With 24 agents the sample fraction changes too.
+2. **Agent board sampling — we recommend `full`** (§5b). Darius's `uniform` at
+   7 of 15 was inherited, not chosen, and adds a per-round reading lottery on
+   top of epistemic decay.
 3. **`report_citation_scope`: keep `active_or_observed`?** It is the propagation
    mechanism. `active_only` would make the board inert.
 4. **`advocacy_schedule`: fix it across arms**, or treat activation as a measured
