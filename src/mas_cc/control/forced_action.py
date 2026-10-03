@@ -11,6 +11,7 @@ from mas_cc.core import AgentId
 from mas_cc.llm_runtime.exceptions import ConfigurationError
 from mas_cc.llm_runtime.validation import ValidationIssue
 
+from .options import ReadTrackingOptions
 from .protocols import Control
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ class ForcedActionControl(Control):
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> "ForcedActionControl":
+        options = ReadTrackingOptions(options)
         raw_agent_ids = options.get("agent_ids")
         if not isinstance(raw_agent_ids, Sequence) or isinstance(raw_agent_ids, (str, bytes)) or not raw_agent_ids:
             raise ConfigurationError(
@@ -75,6 +77,9 @@ class ForcedActionControl(Control):
                 [ValidationIssue("control.options.until_interaction", "must be a positive integer or null")],
                 context="control creation",
             )
+        unread = options.unread_issues()
+        if unread:
+            raise ConfigurationError(unread, context="control creation")
         return cls(agent_ids=agent_ids, forced_value=forced_value, until_interaction=until_interaction)
 
 
