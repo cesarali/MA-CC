@@ -86,6 +86,9 @@ class ControllerPolicy:
     gate: str = "always"               # "always" or "soft"
     beta: float = 4.0
     cooldown: int = 0
+    # Field added to the posting log-odds, for the susceptibility measurement of
+    # Darius's Eq. (31): g_h(s) = sigmoid(beta*(threshold - s) + h).
+    h: float = 0.0
     # CHOICE. "lru" reproduces select_truthful_reports exactly: a
     # least-recently-used rotation in which the target only breaks ties.
     # "greedy_posterior" is the oracle: pick the facts that most raise the
@@ -251,7 +254,11 @@ class ExactGame:
         m = sum(self.posterior(a.active)[self.cp.target] for a in agents) / len(agents)
         import math
 
-        return random.random() < 1.0 / (1.0 + math.exp(-self.cp.beta * (self.cp.threshold - m)))
+        z = self.cp.beta * (self.cp.threshold - m) + self.cp.h
+        self._last_g = 1.0 / (1.0 + math.exp(-z))
+        fired = self._gate_rng.random() < self._last_g
+        self._score_sum += (1.0 if fired else 0.0) - self._last_g   # likelihood score
+        return fired
 
     def _controller_facts(
         self,
@@ -294,6 +301,8 @@ class ExactGame:
     def run_episode(self, episode_seed: int, task_id: str = "task003") -> list[dict]:
         r = self.rules
         rng = random.Random(episode_seed)
+        self._gate_rng = random.Random(episode_seed ^ 0x5EED)
+        self._score_sum = 0.0
         agents = [
             Agent(aid, known=set(facts), active=set(facts))
             for aid, facts in sorted(self.assignment.items())
@@ -378,6 +387,7 @@ class ExactGame:
                     "controller_posts": n_ctl,
                     "activations": exposures,
                     "board_size": len(board),
+                    "score": self._score_sum,
                 }
             )
         return rows

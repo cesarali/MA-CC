@@ -28,6 +28,14 @@ exact Bayesian arithmetic in place of the model.
 | decision | `sigmoid(β_e·e + β_s·s)` | **argmax of the exact posterior** |
 | free parameters | `β_evidence`, `β_social`, overload | **none** |
 
+## The three reports
+
+| | file | what it answers |
+|---|---|---|
+| **1** | [`01_how_it_all_works.pdf`](01_how_it_all_works.pdf) | **Start here.** The task, what the agents do, what the controller does, every available mode, the two pools we chose, the plan — with a diagram. Then the Darius-style vote-trajectory and susceptibility plots |
+| **2** | [`02_simulation_and_comparison.pdf`](02_simulation_and_comparison.pdf) | The sweep, the coarse-grained states, the path-KL estimates, and the point-by-point comparison with the task_004 thermodynamics model |
+| **3** | [`03_mean_field_theory.pdf`](03_mean_field_theory.pdf) | The mean-field theory: full derivation, continuous-time limit, numerical solution, **why it fails**, and three concrete repairs |
+
 ## Files
 
 | | |
