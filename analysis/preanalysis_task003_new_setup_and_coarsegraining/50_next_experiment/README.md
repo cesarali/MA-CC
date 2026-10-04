@@ -5,6 +5,9 @@ been launched.
 
 ## Read in this order
 
+**One page on everything decided, open, and broken:**
+[`SUMMARY_2026-10-04.md`](SUMMARY_2026-10-04.md)
+
 **If you just want to know what we are running:**
 [`EXPERIMENTS.md`](EXPERIMENTS.md) — the two setups, their arms, the three
 phases of settings, and the cell counts.
@@ -19,9 +22,11 @@ The rest, in order:
 |---|---|---|
 | 1 | [`prior_art_2026-10-02.md`](prior_art_2026-10-02.md) | What already exists: Darius's balanced controller pool and `task_004` studies on `darius-MA-v1`, plan v0.4, and how the two externally-written files in `../10_task_and_facts/` fit |
 | 2 | [`design_preliminary_2026-10-02.md`](design_preliminary_2026-10-02.md) | The proposed design, the controller recommendation, and the sample-size calculation |
-| 3 | [`protocols_2026-10-02.md`](protocols_2026-10-02.md) | **The three protocols** — agent comms, controller comms, controller budget — the full option surface, what Darius set, and why `darius-MA-v1` must be merged |
-| 4 | [`designs/`](designs/) | **The three concrete setups** — v0 reference, symmetric-v2, nosolution-v2 — with fact lists, and what slot lean means |
-| 5 | [`builders/`](builders/) | The search that produced them, and the scarcity constraint that bounds it |
+| 3 | [`merge_assessment_2026-10-04.md`](merge_assessment_2026-10-04.md) | The merge with `darius-MA-v1`, tested; and the two latent repository breakages |
+| 4 | [`research_directions_2026-10-04.md`](research_directions_2026-10-04.md) | Posterior-aware control, the LLM-free simulator, the mean-field Langevin theory — and what already exists in `src/santa_fe*` |
+| 5 | [`protocols_2026-10-02.md`](protocols_2026-10-02.md) | **The three protocols** — agent comms, controller comms, controller budget — the full option surface, what Darius set, and why `darius-MA-v1` must be merged |
+| 6 | [`designs/`](designs/) | **The three concrete setups** — v0 reference, symmetric-v2, nosolution-v2 — with fact lists, and what slot lean means |
+| 7 | [`builders/`](builders/) | The search that produced them, and the scarcity constraint that bounds it |
 
 ## The short version
 
