@@ -223,7 +223,6 @@ def test_targeted_scientific_recipe_is_paired():
     assert sample.sample_size["episode_counts"] == [10, 20, 30, 50, 75, 100, 200]
 
 
-<<<<<<< HEAD
 def test_rho_phase_recipe_keeps_other_sweep_axes():
     original = load_config("configs/santa_fe/beta_cmi_sweep.yaml")
     phase = load_config("configs/santa_fe/rho_phase_sweep.yaml")
@@ -234,7 +233,6 @@ def test_rho_phase_recipe_keeps_other_sweep_axes():
     assert {(cell.params.beta_evidence, cell.params.beta_social) for cell in phase.cells} == {
         (cell.params.beta_evidence, cell.params.beta_social) for cell in original.cells}
     assert phase.episodes == original.episodes
-=======
 def test_v3_semantic_clock_and_event_ledger():
     import json
     from dataclasses import replace
@@ -422,4 +420,3 @@ def test_v3_shared_information_engine_and_sensing_source(monkeypatch):
             pd.isna(before["estimate"]) and pd.isna(after["estimate"]))
         assert before["round_dual_action_event_fraction"] == after["round_dual_action_event_fraction"]
     assert len(reference_nulls) == len(fast_nulls)
->>>>>>> f5ad4ef0dd572062917686249173e365f72766dd
