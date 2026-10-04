@@ -168,6 +168,25 @@ class ExactGame:
             winners = [k for k in range(3) if p[k] == best]
             # deterministic tie-break, so a tie does not inject noise
             return winners[0] if len(winners) == 1 else rng.choice(winners)
+        if self.ap.vote_rule == "softmax_prob":
+            # Darius's task004 rule, Eq. (8): softmax over the PROBABILITIES
+            # themselves, not their logs, with beta = 20. This is not
+            # "artificial confusion": without it the argmax agent is
+            # deterministic and the coarse-grained chain collapses onto
+            # absorbing states, which an LLM population does not do.
+            import math
+
+            z = [self.ap.beta * p[k] for k in range(3)]
+            m = max(z)
+            e = [math.exp(v - m) for v in z]
+            tot = sum(e)
+            r = rng.random() * tot
+            acc = 0.0
+            for k in range(3):
+                acc += e[k]
+                if r <= acc:
+                    return k
+            return 2
         if self.ap.vote_rule == "softmax":
             import math
 

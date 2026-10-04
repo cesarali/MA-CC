@@ -59,11 +59,15 @@ game:
     invalid_response_retries: 4
     expected_validation_failure_rate: 0.15
     board:
-      sampling: full                  # read the WHOLE board. Darius uses uniform at
-                                      # 7 of 15, which adds a per-round reading
-                                      # lottery on top of epistemic decay and partly
-                                      # undoes the control these designs exert over
-                                      # what each agent holds
+      sampling: uniform               # CORRECTED 2026-10-04. We first recommended
+                                      # `full` on the grounds that a reading lottery
+                                      # adds noise. The LLM-free simulation shows the
+                                      # opposite at rho = 1: with `full` the
+                                      # population saturates by round 5 and all 60
+                                      # episodes end IDENTICALLY (sd(e) = 0.0000, one
+                                      # distinct endpoint). With uniform q = 7 there
+                                      # are 17. Darius's inherited setting is right.
+                                      # See ../../60_exact_simulation/.
       message_lifetime_rounds: 1       # front-page board: last round only, no history
       communication_profile: report_only
                                       # reports are the only channel carrying facts,
