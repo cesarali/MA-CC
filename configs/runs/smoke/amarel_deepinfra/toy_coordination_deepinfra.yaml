@@ -1,0 +1,74 @@
+schema_version: 1
+
+llm_provider:
+  type: deepinfra
+  model: deepseek-ai/DeepSeek-V4-Flash-0731
+  credentials_env: DEEPINFRA_API_KEY
+  base_url_env: DEEPINFRA_BASE_URL
+  timeout_seconds: 60
+  max_retries: 1
+  request_concurrency: 1
+  temperature: 0.0
+  max_output_tokens: 64
+  options:
+    estimated_latency_seconds: 2.0
+    # The toy prompt requires one literal A/B choice rather than a JSON object.
+    response_format: null
+
+prompt:
+  component: ../../../components/prompts/toy_coordination_v3.yaml
+
+game:
+  component: ../../../components/games/toy_coordination.yaml
+  overrides:
+    horizon: 2
+
+execution:
+  schema_version: 1
+  seed: 20260901
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  schema_version: 1
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  schema_version: 1
+  accounting_unit: USD
+  system_max_cost_per_run: 0.10
+  max_cost_per_run: 0.10
+  max_provider_requests: 10
+  max_input_tokens: 10000
+  max_output_tokens: 640
+  allow_unbounded_paid_requests: false
+
+logging:
+  component: ../../../components/logging/default.yaml
+  overrides:
+    comet: false
+
+storage:
+  component: ../../../components/storage/local.yaml
+  overrides:
+    artifact_profile: full
+    overwrite: false
+
+analysis:
+  schema_version: 1
+  enabled: false
+  estimators: []
+
+experiment:
+  schema_version: 1
+  name: amarel-deepinfra-toy-smoke
+  description: One two-agent, two-interaction DeepInfra episode on Amarel.
+  tags: [smoke, amarel, deepinfra, deepseek-v4-flash-0731]
+
+grid:
+  # One explicit scientific cell exercises the generic cell-array worker.
+  game.horizon: [2]

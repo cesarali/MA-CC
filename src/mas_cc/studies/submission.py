@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -19,8 +20,9 @@ from mas_cc.config import GridSpec, load_run_config_or_grid
 from mas_cc.storage import canonical_hash
 
 from .manifest import StudySpec, discover_study
+from .runtime import EXECUTION_SITES
 from .drain import _atomic_json
-from .site import default_study_launcher
+from .site import active_cluster, default_study_launcher
 
 
 SUBMISSION_COLUMNS = (
@@ -34,6 +36,26 @@ SUBMISSION_COLUMNS = (
     "execution_seed",
     "git_commit",
 )
+
+AMAREL_ACCOUNT = "general"
+AMAREL_PARTITION = "main"
+AMAREL_QOS = "normal"
+AMAREL_MAX_WALLTIME_SECONDS = 72 * 60 * 60
+AMAREL_RESULTS_ROOT = "/scratch/df630/MA-CC-results"
+
+# Cesar is the private SLURM-on-Kubernetes cluster. It has one shared NFS mount
+# and no per-user scratch, so results and the checked-out repository both live
+# under /shared.
+CESAR_PARTITION = "main"
+CESAR_RESULTS_ROOT = "/shared/MA-CC-results"
+
+# NERSC has no folder here because its studies go through `mas-cc study prepare`
+# plus scripts/nersc/, never through this sbatch path.
+_SITE_JOB_SCRIPT_FOLDERS = {
+    "amarel": "scripts/Amarel/SLURM",
+    "cesar": "scripts/Cesar/SLURM",
+    "potsdam": "scripts/Potsdam/SLURM",
+}
 
 
 def _now() -> str:
@@ -53,6 +75,34 @@ def _file_hash(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _slurm_walltime_seconds(value: str) -> int:
+    match = re.fullmatch(r"(?:(\d+)-)?(\d+):(\d{2}):(\d{2})", value)
+    if match is None:
+        raise ValueError(f"invalid SLURM time limit: {value!r}")
+    days, hours, minutes, seconds = (int(item or 0) for item in match.groups())
+    if minutes >= 60 or seconds >= 60:
+        raise ValueError(f"invalid SLURM time limit: {value!r}")
+    return ((days * 24 + hours) * 60 + minutes) * 60 + seconds
+
+
+def _absolute_path(path: str | Path, *, preserve_symlinks: bool = False) -> Path:
+    expanded = Path(path).expanduser()
+    if preserve_symlinks:
+        if expanded.is_absolute():
+            return Path(os.path.abspath(str(expanded)))
+        logical_cwd = Path(os.environ.get("PWD", os.getcwd()))
+        candidate = logical_cwd / expanded
+        if candidate.exists():
+            return Path(os.path.normpath(str(candidate)))
+    return expanded.resolve()
+
+
+def _default_job_script(execution_site: str, *, cell_array: bool) -> Path:
+    filename = "run_study_cell_array.job" if cell_array else "run_config_array.job"
+    folder = _SITE_JOB_SCRIPT_FOLDERS.get(execution_site, "scripts/Potsdam/SLURM")
+    return Path(folder) / filename
 
 
 def _git_commit(root: Path) -> str:
@@ -100,7 +150,7 @@ def build_submission_entries(
 ) -> tuple[SubmissionEntry, ...]:
     """Resolve every config and create the stable scientific array mapping."""
 
-    destination = Path(results_dir).expanduser().resolve()
+    destination = Path(os.path.abspath(str(Path(results_dir).expanduser())))
     commit = _git_commit(spec.config_dir) if git_commit is None else git_commit
     entries: list[SubmissionEntry] = []
     labels: set[str] = set()
@@ -286,12 +336,34 @@ def submit_study(
     *,
     throttle: int | None = None,
     job_script: str | Path | None = None,
+    require_results_under: str | Path | None = None,
+    execution_site: str | None = None,
     run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> SubmissionResult:
     """Preflight all configs, publish manifests, then call ``sbatch`` exactly once."""
 
     from mas_cc.cli.experiment import run_experiment_preflight
 
+    if run is None and os.environ.get("NERSC_HOST") == "perlmutter":
+        raise ValueError(
+            "batch study submission is disabled on NERSC Perlmutter; use "
+            "`mas-cc study prepare` followed by `scripts/nersc/run_study.sh` "
+            "so the allocation uses --qos=interactive"
+        )
+    if execution_site is not None and execution_site not in EXECUTION_SITES:
+        raise ValueError(
+            "execution_site must be one of "
+            + ", ".join(repr(site) for site in EXECUTION_SITES)
+        )
+    # An explicit site selects that site's launchers. With none, the launcher
+    # comes from main's detection of the active cluster (Cygnus or Potsdam),
+    # and preparation.json records the site that launcher declares: the
+    # Cygnus launcher declares none, the Potsdam one declares "potsdam".
+    # A mismatch would make validate_study_execution_site refuse to start.
+    if execution_site is not None:
+        recorded_site = execution_site
+    else:
+        recorded_site = "unspecified" if active_cluster() == "cygnus" else "potsdam"
     spec = discover_study(config_dir)
     from .preflight import validate_study_preflight_contract
 
@@ -299,20 +371,57 @@ def submit_study(
     _validate_required_initializations(spec)
     runner = subprocess.run if run is None else run
     configured_results = spec.execution.get("results_root")
-    study_dir = (
-        Path(results_dir or configured_results or (Path("results") / spec.name))
-        .expanduser()
-        .resolve()
+    amarel_results_root = _absolute_path(
+        os.environ.get("AMAREL_RESULTS_ROOT", AMAREL_RESULTS_ROOT),
+        preserve_symlinks=execution_site == "amarel",
     )
-    required_results_under = spec.execution.get("require_results_under")
+    cesar_results_root = _absolute_path(
+        os.environ.get("CESAR_RESULTS_ROOT", CESAR_RESULTS_ROOT)
+    )
+    if execution_site == "amarel" and results_dir is None:
+        configured_results = amarel_results_root / spec.name
+    # Cesar keeps everything on one shared NFS mount. A study config checked in
+    # for Potsdam or Amarel carries an absolute results_root for that site,
+    # which does not exist here, so pin the Cesar root instead of inheriting it.
+    if execution_site == "cesar" and results_dir is None:
+        configured_results = cesar_results_root / spec.name
+    study_dir = _absolute_path(
+        results_dir or configured_results or (Path("results") / spec.name),
+        preserve_symlinks=execution_site == "amarel",
+    )
+    site_required_root = {
+        "amarel": amarel_results_root,
+        "cesar": cesar_results_root,
+    }.get(execution_site)
+    required_results_under = (
+        require_results_under
+        if require_results_under is not None
+        else (
+            site_required_root
+            if site_required_root is not None
+            else spec.execution.get("require_results_under")
+        )
+    )
     if required_results_under is not None:
-        required_root = Path(str(required_results_under)).expanduser().resolve()
+        required_root = _absolute_path(
+            str(required_results_under),
+            preserve_symlinks=execution_site == "amarel",
+        )
         try:
             study_dir.relative_to(required_root)
         except ValueError as exc:
             raise ValueError(
                 f"study results must be stored under {required_root}, got {study_dir}"
             ) from exc
+        if require_results_under is not None or site_required_root is not None:
+            spec = replace(
+                spec,
+                execution={
+                    **spec.execution,
+                    "results_root": str(study_dir),
+                    "require_results_under": str(required_root),
+                },
+            )
     prior_submission = study_dir / "submission.json"
     if prior_submission.is_file():
         previous = json.loads(prior_submission.read_text(encoding="utf-8"))
@@ -413,12 +522,48 @@ def submit_study(
             json.dumps(execution_plan, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        script = Path(job_script or default_study_launcher(cell_array=True)).resolve()
+        script = _absolute_path(
+            job_script
+            or (
+                _default_job_script(execution_site, cell_array=True)
+                if execution_site is not None
+                # No explicit site: main's detection of the active cluster.
+                else default_study_launcher(cell_array=True)
+            ),
+            preserve_symlinks=execution_site == "amarel",
+        )
         array = f"0-{plan.shard_count - 1}%{plan.array_throttle}"
+        if execution_site == "amarel":
+            if _slurm_walltime_seconds(plan.time_limit) > AMAREL_MAX_WALLTIME_SECONDS:
+                raise ValueError("Amarel time limit cannot exceed 3-00:00:00")
+            scheduler_options = (
+                f"--account={AMAREL_ACCOUNT}",
+                f"--partition={AMAREL_PARTITION}",
+                f"--qos={AMAREL_QOS}",
+                f"--chdir={script.parents[3]}",
+                f"--export=ALL,AMAREL_REPO_ROOT={script.parents[3]}",
+            )
+        elif execution_site == "cesar":
+            # SLURM copies the batch script into /var/spool/slurmd, so the job
+            # cannot find _common.sh relative to itself. Amarel solves this with
+            # --export=ALL,VAR=..., but on this cluster any explicit VAR=value
+            # in --export makes the batch job hang forever without ever opening
+            # its output file (--export=ALL alone is fine). So pass the
+            # repository root through --chdir instead and let the job script
+            # resolve it from its working directory.
+            scheduler_options = (
+                f"--partition={plan.partition}",
+                f"--qos={plan.qos}",
+                f"--chdir={script.parents[3]}",
+            )
+        else:
+            scheduler_options = (
+                f"--partition={plan.partition}",
+                f"--qos={plan.qos}",
+            )
         command = (
             "sbatch",
-            f"--partition={plan.partition}",
-            f"--qos={plan.qos}",
+            *scheduler_options,
             "--nodes=1",
             "--ntasks=1",
             f"--array={array}",
@@ -434,7 +579,16 @@ def submit_study(
         from .execution import plan_config_execution
 
         plan = plan_config_execution(spec, len(entries))
-        script = Path(job_script or default_study_launcher(cell_array=False)).resolve()
+        script = _absolute_path(
+            job_script
+            or (
+                _default_job_script(execution_site, cell_array=False)
+                if execution_site is not None
+                # No explicit site: main's detection of the active cluster.
+                else default_study_launcher(cell_array=False)
+            ),
+            preserve_symlinks=execution_site == "amarel",
+        )
         if throttle is not None:
             if throttle < 1:
                 raise ValueError("SLURM array throttle must be a positive integer")
@@ -462,8 +616,23 @@ def submit_study(
             encoding="utf-8",
         )
         array = f"0-{len(entries) - 1}%{plan.array_throttle}"
+        if execution_site == "amarel":
+            scheduler_options = (
+                f"--account={AMAREL_ACCOUNT}",
+                f"--partition={AMAREL_PARTITION}",
+                f"--qos={AMAREL_QOS}",
+                f"--chdir={script.parents[3]}",
+                f"--export=ALL,AMAREL_REPO_ROOT={script.parents[3]}",
+            )
+        elif execution_site == "cesar":
+            # See the cell-array branch: --export=ALL,VAR=... hangs batch jobs
+            # on this cluster, so the repository root arrives via --chdir.
+            scheduler_options = (f"--chdir={script.parents[3]}",)
+        else:
+            scheduler_options = ()
         command = (
             "sbatch",
+            *scheduler_options,
             f"--array={array}",
             f"--partition={plan.partition}",
             f"--qos={plan.qos}",
@@ -479,6 +648,23 @@ def submit_study(
         )
     if not script.is_file():
         raise ValueError(f"SLURM study job script does not exist: {script}")
+    (study_dir / "preparation.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "prepared",
+                "prepared_at": _now(),
+                "execution_site": recorded_site,
+                "array": array,
+                "worker_manifest": str(execution_manifest or manifest_path),
+                "execution_plan": execution_plan,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     drain_policy = dict((execution_plan or {}).get("graceful_drain") or {})
     signal_option = (
         (f"--signal=B:{drain_policy['signal']}@{drain_policy['lead_seconds']}",)
@@ -524,6 +710,35 @@ def submit_study(
     )
 
 
+def prepare_study(
+    config_dir: str | Path,
+    results_dir: str | Path | None = None,
+    *,
+    throttle: int | None = None,
+    job_script: str | Path | None = None,
+    require_results_under: str | Path | None = None,
+    execution_site: str | None = None,
+) -> SubmissionResult:
+    """Prepare manifests and a scheduler command without contacting SLURM."""
+
+    def _capture(
+        command: Sequence[str], **_: Any
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 0\n", "")
+
+    result = submit_study(
+        config_dir,
+        results_dir,
+        throttle=throttle,
+        job_script=job_script,
+        require_results_under=require_results_under,
+        execution_site=execution_site,
+        run=_capture,
+    )
+    (result.study_dir / "submission.json").unlink(missing_ok=True)
+    return replace(result, job_id=None)
+
+
 __all__ = [
     "SUBMISSION_COLUMNS",
     "SubmissionEntry",
@@ -532,6 +747,7 @@ __all__ = [
     "build_submission_entries",
     "read_submission_manifest",
     "resolve_array_entry",
+    "prepare_study",
     "submit_study",
     "write_submission_manifest",
 ]

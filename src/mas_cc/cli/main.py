@@ -230,6 +230,20 @@ def build_parser() -> argparse.ArgumentParser:
         "study", help="submit and aggregate a folder of ordinary experiment configs"
     )
     study_commands = study.add_subparsers(dest="study_command", required=True)
+    study_prepare = study_commands.add_parser(
+        "prepare", help="preflight every config and write worker manifests without submitting"
+    )
+    study_prepare.add_argument("--config-dir", type=Path, required=True)
+    study_prepare.add_argument("--results-dir", type=Path)
+    study_prepare.add_argument("--throttle", type=int)
+    study_prepare.add_argument("--require-results-under", type=Path)
+    study_prepare.add_argument(
+        "--execution-site",
+        choices=("amarel", "cesar", "nersc", "potsdam"),
+        default=None,
+        help="scheduler adapter; omit to use the launcher for the active Slurm cluster "
+        "(on Cygnus, which is Cesar, pass cesar to run from this checkout)",
+    )
     study_preflight = study_commands.add_parser(
         "preflight", help="validate every config and the optional strict study contract"
     )
@@ -260,7 +274,20 @@ def build_parser() -> argparse.ArgumentParser:
     study_submit.add_argument(
         "--job-script",
         type=Path,
-        help="generic study launcher override (default: selected from the active Slurm cluster)",
+        help="override the launcher chosen by --execution-site, or by the active Slurm "
+        "cluster when no site is given",
+    )
+    study_submit.add_argument(
+        "--execution-site",
+        choices=("amarel", "cesar", "potsdam"),
+        default=None,
+        help="scheduler adapter; omit to use the launcher for the active Slurm cluster "
+        "(on Cygnus, which is Cesar, pass cesar to run from this checkout)",
+    )
+    study_submit.add_argument(
+        "--require-results-under",
+        type=Path,
+        help="explicit site result boundary recorded in the prepared manifest",
     )
     study_drain = study_commands.add_parser("drain", help="request a resumable stop of an active study job")
     study_drain.add_argument("--study-dir", type=Path, required=True)
@@ -523,6 +550,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=4,
         help="bins per axis for the coarse (kappa, phi) diagnostic conditioning",
+    )
+    relational_analysis.add_argument(
+        "--theoretical-reference",
+        choices=("single_affinity_revised", "none", "matched_qvoter_null"),
+        default="single_affinity_revised",
+        help=(
+            "closed-form curve to compare against; must be 'none' for a "
+            "finite-memory board run or finite epistemic persistence, whose "
+            "dynamics the single-affinity theory does not describe"
+        ),
     )
 
     benchmark = commands.add_parser(
@@ -850,6 +887,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(f"  Report: {result.output_dir / 'report.md'}")
         return 0
+    if args.command == "study" and args.study_command == "prepare":
+        from mas_cc.studies import prepare_study
+
+        try:
+            result = prepare_study(
+                args.config_dir,
+                args.results_dir,
+                throttle=args.throttle,
+                require_results_under=args.require_results_under,
+                execution_site=args.execution_site,
+            )
+        except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        worker_manifest = (
+            result.study_dir / "execution_manifest.csv"
+            if result.execution_plan is not None
+            else result.manifest_path
+        )
+        print(f"Study {result.study_dir.name} prepared: {len(result.entries)} config(s), {result.study_dir}")
+        print(f"  Worker manifest: {worker_manifest}")
+        return 0
     if args.command == "study" and args.study_command == "initialize":
         from mas_cc.studies.initialization import materialize_study_initializations
 
@@ -870,6 +929,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.results_dir,
                 throttle=args.throttle,
                 job_script=args.job_script,
+                execution_site=args.execution_site,
+                require_results_under=args.require_results_under,
             )
         except (ConfigurationError, ProviderError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
@@ -1182,6 +1243,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 confidence=args.confidence,
                 seed=args.seed,
                 epistemic_bins=args.epistemic_bins,
+                theoretical_reference=args.theoretical_reference,
             )
         except (ConfigurationError, OSError, ValueError, FileNotFoundError) as exc:
             print(str(exc), file=sys.stderr)

@@ -1,0 +1,22 @@
+study: {name: blackboard_deepinfra_smoke}
+configs: [blackboard_smoke.yaml]
+execution:
+  mode: auto
+  target_rpm: 60
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 1
+  memory: 4G
+  time_limit: "00:30:00"
+  partition: main
+  qos: normal
+  results_root: /scratch/df630/MA-CC-results/smoke/blackboard_deepinfra_smoke
+  require_results_under: /scratch/df630/MA-CC-results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 4
+    minimum_concurrency: 1
+    maximum_concurrency: 4
+    target_rpm: 60
+    retry_max_elapsed_seconds: 300

@@ -1,23 +1,49 @@
 study:
-  name: relational-population-study-08
+  name: relational-population-study-08-neuralwatt
 
 configs:
   - study08_wrong_prompt_b.yaml
   - study08_truth_prompt_b.yaml
 
 execution:
-  # Identical automatic cell-array topology and provider-load policy to Studies 06/07.
+  # NeuralWatt's authenticated Standard tier permits five concurrent requests
+  # per model. Keep multiple scientific cells active on either supported
+  # cluster, but hard-cap the shared provider coordinator at five attempts.
   mode: auto
-  target_rpm: 900
-  assumed_latency_seconds: 10.0
-  max_active_nodes: 18
+  # PAYG has no legacy RPM ceiling. Permit up to 500 completed requests/minute;
+  # the separate five-request in-flight cap remains the binding safety limit.
+  target_rpm: 500
+  # The 2026-08-29 Perlmutter benchmark measured 1.396 s mean latency for the
+  # exact Study 08 initial prompt. Plan at 1.5 s rather than the obsolete
+  # forced-tool latency.
+  assumed_latency_seconds: 1.5
+  max_active_nodes: 5
   cpus_per_task: 8
   memory: 8G
   time_limit: "04:00:00"
+  # Checked-in scheduler and result defaults remain Potsdam-safe. NERSC's
+  # preparation command replaces only the site result boundary, and its
+  # launcher ignores these source scheduler fields in favor of the enforced
+  # interactive CPU allocation.
   partition: all
   qos: normal
-  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_08
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_08_neuralwatt
   require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    # Start below the observed unstable region. Recover toward five only after
+    # a sustained healthy interval instead of oscillating every 30 seconds.
+    initial_concurrency: 2
+    minimum_concurrency: 1
+    maximum_concurrency: 5
+    target_rpm: 500
+    # A live 503 burst produced 12 failures after a long healthy window. The
+    # former 25% ratio was diluted by those successes and reacted too late.
+    # Five percent plus two local failures trips on a genuine synchronized
+    # burst while ignoring an isolated transient response.
+    local_failure_threshold: 2
+    global_failure_ratio: 0.05
+    increase_interval_seconds: 300
 
 analysis:
   recipe: analysis.yaml

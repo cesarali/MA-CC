@@ -1,0 +1,16 @@
+study:
+  name: task004_allfacts_b3_soft_report_only_suite
+configs:
+- false_allfacts_rho075.yaml
+- truth_allfacts_rho075.yaml
+- false_allfacts_rho1.yaml
+- truth_allfacts_rho1.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/task004-allfacts-b3-soft-report-only-suite-20260926
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 200
+  assumed_latency_seconds: 12.5
+  throttle: 4

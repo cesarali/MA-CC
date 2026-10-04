@@ -1,0 +1,12 @@
+study:
+  name: task004_allfacts_b90_parallel
+configs:
+- false_allfacts_rho1.yaml
+- truth_allfacts_rho075.yaml
+execution:
+  mode: config_array
+  results_root: results/local/task004_allfacts_b90_parallel
+  partition: main
+  target_rpm: 300
+  assumed_latency_seconds: 12.5
+  throttle: 2

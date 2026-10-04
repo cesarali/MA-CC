@@ -17,7 +17,7 @@ from .profiles import ProfiledLLMProvider
 
 ProviderFactory = Callable[..., LLMProvider]
 OPENAI_COMPATIBLE_PROVIDER_TYPES = frozenset(
-    {"deepinfra", "openai", "university"}
+    {"deepinfra", "neuralwatt", "openai", "university"}
 )
 
 
@@ -68,6 +68,7 @@ def create_default_provider_registry() -> ProviderRegistry:
     prefix = "mas_cc.llm_runtime.providers.adapters"
     registry.register("mock", f"{prefix}.mock:MockLLMProvider")
     registry.register("deepinfra", f"{prefix}.deepinfra:DeepInfraProvider")
+    registry.register("neuralwatt", f"{prefix}.neuralwatt:NeuralWattProvider")
     registry.register("openai", f"{prefix}.openai:OpenAIProvider")
     registry.register("university", f"{prefix}.university:UniversityProvider")
     registry.register("gemma_local", f"{prefix}.gemma_local:GemmaLocalProvider")

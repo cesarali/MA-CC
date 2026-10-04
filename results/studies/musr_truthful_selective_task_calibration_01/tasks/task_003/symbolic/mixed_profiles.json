@@ -1,0 +1,46 @@
+{
+  "CONTROLLER_b03+DECISIVE": {
+    "Hbar": 0.0,
+    "M": 1.0,
+    "compatible_worlds": 66,
+    "posterior_vector": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "valid_probability_mass": 0.0033531473860691956
+  },
+  "CONTROLLER_b06+DECISIVE": {
+    "Hbar": 0.0,
+    "M": 1.0,
+    "compatible_worlds": 66,
+    "posterior_vector": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "valid_probability_mass": 0.0033531473860691956
+  },
+  "CONTROLLER_b12+DECISIVE": {
+    "Hbar": 0.0,
+    "M": 1.0,
+    "compatible_worlds": 18,
+    "posterior_vector": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "valid_probability_mass": 0.0009144947416552351
+  },
+  "CONTROLLER_b24+DECISIVE": {
+    "Hbar": 0.0,
+    "M": 1.0,
+    "compatible_worlds": 3,
+    "posterior_vector": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "valid_probability_mass": 0.00015241579027587253
+  }
+}

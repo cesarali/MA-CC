@@ -1,0 +1,27 @@
+study: {name: musr_blackboard_population_01_deepinfra}
+configs:
+  - blackboard_1_no_control.yaml
+  - blackboard_1_truth_control.yaml
+  - blackboard_1_false_control.yaml
+preflight: {contract: musr_blackboard_population_01_v1}
+execution:
+  mode: auto
+  target_rpm: 600
+  assumed_latency_seconds: 4.5
+  max_active_nodes: 6
+  throttle: 6
+  cpus_per_task: 10
+  memory: 24G
+  time_limit: "20:00:00"
+  partition: all
+  qos: normal
+  results_root: /scratch/df630/MA-CC-results/studies/musr_blackboard_population_01_deepinfra
+  require_results_under: /scratch/df630/MA-CC-results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 60
+    minimum_concurrency: 4
+    maximum_concurrency: 60
+    target_rpm: 600
+    retry_max_elapsed_seconds: 300
+analysis: {recipe: analysis.yaml}

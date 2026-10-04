@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=mas-cc-study
+#SBATCH --account=general
+#SBATCH --partition=main
+#SBATCH --qos=normal
+#SBATCH --time=1-00:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+# Direct-submit fallback; `mas-cc study submit` normally overrides both paths.
+#SBATCH --output=/scratch/df630/MA-CC-results/logs/slurm-%A_%a.out
+#SBATCH --error=/scratch/df630/MA-CC-results/logs/slurm-%A_%a.err
+
+set -euo pipefail
+if [[ -n "${AMAREL_REPO_ROOT:-}" ]]; then
+  source "${AMAREL_REPO_ROOT}/scripts/Amarel/SLURM/_common.sh"
+else
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -L)/_common.sh"
+fi
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: run_config_array.job SUBMISSION_MANIFEST" >&2
+  exit 2
+fi
+
+export MAS_CC_EXECUTION_SITE=amarel
+amarel_prepare_runtime
+export PYTHONPATH="${AMAREL_REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+CONDA_EXE="$(amarel_resolve_conda)"
+readonly CONDA_EXE
+
+exec "${CONDA_EXE}" run -n MA-CC --no-capture-output \
+  python -m mas_cc.studies.array_worker "$1"

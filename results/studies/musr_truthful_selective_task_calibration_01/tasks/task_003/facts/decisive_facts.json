@@ -1,0 +1,176 @@
+[
+  {
+    "canonical_fact_text": "Alice's skill for build the data pipeline is at least as strong as Chandra's skill for build the data pipeline.",
+    "fact_id": "cf_x00_ge_x04",
+    "kind": "skill_comparison",
+    "logical_signature": [
+      "ge",
+      0,
+      4,
+      null
+    ],
+    "predicate": {
+      "left_index": 0,
+      "operator": "ge",
+      "right_index": 4,
+      "threshold": null
+    },
+    "provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t0",
+        "skill_p2_t0"
+      ],
+      "latent_indices": [
+        0,
+        4
+      ]
+    },
+    "role": "decisive"
+  },
+  {
+    "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+    "fact_id": "cf_x01_le_x04",
+    "kind": "skill_comparison",
+    "logical_signature": [
+      "le",
+      1,
+      4,
+      null
+    ],
+    "predicate": {
+      "left_index": 1,
+      "operator": "le",
+      "right_index": 4,
+      "threshold": null
+    },
+    "provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t1",
+        "skill_p2_t0"
+      ],
+      "latent_indices": [
+        1,
+        4
+      ]
+    },
+    "role": "decisive"
+  },
+  {
+    "canonical_fact_text": "Alice's skill for conduct stakeholder interviews is no stronger than Chandra's skill for conduct stakeholder interviews.",
+    "fact_id": "cf_x01_le_x05",
+    "kind": "skill_comparison",
+    "logical_signature": [
+      "le",
+      1,
+      5,
+      null
+    ],
+    "predicate": {
+      "left_index": 1,
+      "operator": "le",
+      "right_index": 5,
+      "threshold": null
+    },
+    "provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p0_t1",
+        "skill_p2_t1"
+      ],
+      "latent_indices": [
+        1,
+        5
+      ]
+    },
+    "role": "decisive"
+  },
+  {
+    "canonical_fact_text": "Bruno's skill for build the data pipeline is no stronger than Bruno's skill for conduct stakeholder interviews.",
+    "fact_id": "cf_x02_le_x03",
+    "kind": "skill_comparison",
+    "logical_signature": [
+      "le",
+      2,
+      3,
+      null
+    ],
+    "predicate": {
+      "left_index": 2,
+      "operator": "le",
+      "right_index": 3,
+      "threshold": null
+    },
+    "provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "skill_p1_t0",
+        "skill_p1_t1"
+      ],
+      "latent_indices": [
+        2,
+        3
+      ]
+    },
+    "role": "decisive"
+  },
+  {
+    "canonical_fact_text": "The cooperation of alice and bruno is no stronger than the cooperation of Bruno and Chandra.",
+    "fact_id": "cf_x06_le_x08",
+    "kind": "cooperation_comparison",
+    "logical_signature": [
+      "le",
+      6,
+      8,
+      null
+    ],
+    "predicate": {
+      "left_index": 6,
+      "operator": "le",
+      "right_index": 8,
+      "threshold": null
+    },
+    "provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p0_p1",
+        "coop_p1_p2"
+      ],
+      "latent_indices": [
+        6,
+        8
+      ]
+    },
+    "role": "decisive"
+  },
+  {
+    "canonical_fact_text": "The cooperation of alice and chandra is no stronger than the cooperation of Bruno and Chandra.",
+    "fact_id": "cf_x07_le_x08",
+    "kind": "cooperation_comparison",
+    "logical_signature": [
+      "le",
+      7,
+      8,
+      null
+    ],
+    "predicate": {
+      "left_index": 7,
+      "operator": "le",
+      "right_index": 8,
+      "threshold": null
+    },
+    "provenance": {
+      "derivation": "deterministic predicate over the exact hidden latent values",
+      "latent_fact_ids": [
+        "coop_p0_p2",
+        "coop_p1_p2"
+      ],
+      "latent_indices": [
+        7,
+        8
+      ]
+    },
+    "role": "decisive"
+  }
+]

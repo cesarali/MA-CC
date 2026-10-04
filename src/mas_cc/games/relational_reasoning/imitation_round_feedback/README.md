@@ -337,6 +337,34 @@ sensing exactly as before. The hypergeometric sensor theory is not reported
 for board sensing, although empirical sensing and actuation-response estimators
 remain available from the retained observations.
 
+For an LLM-authored adaptive controller on a one-day board,
+`control.options.controller_memory_mode: public_ledger` adds an optional
+public-observation memory. The default is `none`. The runtime retains only
+message IDs sampled by the controller, including on days when it does not
+post, and carries those IDs across round-boundary continuations. Its prompt
+keeps yesterday's sampled board verbatim and summarizes observed posts by day,
+distinct participant author, and cited fact. Last *posted* votes are labelled
+as observations, not as the population's current ballots; the controller's
+own posts are counted separately. This remains sample-limited if `q_c` is
+reduced in a later experiment.
+
+For an LLM-authored adaptive controller, `controller_budget_scope: per_round`
+gives a fresh `intervention_budget` each day. Its default
+`controller_round_budget_mode: exact` requires exactly `b` posts when the
+controller acts. Set `controller_round_budget_mode: zero_or_exact` to let it
+choose HOLD (zero posts) or exactly `b` posts; unused daily slots do not carry
+over. This mode applies to single-mode report-only or full communication, not
+mixed-message rounds. `controller_budget_scope: episode` instead makes `b` a
+whole-episode allowance and permits variable daily spending up to the amount
+remaining. The two budget modes are separate config choices.
+
+For a frozen truthful-selective task, `control.options.controller_fact_pool_mode`
+defaults to `frozen`, the task's curated reportable pool. Set it to
+`all_nondecisive` to offer every verified task fact except the declared
+decisive facts. This changes only the controller's choices: agents retain the
+same private evidence and paired initial votes. The broader pool is presented
+without the frozen pool's false-target ranking scores.
+
 `control.options.message_mode`:
 
 The controller goes through the same renderer as a peer, so it gets no prose
@@ -481,6 +509,8 @@ control:
 | `game.options.initialization.initial_distribution` | optional weights for `uniform_random` |
 | `game.options.stop_on_consensus` | checked only at round boundaries |
 | `control.options.intervention_budget` | `b`, controlled positions per advocating round |
+| `control.options.controller_budget_scope` | `per_round` (default) resets `b` each round; `episode` shares `b` across the whole episode |
+| `control.options.controller_round_budget_mode` | `exact` (default), or `zero_or_exact` for an LLM-authored adaptive controller that may HOLD or post exactly `b` in a round |
 | `control.options.controller_actuation_mode` | `direct_recommendation` for guaranteed transient exposure, or `coordination_request` for persistent stochastic reach |
 | `control.options.message_mode` | `recommendation_only` \| `recommendation_plus_fact` |
 | `control.options.advocacy_schedule` | `soft` (default) closes the loop through the sensed target share; `always` advocates every round regardless. Open loop is what a controllability study wants — under `soft` the actuation a population gets is a function of its own state, confounding "did control move it" with "did it need moving". Sensing still runs and is still logged either way |

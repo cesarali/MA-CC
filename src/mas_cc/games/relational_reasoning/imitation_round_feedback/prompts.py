@@ -136,10 +136,10 @@ SOCIAL_ENVIRONMENT_VIGILANT = (
 BOARD_SOCIAL_ENVIRONMENT_V3 = (
     "Participant identities persist across interactions.\n"
     "\n"
-    "Different participants may know different facts about this problem. No single\n"
-    "participant is guaranteed to know everything needed to answer. Evaluate public\n"
-    "messages by their evidence and reasoning rather than by repetition, confidence,\n"
-    "participant identity, or apparent authority."
+    "The evidence for this problem is divided among the participants: each holds a\n"
+    "different part of it and no participant can see all of it. Use the public\n"
+    "board to exchange evidence with the other participants so that the group can\n"
+    "identify the correct answer."
 )
 SOCIAL_ENVIRONMENT_EVIDENCE_CALIBRATED = (
     "Participant identities persist across interactions.\n"
@@ -300,6 +300,8 @@ DECISION_INSTRUCTION = (
     "Keep your reason to at most three sentences."
 )
 
+SECTION_HEADINGS = ("SCENARIO", "QUESTION", "TASK", "BACKGROUND")
+
 ALLOCATION_DECISION_SCAFFOLD = (
     "Evaluate each candidate allocation using the evidence available to you.\n"
     "\n"
@@ -314,15 +316,16 @@ ALLOCATION_DECISION_SCAFFOLD = (
     "Do not treat missing evidence as evidence for or against an allocation.\n"
     "\n"
     "Determine your vote from the evidence first.\n"
-    "Only after deciding, choose which evidence item, if any, to share."
+    "Only after deciding, choose which evidence item, if any, would be most useful\n"
+    "to participants who may not already have it."
 )
 
 BOARD_DECISION_BASIS = (
     "Make your own decision using your private evidence, your current position,\n"
     "and the temporary public-board messages shown below. You see only a small\n"
-    "sample of currently live messages. Evaluate them rather than automatically\n"
-    "following them. Later participants may read a public message you post. Your\n"
-    "private reason is recorded for analysis and is never posted."
+    "sample of currently live messages. Later participants may read a public\n"
+    "message you post. Your private reason is recorded for analysis and is never\n"
+    "posted."
 )
 
 BOARD_DECISION_BASIS_NONE_VISIBLE = (
@@ -331,18 +334,49 @@ BOARD_DECISION_BASIS_NONE_VISIBLE = (
     "one message for later participants. Your private reason is never posted."
 )
 
-BOARD_DECISION_BASIS_V3 = (
-    "Make your own decision using your private evidence, your previous vote,\n"
-    "and the temporary public-board messages shown below. You see only a small\n"
-    "sample of currently live messages. Evaluate them rather than automatically\n"
-    "following them. Later participants may read a public message you post. Your\n"
-    "private reason is recorded for analysis and is never posted."
-)
+def board_decision_basis_v3(
+    sampled: int | None = None,
+    population: int | None = None,
+    round_index: int | None = None,
+    rounds: int | None = None,
+) -> str:
+    """The v3+ basis text, with the sample and the clock stated where known."""
+
+    clock = (
+        f"This is round {round_index} of {rounds}; "
+        f"{max(rounds - round_index, 0)} rounds remain after this one.\n"
+        if round_index is not None and rounds is not None
+        else ""
+    )
+    scale = (
+        f"You see {sampled} of the messages currently live on the board, and there "
+        f"are {population} participants in total.\n"
+        if sampled is not None and population is not None
+        else "You see only a small sample of currently live messages.\n"
+    )
+    return (
+        clock
+        + "Make your own decision using your private evidence, your previous vote,\n"
+        "and the temporary public-board messages shown below. "
+        + scale
+        + "Later participants may read a public message you post. Your private\n"
+        "reason is recorded for analysis and is never posted."
+    )
+
+
+BOARD_DECISION_BASIS_V3 = board_decision_basis_v3()
 
 BOARD_DECISION_BASIS_NONE_VISIBLE_V3 = (
     "Make your own decision using your private evidence and previous vote.\n"
     "No live public-board message is visible in this update. You may still post\n"
     "one message for later participants. Your private reason is never posted."
+)
+
+MANDATORY_VOTE_INSTRUCTION = (
+    "Not voting or abstaining is not an option. You must always choose exactly one\n"
+    "of the available option letters, even when the evidence available to you is\n"
+    "incomplete or inconclusive. Never return `none`, `null`, `unknown`, or any\n"
+    "other value for `vote`."
 )
 
 BOARD_DECISION_INSTRUCTION = (
@@ -354,6 +388,8 @@ BOARD_DECISION_INSTRUCTION = (
     "- REPORT shares information, an answer, a conclusion, or a correction. It\n"
     "  may attach one exact evidence identifier.\n"
     "- NONE posts nothing; use null for text, shared_fact_id, and reply_to.\n\n"
+    "Your public message is how your evidence reaches participants who do not\n"
+    "already have it.\n\n"
     "REQUEST and REPORT may reply to any visible message by putting that message\n"
     "ID in reply_to. Use null when the message is not a reply. A REPORT may cite\n"
     "only a fact listed under YOUR CURRENT KNOWLEDGE. Do not invent evidence or\n"
@@ -375,6 +411,8 @@ BOARD_DECISION_INSTRUCTION_V3 = (
     "  public text, describe the allocation itself rather than using option letters\n"
     "  A/B/C; your vote is transmitted separately.\n"
     "- NONE posts nothing; use null for text, shared_fact_id, and reply_to.\n\n"
+    "Your public message is how your evidence reaches participants who do not\n"
+    "already have it.\n\n"
     "REQUEST and REPORT may reply to any visible message by putting that message\n"
     "ID in reply_to. Use null when the message is not a reply. A REPORT may cite\n"
     "only a fact listed under YOUR VERIFIED EVIDENCE. Do not invent evidence or\n"
@@ -391,10 +429,12 @@ BOARD_DECISION_INSTRUCTION_NO_REQUEST_V4 = (
     "  public text, describe the allocation itself rather than using option letters\n"
     "  A/B/C; your vote is transmitted separately.\n"
     "- NONE posts nothing; use null for text, shared_fact_id, and reply_to.\n\n"
+    "Your public message is how your evidence reaches participants who do not\n"
+    "already have it.\n\n"
     "REPORT may reply to any visible message by putting that message ID in reply_to.\n"
-    "Use null when the message is not a reply. A REPORT may cite only a fact listed\n"
-    "under YOUR VERIFIED EVIDENCE. Do not invent evidence or identifiers. Your\n"
-    "private reason is never copied into public_message."
+    "Use null when the message is not a reply. A REPORT may cite only a fact\n"
+    "identifier offered by shared_fact_id below. Do not invent evidence or\n"
+    "identifiers. Your private reason is never copied into public_message."
 )
 
 NO_KNOWN_FACTS = (
@@ -668,16 +708,22 @@ class TaskBlock(PromptBlock[Mapping[str, Any]]):
 
     def render(self) -> str:
         options = "\n".join(f"- {option}" for option in self.value["options"])  # type: ignore[index]
+        question = str(self.value["question"])  # type: ignore[index]
+        # Some task families ship their own section headings - the MuSR team
+        # allocation text opens "SCENARIO ... QUESTION ..." - and wrapping those
+        # in another QUESTION heading puts the label above the wrong section.
+        heading = "" if question.lstrip().startswith(SECTION_HEADINGS) else "QUESTION\n\n"
         return (
-            "QUESTION\n"
-            "\n"
-            f"{self.value['question']}\n"  # type: ignore[index]
+            heading
+            + f"{question}\n"
             "\n"
             "The available answers are:\n"
             "\n"
             f"{options}\n"
             "\n"
-            "Exactly one of these answers is correct. Vote by its letter."
+            "Exactly one of these answers is correct. Vote by its letter.\n"
+            "\n"
+            f"{MANDATORY_VOTE_INSTRUCTION}"
         )
 
 
@@ -1048,6 +1094,13 @@ class RelationalBallotContract(ResponseContract):
 
         return tuple(str(item) for item in self.options.get("relations", ()))
 
+    @property
+    def max_reason_characters(self) -> int:
+        value = self.options.get("max_reason_characters", MAX_REASON_CHARACTERS)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("max_reason_characters must be a positive integer")
+        return value
+
     def instruction(self) -> str:
         options = " | ".join(self.allowed_values)
         # `none` is always last and always present: an agent that knows nothing
@@ -1060,7 +1113,7 @@ class RelationalBallotContract(ResponseContract):
             "\n"
             "{\n"
             f'  "vote": "<{options}>",\n'
-            f'  "reason": "<a few sentences, at most {MAX_REASON_CHARACTERS} characters>",\n'
+            f'  "reason": "<a few sentences, at most {self.max_reason_characters} characters>",\n'
             f'  "shared_fact_id": "<{citable}>"\n'
             "}"
         )
@@ -1092,11 +1145,11 @@ class RelationalBallotContract(ResponseContract):
             return ValidationResult.failure(
                 ValidationIssue("response.reason", "must be non-empty text")
             )
-        if len(reason.strip()) > MAX_REASON_CHARACTERS:
+        if len(reason.strip()) > self.max_reason_characters:
             return ValidationResult.failure(
                 ValidationIssue(
                     "response.reason",
-                    f"must be at most {MAX_REASON_CHARACTERS} characters",
+                    f"must be at most {self.max_reason_characters} characters",
                 )
             )
         if "shared_fact_id" not in parsed:
@@ -1146,9 +1199,10 @@ class RelationalBallotContract(ResponseContract):
                 f"{allowed}\n\n"
                 "Do not include a label, fact text, punctuation, or explanation in that field."
             )
-        # ``dataclass(slots=True)`` creates a replacement class object.  A
-        # zero-argument ``super()`` can retain the pre-replacement ``__class__``
-        # cell and fail at runtime while constructing a validation retry.
+        # Explicit rather than ``super()``: ``@dataclass(slots=True)`` rebuilds
+        # the class and leaves the zero-argument form's ``__class__`` cell
+        # pointing at the discarded original.  This method is also reached
+        # through ``BlackboardBallotContract`` for ordinary schema failures.
         return ResponseContract.repair_guidance(self, issues)
 
 
@@ -1256,7 +1310,7 @@ class BlackboardBallotContract(RelationalBallotContract):
             '  "public_message": {\n'
             f'    "type": "<{message_types}>",\n'
             '    "text": "<public text or null>",\n'
-            f'    "shared_fact_id": "<{citable}> or null,\n'
+            f'    "shared_fact_id": "<{citable}>" or null,\n'
             '    "reply_to": "<visible message ID or null>"\n'
             "  }\n"
             "}"
@@ -1411,6 +1465,13 @@ class BlackboardBallotContract(RelationalBallotContract):
 
     def repair_guidance(self, issues: Sequence[ValidationIssue]) -> str:
         issue = issues[0]
+        if issue.field == "response.private_reason":
+            return (
+                "Your previous private_reason was too long.\n\n"
+                "Return the complete JSON object again with the same fields. "
+                "private_reason must be one short sentence of at most 300 characters. "
+                "Do not include analysis or any text outside the JSON object."
+            )
         if issue.field in {
             "response.public_message.shared_fact_id",
             "response.public_message",
@@ -1479,7 +1540,7 @@ class BlackboardBallotContractV3(BlackboardBallotContract):
             '  "public_message": {\n'
             f'    "type": "<{message_types}>",\n'
             '    "text": "<public text or null>",\n'
-            f'    "shared_fact_id": "<{citable}> or null,\n'
+            f'    "shared_fact_id": "<{citable}>" or null,\n'
             '    "reply_to": "<visible message ID or null>"\n'
             "  }\n"
             "}"
@@ -1508,6 +1569,7 @@ def relational_public_ballot_prompt(
     relations: Sequence[str] = (),
     receiver_epistemic_disposition: str | None = None,
     social_distrust: bool | None = None,
+    max_reason_characters: int = MAX_REASON_CHARACTERS,
 ) -> RelationalBallotPrompt:
     """One prompt of this family.
 
@@ -1543,6 +1605,7 @@ def relational_public_ballot_prompt(
             options={
                 "fact_ids": tuple(fact_ids),
                 "relations": tuple(relations),
+                "max_reason_characters": max_reason_characters,
             },
         ),
     )
@@ -1655,6 +1718,7 @@ def build_relational_ballot_prompt(
     social_context: bool = False,
     answer_display_texts: Mapping[str, str] | None = None,
     local_prompt_variant: str = LOCAL_PROMPT_P0,
+    max_reason_characters: int = MAX_REASON_CHARACTERS,
 ) -> RelationalBallotPrompt:
     """Bind one focal update, or - with no sources and no vote - one local vote.
 
@@ -1682,6 +1746,7 @@ def build_relational_ballot_prompt(
         relations=tuple(sorted(option_letters.values())),
         receiver_epistemic_disposition=receiver_epistemic_disposition,
         social_distrust=social_distrust,
+        max_reason_characters=max_reason_characters,
     )
     if local_prompt_variant in {LOCAL_PROMPT_P2, LOCAL_PROMPT_P3}:
         prompt = replace(
@@ -1754,6 +1819,9 @@ def build_relational_blackboard_prompt(
     observed_facts: Sequence[str] = (),
     report_citation_scope: str = "active_only",
     allowed_message_types: Sequence[str] | None = None,
+    population_size: int | None = None,
+    round_index: int | None = None,
+    rounds: int | None = None,
 ) -> BlackboardBallotPrompt:
     """Bind one board update while keeping the private reason out of public text."""
 
@@ -1774,7 +1842,9 @@ def build_relational_blackboard_prompt(
     ).bind(
         identity=identity,
         decision_basis=(
-            BOARD_DECISION_BASIS_V3
+            board_decision_basis_v3(
+                len(board_messages), population_size, round_index, rounds
+            )
             if version >= 3 and board_messages
             else BOARD_DECISION_BASIS_NONE_VISIBLE_V3
             if version >= 3 and social_context

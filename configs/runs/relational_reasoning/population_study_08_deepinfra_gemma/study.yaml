@@ -1,0 +1,41 @@
+study:
+  name: relational-population-study-08-deepinfra-gemma
+
+configs:
+  - study08_wrong_prompt_b.yaml
+  - study08_truth_prompt_b.yaml
+
+execution:
+  mode: auto
+  # The authenticated account reports 200 outstanding requests per model and
+  # 1,100,000 tokens/minute. Production startup on 2026-08-30 measured 948 RPM
+  # at 49 outstanding requests, 3.94 s mean latency, and 948/948 HTTP successes.
+  # Keep the 1,200 RPM gate (about 828,000 TPM at the measured 690 tokens/call),
+  # but expose all 192 scientific cells as runnable episode streams. The 10 s
+  # planning latency covers the observed 10.74 s tail and lets the scheduler
+  # retain enough waiting work; the shared controller remains the hard runtime
+  # RPM/concurrency safety boundary.
+  target_rpm: 1200
+  assumed_latency_seconds: 10.0
+  max_active_nodes: 200
+  cpus_per_task: 1
+  memory: 2G
+  time_limit: "04:00:00"
+  # These checked-in defaults remain Potsdam-safe. NERSC preparation rebinds
+  # only the external result root; scripts/nersc enforces interactive CPU QoS.
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/relational_population_study_08_deepinfra_gemma
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 100
+    minimum_concurrency: 32
+    maximum_concurrency: 200
+    target_rpm: 1200
+    local_failure_threshold: 2
+    global_failure_ratio: 0.05
+    increase_interval_seconds: 30
+
+analysis:
+  recipe: analysis.yaml

@@ -17,11 +17,43 @@ from mas_cc.llm_runtime.providers.load_control import (
 )
 
 
+EXECUTION_SITE_ENV = "MAS_CC_EXECUTION_SITE"
+
+# The single source of truth for site names. Both the submission side and the
+# worker side validate against this, so adding a site in one place only -- as
+# happened when 'cesar' was introduced -- cannot silently leave workers
+# rejecting studies the submitter accepted.
+EXECUTION_SITES = ("potsdam", "nersc", "amarel", "cesar")
+
+
 def _mapping_file(path: Path) -> Mapping[str, Any]:
     if not path.is_file():
         return {}
     loaded = json.loads(path.read_text(encoding="utf-8"))
     return loaded if isinstance(loaded, Mapping) else {}
+
+
+def validate_study_execution_site(manifest_path: str | Path) -> None:
+    """Reject a prepared study launched by the wrong site adapter.
+
+    Direct/local worker calls leave ``MAS_CC_EXECUTION_SITE`` unset. The two
+    scheduler launchers always set it, so real cluster execution fails closed
+    if a Potsdam preparation reaches NERSC or vice versa.
+    """
+
+    actual = os.environ.get(EXECUTION_SITE_ENV, "").strip()
+    if actual and actual not in EXECUTION_SITES:
+        raise ValueError(f"unsupported execution site: {actual!r}")
+    study_root = Path(manifest_path).expanduser().resolve().parent
+    preparation = _mapping_file(study_root / "preparation.json")
+    expected = str(preparation.get("execution_site", "unspecified"))
+    if expected == "unspecified" and not actual:
+        return
+    if expected not in EXECUTION_SITES or expected != actual:
+        raise ValueError(
+            f"study was prepared for execution site {expected!r}, "
+            f"not {actual or 'unset'!r}: {study_root}"
+        )
 
 
 def configure_study_provider_load_control(manifest_path: str | Path) -> None:

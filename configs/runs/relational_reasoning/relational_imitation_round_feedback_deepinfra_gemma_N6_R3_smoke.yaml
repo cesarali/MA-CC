@@ -1,0 +1,110 @@
+# One real DeepInfra episode of the relational round-feedback game.
+#
+# Shape: 6 agents x 3 population rounds = 18 model calls. Uniform-random
+# initialization avoids six additional provider calls. One configured retry
+# per decision gives a conservative ceiling of 36 calls.
+#
+# Run from the repository root on NERSC Perlmutter after preflight. Keep the
+# output override on /pscratch; do not write live results into this checkout.
+
+llm_provider:
+  type: deepinfra
+  model: google/gemma-4-E4B-it
+  credentials_env: DEEPINFRA_API_KEY
+  timeout_seconds: 120
+  max_retries: 1
+  # One population round can dispatch all six agents together. The provider's
+  # account ceiling is checked separately before increasing study scale.
+  request_concurrency: 6
+  temperature: 0.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 5.0
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_public_ballot
+  prompt_version: 1
+  response_contract:
+    type: relational_public_ballot
+    allowed_values: [A, B, C]
+
+game:
+  type: relational_imitation_round_feedback
+  population_size: 6
+  horizon: 3
+  topology: complete
+  options:
+    task_dataset_dir: src/mas_cc/relational_task_generator/relational_task_generator/datasets/n6_L2_r02
+    task_id: task_0001
+    dynamics_mode: reasoning
+    rounds: 3
+    social_group_size: 1
+    vote_visibility: public
+    prompt_version: 1
+    social_distrust: true
+    stop_on_consensus: false
+    invalid_response_retries: 1
+    initialization:
+      mode: uniform_random
+
+control:
+  mechanism: none
+
+execution:
+  seed: 20260830
+  repetitions: 1
+  parallelism: 1
+  fail_fast: true
+
+pricing:
+  mode: offline
+  require_fresh_at_launch: false
+  fallback_policy: deny
+  explicit_unknown_price_override: false
+
+budget:
+  accounting_unit: USD
+  system_max_cost_per_run: 1.0
+  max_cost_per_run: 0.25
+  max_provider_requests: 40
+  max_input_tokens: 250000
+  max_output_tokens: 200000
+  allow_unbounded_paid_requests: false
+
+logging:
+  level: INFO
+  console: true
+  audit: true
+  comet: false
+
+storage:
+  output_dir: /pscratch/sd/d/dfarough/MA-CC-results/deepinfra-gemma
+  format: jsonl
+  artifact_profile: full
+  checkpoint_mode: episode
+  overwrite: false
+
+analysis:
+  enabled: false
+
+metrics:
+  enabled: false
+  comet_export: []
+
+aggregation:
+  cell_metrics: []
+  sweep_metrics: []
+  null_permutations: 0
+
+observability:
+  schema_version: 1
+  comet:
+    sweep_experiment: false
+
+experiment:
+  name: relational-round-feedback-deepinfra-gemma-n6-r3-smoke
+  description: >-
+    One real DeepInfra Gemma 4 E4B episode with six agents, three
+    population rounds, no controller, and external pscratch storage.
+  tags: [relational, round-feedback, reasoning, deepinfra, gemma-4-e4b-it, smoke, N6, R3]

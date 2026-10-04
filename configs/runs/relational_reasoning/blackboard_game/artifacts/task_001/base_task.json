@@ -1,0 +1,1578 @@
+{
+  "evidence": [
+    {
+      "branch_id": "skill_p0_t0_b00",
+      "evidence_id": "e_skill_p0_t0_b00",
+      "latent_fact_id": "skill_p0_t0",
+      "text": [
+        "During the spring water-quality review, Alice noticed that several site totals did not match the daily logs.",
+        "She found that one spreadsheet column had been shifted during import, restored the original alignment, and documented the correction for the team."
+      ]
+    },
+    {
+      "branch_id": "skill_p0_t0_b01",
+      "evidence_id": "e_skill_p0_t0_b01",
+      "latent_fact_id": "skill_p0_t0",
+      "text": [
+        "After the roadside noise survey, Alice combined the monitor readings from all collection days into a single table.",
+        "Her summary separated unusual readings caused by equipment tests from the regular observations, and the project lead used it in the final report."
+      ]
+    },
+    {
+      "branch_id": "skill_p0_t0_b02",
+      "evidence_id": "e_skill_p0_t0_b02",
+      "latent_fact_id": "skill_p0_t0",
+      "text": [
+        "At the drainage-project debrief, Alice prepared a chart comparing rainfall readings with the water-level records from each monitoring point.",
+        "When a teammate questioned an apparent rise, she explained which dates were comparable and why the remaining pattern still mattered."
+      ]
+    },
+    {
+      "branch_id": "skill_p0_t1_b00",
+      "evidence_id": "e_skill_p0_t1_b00",
+      "latent_fact_id": "skill_p0_t1",
+      "text": [
+        "At the spring neighborhood planning session, Alice opened with a round where each resident named one concern before discussion began.",
+        "When two attendees disagreed about the playground proposal, Alice summarized both views and helped the group draft a compromise that everyone present signed."
+      ]
+    },
+    {
+      "branch_id": "skill_p0_t1_b01",
+      "evidence_id": "e_skill_p0_t1_b01",
+      "latent_fact_id": "skill_p0_t1",
+      "text": [
+        "During last year's river-cleanup volunteer meeting, several new volunteers stayed silent while two long-time members dominated the conversation.",
+        "Alice invited the quieter volunteers to describe their availability, recorded their ideas on a flip chart, and the meeting ended with every volunteer choosing a role."
+      ]
+    },
+    {
+      "branch_id": "skill_p0_t1_b02",
+      "evidence_id": "e_skill_p0_t1_b02",
+      "latent_fact_id": "skill_p0_t1",
+      "text": [
+        "At the library's evening feedback gathering, parents, shop owners, and student representatives arrived with competing requests for the town-square redesign.",
+        "Alice grouped similar comments on a wall, checked that speakers felt their points were represented, and guided attendees through selecting the issues to raise with the council."
+      ]
+    },
+    {
+      "branch_id": "skill_p1_t0_b00",
+      "evidence_id": "e_skill_p1_t0_b00",
+      "latent_fact_id": "skill_p1_t0",
+      "text": [
+        "In the river-monitoring pilot, Bruno combined readings recorded in centimetres with readings recorded in metres in the same spreadsheet column.",
+        "A colleague found the mismatch while preparing the final summary and rebuilt the affected calculations."
+      ]
+    },
+    {
+      "branch_id": "skill_p1_t0_b01",
+      "evidence_id": "e_skill_p1_t0_b01",
+      "latent_fact_id": "skill_p1_t0",
+      "text": [
+        "During the park survey review, Bruno presented a chart after filtering out blank entries from one sampling day.",
+        "When asked why the average had changed, he could not identify that the filter had also removed several valid zero readings."
+      ]
+    },
+    {
+      "branch_id": "skill_p1_t0_b02",
+      "evidence_id": "e_skill_p1_t0_b02",
+      "latent_fact_id": "skill_p1_t0",
+      "text": [
+        "For the neighbourhood mapping project, Bruno drafted a table comparing counts from four street segments.",
+        "Before the table was shared, Chandra recalculated the percentages and corrected two entries whose denominators had been mixed up."
+      ]
+    },
+    {
+      "branch_id": "skill_p1_t1_b00",
+      "evidence_id": "e_skill_p1_t1_b00",
+      "latent_fact_id": "skill_p1_t1",
+      "text": [
+        "At last spring's neighborhood listening session, Bruno opened the discussion by asking each resident to name one concern before anyone debated solutions.",
+        "When two attendees began talking over each other, he summarized both points and the group completed a list of agreed priorities before the meeting ended."
+      ]
+    },
+    {
+      "branch_id": "skill_p1_t1_b01",
+      "evidence_id": "e_skill_p1_t1_b01",
+      "latent_fact_id": "skill_p1_t1",
+      "text": [
+        "During the park-design gathering, rain forced the team to leave the outdoor display boards and move into a small library room.",
+        "Bruno reorganized the chairs into circles, divided the participants into short discussion rounds, and collected their notes before the room booking ended."
+      ]
+    },
+    {
+      "branch_id": "skill_p1_t1_b02",
+      "evidence_id": "e_skill_p1_t1_b02",
+      "latent_fact_id": "skill_p1_t1",
+      "text": [
+        "At a youth advisory meeting, several students stayed silent while adults discussed transportation problems.",
+        "Bruno invited the students to mark routes on a map first, then asked them to explain their markings; their suggestions were included in the final meeting record."
+      ]
+    },
+    {
+      "branch_id": "skill_p2_t0_b00",
+      "evidence_id": "e_skill_p2_t0_b00",
+      "latent_fact_id": "skill_p2_t0",
+      "text": [
+        "After the creek-monitoring visit, Chandra entered several gauge readings under the wrong sampling dates in the shared worksheet.",
+        "Mina rebuilt the summary table and asked Chandra to use the corrected version for the project update."
+      ]
+    },
+    {
+      "branch_id": "skill_p2_t0_b01",
+      "evidence_id": "e_skill_p2_t0_b01",
+      "latent_fact_id": "skill_p2_t0",
+      "text": [
+        "In the soil-moisture report, Chandra’s stated average did not match the readings listed in the appendix.",
+        "The project lead flagged the mismatch during review and completed the calculation before submitting the report."
+      ]
+    },
+    {
+      "branch_id": "skill_p2_t0_b02",
+      "evidence_id": "e_skill_p2_t0_b02",
+      "latent_fact_id": "skill_p2_t0",
+      "text": [
+        "At the monitoring debrief, Chandra interpreted a chart’s vertical axis as site names rather than water-depth readings.",
+        "After the facilitator explained the axes, Chandra asked for help identifying which observations showed the largest change."
+      ]
+    },
+    {
+      "branch_id": "skill_p2_t1_b00",
+      "evidence_id": "e_skill_p2_t1_b00",
+      "latent_fact_id": "skill_p2_t1",
+      "text": [
+        "At a neighborhood drainage meeting, Chandra restated competing concerns and invited quieter residents to speak before the group chose next steps.",
+        "Afterward, the organizer sent a written recap because several attendees were still unclear about who would contact the council."
+      ]
+    },
+    {
+      "branch_id": "skill_p2_t1_b01",
+      "evidence_id": "e_skill_p2_t1_b01",
+      "latent_fact_id": "skill_p2_t1",
+      "text": [
+        "During a school-garden planning session, volunteers argued about planting priorities until Chandra proposed a turn-taking list and returned the conversation to the agenda.",
+        "The signup sheet remained incomplete until another volunteer collected the remaining names after the meeting."
+      ]
+    },
+    {
+      "branch_id": "skill_p2_t1_b02",
+      "evidence_id": "e_skill_p2_t1_b02",
+      "latent_fact_id": "skill_p2_t1",
+      "text": [
+        "At a library listening session, Chandra paired attendees with opposing views for brief exchanges and then asked each pair to report a point they had heard from the other side.",
+        "When one participant challenged the event timeline, Chandra acknowledged the concern and referred the detailed resolution to the session coordinator."
+      ]
+    },
+    {
+      "branch_id": "coop_p0_p1_b00",
+      "evidence_id": "e_coop_p0_p1_b00",
+      "latent_fact_id": "coop_p0_p1",
+      "text": [
+        "During last month's neighborhood survey, Alice drafted a collection timetable while Bruno separately sent volunteers a different timetable.",
+        "Several volunteers arrived at different sites on the same morning, and the survey start was postponed until the schedules were reconciled."
+      ]
+    },
+    {
+      "branch_id": "coop_p0_p1_b01",
+      "evidence_id": "e_coop_p0_p1_b01",
+      "latent_fact_id": "coop_p0_p1",
+      "text": [
+        "At the riverbank monitoring debrief, Alice marked several readings for exclusion because the notes were incomplete.",
+        "Bruno restored those readings to the summary, and the team lead deferred publication until another reviewer checked the logbook."
+      ]
+    },
+    {
+      "branch_id": "coop_p0_p1_b02",
+      "evidence_id": "e_coop_p0_p1_b02",
+      "latent_fact_id": "coop_p0_p1",
+      "text": [
+        "In the spring recycling forum, Alice opened the discussion with a question period before Bruno had finished presenting the sign-up process.",
+        "Chandra stepped in twice to reset the agenda, and attendees left before the final volunteer roles were explained."
+      ]
+    },
+    {
+      "branch_id": "coop_p0_p2_b00",
+      "evidence_id": "e_coop_p0_p2_b00",
+      "latent_fact_id": "coop_p0_p2",
+      "text": [
+        "At the spring outreach meeting, Alice drafted the discussion order while Chandra collected comments from neighborhood representatives.",
+        "When the venue lost an hour of availability, they revised the agenda together and the meeting began on time."
+      ]
+    },
+    {
+      "branch_id": "coop_p0_p2_b01",
+      "evidence_id": "e_coop_p0_p2_b01",
+      "latent_fact_id": "coop_p0_p2",
+      "text": [
+        "During the river-cleanup sign-up day, Chandra greeted arriving volunteers and tracked their questions.",
+        "Alice updated the station map from Chandra's notes, and volunteers were directed to the correct check-in tables."
+      ]
+    },
+    {
+      "branch_id": "coop_p0_p2_b02",
+      "evidence_id": "e_coop_p0_p2_b02",
+      "latent_fact_id": "coop_p0_p2",
+      "text": [
+        "After the neighborhood survey review, Alice wanted the summary to emphasize recurring drainage concerns, while Chandra wanted to include residents' comments about park access.",
+        "They combined both topics into the follow-up memo and each contacted the residents connected to the section they had prepared."
+      ]
+    },
+    {
+      "branch_id": "coop_p1_p2_b00",
+      "evidence_id": "e_coop_p1_p2_b00",
+      "latent_fact_id": "coop_p1_p2",
+      "text": [
+        "At last spring's neighborhood drainage meeting, Bruno prepared the sign-in materials while Chandra arranged the discussion circles and translated residents' questions into the agenda.",
+        "When the venue opened late, they combined the welcome and mapping activities without losing any of the scheduled discussion topics."
+      ]
+    },
+    {
+      "branch_id": "coop_p1_p2_b01",
+      "evidence_id": "e_coop_p1_p2_b01",
+      "latent_fact_id": "coop_p1_p2",
+      "text": [
+        "During a previous stream-survey review, Bruno noticed that several location notes did not match the corresponding measurement sheets and flagged the records for follow-up.",
+        "Chandra compared the field sketches with the original notebooks, and the pair traced the mismatch to a swapped page before the report was circulated."
+      ]
+    },
+    {
+      "branch_id": "coop_p1_p2_b02",
+      "evidence_id": "e_coop_p1_p2_b02",
+      "latent_fact_id": "coop_p1_p2",
+      "text": [
+        "While preparing materials for a park-feedback session, Bruno preferred grouping comments by neighborhood, whereas Chandra initially wanted them grouped by topic.",
+        "They tested both layouts on the same set of comments, then produced a combined board that let attendees find remarks by either neighborhood or topic."
+      ]
+    }
+  ],
+  "generation": {
+    "branches_per_latent_fact": 3,
+    "max_output_tokens": 2048,
+    "model": "microsoft/gpt-5.6-terra",
+    "musr_commit": "b1f4d4168a9cfc6760e8b74d728e4516023dfaa5",
+    "musr_license": "MIT",
+    "musr_repo": "https://github.com/Zayne-sprague/MuSR",
+    "prompt_version": "musr_team_allocation_evidence_v1",
+    "provider": "university",
+    "seed": 20260901,
+    "statements_per_branch": 2,
+    "symbolic_candidate_id": 8109,
+    "task_seed": 8828909129614812917,
+    "temperature_requested": 1.0,
+    "tree_depth": 2
+  },
+  "gold_answer": "ALLOCATION_0",
+  "gold_index": 0,
+  "latent": {
+    "candidate_allocations": [
+      {
+        "assignment": {
+          "analyze the field measurements": [
+            "Alice"
+          ],
+          "coordinate the community workshop": [
+            "Bruno",
+            "Chandra"
+          ]
+        },
+        "pair": [
+          "Bruno",
+          "Chandra"
+        ],
+        "singleton": "Alice"
+      },
+      {
+        "assignment": {
+          "analyze the field measurements": [
+            "Bruno"
+          ],
+          "coordinate the community workshop": [
+            "Alice",
+            "Chandra"
+          ]
+        },
+        "pair": [
+          "Alice",
+          "Chandra"
+        ],
+        "singleton": "Bruno"
+      },
+      {
+        "assignment": {
+          "analyze the field measurements": [
+            "Chandra"
+          ],
+          "coordinate the community workshop": [
+            "Alice",
+            "Bruno"
+          ]
+        },
+        "pair": [
+          "Alice",
+          "Bruno"
+        ],
+        "singleton": "Chandra"
+      }
+    ],
+    "candidate_scores": [
+      11,
+      8,
+      8
+    ],
+    "cooperation_matrix": {
+      "Alice|Bruno": 1,
+      "Alice|Chandra": 2,
+      "Bruno|Chandra": 3
+    },
+    "gold_allocation": {
+      "assignment": {
+        "analyze the field measurements": [
+          "Alice"
+        ],
+        "coordinate the community workshop": [
+          "Bruno",
+          "Chandra"
+        ]
+      },
+      "pair": [
+        "Bruno",
+        "Chandra"
+      ],
+      "singleton": "Alice"
+    },
+    "gold_index": 0,
+    "margin_to_second_best": 3,
+    "people": [
+      "Alice",
+      "Bruno",
+      "Chandra"
+    ],
+    "skill_matrix": {
+      "Alice": [
+        3,
+        3
+      ],
+      "Bruno": [
+        1,
+        3
+      ],
+      "Chandra": [
+        1,
+        2
+      ]
+    },
+    "skills": [
+      "quantitative analysis",
+      "group facilitation"
+    ],
+    "tasks": [
+      {
+        "name": "analyze the field measurements",
+        "skill": "quantitative analysis"
+      },
+      {
+        "name": "coordinate the community workshop",
+        "skill": "group facilitation"
+      }
+    ]
+  },
+  "options": [
+    {
+      "assignment": {
+        "analyze the field measurements": [
+          "Alice"
+        ],
+        "coordinate the community workshop": [
+          "Bruno",
+          "Chandra"
+        ]
+      },
+      "display_text": "analyze the field measurements: Alice; coordinate the community workshop: Bruno and Chandra",
+      "id": "ALLOCATION_0",
+      "index": 0,
+      "pair": [
+        "Bruno",
+        "Chandra"
+      ],
+      "singleton": "Alice"
+    },
+    {
+      "assignment": {
+        "analyze the field measurements": [
+          "Bruno"
+        ],
+        "coordinate the community workshop": [
+          "Alice",
+          "Chandra"
+        ]
+      },
+      "display_text": "analyze the field measurements: Bruno; coordinate the community workshop: Alice and Chandra",
+      "id": "ALLOCATION_1",
+      "index": 1,
+      "pair": [
+        "Alice",
+        "Chandra"
+      ],
+      "singleton": "Bruno"
+    },
+    {
+      "assignment": {
+        "analyze the field measurements": [
+          "Chandra"
+        ],
+        "coordinate the community workshop": [
+          "Alice",
+          "Bruno"
+        ]
+      },
+      "display_text": "analyze the field measurements: Chandra; coordinate the community workshop: Alice and Bruno",
+      "id": "ALLOCATION_2",
+      "index": 2,
+      "pair": [
+        "Alice",
+        "Bruno"
+      ],
+      "singleton": "Chandra"
+    }
+  ],
+  "people": [
+    "Alice",
+    "Bruno",
+    "Chandra"
+  ],
+  "question": "Which allocation is expected to be most effective?",
+  "reasoning_provenance": {
+    "failed_generation_attempt_count": 0,
+    "generation_attempts": 9,
+    "latent_facts": [
+      {
+        "fact_id": "skill_p0_t0",
+        "hidden_claim": "Alice has strong quantitative analysis skill for the task to analyze the field measurements.",
+        "kind": "skill",
+        "people": [
+          "Alice"
+        ],
+        "task_index": 0,
+        "value": 3
+      },
+      {
+        "fact_id": "skill_p0_t1",
+        "hidden_claim": "Alice has strong group facilitation skill for the task to coordinate the community workshop.",
+        "kind": "skill",
+        "people": [
+          "Alice"
+        ],
+        "task_index": 1,
+        "value": 3
+      },
+      {
+        "fact_id": "skill_p1_t0",
+        "hidden_claim": "Bruno has limited quantitative analysis skill for the task to analyze the field measurements.",
+        "kind": "skill",
+        "people": [
+          "Bruno"
+        ],
+        "task_index": 0,
+        "value": 1
+      },
+      {
+        "fact_id": "skill_p1_t1",
+        "hidden_claim": "Bruno has strong group facilitation skill for the task to coordinate the community workshop.",
+        "kind": "skill",
+        "people": [
+          "Bruno"
+        ],
+        "task_index": 1,
+        "value": 3
+      },
+      {
+        "fact_id": "skill_p2_t0",
+        "hidden_claim": "Chandra has limited quantitative analysis skill for the task to analyze the field measurements.",
+        "kind": "skill",
+        "people": [
+          "Chandra"
+        ],
+        "task_index": 0,
+        "value": 1
+      },
+      {
+        "fact_id": "skill_p2_t1",
+        "hidden_claim": "Chandra has moderate group facilitation skill for the task to coordinate the community workshop.",
+        "kind": "skill",
+        "people": [
+          "Chandra"
+        ],
+        "task_index": 1,
+        "value": 2
+      },
+      {
+        "fact_id": "coop_p0_p1",
+        "hidden_claim": "Alice and Bruno work poorly together.",
+        "kind": "cooperation",
+        "people": [
+          "Alice",
+          "Bruno"
+        ],
+        "task_index": null,
+        "value": 1
+      },
+      {
+        "fact_id": "coop_p0_p2",
+        "hidden_claim": "Alice and Chandra work adequately together.",
+        "kind": "cooperation",
+        "people": [
+          "Alice",
+          "Chandra"
+        ],
+        "task_index": null,
+        "value": 2
+      },
+      {
+        "fact_id": "coop_p1_p2",
+        "hidden_claim": "Bruno and Chandra work very well together.",
+        "kind": "cooperation",
+        "people": [
+          "Bruno",
+          "Chandra"
+        ],
+        "task_index": null,
+        "value": 3
+      }
+    ],
+    "trees": [
+      {
+        "branch_id": "skill_p0_t0_b00",
+        "latent_fact_id": "skill_p0_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t0_b00_explicit_0",
+                  "text": "During the spring water-quality review, Alice noticed that several site totals did not match the daily logs."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t0_b00_explicit_1",
+                  "text": "She found that one spreadsheet column had been shifted during import, restored the original alignment, and documented the correction for the team."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p0_t0_b00_commonsense_0",
+                  "text": "Finding and repairing an import-related discrepancy requires careful quantitative checking of records and calculations."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p0_t0_b00_deduced_0",
+              "text": "Alice can trace discrepancies in a dataset to their source and resolve them."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p0_t0_b00_root",
+          "text": "Alice has strong quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p0_t0_b01",
+        "latent_fact_id": "skill_p0_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t0_b01_explicit_0",
+                  "text": "After the roadside noise survey, Alice combined the monitor readings from all collection days into a single table."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t0_b01_explicit_1",
+                  "text": "Her summary separated unusual readings caused by equipment tests from the regular observations, and the project lead used it in the final report."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p0_t0_b01_commonsense_0",
+                  "text": "Combining measurement records and distinguishing atypical observations from regular ones demonstrates sound handling of empirical data."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p0_t0_b01_deduced_0",
+              "text": "Alice can turn raw measurements into defensible summaries."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p0_t0_b01_root",
+          "text": "Alice has strong quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p0_t0_b02",
+        "latent_fact_id": "skill_p0_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t0_b02_explicit_0",
+                  "text": "At the drainage-project debrief, Alice prepared a chart comparing rainfall readings with the water-level records from each monitoring point."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t0_b02_explicit_1",
+                  "text": "When a teammate questioned an apparent rise, she explained which dates were comparable and why the remaining pattern still mattered."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p0_t0_b02_commonsense_0",
+                  "text": "Explaining comparability and patterns in paired measurement records depends on interpreting quantitative evidence accurately."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p0_t0_b02_deduced_0",
+              "text": "Alice communicates numerical findings in a way that supports project decisions."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p0_t0_b02_root",
+          "text": "Alice has strong quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p0_t1_b00",
+        "latent_fact_id": "skill_p0_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t1_b00_explicit_0",
+                  "text": "At the spring neighborhood planning session, Alice opened with a round where each resident named one concern before discussion began."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t1_b00_explicit_1",
+                  "text": "When two attendees disagreed about the playground proposal, Alice summarized both views and helped the group draft a compromise that everyone present signed."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p0_t1_b00_commonsense_0",
+                  "text": "A process that gives participants turns to speak and resolves disagreement into a jointly accepted plan helps a group work productively."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p0_t1_b00_deduced_0",
+              "text": "The neighborhood planning session reached a shared, documented set of next steps."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p0_t1_b00_root",
+          "text": "Alice has strong group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p0_t1_b01",
+        "latent_fact_id": "skill_p0_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t1_b01_explicit_0",
+                  "text": "During last year's river-cleanup volunteer meeting, several new volunteers stayed silent while two long-time members dominated the conversation."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t1_b01_explicit_1",
+                  "text": "Alice invited the quieter volunteers to describe their availability, recorded their ideas on a flip chart, and the meeting ended with every volunteer choosing a role."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p0_t1_b01_commonsense_0",
+                  "text": "Drawing quieter participants into a discussion and turning contributions into agreed actions supports inclusive group participation."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p0_t1_b01_deduced_0",
+              "text": "The volunteer meeting remained constructive despite uneven participation."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p0_t1_b01_root",
+          "text": "Alice has strong group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p0_t1_b02",
+        "latent_fact_id": "skill_p0_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t1_b02_explicit_0",
+                  "text": "At the library's evening feedback gathering, parents, shop owners, and student representatives arrived with competing requests for the town-square redesign."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p0_t1_b02_explicit_1",
+                  "text": "Alice grouped similar comments on a wall, checked that speakers felt their points were represented, and guided attendees through selecting the issues to raise with the council."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p0_t1_b02_commonsense_0",
+                  "text": "Organizing diverse comments, checking understanding, and helping a group identify common priorities can turn a discussion into actionable feedback."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p0_t1_b02_deduced_0",
+              "text": "A community feedback gathering produced usable input from attendees with different priorities."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p0_t1_b02_root",
+          "text": "Alice has strong group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p1_t0_b00",
+        "latent_fact_id": "skill_p1_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t0_b00_explicit_0",
+                  "text": "In the river-monitoring pilot, Bruno combined readings recorded in centimetres with readings recorded in metres in the same spreadsheet column."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t0_b00_explicit_1",
+                  "text": "A colleague found the mismatch while preparing the final summary and rebuilt the affected calculations."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p1_t0_b00_commonsense_0",
+                  "text": "Mixing measurement units in a calculation sheet can produce unreliable totals and comparisons."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p1_t0_b00_deduced_0",
+              "text": "Bruno's earlier measurement summary needed correction before it could be used."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p1_t0_b00_root",
+          "text": "Bruno has limited quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p1_t0_b01",
+        "latent_fact_id": "skill_p1_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t0_b01_explicit_0",
+                  "text": "During the park survey review, Bruno presented a chart after filtering out blank entries from one sampling day."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t0_b01_explicit_1",
+                  "text": "When asked why the average had changed, he could not identify that the filter had also removed several valid zero readings."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p1_t0_b01_commonsense_0",
+                  "text": "Understanding filters and excluded values is important when interpreting summaries derived from collected measurements."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p1_t0_b01_deduced_0",
+              "text": "Bruno had difficulty tracing how a filtered dataset affected the resulting figures."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p1_t0_b01_root",
+          "text": "Bruno has limited quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p1_t0_b02",
+        "latent_fact_id": "skill_p1_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t0_b02_explicit_0",
+                  "text": "For the neighbourhood mapping project, Bruno drafted a table comparing counts from four street segments."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t0_b02_explicit_1",
+                  "text": "Before the table was shared, Chandra recalculated the percentages and corrected two entries whose denominators had been mixed up."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p1_t0_b02_commonsense_0",
+                  "text": "Accurate numerical comparisons require using the appropriate denominator for each percentage."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p1_t0_b02_deduced_0",
+              "text": "Bruno relied on another person to verify a numerical comparison in a previous project."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p1_t0_b02_root",
+          "text": "Bruno has limited quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p1_t1_b00",
+        "latent_fact_id": "skill_p1_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t1_b00_explicit_0",
+                  "text": "At last spring's neighborhood listening session, Bruno opened the discussion by asking each resident to name one concern before anyone debated solutions."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t1_b00_explicit_1",
+                  "text": "When two attendees began talking over each other, he summarized both points and the group completed a list of agreed priorities before the meeting ended."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p1_t1_b00_commonsense_0",
+                  "text": "Creating space for multiple voices and resolving interruptions helps a group reach agreement."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p1_t1_b00_deduced_0",
+              "text": "Bruno can guide a mixed group toward a shared plan."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p1_t1_b00_root",
+          "text": "Bruno has strong group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p1_t1_b01",
+        "latent_fact_id": "skill_p1_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t1_b01_explicit_0",
+                  "text": "During the park-design gathering, rain forced the team to leave the outdoor display boards and move into a small library room."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t1_b01_explicit_1",
+                  "text": "Bruno reorganized the chairs into circles, divided the participants into short discussion rounds, and collected their notes before the room booking ended."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p1_t1_b01_commonsense_0",
+                  "text": "Adapting a meeting format while preserving participation and producing usable input demonstrates effective live-session leadership."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p1_t1_b01_deduced_0",
+              "text": "Bruno can keep a participatory session moving when plans change."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p1_t1_b01_root",
+          "text": "Bruno has strong group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p1_t1_b02",
+        "latent_fact_id": "skill_p1_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t1_b02_explicit_0",
+                  "text": "At a youth advisory meeting, several students stayed silent while adults discussed transportation problems."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p1_t1_b02_explicit_1",
+                  "text": "Bruno invited the students to mark routes on a map first, then asked them to explain their markings; their suggestions were included in the final meeting record."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p1_t1_b02_commonsense_0",
+                  "text": "Offering a lower-pressure way to contribute can help quieter participants join a group discussion."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p1_t1_b02_deduced_0",
+              "text": "Bruno can draw out contributions from people who are initially reluctant to speak."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p1_t1_b02_root",
+          "text": "Bruno has strong group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p2_t0_b00",
+        "latent_fact_id": "skill_p2_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t0_b00_explicit_0",
+                  "text": "After the creek-monitoring visit, Chandra entered several gauge readings under the wrong sampling dates in the shared worksheet."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t0_b00_explicit_1",
+                  "text": "Mina rebuilt the summary table and asked Chandra to use the corrected version for the project update."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t0_b00_commonsense_0",
+                  "text": "Accurately organizing measurements by date is necessary before drawing conclusions from field data."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t0_b00_commonsense_1",
+                  "text": "A summary that must be rebuilt by someone else indicates difficulty handling the underlying data work."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p2_t0_b00_deduced_0",
+              "text": "Chandra’s runoff summary needed substantial revision before the figures could be circulated."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p2_t0_b00_root",
+          "text": "Chandra has limited quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p2_t0_b01",
+        "latent_fact_id": "skill_p2_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t0_b01_explicit_0",
+                  "text": "In the soil-moisture report, Chandra’s stated average did not match the readings listed in the appendix."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t0_b01_explicit_1",
+                  "text": "The project lead flagged the mismatch during review and completed the calculation before submitting the report."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t0_b01_commonsense_0",
+                  "text": "Checking whether a reported average matches the recorded observations is a routine part of quantitative reporting."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t0_b01_commonsense_1",
+                  "text": "Needing another person to complete a flagged calculation is evidence about readiness for similar analytical work."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p2_t0_b01_deduced_0",
+              "text": "Chandra struggled to reconcile basic calculations in a prior measurement report."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p2_t0_b01_root",
+          "text": "Chandra has limited quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p2_t0_b02",
+        "latent_fact_id": "skill_p2_t0",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t0_b02_explicit_0",
+                  "text": "At the monitoring debrief, Chandra interpreted a chart’s vertical axis as site names rather than water-depth readings."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t0_b02_explicit_1",
+                  "text": "After the facilitator explained the axes, Chandra asked for help identifying which observations showed the largest change."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t0_b02_commonsense_0",
+                  "text": "Reading axes and comparing plotted measurements are foundational steps in interpreting field-data charts."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t0_b02_commonsense_1",
+                  "text": "Repeated guidance on those steps can inform expectations about independent measurement analysis."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p2_t0_b02_deduced_0",
+              "text": "Chandra relied on step-by-step support when interpreting a measurement chart."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p2_t0_b02_root",
+          "text": "Chandra has limited quantitative analysis skill for the task to analyze the field measurements."
+        }
+      },
+      {
+        "branch_id": "skill_p2_t1_b00",
+        "latent_fact_id": "skill_p2_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t1_b00_explicit_0",
+                  "text": "At a neighborhood drainage meeting, Chandra restated competing concerns and invited quieter residents to speak before the group chose next steps."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t1_b00_explicit_1",
+                  "text": "Afterward, the organizer sent a written recap because several attendees were still unclear about who would contact the council."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t1_b00_commonsense_0",
+                  "text": "Inviting participation and summarizing disagreements are signs of guiding a group conversation."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t1_b00_commonsense_1",
+                  "text": "Needing a follow-up recap suggests the guidance was useful but not fully complete."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p2_t1_b00_deduced_0",
+              "text": "Chandra can help a community discussion reach a shared next step, though clarification may still be needed afterward."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p2_t1_b00_root",
+          "text": "Chandra has moderate group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p2_t1_b01",
+        "latent_fact_id": "skill_p2_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t1_b01_explicit_0",
+                  "text": "During a school-garden planning session, volunteers argued about planting priorities until Chandra proposed a turn-taking list and returned the conversation to the agenda."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t1_b01_explicit_1",
+                  "text": "The signup sheet remained incomplete until another volunteer collected the remaining names after the meeting."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t1_b01_commonsense_0",
+                  "text": "Creating turn-taking and returning to an agenda helps a group continue productively."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t1_b01_commonsense_1",
+                  "text": "An incomplete follow-up task indicates that some coordination details still required support."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p2_t1_b01_deduced_0",
+              "text": "Chandra can restore structure when volunteers begin talking over one another."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p2_t1_b01_root",
+          "text": "Chandra has moderate group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "skill_p2_t1_b02",
+        "latent_fact_id": "skill_p2_t1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t1_b02_explicit_0",
+                  "text": "At a library listening session, Chandra paired attendees with opposing views for brief exchanges and then asked each pair to report a point they had heard from the other side."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "skill_p2_t1_b02_explicit_1",
+                  "text": "When one participant challenged the event timeline, Chandra acknowledged the concern and referred the detailed resolution to the session coordinator."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t1_b02_commonsense_0",
+                  "text": "Structured exchanges and inclusive reporting can help participants engage with one another."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "skill_p2_t1_b02_commonsense_1",
+                  "text": "Referring a complex issue onward can show appropriate limits rather than complete inability to manage the discussion."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "skill_p2_t1_b02_deduced_0",
+              "text": "Chandra can make space for different viewpoints in a public discussion, while escalating difficult issues when necessary."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "skill_p2_t1_b02_root",
+          "text": "Chandra has moderate group facilitation skill for the task to coordinate the community workshop."
+        }
+      },
+      {
+        "branch_id": "coop_p0_p1_b00",
+        "latent_fact_id": "coop_p0_p1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p1_b00_explicit_0",
+                  "text": "During last month's neighborhood survey, Alice drafted a collection timetable while Bruno separately sent volunteers a different timetable."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p1_b00_explicit_1",
+                  "text": "Several volunteers arrived at different sites on the same morning, and the survey start was postponed until the schedules were reconciled."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p0_p1_b00_commonsense_0",
+                  "text": "Conflicting instructions from two people responsible for the same plan can indicate difficulty aligning their work."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p0_p1_b00_deduced_0",
+              "text": "Their shared planning session ended without a usable joint schedule."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p0_p1_b00_root",
+          "text": "Alice and Bruno work poorly together."
+        }
+      },
+      {
+        "branch_id": "coop_p0_p1_b01",
+        "latent_fact_id": "coop_p0_p1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p1_b01_explicit_0",
+                  "text": "At the riverbank monitoring debrief, Alice marked several readings for exclusion because the notes were incomplete."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p1_b01_explicit_1",
+                  "text": "Bruno restored those readings to the summary, and the team lead deferred publication until another reviewer checked the logbook."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p0_p1_b01_commonsense_0",
+                  "text": "When two collaborators repeatedly reverse each other's decisions and require outside resolution, their collaboration may be strained."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p0_p1_b01_deduced_0",
+              "text": "Their prior joint review produced unresolved disagreements rather than a finished record."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p0_p1_b01_root",
+          "text": "Alice and Bruno work poorly together."
+        }
+      },
+      {
+        "branch_id": "coop_p0_p1_b02",
+        "latent_fact_id": "coop_p0_p1",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p1_b02_explicit_0",
+                  "text": "In the spring recycling forum, Alice opened the discussion with a question period before Bruno had finished presenting the sign-up process."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p1_b02_explicit_1",
+                  "text": "Chandra stepped in twice to reset the agenda, and attendees left before the final volunteer roles were explained."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p0_p1_b02_commonsense_0",
+                  "text": "A co-led event that repeatedly needs a third person to restore coordination suggests the leads were not working in sync."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p0_p1_b02_deduced_0",
+              "text": "Their earlier co-led public session required repeated intervention from a third person."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p0_p1_b02_root",
+          "text": "Alice and Bruno work poorly together."
+        }
+      },
+      {
+        "branch_id": "coop_p0_p2_b00",
+        "latent_fact_id": "coop_p0_p2",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p2_b00_explicit_0",
+                  "text": "At the spring outreach meeting, Alice drafted the discussion order while Chandra collected comments from neighborhood representatives."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p2_b00_explicit_1",
+                  "text": "When the venue lost an hour of availability, they revised the agenda together and the meeting began on time."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p0_p2_b00_commonsense_0",
+                  "text": "People who can revise shared plans under time pressure have demonstrated a workable pattern of collaboration."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p0_p2_b00_deduced_0",
+              "text": "Their earlier joint planning stayed coordinated through a last-minute change."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p0_p2_b00_root",
+          "text": "Alice and Chandra work adequately together."
+        }
+      },
+      {
+        "branch_id": "coop_p0_p2_b01",
+        "latent_fact_id": "coop_p0_p2",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p2_b01_explicit_0",
+                  "text": "During the river-cleanup sign-up day, Chandra greeted arriving volunteers and tracked their questions."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p2_b01_explicit_1",
+                  "text": "Alice updated the station map from Chandra's notes, and volunteers were directed to the correct check-in tables."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p0_p2_b01_commonsense_0",
+                  "text": "Passing timely information between complementary roles supports smooth joint work."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p0_p2_b01_deduced_0",
+              "text": "They have previously handled complementary parts of the same public-facing event."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p0_p2_b01_root",
+          "text": "Alice and Chandra work adequately together."
+        }
+      },
+      {
+        "branch_id": "coop_p0_p2_b02",
+        "latent_fact_id": "coop_p0_p2",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p2_b02_explicit_0",
+                  "text": "After the neighborhood survey review, Alice wanted the summary to emphasize recurring drainage concerns, while Chandra wanted to include residents' comments about park access."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p0_p2_b02_explicit_1",
+                  "text": "They combined both topics into the follow-up memo and each contacted the residents connected to the section they had prepared."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p0_p2_b02_commonsense_0",
+                  "text": "Resolving differing priorities by incorporating both contributions is evidence of constructive collaboration."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p0_p2_b02_deduced_0",
+              "text": "A prior disagreement between them was resolved into a shared follow-up plan."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p0_p2_b02_root",
+          "text": "Alice and Chandra work adequately together."
+        }
+      },
+      {
+        "branch_id": "coop_p1_p2_b00",
+        "latent_fact_id": "coop_p1_p2",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p1_p2_b00_explicit_0",
+                  "text": "At last spring's neighborhood drainage meeting, Bruno prepared the sign-in materials while Chandra arranged the discussion circles and translated residents' questions into the agenda."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p1_p2_b00_explicit_1",
+                  "text": "When the venue opened late, they combined the welcome and mapping activities without losing any of the scheduled discussion topics."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p1_p2_b00_commonsense_0",
+                  "text": "Partners who adapt roles together during an unexpected disruption can maintain a shared plan effectively."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p1_p2_b00_deduced_0",
+              "text": "Their joint planning produced a smoothly run public session."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p1_p2_b00_root",
+          "text": "Bruno and Chandra work very well together."
+        }
+      },
+      {
+        "branch_id": "coop_p1_p2_b01",
+        "latent_fact_id": "coop_p1_p2",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p1_p2_b01_explicit_0",
+                  "text": "During a previous stream-survey review, Bruno noticed that several location notes did not match the corresponding measurement sheets and flagged the records for follow-up."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p1_p2_b01_explicit_1",
+                  "text": "Chandra compared the field sketches with the original notebooks, and the pair traced the mismatch to a swapped page before the report was circulated."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p1_p2_b01_commonsense_0",
+                  "text": "People who coordinate complementary checks can identify the source of an error and prevent it from spreading."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p1_p2_b01_deduced_0",
+              "text": "Their shared review process caught and resolved a data discrepancy."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p1_p2_b01_root",
+          "text": "Bruno and Chandra work very well together."
+        }
+      },
+      {
+        "branch_id": "coop_p1_p2_b02",
+        "latent_fact_id": "coop_p1_p2",
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p1_p2_b02_explicit_0",
+                  "text": "While preparing materials for a park-feedback session, Bruno preferred grouping comments by neighborhood, whereas Chandra initially wanted them grouped by topic."
+                },
+                {
+                  "children": [],
+                  "kind": "explicit",
+                  "node_id": "coop_p1_p2_b02_explicit_1",
+                  "text": "They tested both layouts on the same set of comments, then produced a combined board that let attendees find remarks by either neighborhood or topic."
+                },
+                {
+                  "children": [],
+                  "kind": "commonsense",
+                  "node_id": "coop_p1_p2_b02_commonsense_0",
+                  "text": "Constructively testing competing ideas and integrating their strengths reflects productive collaboration."
+                }
+              ],
+              "kind": "deduced",
+              "node_id": "coop_p1_p2_b02_deduced_0",
+              "text": "They handled a disagreement constructively and left with a usable joint result."
+            }
+          ],
+          "kind": "hidden",
+          "node_id": "coop_p1_p2_b02_root",
+          "text": "Bruno and Chandra work very well together."
+        }
+      }
+    ]
+  },
+  "scenario": "A project lead must allocate Alice, Bruno, Chandra between two urgent tasks. One person must analyze the field measurements; the other two must jointly coordinate the community workshop. Each candidate allocation is judged by the relevant individual skills and by how well the two-person team cooperates. Use the evidence to choose the strongest allocation.",
+  "schema_version": "musr_team_allocation_native_v1",
+  "semantic_world_sha256": "b1b061f5361549b24b9164e956c79b87d23b454fb371114729396cd064528750",
+  "skills": [
+    "quantitative analysis",
+    "group facilitation"
+  ],
+  "task_family": "musr_team_allocation",
+  "task_id": "task_001",
+  "tasks": [
+    {
+      "name": "analyze the field measurements",
+      "skill": "quantitative analysis"
+    },
+    {
+      "name": "coordinate the community workshop",
+      "skill": "group facilitation"
+    }
+  ],
+  "validation": {
+    "forbidden_leakage_free": true,
+    "language_generated_after_symbolic_acceptance": true,
+    "score_margin": 3,
+    "symbolic_ambiguity_gate": true,
+    "unique_exact_winner": true
+  }
+}

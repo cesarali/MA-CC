@@ -1,0 +1,19 @@
+study:
+  name: 29-09-2026-task004-classical-b3-gated-balanced
+configs:
+- false_classical_b3_gated_rho1.yaml
+- truth_classical_b3_gated_rho1.yaml
+- false_classical_b3_gated_rho075.yaml
+- truth_classical_b3_gated_rho075.yaml
+- false_classical_b3_gated_rho06.yaml
+- truth_classical_b3_gated_rho06.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/29-09-2026-task004-classical-b3-gated-balanced
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 200
+  assumed_latency_seconds: 12.5
+  throttle: 4
+  memory: 32G

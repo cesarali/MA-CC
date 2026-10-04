@@ -361,6 +361,17 @@ class RelationalImitationRoundFeedbackGame(Game):
         """The single provider call behind one focal update."""
 
         rules = self.rules(config)
+        max_reason_characters = config.options.get(
+            "max_reason_characters", MAX_REASON_CHARACTERS
+        )
+        if (
+            isinstance(max_reason_characters, bool)
+            or not isinstance(max_reason_characters, int)
+            or max_reason_characters < 1
+        ):
+            raise ValueError(
+                "game.options.max_reason_characters must be a positive integer"
+            )
         agent = state.relational_agent(focal)
         resolved_id = interaction_id or InteractionId(
             f"interaction-{state.turn + 1:04d}"
@@ -435,11 +446,19 @@ class RelationalImitationRoundFeedbackGame(Game):
                 allow_participant_requests=rules.allow_participant_requests,
                 require_grounded_reports=rules.require_grounded_reports,
                 force_none=citation_context.communication_action_masked,
+                # Only facts the agent does not already hold. Printing a fact
+                # it already has under YOUR VERIFIED EVIDENCE a second time here
+                # duplicated ~400 characters per fact and blurred the very
+                # distinction this block exists to draw: held versus received.
                 observed_facts=tuple(
                     render_own_fact(fact_id, state.fact_text(fact_id))
                     for fact_id in citation_context.observed_fact_ids
+                    if fact_id not in set(self._citable_fact_ids(state, agent))
                 ),
                 report_citation_scope=rules.report_citation_scope,
+                population_size=rules.n_agents,
+                round_index=state.turn // rules.n_agents + 1,
+                rounds=rules.rounds,
                 allowed_message_types=(
                     (MESSAGE_REQUEST, MESSAGE_NONE)
                     if not citation_context.citable_fact_ids
@@ -473,6 +492,7 @@ class RelationalImitationRoundFeedbackGame(Game):
                 local_prompt_variant=(
                     rules.local_prompt_variant if stage == INITIAL_VOTE else "P0"
                 ),
+                max_reason_characters=max_reason_characters,
             )
         )
         return DecisionRequest(
@@ -653,14 +673,25 @@ class RelationalImitationRoundFeedbackGame(Game):
                     f"must resolve to one of {list(state.possible_answers)}",
                 )
             )
+        max_reason_characters = config.options.get(
+            "max_reason_characters", MAX_REASON_CHARACTERS
+        )
+        if (
+            isinstance(max_reason_characters, bool)
+            or not isinstance(max_reason_characters, int)
+            or max_reason_characters < 1
+        ):
+            raise ValueError(
+                "game.options.max_reason_characters must be a positive integer"
+            )
         reason = action.metadata.get("reason")
         if not isinstance(reason, str) or not reason.strip():
             issues.append(ValidationIssue("action.reason", "must be non-empty text"))
-        elif len(reason.strip()) > MAX_REASON_CHARACTERS:
+        elif len(reason.strip()) > max_reason_characters:
             issues.append(
                 ValidationIssue(
                     "action.reason",
-                    f"must be at most {MAX_REASON_CHARACTERS} characters",
+                    f"must be at most {max_reason_characters} characters",
                 )
             )
         if not action.metadata.get("shared_fact_present"):
@@ -1358,6 +1389,9 @@ class RelationalImitationRoundFeedbackGame(Game):
                 fact_ids=("f1", "f2"),
                 current_vote=None,
                 receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
+                max_reason_characters=int(
+                    config.options.get("max_reason_characters", MAX_REASON_CHARACTERS)
+                ),
             ),
         )
         representative_sources = tuple(
@@ -1399,6 +1433,11 @@ class RelationalImitationRoundFeedbackGame(Game):
                     social_sources=representative_sources,
                     vote_visibility=rules.vote_visibility,
                     receiver_epistemic_disposition=rules.receiver_epistemic_disposition,
+                    max_reason_characters=int(
+                        config.options.get(
+                            "max_reason_characters", MAX_REASON_CHARACTERS
+                        )
+                    ),
                 )
             ),
         )

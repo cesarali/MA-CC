@@ -1,0 +1,64 @@
+study:
+  name: relational-population-study-09h-deepinfra-deepseek-v4-flash-0731-cesar
+
+configs:
+  - study09h_task0002_false_high_statistics_persistence_deepinfra_deepseek.yaml
+
+preflight:
+  contract: relational_persistence_high_statistics_false_v1
+
+# Cesar execution variant of ../population_study_09h_deepinfra_deepseek.
+#
+# The experiment YAML and analysis recipe are byte-identical copies of that
+# study; only this file differs. Scientific identity is unchanged: frozen task
+# 0002, N=12, L=3, 30 rounds, q={1,2}, rho={0.80,0.85}, b={3,4,6,8,9,12},
+# 15 repetitions across 24 cells = 360 episodes, guarded by the same
+# relational_persistence_high_statistics_false_v1 contract.
+execution:
+  mode: auto
+  # Unchanged from the source study: the DeepInfra account allows 200
+  # concurrent requests and 1.1M TPM. At the measured ~690 tokens per request,
+  # 1,200 RPM is about 828k TPM, which stays under that ceiling. The shared
+  # coordinator enforces the cap globally, so it does not depend on node count.
+  target_rpm: 1200
+  assumed_latency_seconds: 12.0
+  # Cesar has six compute nodes, and SLURM advertises 4 CPUs / 7500 MB each --
+  # 24 CPU slots in total. The source study's cpus_per_task: 10 and memory: 12G
+  # would never be schedulable here.
+  #
+  # The work is I/O bound: DeepInfra runs the model, and a worker only issues
+  # HTTPS requests and parses JSON. One CPU per worker is therefore enough, and
+  # it is what lets all 24 cells run at once (4 workers per node x 6 nodes)
+  # rather than 6 at a time. That restores the source study's 24-way cell
+  # parallelism and its ~1,200 RPM plan on a quarter of the hardware.
+  #
+  # memory must stay under 7500/4 = 1875 MB so four workers fit on one node.
+  # Note this cluster configures no cgroup enforcement (TaskPlugin is unset)
+  # and the physical hosts carry 128 GB, so this figure is scheduler
+  # bookkeeping rather than a hard cap on the worker.
+  max_active_nodes: 24
+  throttle: 24
+  cpus_per_task: 1
+  memory: 1800M
+  # Cesar's `main` partition has no time limit. At the planned 1,200 RPM the
+  # 141k expected requests need about two hours; this is a generous ceiling,
+  # not an estimate.
+  time_limit: "12:00:00"
+  partition: main
+  # Cesar runs no accounting database, so QoS is accepted and ignored.
+  qos: normal
+  results_root: /shared/MA-CC-results/studies/relational_population_study_09h_deepinfra_deepseek_v4_flash_0731_cesar
+  require_results_under: /shared/MA-CC-results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 128
+    minimum_concurrency: 32
+    maximum_concurrency: 200
+    target_rpm: 1200
+    local_failure_threshold: 2
+    global_failure_ratio: 0.05
+    increase_interval_seconds: 30
+    retry_max_elapsed_seconds: 300
+
+analysis:
+  recipe: analysis.yaml

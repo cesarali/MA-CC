@@ -1,0 +1,106 @@
+study: {name: musr_blackboard_adaptive_communication_q3_qwen_cesar}
+configs: [q3_no_control.yaml, q3_truth_control.yaml, q3_false_control.yaml]
+
+# Qwen / cesar variant of ../blackboard_adaptive_communication_q3_deepinfra.
+#
+# Three changes to each experiment YAML, and nothing else: the model, the
+# initialization artifact directory, and the experiment name. The prompt-v4
+# adaptive-communication design is unchanged -- rho {0.70, 0.775, 0.85, 0.925,
+# 1.00}, b {3, 6, 9, 12, 15, 18, 21} on the controlled arms, q=3, N=24,
+# 10 rounds, 10 matched repetitions, 75 cells and 750 episodes -- and
+# analysis.yaml is a byte-identical copy.
+#
+# Model: Qwen/Qwen3-235B-A22B-Instruct-2507 rather than DeepSeek-V4-Flash.
+# This is a different measured scientific system, so no DeepSeek episode is
+# reused and the results root is separate.
+#
+# Why this Qwen and not a cheaper one: the Qwen3 *thinking* models
+# (Qwen3-32B, Qwen3-14B) emit a <think>...</think> block ahead of the JSON
+# body, which breaks the strict response contract, and they spend 150-200
+# output tokens on answers this model returns in six. The -Instruct variants
+# do not think. Measured live on 2026-09-12.
+execution:
+  mode: auto
+  cells_per_shard: 2
+  # Retuned from the first hour of live measurement (job 157, 25k requests).
+  #
+  # assumed_latency_seconds was inherited from the DeepSeek study at 6.0, but
+  # Qwen3-235B-A22B is a much larger MoE: measured latency is ~22 s. That
+  # matters because the planner derives the array throttle from it --
+  # floor(target_rpm x latency / (60 x slots_per_shard)) -- so the wrong 6.0
+  # produced only 5 concurrent shards (100 request slots) and 274 real RPM
+  # against a nominal 1,000.
+  #
+  # With the measured 22 s, target_rpm 600 yields floor(600 x 22 / 1200) = 11
+  # shards = 220 slots, clamped to 200 by the load controller below. Lowering
+  # the nominal target therefore *raises* real throughput, to ~545 RPM.
+  #
+  # 200 concurrent is the DeepInfra account ceiling, so this is the maximum
+  # achievable; there is no configuration that goes faster while latency holds
+  # at 22 s. Observed tokens/request is climbing as board history accumulates
+  # (1,228 -> 1,631), so late in the run 545 RPM approaches the 1.1M TPM
+  # ceiling and the adaptive controller is expected to throttle back.
+  target_rpm: 600
+  assumed_latency_seconds: 22.0
+  # Cesar has six nodes advertising 4 CPUs / 7500 MB each -- 24 CPU slots.
+  # The source study's cpus_per_task: 8 and memory: 12G cannot schedule here;
+  # the work is I/O bound (DeepInfra runs the model, a worker only issues HTTPS
+  # and parses JSON), so one CPU per worker is both sufficient and schedulable.
+  # memory must stay under 7500/4 = 1875 MB so four workers share a node. This
+  # cluster configures no cgroup enforcement and the hosts carry 128 GB, so
+  # that figure is scheduler bookkeeping rather than a hard cap on the worker.
+  #
+  # The ceilings below are not what binds. The planner derives the array
+  # throttle from the rate target -- floor(1000 RPM x 6 s / (60 x 20 slots
+  # per shard)) = 5 -- so five shards run at a time and the plan lands at the
+  # intended 1,000 RPM, matching the source study's max_active_nodes: 5 and
+  # the 100-request load-control ceiling. Cesar has spare capacity; the
+  # DeepInfra rate target is the limit, not the cluster.
+  # Pinned, not left to the planner. throttle = min(shard_count, rpm_bound,
+  # max_active_nodes), and rpm_bound drifts as cells complete -- successive
+  # submissions of this same study resolved to 11, then 12, then 13. With the
+  # coordinator off, the concurrency ceiling is
+  # throttle x cells_per_shard x request_concurrency, so a drifting throttle
+  # silently walks past the 200-request account cap. Pinning max_active_nodes
+  # makes the ceiling deterministic: 12 x 2 x 8 = 192.
+  max_active_nodes: 12
+  throttle: 12
+  cpus_per_task: 1
+  memory: 1800M
+  # Cesar's `main` partition has no time limit; this is a generous ceiling.
+  time_limit: "12:00:00"
+  partition: main
+  # Cesar runs no accounting database, so QoS is accepted and ignored.
+  qos: normal
+  results_root: /shared/MA-CC-results/studies/musr_blackboard_adaptive_communication_q3_qwen_cesar
+  require_results_under: /shared/MA-CC-results
+  # Shared coordination is OFF, and this is deliberate.
+  #
+  # shared_adaptive serialises every request through an exclusive lock on the
+  # NFS mount: acquire before the call, release after, plus heartbeat renewals
+  # for calls that outlive heartbeat_seconds. At ~185 RPM that is ~550 lock
+  # transactions per minute through one directory. Job 167 ran it with eleven
+  # workers and the lock queue collapsed -- 48 ProviderCoordinationUnavailable
+  # timeouts across 8 shards, 344 failed episodes, and lower throughput than
+  # the five-worker run, because the lock is a global serialisation point that
+  # adds contention without adding capacity.
+  #
+  # With mode: off there is no coordinator and no lock traffic
+  # (load_control.py:697). Concurrency is then bounded purely by the local
+  # asyncio semaphores, which is safe by construction here:
+  #
+  #   12 shards x 2 cells/shard x request_concurrency 8 = 192 <= 200 account cap
+  #
+  # Size request_concurrency against the throttle the planner actually reports
+  # in the submit output, not against a hand-computed one: it resolved to 12
+  # here, not the 11 the rpm_bound formula suggested, and 12 x 2 x 9 = 216
+  # would have exceeded the cap with no coordinator left to absorb it.
+  #
+  # so the account ceiling cannot be exceeded even with every worker saturated.
+  # The cost is losing adaptive backoff on 429s; that is acceptable because
+  # 132k requests produced zero rate-limit responses while sitting at 25% of
+  # the 1.1M TPM ceiling. Restore shared_adaptive if the token mix ever grows
+  # enough to approach that ceiling.
+  # "off" must be quoted: YAML 1.1 parses a bare off as boolean false.
+  provider_load_control: {mode: "off"}
+analysis: {recipe: analysis.yaml}

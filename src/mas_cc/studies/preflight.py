@@ -1231,7 +1231,20 @@ def run_study_preflight(
         key: sum(int(row["total_provider_requests"][key]) for row in estimates)
         for key in ("lower", "expected", "conservative")
     }
-    design = {**design, "provider_calls": calls}
+    design = {
+        **design,
+        "provider_calls": calls,
+        "total_cells": design.get(
+            "total_cells", sum(int(row.get("cell_count", 1)) for row in estimates)
+        ),
+        "total_episodes": design.get(
+            "total_episodes",
+            sum(
+                int(row.get("total_episode_count", row.get("episode_count", 0)))
+                for row in estimates
+            ),
+        ),
+    }
     from mas_cc.config import GridSpec, load_run_config_or_grid
     from mas_cc.planning.semantic_storage import estimate_semantic_storage
 
@@ -1275,6 +1288,8 @@ def run_study_preflight(
             [
                 "- Scientific contract: none (ordinary study preflight)",
                 f"- Configurations: {len(spec.configs)}",
+                f"- Total cells: {design['total_cells']}",
+                f"- Total episodes: {design['total_episodes']}",
                 f"- Nominal provider calls: {calls['lower']}",
                 f"- Expected provider calls: {calls['expected']}",
                 f"- Conservative provider calls: {calls['conservative']}",

@@ -8,7 +8,7 @@ from .merge import merge_studies
 from .initialization import materialize_study_initializations
 from .preflight import StudyPreflightResult, run_study_preflight
 from .reporting import ReportResult, build_study_report
-from .submission import SubmissionResult, submit_study
+from .submission import SubmissionResult, prepare_study, submit_study
 
 __all__ = [
     "StudySpec",
@@ -25,5 +25,6 @@ __all__ = [
     "merge_studies",
     "run_study_preflight",
     "plan_extension",
+    "prepare_study",
     "submit_study",
 ]

@@ -38,6 +38,7 @@ from mas_cc.analysis.single_affinity import target_sensing_information
 from mas_cc.games.hidden_bench.imitation.controller import advocacy_probability
 from mas_cc.games.relational_reasoning.imitation_round_feedback.prompts import (
     BlackboardBallotContract,
+    MAX_REASON_CHARACTERS,
     build_relational_blackboard_prompt,
     relational_blackboard_ballot_prompt,
 )
@@ -610,6 +611,78 @@ def test_all_ordinary_actions_validate_and_replies_need_visible_target():
     assert not contract.validate(invalid).valid
 
 
+def test_blackboard_contract_can_request_repair_for_an_overlong_private_reason():
+    contract = BlackboardBallotContract(
+        allowed_values=("A", "B"),
+        options={"fact_ids": (), "relations": (), "visible_message_ids": ()},
+    )
+    response = json.dumps(
+        {
+            "vote": "A",
+            "private_reason": "x" * (MAX_REASON_CHARACTERS + 1),
+            "public_message": {
+                "type": "NONE",
+                "text": None,
+                "shared_fact_id": None,
+                "reply_to": None,
+            },
+        }
+    )
+
+    result = contract.validate(response)
+    assert not result.valid
+    assert result.issues[0].field == "response.private_reason"
+    guidance = contract.repair_guidance(result.issues)
+
+    assert "private_reason was too long" in guidance
+    assert "one short sentence of at most 300 characters" in guidance
+    assert "complete JSON object" in guidance
+    assert "outside the JSON object" in guidance
+
+
+def test_blackboard_overlong_private_reason_is_repaired_in_the_decision_loop():
+    config = _config(rounds=1)
+    options = {**dict(config.game.options), "invalid_response_retries": 3}
+    config = replace(config, game=replace(config.game, options=options))
+    seen = []
+
+    def factory(request):
+        seen.append(request)
+        return json.dumps(
+            {
+                "vote": "A",
+                "private_reason": (
+                    "x" * (MAX_REASON_CHARACTERS + 1)
+                    if len(seen) == 1
+                    else "brief corrected reason"
+                ),
+                "public_message": {
+                    "type": "NONE",
+                    "text": None,
+                    "shared_fact_id": None,
+                    "reply_to": None,
+                },
+            }
+        )
+
+    result = asyncio.run(
+        run_relational_imitation_round_feedback_game(
+            create_game(config.game),
+            config,
+            MockLLMProvider(config.llm_provider, response_factory=factory),
+        )
+    )
+
+    repaired = result.interactions[0].decisions[0]
+    assert repaired.validation_attempts == 2
+    assert len(seen[1].messages) == len(seen[0].messages) + 1
+    assert seen[1].messages[-1].role.value == "user"
+    assert "private_reason was too long" in seen[1].messages[-1].content
+    assert "one short sentence of at most 300 characters" in seen[1].messages[-1].content
+    assert seen[0].metadata["validation_repair"] is False
+    assert seen[1].metadata["validation_repair"] is True
+
+
 def test_request_cannot_attach_evidence_and_report_can():
     contract = BlackboardBallotContract(
         allowed_values=("A", "B"),
@@ -811,7 +884,13 @@ def test_blackboard_v3_prompt_guidance_and_json_contract_are_surgical():
     assert "YOUR PREVIOUS VOTE" in rendered
     assert "You may keep or revise this vote" in rendered
     assert "Some participants may have objectives" not in rendered
-    assert "rather than by repetition, confidence" in rendered
+    # The vigilant board framing now states that evidence is split across
+    # participants and asks them to exchange it. The earlier anti-conformity
+    # clause was removed deliberately: instructing agents how to weigh social
+    # information biases the very thing these studies measure.
+    assert "divided among the participants" in rendered
+    assert "exchange evidence with the other participants" in rendered
+    assert "rather than by repetition, confidence" not in rendered
     assert "REQUEST asks for specific missing evidence or information" in rendered
     assert "missing or ambiguous" in rendered
     assert "Prefer REQUEST over NONE" in rendered

@@ -1,0 +1,28 @@
+study:
+  name: amarel-deepinfra-smoke
+
+configs:
+  - toy_coordination_deepinfra.yaml
+
+execution:
+  mode: auto
+  target_rpm: 30
+  assumed_latency_seconds: 2.0
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 1
+  memory: 2G
+  time_limit: "00:10:00"
+  # Source defaults remain Potsdam-safe. The explicit Amarel adapter replaces
+  # these scheduler fields and rebinds the generated result boundary.
+  partition: all
+  qos: normal
+  results_root: /work/ojedamarin/Projects/LanguageGames/MA-CC/results/studies/amarel_deepinfra_smoke
+  require_results_under: /work/ojedamarin/Projects/LanguageGames/MA-CC/results
+  provider_load_control:
+    mode: shared_adaptive
+    initial_concurrency: 1
+    minimum_concurrency: 1
+    maximum_concurrency: 1
+    target_rpm: 30
+

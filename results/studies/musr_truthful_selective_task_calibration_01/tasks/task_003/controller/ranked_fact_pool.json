@@ -1,0 +1,170 @@
+[
+  {
+    "fact_id": "cf_x01_le_x03",
+    "rank": 1,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 24.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x00_ge_x05",
+    "rank": 2,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 23.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x02_le_2",
+    "rank": 3,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 22.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x07_le_2",
+    "rank": 4,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 21.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x02_le_x04",
+    "rank": 5,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 20.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x06_ge_x07",
+    "rank": 6,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 19.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x03_ge_2",
+    "rank": 7,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 18.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x03_ge_x05",
+    "rank": 8,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 17.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x04_ge_2",
+    "rank": 9,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 16.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x03_eq_2",
+    "rank": 10,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 15.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x02_eq_1",
+    "rank": 11,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 14.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x08_eq_2",
+    "rank": 12,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 13.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x05_eq_1",
+    "rank": 13,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 12.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x01_ge_x02",
+    "rank": 14,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 11.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x05_le_2",
+    "rank": 15,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 10.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x04_ge_x05",
+    "rank": 16,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 9.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x02_ge_x05",
+    "rank": 17,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 8.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x01_ge_x05",
+    "rank": 18,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 7.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x08_le_2",
+    "rank": 19,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 6.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x00_ge_x02",
+    "rank": 20,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 5.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x07_eq_1",
+    "rank": 21,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 4.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x02_eq_x05",
+    "rank": 22,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 3.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x03_eq_x04",
+    "rank": 23,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 2.0,
+    "strategy_class": "target-compatible"
+  },
+  {
+    "fact_id": "cf_x03_le_x04",
+    "rank": 24,
+    "ranking_method": "diversity_positive_marginal_beam_v1",
+    "score": 1.0,
+    "strategy_class": "target-compatible"
+  }
+]

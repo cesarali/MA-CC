@@ -15,6 +15,7 @@ import pytest
 import yaml
 
 from mas_cc.cli.experiment import run_experiment_command
+from mas_cc.cli.main import main as cli_main
 from mas_cc.analysis.effective_affinity import effective_affinity_analysis
 from mas_cc.config import GridSpec, load_run_config, load_run_config_or_grid
 from mas_cc.experiments import run_experiment_sync
@@ -40,10 +41,12 @@ from mas_cc.studies.table_io import read_scientific_table, write_scientific_tabl
 from mas_cc.studies.submission import (
     array_task_command,
     build_submission_entries,
+    prepare_study,
     resolve_array_entry,
     submit_study,
     write_submission_manifest,
 )
+from mas_cc.studies.runtime import validate_study_execution_site
 
 
 def test_study_workers_reject_mixed_live_provider_policies(tmp_path, monkeypatch):
@@ -229,8 +232,220 @@ def test_submit_preflights_every_config_and_calls_sbatch_once(tmp_path, monkeypa
     assert calls[0][0:2] == ("sbatch", "--array=0-1%2")
     assert result.job_id == "4242"
     assert (result.study_dir / "study_manifest.json").is_file()
+    preparation = json.loads((result.study_dir / "preparation.json").read_text())
+    assert preparation["execution_site"] == "potsdam"
     with (result.study_dir / "submission_manifest.csv").open(newline="") as stream:
         assert [int(row["array_index"]) for row in csv.DictReader(stream)] == [0, 1]
+
+
+def test_real_batch_submission_is_disabled_on_nersc(tmp_path, monkeypatch):
+    monkeypatch.setenv("NERSC_HOST", "perlmutter")
+    with pytest.raises(ValueError, match="--qos=interactive"):
+        submit_study(tmp_path)
+    assert not any(tmp_path.iterdir())
+
+
+def test_amarel_config_array_submission_uses_site_policy_and_scratch_boundary(
+    tmp_path, monkeypatch
+):
+    _standalone_config(tmp_path / "config.yaml", name="amarel-config")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: amarel-config}\nconfigs: [config.yaml]\n", encoding="utf-8"
+    )
+    scratch = tmp_path / "scratch" / "MA-CC-results"
+    monkeypatch.setenv("AMAREL_RESULTS_ROOT", str(scratch))
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 9001\n", "")
+
+    result = submit_study(tmp_path, execution_site="amarel", run=fake_run)
+
+    assert result.study_dir == (scratch / "amarel-config").resolve()
+    assert calls[0][0] == "sbatch"
+    assert "--account=general" in calls[0]
+    assert "--partition=main" in calls[0]
+    assert "--qos=normal" in calls[0]
+    assert any(item.startswith("--chdir=") for item in calls[0])
+    assert any(item.startswith("--export=ALL,AMAREL_REPO_ROOT=") for item in calls[0])
+    assert any(
+        item.endswith("/scripts/Amarel/SLURM/run_config_array.job")
+        for item in calls[0]
+    )
+    preparation = json.loads((result.study_dir / "preparation.json").read_text())
+    manifest = json.loads((result.study_dir / "study_manifest.json").read_text())
+    assert preparation["execution_site"] == "amarel"
+    assert manifest["execution"]["require_results_under"] == str(scratch.resolve())
+
+
+def test_amarel_worker_site_stamp_is_accepted_and_other_sites_are_rejected(
+    tmp_path, monkeypatch
+):
+    manifest = tmp_path / "submission_manifest.csv"
+    manifest.write_text("", encoding="utf-8")
+    (tmp_path / "preparation.json").write_text(
+        json.dumps({"status": "prepared", "execution_site": "amarel"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MAS_CC_EXECUTION_SITE", "amarel")
+    validate_study_execution_site(manifest)
+    monkeypatch.setenv("MAS_CC_EXECUTION_SITE", "potsdam")
+    with pytest.raises(ValueError, match="prepared for execution site 'amarel'"):
+        validate_study_execution_site(manifest)
+
+
+def test_amarel_preserves_lexical_scratch_mount_paths(tmp_path, monkeypatch):
+    _standalone_config(tmp_path / "config.yaml", name="lexical-mount")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: lexical-mount}\nconfigs: [config.yaml]\n", encoding="utf-8"
+    )
+    physical = tmp_path / "physical"
+    physical.mkdir()
+    lexical = tmp_path / "scratch"
+    lexical.symlink_to(physical, target_is_directory=True)
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    result = prepare_study(
+        tmp_path,
+        lexical / "results" / "lexical-mount",
+        require_results_under=lexical / "results",
+        execution_site="amarel",
+    )
+
+    assert str(result.study_dir).startswith(str(lexical))
+    assert str(result.study_dir).startswith(str(physical)) is False
+
+
+def test_prepare_writes_manifests_without_contacting_slurm(tmp_path, monkeypatch):
+    _standalone_config(tmp_path / "config.yaml", name="prepared")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: prepared}\nconfigs: [config.yaml]\n", encoding="utf-8"
+    )
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    result = prepare_study(
+        tmp_path, tmp_path / "results", throttle=1, execution_site="nersc"
+    )
+
+    assert result.job_id is None
+    assert result.command[0] == "sbatch"
+    assert not (result.study_dir / "submission.json").exists()
+    preparation = json.loads((result.study_dir / "preparation.json").read_text())
+    assert preparation["status"] == "prepared"
+    assert preparation["execution_site"] == "nersc"
+    assert preparation["array"] == "0-0%1"
+    assert preparation["worker_manifest"] == str(result.manifest_path)
+
+
+def test_prepare_cli_reports_worker_manifest_without_submitting(
+    tmp_path, monkeypatch, capsys
+):
+    _standalone_config(tmp_path / "config.yaml", name="prepared-cli")
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: prepared-cli}\nconfigs: [config.yaml]\n", encoding="utf-8"
+    )
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    results = tmp_path / "results"
+    assert (
+        cli_main(
+            [
+                "study",
+                "prepare",
+                "--config-dir",
+                str(tmp_path),
+                "--results-dir",
+                str(results),
+                "--execution-site",
+                "nersc",
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert "Study results prepared" in output
+    # `study prepare` reports the execution manifest, not the submission one:
+    # origin/main moved the planned per-cell work into execution_manifest.csv.
+    assert f"Worker manifest: {results.resolve() / 'execution_manifest.csv'}" in output
+    assert not (results / "submission.json").exists()
+    preparation = json.loads((results / "preparation.json").read_text())
+    assert preparation["execution_site"] == "nersc"
+
+
+def test_prepare_can_record_an_explicit_site_results_boundary(tmp_path, monkeypatch):
+    _standalone_config(tmp_path / "config.yaml", name="site-prepared")
+    potsdam_root = tmp_path / "potsdam-results"
+    nersc_root = tmp_path / "nersc-results"
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: site-prepared}\nconfigs: [config.yaml]\nexecution:\n"
+        f"  results_root: {potsdam_root}\n"
+        f"  require_results_under: {potsdam_root}\n",
+        encoding="utf-8",
+    )
+
+    def fake_preflight(config, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    result = prepare_study(
+        tmp_path,
+        nersc_root / "study",
+        require_results_under=nersc_root,
+        execution_site="nersc",
+    )
+    manifest = json.loads((result.study_dir / "study_manifest.json").read_text())
+    assert manifest["execution"]["results_root"] == str(result.study_dir)
+    assert manifest["execution"]["require_results_under"] == str(nersc_root.resolve())
+    source_entries = build_submission_entries(
+        discover_study(tmp_path), potsdam_root / "study", git_commit="test"
+    )
+    assert [entry.config_hash for entry in result.entries] == [
+        entry.config_hash for entry in source_entries
+    ]
+    assert [entry.resolved_config_hash for entry in result.entries] == [
+        entry.resolved_config_hash for entry in source_entries
+    ]
+
+
+def test_cluster_worker_rejects_a_preparation_from_the_other_site(tmp_path, monkeypatch):
+    manifest = tmp_path / "submission_manifest.csv"
+    manifest.write_text("", encoding="utf-8")
+    (tmp_path / "preparation.json").write_text(
+        json.dumps({"status": "prepared", "execution_site": "potsdam"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MAS_CC_EXECUTION_SITE", "nersc")
+
+    with pytest.raises(ValueError, match="prepared for execution site 'potsdam'"):
+        validate_study_execution_site(manifest)
+
+    (tmp_path / "preparation.json").write_text(
+        json.dumps({"status": "prepared", "execution_site": "nersc"}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("MAS_CC_EXECUTION_SITE")
+    with pytest.raises(ValueError, match="not 'unset'"):
+        validate_study_execution_site(manifest)
 
 
 def test_potsdam_study_launchers_pin_dedicated_conda_environment():
@@ -247,8 +462,56 @@ def test_potsdam_study_launchers_pin_dedicated_conda_environment():
         assert "\npython -m mas_cc.studies." not in script
 
 
+def test_amarel_launchers_are_generic_site_isolated_and_use_scratch_caches():
+    launchers = (
+        Path("scripts/Amarel/SLURM/run_config_array.job"),
+        Path("scripts/Amarel/SLURM/run_study_cell_array.job"),
+    )
+    common = Path("scripts/Amarel/SLURM/_common.sh").read_text(encoding="utf-8")
+    assert "/scratch/df630" in common
+    assert "HF_HOME" in common
+    assert "COMET_CACHE_DIR" in common
+    assert "CONDA_ENVS_PATH" in common
+    assert "CONDA_PKGS_DIRS" in common
+    assert "df -Pk" in common
+    for launcher in launchers:
+        script = launcher.read_text(encoding="utf-8")
+        assert "MAS_CC_EXECUTION_SITE=amarel" in script
+        assert 'PYTHONPATH="${AMAREL_REPO_ROOT}/src' in script
+        assert "#SBATCH --account=general" in script
+        assert "#SBATCH --partition=main" in script
+        assert "#SBATCH --qos=normal" in script
+        assert "${AMAREL_REPO_ROOT}/scripts/Amarel/SLURM/_common.sh" in script
+        assert "scripts/nersc" not in script
+        assert "/work/ojedamarin" not in script
+
+
+def test_amarel_deepinfra_smoke_is_one_tiny_cell_and_uses_the_shared_planner():
+    root = Path("configs/runs/smoke/amarel_deepinfra")
+    spec = discover_study(root)
+    submissions = build_submission_entries(spec, "/tmp/amarel-smoke", git_commit="test")
+    shards = build_cell_execution_entries(spec, submissions)
+    plan = plan_cell_execution(spec, len(shards))
+    source = load_run_config_or_grid(spec.configs[0], environment={})
+
+    assert isinstance(source, GridSpec)
+    assert len(source.cells) == 1
+    assert submissions[0].expected_episode_count == 1
+    assert source.base.game.population_size == 2
+    assert source.base.game.horizon == 2
+    assert source.base.llm_provider.type == "deepinfra"
+    assert source.base.llm_provider.model == "deepseek-ai/DeepSeek-V4-Flash-0731"
+    assert len(shards) == 1
+    assert plan.array_throttle == 1
+    assert plan.cpus_per_task == 1
+    assert plan.memory == "2G"
+    assert plan.time_limit == "00:10:00"
+
+
 def test_study06_auto_plan_uses_cells_and_stays_below_rpm_target():
-    spec = discover_study("configs/runs/relational_reasoning/population_study_06")
+    spec = discover_study(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_06"
+    )
     submissions = build_submission_entries(
         spec, "results/test-study06", git_commit="test"
     )
@@ -430,7 +693,9 @@ def test_cell_worker_runs_every_cell_in_selected_bundle(tmp_path, monkeypatch):
 
 
 def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
-    root = Path("configs/runs/relational_reasoning/population_study_07")
+    root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_07"
+    )
     spec = discover_study(root)
     submissions = build_submission_entries(spec, "/tmp/test-study07", git_commit="test")
     shards = build_cell_execution_entries(spec, submissions)
@@ -465,7 +730,8 @@ def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
     }
     study06_analysis = yaml.safe_load(
         Path(
-            "configs/runs/relational_reasoning/population_study_06/analysis.yaml"
+            "configs/runs/relational_reasoning/first_population_studies/"
+            "population_study_06/analysis.yaml"
         ).read_text()
     )
     study07_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
@@ -473,12 +739,15 @@ def test_study07_is_matched_to_study06_and_uses_same_execution_protocol():
         assert study07_analysis[key] == study06_analysis[key]
 
 
-def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
-    root = Path("configs/runs/relational_reasoning/population_study_08")
+def test_study08_prompt_semantics_design_is_paired_and_provider_safe():
+    root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_08"
+    )
     spec = discover_study(root)
     submissions = build_submission_entries(spec, "/tmp/test-study08", git_commit="test")
     shards = build_cell_execution_entries(spec, submissions)
     plan = plan_cell_execution(spec, len(shards))
+    source_execution = yaml.safe_load((root / "study.yaml").read_text())["execution"]
     wrong = load_run_config_or_grid(root / "study08_wrong_prompt_b.yaml")
     truth = load_run_config_or_grid(root / "study08_truth_prompt_b.yaml")
 
@@ -508,21 +777,42 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
         cell.config.experiment.metadata["common_random_numbers_across_grid"]
         for cell in wrong.cells + truth.cells
     } == {True}
-    assert {cell.config.execution.seed for cell in wrong.cells + truth.cells} == {
-        20260822
-    }
-    assert {
-        cell.config.execution.repetitions for cell in wrong.cells + truth.cells
-    } == {10}
-    assert plan.array_throttle == 18
-    assert plan.total_request_concurrency == 144
-    assert plan.estimated_rpm == 864
+    assert {cell.config.execution.seed for cell in wrong.cells + truth.cells} == {20260822}
+    assert {cell.config.execution.repetitions for cell in wrong.cells + truth.cells} == {10}
+    assert {cell.config.execution.parallelism for cell in wrong.cells + truth.cells} == {1}
+    assert {cell.config.llm_provider.request_concurrency for cell in wrong.cells + truth.cells} == {1}
+    assert all(
+        "response_format" not in cell.config.llm_provider.options
+        for cell in wrong.cells + truth.cells
+    )
+    assert all(
+        "structured_output_tool" not in cell.config.llm_provider.options
+        for cell in wrong.cells + truth.cells
+    )
+    assert plan.array_throttle == 5
+    assert plan.total_episode_slots == 5
+    assert plan.total_request_concurrency == 5
+    # Five slots at the benchmark-informed 1.5-second planning latency yield a
+    # 200-RPM planning estimate below the 500-RPM rolling gate.
+    assert plan.estimated_rpm == 200
+    # Begin below the provider's unstable five-request edge and promote only
+    # after the configured healthy interval.
+    assert plan.provider_load_control["initial_concurrency"] == 2
+    assert plan.provider_load_control["minimum_concurrency"] == 1
+    assert plan.provider_load_control["maximum_concurrency"] == 5
+    assert plan.provider_load_control["target_rpm"] == 500
     assert plan.cpus_per_task == 8
     assert plan.time_limit == "04:00:00"
+    assert source_execution["partition"] == "all"
+    assert source_execution["qos"] == "normal"
+    assert source_execution["results_root"].startswith("/work/")
+    assert source_execution["require_results_under"].startswith("/work/")
+    assert "/pscratch/" not in (root / "study.yaml").read_text()
 
     study06_analysis = yaml.safe_load(
         Path(
-            "configs/runs/relational_reasoning/population_study_06/analysis.yaml"
+            "configs/runs/relational_reasoning/first_population_studies/"
+            "population_study_06/analysis.yaml"
         ).read_text()
     )
     study08_analysis = yaml.safe_load((root / "analysis.yaml").read_text())
@@ -558,11 +848,78 @@ def test_study08_prompt_semantics_design_is_paired_and_uses_study06_topology():
     )
 
 
+def test_study08_deepinfra_gemma_preserves_the_scientific_design():
+    source_root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_08"
+    )
+    variant_root = Path(
+        "configs/runs/relational_reasoning/population_study_08_deepinfra_gemma"
+    )
+    spec = discover_study(variant_root)
+    submissions = build_submission_entries(spec, "/tmp/test-study08-gemma", git_commit="test")
+    shards = build_cell_execution_entries(spec, submissions)
+    plan = plan_cell_execution(spec, len(shards))
+
+    assert spec.name == "relational-population-study-08-deepinfra-gemma"
+    assert [entry.expected_cell_count for entry in submissions] == [96, 96]
+    assert [entry.expected_episode_count for entry in submissions] == [960, 960]
+    assert len(shards) == 192
+    assert plan.array_throttle == 192
+    assert plan.total_episode_slots == 192
+    assert plan.total_request_concurrency == 192
+    assert plan.estimated_rpm == pytest.approx(1152.0)
+    assert plan.cpus_per_task == 1
+    assert plan.provider_load_control["initial_concurrency"] == 100
+    assert plan.provider_load_control["minimum_concurrency"] == 32
+    assert plan.provider_load_control["maximum_concurrency"] == 200
+    assert plan.provider_load_control["target_rpm"] == 1200
+
+    for filename in ("study08_wrong_prompt_b.yaml", "study08_truth_prompt_b.yaml"):
+        source = load_run_config_or_grid(source_root / filename)
+        variant = load_run_config_or_grid(variant_root / filename)
+        assert isinstance(source, GridSpec)
+        assert isinstance(variant, GridSpec)
+        assert source.axes == variant.axes
+        for field in (
+            "prompt",
+            "game",
+            "control",
+            "execution",
+            "pricing",
+            "budget",
+            "logging",
+            "storage",
+            "analysis",
+            "metrics",
+            "aggregation",
+            "observability",
+        ):
+            assert getattr(source.base, field) == getattr(variant.base, field)
+        provider = variant.base.llm_provider
+        assert provider.type == "deepinfra"
+        assert provider.model == "google/gemma-4-E4B-it"
+        assert provider.credentials_env == "DEEPINFRA_API_KEY"
+        assert provider.request_concurrency == 1
+        assert provider.max_output_tokens == 4096
+        source_metadata = dict(source.base.experiment.metadata)
+        variant_metadata = dict(variant.base.experiment.metadata)
+        assert variant_metadata.pop("llm_provider") == "deepinfra"
+        assert variant_metadata.pop("llm_model") == "google/gemma-4-E4B-it"
+        source_metadata.pop("llm_provider")
+        source_metadata.pop("llm_model")
+        assert source_metadata == variant_metadata
+
+    assert (source_root / "analysis.yaml").read_bytes() == (
+        variant_root / "analysis.yaml"
+    ).read_bytes()
+
+
 def test_auto_submission_writes_execution_plan_and_explicit_resources(
     tmp_path, monkeypatch
 ):
     source = load_run_config_or_grid(
-        "configs/runs/relational_reasoning/population_study_06/study06_beta_ablation.yaml"
+        "configs/runs/relational_reasoning/first_population_studies/"
+        "population_study_06/study06_beta_ablation.yaml"
     )
     config = tmp_path / "grid.yaml"
     config.write_text(
@@ -615,6 +972,84 @@ def test_auto_submission_writes_execution_plan_and_explicit_resources(
     assert any(argument.startswith("--array=0-1%") for argument in calls[0])
 
 
+def test_amarel_auto_submission_uses_generic_cell_launcher_and_ignores_source_site(
+    tmp_path, monkeypatch
+):
+    source = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/first_population_studies/"
+        "population_study_06/study06_beta_ablation.yaml"
+    )
+    config = tmp_path / "grid.yaml"
+    config.write_text(
+        yaml.safe_dump(source.base.to_dict(), sort_keys=False)
+        + "grid:\n  control.options.intervention_budget: [8, 16]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: amarel-auto}\nconfigs: [grid.yaml]\n"
+        "execution:\n  mode: auto\n  target_rpm: 900\n"
+        "  assumed_latency_seconds: 10\n  max_active_nodes: 2\n"
+        "  cpus_per_task: 8\n  memory: 8G\n  time_limit: '04:00:00'\n"
+        "  partition: all\n  qos: potsdam-only\n",
+        encoding="utf-8",
+    )
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("AMAREL_RESULTS_ROOT", str(scratch))
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(tuple(command))
+        return subprocess.CompletedProcess(command, 0, "Submitted batch job 9002\n", "")
+
+    result = submit_study(tmp_path, execution_site="amarel", run=fake_run)
+
+    assert "--account=general" in calls[0]
+    assert "--partition=main" in calls[0]
+    assert "--qos=normal" in calls[0]
+    assert any(item.startswith("--chdir=") for item in calls[0])
+    assert any(item.startswith("--export=ALL,AMAREL_REPO_ROOT=") for item in calls[0])
+    assert "--partition=all" not in calls[0]
+    assert "--qos=potsdam-only" not in calls[0]
+    assert any(
+        item.endswith("/scripts/Amarel/SLURM/run_study_cell_array.job")
+        for item in calls[0]
+    )
+    assert result.execution_plan["shard_count"] == 2
+
+
+def test_amarel_rejects_a_cell_plan_above_the_72_hour_hard_limit(
+    tmp_path, monkeypatch
+):
+    source = load_run_config_or_grid(
+        "configs/runs/relational_reasoning/first_population_studies/"
+        "population_study_06/study06_beta_ablation.yaml"
+    )
+    (tmp_path / "grid.yaml").write_text(
+        yaml.safe_dump(source.base.to_dict(), sort_keys=False)
+        + "grid:\n  control.options.intervention_budget: [8]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "study.yaml").write_text(
+        "study: {name: too-long}\nconfigs: [grid.yaml]\n"
+        "execution: {mode: auto, time_limit: '3-00:00:01'}\n",
+        encoding="utf-8",
+    )
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("AMAREL_RESULTS_ROOT", str(scratch))
+
+    def fake_preflight(config_path, output):
+        Path(output).mkdir(parents=True)
+        return SimpleNamespace(launch_status="permitted")
+
+    monkeypatch.setattr("mas_cc.cli.experiment.run_experiment_preflight", fake_preflight)
+    with pytest.raises(ValueError, match="cannot exceed 3-00:00:00"):
+        prepare_study(tmp_path, execution_site="amarel")
 def test_auto_submission_falls_back_to_resource_aware_config_array(
     tmp_path, monkeypatch
 ):
@@ -697,7 +1132,7 @@ def test_cell_shards_reconstruct_complete_scientific_cells(tmp_path):
     raw = yaml.safe_load(
         Path(
             "configs/runs/relational_reasoning/"
-            "relational_imitation_round_feedback_controlled_smoke.yaml"
+            "misselaneous/relational_imitation_round_feedback_controlled_smoke.yaml"
         ).read_text(encoding="utf-8")
     )
     raw["storage"]["artifact_profile"] = "results_only"
@@ -1241,7 +1676,7 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
     raw = yaml.safe_load(
         Path(
             "configs/runs/relational_reasoning/"
-            "relational_imitation_round_feedback_controlled_smoke.yaml"
+            "misselaneous/relational_imitation_round_feedback_controlled_smoke.yaml"
         ).read_text(encoding="utf-8")
     )
     raw["storage"]["overwrite"] = False
@@ -1400,7 +1835,9 @@ def test_single_affinity_derived_family_is_written_by_offline_aggregation(tmp_pa
 
 
 def test_study06_results_only_retains_requested_round_and_micro_fields(tmp_path):
-    study_root = Path("configs/runs/relational_reasoning/population_study_06")
+    study_root = Path(
+        "configs/runs/relational_reasoning/first_population_studies/population_study_06"
+    )
     study = discover_study(study_root)
     assert [path.name for path in study.configs] == [
         "study06_main_b_theta.yaml",

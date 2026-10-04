@@ -1,0 +1,18 @@
+study: {name: task003_reasoning_v41}
+configs: [controlled.yaml, no_control.yaml]
+execution:
+  mode: auto
+  # deepseek-v4.1-flash at reasoning_effort=low measured ~32 RPM on this
+  # workload against NeuralWatt's ~5-concurrent ceiling.
+  target_rpm: 32
+  assumed_latency_seconds: 9.0
+  max_active_nodes: 1
+  throttle: 1
+  cpus_per_task: 1
+  memory: 2G
+  time_limit: "12:00:00"
+  partition: main
+  qos: normal
+  results_root: results/studies/task003_reasoning_v41
+  provider_load_control: {mode: "off"}
+analysis: {recipe: analysis.yaml}

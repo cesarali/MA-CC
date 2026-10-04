@@ -1,0 +1,17 @@
+study:
+  name: 28-09-2026-task004-balanced-b90-report-only-rho1
+configs:
+- false_balanced_b90_report_only_rho1.yaml
+- truth_balanced_b90_report_only_rho1.yaml
+execution:
+  mode: config_array
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/28-09-2026-task004-balanced-b90-report-only-rho1
+  require_results_under: /shared/MA-CC-results
+  partition: main
+  target_rpm: 200
+  assumed_latency_seconds: 12.5
+  throttle: 4
+  # 8G was exceeded at round ~16 (SLURM 19687, OUT_OF_MEMORY). Cause not yet
+  # found; 32G covers even faster-than-linear growth to round 30.
+  memory: 32G

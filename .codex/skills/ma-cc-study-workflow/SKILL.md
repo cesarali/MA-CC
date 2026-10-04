@@ -51,6 +51,44 @@ with a credential-free import check for `mas_cc`, `pandas`, and `pyarrow`.
 Ensure the SLURM job inherits or explicitly invokes this same `MA-CC`
 environment; the login shell's system Python is not a valid fallback.
 
+## NERSC Perlmutter environment and interactive-only scheduler
+
+In the NERSC checkout at `/pscratch/sd/d/dfarough/MA-CC`, load
+`python/3.11-24.1.0` and use the existing `MA-CC` Conda environment physically
+stored at `/pscratch/sd/d/dfarough/conda_envs/MA-CC`. Its package cache is
+`/pscratch/sd/d/dfarough/conda_pkgs`; never recreate it in the home directory.
+
+Lightweight preflights and unit tests may run on a login node. All production
+experiments, study workers, and compute-heavy post-processing must use
+Perlmutter CPU nodes through `salloc --qos=interactive --constraint=cpu`.
+Never use `sbatch`, the regular QoS, or an omitted/default QoS for NERSC MA-CC
+work. Interactive allocations are limited to four nodes and four hours, with
+128 physical CPU cores per node. Use `scripts/nersc/`; its launchers hard-code
+the QoS, reject non-interactive allocations, and place logs with results on
+`/pscratch`, outside the repository. Prepare standardized study manifests with
+`mas-cc study prepare` before running them with
+`scripts/nersc/run_study.sh`.
+
+## Rutgers Amarel batch scheduler
+
+Develop Amarel changes locally and use the `amarel` courier for every remote
+operation. Never SSH directly. Tell the operator to approve the Duo push before
+each call and batch remote inspection, setup, submission, and polling to avoid
+unnecessary approvals.
+
+Amarel uses `sbatch` with account `general`, partition `main`, QoS `normal`, and
+a hard 72-hour walltime. Use only the generic templates under
+`scripts/Amarel/SLURM/`. Results, logs, provider coordination, and all model or
+Comet caches belong under `/scratch/df630`, outside the repository and home.
+Check scratch space before staging. Build and run the named `MA-CC` Conda
+environment from `environment.yml`; do not use the base Python installations.
+
+Submit with `mas-cc study submit --execution-site amarel`, an explicit result
+root under `/scratch/df630/MA-CC-results`, and the matching
+`--require-results-under` guard. Long studies must rely on the existing episode
+checkpoints, a provider-safe array throttle, and resubmission of the same study
+root rather than exceeding the 72-hour cap.
+
 On Potsdam only, distinguish the runtime working directory from the output
 root. Scientific results and SLURM logs belong under `/work`, while the generic
 Potsdam launchers must explicitly establish
@@ -59,9 +97,23 @@ directory so repository-local provider configuration, including `.env`, is
 found independently of the directory from which `sbatch` was invoked. Do not
 apply this absolute path or environment-loading convention outside Potsdam.
 
-Outside Potsdam, use the existing environment and setup conventions of the
-local checkout. Do not require the Potsdam environment name or absolute Conda
-path on a developer's local machine.
+## Cesar cluster
+
+Cesar has no Conda, no modules, and no root. The environment is a uv virtualenv
+on the shared NFS mount and the repository is an rsync copy at `/shared/MA-CC`,
+not a clone, so there is no git on the cluster and studies submitted there
+record an empty `git_commit`; commit before syncing if a run needs to be
+traceable. Push with `scripts/Cesar/sync.sh`, which refuses to run while jobs
+are active because workers import from the synced `src/`. Submit with
+`mas-cc study submit --execution-site cesar`; results are pinned under
+`/shared/MA-CC-results`. Two site facts the launchers encode: compute nodes
+ship no CA certificates, so `SSL_CERT_FILE` must point at a staged bundle; and
+any explicit `VAR=value` in `--export` makes a batch job hang indefinitely, so
+the repository root is passed via `--chdir`.
+
+Outside Potsdam, NERSC, Amarel, and Cesar, use the existing environment and
+setup conventions of the local checkout. Do not require any cluster's
+environment name or absolute Conda path on a developer's local machine.
 
 ## Read the architecture first
 
@@ -80,7 +132,10 @@ family is demonstrably closer to the requested scientific design.
   `scripts/Potsdam/SLURM/run_config_array.job` for config arrays or
   `scripts/Potsdam/SLURM/run_study_cell_array.job` for planned cell arrays. Add
   another launcher only when scheduler topology genuinely differs, and explain
-  that difference.
+  that difference. NERSC's interactive-only `salloc` topology is implemented
+  once by the generic launchers under `scripts/nersc/`; never create a
+  study-specific NERSC launcher. Amarel's batch topology is implemented once
+  under `scripts/Amarel/SLURM/`; never create a study-specific Amarel launcher.
 - Put hypotheses, fixed parameters, sweep axes, seeds, models, budgets,
   retention, and analysis requests in YAML—not shell scripts.
 - Group related configs in one study folder with `study.yaml` and, when needed,
@@ -176,6 +231,21 @@ destination. The command preflights every config again and submits one generic
 study array. `execution.mode: auto` should generate execution shards and an
 `execution_plan.json`; config-array mode remains a compatibility fallback.
 Do not increase a throttle without recalculating provider load.
+
+On NERSC, do not use the submit command because it calls Potsdam's `sbatch`
+topology; the real submit path fails closed when `NERSC_HOST=perlmutter`. Use
+the equivalent two-stage path:
+
+```bash
+mas-cc study prepare --config-dir <folder> --results-dir <study-result-root> \
+  --require-results-under <site-results-root>
+scripts/nersc/run_study.sh --account <cpu-project> --nodes <1-4> \
+  --study-dir <study-result-root>
+```
+
+The NERSC runner retains the generated scientific mapping and provider-safe
+throttle, then distributes generic cell/config workers across whole CPU nodes
+inside an allocation whose QoS is fixed to `interactive`.
 
 Monitor the returned job with the site's ordinary `squeue`/`sacct` tools and
 verify task exit states and run/cell seals. For a scheduler smoke, use a tiny

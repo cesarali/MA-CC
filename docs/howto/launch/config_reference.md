@@ -43,7 +43,8 @@ loaded config is validated against), and `src/mas_cc/config/loader.py` (YAML →
 
 ```yaml
 llm_provider:
-  type: university               # REQUIRED. One of: university | openai | gemma_local | mock.
+  type: university               # REQUIRED. One of: university | deepinfra | neuralwatt |
+                                  # openai | gemma_local | mock.
                                   # Changes which adapter class handles every request — see
                                   # Appendix B for what's specific to each. Cannot be swept in a
                                   # grid (see section 9): one grid uses one provider client.
@@ -59,8 +60,9 @@ llm_provider:
                                   # need no credential, e.g. mock or a fully local gemma_local.
   base_url_env: BASE_POTSDAM_LLM_URL
                                   # Same idea, for the endpoint URL. Required by `university` (a
-                                  # proxy with no fixed public URL); irrelevant for `openai`
-                                  # (fixed endpoint) and `gemma_local`/`mock` (no HTTP call at all).
+                                  # proxy with no fixed public URL); irrelevant for `deepinfra`,
+                                  # `neuralwatt`, and `openai` (fixed endpoints), and for
+                                  # `gemma_local`/`mock` (no HTTP call at all).
   timeout_seconds: 60            # Float > 0. Per-request HTTP timeout passed straight to the
                                   # client. Too low on a slow model → requests fail with a timeout
                                   # error and get retried (see max_retries) or counted as failures.

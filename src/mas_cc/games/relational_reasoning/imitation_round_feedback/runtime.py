@@ -60,6 +60,7 @@ from mas_cc.llm_runtime.prompts import (
     ResponseContract,
     TokenCounter,
 )
+from mas_cc.llm_runtime import tracing
 from mas_cc.llm_runtime.providers import LLMProvider, ProviderError
 from mas_cc.runtime import (
     DecisionLoopExhausted,
@@ -76,6 +77,7 @@ from .adaptive_communication import (
     LLM_AUTHORED_REPORT_ONLY_POLICY,
     LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
     LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+    LLM_AUTHORED_VARIABLE_FULL_COMMUNICATION_POLICY,
     LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
     AuthoredControllerMessage,
     CommunicationChoice,
@@ -89,6 +91,10 @@ from .adaptive_communication import (
 )
 from .controller import (
     ADAPTIVE_COMMUNICATION,
+    BUDGET_SCOPE_EPISODE,
+    BUDGET_SCOPE_PER_ROUND,
+    ROUND_BUDGET_EXACT,
+    ROUND_BUDGET_ZERO_OR_EXACT,
     COORDINATION_REQUEST,
     DIRECT_RECOMMENDATION,
     RECOMMENDATION_ONLY,
@@ -100,7 +106,10 @@ from .controller import (
     TIMING_MICROSCOPIC,
     CONTROLLER_AUTHORING_DETERMINISTIC,
     CONTROLLER_AUTHORING_LLM,
+    CONTROLLER_MEMORY_NONE,
+    CONTROLLER_MEMORY_PUBLIC_LEDGER,
 )
+from .controller_memory import build_public_observation_ledger
 from .game import RelationalImitationRoundFeedbackGame
 from .initialization import (
     initialization_artifact_path,
@@ -1095,6 +1104,9 @@ async def run_relational_imitation_round_feedback_game(
     sensor_sample_size = getattr(resolved_control, "sensor_sample_size", None)
     intervention_budget = int(getattr(resolved_control, "intervention_budget", 0))
     controller_authoring = getattr(resolved_control, "controller_authoring", None)
+    controller_memory_mode = str(
+        getattr(resolved_control, "controller_memory_mode", CONTROLLER_MEMORY_NONE)
+    )
     allow_mixed_message_types = bool(
         getattr(resolved_control, "controller_allow_mixed_message_types", False)
     )
@@ -1116,11 +1128,28 @@ async def run_relational_imitation_round_feedback_game(
             "controller_allow_mixed_message_types requires llm_authored "
             "controller authoring"
         )
+    controller_budget_scope = str(
+        getattr(resolved_control, "controller_budget_scope", BUDGET_SCOPE_PER_ROUND)
+    )
+    controller_round_budget_mode = str(
+        getattr(resolved_control, "controller_round_budget_mode", ROUND_BUDGET_EXACT)
+    )
+    # An episode allowance needs a variable-count policy in either board
+    # profile. The fixed policies would spend everything at the first dawn.
     effective_communication_policy = (
+        LLM_AUTHORED_VARIABLE_FULL_COMMUNICATION_POLICY
+        if controller_authoring == CONTROLLER_AUTHORING_LLM
+        and rules.communication_profile == COMMUNICATION_PROFILE_FULL
+        and controller_budget_scope == BUDGET_SCOPE_EPISODE
+        else
         LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY
         if controller_authoring == CONTROLLER_AUTHORING_LLM
         and allow_mixed_message_types
         and rules.communication_profile == COMMUNICATION_PROFILE_FULL
+        else LLM_AUTHORED_REPORT_ONLY_POLICY
+        if controller_authoring == CONTROLLER_AUTHORING_LLM
+        and rules.communication_profile == COMMUNICATION_PROFILE_REPORT_ONLY
+        and controller_budget_scope == BUDGET_SCOPE_EPISODE
         else LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY
         if controller_authoring == CONTROLLER_AUTHORING_LLM
         and rules.communication_profile == COMMUNICATION_PROFILE_REPORT_ONLY
@@ -1138,8 +1167,8 @@ async def run_relational_imitation_round_feedback_game(
         raise ValueError(
             "controller sensor_sample_size cannot exceed the population size"
         )
-    if not 0 <= intervention_budget <= rules.n_agents:
-        raise ValueError("controller intervention_budget must be between 0 and N")
+    if intervention_budget < 0:
+        raise ValueError("controller intervention_budget must not be negative")
 
     # One fact per *episode*, resolved once from the frozen task before anything
     # runs: §11 wants the controller's evidence to be a fixed experimental
@@ -1170,8 +1199,29 @@ async def run_relational_imitation_round_feedback_game(
         in {COORDINATION_REQUEST, TRUTHFUL_STRATEGIC_REPORT, ADAPTIVE_COMMUNICATION}
         and controller_timing == TIMING_DAWN_ONLY
     )
+    # One message per agent slot is a per-round accounting, so b <= N binds a
+    # per-round quota and any slot-scheduled mode. Dawn posting on a whole-game
+    # allowance consumes no slots and spends across rounds, so it does not.
+    if (
+        not dawn_blackboard or controller_budget_scope == BUDGET_SCOPE_PER_ROUND
+    ) and intervention_budget > rules.n_agents:
+        raise ValueError("controller intervention_budget must be between 0 and N")
     if sensing_mode == SENSING_BOARD and rules.social_mode != SOCIAL_MODE_BOARD:
         raise ValueError("controller sensing_mode 'board' requires social_mode 'board'")
+    if controller_memory_mode == CONTROLLER_MEMORY_PUBLIC_LEDGER:
+        if (
+            sensing_mode != SENSING_BOARD
+            or actuation_mode != ADAPTIVE_COMMUNICATION
+            or controller_authoring != CONTROLLER_AUTHORING_LLM
+        ):
+            raise ValueError(
+                "controller public_ledger memory requires board-sensed "
+                "llm_authored adaptive_communication"
+            )
+        if rules.board_message_lifetime_rounds != 1:
+            raise ValueError(
+                "controller public_ledger memory requires one-day board messages"
+            )
     evidence_strategy = getattr(resolved_control, "controller_evidence_strategy", None)
     state = game.initialize(config.game, config.execution.seed) if initial_state is None else initial_state
     task = game.load_task(config.game)
@@ -1316,6 +1366,9 @@ async def run_relational_imitation_round_feedback_game(
         CommunicationMode(str(value))
         for value in restored.get("previous_communication_modes", ())
     ]
+    observed_board_days: list[dict[str, Any]] = [
+        dict(value) for value in restored.get("controller_observed_board_days", ())
+    ] if controller_memory_mode == CONTROLLER_MEMORY_PUBLIC_LEDGER else []
     pending_board_signal = _signal_from_dict(restored.get("pending_board_signal"))
     first_round = 0 if start_round is None else int(start_round)
     if first_round < 0 or first_round > rules.rounds:
@@ -1329,9 +1382,14 @@ async def run_relational_imitation_round_feedback_game(
     if rules.initialization_only:
         run_rounds = 0
     branch_metadata = dict(continuation_metadata or {})
+    # Handle for the open round trace span. Passing it back into round_begin
+    # closes any span an aborted round left open, so a crash mid-round cannot
+    # strand one.
+    round_trace: Any = None
     for round_index in range(first_round, first_round + run_rounds):
         if state.terminated:
             break
+        round_trace = tracing.round_begin(round_index, previous=round_trace)
         round_logical_decisions_before = logical_decisions
         round_validation_attempts_before = validation_attempts
         options = tuple(state.possible_answers)
@@ -1417,6 +1475,19 @@ async def run_relational_imitation_round_feedback_game(
                 if dawn_blackboard and round_index > 0
                 else ()
             )
+        if (
+            controller_memory_mode == CONTROLLER_MEMORY_PUBLIC_LEDGER
+            and round_signal is not None
+        ):
+            observation = round_signal.observation
+            observed_board_days.append({
+                "day": round_index,
+                "message_ids": [
+                    message.message_id for message in previous_board_messages
+                ],
+                "view_complete": len(previous_board_messages)
+                == int(observation.get("eligible_message_count", -1)),
+            })
         _, night_expired_message_ids = state.blackboard.expire(round_index - 1)
         persistence_seed: int | None = None
         deactivated: tuple[tuple[str, str], ...] = ()
@@ -1608,9 +1679,49 @@ async def run_relational_imitation_round_feedback_game(
                     )
                 )
             )
+            budget_scope = controller_budget_scope
+            budget_spent = sum(
+                1
+                for message in state.blackboard.messages
+                if message.author_kind == "controller"
+            )
+            # Reports within one round must be distinct. A full-communication
+            # round can instead post requests or directives, so only the
+            # report-only profile is bounded by the eligible fact pool.
+            eligible_now = len(eligible_ranked)
+            max_per_round = getattr(
+                resolved_control, "controller_max_posts_per_round", None
+            )
+            round_budget = (
+                min(
+                    max(intervention_budget - budget_spent, 0),
+                    (eligible_now if rules.communication_profile ==
+                     COMMUNICATION_PROFILE_REPORT_ONLY else intervention_budget),
+                    max_per_round if max_per_round else eligible_now,
+                )
+                if budget_scope == "episode"
+                else intervention_budget
+            )
             controller_communication_context = ControllerCommunicationContext(
                 round_index=round_index,
                 target=target,
+                # The same scenario and question the agents get, plus what each
+                # option means. Without these the controller is told to push a
+                # label it cannot interpret.
+                scenario_question=task.question,
+                answer_display_texts=(
+                    dict(task.answer_display_texts)
+                    if task.answer_display_texts
+                    else None
+                ),
+                report_cooldown_rounds=int(
+                    getattr(resolved_control, "controller_report_cooldown_rounds", 1)
+                ),
+                report_max_posts_per_fact=int(
+                    getattr(
+                        resolved_control, "controller_report_max_posts_per_fact", 3
+                    )
+                ),
                 sampled_opinion_counts={
                     str(key): int(value) for key, value in dict(sampled_counts).items()
                 },
@@ -1662,7 +1773,33 @@ async def run_relational_imitation_round_feedback_game(
                     for message in state.blackboard.messages
                     if message.author_kind == "controller"
                 ),
-                budget=intervention_budget,
+                budget=round_budget,
+                budget_scope=budget_scope,
+                round_budget_mode=controller_round_budget_mode,
+                budget_total=intervention_budget,
+                budget_spent=budget_spent,
+                horizon=rules.rounds,
+                rounds_remaining=max(rules.rounds - (round_index + 1), 0),
+                population=rules.n_agents,
+                sensing_mode=sensing_mode,
+                board_view_complete=(
+                    len(previous_board_messages)
+                    == int(round_signal.observation.get("eligible_message_count", -1))
+                    if sensing_mode == SENSING_BOARD else None
+                ),
+                public_memory=(
+                    build_public_observation_ledger(
+                        observed_board_days,
+                        {
+                            message.message_id: message.to_dict()
+                            for message in state.blackboard.messages
+                        },
+                        population_size=rules.n_agents,
+                        options=options,
+                    )
+                    if controller_memory_mode == CONTROLLER_MEMORY_PUBLIC_LEDGER
+                    else None
+                ),
             )
             communication_policy = str(effective_communication_policy)
             if communication_policy in {
@@ -1670,6 +1807,7 @@ async def run_relational_imitation_round_feedback_game(
                 LLM_AUTHORED_REPORT_ONLY_POLICY,
                 LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
                 LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+                LLM_AUTHORED_VARIABLE_FULL_COMMUNICATION_POLICY,
                 LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
             }:
                 if communication_policy in {
@@ -1677,6 +1815,24 @@ async def run_relational_imitation_round_feedback_game(
                     LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
                 }:
                     allowed_controller_modes = (CommunicationMode.REPORT,)
+                if (
+                    (
+                        controller_budget_scope == BUDGET_SCOPE_EPISODE
+                        and communication_policy in {
+                            LLM_AUTHORED_REPORT_ONLY_POLICY,
+                            LLM_AUTHORED_VARIABLE_FULL_COMMUNICATION_POLICY,
+                        }
+                    )
+                    or (
+                        controller_budget_scope == BUDGET_SCOPE_PER_ROUND
+                        and controller_round_budget_mode == ROUND_BUDGET_ZERO_OR_EXACT
+                        and communication_policy in {
+                            LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
+                            LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+                        }
+                    )
+                ):
+                    allowed_controller_modes += (CommunicationMode.HOLD,)
                 saved_controller = recovery.replay_controller(
                     controller_communication_context
                 )
@@ -1813,23 +1969,39 @@ async def run_relational_imitation_round_feedback_game(
                                 "fixed-budget communication; refusing to substitute "
                                 "deterministic authorship"
                             )
-                        elif communication_policy == LLM_AUTHORED_REPORT_ONLY_POLICY:
-                            if not controller_communication_context.eligible_facts:
+                        elif communication_policy in {
+                            LLM_AUTHORED_REPORT_ONLY_POLICY,
+                            LLM_AUTHORED_VARIABLE_FULL_COMMUNICATION_POLICY,
+                        }:
+                            if CommunicationMode.HOLD in allowed_controller_modes:
+                                # A failed call must not spend a whole-game
+                                # message on an arbitrary fact. Holding costs
+                                # nothing and leaves the budget for a round the
+                                # controller actually chose.
+                                communication_choice = CommunicationChoice(
+                                    mode=CommunicationMode.HOLD,
+                                    reason="validation_failed_hold_fallback",
+                                    policy=communication_policy,
+                                    policy_version=1,
+                                    fact_ids=(),
+                                    text=None,
+                                )
+                            elif not controller_communication_context.eligible_facts:
                                 raise ValueError(
                                     "authored report-only fallback has no eligible fact"
                                 )
-                            communication_choice = CommunicationChoice(
-                                mode=CommunicationMode.REPORT,
-                                reason="validated_canonical_report_fallback",
-                                policy=communication_policy,
-                                policy_version=1,
-                                fact_ids=(
-                                    controller_communication_context.eligible_facts[
-                                        0
-                                    ].fact_id,
-                                ),
-                                text=None,
-                            )
+                            else:
+                                communication_choice = CommunicationChoice(
+                                    mode=CommunicationMode.REPORT,
+                                    reason="validated_canonical_report_fallback",
+                                    policy=communication_policy,
+                                    policy_version=1,
+                                    fact_ids=(
+                                        controller_communication_context
+                                        .eligible_facts[0].fact_id,
+                                    ),
+                                    text=None,
+                                )
                         else:
                             communication_choice = choose_communication_mode(
                                 controller_communication_context,
@@ -1884,7 +2056,13 @@ async def run_relational_imitation_round_feedback_game(
                 else CommunicationMode.DIRECTIVE
             )
             executed_communication_mode = chosen_mode
-            if communication_choice is not None and communication_choice.messages:
+            if chosen_mode == CommunicationMode.HOLD:
+                # The controller declined to spend this round. Posting nothing
+                # is what actually preserves the allowance: budget_spent is
+                # counted from the controller's messages on the board, so an
+                # unposted message stays available for a later round.
+                pass
+            elif communication_choice is not None and communication_choice.messages:
                 ranked_by_id = {row.fact_id: row for row in all_ranked}
                 for authored_message in communication_choice.messages:
                     if authored_message.mode == CommunicationMode.REPORT:
@@ -1960,8 +2138,14 @@ async def run_relational_imitation_round_feedback_game(
                         live_fact_counts=live_fact_counts,
                         selected_rounds=selected_report_rounds,
                     )
+                # "Exactly b" is a per-round quota. Against a whole-game
+                # allowance the controller chooses how many to spend this
+                # round, and the parser has already bounded that choice by
+                # what remains, so there is nothing left to assert here.
                 if (
-                    (actuation_mode == TRUTHFUL_STRATEGIC_REPORT or uses_communication_handles)
+                    controller_budget_scope == BUDGET_SCOPE_PER_ROUND
+                    and (actuation_mode == TRUTHFUL_STRATEGIC_REPORT
+                         or uses_communication_handles)
                     and len(selections) != intervention_budget
                 ):
                     raise ValueError(
@@ -2056,6 +2240,7 @@ async def run_relational_imitation_round_feedback_game(
                 LLM_AUTHORED_REPORT_ONLY_POLICY,
                 LLM_AUTHORED_FIXED_REPORT_ONLY_POLICY,
                 LLM_AUTHORED_FULL_COMMUNICATION_POLICY,
+                LLM_AUTHORED_VARIABLE_FULL_COMMUNICATION_POLICY,
                 LLM_AUTHORED_MIXED_FULL_COMMUNICATION_POLICY,
             }
             else "algorithmic"
@@ -2284,6 +2469,8 @@ async def run_relational_imitation_round_feedback_game(
                 "round_controller_advocate_probability": probability,
                 "controlled_slot": controlled_slot,
                 "intervention_budget": intervention_budget,
+                "controller_budget_scope": controller_budget_scope,
+                "controller_round_budget_mode": controller_round_budget_mode,
                 "controlled_positions_hash_or_id": schedule_hash,
                 "controller_message_mode": message_mode,
                 "receiver_epistemic_disposition": rules.receiver_epistemic_disposition,
@@ -2703,6 +2890,8 @@ async def run_relational_imitation_round_feedback_game(
             "q_c_effective": q_c_effective,
             "intervention_budget": intervention_budget,
             "b": intervention_budget,
+            "controller_budget_scope": controller_budget_scope,
+            "controller_round_budget_mode": controller_round_budget_mode,
             "sensing_fraction": (
                 None
                 if q_c is None or sensing_mode == SENSING_BOARD
@@ -2872,6 +3061,22 @@ async def run_relational_imitation_round_feedback_game(
             ),
             "controller_report_selection_strategy": getattr(
                 resolved_control, "controller_report_selection_strategy", None
+            ),
+            "controller_fact_pool_mode": getattr(
+                resolved_control, "controller_fact_pool_mode", None
+            ),
+            "controller_fact_pool_size": (
+                len(
+                    resolved_control.reportable_fact_ids_for_target(
+                        task, config.execution.seed
+                    )
+                )
+                if resolved_control is not None
+                and actuation_mode in {
+                    ADAPTIVE_COMMUNICATION,
+                    TRUTHFUL_STRATEGIC_REPORT,
+                }
+                else None
             ),
             "controller_report_pool_mode": getattr(
                 resolved_control, "controller_report_pool_mode", None
@@ -3222,6 +3427,12 @@ async def run_relational_imitation_round_feedback_game(
             "correct_answer": state.correct_answer,
             "correct_relation": state.task["correct_relation"],
         }
+        tracing.round_end(
+            round_trace,
+            event=round_event,
+            board=state.blackboard.live_messages(round_index),
+        )
+        round_trace = None
         round_record = RelationalRoundRecord(round_index=round_index, event=round_event)
         round_records.append(round_record)
         _notify(observer, "record_round_trajectory", record=round_record)
@@ -3269,6 +3480,8 @@ async def run_relational_imitation_round_feedback_game(
                 mode.value for mode in previous_communication_modes
             ],
             "pending_board_signal": _signal_to_dict(pending_board_signal),
+            **({"controller_observed_board_days": observed_board_days}
+               if controller_memory_mode == CONTROLLER_MEMORY_PUBLIC_LEDGER else {}),
             "initialization_context": {
                 "initialization_source": initialization_source,
                 "initialization_repetition": initialization_repetition,

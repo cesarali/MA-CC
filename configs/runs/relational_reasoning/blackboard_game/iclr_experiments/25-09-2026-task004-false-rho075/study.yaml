@@ -1,0 +1,25 @@
+study:
+  name: 25-09-2026-task004-false-rho075
+configs:
+- false_control.yaml
+execution:
+  mode: auto
+  cells_per_shard: 1
+  target_rpm: 500
+  assumed_latency_seconds: 15.0
+  max_active_nodes: 4
+  throttle: 4
+  cpus_per_task: 4
+  memory: 12G
+  time_limit: '24:00:00'
+  partition: main
+  execution_site: cesar
+  results_root: /shared/MA-CC-results/25-09-2026-task004-false-rho075
+  require_results_under: /shared/MA-CC-results
+  # No shared coordinator: this is one cell against a provider account that
+  # cesar's own array is already using. Bounded local concurrency keeps our
+  # share small and predictable instead of competing for a global lease.
+  provider_load_control:
+    mode: "off"
+analysis:
+  recipe: analysis.yaml

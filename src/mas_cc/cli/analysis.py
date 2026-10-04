@@ -89,6 +89,7 @@ def run_relational_round_feedback_analysis_command(
     confidence: float = 0.95,
     seed: int = 1,
     epistemic_bins: int = 4,
+    theoretical_reference: str = "single_affinity_revised",
 ) -> dict[str, Any]:
     """Run the same round-feedback estimators over a relational grid.
 
@@ -111,4 +112,5 @@ def run_relational_round_feedback_analysis_command(
         confidence=confidence,
         seed=seed,
         epistemic_bins=epistemic_bins,
+        theoretical_reference=theoretical_reference,
     )

@@ -9,7 +9,10 @@ from mas_cc.games.relational_reasoning.data import load_musr_team_allocation_tas
 from mas_cc.studies.aggregation import _blackboard_diagnostic_table
 from mas_cc.studies.initialization import build_initialization_plan
 from mas_cc.studies.manifest import discover_study
-from mas_cc.studies.preflight import validate_study_preflight_contract
+from mas_cc.studies.preflight import (
+    run_study_preflight,
+    validate_study_preflight_contract,
+)
 from mas_cc.studies.submission import build_submission_entries
 
 
@@ -18,6 +21,7 @@ ASSIGNMENT = Path(
     "configs/runs/relational_reasoning/blackboard_game/artifacts/task_001_F9_N24.json"
 )
 DATASET = Path("results/studies/musr_symbolic_ambiguity_calibration_01/accepted_tasks")
+SMOKE_ROOT = Path("configs/runs/smoke/blackboard_deepinfra")
 
 
 def _grid(name: str) -> GridSpec:
@@ -102,6 +106,24 @@ def test_response_correction_retries_remain_enabled():
         config = _grid(name).base
         assert config.game.options["invalid_response_retries"] == 3
         assert config.llm_provider.max_retries == 2
+
+
+def test_smoke_study_preflight_without_a_design_contract_renders(tmp_path):
+    result = run_study_preflight(SMOKE_ROOT, tmp_path)
+
+    assert result.design["status"] == "not_requested"
+    assert result.design["total_cells"] == 1
+    assert result.design["total_episodes"] == 1
+    assert result.design["provider_calls"] == {
+        "lower": 24,
+        "expected": 26,
+        "conservative": 96,
+    }
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "Status: **NOT_REQUESTED**" in report
+    assert "Total cells: 1" in report
+    assert "Total episodes: 1" in report
+    assert "Expected provider calls: 26" in report
 
 
 def test_analysis_recipe_preserves_core_metrics_and_blackboard_views():

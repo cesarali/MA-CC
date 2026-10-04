@@ -707,7 +707,7 @@ def default_pricing_catalog() -> PricingCatalog:
     """Small dated catalog; unknown models deliberately remain unknown."""
 
     retrieved = "2026-08-02T00:00:00Z"
-    version = "2026-08-02-provider-economics-v2"
+    version = "2026-08-30-provider-economics-v8"
     common = {"retrieved_at": retrieved, "version": version}
     return PricingCatalog(
         version=version,
@@ -717,6 +717,36 @@ def default_pricing_catalog() -> PricingCatalog:
             ModelPricing("openai", "gpt-4o-mini", 0.15, 0.60, "USD", "official OpenAI pricing table",
                          "https://developers.openai.com/api/docs/pricing", cached_input_per_million=0.075,
                          **common),
+            ModelPricing(
+                # Live catalogue metadata on 2026-09-22: 0.15 USD per million
+                # input and 0.60 per million output, 1M context.
+                #
+                # This is a reasoning model with an adjustable effort control
+                # (options.reasoning_effort). A live probe on the production
+                # blackboard ballot prompt spent its entire 512-token budget on
+                # reasoning and returned no answer; it needs max_output_tokens
+                # >= 2048. At effort=low it answered 5/6 with ~962 output
+                # tokens, at default ~1,438 and only 2/6. Size the output
+                # budget and the effort together or episodes will fail.
+                "neuralwatt", "deepseek-v4.1-flash", 0.15, 0.60, "USD",
+                "NeuralWatt authenticated model-catalog pricing metadata",
+                "https://portal.neuralwatt.com/models/deepseek-v4.1-flash",
+                retrieved_at="2026-09-22T00:00:00Z",
+                version="2026-09-22-neuralwatt-catalog-v1",
+                limits=ProviderLimits(maximum_input_tokens=1_048_560),
+            ),
+            ModelPricing(
+                "neuralwatt", "deepseek-v4-flash", 0.14, 0.28, "USD",
+                "NeuralWatt authenticated model-catalog pricing metadata",
+                "https://portal.neuralwatt.com/models/deepseek-v4-flash",
+                retrieved_at="2026-08-28T00:00:00Z",
+                version="2026-08-28-neuralwatt-catalog-v1",
+                cached_input_per_million=0.028,
+                limits=ProviderLimits(
+                    maximum_input_tokens=1_048_560,
+                    maximum_output_tokens=65_536,
+                ),
+            ),
             ModelPricing(
                 "deepinfra", "deepseek-ai/DeepSeek-V4-Flash", 0.09, 0.18, "USD",
                 "DeepInfra public model metadata denominated in cents per token",
@@ -730,6 +760,43 @@ def default_pricing_catalog() -> PricingCatalog:
                 ),
             ),
             ModelPricing(
+                "deepinfra", "deepseek-ai/DeepSeek-V4-Flash-0731", 0.08, 0.18, "USD",
+                "DeepInfra authenticated/public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/deepseek-ai/DeepSeek-V4-Flash-0731",
+                retrieved_at="2026-08-30T20:39:00Z",
+                version="2026-08-30-deepinfra-v4-flash-0731-live-v1",
+                cached_input_per_million=0.016,
+                limits=ProviderLimits(maximum_input_tokens=1_048_576),
+            ),
+            ModelPricing(
+                # Live metadata reported cents_per_input_token 8e-06 and
+                # cents_per_output_token 2.8e-05, i.e. 0.08 and 0.28 USD per
+                # million. No cached-input rate is offered for this model.
+                #
+                # WARNING: this is a Qwen3 *thinking* model. A live probe on
+                # 2026-09-12 returned a <think>...</think> block ahead of the
+                # JSON body and spent 146 output tokens on a six-token answer,
+                # which both breaks strict response contracts and makes the
+                # headline output rate misleading. Prefer an -Instruct variant
+                # for MA-CC games.
+                "deepinfra", "Qwen/Qwen3-32B", 0.08, 0.28, "USD",
+                "DeepInfra authenticated model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/Qwen/Qwen3-32B",
+                retrieved_at="2026-09-12T00:00:00Z",
+                version="2026-09-12-deepinfra-qwen3-32b-live-v1",
+                limits=ProviderLimits(maximum_input_tokens=40_960),
+            ),
+            ModelPricing(
+                # The DeepInfra-hosted counterpart of the
+                # gwdg/openai-gpt-oss-120b served through the university proxy.
+                # Record taken from origin/main, which carries a later snapshot
+                # and the output-token limit this entry originally lacked.
+                #
+                # A 24-episode experiment on 2026-09-14 showed this model
+                # generating ~714 output tokens per request where the DeepSeek
+                # and Qwen instruct models produced 167 and 245 on the identical
+                # workload, so its low per-token rate does not make it the
+                # cheapest choice per run.
                 "deepinfra", "openai/gpt-oss-120b", 0.037, 0.17, "USD",
                 "DeepInfra public OpenAI-model metadata denominated in USD per million tokens",
                 "https://api.deepinfra.com/v1/models",
@@ -739,6 +806,45 @@ def default_pricing_catalog() -> PricingCatalog:
                     maximum_input_tokens=131_072,
                     maximum_output_tokens=131_072,
                 ),
+            ),
+            ModelPricing(
+                # Live metadata reported 0.09 USD per million input and 0.55 USD
+                # per million output, with no cached-input rate. A live probe on
+                # 2026-09-12 returned a bare JSON body with no <think> block and
+                # six output tokens, so it honours strict response contracts.
+                "deepinfra", "Qwen/Qwen3-235B-A22B-Instruct-2507", 0.09, 0.55, "USD",
+                "DeepInfra authenticated model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/Qwen/Qwen3-235B-A22B-Instruct-2507",
+                retrieved_at="2026-09-12T00:00:00Z",
+                version="2026-09-12-deepinfra-qwen3-235b-instruct-2507-live-v1",
+                limits=ProviderLimits(maximum_input_tokens=262_144),
+            ),
+            ModelPricing(
+                "deepinfra", "google/gemma-4-26B-A4B-it", 0.07, 0.34, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/google/gemma-4-26B-A4B-it",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-gemma-public-model-v1",
+                limits=ProviderLimits(maximum_input_tokens=262_144),
+            ),
+            ModelPricing(
+                "deepinfra", "google/gemma-4-31B-it-turbo", 0.09, 0.34, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/google/gemma-4-31B-it-turbo",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-gemma-turbo-public-model-v1",
+                limits=ProviderLimits(
+                    maximum_input_tokens=262_144,
+                    maximum_output_tokens=16_384,
+                ),
+            ),
+            ModelPricing(
+                "deepinfra", "google/gemma-4-E4B-it", 0.02, 0.10, "USD",
+                "DeepInfra public model metadata denominated in cents per token",
+                "https://api.deepinfra.com/models/google/gemma-4-E4B-it",
+                retrieved_at="2026-08-30T00:00:00Z",
+                version="2026-08-30-deepinfra-gemma-e4b-public-model-v1",
+                limits=ProviderLimits(maximum_input_tokens=131_072),
             ),
             ModelPricing("university", "gwdg/qwen3-30b-a3b-instruct-2507", 0.0, 0.0,
                          "proxy_accounting_unit", "University proxy model-info snapshot; currency unspecified",

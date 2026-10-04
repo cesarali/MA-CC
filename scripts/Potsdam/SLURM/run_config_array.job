@@ -12,6 +12,7 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
+export MAS_CC_EXECUTION_SITE=potsdam
 readonly CONDA_EXE=/home/ojedamarin/.local/share/miniforge3/bin/conda
 readonly REPOSITORY_ROOT=/home/ojedamarin/Projects/LanguageGames/MA-CC
 

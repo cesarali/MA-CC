@@ -39,6 +39,19 @@ data/
 # Preflight / inspection artifacts (regenerable, provider-free)
 inspection/
 
+# Experiment outputs: large, and regenerable from the configs plus the recorded
+# seeds. Ignored by listing CONTENTS rather than the directory itself, because
+# git cannot re-include anything under an excluded directory -- and the MuSR
+# task datasets live under results/ but are experiment *inputs* that configs
+# reference by path and verify by SHA-256, so they must stay committable.
+results/*
+!results/studies/
+results/studies/*
+!results/studies/musr_*_calibration_*/
+
+# Paired-initialization artifacts written by `mas-cc study initialize`.
+*_initializations/
+
 # LaTeX build artifacts under docs/papers (regenerable; they differ between TeX
 # installations, which made every cross-machine pull conflict).  Sources -- .tex,
 # .bib, .sty, .bst, .bbl and figures -- stay tracked.

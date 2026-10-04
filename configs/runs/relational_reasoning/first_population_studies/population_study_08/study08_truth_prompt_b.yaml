@@ -1,20 +1,26 @@
 # Study 08B: factorized epistemic condition x actuation under truth control.
 # Fixed: N=24, q=1, q_c=12, theta=0.5, beta=4, ten rounds.
 # Shape: 4 prompts x 6 b x 4 matched worlds x 10 repetitions = 960 episodes.
-# Calls: 253,440 nominal; 267,840 expected; 506,880 conservative.
+# Calls: 253,440 nominal; 267,840 expected; 1,520,640 conservative.
 
 llm_provider:
-  type: university
-  model: gwdg/openai-gpt-oss-120b
-  credentials_env: POTSDAM_API_KEY
-  base_url_env: BASE_POTSDAM_LLM_URL
-  timeout_seconds: 180
-  max_retries: 2
-  request_concurrency: 8
+  type: neuralwatt
+  model: deepseek-v4-flash
+  credentials_env: NEURALWATT_API_KEY
+  timeout_seconds: 120
+  # Provider-side 5xx bursts are transient and must not terminate a 268-call
+  # episode after only three HTTP attempts. Full-jitter exponential backoff in
+  # the shared adapter keeps these nine attempts bounded and desynchronized.
+  max_retries: 8
+  # Five one-slot cell workers saturate the account's five-request global cap
+  # without leaving forty episodes partially complete at allocation rollover.
+  request_concurrency: 1
   temperature: 0.0
+  # Preserve a full reasoning-sized output budget; the Study 08 game config
+  # separately advertises and validates its larger private-reason allowance.
   max_output_tokens: 4096
   options:
-    estimated_latency_seconds: 10.0
+    estimated_latency_seconds: 1.5
 
 prompt:
   schema_version: 2
@@ -39,7 +45,13 @@ game:
     prompt_version: 1
     receiver_epistemic_disposition: vigilant
     stop_on_consensus: false
-    invalid_response_retries: 1
+    # A production study contains more than half a million expected decisions.
+    # At the declared 5% validation-failure rate, two attempts make at least
+    # one terminal malformed-response failure effectively certain. Six total
+    # attempts reduce that study-wide risk below one percent while leaving the
+    # expected-attempt estimate (1 / 0.95) unchanged.
+    invalid_response_retries: 5
+    max_reason_characters: 16384
     expected_validation_failure_rate: 0.05
     initialization:
       mode: local_vote
@@ -61,23 +73,27 @@ control:
 execution:
   seed: 20260822
   repetitions: 10
-  parallelism: 8
+  parallelism: 1
   fail_fast: false
 
 pricing:
-  mode: live
-  max_age_seconds: 600
-  require_fresh_at_launch: true
+  # NeuralWatt publishes authenticated model metadata but the MA-CC pricing
+  # runtime currently uses the dated, auditable offline catalog entry.
+  mode: offline
+  require_fresh_at_launch: false
   fallback_policy: deny
   explicit_unknown_price_override: false
 
 budget:
-  accounting_unit: proxy_accounting_unit
-  system_max_cost_per_run: 300.0
-  max_cost_per_run: 300.0
-  max_provider_requests: 700000
-  max_input_tokens: 4000000000
-  max_output_tokens: 500000000
+  accounting_unit: USD
+  # Explicit production override approved for the 4,096-token cap and six
+  # validation attempts. Expected spend is unchanged; these finite limits
+  # admit the deliberately pessimistic all-attempts conservative bound.
+  system_max_cost_per_run: 2500.0
+  max_cost_per_run: 2500.0
+  max_provider_requests: 2000000
+  max_input_tokens: 15000000000
+  max_output_tokens: 8000000000
   allow_unbounded_paid_requests: false
 
 logging:
@@ -135,7 +151,7 @@ experiment:
   description: >-
     Study 08 truth-aligned receiver x evidence-strategy x actuation atlas at N=24, q=1,
     q_c=12, theta=0.5, beta=4 over four matched worlds and ten repetitions.
-  tags: [relational, population-study-08, truth-aligned, prompt-class, b-atlas, N24, q1, qc12, beta4, results-only]
+  tags: [relational, population-study-08, truth-aligned, prompt-class, b-atlas, N24, q1, qc12, beta4, neuralwatt, deepseek-v4-flash, results-only]
   metadata:
     study: population_study_08
     phase: truth_prompt_atlas
@@ -152,9 +168,11 @@ experiment:
     repetitions: 10
     cells: 96
     episodes: 960
+    llm_provider: neuralwatt
+    llm_model: deepseek-v4-flash
     nominal_provider_requests: 253440
     expected_provider_requests: 267840
-    conservative_provider_requests: 506880
+    conservative_provider_requests: 1520640
     common_random_numbers_across_grid: true
     crn_note: all prompt, budget, and task cells share repetition-index streams; the wrong block uses the same grid order and root seed
     mandatory_message_mode: recommendation_plus_fact

@@ -10,9 +10,9 @@ from typing import Any
 
 from mas_cc.llm_runtime.config import LLMProviderConfig
 
+from ._openai_compatible import OpenAICompatibleProvider
 from ..errors import ProviderError
 from ..load_control import SharedProviderCoordinator
-from ._openai_compatible import OpenAICompatibleProvider
 
 
 _JSON_OBJECT_UNSUPPORTED_MODELS = frozenset({"google/gemma-4-E4B-it"})
@@ -59,7 +59,10 @@ class DeepInfraProvider(OpenAICompatibleProvider):
                 code="configuration_error",
                 retryable=False,
             )
-        if "response_format" not in options:
+        if "response_format" not in options and "structured_output_tool" not in options:
+            # DeepInfra defaults to its fast JSON-object protocol. Keep the
+            # exception provider-owned and model-specific: the live E4B
+            # contract returned HTTP 405 when response_format was present.
             options["response_format"] = (
                 None
                 if config.model in _JSON_OBJECT_UNSUPPORTED_MODELS
@@ -87,6 +90,10 @@ class DeepInfraProvider(OpenAICompatibleProvider):
             default_credentials_env="DEEPINFRA_API_KEY",
             default_base_url_env="DEEPINFRA_BASE_URL",
             fallback_base_url=self._DEFAULT_BASE_URL,
+            # DeepInfra's OpenAI-compatible chat route is below /v1/openai,
+            # while its model catalogue is exposed separately at /v1/models.
+            # The shared transport validates the exact configured model while
+            # retaining the separate fixed chat route.
             validate_model=True,
             model_list_url=model_list_url,
             environment=environment,

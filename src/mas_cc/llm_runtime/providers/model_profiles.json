@@ -2,24 +2,6 @@
   "schema_version": 1,
   "profiles": [
     {
-      "provider_type": "deepinfra",
-      "model": "deepseek-ai/DeepSeek-V4-Flash",
-      "family": "deepseek",
-      "temperature": {
-        "mode": "any"
-      },
-      "supports_seed": true,
-      "supports_system_messages": true,
-      "max_output_tokens_field": "max_tokens",
-      "probed_at": "2026-08-30T00:00:00Z",
-      "probe_source": "manual",
-      "supported": true,
-      "notes": [
-        "DeepInfra public metadata listed deepseek-ai/DeepSeek-V4-Flash on 2026-08-30.",
-        "The model reports OpenAI chat, JSON-object, temperature, seed, and system-message support. Run the opt-in live smoke before production."
-      ]
-    },
-    {
       "provider_type": "university",
       "model": "microsoft/gpt-4o",
       "family": "gpt-4",
@@ -64,6 +46,197 @@
         "system_messages: HTTP 200",
         "max_tokens: HTTP 200",
         "max_completion_tokens: HTTP 200"
+      ]
+    },
+    {
+      "provider_type": "neuralwatt",
+      "model": "deepseek-v4-flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-28T17:46:08Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "NeuralWatt's authenticated customer model catalog listed deepseek-v4-flash on 2026-08-28.",
+        "The catalog reports system-role and JSON-mode support, a 1,048,560-token context limit, and a 65,536-token output limit.",
+        "A live MA-CC smoke completion returned HTTP 200 with a system message, temperature=0, max_tokens, and seed in the same request."
+      ]
+    },
+    {
+      "provider_type": "neuralwatt",
+      "model": "deepseek-v4.1-flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-22T00:00:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "NeuralWatt's authenticated catalogue listed deepseek-v4.1-flash on 2026-09-22 with 0.15/0.60 USD per million and a 1M context.",
+        "Reasoning model with options.reasoning_effort. On the production blackboard ballot prompt it returned 0/6 at max_output_tokens 512 (whole budget spent reasoning), 2/6 at 2048 default effort, and 5/6 at 2048 with effort=low.",
+        "NeuralWatt admits roughly 5 concurrent requests per key regardless of the configured request_concurrency; excess returns HTTP 429."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "deepseek-ai/DeepSeek-V4-Flash",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed deepseek-ai/DeepSeek-V4-Flash on 2026-08-30.",
+        "The model metadata reports OpenAI chat, JSON, structured-output, tool, and seed support with a 1,048,576-token context and 65,536-token output limit.",
+        "Temperature and system-message support are documented metadata; confirm them with the opt-in live MA-CC smoke before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "family": "deepseek",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T20:41:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "DeepInfra's authenticated and public model metadata listed deepseek-ai/DeepSeek-V4-Flash-0731 on 2026-08-30.",
+        "The model page reports OpenAI chat, JSON, function calling, temperature, seed, and a 1,048,576-token context.",
+        "Live MA-CC probes on NERSC interactive CPU job 57753115 passed one chat request and a 64-request concurrent burst with system messages, temperature=0, max_tokens, seed, and json_object response format."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "google/gemma-4-26B-A4B-it",
+      "family": "gemma",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed google/gemma-4-26B-A4B-it as active on 2026-08-30.",
+        "The model metadata reports OpenAI chat, JSON, structured-output, tools, temperature, and seed support with a 262,144-token context.",
+        "System-message support is provisionally enabled for the opt-in live MA-CC smoke and must pass before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "google/gemma-4-31B-it-turbo",
+      "family": "gemma",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed google/gemma-4-31B-it-turbo as active on 2026-08-30.",
+        "The model metadata reports OpenAI compatibility, JSON-object response format, tools, reasoning, temperature, and seed support with a 262,144-token context and 16,384-token output limit.",
+        "System-message support is provisionally enabled for the opt-in live MA-CC smoke and must pass before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "google/gemma-4-E4B-it",
+      "family": "gemma",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-08-30T00:00:00Z",
+      "probe_source": "manual",
+      "supported": true,
+      "notes": [
+        "DeepInfra's public model metadata listed google/gemma-4-E4B-it as active on 2026-08-30.",
+        "The model page documents OpenAI chat and system messages; public metadata reports tools, reasoning, temperature, and seed support with a 131,072-token context.",
+        "A live request on 2026-08-30 returned HTTP 405 when response_format=json_object was present, despite the generic metadata field. DeepInfraProvider therefore disables only its JSON-object default for this exact model.",
+        "The Study 08 variant retains its explicit 4,096-token output cap; confirm prompt-only JSON compliance with the opt-in live MA-CC smoke before production."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "Qwen/Qwen3-32B",
+      "family": "qwen",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-12T00:00:00Z",
+      "probe_source": "manual",
+      "supported": false,
+      "notes": [
+        "DeepInfra's authenticated model metadata listed Qwen/Qwen3-32B as active text-generation on 2026-09-12, not deprecated and with no replacement.",
+        "The metadata reports a 40,960-token context and token pricing of 0.08 USD per million input and 0.28 USD per million output; no cached-input rate is offered.",
+        "A live probe on 2026-09-12 returned a <think>...</think> block ahead of the JSON body and spent 146 output tokens on a six-token answer. This breaks strict MA-CC response contracts and inflates output cost; prefer an -Instruct variant for games."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "family": "qwen",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-12T00:00:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "DeepInfra's authenticated model metadata listed Qwen/Qwen3-235B-A22B-Instruct-2507 as active text-generation on 2026-09-12, not deprecated and with no replacement.",
+        "The metadata reports a 262,144-token context and token pricing of 0.09 USD per million input and 0.55 USD per million output; no cached-input rate is offered.",
+        "A live probe on 2026-09-12 returned a bare JSON object with no <think> block and six output tokens under the provider's json_object response format, so it honours strict response contracts."
+      ]
+    },
+    {
+      "provider_type": "deepinfra",
+      "model": "openai/gpt-oss-120b",
+      "family": "gpt-oss",
+      "temperature": {
+        "mode": "any"
+      },
+      "supports_seed": true,
+      "supports_system_messages": true,
+      "max_output_tokens_field": "max_tokens",
+      "probed_at": "2026-09-14T00:00:00Z",
+      "probe_source": "probe",
+      "supported": true,
+      "notes": [
+        "DeepInfra's authenticated model metadata listed openai/gpt-oss-120b as active text-generation on 2026-09-14, not deprecated and with no replacement.",
+        "The metadata reports a 131,072-token context and token pricing of 0.037 USD per million input and 0.170 per million output.",
+        "A live concurrency sweep on 2026-09-14 returned no <think> blocks, but this model generates markedly longer completions than the Qwen and DeepSeek instruct models at the same prompt (roughly 450-550 output tokens where they produced 120-380)."
       ]
     }
   ]
