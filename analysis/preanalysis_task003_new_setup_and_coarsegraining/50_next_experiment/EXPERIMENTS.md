@@ -7,6 +7,25 @@ This file is the plain explanation. For building the configs, see
 
 ---
 
+## 0. Glossary
+
+Every term used below, defined once.
+
+| term | meaning |
+|---|---|
+| **v0.4** | `control_efficiency_project_plan_v0.4_post-meeting_plan.md` — **the team's agreed experiment plan, version 0.4, written after a meeting.** It names leads (Alan + Chris on parallelization, César + Ramses on statistics) and fixes 30 rounds, ρ ∈ {0.75, 1.0}, two budget protocols, full vs report-only communication, full vs partial board sensing, truth vs false control, 50 episodes per cell, and a 1,700-episode first study. "v0.4 says X" means that document specifies X. |
+| **v0.4 priority 1–4** | v0.4's own ordering of four experiments. **1** = full-episode budget `B` + full communication. **2** = per-round budget `b` + full communication. **3** = full-episode `B` + report-only. **4** = per-round `b` + report-only. v0.4 calls 1 and 2 "the immediate priority" and postpones 3 and 4. |
+| **task003-symmetric-v2** | Our setup where the 24 agents **collectively hold a proof** of the right answer. Task id `task003_symmetric_v2`. |
+| **task003-nosolution-v2** | Our setup where they **do not** — the population's posterior is a coin flip between truth and `ALLOCATION_2`. Task id `task003_nosolution_v2`. |
+| **ρ (rho), persistence** | Probability an agent remembers each fact it holds, per round. ρ = 1 is perfect memory. |
+| **b** | Control budget **per round**: facts the controller may post each round. |
+| **B** | Control budget **per episode**: one reservoir for all 30 rounds; the controller chooses when to spend it. |
+| **arm** | silent (no controller) / truth control (`ALLOCATION_0`) / false control (`ALLOCATION_2`). |
+| **lean** | The allocation a fact most favours when read alone. |
+| **cell** | One (setup, arm, ρ, settings) combination. |
+| **pool** | The 12 facts the controller may post, shared by both steering directions. |
+| **decisive facts** | A 6-fact set that proves `ALLOCATION_0`. Held by the agents in symmetric-v2, absent in nosolution-v2. |
+
 ## 1. Two setups, same world
 
 Both are `task_003` — latent vector `(3,1,1,2,2,1,1,1,2)`, scores 8 / 4 / 6,
@@ -102,10 +121,17 @@ agents:     communication_profile: full_communication
 controller: controller_authoring:      llm_authored
 ```
 
-**Why these two together, and why `full_communication` last.** A `REQUEST`
-carries no fact, so it adds a channel the measured quantity is blind to. Plan
-v0.4 agrees on the ordering — report-only is its priority 1–2, full
-communication its 3–4.
+**Why these two together.** A `REQUEST` carries no fact, so it adds a channel
+the measured quantity is blind to, and `deterministic` authoring under
+`full_communication` would introduce a seeded random mode draw (see below).
+
+> ⚠️ **Correction (2026-10-04).** An earlier version of this file said "v0.4
+> agrees on the ordering — report-only is its priority 1–2". **That is backwards.**
+> v0.4's priorities are **1** = `B` + full communication, **2** = `b` + full
+> communication, **3** = `B` + report-only, **4** = `b` + report-only. So
+> **full communication is v0.4's immediate priority and report-only is
+> postponed** — our phase 1 is v0.4's *priority 4*, its lowest. See §3d for how
+> to reconcile that; it is a team decision, not ours to make silently.
 
 Derived policy: `llm_authored_full_communication_v1`. The controller picks one
 mode per round (`REPORT`, `REQUEST` or `DIRECTIVE`) and fills every slot with
@@ -317,6 +343,107 @@ alignment toward two opposite targets at once. Two options:
 Option 1 is what our design intends. Option 2 is worth running *as well*,
 because the contrast between them separates **evidence selection** from **bare
 recommendation**, which is a question neither setup currently answers.
+
+## 3d. Our phases against v0.4's priorities — the real relationship
+
+v0.4's four experiments, in its own order:
+
+| v0.4 priority | budget | communication |
+|---|---|---|
+| **1** — immediate | `B` full-episode | **full communication** |
+| **2** — immediate | `b` per-round | **full communication** |
+| 3 — postponed | `B` full-episode | report-only |
+| 4 — postponed | `b` per-round | report-only |
+
+Mapping our phases onto that:
+
+| our phase | = v0.4 priority |
+|---|---|
+| phase 1 — report-only, `b`, deterministic | **4** (its lowest) |
+| phase 2 — report-only, `b`, llm_authored | **4** |
+| phase 3 — full communication, `b`, llm_authored | **2** |
+| phase 4 — full communication, `B`, llm_authored | **1** |
+
+So our ordering is **the reverse of v0.4's**. That is a real disagreement and it
+needs team agreement, not a quiet decision by us.
+
+### The honest case for our ordering
+
+It is **not** "report-only is more important". It is that v0.4's own §4
+execution rule says:
+
+> Implement → validate → freeze → run Experiments 1–2 at 50 episodes/cell →
+> assess statistical reliability → increase repetitions only if needed
+
+**Our phase 1 is the "validate" step, not a competing experiment.** It is the
+cheapest, cleanest cell in the whole design — one message type, no language
+model in the controller loop, a dose that is a known function of the sensed
+state — and it is the configuration in which our estimator is most likely to
+work. The last batch failed precisely because nobody checked that the
+information quantities were estimable before running the full grid.
+
+So the proposal is: **phase 1 as the validation gate (12 cells, 1,200
+episodes), then straight to v0.4 priority 2, then priority 1.** Phases 3 and 4
+*are* v0.4's priorities 2 and 1.
+
+### If the team wants v0.4's order kept strictly
+
+Then start at **priority 2** (`b` per-round + full communication), not priority
+1. The per-round budget is the part our estimator argument is really about — an
+episode reservoir adds a hidden state variable (§3b) — and priority 2 already
+gives v0.4 its full communication. That is a one-step departure instead of
+four, and it is the compromise worth proposing at the next meeting.
+
+## 3e. Can the silently-ignored options be fixed?
+
+**Partly, and a general fix is riskier than it looks.**
+
+The problem: `from_options` reads the keys it knows with `options.get(...)` and
+**ignores the rest silently**. So `controller_budget_scope: episode` on
+`dev/rsanchez` runs per-round while the config claims otherwise.
+
+**A naive strict "reject unknown keys" check would break every config in the
+repository.** Measured across all configs on both branches, these keys appear in
+`control.options` but are *not* read by the relational controller's own
+`options.get` calls:
+
+| key | configs using it |
+|---|---:|
+| `target` | 139 / 197 |
+| `sensor_sample_size` | 139 / 197 |
+| `threshold` | 139 / 197 |
+| `beta` | 136 / 194 |
+| `policy` | 131 / 189 |
+| `template_version` | 23 |
+| `agent_ids`, `forced_value`, `until_interaction` | 3 each |
+
+The first six are read by the **parent** class
+(`hidden_bench/imitation/controller.py`), and the last three belong to *other*
+control mechanisms. So any strict check must (a) collect the key set across the
+whole class hierarchy and (b) be per-mechanism. Doable, but it touches a path
+every study in the repo depends on, and five people share this branch.
+
+### Recommended instead: a targeted guard
+
+Two cheap steps that close the actual hazard without that risk:
+
+1. **Merge.** After the merge both dangerous keys exist and are read, so the
+   specific footgun disappears.
+2. **Assert at build time, not in the library.** The runbook already requires:
+
+   ```python
+   c = RelationalRoundBudgetedControl.from_options(opts)
+   assert hasattr(c, "controller_budget_scope"), "darius-MA-v1 not merged"
+   assert hasattr(c, "controller_fact_pool_mode"), "darius-MA-v1 not merged"
+   ```
+
+   This catches the one case that matters, costs nothing, and risks no other
+   config.
+
+A proper strict-key validator is worth doing as its own piece of work, with the
+MRO walk and per-mechanism key sets, and with the repository's two latent test
+breakages fixed first so the change can be validated. See
+[`merge_assessment_2026-10-04.md`](merge_assessment_2026-10-04.md).
 
 ## 4. How many runs is that?
 

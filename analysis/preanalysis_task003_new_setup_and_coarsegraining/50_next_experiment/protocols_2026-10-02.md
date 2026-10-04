@@ -346,9 +346,13 @@ control.options:
 **`communication_profile: report_only`, not `full_communication`.** Reports are
 the channel that carries facts, and facts are the entire treatment. Requests add
 a second channel whose content is not a fact, so it adds variance without
-adding anything to the quantity being measured. Plan v0.4 agrees on ordering:
-it puts report-only ahead of full communication in its priority list. Add
-`full_communication` later as a factor, not now.
+adding anything to the quantity being measured.
+
+**Correction (2026-10-04):** an earlier version said v0.4 "puts report-only
+ahead of full communication in its priority list". It does the opposite —
+v0.4's priorities 1 and 2 are both *full communication*, and report-only is 3
+and 4. Choosing report-only first is a **departure** from v0.4, justified on
+measurement grounds alone. See `EXPERIMENTS.md` §3d.
 
 **`controller_authoring: deterministic` first.** Reasons in
 `design_preliminary_2026-10-02.md` §2: it makes the posting sequence a known
