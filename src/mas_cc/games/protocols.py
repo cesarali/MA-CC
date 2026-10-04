@@ -18,10 +18,32 @@ from mas_cc.llm_runtime.prompts import CompilablePrompt
 
 
 def _freeze(value: Any) -> Any:
+    """Return a deeply read-only equivalent of ``value``, reusing frozen parts.
+
+    Anything that is already frozen (a mapping proxy with string keys whose
+    values are frozen, or a plain tuple of frozen items) is returned as is
+    rather than rebuilt. Without this, a record that extends a frozen history
+    by one entry (``[*state.event_history, event]``) deep-copied the whole
+    history every time. Game states are built once per turn and all kept for
+    the episode, so memory grew quadratically: about 2 GB per 30-round
+    task_004 episode. Reuse changes no value, only avoids duplicates, and is
+    safe because every mapping proxy in the codebase wraps a fresh dict that
+    nothing else holds.
+    """
+
     if isinstance(value, Mapping):
-        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+        frozen = {str(key): _freeze(item) for key, item in value.items()}
+        if type(value) is MappingProxyType and all(
+            type(key) is str and frozen[key] is item for key, item in value.items()
+        ):
+            return value
+        return MappingProxyType(frozen)
     if isinstance(value, (list, tuple)):
-        return tuple(_freeze(item) for item in value)
+        items = tuple(_freeze(item) for item in value)
+        # Exact type only: a namedtuple still becomes a plain tuple, as before.
+        if type(value) is tuple and all(a is b for a, b in zip(items, value)):
+            return value
+        return items
     if isinstance(value, set):
         return frozenset(_freeze(item) for item in value)
     return value
