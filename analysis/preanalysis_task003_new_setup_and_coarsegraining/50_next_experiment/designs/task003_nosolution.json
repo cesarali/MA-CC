@@ -1,7 +1,8 @@
 {
   "name": "task003-nosolution",
   "status": "FROZEN 2026-10-05",
-  "note": "Population CANNOT prove the truth; posterior is a coin flip between A0 and A2. 24 agents, slot lean 8/8/8, no decisive facts, neutral 12-fact shared pool, zero overlap.",
+  "note": "Population CANNOT prove anything: no decisive fact, joint posterior a coin flip between ALLOCATION_0 and ALLOCATION_2. 24 agents, 8 per allocation, every agent fact private-eligible. One 12-fact pool, 4 facts favouring each allocation, used for both targets, proving nothing, sharing no fact with the agents.",
+  "built_by": "50_next_experiment/builders/build_task003_nosolution.py",
   "task": "task_003",
   "world": [
     3,
@@ -15,25 +16,26 @@
     2
   ],
   "gold_target": "ALLOCATION_0",
+  "false_target": "ALLOCATION_2",
   "population_size": 24,
   "facts_per_agent": 1,
   "agents": {
     "distinct_facts": [
-      "cf_x00_ge_x05",
-      "cf_x01_eq_1",
-      "cf_x01_eq_x02",
+      "cf_x00_ge_x02",
       "cf_x01_eq_x05",
+      "cf_x01_ge_x02",
+      "cf_x01_ge_x05",
+      "cf_x01_le_2",
+      "cf_x02_eq_x05",
       "cf_x02_le_x04",
       "cf_x03_eq_x04",
       "cf_x03_ge_2",
       "cf_x03_ge_x05",
-      "cf_x03_le_x04",
-      "cf_x04_le_2",
-      "cf_x05_eq_1",
-      "cf_x05_le_2",
+      "cf_x03_le_2",
       "cf_x06_ge_x07",
-      "cf_x06_le_x07",
-      "cf_x08_eq_2"
+      "cf_x07_le_2",
+      "cf_x08_eq_2",
+      "cf_x08_ge_2"
     ],
     "n_distinct": 15,
     "distinct_lean_A0_A1_A2": [
@@ -46,27 +48,51 @@
       8,
       8
     ],
+    "by_lean": {
+      "A0": [
+        "cf_x00_ge_x02",
+        "cf_x01_le_2",
+        "cf_x03_ge_2",
+        "cf_x07_le_2",
+        "cf_x08_ge_2"
+      ],
+      "A1": [
+        "cf_x01_eq_x05",
+        "cf_x02_eq_x05",
+        "cf_x03_eq_x04",
+        "cf_x03_le_2",
+        "cf_x08_eq_2"
+      ],
+      "A2": [
+        "cf_x01_ge_x02",
+        "cf_x01_ge_x05",
+        "cf_x02_le_x04",
+        "cf_x03_ge_x05",
+        "cf_x06_ge_x07"
+      ]
+    },
     "slot_multiplicity": {
-      "cf_x00_ge_x05": 2,
-      "cf_x01_eq_1": 2,
-      "cf_x01_eq_x02": 2,
+      "cf_x00_ge_x02": 2,
       "cf_x01_eq_x05": 2,
+      "cf_x01_ge_x02": 2,
+      "cf_x01_ge_x05": 1,
+      "cf_x01_le_2": 2,
+      "cf_x02_eq_x05": 1,
       "cf_x02_le_x04": 2,
-      "cf_x03_eq_x04": 2,
+      "cf_x03_eq_x04": 1,
       "cf_x03_ge_2": 1,
       "cf_x03_ge_x05": 2,
-      "cf_x03_le_x04": 2,
-      "cf_x04_le_2": 1,
-      "cf_x05_eq_1": 2,
-      "cf_x05_le_2": 1,
+      "cf_x03_le_2": 2,
       "cf_x06_ge_x07": 1,
-      "cf_x06_le_x07": 1,
-      "cf_x08_eq_2": 1
+      "cf_x07_le_2": 1,
+      "cf_x08_eq_2": 2,
+      "cf_x08_ge_2": 2
     },
     "multiplicity_range": [
       1,
       2
     ],
+    "all_private_eligible": true,
     "joint_posterior": [
       0.5,
       0.0,
@@ -74,65 +100,53 @@
     ],
     "decisive_held": [],
     "minimal_proofs_assemblable": 0,
-    "by_lean": {
-      "A0": [
-        "cf_x00_ge_x05",
-        "cf_x01_eq_1",
-        "cf_x01_eq_x02",
-        "cf_x03_ge_2",
-        "cf_x04_le_2"
-      ],
-      "A1": [
-        "cf_x01_eq_x05",
-        "cf_x03_eq_x04",
-        "cf_x03_le_x04",
-        "cf_x06_le_x07",
-        "cf_x08_eq_2"
-      ],
-      "A2": [
-        "cf_x02_le_x04",
-        "cf_x03_ge_x05",
-        "cf_x05_eq_1",
-        "cf_x05_le_2",
-        "cf_x06_ge_x07"
-      ]
-    },
+    "mean_strength_per_agent_A0_A1_A2": [
+      0.1017,
+      0.051,
+      0.1036
+    ],
+    "mean_individual_belief_A0_A1_A2": [
+      0.3486,
+      0.2905,
+      0.3609
+    ],
+    "starting_gap_A0_vs_A2": 0.0122,
     "agent_assignments": {
       "agent_001": [
-        "cf_x00_ge_x05"
+        "cf_x00_ge_x02"
       ],
       "agent_002": [
-        "cf_x01_eq_1"
+        "cf_x01_le_2"
       ],
       "agent_003": [
-        "cf_x01_eq_x02"
-      ],
-      "agent_004": [
         "cf_x03_ge_2"
       ],
+      "agent_004": [
+        "cf_x07_le_2"
+      ],
       "agent_005": [
-        "cf_x04_le_2"
+        "cf_x08_ge_2"
       ],
       "agent_006": [
-        "cf_x00_ge_x05"
+        "cf_x00_ge_x02"
       ],
       "agent_007": [
-        "cf_x01_eq_1"
+        "cf_x01_le_2"
       ],
       "agent_008": [
-        "cf_x01_eq_x02"
+        "cf_x08_ge_2"
       ],
       "agent_009": [
         "cf_x01_eq_x05"
       ],
       "agent_010": [
-        "cf_x03_eq_x04"
+        "cf_x02_eq_x05"
       ],
       "agent_011": [
-        "cf_x03_le_x04"
+        "cf_x03_eq_x04"
       ],
       "agent_012": [
-        "cf_x06_le_x07"
+        "cf_x03_le_2"
       ],
       "agent_013": [
         "cf_x08_eq_2"
@@ -141,51 +155,51 @@
         "cf_x01_eq_x05"
       ],
       "agent_015": [
-        "cf_x03_eq_x04"
+        "cf_x03_le_2"
       ],
       "agent_016": [
-        "cf_x03_le_x04"
+        "cf_x08_eq_2"
       ],
       "agent_017": [
-        "cf_x02_le_x04"
+        "cf_x01_ge_x02"
       ],
       "agent_018": [
-        "cf_x03_ge_x05"
+        "cf_x01_ge_x05"
       ],
       "agent_019": [
-        "cf_x05_eq_1"
+        "cf_x02_le_x04"
       ],
       "agent_020": [
-        "cf_x05_le_2"
+        "cf_x03_ge_x05"
       ],
       "agent_021": [
         "cf_x06_ge_x07"
       ],
       "agent_022": [
-        "cf_x02_le_x04"
+        "cf_x01_ge_x02"
       ],
       "agent_023": [
-        "cf_x03_ge_x05"
+        "cf_x02_le_x04"
       ],
       "agent_024": [
-        "cf_x05_eq_1"
+        "cf_x03_ge_x05"
       ]
     }
   },
   "controller_pool": {
     "fact_ids": [
-      "cf_x00_ge_x03",
-      "cf_x01_ge_x02",
-      "cf_x01_ge_x05",
-      "cf_x01_le_2",
-      "cf_x02_eq_x05",
+      "cf_x00_eq_3",
+      "cf_x00_ge_2",
+      "cf_x00_ge_x01",
+      "cf_x06_eq_1",
       "cf_x02_ge_x05",
-      "cf_x03_le_2",
+      "cf_x03_le_x04",
+      "cf_x06_le_x07",
+      "cf_x08_le_2",
       "cf_x04_ge_2",
       "cf_x04_ge_x05",
-      "cf_x06_eq_1",
-      "cf_x06_le_2",
-      "cf_x08_le_2"
+      "cf_x05_eq_1",
+      "cf_x05_le_2"
     ],
     "size": 12,
     "lean_A0_A1_A2": [
@@ -194,16 +208,30 @@
       4
     ],
     "joint_posterior": [
-      0.318182,
-      0.363636,
-      0.318182
+      0.329341,
+      0.341317,
+      0.329341
     ],
     "proves_any_allocation": false,
-    "minimal_proofs_inside": 0,
-    "strength_wasserstein1_truth_vs_rival": 0.008586,
+    "neutrality": 0.004,
+    "strength_wasserstein1_A0_vs_A2": 0.00066,
+    "sum_dP_A0_facts": 0.6268,
+    "sum_dP_A2_facts": 0.6294,
+    "ineligible_facts_in_pool": [
+      "cf_x00_eq_3",
+      "cf_x00_ge_x01",
+      "cf_x04_ge_x05",
+      "cf_x05_eq_1",
+      "cf_x06_eq_1"
+    ],
     "shared_by_both_targets": true
   },
-  "overlap_agents_pool": [],
   "n_overlap": 0,
-  "built_by": "50_next_experiment/builders/build_task003_nosolution.py"
+  "overlap_agents_pool": [],
+  "search": {
+    "seed": 2026,
+    "samples_per_rival_choice": 400,
+    "agent_sets_meeting_rule_4": 10438,
+    "total_imbalance": 0.0169
+  }
 }

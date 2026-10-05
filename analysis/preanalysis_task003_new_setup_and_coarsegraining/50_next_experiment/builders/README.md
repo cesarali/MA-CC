@@ -6,7 +6,7 @@ directory.
 | script | what it does |
 |---|---|
 | `build_task003_symmetric.py` | chooses the 24 task003-symmetric agents against the two fixed pools and **writes** `../designs/task003_symmetric.json`. Its rules are in its docstring and in `../designs/README.md` §3 |
-| `build_task003_nosolution.py` | rebuilds the task003-nosolution agents and single pool, and **checks** them against `../designs/task003_nosolution.json` |
+| `build_task003_nosolution.py` | chooses the task003-nosolution agents and single pool and **writes** `../designs/task003_nosolution.json`. Its rules are in its docstring and in `../designs/README.md` §4 |
 | `scan_design_menu.py` | scans the feasible combinations of (k0, kr, c) for the single-pool design and prints one candidate per combination |
 
 Run from the repository root with `.venv/bin/python`. Each takes a few seconds.
@@ -37,13 +37,15 @@ why any lean-balanced agent set must overlap it by exactly two thirds.
 
 ## Constraints the task003-nosolution search enforces
 
-8 agents per allocation; agents hold no decisive fact; joint posterior searched
-toward P(A0) = 0.5; pool `4/4/4`, strength-matched by Wasserstein-1 distance (a
-measure of how different two sets of numbers are); **pool proves no
-allocation**; zero overlap with the agents.
+8 agents per allocation, every agent fact private-eligible; no decisive fact;
+joint posterior exactly (0.5, 0, 0.5); pool `4/4/4`, proving no allocation, zero
+overlap with the agents. Ranked by the sum of the pool's A0-vs-A2 strength gap,
+the pool's distance from the prior, and the agents' A0-vs-A2 starting gap.
+With `kr = 5` and `c = 4` the bound is tight (5 + 4 = 9): choosing the agents'
+rival facts fixes the pool's.
 
-It does **not** check that agent facts are private-eligible; two are not. See
-`../designs/README.md` §7.
+The 2 October version (two ineligible agent facts) is in
+`../archive/task003_nosolution_ineligible_superseded.json`.
 
 The superseded 2 October builder, which also produced a single-pool
 task003-symmetric, is in `../archive/build_designs_sharedpool_superseded.py`.

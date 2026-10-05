@@ -16,7 +16,7 @@ OUT = HERE/"report"/"figures"; OUT.mkdir(parents=True, exist_ok=True)
 # are kept because saved results are named after them; the symmetric file is superseded.
 SETUP_FILES = {
     "task003_symmetric_v2": HERE.parent / "50_next_experiment" / "archive" / "task003_symmetric_sharedpool_superseded.json",
-    "task003_nosolution_v2": HERE.parent / "50_next_experiment" / "designs" / "task003_nosolution.json",
+    "task003_nosolution_v2": HERE.parent / "50_next_experiment" / "archive" / "task003_nosolution_ineligible_superseded.json",
 }
 W = World((3,1,1,2,2,1,1,1,2))
 SET = {"task003_symmetric_v2":"symmetric-v2","task003_nosolution_v2":"nosolution-v2"}

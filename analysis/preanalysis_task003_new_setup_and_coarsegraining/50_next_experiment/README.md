@@ -62,5 +62,3 @@ two steering directions. The calculation is in
 2. Scripted (deterministic) controller first, or LLM controller first? Our order
    reverses the plan's priorities; this needs team agreement
    ([`EXPERIMENTS.md`](EXPERIMENTS.md) §3d).
-3. Two task-003-nosolution agent facts are not private-eligible
-   ([`designs/README.md`](designs/README.md) §7). Accept, or rebuild?

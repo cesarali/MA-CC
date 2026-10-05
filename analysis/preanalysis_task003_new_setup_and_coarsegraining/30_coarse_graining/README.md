@@ -1,4 +1,12 @@
-# 02_markov_tests — is the coarse-graining valid?
+# 30_coarse_graining — is the coarse-graining valid?
+
+> **Status, 5 October 2026.** Everything here was measured on the **archived
+> LLM study** (`21-09-2026-full-vs-report-v1`: the archived agents, César's
+> 24-fact pool, 15 rounds). The coarse-graining itself is only a definition
+> (the mean agent belief in the truth, binned), so it carries over to any data.
+> **Whether it is Markovian does not carry over**: rerun the four tests on each
+> new dataset, and re-check the bin cuts per setup. In `task003-nosolution` the
+> swarm as a whole sits at 0.5, right on a cut.
 
 The population state is coarse-grained to the **mean agent posterior**
 `e = mean_j P(ALLOCATION_0 | K_j)`, binned into 4 states at cuts 0.33 / 0.50 / 0.75.

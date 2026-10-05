@@ -1,5 +1,10 @@
 # A symmetric controller and an epistemic coarse-graining
 
+> **Status, 5 October 2026.** §2 (the two pools) is frozen as the controller
+> pools of `task003-symmetric`. §1 is superseded: the agents were replaced so
+> that 8 favour each allocation. §3 developed into `task003-nosolution`. See
+> [`../50_next_experiment/designs/README.md`](../50_next_experiment/designs/README.md).
+
 Design note, 2 October 2026. Companion to
 [`../10_task_and_facts/task_003_analysis.md`](../10_task_and_facts/task_003_analysis.md),
 which establishes the fact inventory this note builds on. Every number here is

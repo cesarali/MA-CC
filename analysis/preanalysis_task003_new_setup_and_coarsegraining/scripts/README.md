@@ -1,15 +1,17 @@
 # scripts — reproduce everything here
 
 Run from the repository root with the project venv (`.venv/bin/python`).
-Depends on `../../game_analysis/engine.py` for the exact posterior over worlds.
+Depends on `../10_task_and_facts/engine.py` for the exact posterior over worlds.
+Input: the archived study's `rounds.parquet` and `cells.parquet` under
+`/Users/rsanchez/Projects/agents_control/new_rnd_init_experiment/` (read-only).
 
 | order | script | produces | time |
 |---|---|---|---|
-| 1 | `build_states.py` | `data/states_all.parquet` — per-round epistemic state, all three arms | ~2 min |
-| 2 | `add_coordinates.py` | `data/states_full.parquet` — adds spread, dec_frac, pool_frac, mean_nfacts | ~2 min |
-| 3 | `run_four_tests.py` | `02_markov_tests/four_tests.csv`, `lumpability.csv` | ~2 min |
-| 4 | `augmented_states.py` | `02_markov_tests/augmented_states.csv` | ~1 min |
-| 5 | `estimate.py` | `03_estimates/*.csv` | ~2 min |
+| 1 | `build_states.py` | `../results/data/states_all.parquet` — per-round epistemic state, all three arms | ~2 min |
+| 2 | `add_coordinates.py` | `../results/data/states_full.parquet` — adds spread, dec_frac, pool_frac, mean_nfacts | ~2 min |
+| 3 | `run_four_tests.py` | `../30_coarse_graining/four_tests.csv`, `lumpability.csv` | ~2 min |
+| 4 | `augmented_states.py` | `../30_coarse_graining/augmented_states.csv` | ~1 min |
+| 5 | `estimate.py` | `../40_information_estimates/*.csv` | ~2 min |
 
 Supporting modules, not run directly:
 

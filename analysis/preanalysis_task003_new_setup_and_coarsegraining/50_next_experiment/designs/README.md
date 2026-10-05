@@ -10,7 +10,7 @@ asked to build them, read this file in full, then the JSON beside it, then
 | file | what it is |
 |---|---|
 | `task003_symmetric.json` | **task003-symmetric**: 24 agents and **two** controller pools |
-| `task003_nosolution.json` | **task003-nosolution**: 24 agents and **one** controller pool |
+| `task003_nosolution.json` | **task003-nosolution**: 24 agents and **one** controller pool (rebuilt 5 October with eligible agent facts only) |
 | `task003_archived_reference.json` | the setup actually run in study `21-09-2026-full-vs-report-v1`; a reference only |
 | `config_template.yaml`, `variants.yaml` | the run settings, shared by both setups |
 
@@ -48,15 +48,15 @@ The archived reference is what was actually run. It is not a target to build.
 | agents' joint posterior | [1, 0, 0] | [0.5, 0, 0.5] | [1, 0, 0] |
 | minimal proofs the agents can assemble | 12 | 0 | 4 |
 | agents per decisive fact / per rival fact | **1.33 / 1.33** | — / 1.6 | 1.5 / 1.0 |
-| mean individual belief A0 / A1 / A2 | .367 / .312 / .321 | — | .377 / .295 / .328 |
+| mean individual belief A0 / A1 / A2 | .367 / .312 / .321 | .349 / .291 / .361 | .377 / .295 / .328 |
 | controller pool(s) | A0 pool 12, A2 pool 12 | one pool, 12 | one pool, 24 |
 | pool favours A0 / A1 / A2 | A0 pool: A0; A2 pool: A2 | 4 / 4 / 4 | 9 / 6 / 9 |
-| whole-pool posterior | A0 pool [.963, .038, 0]; A2 pool [.114, 0, .886] | [.318, .364, .318] | [.308, 0, .692] |
+| whole-pool posterior | A0 pool [.963, .038, 0]; A2 pool [.114, 0, .886] | [.329, .341, .329] | [.308, 0, .692] |
 | a pool proves its target? | no | no | no |
 | pool facts the agents already hold | 2 in each pool, 1 agent each | 0 | 8 |
 | **new facts each controller brings** | **10 and 10** | 12 | 16 |
-| ΣΔP of those new facts | A0 .957, A2 .969 | — | — |
-| all agent facts private-eligible? | **yes** | **no — 2 are not** (see §7) | yes |
+| ΣΔP of those new facts | A0 .957, A2 .969 | the pool's A0 facts .627, its A2 facts .629 | — |
+| all agent facts private-eligible? | **yes** | **yes** | yes |
 
 ΔP means: how much one fact, read alone, raises the probability of an allocation
 above the prior of ⅓.
@@ -134,17 +134,33 @@ between A0 and A2. That was always true of the decisive set.
 ## 4. task003-nosolution — how it was built
 
 Built by [`../builders/build_task003_nosolution.py`](../builders/build_task003_nosolution.py),
-which reproduces `task003_nosolution.json` exactly and checks it. The reasoning
-is in [`../builders/README.md`](../builders/README.md).
+which writes `task003_nosolution.json` (about 2 minutes, same result every run).
+Rules, in its docstring:
 
 - **Agents**: 24, none of the 6 decisive facts, 8 per allocation, 15 distinct
-  facts (5 per allocation). Together they put A0 and A2 at 0.5 each and can
-  assemble no proof.
+  facts (5 per allocation), **every one private-eligible**: read alone, none
+  makes an agent more than 45% sure. Together they put A0 and A2 at exactly 0.5
+  each and can assemble no proof.
+- **Ranking**: among the 10,438 agent sets that give that exact coin flip, the
+  builder minimises the sum of three imbalances, all in probability units:
+  the strength gap between the pool's A0 facts and its A2 facts (the pool serves
+  both targets, so neither controller should get stronger facts); the whole
+  pool's distance from the prior; and the gap between the agents' mean starting
+  belief in A0 and in A2. Result: 0.0007, 0.004 and 0.012.
+- **The pool may hold ineligible facts.** Eligibility limits what one agent
+  holds. The pool includes the strongest A0 fact (`cf_x00_eq_3`, ΔP .252) and
+  its mirror for A2 (`cf_x05_eq_1`, .252) as a matched pair.
 - **Why 24 agents**: Darius's `task_004` removed the decisive facts *together
   with the agents holding them*, leaving 15 agents. That mixes up "no proof
   available" with "fewer agents". Here the decisive facts are *replaced*.
-- **One pool**: 12 facts, 4 favouring each allocation, chosen so the whole pool
-  sits close to the prior and proves nothing. It shares no fact with the agents.
+- **One pool**: 12 facts, 4 favouring each allocation, proving nothing, sharing
+  no fact with the agents.
+- **History**: the 2 October version gave two agents each the two strongest
+  facts in the task (`cf_x01_eq_1`, `cf_x05_eq_1`, each making an agent 58.5%
+  sure), breaking the eligibility rule. It is kept in
+  `../archive/task003_nosolution_ineligible_superseded.json`. The rebuild also
+  improved the pool's A0/A2 balance (ΣΔP .627 vs .629, against .335 vs .446
+  before) and halved the agents' starting gap (.012, against .028).
 - **The scarcity bound**: only 9 facts favour A1 and 9 favour A2, against 31
   for A0. Agents and pool compete for them, so zero overlap needs
   `kr + c ≤ 9`. Here `kr` = distinct rival facts the agents hold per allocation
@@ -200,16 +216,10 @@ Step-by-step build instructions: [`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md) §2.
 
 ## 7. Open issues
 
-- **Two no-solution agent facts are not private-eligible**: `cf_x01_eq_1` and
-  `cf_x05_eq_1` (each held by 2 agents). "Eligible" is the task generator's rule
-  for facts not too revealing to hand a single agent (see
-  `../../10_task_and_facts/task_003_analysis.md`). The 2 October builder never
-  checked it. Decide whether to accept this or rebuild the no-solution agents
-  with eligible facts only.
-- **The LLM-free simulation in `../../70_codex_simulations/` ran
-  task003-symmetric with a single shared pool**, the design superseded on
-  5 October (kept in `../archive/`). Its symmetric results do not describe this
-  setup and need a rerun. Its no-solution results stand.
+- **The LLM-free simulations in `../../60_exact_simulation/` and
+  `../../70_codex_simulations/` ran the superseded designs of both setups**
+  (kept in `../archive/`). Their results do not describe the frozen setups and
+  need a rerun with the new simulator specification.
 - **Nothing logs the proof-assembly rate**: per round, the fraction of agents
   whose active memory holds a complete proof. That is what task003-symmetric
   exists to measure.

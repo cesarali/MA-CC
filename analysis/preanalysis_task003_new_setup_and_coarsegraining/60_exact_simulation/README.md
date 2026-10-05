@@ -1,14 +1,16 @@
 # 60_exact_simulation — the LLM-free mirror of the game
 
-> **5 October 2026: the task003-symmetric results here describe a superseded
-> design.** These simulations gave task003-symmetric one shared neutral pool. The
-> frozen design has **two** pools, one per target, and different agents; see
-> `../50_next_experiment/designs/README.md`. Read every symmetric result below
-> as a study of that older design, not of task003-symmetric, until it is rerun.
-> The task003-nosolution results are unaffected: its agents and pool are
-> unchanged (`the scripts now read
-> `../50_next_experiment/designs/task003_nosolution.json`). Names ending in
-> `_v2` in this folder are the labels the runs were made under.
+> **5 October 2026: every result here describes superseded designs.** These
+> simulations gave task003-symmetric one shared neutral pool (the frozen design
+> has two pools, one per target, and different agents), and used the 2 October
+> task003-nosolution, whose agents held two facts too informative for one agent
+> (since rebuilt). Both old designs are in `../50_next_experiment/archive/`; the
+> frozen ones are described in `../50_next_experiment/designs/README.md`. Read
+> the results as studies of the old designs until rerun. Names ending in `_v2`
+> are the labels the runs were made under.
+>
+> The `lru` controller rule (§2) will be **dropped** from the new simulator, by
+> decision of 5 October; `greedy_posterior` stays only as an oracle reference.
 
 
 **PRELIMINARY**, 4 October 2026. Working and fast. Not yet a package; it should
@@ -102,14 +104,14 @@ pool, only the target differing:
 
 | setup | ρ | controller rule | e (truth arm) | e (false arm) | **gap** |
 |---|---|---|---:|---:|---:|
-| symmetric-v2 | 0.75 | `lru` *(= `deterministic`)* | 0.601 | 0.601 | **+0.000** |
-| symmetric-v2 | 0.75 | `greedy_posterior` *(oracle)* | 0.750 | 0.067 | **+0.682** |
-| symmetric-v2 | 1.0 | `lru` | 0.975 | 0.975 | **+0.000** |
-| symmetric-v2 | 1.0 | `greedy_posterior` | 0.980 | 0.486 | **+0.494** |
-| nosolution-v2 | 0.75 | `lru` | 0.512 | 0.512 | **+0.000** |
-| nosolution-v2 | 0.75 | `greedy_posterior` | 0.838 | 0.090 | **+0.748** |
-| nosolution-v2 | 1.0 | `lru` | 0.934 | 0.934 | **+0.000** |
-| nosolution-v2 | 1.0 | `greedy_posterior` | 0.985 | 0.125 | **+0.860** |
+| old symmetric (shared pool) | 0.75 | `lru` *(= `deterministic`)* | 0.601 | 0.601 | **+0.000** |
+| old symmetric (shared pool) | 0.75 | `greedy_posterior` *(oracle)* | 0.750 | 0.067 | **+0.682** |
+| old symmetric (shared pool) | 1.0 | `lru` | 0.975 | 0.975 | **+0.000** |
+| old symmetric (shared pool) | 1.0 | `greedy_posterior` | 0.980 | 0.486 | **+0.494** |
+| old no-solution | 0.75 | `lru` | 0.512 | 0.512 | **+0.000** |
+| old no-solution | 0.75 | `greedy_posterior` | 0.838 | 0.090 | **+0.748** |
+| old no-solution | 1.0 | `lru` | 0.934 | 0.934 | **+0.000** |
+| old no-solution | 1.0 | `greedy_posterior` | 0.985 | 0.125 | **+0.860** |
 
 **Exactly zero in every cell** for the LRU rule, and the zero is structural, not
 statistical: with a neutral pool `base_score` is 0 for every fact, so the
@@ -117,11 +119,11 @@ ranking never consults the target at all.
 
 Two further readings:
 
-- **nosolution-v2 is the better instrument.** Its oracle gaps (+0.75, +0.86)
-  exceed symmetric-v2's (+0.68, +0.49), because an undecided population leaves
+- **The no-solution setup is the better instrument.** Its oracle gaps (+0.75, +0.86)
+  exceed the symmetric setup's (+0.68, +0.49), because an undecided population leaves
   more room to move. That is what it was designed for.
 - **A targeted controller can defeat a population that collectively owns a
-  proof.** In symmetric-v2 at ρ = 0.75 the false oracle drives the mean
+  proof.** In the old symmetric setup at ρ = 0.75 the false oracle drives the mean
   posterior to **0.067** and the A0 vote share to **0.003**, against a
   population whose pooled evidence proves A0. That is the striking claim the
   setup exists to test.
@@ -172,7 +174,7 @@ facts, which is what makes it this fast.
   estimators never had.
 - **Sweeping the design space** — pool composition, overlap, assignments, ρ, b —
   for free before spending LLM budget.
-- **Checking the mean-field theory** of `../50_next_experiment/research_directions_2026-10-04.md` §3.
+- **Checking the mean-field theory** of `../50_next_experiment/notes/research_directions_2026-10-04.md` §3.
 - **Exact power analysis** instead of extrapolation.
 
 **Not** a substitute for the LLM experiments. A Bayes-exact agent cannot be
