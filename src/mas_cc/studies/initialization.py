@@ -12,6 +12,9 @@ from typing import Any, Callable, Sequence
 from mas_cc.config import GridSpec, RunConfig, load_run_config_or_grid
 from mas_cc.core import Seed
 from mas_cc.games import create_game
+from mas_cc.games.relational_reasoning.imitation_round_feedback.bayesian import (
+    BayesianAgentPolicy,
+)
 from mas_cc.games.relational_reasoning.imitation_round_feedback.initialization import (
     artifact_from_actions,
     initialization_artifact_path,
@@ -134,6 +137,11 @@ async def materialize_initializations(
                 )
                 return
             state = game.initialize(episode_config.game, entry.episode_seed)
+            rules = game.rules(episode_config.game)
+            agent_policy = (
+                BayesianAgentPolicy.load(rules.task_dataset_dir, str(rules.task_id), state.fact_ids)
+                if rules.agent_decision_mode == "bayesian" else None
+            )
             provider = provider_factory(episode_config)
             recovery = _RecoveryLedger(None)
             try:
@@ -150,6 +158,7 @@ async def materialize_initializations(
                                 Seed(entry.episode_seed),
                                 None,
                                 recovery,
+                                agent_policy,
                             )
                             for request in game.initial_vote_requests(
                                 state, episode_config.game

@@ -142,6 +142,12 @@ def initialization_compatibility_payload(
     requests = game.initial_vote_requests(shell, config.game)
     task = game.load_task(config.game)
     return {
+        # Leave old LLM artifact identities unchanged; Bayesian and LLM local
+        # votes must never silently reuse each other's paired artifacts.
+        **(
+            {"agent_decision_mode": "bayesian"}
+            if game.rules(config.game).agent_decision_mode == "bayesian" else {}
+        ),
         "schema_version": INITIALIZATION_ARTIFACT_SCHEMA_VERSION,
         "game_type": config.game.type,
         "game_version": game.spec.version,
