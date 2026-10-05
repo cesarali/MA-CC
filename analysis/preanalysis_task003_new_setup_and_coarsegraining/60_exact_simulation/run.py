@@ -9,12 +9,17 @@ sys.path.insert(0, str(HERE.parent / "10_task_and_facts"))
 from engine import World
 from exact_game import ExactGame, GameRules, AgentPolicy, ControllerPolicy
 
-DESIGNS = HERE.parent / "50_next_experiment" / "designs"
+# The setups these results were produced with (2 October single-pool designs). The keys
+# are kept because saved results are named after them; the symmetric file is superseded.
+SETUP_FILES = {
+    "task003_symmetric_v2": HERE.parent / "50_next_experiment" / "archive" / "task003_symmetric_sharedpool_superseded.json",
+    "task003_nosolution_v2": HERE.parent / "50_next_experiment" / "designs" / "task003_nosolution.json",
+}
 WORLD = (3, 1, 1, 2, 2, 1, 1, 1, 2)
 
 
 def load(setup: str):
-    d = json.loads((DESIGNS / f"{setup}.json").read_text())
+    d = json.loads(SETUP_FILES[setup].read_text())
     return d["agents"]["agent_assignments"], d["controller_pool"]["fact_ids"]
 
 

@@ -9,7 +9,7 @@ facts, and reports who can prove the answer.
 | `task_003_analysis.md` | **main report** — the task, the 99-proposition catalog, the 49 true facts, the four classifications, proof enumeration, the full fact table |
 | `task_003_facts.csv` | all 49 facts with ΔP(A0/A1/A2), entropy, maxP, eligibility, decisiveness, allocation |
 | `task_003_proofs.json` | minimal solving sets, per-fact appearance counts, coverage, disjoint packing |
-| `symmetric_pools.json` | the matched A0/A2 pools proposed in `../20_controller_redesign/` |
+| `symmetric_pools.json` | the two controller pools of **task003-symmetric**: the A0 pool and the A2 pool, matched pair by pair. Designed in `../20_controller_redesign/` |
 | `generality.json` | the same measures on 12 other random worlds |
 | `task_003_redesign.md` † | an independent pool-correction analysis from a separate session |
 | `task_003_pool_comparison.json` † | its output |

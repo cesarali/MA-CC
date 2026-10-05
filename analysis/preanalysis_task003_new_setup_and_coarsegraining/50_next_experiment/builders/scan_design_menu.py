@@ -1,5 +1,5 @@
 import json, collections, random, pathlib, sys
-S = pathlib.Path("/private/tmp/claude-501/-Users-rsanchez-Projects-MA-CC/2624cbd7-c886-46ad-ba56-a68bf0495a6c/scratchpad/tasks")
+S = pathlib.Path(__file__).resolve().parents[4] / "results/studies/musr_truthful_selective_task_calibration_01/tasks"
 sys.path.insert(0, "/Users/rsanchez/Projects/MA-CC/src")
 from mas_cc.musr_team_allocation_generator.ambiguity import TeamAllocationCompletionIndex
 from mas_cc.musr_team_allocation_generator.symbolic_facts import CanonicalFact

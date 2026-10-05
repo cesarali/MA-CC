@@ -12,7 +12,12 @@ from engine import World
 from meanfield import MeanFieldV2
 from exact_game import ExactGame, GameRules, AgentPolicy, ControllerPolicy
 OUT = HERE/"report"/"figures"; OUT.mkdir(parents=True, exist_ok=True)
-D = HERE.parent/"50_next_experiment"/"designs"
+# The setups these results were produced with (2 October single-pool designs). The keys
+# are kept because saved results are named after them; the symmetric file is superseded.
+SETUP_FILES = {
+    "task003_symmetric_v2": HERE.parent / "50_next_experiment" / "archive" / "task003_symmetric_sharedpool_superseded.json",
+    "task003_nosolution_v2": HERE.parent / "50_next_experiment" / "designs" / "task003_nosolution.json",
+}
 W = World((3,1,1,2,2,1,1,1,2))
 SET = {"task003_symmetric_v2":"symmetric-v2","task003_nosolution_v2":"nosolution-v2"}
 
@@ -88,7 +93,7 @@ fig.tight_layout(); fig.savefig(OUT/"fig_pathkl.pdf"); plt.close(fig)
 # --- Fig 5: theory vs simulation -------------------------------------------
 fig, axes = plt.subplots(2, 2, figsize=(9, 5.6), sharex=True, sharey=True)
 for r, setup in enumerate(SET):
-    d = json.loads((D/f"{setup}.json").read_text())
+    d = json.loads(SETUP_FILES[setup].read_text())
     asg, pool = d["agents"]["agent_assignments"], d["controller_pool"]["fact_ids"]
     for c, rho in enumerate((0.75, 1.0)):
         ax = axes[r, c]

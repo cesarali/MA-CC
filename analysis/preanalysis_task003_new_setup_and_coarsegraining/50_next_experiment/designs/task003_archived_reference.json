@@ -1,5 +1,5 @@
 {
-  "name": "task003-symmetric-v0-reference",
+  "name": "task003-archived-reference",
   "status": "ARCHIVED - this is what was actually run",
   "note": "The configuration behind study 21-09-2026-full-vs-report-v1 and all of our coarse-graining calibration. Kept as the comparison baseline: it is the only setup with data (20,730 per-round rows) and validated estimators. Its controller pool is the DEFECTIVE one - admission was evaluated once for ALLOCATION_2 and reused for both targets, so both arms quote the same 24 facts.",
   "task": "task_003",

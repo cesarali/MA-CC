@@ -15,7 +15,7 @@ facts removed from the agents. Six experiments.
 **Two of those three choices should change.**
 
 **Drop the two target-specific pools.** *(Superseded 2026-10-02: use the
-neutral shared pool in [`designs/`](designs/), not Darius's balanced pool
+neutral shared pool in [`designs/`](../designs), not Darius's balanced pool
 directly — his whole pool has joint posterior 1.0 for the truth and contains a
 size-6 proof, so his truth controller could simply hand over a proof. The
 reasoning below for preferring one shared pool over two still holds.)*
@@ -37,7 +37,7 @@ facts **together with their holders**, dropping the population from 24 agents to
 15. That confounds proof availability with population size, with the number of
 distinct facts (21 → 15), and with per-fact redundancy. Holding the population at
 24 and *replacing* the six facts isolates the factor. Both corrected setups are
-in [`designs/`](designs/).
+in [`designs/`](../designs).
 
 So the design is **3 arms × 2 decisive conditions**, not 6 separate experiments:
 
@@ -178,7 +178,7 @@ Unchanged from the archived setup, which worked:
 built.)* Each agent holds **exactly one fact**, not a packet — 24 agents, 24
 slots. Both setups hold the population at 24 agents with slot-level lean balance
 8/8/8, and differ only in whether the decisive facts are present. See
-[`designs/`](designs/) for the fact lists, and [`builders/`](builders/) for the
+[`designs/`](../designs) for the fact lists, and [`builders/`](../builders) for the
 search that produced them.
 
 ### Controller

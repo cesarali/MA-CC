@@ -1,322 +1,228 @@
-# The two new experimental setups — build specification
+# The two experimental setups — build specification
 
-**Status: PRELIMINARY.** These are candidate designs, not frozen
-configurations. Nothing here has been written into a task directory or run.
+**Status: FROZEN 2026-10-05.** Both setups are fixed. Nothing has been written into
+a task directory or run with language models yet.
 
 This file is the single source of truth for the two setups. If you are an agent
-asked to build them, read this file in full, then the JSON beside it.
+asked to build them, read this file in full, then the JSON beside it, then
+[`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md).
+
+| file | what it is |
+|---|---|
+| `task003_symmetric.json` | **task003-symmetric**: 24 agents and **two** controller pools |
+| `task003_nosolution.json` | **task003-nosolution**: 24 agents and **one** controller pool |
+| `task003_archived_reference.json` | the setup actually run in study `21-09-2026-full-vs-report-v1`; a reference only |
+| `config_template.yaml`, `variants.yaml` | the run settings, shared by both setups |
 
 ---
 
 ## 1. What the two setups are
 
-Both are the **same world**: `task_003`, latent vector
-`(3,1,1,2,2,1,1,1,2)`, candidate scores 8 / 4 / 6, `ALLOCATION_0` correct,
-`ALLOCATION_2` the designated wrong target. Both draw from the **same 49-fact
-universe**. They differ only in **who holds which facts**.
+Both use the **same world**: `task_003`, hidden vector `(3,1,1,2,2,1,1,1,2)`,
+allocation scores 8 / 4 / 6, so `ALLOCATION_0` (A0) is correct and
+`ALLOCATION_2` (A2) is the wrong target a false controller steers toward. Both
+draw on the same 49 true facts.
 
-| | `task003-symmetric` | `task003-nosolution` |
+| | **task003-symmetric** | **task003-nosolution** |
 |---|---|---|
-| question it answers | Can the swarm find a proof it collectively owns — and can a controller stop it? | Can a controller tip a swarm that is genuinely undecided? |
-| population can prove the truth | **yes** | **no** |
-| accuracy ceiling | **1.0** | **0.5** |
-| the false controller must | defeat an available certainty | tip a coin flip |
-| the truth controller's job | facilitation: help find the owned proof | persuasion |
+| agents hold the 6 decisive facts | **yes**, so together they can prove A0 | **no**, so they cannot prove anything |
+| controller pools | **two**: the A0 pool, used only when the controller targets A0; the A2 pool, used only when it targets A2 | **one**, used for both targets: 4 facts favouring each of A0, A1, A2 |
+| question it answers | Can the swarm assemble a proof it owns, and can a controller help or stop it? | Can a controller tip a swarm that is genuinely undecided? |
+| accuracy ceiling | 1.0 | 0.5 |
 
-Keep both. They are different questions, and the second is not a strictly
-harder version of the first.
+Keep both. They ask different questions; the second is not a harder version of
+the first.
 
 ---
 
 ## 2. Every property, side by side
 
-`v0` is the archived setup that was actually run. It is the reference, not a
-target to build.
+The archived reference is what was actually run. It is not a target to build.
 
-| property | **v0 (reference)** | **symmetric-v2** | **nosolution-v2** |
+| property | **task003-symmetric** | **task003-nosolution** | archived reference |
 |---|---|---|---|
-| agent number | 24 | **24** | **24** |
-| facts per agent | 1 | 1 | 1 |
-| # distinct facts | 21 | **16** | **15** |
-| **slot lean** A0/A1/A2 | **16 / 5 / 3** | **8 / 8 / 8** | **8 / 8 / 8** |
-| **distinct lean** A0/A1/A2 | 13 / 5 / 3 | 6 / 5 / 5 | **5 / 5 / 5** |
-| slot multiplicity range | [1, 2] | [1, 2] | [1, 2] |
-| agents' joint posterior | [1.0, 0, 0] | [1.0, 0, 0] | **[0.5, 0, 0.5]** |
-| decisive facts held | 6 of 6 | **6 of 6** | **0 of 6** |
-| proofs available to agents | 4 | **8** | **0** |
-| pool size | 24 | **12** | **12** |
-| pool lean A0/A1/A2 | 9 / 6 / 9 | **4 / 4 / 4** | **4 / 4 / 4** |
-| pool joint posterior | [0.308, 0, 0.692] | **[⅓, ⅓, ⅓]** | [0.318, 0.364, 0.318] |
-| pool proves any allocation? | no | **no** | **no** |
-| proofs inside the pool | 0 | 0 | 0 |
-| pool strength match (W₁) | n/a | 0.046 | **0.009** |
-| pool shared by both targets | yes (by defect) | **yes (by design)** | **yes (by design)** |
-| agent ↔ pool overlap | 8 of 21 | **0** | **0** |
-| **is this already there?** | **yes, fully** | **no — must be built** | **no — must be built** |
+| agents, facts per agent | 24, 1 | 24, 1 | 24, 1 |
+| distinct facts held | 18 | 15 | 21 |
+| agents per allocation A0 / A1 / A2 | **8 / 8 / 8** | **8 / 8 / 8** | 16 / 5 / 3 |
+| decisive facts held | 6 of 6 | 0 of 6 | 6 of 6 |
+| agents' joint posterior | [1, 0, 0] | [0.5, 0, 0.5] | [1, 0, 0] |
+| minimal proofs the agents can assemble | 12 | 0 | 4 |
+| agents per decisive fact / per rival fact | **1.33 / 1.33** | — / 1.6 | 1.5 / 1.0 |
+| mean individual belief A0 / A1 / A2 | .367 / .312 / .321 | — | .377 / .295 / .328 |
+| controller pool(s) | A0 pool 12, A2 pool 12 | one pool, 12 | one pool, 24 |
+| pool favours A0 / A1 / A2 | A0 pool: A0; A2 pool: A2 | 4 / 4 / 4 | 9 / 6 / 9 |
+| whole-pool posterior | A0 pool [.963, .038, 0]; A2 pool [.114, 0, .886] | [.318, .364, .318] | [.308, 0, .692] |
+| a pool proves its target? | no | no | no |
+| pool facts the agents already hold | 2 in each pool, 1 agent each | 0 | 8 |
+| **new facts each controller brings** | **10 and 10** | 12 | 16 |
+| ΣΔP of those new facts | A0 .957, A2 .969 | — | — |
+| all agent facts private-eligible? | **yes** | **no — 2 are not** (see §7) | yes |
 
-### "Is this already there?" in detail
-
-**v0 — yes, nothing to build.** The frozen task is on `origin/darius-MA-v1` at
-`results/studies/musr_truthful_selective_task_calibration_01/tasks/task_003/`,
-including `private/N24_assignment.json` and
-`facts/controller_reportable_facts.json`. There are also 20,730 analysed
-per-round rows from study `21-09-2026-full-vs-report-v1`. **Its controller pool
-is defective**: admission was evaluated once for `ALLOCATION_2` and reused for
-the `ALLOCATION_0` arm, so both arms quote the same 24 facts and the truth arm
-recommends A0 while citing evidence picked to undermine it. Use v0 only as a
-dynamics baseline and as the bridge back to our calibrated estimators. **Never
-read its truth-arm numbers as evidence about truth-directed steering.**
-
-**symmetric-v2 and nosolution-v2 — no, neither exists.** What is missing is
-exactly two files per setup: a 24-agent private assignment and a 12-fact
-controller pool. Everything else (the world, the 49 facts, the decisive set) is
-reused unchanged from `task_003`.
-
-The nearest existing thing to nosolution-v2 is Darius's `task_004`, which is
-`task_003` with the decisive facts removed — **but it removed them together
-with their holders**, dropping the population to 15 agents. That confounds proof
-availability with population size, distinct-fact count (21 → 15) and
-redundancy. nosolution-v2 holds the population at 24 and replaces the facts
-instead.
+ΔP means: how much one fact, read alone, raises the probability of an allocation
+above the prior of ⅓.
 
 ---
 
-## 3. Slot lean versus distinct lean
+## 3. task003-symmetric — how it was built
 
-Every agent holds **exactly one fact**. If the same fact is given to two agents
-it fills two **slots** but counts once as a **distinct** fact. A fact's *lean*
-is the allocation it most favours when read alone, under the exact
-14,388-world posterior.
+### The two pools (designed 2 October)
 
-- **Distinct lean** — how many *different* facts of each lean are in play. Sets
-  what the population can *conclude*: the joint posterior, and whether a proof
-  exists at all. This is the information content.
-- **Slot lean** — how many *agents* hold a fact of each lean. Sets where the
-  population *starts*: the opening spread of beliefs and the first vote split.
+Membership: [`../../10_task_and_facts/symmetric_pools.json`](../../10_task_and_facts/symmetric_pools.json).
+Reasoning: [`../../20_controller_redesign/symmetric_controller_and_coarse_graining.md`](../../20_controller_redesign/symmetric_controller_and_coarse_graining.md) §2.
 
-They come apart whenever facts repeat, and in v0 they come apart badly: all
-three duplicated facts are truth-leaning, so distinct lean 13/5/3 becomes slot
-lean **16/5/3** — **16 of 24 agents** open holding truth-leaning evidence
-against 8 holding rival-leaning. The initial skew is worse than the distinct
-count suggests. Both v2 setups fix this to 8/8/8.
+1. **Equal size**: 12 facts each.
+2. **Matched weight**: each A0 fact is paired with an A2 fact of near-identical
+   ΔP for its target; 10 of the 12 pairs match exactly.
+3. **No decisive facts.**
+4. **No shared facts.** Without this, 12 facts that only rule out A1 land in
+   both pools.
+5. **Neither pool can prove its target.** Without this, the A0 pool reaches
+   P(A0) = 1 and the A2 pool cannot match it.
 
-**Multiplicity is a second, quieter knob.** A fact held by two agents must be
-forgotten twice, so it survives epistemic decay at ρ < 1 better than a fact
-held once. Uneven duplication therefore privileges whichever facts got doubled.
-Both v2 designs keep multiplicity in **[1, 2]** and duplicate **evenly** within
-each lean group by round-robin, not at random.
+Only 12 facts in the whole task raise A2 while lowering A0. The A2 pool is all
+of them.
+
+### The agents (chosen 5 October)
+
+Built by [`../builders/build_task003_symmetric.py`](../builders/build_task003_symmetric.py),
+which writes `task003_symmetric.json`. Its rules, in order:
+
+1. 24 agents, one fact each, every fact private-eligible, each fact held by 1 or 2 agents.
+2. 8 agents per allocation. An agent counts for allocation k when its fact
+   raises P(k) at least as much as any other allocation. **A fact tied between
+   two allocations may count for either.**
+3. The A0 group is exactly the 6 decisive facts, so the agents can prove A0.
+4. **Equal new evidence for both controllers.** The pool facts the agents
+   already hold must be matched pairs: an A0-pool fact together with its A2
+   partner. Both controllers then bring the same number of new facts, of the
+   same weight.
+5. **Equal duplication.** A fact held by two agents survives forgetting better.
+   So decisive facts and rival facts are held by the same mean number of agents
+   (8/6 = 16/12 = 1.33). Otherwise, at ρ = 0.75 the proof would fade faster
+   than the evidence against it, which favours the A2 controller.
+6. Among what is left: fewest tied facts, then the smallest overlap, then rival
+   groups of the most similar strength.
+
+45,925 agent sets satisfy rules 1–5. Five others tie with the chosen one; they
+swap facts of identical weight.
+
+### The agents
+
+| group (8 agents each) | facts; **bold** = held by 2 agents |
+|---|---|
+| A0 | **`cf_x00_ge_x04`**, `cf_x01_le_x04`, `cf_x01_le_x05`, `cf_x02_le_x03`, **`cf_x06_le_x08`**, `cf_x07_le_x08` — the 6 decisive facts |
+| A1 | `cf_x00_ge_x03` (tie A0/A1), **`cf_x01_eq_x05`**, `cf_x02_ge_x05` (tie A1/A2), **`cf_x03_le_2`**, `cf_x06_le_2` (tie A0/A1), `cf_x06_le_x07` |
+| A2 | `cf_x02_le_2` (tie A0/A2), **`cf_x02_le_x04`**, `cf_x03_eq_2` (tie A0/A2), `cf_x03_ge_x05`, **`cf_x06_ge_x07`**, `cf_x08_eq_2` (tie A1/A2) |
+
+Pool facts the agents already hold: `cf_x00_ge_x03` and `cf_x06_le_x07` from the
+A0 pool; their partners `cf_x02_ge_x05` and `cf_x08_eq_2` from the A2 pool.
+
+### The price of rule 5
+
+Exact duplication needs 6 tied facts among the 12 rival facts. In 4 of them the
+tie is with A0. So "8 agents per allocation" really means: 8 agents favour A0
+alone; 8 favour A1 and 8 favour A2, and 4 of those 16 favour A0 equally. The
+effect on starting beliefs is small, because the tied facts are weak (ΔP .014
+to .063): the mean individual belief in A0 is .367, against .358 for the best
+design without ties. **State this in any write-up.**
+
+Two of the decisive facts (`cf_x01_le_x04`, `cf_x02_le_x03`) are themselves tied
+between A0 and A2. That was always true of the decisive set.
 
 ---
 
-## 4. How to read the JSON
+## 4. task003-nosolution — how it was built
 
-Three files, one per setup:
+Built by [`../builders/build_task003_nosolution.py`](../builders/build_task003_nosolution.py),
+which reproduces `task003_nosolution.json` exactly and checks it. The reasoning
+is in [`../builders/README.md`](../builders/README.md).
 
-```
-task003_symmetric_v0_reference.json
-task003_symmetric_v2.json
-task003_nosolution_v2.json
-config_template.yaml                 <- the settings for BOTH experiments
-```
+- **Agents**: 24, none of the 6 decisive facts, 8 per allocation, 15 distinct
+  facts (5 per allocation). Together they put A0 and A2 at 0.5 each and can
+  assemble no proof.
+- **Why 24 agents**: Darius's `task_004` removed the decisive facts *together
+  with the agents holding them*, leaving 15 agents. That mixes up "no proof
+  available" with "fewer agents". Here the decisive facts are *replaced*.
+- **One pool**: 12 facts, 4 favouring each allocation, chosen so the whole pool
+  sits close to the prior and proves nothing. It shares no fact with the agents.
+- **The scarcity bound**: only 9 facts favour A1 and 9 favour A2, against 31
+  for A0. Agents and pool compete for them, so zero overlap needs
+  `kr + c ≤ 9`. Here `kr` = distinct rival facts the agents hold per allocation
+  (5), and `c` = pool facts per allocation (4).
 
-`config_template.yaml` is annotated and shared: **only `task_id` differs between
-the two experiments.** Lines marked `<<VARY>>` are the factor grid, lines marked
-`<<DARIUS>>` need `origin/darius-MA-v1` merged. The reasoning for each setting is
-in `../protocols_2026-10-02.md` §2, §3 and §5b.
+---
 
-Each has the same shape. The fields you need to build a setup:
+## 5. How to read the JSON
+
+Both setup files carry the same `agents` block:
 
 | field | meaning |
 |---|---|
-| `population_size` | 24 |
-| `facts_per_agent` | 1 |
-| `agents.agent_assignments` | **the thing to write out** — `{"agent_001": ["cf_..."], ...}`, 24 entries, one fact each |
-| `agents.distinct_facts` | the distinct facts, sorted |
-| `agents.by_lean` | the same facts grouped `A0` / `A1` / `A2` |
-| `agents.slot_multiplicity` | how many agents hold each fact |
-| `controller_pool.fact_ids` | **the other thing to write out** — the 12 pool facts |
+| `agents.agent_assignments` | **write this out**: `{"agent_001": ["cf_..."], ...}`, 24 entries |
+| `agents.distinct_facts`, `agents.slot_multiplicity` | the facts, and how many agents hold each |
+| `agents.joint_posterior`, `agents.minimal_proofs_assemblable`, `agents.decisive_held` | checks to recompute after building |
 
-The rest are verification targets: `agents.joint_posterior`,
-`agents.minimal_proofs_assemblable`, `agents.decisive_held`,
-`controller_pool.joint_posterior`, `controller_pool.proves_any_allocation`,
-`n_overlap`. Recompute them after building and check they match. If any differs,
-stop — the assignment was written wrong.
+The pools differ:
+
+| setup | field | meaning |
+|---|---|---|
+| task003-symmetric | `controller_pools.ALLOCATION_0.fact_ids` | the pool for a controller targeting A0 |
+| task003-symmetric | `controller_pools.ALLOCATION_2.fact_ids` | the pool for a controller targeting A2 |
+| task003-symmetric | `pool_pairs` | the 12 weight-matched pairs, and which the agents hold |
+| task003-nosolution | `controller_pool.fact_ids` | the single pool, for either target |
 
 ---
 
-## 5. How to build a setup
+## 6. How the runtime gets the right pool
 
-### Step 1 — copy the task directory
+With `controller_report_pool_mode: frozen`, the controller's pool is the task
+directory's `facts/controller_reportable_facts.json`, **whatever the target**.
+So a pool is chosen by choosing a task directory:
 
-Start from the frozen `task_003` on `origin/darius-MA-v1`:
-
-```
-results/studies/musr_truthful_selective_task_calibration_01/tasks/task_003/
-```
-
-Copy it to a new task id. Keep `task.json`, `hidden_world.json`, `facts/`,
-`symbolic/` and `generation/` **unchanged** — the world and the 49 facts are
-identical across all three setups. Record the provenance in `task.json` the way
-`task_004` does, with a `derived_from` field.
-
-### Step 2 — write the private assignment
-
-Write `agents.agent_assignments` from the JSON to
-`private/N24_assignment.json`, matching the existing schema:
-
-```json
-{"schema_version": ..., "population_size": 24,
- "agent_assignments": {"agent_001": ["cf_x05_eq_1"], ...},
- "profiles": ...}
-```
-
-Copy `schema_version` and the `profiles` structure from the existing
-`task_003/private/N24_assignment.json`.
-
-### Step 3 — write the controller pool
-
-Write `controller_pool.fact_ids` to `controller/balanced_fact_pool.json`, in the
-schema Darius's builder emits (see
-`scripts/local/build_balanced_controller_pool.py` on `darius-MA-v1`). The
-runtime only reads the `fact_ids` list; the rest of that file is audit metadata.
-Set `rule` to something that names *our* construction, not his — ours adds the
-"proves no allocation" constraint his does not have.
-
-### Step 4 — point the config at it
-
-```yaml
-control:
-  options:
-    controller_fact_pool_mode: balanced     # reads controller/balanced_fact_pool.json
-```
-
-**This mode does not exist on `dev/rsanchez`.** It was added on
-`darius-MA-v1` (`CONTROLLER_FACT_POOL_BALANCED` in `controller.py`,
-`controller_balanced_fact_ids` in `data.py`). So:
-
-**Merging `darius-MA-v1` is a prerequisite, not a preference.** There is no
-workaround. *(Corrected 2026-10-02: an earlier version of this file offered
-`target_aligned_v1` as a fallback. It cannot work — see below.)*
-
-`controller_report_pool_mode: target_aligned_v1`, the only alternative on
-`dev/rsanchez`, is a **truth-arm-only override**: it substitutes an explicit
-fact list when the resolved target is the truth target, and otherwise falls back
-to the task's frozen pool. It therefore produces **two different menus**, which
-is exactly what rule 2 in §6 forbids. It also enforces three hard checks that
-these designs violate — each a `raise ValueError`, not a warning:
-
-1. the explicit pool **must contain every decisive fact** — ours contains none,
-   by construction;
-2. it **must not overlap the frozen false-target pool**;
-3. the target must be a truth target **distinct from** the task's declared
-   controller target.
-
-See `reportable_fact_ids_for_target` in
-`src/mas_cc/games/relational_reasoning/imitation_round_feedback/controller.py`.
-
-The two option names are different things and are easy to confuse:
-
-| option | what it selects | target-aware? | values |
+| task directory | agents | `facts/controller_reportable_facts.json` | used for |
 |---|---|---|---|
-| `controller_fact_pool_mode` *(darius only)* | **which facts are on the menu** | **no** — `reportable_fact_ids(task)` takes no target | `frozen`, `all_nondecisive`, `balanced` |
-| `controller_report_pool_mode` *(both branches)* | **how the menu resolves against the target** | **yes** | `frozen`, `target_aligned_v1` |
+| `task003_symmetric_to_a0` | symmetric agents | the A0 pool | truth control, and the silent runs |
+| `task003_symmetric_to_a2` | symmetric agents | the A2 pool | false control |
+| `task003_nosolution` | no-solution agents | the single pool | silent, truth and false control |
 
-`controller_report_pool_mode: frozen` returns the task's frozen pool whatever the
-target — **that is the original defect**. Our designs need the target-independent
-option, which only exists on `darius-MA-v1`.
+The two symmetric directories differ **only** in that one file (plus
+`controller_fact_scores`, below), so a diff shows exactly what changed.
 
-**The budget protocol is also darius-only**, and so is v0.4's experimental
-design. See `../protocols_2026-10-02.md` §4.
+A bonus: the deterministic controller ranks facts by `task.controller_fact_scores`,
+one field per task. In the symmetric setup each directory can carry scores
+toward its own target, so the scripted controller's fact choice is no longer
+blind to the target. In the no-solution setup the pool is shared, so that
+problem remains; see `../EXPERIMENTS.md` §3c.
 
-### Step 5 — set population size and verify
-
-`population_size: 24` in the study config. Then recompute the verification
-fields from §4 against the built task and confirm every one matches.
-
----
-
-## 6. Design rules both v2 setups enforce
-
-1. 24 agents, one fact each, **slot lean 8/8/8**, multiplicity in [1, 2],
-   duplicated evenly within each lean group.
-2. **One controller pool shared by both targets**, so the menu is identical
-   whichever direction is steered and any directional difference is
-   attributable to the *selection policy* rather than to the menu. Two
-   target-specific pools cannot support that claim.
-3. Pool lean `4/4/4`, with truth-leaning and rival-leaning strengths matched by
-   Wasserstein-1 distance.
-4. **The pool proves no allocation.** Darius's balanced pool does not meet this:
-   its whole-pool joint posterior is 1.0 for the truth and it contains one
-   size-6 proof, so his truth controller could hand over a proof outright and
-   that arm becomes disclosure rather than persuasion.
-5. **Zero agent ↔ pool overlap.**
+Step-by-step build instructions: [`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md) §2.
 
 ---
 
-## 7. Why the pool is only 12 facts — the scarcity bound
+## 7. Open issues
 
-The task contains only **9 A1-leaning and 9 A2-leaning facts**, against 31
-A0-leaning. Rival-leaning facts are the scarce resource, and both the agents and
-the controller want them. With `kr` = the agents' distinct rival facts per lean
-and `c` = the pool's per lean, zero overlap requires
-
-```
-kr + c <= 9
-```
-
-Both v2 setups sit at `kr = 5`, `c = 4`. Darius's balanced pool takes **all 18**
-rival facts (its rule is "keep all rival-leaning facts"), which is why every one
-of the 22 facts outside it is A0-leaning, and why any lean-balanced agent set
-must overlap it by exactly two thirds. **His 10-of-15 overlap was forced by the
-pool rule, not a tuning accident.**
-
-A consequence to accept deliberately: at b = 3 posts per round over 30 rounds
-the controller posts 90 times from a 12-fact menu, so its problem is **timing
-and selection, not discovery**.
+- **Two no-solution agent facts are not private-eligible**: `cf_x01_eq_1` and
+  `cf_x05_eq_1` (each held by 2 agents). "Eligible" is the task generator's rule
+  for facts not too revealing to hand a single agent (see
+  `../../10_task_and_facts/task_003_analysis.md`). The 2 October builder never
+  checked it. Decide whether to accept this or rebuild the no-solution agents
+  with eligible facts only.
+- **The LLM-free simulation in `../../70_codex_simulations/` ran
+  task003-symmetric with a single shared pool**, the design superseded on
+  5 October (kept in `../archive/`). Its symmetric results do not describe this
+  setup and need a rerun. Its no-solution results stand.
+- **Nothing logs the proof-assembly rate**: per round, the fraction of agents
+  whose active memory holds a complete proof. That is what task003-symmetric
+  exists to measure.
+- **One world.** Every number here is tuned to `task_003`. Balance in one world
+  does not show the result generalises.
 
 ---
 
-## 8. Two knobs that are decisions, not defaults
-
-**Overlap is a mechanism switch.** At zero overlap the controller can only
-**inject** facts new to the population; it can never **refresh** one an agent
-already holds. That is clean for attribution — but refresh is the best
-explanation we have for path divergence being *larger* at ρ = 0.75 than at
-ρ = 1 despite fewer posts. Consider running overlap as a factor (0 / 4 / 8)
-rather than always minimising it.
-
-**Joint neutrality trades against strength matching.** symmetric-v2's pool sits
-exactly on the prior (⅓ each) at W₁ = 0.046; nosolution-v2 gives up a little
-neutrality for W₁ = 0.009. Both cannot be exact at a 12-fact pool. Which matters
-more depends on whether the claim is about the menu's *composition* or its
-*persuasive weight*.
-
----
-
-## 9. Known gaps
-
-- **symmetric-v2's six A0-leaning distinct facts are exactly the six decisive
-  facts**, so truth-evidence and the proof set coincide perfectly. Setting
-  `k0 = 8` decouples them; see `../builders/scan_design_menu.py`.
-- **Nothing records the proof-assembly rate** — per round, the fraction of
-  agents whose active memory holds a complete proof. That is the quantity
-  symmetric-v2 exists to measure, and no current artifact logs it.
-- **The builders read the frozen tasks from a session scratchpad.** They need
-  repointing at a permanent copy of
-  `results/studies/musr_truthful_selective_task_calibration_01/tasks/` from
-  `origin/darius-MA-v1` before anyone else can run them.
-- **These are 24-agent designs for `task_003` only.** Generality across worlds
-  is untested; see `../../10_task_and_facts/task_003_analysis.md` §8.
-
----
-
-## 10. Where the surrounding context lives
+## 8. Where the surrounding context lives
 
 | | |
 |---|---|
-| what `task_003` is, the 49 facts, the proofs | `../../10_task_and_facts/task_003_analysis.md` (verified 2026-10-02) |
-| why the old controller was unfair | `../../20_controller_redesign/` |
-| the state representation for estimating information | `../../30_coarse_graining/`, `../../40_information_estimates/` |
-| what Darius already built, and plan v0.4 | `../prior_art_2026-10-02.md` |
-| rounds, episodes, which controller to run first | `../design_preliminary_2026-10-02.md` |
-| the search that produced these designs | `../builders/` |
+| what `task_003` is, the 49 facts, the proofs | `../../10_task_and_facts/task_003_analysis.md` |
+| why the archived controller was unfair, and the two-pool design | `../../20_controller_redesign/` |
+| how the experiment is run | `../EXPERIMENTS.md`, `AGENT_RUNBOOK.md` |
+| superseded designs and builders | `../archive/` |

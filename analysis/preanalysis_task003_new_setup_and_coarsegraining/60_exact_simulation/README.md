@@ -1,5 +1,16 @@
 # 60_exact_simulation — the LLM-free mirror of the game
 
+> **5 October 2026: the task003-symmetric results here describe a superseded
+> design.** These simulations gave task003-symmetric one shared neutral pool. The
+> frozen design has **two** pools, one per target, and different agents; see
+> `../50_next_experiment/designs/README.md`. Read every symmetric result below
+> as a study of that older design, not of task003-symmetric, until it is rerun.
+> The task003-nosolution results are unaffected: its agents and pool are
+> unchanged (`the scripts now read
+> `../50_next_experiment/designs/task003_nosolution.json`). Names ending in
+> `_v2` in this folder are the labels the runs were made under.
+
+
 **PRELIMINARY**, 4 October 2026. Working and fast. Not yet a package; it should
 move to `src/` once the modelling choices in §3 are settled.
 

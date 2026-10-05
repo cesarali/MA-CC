@@ -5,7 +5,7 @@
 requests were made.
 
 Companion to
-[`symmetric_controller_and_coarse_graining.md`](symmetric_controller_and_coarse_graining.md),
+[`symmetric_controller_and_coarse_graining.md`](../20_controller_redesign/symmetric_controller_and_coarse_graining.md),
 which proposed the coarse-graining this report tests.
 
 Reproduce with:

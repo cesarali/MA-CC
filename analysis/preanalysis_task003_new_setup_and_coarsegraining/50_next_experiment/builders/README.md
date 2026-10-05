@@ -1,13 +1,19 @@
-# builders — searching for improved agent assignments and controller pools
+# builders — the scripts that produce and check the two setups
 
-**Preliminary.** These scripts search for assignments satisfying the design
-constraints discussed on 2026-10-02. They write nothing into any task
-directory; they print candidates for review.
+They read the task files from the repository and write nothing into any task
+directory.
 
 | script | what it does |
 |---|---|
-| `scan_design_menu.py` | scans the feasible frontier over (k0, kr, c) and prints one candidate per combination |
-| `build_designs_v2.py` | produces the two recommended designs with full fact lists and proof counts |
+| `build_task003_symmetric.py` | chooses the 24 task003-symmetric agents against the two fixed pools and **writes** `../designs/task003_symmetric.json`. Its rules are in its docstring and in `../designs/README.md` §3 |
+| `build_task003_nosolution.py` | rebuilds the task003-nosolution agents and single pool, and **checks** them against `../designs/task003_nosolution.json` |
+| `scan_design_menu.py` | scans the feasible combinations of (k0, kr, c) for the single-pool design and prints one candidate per combination |
+
+Run from the repository root with `.venv/bin/python`. Each takes a few seconds.
+
+The rest of this file explains the task003-nosolution search. The two
+task003-symmetric pools were designed on 2 October; see
+`../../20_controller_redesign/symmetric_controller_and_coarse_graining.md` §2.
 
 ## Parameters
 
@@ -29,16 +35,15 @@ Darius's balanced pool takes *all 18* rival facts ("keep all rival-leaning
 facts"), which is why every one of the 22 facts outside it is A0-leaning, and
 why any lean-balanced agent set must overlap it by exactly two thirds.
 
-## Constraints enforced
+## Constraints the task003-nosolution search enforces
 
-Both setups: slot lean 8/8/8; pool lean `c/c/c`; pool strength-matched across
-halves by Wasserstein-1; **pool must not prove any allocation**; overlap
-minimised.
+8 agents per allocation; agents hold no decisive fact; joint posterior searched
+toward P(A0) = 0.5; pool `4/4/4`, strength-matched by Wasserstein-1 distance (a
+measure of how different two sets of numbers are); **pool proves no
+allocation**; zero overlap with the agents.
 
-- `task003-symmetric`: agents hold all 6 decisive facts, joint posterior = 1.0
-- `task003-nosolution`: agents hold no decisive fact, joint posterior < 1,
-  searched toward P(A0) = 0.5
+It does **not** check that agent facts are private-eligible; two are not. See
+`../designs/README.md` §7.
 
-Run with the repo venv and `PYTHONPATH` unset — the scripts add `src/` and
-`../10_task_and_facts` themselves. They read the frozen tasks extracted from
-`origin/darius-MA-v1`; see `../prior_art_2026-10-02.md` §6.
+The superseded 2 October builder, which also produced a single-pool
+task003-symmetric, is in `../archive/build_designs_sharedpool_superseded.py`.

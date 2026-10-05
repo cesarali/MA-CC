@@ -1,6 +1,6 @@
 {
-  "name": "task003-nosolution-v2",
-  "status": "PRELIMINARY",
+  "name": "task003-nosolution",
+  "status": "FROZEN 2026-10-05",
   "note": "Population CANNOT prove the truth; posterior is a coin flip between A0 and A2. 24 agents, slot lean 8/8/8, no decisive facts, neutral 12-fact shared pool, zero overlap.",
   "task": "task_003",
   "world": [
@@ -204,5 +204,6 @@
     "shared_by_both_targets": true
   },
   "overlap_agents_pool": [],
-  "n_overlap": 0
+  "n_overlap": 0,
+  "built_by": "50_next_experiment/builders/build_task003_nosolution.py"
 }

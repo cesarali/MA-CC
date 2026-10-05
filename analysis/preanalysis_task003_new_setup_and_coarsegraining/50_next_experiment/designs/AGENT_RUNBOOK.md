@@ -1,8 +1,12 @@
 # Runbook: build and launch the two new experiments
 
-**For an agent.** Read this file in full before acting. Everything here is
-**PRELIMINARY** — do not freeze a study or spend provider budget without
-confirming with the author (rsanchez).
+**For an agent.** Read this file in full before acting. The two setups are
+**frozen** (5 October 2026); the run settings are not. Do not freeze a study or
+spend provider budget without confirming with the author (rsanchez).
+
+> **Merge status.** `origin/darius-MA-v1` was merged into `dev/rsanchez` on
+> 4 October (commit `4d570b3`). Statements below about what is "unmerged" or
+> "darius only" describe the branch before that merge.
 
 Context, in one line: we are running two MuSR blackboard-control setups that
 differ *only* in whether the population of 24 agents collectively holds a proof
@@ -17,11 +21,11 @@ of the correct answer. Plain explanation in [`../EXPERIMENTS.md`](../EXPERIMENTS
 | **task_003** | The fixed world: 3 people, 2 jobs, 3 candidate allocations, 9 hidden values. `ALLOCATION_0` is correct; `ALLOCATION_2` is the wrong target we steer toward. |
 | **fact** | One of 49 true propositions about that world. Nobody ever lies; steering is done purely by *which* true facts get said. |
 | **lean** | The allocation a fact most favours when read alone. |
-| **decisive facts** | A 6-fact set that proves `ALLOCATION_0`. Present in symmetric-v2, absent in nosolution-v2. |
+| **decisive facts** | A 6-fact set that proves `ALLOCATION_0`. Held by the agents in task003-symmetric, absent in task003-nosolution. |
 | **ρ (persistence)** | Probability an agent remembers each fact it holds, per round. |
 | **arm** | silent (no controller) / truth control / false control. |
-| **pool** | The 12 facts the controller may post. Shared by both steering directions. |
-| **v0.4** | `control_efficiency_project_plan_v0.4_post-meeting_plan.md`, the team's agreed plan. |
+| **pool** | The facts the controller may post. task003-symmetric has **two** 12-fact pools, one per target; task003-nosolution has **one**, shared by both targets. |
+| **post-meeting plan** | `control_efficiency_project_plan_the post-meeting plan_post-meeting_plan.md`, the team's agreed plan. |
 
 ---
 
@@ -36,8 +40,8 @@ Phase 1 runs on `dev/rsanchez` unmerged. Use the **frozen-pool route**:
 - `controller_report_pool_mode: frozen` (the default) returns
   `task.controller_reportable_fact_ids` **with no reference to the target** — it
   is already target-independent, on both branches.
-- So write our 12 neutral facts into `facts/controller_reportable_facts.json`
-  (§2 step 5) and the shared pool works unmerged.
+- So the pool is chosen by the task directory: write the right pool into each
+  directory's `facts/controller_reportable_facts.json` (§2 step 5).
 - `validate_truthful_report_task` permits the target to be the task's declared
   target **or** the ground truth, so both arms pass.
 - `intervention_budget: 3` is per-round on `dev/rsanchez` and is the only
@@ -62,18 +66,28 @@ assert hasattr(c, "controller_budget_scope"), "darius-MA-v1 not merged"
 Without that check a config asking for an episode reservoir runs per-round while
 claiming otherwise.
 
-### 1b. The two task directories do not exist yet
+### 1b. The three task directories do not exist yet
 
 Build them per §2 before writing any config.
 
 ---
 
-## 2. Build the two task directories
+## 2. Build the three task directories
 
-Source: the frozen `task_003` on `origin/darius-MA-v1` at
+Source: the frozen `task_003` at
 `results/studies/musr_truthful_selective_task_calibration_01/tasks/task_003/`.
 
-For each of `task003_symmetric_v2` and `task003_nosolution_v2`:
+| task directory | agents from | pool from | used for |
+|---|---|---|---|
+| `task003_symmetric_to_a0` | `task003_symmetric.json` | `controller_pools.ALLOCATION_0.fact_ids` | truth control, and the silent runs |
+| `task003_symmetric_to_a2` | `task003_symmetric.json` | `controller_pools.ALLOCATION_2.fact_ids` | false control |
+| `task003_nosolution` | `task003_nosolution.json` | `controller_pool.fact_ids` | silent, truth and false control |
+
+The two symmetric directories must be identical except for the pool file and
+the scores in step 6. **Never run the A2 target from the A0 directory or the
+reverse**: that hands the controller the other target's pool, with no error.
+
+For each directory:
 
 1. **Copy the whole `task_003` directory** to the new task id. Leave
    `task.json`, `hidden_world.json`, `facts/`, `symbolic/` and `generation/`
@@ -81,11 +95,11 @@ For each of `task003_symmetric_v2` and `task003_nosolution_v2`:
 2. **Record provenance** in `task.json` with a `derived_from` field, the way
    `task_004` does.
 3. **Write `private/N24_assignment.json`** from `agents.agent_assignments` in
-   the corresponding `task003_*_v2.json` beside this file. Copy
+   the setup's JSON beside this file. Copy
    `schema_version` and the `profiles` structure from the original
    `task_003/private/N24_assignment.json`.
-4. **Write `controller/balanced_fact_pool.json`** from
-   `controller_pool.fact_ids`. The runtime reads only the `fact_ids` list; the
+4. **Write `controller/balanced_fact_pool.json`** from that directory's pool
+   (table above). The runtime reads only the `fact_ids` list; the
    rest of the file is audit metadata. Follow the schema that
    `scripts/local/build_balanced_controller_pool.py` emits, but set `rule` to
    name *our* construction — ours adds a "proves no allocation" constraint that
@@ -107,39 +121,34 @@ For each of `task003_symmetric_v2` and `task003_nosolution_v2`:
    depend on the target, so with absent or equal scores the fact choice is
    **target-blind** and the two arms differ only in the recommendation text.
 
-   There is one score field per task, so it cannot encode two opposite targets.
-   Either:
+   - **task003-symmetric**: already one directory per target, so score each
+     directory's pool toward its own target.
+   - **task003-nosolution**: one score field cannot point at two opposite
+     targets. Either split it into two directories differing *only* in the
+     score field, or accept target-blind fact choice (*does a recommendation
+     steer with evidence held constant?*).
 
-   - **two task directories per setup** (four total), identical facts and pool,
-     differing *only* in the score field — one scored toward `ALLOCATION_0`, one
-     toward `ALLOCATION_2`. This is what the design intends; a diff shows exactly
-     one field changed. Or
-   - **accept target-blind fact choice**, giving the narrower experiment *does a
-     recommendation steer with evidence held constant?*
-
-   Ask rsanchez which, or run both — the contrast separates evidence selection
-   from bare recommendation. See `../EXPERIMENTS.md` §3c.
+   Ask rsanchez which for task003-nosolution. See `../EXPERIMENTS.md` §3c.
 
 ### Verify before going further
 
 Recompute these from the built task and check each against the JSON. **If any
 differs, stop** — the assignment was written wrong.
 
-| check | symmetric-v2 | nosolution-v2 |
-|---|---|---|
-| agents, facts each | 24, 1 | 24, 1 |
-| distinct facts | 16 | 15 |
-| slot lean A0/A1/A2 | 8 / 8 / 8 | 8 / 8 / 8 |
-| agents' joint posterior | [1.0, 0, 0] | [0.5, 0, 0.5] |
-| decisive facts held | 6 | 0 |
-| minimal proofs assemblable | 8 | 0 |
-| pool size, lean | 12, 4/4/4 | 12, 4/4/4 |
-| pool proves any allocation | **false** | **false** |
-| agent ↔ pool overlap | **0** | **0** |
+| check | `_to_a0` | `_to_a2` | `task003_nosolution` |
+|---|---|---|---|
+| agents, facts each | 24, 1 | 24, 1 | 24, 1 |
+| distinct agent facts | 18 | 18 | 15 |
+| agents per allocation A0/A1/A2 | 8 / 8 / 8 | 8 / 8 / 8 | 8 / 8 / 8 |
+| agents' joint posterior | [1, 0, 0] | [1, 0, 0] | [0.5, 0, 0.5] |
+| decisive facts held | 6 | 6 | 0 |
+| minimal proofs assemblable | 12 | 12 | 0 |
+| pool size | 12 | 12 | 12 |
+| pool proves any allocation | **false** | **false** | **false** |
+| pool facts the agents hold | 2 | 2 | **0** |
 
-`../builders/build_designs_v2.py` shows how each was computed. It currently
-reads the frozen tasks from a session scratchpad and **needs repointing** at a
-permanent copy first.
+The builders in `../builders/` compute every value (`build_task003_symmetric.py`,
+`build_task003_nosolution.py`) and read the task files from the repository.
 
 ---
 
@@ -155,7 +164,7 @@ a variant lists, change nothing else.
 
 | factor | levels |
 |---|---|
-| setup | `task003_symmetric_v2`, `task003_nosolution_v2` |
+| setup | task003-symmetric (directories `_to_a0` and `_to_a2`), task003-nosolution |
 | arm | `silent` (omit the whole `control:` block), `truth_control` (`target: ALLOCATION_0`), `false_control` (`target: ALLOCATION_2`) |
 | `epistemic_persistence` | `0.75`, `1.0` |
 
@@ -211,7 +220,7 @@ through a skill does **not** by itself authorise a real submission or a paid
 provider call — get that from rsanchez.
 
 `repetitions: 100` in the template is a recommendation from the bootstrap
-calculation, not v0.4's number (v0.4 says start at 50). It doubles the cost.
+calculation, not the post-meeting plan's number (it says start at 50). It doubles the cost.
 **Confirm the episode count before submitting.**
 
 ---
@@ -235,8 +244,8 @@ calculation, not v0.4's number (v0.4 says start at 50). It doubles the cost.
 - **Do not** write anything into `/Users/rsanchez/Projects/agents_control` — it
   is read-only for this project.
 - **Do not** present the two setups' accuracy numbers as directly comparable.
-  symmetric-v2's ceiling is 1.0 and nosolution-v2's is 0.5; the latter needs
-  rescaling first.
+  task003-symmetric's ceiling is 1.0 and task003-nosolution's is 0.5; the
+  latter needs rescaling first.
 
 ---
 
@@ -245,11 +254,11 @@ calculation, not v0.4's number (v0.4 says start at 50). It doubles the cost.
 | what | where |
 |---|---|
 | plain explanation, cell counts | [`../EXPERIMENTS.md`](../EXPERIMENTS.md) |
-| every property of all three setups, build steps | [`README.md`](README.md) |
+| every property of both setups, how they were built | [`README.md`](README.md) |
 | the settings, annotated | [`config_template.yaml`](config_template.yaml) |
 | phase 2 / 3 overrides | [`variants.yaml`](variants.yaml) |
-| the fact lists | `task003_symmetric_v2.json`, `task003_nosolution_v2.json`, `task003_symmetric_v0_reference.json` |
-| why each protocol option, with code references | [`../protocols_2026-10-02.md`](../protocols_2026-10-02.md) |
-| rounds / episodes / which controller first | [`../design_preliminary_2026-10-02.md`](../design_preliminary_2026-10-02.md) |
-| what Darius built, what v0.4 says | [`../prior_art_2026-10-02.md`](../prior_art_2026-10-02.md) |
+| the fact lists | `task003_symmetric.json`, `task003_nosolution.json`, `task003_archived_reference.json` |
+| why each protocol option, with code references | [`../notes/protocols_2026-10-02.md`](../notes/protocols_2026-10-02.md) |
+| rounds / episodes / which controller first | [`../archive/design_preliminary_2026-10-02.md`](../archive/design_preliminary_2026-10-02.md) |
+| what Darius built, what the post-meeting plan says | [`../notes/prior_art_2026-10-02.md`](../notes/prior_art_2026-10-02.md) |
 | what `task_003` is, the 49 facts, the proofs | [`../../10_task_and_facts/task_003_analysis.md`](../../10_task_and_facts/task_003_analysis.md) |

@@ -154,7 +154,7 @@ Start with
 [`50_next_experiment/EXPERIMENTS.md`](analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/EXPERIMENTS.md)
 for what they are, or
 [`designs/AGENT_RUNBOOK.md`](analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/AGENT_RUNBOOK.md)
-to build them. Both are marked PRELIMINARY.
+to build them. The two setups are frozen; the run settings are preliminary.
 
 ## Tests
 

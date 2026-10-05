@@ -154,7 +154,7 @@ This routing instruction does not authorize automatic uploads.
 
 ### The next MuSR blackboard-control setups
 
-Two candidate setups, `task003-symmetric-v2` and `task003-nosolution-v2`, are
+Two setups, `task003-symmetric` and `task003-nosolution`, are
 specified under
 `analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/`.
 
@@ -165,13 +165,15 @@ specified under
 - The settings live in `50_next_experiment/designs/config_template.yaml`, with
   per-phase overrides in `variants.yaml`.
 
-Two things that are easy to get wrong and are covered there: the
-`balanced` controller pool mode does not exist on `dev/rsanchez` (it is on
-`darius-MA-v1`), and `controller_fact_pool_mode` is a different option from
+Two things that are easy to get wrong and are covered there:
+`task003-symmetric` has **two** controller pools, one per target, so it needs
+two task directories (`task003_symmetric_to_a0`, `task003_symmetric_to_a2`)
+and a run must use the directory matching its target; and
+`controller_fact_pool_mode` is a different option from
 `controller_report_pool_mode`.
 
-Both setups are marked PRELIMINARY. Do not freeze a study configuration from
-them without confirming with the author.
+The two setups are frozen (5 October 2026); the run settings are preliminary.
+Do not freeze a study configuration without confirming with the author.
 
 
 For combining complementary completed studies before aggregation, use

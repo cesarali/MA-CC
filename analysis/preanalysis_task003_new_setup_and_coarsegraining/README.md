@@ -11,9 +11,10 @@
 > **Every property and fact list?** →
 > [`50_next_experiment/designs/`](50_next_experiment/designs/)
 >
-> Neither setup exists yet. Each needs exactly two files written: a 24-agent
-> private assignment and a 12-fact controller pool. Everything else is reused
-> from `task_003` unchanged.
+> **The two setups are frozen (5 October 2026)**: `task003-symmetric` (agents
+> can prove the answer; two controller pools, one per target) and
+> `task003-nosolution` (agents cannot; one shared pool). Neither has been built
+> into a task directory yet.
 >
 > The rest of this directory is the **analysis those designs came out of**. You
 > do not need it to build them, but §10 of that README says which part answers
@@ -36,7 +37,9 @@ and the generator source in `src/mas_cc/musr_team_allocation_generator`.
 | **20** | [`20_controller_redesign/`](20_controller_redesign/) | Why is the truth-vs-decoy comparison unfair, and what replaces it? |
 | **30** | [`30_coarse_graining/`](30_coarse_graining/) | Can we compress the population state enough to estimate anything? Is the result Markovian? |
 | **40** | [`40_information_estimates/`](40_information_estimates/) | The actual path divergences, mutual informations and efficiencies |
-| **50** | [`50_next_experiment/`](50_next_experiment/) | **Preliminary.** Planning the next study: what Darius already built on `darius-MA-v1`, how plan v0.4 fits, which controller to use, how many episodes |
+| **50** | [`50_next_experiment/`](50_next_experiment/) | The next study: the two frozen setups (`task003-symmetric`, `task003-nosolution`), how to build them, and the run plan |
+| **60** | [`60_exact_simulation/`](60_exact_simulation/) | An LLM-free mirror of the game (agents compute exact posteriors). Its task003-symmetric runs used the superseded single-pool design |
+| **70** | [`70_codex_simulations/`](70_codex_simulations/) | A larger LLM-free study and mean-field test. Same caveat as 60 for task003-symmetric |
 
 Shared: [`scripts/`](scripts/) reproduces 30 and 40; [`results/`](results/) holds the
 per-round state files and run logs (gitignored).

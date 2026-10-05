@@ -10,7 +10,7 @@ is the design note. It covers five points:
 4. whether a two-allocation world is possible;
 5. the epistemic coarse-graining — proposed here, tested in `../02_markov_tests/`.
 
-Pool membership is in `../../game_analysis/symmetric_pools.json`.
+Pool membership is in [`../10_task_and_facts/symmetric_pools.json`](../10_task_and_facts/symmetric_pools.json). These two pools are the controller pools of the frozen **task003-symmetric** setup; see [`../50_next_experiment/designs/README.md`](../50_next_experiment/designs/README.md).
 
 The problem it solves: the executed study admits controller facts by a rule
 evaluated once for the **false** target and reused for both configurations, so

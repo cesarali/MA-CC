@@ -1,79 +1,66 @@
-# 50_next_experiment — planning the symmetric controller study
+# 50_next_experiment — the next controller study
 
-**Everything here is PRELIMINARY.** No configuration is frozen and no run has
-been launched.
+**The two setups are frozen (5 October 2026). The run settings are not, and
+nothing has been launched.**
 
-## Read in this order
+## Start here
 
-**One page on everything decided, open, and broken:**
-[`SUMMARY_2026-10-04.md`](SUMMARY_2026-10-04.md)
+| if you want | read |
+|---|---|
+| what the two setups are, and why | [`designs/README.md`](designs/README.md) |
+| what we are running: arms, phases, cell counts | [`EXPERIMENTS.md`](EXPERIMENTS.md) |
+| to build the task directories and configs | [`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) |
 
-**If you just want to know what we are running:**
-[`EXPERIMENTS.md`](EXPERIMENTS.md) — the two setups, their arms, the three
-phases of settings, and the cell counts.
+## The two setups, in one table
 
-**If you are building the configs:**
-[`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) — step by step.
-
-The rest, in order:
-
-
-| # | file | what it is |
+| | **task003-symmetric** | **task003-nosolution** |
 |---|---|---|
-| 1 | [`prior_art_2026-10-02.md`](prior_art_2026-10-02.md) | What already exists: Darius's balanced controller pool and `task_004` studies on `darius-MA-v1`, plan v0.4, and how the two externally-written files in `../10_task_and_facts/` fit |
-| 2 | [`design_preliminary_2026-10-02.md`](design_preliminary_2026-10-02.md) | The proposed design, the controller recommendation, and the sample-size calculation |
-| 3 | [`merge_assessment_2026-10-04.md`](merge_assessment_2026-10-04.md) | The merge with `darius-MA-v1`, tested; and the two latent repository breakages |
-| 4 | [`research_directions_2026-10-04.md`](research_directions_2026-10-04.md) | Posterior-aware control, the LLM-free simulator, the mean-field Langevin theory — and what already exists in `src/santa_fe*` |
-| 5 | [`protocols_2026-10-02.md`](protocols_2026-10-02.md) | **The three protocols** — agent comms, controller comms, controller budget — the full option surface, what Darius set, and why `darius-MA-v1` must be merged |
-| 6 | [`designs/`](designs/) | **The three concrete setups** — v0 reference, symmetric-v2, nosolution-v2 — with fact lists, and what slot lean means |
-| 7 | [`builders/`](builders/) | The search that produced them, and the scarcity constraint that bounds it |
+| agents | 24, one fact each, 8 favouring each allocation | same |
+| agents hold the 6 decisive facts | **yes**, so they can prove `ALLOCATION_0` | **no**, so they cannot prove anything |
+| controller pools | **two**: the A0 pool for a controller targeting `ALLOCATION_0`, the A2 pool for one targeting `ALLOCATION_2` | **one**, for both targets, 4 facts favouring each allocation |
+| file | [`designs/task003_symmetric.json`](designs/task003_symmetric.json) | [`designs/task003_nosolution.json`](designs/task003_nosolution.json) |
+| built by | [`builders/build_task003_symmetric.py`](builders/build_task003_symmetric.py) | [`builders/build_task003_nosolution.py`](builders/build_task003_nosolution.py) |
 
-## The short version
+## What is in this folder
 
-**Most of this is built already.** `darius-MA-v1` has a frozen *balanced*
-27-fact controller pool for `task_004` — 9 facts leaning to each allocation,
-strength-matched by Wasserstein-1 distance — plus a `balanced` runtime mode and
-twelve study directories at 30 rounds crossing persistence, budget protocol and
-communication profile. Reuse it; do not rebuild it.
+| folder or file | what it is |
+|---|---|
+| [`designs/`](designs/) | the frozen setups, their specification, the build runbook, the config template |
+| [`builders/`](builders/) | the scripts that produce and check the setups |
+| [`EXPERIMENTS.md`](EXPERIMENTS.md) | the experiment plan: arms, phases, budget protocol, cell counts |
+| [`notes/`](notes/) | dated working notes, still correct as records: what Darius built ([`prior_art`](notes/prior_art_2026-10-02.md)), every protocol option ([`protocols`](notes/protocols_2026-10-02.md)), the branch merge ([`merge_assessment`](notes/merge_assessment_2026-10-04.md)), the 4 October summary ([`SUMMARY`](notes/SUMMARY_2026-10-04.md)), research ideas ([`research_directions`](notes/research_directions_2026-10-04.md)) |
+| [`archive/`](archive/) | superseded material, kept for the record: the 2 October design draft, and the 2 October shared-pool symmetric setup and its builder |
 
-**One balanced pool beats two symmetric pools.** With a single pool the
-controller's menu is identical whichever target it is given, so any directional
-difference is the *selection policy*. Two target-specific pools confound menu
-with policy. This supersedes our draft `symmetric_pools.json`.
+The notes are dated snapshots. Where they disagree with `designs/README.md`, the
+designs README wins. In particular, notes written before 5 October may describe
+task003-symmetric with a single shared pool; that design was superseded.
 
-**The truth/decoy asymmetry cannot be removed.** The balanced pool as a whole
-proves A0 (joint posterior 1.000); its 9 A2-leaning facts reach only 0.933. All
-facts are true statements about one world, so any large enough set of them is
-consistent only with worlds near the truth. Three independent analyses agree.
-The comparison must be reported as *correction versus selective persuasion under
-the world's inherent asymmetry*, not as symmetric steering.
+## Points that still hold from the planning notes
 
-**Keep the decisive-fact factor, but it is not new.** `task_004` *is* `task_003`
-with the decisive facts removed — its `task.json` says so. It is still worth
-keeping because Darius removed them together with their holders (24 agents → 15),
-confounding proof availability with population size. Both corrected setups, at a
-fixed 24 agents, are in [`designs/`](designs/).
+**The truth/false asymmetry cannot be removed.** Every fact is true about one
+world, so a large enough set of facts is consistent only with worlds near the
+truth. A truthful false controller can never hand over a proof of a false
+answer. Report the comparison as *correction versus selective persuasion*, not
+as perfectly symmetric steering.
 
-**30 rounds, and push for 100 episodes per cell.** 15 rounds truncates the path
-divergence while it is still growing. And the bootstrap resamples whole
-episodes, so at v0.4's initial 50 the confidence interval on the headline
-quantity lands near ±33% — extrapolated from the 18% we measured at 168
-episodes. v0.4 already permits extension to 100; the calculation is in
-`design_preliminary_2026-10-02.md` §3.
+**Why the decisive-fact factor is worth keeping.** Darius's `task_004` is
+`task_003` with the decisive facts removed, but it removed them *together with
+the agents holding them* (24 agents → 15), mixing up "no proof available" with
+"fewer agents". task003-nosolution keeps 24 agents and replaces the facts.
 
-**Recommended first controller:** the deterministic per-round one (`b = 3`), not
-the LLM episode-budget one. It is the configuration our exact path-KL estimator
-is most likely to survive, and it is the reference the LLM controller needs. This
-inverts v0.4's priority order and needs agreeing with César.
+**30 rounds, and argue for 100 episodes per cell.** 15 rounds cuts the path
+divergence off while it is still growing. At the post-meeting plan's 50 episodes
+the confidence interval on the main quantity is about ±33%, too wide to separate
+two steering directions. The calculation is in
+[`archive/design_preliminary_2026-10-02.md`](archive/design_preliminary_2026-10-02.md) §3.
 
-## Blocking questions
+## Open questions
 
-0. **`darius-MA-v1` must be merged before anything can be configured.** The
-   options plan v0.4 requires — a full-episode budget scope, and a
-   target-independent controller menu — do not exist on `dev/rsanchez`. See
-   [`protocols_2026-10-02.md`](protocols_2026-10-02.md) §1 and §4.
-1. Does v0.4's "50 episodes per cell" mean 50 **initializations** or 50
-   trajectories? The initialization is the only independent unit, so the two
-   readings differ by a large factor in effective sample size.
-2. Deterministic controller first, or LLM controller first?
-3. `task_003` or `task_004`? (We lean `task_004`.)
+1. Does the post-meeting plan's "50 episodes per cell" mean 50 **initializations**
+   or 50 trajectories? Only initializations are independent, so the two readings
+   give very different precision.
+2. Scripted (deterministic) controller first, or LLM controller first? Our order
+   reverses the plan's priorities; this needs team agreement
+   ([`EXPERIMENTS.md`](EXPERIMENTS.md) §3d).
+3. Two task-003-nosolution agent facts are not private-eligible
+   ([`designs/README.md`](designs/README.md) §7). Accept, or rebuild?

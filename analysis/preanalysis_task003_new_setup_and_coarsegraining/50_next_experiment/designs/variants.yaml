@@ -7,8 +7,8 @@
 # PRELIMINARY. Rationale: ../EXPERIMENTS.md section 3.
 
 # NOTE: phase 1-3 all run on dev/rsanchez UNMERGED, via
-# controller_report_pool_mode: frozen with our 12 facts written into
-# facts/controller_reportable_facts.json. Only phase 4 (episode budget) needs the
+# controller_report_pool_mode: frozen with each task directory's 12-fact pool
+# written into facts/controller_reportable_facts.json. Only phase 4 (episode budget) needs the
 # merge. Do NOT use controller_fact_pool_mode: balanced with deterministic
 # authoring -- it forces base_score = 0 and makes the fact choice target-blind.
 
@@ -48,7 +48,7 @@ phase_2_report_only_llm:
 phase_3_full_communication_llm:
   description: >
     Adds the second agent channel. A REQUEST carries no fact, so it adds a
-    degree of freedom the measured quantity is blind to; plan v0.4 also puts
+    degree of freedom the measured quantity is blind to; plan the post-meeting plan also puts
     full communication after report-only in its priority list.
   derived_controller_policy: llm_authored_full_communication_v1
   overrides:
@@ -95,8 +95,10 @@ phase_4_full_communication_deterministic:
 # ---------------------------------------------------------------------------
 grid:
   setup:
-    - task003_symmetric_v2          # population CAN prove the truth
-    - task003_nosolution_v2         # population CANNOT; posterior is a coin flip
+    - task003_symmetric             # population CAN prove the truth; two pools, so
+                                    # task_id task003_symmetric_to_a0 for silent and
+                                    # truth control, task003_symmetric_to_a2 for false control
+    - task003_nosolution            # population CANNOT; posterior is a coin flip; one pool
   arm:
     - "silent"                      # omit the whole `control:` block
     - "truth_control"               # control.options.target: ALLOCATION_0
@@ -114,17 +116,17 @@ cells_per_phase:
 # ---------------------------------------------------------------------------
 later_factors:
   budget_level:
-    control.options.intervention_budget: [3, 6]      # v0.4's b
+    control.options.intervention_budget: [3, 6]      # the post-meeting plan's b
   budget_scope:
     control.options.controller_budget_scope: episode
-    control.options.intervention_budget: [90, 180]   # v0.4's B
+    control.options.intervention_budget: [90, 180]   # the post-meeting plan's B
     matched_pairs:
       - {per_round: 3, episode: 90}    # 30 rounds x 3 = 90: identical total capacity
       - {per_round: 6, episode: 180}   # 30 rounds x 6 = 180
     why_worth_running: >
       The matched pair holds TOTAL capacity fixed and varies only whether the
       controller may choose its own timing, which is a clean contrast and is
-      v0.4's own design. With a reservoir, temporal allocation becomes part of
+      the post-meeting plan's own design. With a reservoir, temporal allocation becomes part of
       the controller policy -- the richer object.
     required_before_trusting_path_quantities: >
       Augment the coarse-grained state with a 3-level remaining-budget
@@ -140,7 +142,7 @@ later_factors:
       darius relaxed the pool-size bound for episode scope.
   controller_sensing:
     control.options.sensor_sample_size: [23, "<partial, undefined>"]
-    note: v0.4 asks for a partial-board sensing arm but never defines it.
+    note: the post-meeting plan asks for a partial-board sensing arm but never defines it.
   agent_board_reading:
     game.options.board.sampling: [full, uniform]
     note: >

@@ -1,15 +1,20 @@
-# PRELIMINARY config template for task003-symmetric-v2 and task003-nosolution-v2.
+# PRELIMINARY config template for task003-symmetric and task003-nosolution.
 #
 # Both experiments use THIS SAME FILE. Only `task_id` changes. That is the point:
 # the two setups differ solely in which facts the agents hold and which 12-fact
-# pool the controller gets, both of which live inside the task directory. Holding
+# pool the controller gets, both of which live inside the task directory.
+# task003-symmetric has one task directory per target (_to_a0, _to_a2), so the
+# controller always gets the pool built for its own target.
+#
+# As of 4 October origin/darius-MA-v1 is merged (4d570b3); "unmerged" below
+# describes the branch before that. Holding
 # every protocol setting identical is what makes the two comparable.
 #
 # Lines marked  <<VARY>>  are the factor grid.
 # As written this runs on dev/rsanchez UNMERGED. origin/darius-MA-v1 is needed
 # only for phase 4 (episode-scope budget B). See ../EXPERIMENTS.md section 3c.
 #
-# Rationale for every choice: ../protocols_2026-10-02.md sections 2, 3 and 5b.
+# Rationale for every choice: ../notes/protocols_2026-10-02.md sections 2, 3 and 5b.
 # Property tables for the two setups:   ./README.md
 
 llm_provider:
@@ -45,9 +50,11 @@ game:
   options:
     task_family: musr_team_allocation
     task_dataset_dir: <path to the tasks directory>
-    task_id: task003_symmetric_v2     # <<VARY>>  or task003_nosolution_v2
+    task_id: task003_symmetric_to_a0  # <<VARY>>  task003_symmetric_to_a0 (silent, truth control),
+                                      #           task003_symmetric_to_a2 (false control),
+                                      #           task003_nosolution (all arms)
     dynamics_mode: reasoning          # the only implemented value
-    rounds: 30                        # v0.4; path divergence is still rising at h=14
+    rounds: 30                        # the post-meeting plan; path divergence is still rising at h=14
     social_mode: board                # the blackboard is the object of study
     social_group_size: 23             # max is population_size - 1; inert under sampling: full
     epistemic_persistence: 0.75       # <<VARY>>  0.75 and 1.0
@@ -142,7 +149,7 @@ control:
     sensing_mode: board               # observe what the population said, matching the
                                       # agents' own information surface
     sensor_sample_size: 23            # full sensing. Partial sensing is a separate
-                                      # v0.4 factor that nobody has defined yet
+                                      # the post-meeting plan factor that nobody has defined yet
     policy: soft_target
     threshold: 0.5
     beta: 4.0
@@ -175,7 +182,7 @@ control:
 execution:
   repetitions: 100                    # see ../design_preliminary_2026-10-02.md section 3:
                                       # the bootstrap resamples whole episodes, so
-                                      # v0.4's initial 50 extrapolates to a ~33%
+                                      # the post-meeting plan's initial 50 extrapolates to a ~33%
                                       # interval on the headline quantity against the
                                       # 18% measured at 168 episodes
 

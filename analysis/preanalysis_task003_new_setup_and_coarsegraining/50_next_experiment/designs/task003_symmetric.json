@@ -1,0 +1,427 @@
+{
+  "name": "task003-symmetric",
+  "status": "FROZEN 2026-10-05",
+  "note": "Population CAN prove the truth (holds all 6 decisive facts). 24 agents, 8 per allocation. Two controller pools: the A0 pool is used only when the controller targets ALLOCATION_0, the A2 pool only when it targets ALLOCATION_2. Both controllers bring the same number and weight of facts the agents do not already hold, and decisive and rival facts are duplicated at the same rate.",
+  "built_by": "50_next_experiment/builders/build_task003_symmetric.py",
+  "task": "task_003",
+  "world": [
+    3,
+    1,
+    1,
+    2,
+    2,
+    1,
+    1,
+    1,
+    2
+  ],
+  "gold_target": "ALLOCATION_0",
+  "false_target": "ALLOCATION_2",
+  "population_size": 24,
+  "facts_per_agent": 1,
+  "agents": {
+    "groups": {
+      "A0": {
+        "facts": [
+          "cf_x00_ge_x04",
+          "cf_x01_le_x04",
+          "cf_x01_le_x05",
+          "cf_x02_le_x03",
+          "cf_x06_le_x08",
+          "cf_x07_le_x08"
+        ],
+        "slots": 8,
+        "duplicated": [
+          "cf_x00_ge_x04",
+          "cf_x06_le_x08"
+        ],
+        "tied_facts": {
+          "cf_x01_le_x04": [
+            "A0",
+            "A2"
+          ],
+          "cf_x02_le_x03": [
+            "A0",
+            "A2"
+          ]
+        }
+      },
+      "A1": {
+        "facts": [
+          "cf_x00_ge_x03",
+          "cf_x01_eq_x05",
+          "cf_x02_ge_x05",
+          "cf_x03_le_2",
+          "cf_x06_le_2",
+          "cf_x06_le_x07"
+        ],
+        "slots": 8,
+        "duplicated": [
+          "cf_x01_eq_x05",
+          "cf_x03_le_2"
+        ],
+        "tied_facts": {
+          "cf_x00_ge_x03": [
+            "A0",
+            "A1"
+          ],
+          "cf_x02_ge_x05": [
+            "A1",
+            "A2"
+          ],
+          "cf_x06_le_2": [
+            "A0",
+            "A1"
+          ]
+        }
+      },
+      "A2": {
+        "facts": [
+          "cf_x02_le_2",
+          "cf_x02_le_x04",
+          "cf_x03_eq_2",
+          "cf_x03_ge_x05",
+          "cf_x06_ge_x07",
+          "cf_x08_eq_2"
+        ],
+        "slots": 8,
+        "duplicated": [
+          "cf_x02_le_x04",
+          "cf_x06_ge_x07"
+        ],
+        "tied_facts": {
+          "cf_x02_le_2": [
+            "A0",
+            "A2"
+          ],
+          "cf_x03_eq_2": [
+            "A0",
+            "A2"
+          ],
+          "cf_x08_eq_2": [
+            "A1",
+            "A2"
+          ]
+        }
+      }
+    },
+    "distinct_facts": [
+      "cf_x00_ge_x03",
+      "cf_x00_ge_x04",
+      "cf_x01_eq_x05",
+      "cf_x01_le_x04",
+      "cf_x01_le_x05",
+      "cf_x02_ge_x05",
+      "cf_x02_le_2",
+      "cf_x02_le_x03",
+      "cf_x02_le_x04",
+      "cf_x03_eq_2",
+      "cf_x03_ge_x05",
+      "cf_x03_le_2",
+      "cf_x06_ge_x07",
+      "cf_x06_le_2",
+      "cf_x06_le_x07",
+      "cf_x06_le_x08",
+      "cf_x07_le_x08",
+      "cf_x08_eq_2"
+    ],
+    "n_distinct": 18,
+    "slot_multiplicity": {
+      "cf_x00_ge_x03": 1,
+      "cf_x00_ge_x04": 2,
+      "cf_x01_eq_x05": 2,
+      "cf_x01_le_x04": 1,
+      "cf_x01_le_x05": 1,
+      "cf_x02_ge_x05": 1,
+      "cf_x02_le_2": 1,
+      "cf_x02_le_x03": 1,
+      "cf_x02_le_x04": 2,
+      "cf_x03_eq_2": 1,
+      "cf_x03_ge_x05": 1,
+      "cf_x03_le_2": 2,
+      "cf_x06_ge_x07": 2,
+      "cf_x06_le_2": 1,
+      "cf_x06_le_x07": 1,
+      "cf_x06_le_x08": 2,
+      "cf_x07_le_x08": 1,
+      "cf_x08_eq_2": 1
+    },
+    "mean_multiplicity_decisive": 1.3333,
+    "mean_multiplicity_rival": 1.3333,
+    "joint_posterior": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "decisive_held": [
+      "cf_x00_ge_x04",
+      "cf_x01_le_x04",
+      "cf_x01_le_x05",
+      "cf_x02_le_x03",
+      "cf_x06_le_x08",
+      "cf_x07_le_x08"
+    ],
+    "minimal_proofs_assemblable": 12,
+    "mean_individual_belief_A0_A1_A2": [
+      0.367,
+      0.3119,
+      0.3211
+    ],
+    "agent_assignments": {
+      "agent_001": [
+        "cf_x00_ge_x04"
+      ],
+      "agent_002": [
+        "cf_x01_le_x04"
+      ],
+      "agent_003": [
+        "cf_x01_le_x05"
+      ],
+      "agent_004": [
+        "cf_x02_le_x03"
+      ],
+      "agent_005": [
+        "cf_x06_le_x08"
+      ],
+      "agent_006": [
+        "cf_x07_le_x08"
+      ],
+      "agent_007": [
+        "cf_x00_ge_x04"
+      ],
+      "agent_008": [
+        "cf_x06_le_x08"
+      ],
+      "agent_009": [
+        "cf_x00_ge_x03"
+      ],
+      "agent_010": [
+        "cf_x01_eq_x05"
+      ],
+      "agent_011": [
+        "cf_x02_ge_x05"
+      ],
+      "agent_012": [
+        "cf_x03_le_2"
+      ],
+      "agent_013": [
+        "cf_x06_le_2"
+      ],
+      "agent_014": [
+        "cf_x06_le_x07"
+      ],
+      "agent_015": [
+        "cf_x03_le_2"
+      ],
+      "agent_016": [
+        "cf_x01_eq_x05"
+      ],
+      "agent_017": [
+        "cf_x02_le_2"
+      ],
+      "agent_018": [
+        "cf_x02_le_x04"
+      ],
+      "agent_019": [
+        "cf_x03_eq_2"
+      ],
+      "agent_020": [
+        "cf_x03_ge_x05"
+      ],
+      "agent_021": [
+        "cf_x06_ge_x07"
+      ],
+      "agent_022": [
+        "cf_x08_eq_2"
+      ],
+      "agent_023": [
+        "cf_x06_ge_x07"
+      ],
+      "agent_024": [
+        "cf_x02_le_x04"
+      ]
+    }
+  },
+  "controller_pools": {
+    "ALLOCATION_0": {
+      "target": "ALLOCATION_0",
+      "used_only_when_controller_targets": "ALLOCATION_0",
+      "fact_ids": [
+        "cf_x00_eq_3",
+        "cf_x00_ge_x01",
+        "cf_x08_ge_2",
+        "cf_x01_le_2",
+        "cf_x00_ge_2",
+        "cf_x02_le_x05",
+        "cf_x04_le_2",
+        "cf_x00_ge_x03",
+        "cf_x01_le_x02",
+        "cf_x01_eq_x02",
+        "cf_x04_eq_2",
+        "cf_x06_le_x07"
+      ],
+      "size": 12,
+      "sum_dP_target": 1.016,
+      "joint_posterior": [
+        0.9625,
+        0.0375,
+        0.0
+      ],
+      "proves_any_allocation": false,
+      "held_by_agents": [
+        "cf_x00_ge_x03",
+        "cf_x06_le_x07"
+      ],
+      "agents_holding_those": 2,
+      "new_facts": [
+        "cf_x00_eq_3",
+        "cf_x00_ge_x01",
+        "cf_x08_ge_2",
+        "cf_x01_le_2",
+        "cf_x00_ge_2",
+        "cf_x02_le_x05",
+        "cf_x04_le_2",
+        "cf_x01_le_x02",
+        "cf_x01_eq_x02",
+        "cf_x04_eq_2"
+      ],
+      "n_new_facts": 10,
+      "sum_dP_target_new_facts": 0.9572
+    },
+    "ALLOCATION_2": {
+      "target": "ALLOCATION_2",
+      "used_only_when_controller_targets": "ALLOCATION_2",
+      "fact_ids": [
+        "cf_x05_eq_1",
+        "cf_x04_ge_x05",
+        "cf_x01_ge_x05",
+        "cf_x05_le_2",
+        "cf_x04_ge_2",
+        "cf_x01_ge_x02",
+        "cf_x08_le_2",
+        "cf_x02_ge_x05",
+        "cf_x03_le_x04",
+        "cf_x03_eq_x04",
+        "cf_x02_eq_x05",
+        "cf_x08_eq_2"
+      ],
+      "size": 12,
+      "sum_dP_target": 1.0284,
+      "joint_posterior": [
+        0.113636,
+        0.0,
+        0.886364
+      ],
+      "proves_any_allocation": false,
+      "held_by_agents": [
+        "cf_x02_ge_x05",
+        "cf_x08_eq_2"
+      ],
+      "agents_holding_those": 2,
+      "new_facts": [
+        "cf_x05_eq_1",
+        "cf_x04_ge_x05",
+        "cf_x01_ge_x05",
+        "cf_x05_le_2",
+        "cf_x04_ge_2",
+        "cf_x01_ge_x02",
+        "cf_x08_le_2",
+        "cf_x03_le_x04",
+        "cf_x03_eq_x04",
+        "cf_x02_eq_x05"
+      ],
+      "n_new_facts": 10,
+      "sum_dP_target_new_facts": 0.9689
+    }
+  },
+  "pool_pairs": [
+    {
+      "A0": "cf_x00_eq_3",
+      "A2": "cf_x05_eq_1",
+      "dP_A0": 0.252,
+      "dP_A2": 0.252,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x00_ge_x01",
+      "A2": "cf_x04_ge_x05",
+      "dP_A0": 0.1495,
+      "dP_A2": 0.1495,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x08_ge_2",
+      "A2": "cf_x01_ge_x05",
+      "dP_A0": 0.114,
+      "dP_A2": 0.1156,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x01_le_2",
+      "A2": "cf_x05_le_2",
+      "dP_A0": 0.114,
+      "dP_A2": 0.114,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x00_ge_2",
+      "A2": "cf_x04_ge_2",
+      "dP_A0": 0.114,
+      "dP_A2": 0.114,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x02_le_x05",
+      "A2": "cf_x01_ge_x02",
+      "dP_A0": 0.0673,
+      "dP_A2": 0.0673,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x04_le_2",
+      "A2": "cf_x08_le_2",
+      "dP_A0": 0.0633,
+      "dP_A2": 0.0633,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x00_ge_x03",
+      "A2": "cf_x02_ge_x05",
+      "dP_A0": 0.0459,
+      "dP_A2": 0.0459,
+      "held_by_agents": true
+    },
+    {
+      "A0": "cf_x01_le_x02",
+      "A2": "cf_x03_le_x04",
+      "dP_A0": 0.0459,
+      "dP_A2": 0.0459,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x01_eq_x02",
+      "A2": "cf_x03_eq_x04",
+      "dP_A0": 0.0237,
+      "dP_A2": 0.0237,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x04_eq_2",
+      "A2": "cf_x02_eq_x05",
+      "dP_A0": 0.0136,
+      "dP_A2": 0.0237,
+      "held_by_agents": false
+    },
+    {
+      "A0": "cf_x06_le_x07",
+      "A2": "cf_x08_eq_2",
+      "dP_A0": 0.013,
+      "dP_A2": 0.0136,
+      "held_by_agents": true
+    }
+  ],
+  "selection": {
+    "candidates_satisfying_rules_1_to_5": 45925,
+    "equivalent_alternatives": 5
+  }
+}

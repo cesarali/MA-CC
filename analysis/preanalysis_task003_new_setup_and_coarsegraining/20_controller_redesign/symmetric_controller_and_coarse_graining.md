@@ -1,7 +1,7 @@
 # A symmetric controller and an epistemic coarse-graining
 
 Design note, 2 October 2026. Companion to
-[`../game_analysis/task_003_analysis.md`](../game_analysis/task_003_analysis.md),
+[`../10_task_and_facts/task_003_analysis.md`](../10_task_and_facts/task_003_analysis.md),
 which establishes the fact inventory this note builds on. Every number here is
 exact arithmetic over task_003 or a measurement on the archived
 `21-09-2026-full-vs-report-v1` study; no simulations were run.
@@ -92,7 +92,7 @@ Magnitude-matched pair by pair; **10 of 12 gaps are exactly 0.000**.
 | `cf_x04_eq_2` | +0.014 | `cf_x02_eq_x05` | +0.024 | 0.010 |
 | `cf_x06_le_x07` | +0.013 | `cf_x08_eq_2` | +0.014 | 0.001 |
 
-Membership is stored in `../game_analysis/symmetric_pools.json`.
+Membership is stored in [`../10_task_and_facts/symmetric_pools.json`](../10_task_and_facts/symmetric_pools.json). These are the two controller pools of the frozen task003-symmetric setup (5 October 2026).
 
 ### The fourth confound: the activation gate
 
