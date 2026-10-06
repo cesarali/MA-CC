@@ -1,12 +1,12 @@
 # `analysis/` — offline analysis projects
 
-Each subdirectory is one self-contained study: it reads archived simulation
-output, computes something, and produces a report. Nothing here runs
-simulations or talks to a model provider.
+Each subdirectory is one self-contained study. Nothing here talks to a model
+provider; `task003_LLMfree` runs its own LLM-free simulations, in which agents
+are exact Bayesian reasoners.
 
 | project | question |
 |---|---|
-| [`preanalysis_task003_new_setup_and_coarsegraining/`](preanalysis_task003_new_setup_and_coarsegraining/) | What is `task_003`? Why was the first controller unfair? What state representation makes information quantities estimable? |
+| [`task003_LLMfree/`](task003_LLMfree/) | The two frozen control setups for `task_003` (`task003-symmetric`, `task003-nosolution`), the LLM-free simulator, and the coarse-graining used to estimate information quantities |
 | [`bound_estimators/`](bound_estimators/) | Control-efficiency bounds: endpoint and path information, cost, efficiency ratios, estimated with learned critics |
 
 ## Why this is not `results/`
@@ -46,5 +46,7 @@ and no findings.
 and `tests/bound_estimators/` import it, and `pyproject.toml` discovers packages
 under `src/`. It stays there. Only its *outputs* live here.
 
-`preanalysis_task003_new_setup_and_coarsegraining` has its own `scripts/`
-because they are one-off analysis scripts, not a library.
+`task003_LLMfree` keeps its code next to what it produces: the setup builders in
+`experimental_setup/builders/`, the posterior engine in `task_and_facts/`, the
+Markov-test and estimator code in `coarse_graining/code/`. It is analysis code,
+not a library.

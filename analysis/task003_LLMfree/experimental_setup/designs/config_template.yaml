@@ -1,0 +1,193 @@
+# PRELIMINARY config template for task003-symmetric and task003-nosolution.
+#
+# Both experiments use THIS SAME FILE. Only `task_id` changes. That is the point:
+# the two setups differ solely in which facts the agents hold and which 12-fact
+# pool the controller gets, both of which live inside the task directory.
+# task003-symmetric has one task directory per target (_to_a0, _to_a2), so the
+# controller always gets the pool built for its own target.
+#
+# As of 4 October origin/darius-MA-v1 is merged (4d570b3); "unmerged" below
+# describes the branch before that. Holding
+# every protocol setting identical is what makes the two comparable.
+#
+# Lines marked  <<VARY>>  are the factor grid.
+# As written this runs on dev/rsanchez UNMERGED. origin/darius-MA-v1 is needed
+# only for phase 4 (episode-scope budget B). See ../EXPERIMENTS.md section 3c.
+#
+# Rationale for every choice: the protocols note (deleted 6 October; recover it from
+# git, see ../../README.md, 'Recovering deleted material'), sections 2, 3 and 5b.
+# Property tables for the two setups:   ./README.md
+
+llm_provider:
+  type: deepinfra
+  model: openai/gpt-oss-120b          # as in every prior study, for comparability
+  credentials_env: DEEPINFRA_API_KEY
+  timeout_seconds: 180
+  max_retries: 2
+  request_concurrency: 10
+  temperature: 1.0
+  max_output_tokens: 4096
+  options:
+    estimated_latency_seconds: 15.0
+    reasoning_effort: low
+
+prompt:
+  schema_version: 2
+  prompt_family: relational_blackboard_ballot
+  prompt_version: 5                   # v5 gives the right board defaults (see game.options.board)
+  response_contract:
+    type: relational_blackboard_ballot
+    allowed_values: [A, B, C]
+
+# ---------------------------------------------------------------------------
+# AGENTS
+# ---------------------------------------------------------------------------
+game:
+  type: relational_imitation_round_feedback
+  population_size: 24                 # 24 in BOTH setups: this is what decouples
+                                      # proof availability from population size
+  horizon: 30
+  topology: complete
+  options:
+    task_family: musr_team_allocation
+    task_dataset_dir: <path to the tasks directory>
+    task_id: task003_symmetric_to_a0  # <<VARY>>  task003_symmetric_to_a0 (silent, truth control),
+                                      #           task003_symmetric_to_a2 (false control),
+                                      #           task003_nosolution (all arms)
+    dynamics_mode: reasoning          # the only implemented value
+    rounds: 30                        # the post-meeting plan; path divergence is still rising at h=14
+    social_mode: board                # the blackboard is the object of study
+    social_group_size: 23             # max is population_size - 1; inert under sampling: full
+    epistemic_persistence: 0.75       # <<VARY>>  0.75 and 1.0
+    vote_visibility: public
+    stop_on_consensus: false          # early stopping censors episodes and breaks
+                                      # fixed-horizon path quantities
+    prompt_version: 5
+    receiver_epistemic_disposition: vigilant
+    invalid_response_retries: 4
+    expected_validation_failure_rate: 0.15
+    board:
+      sampling: uniform               # CORRECTED 2026-10-04. We first recommended
+                                      # `full` on the grounds that a reading lottery
+                                      # adds noise. The LLM-free simulation shows the
+                                      # opposite at rho = 1: with `full` the
+                                      # population saturates by round 5 and all 60
+                                      # episodes end IDENTICALLY (sd(e) = 0.0000, one
+                                      # distinct endpoint). With uniform q = 7 there
+                                      # are 17. Darius's inherited setting is right.
+                                      # See ../../simulator/runtime_rules.md.
+      message_lifetime_rounds: 1       # front-page board: last round only, no history
+      communication_profile: report_only
+                                      # reports are the only channel carrying facts,
+                                      # and facts are the whole treatment. NOTE the
+                                      # default is full_communication, so this must
+                                      # be set explicitly
+      require_grounded_reports: true   # every report must cite a fact
+      report_citation_scope: active_or_observed
+                                      # an agent may cite a fact it SAW on the board.
+                                      # This is the propagation mechanism; active_only
+                                      # would stop facts spreading and make the board
+                                      # inert
+      no_citable_fact_action: none     # nothing to cite -> post nothing
+      exclude_self_authored: true      # don't read your own post back as evidence
+      allow_no_post: true              # forcing a post manufactures content
+      # allow_participant_requests: DO NOT SET - locked to communication_profile
+    initialization:
+      mode: paired_local_vote          # pairs arms on identical starting states; the
+                                       # initialization is our only independent unit
+      require_artifact: true
+      artifact_dir: <frozen initialization artifacts>
+
+# ---------------------------------------------------------------------------
+# CONTROLLER   -- omit this whole block for the silent arm
+# ---------------------------------------------------------------------------
+control:
+  mechanism: relational_round_budgeted
+  options:
+    target: ALLOCATION_0              # <<VARY>>  ALLOCATION_0 (truth) | ALLOCATION_2 (false)
+
+    # --- what kind of act, who writes it, which side channel ---
+    controller_actuation_mode: adaptive_communication
+                                      # ONLY this and truthful_strategic_report can
+                                      # post a pool fact at all; the other two modes
+                                      # would make these designs meaningless.
+                                      # Also required by controller_authoring
+    controller_authoring: deterministic
+                                      # <<VARY>> second pass: llm_authored.
+                                      # deterministic makes the posting sequence a
+                                      # known function of the sensed state, so the
+                                      # dose is measured rather than estimated, and
+                                      # it is the reference the LLM controller is
+                                      # scored against
+    message_mode: recommendation_only
+                                      # keeps the PEER-SLOT channel factless, so every
+                                      # controller fact arrives through the pool where
+                                      # the design controls it.
+                                      # recommendation_plus_fact would add a second,
+                                      # one-fact-per-episode channel and confound them
+    controller_timing: dawn_only      # one decision at the start of the round.
+                                      # microscopic interleaves within the round, which
+                                      # produced the ordering artifact that invalidated
+                                      # our earlier dose-response result
+
+    # --- which facts are on the menu ---
+    controller_report_pool_mode: frozen          # NO MERGE NEEDED. `frozen` returns
+                                      # task.controller_reportable_fact_ids with no
+                                      # reference to the target -- already
+                                      # target-independent, so both arms get the same
+                                      # 12-fact menu and any directional difference is
+                                      # the selection policy, not the menu.
+                                      # Write our 12 facts into
+                                      # facts/controller_reportable_facts.json.
+                                      #
+                                      # Do NOT use controller_fact_pool_mode: balanced
+                                      # with deterministic authoring: it forces
+                                      # base_score = 0, which makes the fact choice
+                                      # target-blind. See ../EXPERIMENTS.md section 3c
+    controller_report_selection_strategy: target_preserving_v1   # the only value
+
+    # --- sensing ---
+    sensing_mode: board               # observe what the population said, matching the
+                                      # agents' own information surface
+    sensor_sample_size: 23            # full sensing. Partial sensing is a separate
+                                      # the post-meeting plan factor that nobody has defined yet
+    policy: soft_target
+    threshold: 0.5
+    beta: 4.0
+
+    # --- when it fires ---
+    advocacy_schedule: always         # GATE OFF. With `soft` the archived batch fired
+                                      # on 32% vs 54% of rounds, and that firing-rate
+                                      # gap was most of the apparent directional
+                                      # effect. `always` makes the dose comparable
+                                      # across arms; study the gate separately
+
+    # --- how much it may say ---
+    intervention_budget: 3            # <<VARY>>  b = 3, 6 per round
+    # controller_budget_scope: per_round         # OMIT on dev/rsanchez: the option does
+                                      # not exist there and is SILENTLY DISCARDED.
+                                      # Per-round is the only behaviour and the default.
+                                      # Set it explicitly only after merging
+                                      # darius-MA-v1, and only for phase 4 (episode B).
+    # controller_round_budget_mode: exact        # same: darius-only, `exact` is default
+    # controller_memory_mode: none               # same: darius-only, `none` is default
+    controller_report_cooldown_rounds: 0         # a cooldown is a hidden timing constraint
+    controller_report_max_posts_per_fact: 30     # must be >= the budget actually spent
+
+    # DO NOT SET, each raises a validation error when controller_authoring is set:
+    #   controller_communication_policy / _version / _fallback_policy
+    #   allow_controller_requests / allow_controller_directives
+    # DO NOT SET, these belong to the peer-slot channel only:
+    #   controller_evidence_strategy / controller_fact_id / controller_fact_selector
+
+execution:
+  repetitions: 100                    # see ../design_preliminary_2026-10-02.md section 3:
+                                      # the bootstrap resamples whole episodes, so
+                                      # the post-meeting plan's initial 50 extrapolates to a ~33%
+                                      # interval on the headline quantity against the
+                                      # 18% measured at 168 episodes
+
+# pricing / budget / logging / storage / analysis / metrics / observability /
+# experiment: copy from an existing study config unchanged. Note the top-level
+# `budget:` block is the MONEY budget (cost and request caps) and has nothing to do
+# with intervention_budget.

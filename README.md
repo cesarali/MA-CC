@@ -149,11 +149,11 @@ what is tracked and what is not.
 
 **The next MuSR blackboard-control experiments** (`task003-symmetric` and
 `task003-nosolution`) are specified in
-[`analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/`](analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/).
+[`analysis/task003_LLMfree/experimental_setup/designs/`](analysis/task003_LLMfree/experimental_setup/designs/).
 Start with
-[`50_next_experiment/EXPERIMENTS.md`](analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/EXPERIMENTS.md)
+[`experimental_setup/EXPERIMENTS.md`](analysis/task003_LLMfree/experimental_setup/EXPERIMENTS.md)
 for what they are, or
-[`designs/AGENT_RUNBOOK.md`](analysis/preanalysis_task003_new_setup_and_coarsegraining/50_next_experiment/designs/AGENT_RUNBOOK.md)
+[`designs/AGENT_RUNBOOK.md`](analysis/task003_LLMfree/experimental_setup/designs/AGENT_RUNBOOK.md)
 to build them. The two setups are frozen; the run settings are preliminary.
 
 ## Tests
