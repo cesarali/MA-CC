@@ -2,52 +2,22 @@
   "setup": "task003-nosolution",
   "used_when_controller_targets": "ALLOCATION_0 and ALLOCATION_2 (the same pool for both)",
   "what_this_is": "The controller's single pool. 4 facts favour each allocation, so the menu itself is unbiased; the controller's target decides which facts it picks.",
-  "status": "FROZEN 2026-10-05",
+  "status": "FROZEN 2026-10-06",
   "fact_ids": [
-    "cf_x00_eq_3",
-    "cf_x00_ge_2",
     "cf_x00_ge_x01",
-    "cf_x06_eq_1",
+    "cf_x01_eq_1",
+    "cf_x01_le_x03",
+    "cf_x04_le_2",
+    "cf_x01_eq_x05",
     "cf_x02_ge_x05",
-    "cf_x03_le_x04",
-    "cf_x06_le_x07",
-    "cf_x08_le_2",
+    "cf_x03_le_2",
+    "cf_x08_eq_2",
+    "cf_x01_ge_x05",
     "cf_x04_ge_2",
     "cf_x04_ge_x05",
-    "cf_x05_eq_1",
-    "cf_x05_le_2"
+    "cf_x05_eq_1"
   ],
   "facts": [
-    {
-      "fact_id": "cf_x00_eq_3",
-      "text": "Alice's skill for build the data pipeline is strong.",
-      "dP": {
-        "ALLOCATION_0": 0.252,
-        "ALLOCATION_1": -0.126,
-        "ALLOCATION_2": -0.126
-      },
-      "favours": [
-        "ALLOCATION_0"
-      ],
-      "eligible_for_one_agent": false,
-      "decisive": false,
-      "pool_group": "ALLOCATION_0"
-    },
-    {
-      "fact_id": "cf_x00_ge_2",
-      "text": "Alice's skill for build the data pipeline is at least moderate.",
-      "dP": {
-        "ALLOCATION_0": 0.114,
-        "ALLOCATION_1": -0.057,
-        "ALLOCATION_2": -0.057
-      },
-      "favours": [
-        "ALLOCATION_0"
-      ],
-      "eligible_for_one_agent": true,
-      "decisive": false,
-      "pool_group": "ALLOCATION_0"
-    },
     {
       "fact_id": "cf_x00_ge_x01",
       "text": "Alice's skill for build the data pipeline is at least as strong as Alice's skill for conduct stakeholder interviews.",
@@ -64,20 +34,65 @@
       "pool_group": "ALLOCATION_0"
     },
     {
-      "fact_id": "cf_x06_eq_1",
-      "text": "The cooperation of alice and bruno is poor.",
+      "fact_id": "cf_x01_eq_1",
+      "text": "Alice's skill for conduct stakeholder interviews is limited.",
       "dP": {
-        "ALLOCATION_0": 0.1113,
-        "ALLOCATION_1": 0.1113,
-        "ALLOCATION_2": -0.2227
+        "ALLOCATION_0": 0.252,
+        "ALLOCATION_1": -0.126,
+        "ALLOCATION_2": -0.126
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "eligible_for_one_agent": false,
+      "decisive": false,
+      "pool_group": "ALLOCATION_0"
+    },
+    {
+      "fact_id": "cf_x01_le_x03",
+      "text": "Alice's skill for conduct stakeholder interviews is no stronger than Bruno's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": 0.1156,
+        "ALLOCATION_1": -0.1286,
+        "ALLOCATION_2": 0.013
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "pool_group": "ALLOCATION_0"
+    },
+    {
+      "fact_id": "cf_x04_le_2",
+      "text": "Chandra's skill for build the data pipeline is at most moderate.",
+      "dP": {
+        "ALLOCATION_0": 0.0633,
+        "ALLOCATION_1": 0.0633,
+        "ALLOCATION_2": -0.1266
       },
       "favours": [
         "ALLOCATION_0",
         "ALLOCATION_1"
       ],
-      "eligible_for_one_agent": false,
+      "eligible_for_one_agent": true,
       "decisive": false,
       "pool_group": "ALLOCATION_0"
+    },
+    {
+      "fact_id": "cf_x01_eq_x05",
+      "text": "Alice's skill for conduct stakeholder interviews is at the same level as Chandra's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": -0.0264,
+        "ALLOCATION_1": 0.0528,
+        "ALLOCATION_2": -0.0264
+      },
+      "favours": [
+        "ALLOCATION_1"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "pool_group": "ALLOCATION_1"
     },
     {
       "fact_id": "cf_x02_ge_x05",
@@ -96,28 +111,12 @@
       "pool_group": "ALLOCATION_1"
     },
     {
-      "fact_id": "cf_x03_le_x04",
-      "text": "Bruno's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+      "fact_id": "cf_x03_le_2",
+      "text": "Bruno's skill for conduct stakeholder interviews is at most moderate.",
       "dP": {
-        "ALLOCATION_0": -0.0918,
-        "ALLOCATION_1": 0.0459,
-        "ALLOCATION_2": 0.0459
-      },
-      "favours": [
-        "ALLOCATION_1",
-        "ALLOCATION_2"
-      ],
-      "eligible_for_one_agent": true,
-      "decisive": false,
-      "pool_group": "ALLOCATION_1"
-    },
-    {
-      "fact_id": "cf_x06_le_x07",
-      "text": "The cooperation of alice and bruno is no stronger than the cooperation of Alice and Chandra.",
-      "dP": {
-        "ALLOCATION_0": 0.013,
-        "ALLOCATION_1": 0.1156,
-        "ALLOCATION_2": -0.1286
+        "ALLOCATION_0": -0.057,
+        "ALLOCATION_1": 0.114,
+        "ALLOCATION_2": -0.057
       },
       "favours": [
         "ALLOCATION_1"
@@ -127,12 +126,12 @@
       "pool_group": "ALLOCATION_1"
     },
     {
-      "fact_id": "cf_x08_le_2",
-      "text": "The cooperation of bruno and chandra is at most moderate.",
+      "fact_id": "cf_x08_eq_2",
+      "text": "The cooperation of bruno and chandra is adequate.",
       "dP": {
-        "ALLOCATION_0": -0.1266,
-        "ALLOCATION_1": 0.0633,
-        "ALLOCATION_2": 0.0633
+        "ALLOCATION_0": -0.0272,
+        "ALLOCATION_1": 0.0136,
+        "ALLOCATION_2": 0.0136
       },
       "favours": [
         "ALLOCATION_1",
@@ -141,6 +140,21 @@
       "eligible_for_one_agent": true,
       "decisive": false,
       "pool_group": "ALLOCATION_1"
+    },
+    {
+      "fact_id": "cf_x01_ge_x05",
+      "text": "Alice's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": -0.1286,
+        "ALLOCATION_1": 0.013,
+        "ALLOCATION_2": 0.1156
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "pool_group": "ALLOCATION_2"
     },
     {
       "fact_id": "cf_x04_ge_2",
@@ -186,21 +200,6 @@
       "eligible_for_one_agent": false,
       "decisive": false,
       "pool_group": "ALLOCATION_2"
-    },
-    {
-      "fact_id": "cf_x05_le_2",
-      "text": "Chandra's skill for conduct stakeholder interviews is at most moderate.",
-      "dP": {
-        "ALLOCATION_0": -0.057,
-        "ALLOCATION_1": -0.057,
-        "ALLOCATION_2": 0.114
-      },
-      "favours": [
-        "ALLOCATION_2"
-      ],
-      "eligible_for_one_agent": true,
-      "decisive": false,
-      "pool_group": "ALLOCATION_2"
     }
   ],
   "properties": {
@@ -211,22 +210,49 @@
       4
     ],
     "joint_posterior_A0_A1_A2": [
-      0.329341,
-      0.341317,
-      0.329341
+      0.37,
+      0.26,
+      0.37
     ],
     "proves_any_allocation": false,
-    "distance_from_prior": 0.004,
-    "strength_mismatch_A0_vs_A2_facts": 0.00066,
-    "sum_dP_A0_facts": 0.6268,
-    "sum_dP_A2_facts": 0.6294,
+    "distance_from_prior": 0.0367,
+    "strength_mismatch_A0_vs_A2_facts": 0.01266,
+    "sum_dP_A0_facts": 0.5804,
+    "sum_dP_A2_facts": 0.6311,
     "facts_not_eligible_for_one_agent": [
-      "cf_x00_eq_3",
       "cf_x00_ge_x01",
+      "cf_x01_eq_1",
       "cf_x04_ge_x05",
-      "cf_x05_eq_1",
-      "cf_x06_eq_1"
+      "cf_x05_eq_1"
     ],
-    "facts_the_agents_already_hold": []
+    "facts_the_agents_already_hold": [],
+    "agents_plus_whole_pool_posterior_A0_A1_A2": [
+      0.75,
+      0.0,
+      0.25
+    ],
+    "proves_anything_together_with_the_agents": false,
+    "population_ceilings": {
+      "what_this_is": "If all 24 agents pooled their facts and added the best subset of this pool, the highest probability each allocation could reach.",
+      "ALLOCATION_0": {
+        "max_probability": 0.9167,
+        "pool_facts_needed": [
+          "cf_x01_eq_x05",
+          "cf_x04_le_2",
+          "cf_x08_eq_2"
+        ]
+      },
+      "ALLOCATION_1": {
+        "max_probability": 0.0,
+        "pool_facts_needed": []
+      },
+      "ALLOCATION_2": {
+        "max_probability": 0.7692,
+        "pool_facts_needed": [
+          "cf_x04_ge_2",
+          "cf_x05_eq_1"
+        ]
+      }
+    }
   }
 }

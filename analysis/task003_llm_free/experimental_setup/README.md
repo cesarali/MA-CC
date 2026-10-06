@@ -22,7 +22,7 @@ that posts true facts from its **pool** to steer the agents.
 |---|---|---|
 | agents | hold all 6 **decisive** facts, so together they **can prove A0** | hold **no** decisive fact; together they sit at exactly 50/50 between A0 and A2 and **cannot prove anything** |
 | controller pools | **two**, one per target: `controller_pool_A0.json` when steering to A0, `controller_pool_A2.json` when steering to A2 | **one**, `controller_pool.json`, for both targets: 4 facts favouring each of A0, A1, A2 |
-| what makes it fair | both pools bring the agents 10 new facts of matched strength | the single pool's A0 and A2 facts are matched in strength |
+| what makes it fair | both pools bring the agents 10 new facts of matched strength | one unbiased menu for both targets, and no controller can ever complete a proof |
 | question it answers | Can the swarm assemble a proof it owns, and can a controller help or stop it? | Can a controller tip a swarm that is genuinely undecided? |
 
 Each folder holds everything about its setup: a `README.md` (what, why, how it
