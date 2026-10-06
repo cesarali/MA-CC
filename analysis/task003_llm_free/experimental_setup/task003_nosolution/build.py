@@ -1,4 +1,7 @@
-"""Build designs/task003_nosolution.json: 24 agents who cannot prove anything, and one pool.
+"""Choose the task003-nosolution agents and its single controller pool, together.
+
+Outputs: agents.json (the 24 agents) and controller_pool.json (the one pool, used
+for both targets), in this folder.
 
 Rules (the 2 October design, plus private eligibility, added 5 October):
 
@@ -31,18 +34,17 @@ exhaustively.
 Duplicates: in each group, the 3 facts held twice are chosen to minimise the
 agents' starting gap.
 
-Run from the repository root:
-    .venv/bin/python analysis/task003_LLMfree/experimental_setup/builders/build_task003_nosolution.py
+Run from the repository root (about 2 minutes; same result every run):
+    .venv/bin/python analysis/task003_llm_free/experimental_setup/task003_nosolution/build.py
 """
 from __future__ import annotations
 import csv, itertools, json, math, pathlib, random, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-PRE = HERE.parents[1]
+PRE = HERE.parents[1]                                    # analysis/task003_llm_free
 sys.path.insert(0, str(PRE / "task_and_facts"))
 from engine import World  # noqa: E402
 
-OUT = HERE.parent / "designs" / "task003_nosolution.json"
 SAMPLES_PER_RIVAL_CHOICE = 400
 SEED = 2026
 
@@ -157,66 +159,91 @@ def slot_mean(g, dups):
     return (sum(STR[f] for f in g) + sum(STR[f] for f in dups)) / 8
 
 
-design = {
-    "name": "task003-nosolution",
+A = lambda k: f"ALLOCATION_{k}"
+
+
+def favours(f):
+    v = [dP(f, k) for k in range(3)]
+    return [A(k) for k in range(3) if abs(v[k] - max(v)) < 1e-12]
+
+
+def fact_detail(f):
+    return {
+        "fact_id": f,
+        "text": R[f]["text"],
+        "dP": {A(k): round(dP(f, k), 4) for k in range(3)},
+        "favours": favours(f),
+        "eligible_for_one_agent": f in ELIG,
+        "decisive": f in DEC,
+    }
+
+
+agents = {
+    "setup": "task003-nosolution",
+    "what_this_is": ("The 24 agents of task003-nosolution. Each holds one fact. None holds a "
+                     "decisive fact; together they put ALLOCATION_0 and ALLOCATION_2 at exactly "
+                     "0.5 each and cannot prove anything."),
     "status": "FROZEN 2026-10-05",
-    "note": ("Population CANNOT prove anything: no decisive fact, joint posterior a coin flip "
-             "between ALLOCATION_0 and ALLOCATION_2. 24 agents, 8 per allocation, every agent "
-             "fact private-eligible. One 12-fact pool, 4 facts favouring each allocation, used "
-             "for both targets, proving nothing, sharing no fact with the agents."),
-    "built_by": "experimental_setup/builders/build_task003_nosolution.py",
+    "built_by": "build.py (this folder)",
     "task": "task_003",
     "world": list(W.vector),
-    "gold_target": "ALLOCATION_0",
-    "false_target": "ALLOCATION_2",
-    "population_size": 24,
-    "facts_per_agent": 1,
-    "agents": {
-        "distinct_facts": sorted(held),
-        "n_distinct": len(held),
-        "distinct_lean_A0_A1_A2": [5, 5, 5],
-        "slot_lean_A0_A1_A2": [8, 8, 8],
-        "by_lean": {f"A{k}": sorted(groups_distinct[k]) for k in range(3)},
-        "slot_multiplicity": mult,
-        "multiplicity_range": [min(mult.values()), max(mult.values())],
-        "all_private_eligible": held <= ELIG,
-        "joint_posterior": [round(p, 6) for p in pa],
-        "decisive_held": sorted(held & DEC),
+    "truth": A(0),
+    "false_target": A(2),
+    "agent_assignments": {f"agent_{i + 1:03d}": [f] for i, f in enumerate(slots)},
+    "facts": [
+        {**fact_detail(f), "agent_group": A(LEAN[f]), "held_by_agents": mult[f]}
+        for f in sorted(held, key=lambda f: (LEAN[f], f))
+    ],
+    "properties": {
+        "agents": 24,
+        "distinct_facts": len(held),
+        "agents_per_group_A0_A1_A2": [8, 8, 8],
+        "distinct_facts_per_group_A0_A1_A2": [5, 5, 5],
+        "group_rule": "a fact belongs to the allocation it raises most; a tie goes to the lower-numbered allocation",
+        "all_facts_eligible_for_one_agent": held <= ELIG,
+        "decisive_facts_held": f"{len(held & DEC)} of 6",
+        "joint_posterior_A0_A1_A2": [round(p, 6) for p in pa],
         "minimal_proofs_assemblable": 0 if max(pa) < 1.0 else None,
-        "mean_strength_per_agent_A0_A1_A2": [round(slot_mean(groups_distinct[k], best_dup[k]), 4) for k in range(3)],
         "mean_individual_belief_A0_A1_A2": [round(sum(b[k] for b in beliefs) / 24, 4) for k in range(3)],
         "starting_gap_A0_vs_A2": round(gap, 4),
-        "agent_assignments": {f"agent_{i + 1:03d}": [f] for i, f in enumerate(slots)},
+        "agent_sets_meeting_rule_4": hits,
+        "search": {"seed": SEED, "samples_per_rival_choice": SAMPLES_PER_RIVAL_CHOICE, "total_imbalance": total},
     },
-    "controller_pool": {
-        "fact_ids": pool,
-        "size": len(pool),
-        "lean_A0_A1_A2": [4, 4, 4],
-        "joint_posterior": [round(p, 6) for p in pj],
-        "proves_any_allocation": max(pj) == 1.0,
-        "neutrality": score[0],
-        "strength_wasserstein1_A0_vs_A2": score[1],
-        "sum_dP_A0_facts": round(sum(dP(f, 0) for f in pool if LEAN[f] == 0), 4),
-        "sum_dP_A2_facts": round(sum(dP(f, 2) for f in pool if LEAN[f] == 2), 4),
-        "ineligible_facts_in_pool": sorted(set(pool) - ELIG),
-        "shared_by_both_targets": True,
-    },
-    "n_overlap": len(held & set(pool)),
-    "overlap_agents_pool": sorted(held & set(pool)),
-    "search": {"seed": SEED, "samples_per_rival_choice": SAMPLES_PER_RIVAL_CHOICE,
-               "agent_sets_meeting_rule_4": hits, "total_imbalance": total},
 }
 
-assert design["agents"]["all_private_eligible"] and not design["agents"]["decisive_held"]
-assert abs(pa[0] - 0.5) < 1e-12 and pa[1] < 1e-12 and design["n_overlap"] == 0
-assert not design["controller_pool"]["proves_any_allocation"] and max(mult.values()) <= 2
+pool_file = {
+    "setup": "task003-nosolution",
+    "used_when_controller_targets": "ALLOCATION_0 and ALLOCATION_2 (the same pool for both)",
+    "what_this_is": ("The controller's single pool. 4 facts favour each allocation, so the menu "
+                     "itself is unbiased; the controller's target decides which facts it picks."),
+    "status": "FROZEN 2026-10-05",
+    "fact_ids": pool,
+    "facts": [{**fact_detail(f), "pool_group": A(LEAN[f])} for f in pool],
+    "properties": {
+        "size": len(pool),
+        "facts_per_group_A0_A1_A2": [4, 4, 4],
+        "joint_posterior_A0_A1_A2": [round(p, 6) for p in pj],
+        "proves_any_allocation": max(pj) == 1.0,
+        "distance_from_prior": score[0],
+        "strength_mismatch_A0_vs_A2_facts": score[1],
+        "sum_dP_A0_facts": round(sum(dP(f, 0) for f in pool if LEAN[f] == 0), 4),
+        "sum_dP_A2_facts": round(sum(dP(f, 2) for f in pool if LEAN[f] == 2), 4),
+        "facts_not_eligible_for_one_agent": sorted(set(pool) - ELIG),
+        "facts_the_agents_already_hold": sorted(held & set(pool)),
+    },
+}
 
-OUT.write_text(json.dumps(design, indent=2) + "\n")
-a, c = design["agents"], design["controller_pool"]
-print(f"wrote {OUT.relative_to(PRE)}  ({hits} agent sets met the coin-flip rule)")
+assert agents["properties"]["all_facts_eligible_for_one_agent"] and not (held & DEC)
+assert abs(pa[0] - 0.5) < 1e-12 and pa[1] < 1e-12 and not (held & set(pool))
+assert not pool_file["properties"]["proves_any_allocation"] and max(mult.values()) <= 2
+
+(HERE / "agents.json").write_text(json.dumps(agents, indent=2, ensure_ascii=False) + "\n")
+(HERE / "controller_pool.json").write_text(json.dumps(pool_file, indent=2, ensure_ascii=False) + "\n")
+pr, pp = agents["properties"], pool_file["properties"]
+print(f"wrote agents.json and controller_pool.json  ({hits} agent sets met the coin-flip rule)")
 for k in range(3):
-    print(f"  agents A{k}: {sorted(groups_distinct[k])}  held twice: {sorted(best_dup[k])}")
-print(f"  joint {a['joint_posterior']}  mean strength per agent {a['mean_strength_per_agent_A0_A1_A2']}  mean belief {a['mean_individual_belief_A0_A1_A2']}")
+    print(f"  agents {A(k)}: {sorted(groups_distinct[k])}  held twice: {sorted(best_dup[k])}")
+print(f"  joint {pr['joint_posterior_A0_A1_A2']}  mean belief {pr['mean_individual_belief_A0_A1_A2']}  starting gap {pr['starting_gap_A0_vs_A2']}")
 print(f"  pool {pool}")
-print(f"  pool joint {c['joint_posterior']}  neutrality {c['neutrality']}  W1 A0-vs-A2 {c['strength_wasserstein1_A0_vs_A2']}  sum dP A0 {c['sum_dP_A0_facts']} A2 {c['sum_dP_A2_facts']}  ineligible in pool {c['ineligible_facts_in_pool']}")
-print(f"  agents' starting gap A0 vs A2 {a['starting_gap_A0_vs_A2']}")
+print(f"  pool joint {pp['joint_posterior_A0_A1_A2']}  distance from prior {pp['distance_from_prior']}  "
+      f"A0-vs-A2 mismatch {pp['strength_mismatch_A0_vs_A2_facts']}  sum dP A0 {pp['sum_dP_A0_facts']} A2 {pp['sum_dP_A2_facts']}")

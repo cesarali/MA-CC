@@ -10,7 +10,7 @@ spend provider budget without confirming with the author (rsanchez).
 
 Context, in one line: we are running two MuSR blackboard-control setups that
 differ *only* in whether the population of 24 agents collectively holds a proof
-of the correct answer. Plain explanation in [`../EXPERIMENTS.md`](../EXPERIMENTS.md).
+of the correct answer. Plain explanation in [`EXPERIMENTS.md`](EXPERIMENTS.md).
 
 ---
 
@@ -51,7 +51,7 @@ Phase 1 runs on `dev/rsanchez` unmerged. Use the **frozen-pool route**:
 controller.** Darius's change forces `base_score = 0.0` whenever the pool mode
 is not `frozen`, which makes the deterministic fact choice **target-blind** — both
 arms then post the same facts in the same order and differ only in the
-recommendation text. See `../EXPERIMENTS.md` §3c.
+recommendation text. See `EXPERIMENTS.md` §3c.
 
 **Merge `origin/darius-MA-v1` before phase 4** (episode-scope `B`), which needs
 `controller_budget_scope`. That option does not exist on `dev/rsanchez` and is
@@ -79,9 +79,9 @@ Source: the frozen `task_003` at
 
 | task directory | agents from | pool from | used for |
 |---|---|---|---|
-| `task003_symmetric_to_a0` | `task003_symmetric.json` | `controller_pools.ALLOCATION_0.fact_ids` | truth control, and the silent runs |
-| `task003_symmetric_to_a2` | `task003_symmetric.json` | `controller_pools.ALLOCATION_2.fact_ids` | false control |
-| `task003_nosolution` | `task003_nosolution.json` | `controller_pool.fact_ids` | silent, truth and false control |
+| `task003_symmetric_to_a0` | `../task003_symmetric/agents.json` | `../task003_symmetric/controller_pool_A0.json` → `fact_ids` | truth control, and the silent runs |
+| `task003_symmetric_to_a2` | `../task003_symmetric/agents.json` | `../task003_symmetric/controller_pool_A2.json` → `fact_ids` | false control |
+| `task003_nosolution` | `../task003_nosolution/agents.json` | `../task003_nosolution/controller_pool.json` → `fact_ids` | silent, truth and false control |
 
 The two symmetric directories must be identical except for the pool file and
 the scores in step 6. **Never run the A2 target from the A0 directory or the
@@ -94,8 +94,8 @@ For each directory:
    **unchanged** — the world and the 49 facts are identical in both setups.
 2. **Record provenance** in `task.json` with a `derived_from` field, the way
    `task_004` does.
-3. **Write `private/N24_assignment.json`** from `agents.agent_assignments` in
-   the setup's JSON beside this file. Copy
+3. **Write `private/N24_assignment.json`** from `agent_assignments` in
+   the setup's `agents.json`. Copy
    `schema_version` and the `profiles` structure from the original
    `task_003/private/N24_assignment.json`.
 4. **Write `controller/balanced_fact_pool.json`** from that directory's pool
@@ -128,7 +128,7 @@ For each directory:
      score field, or accept target-blind fact choice (*does a recommendation
      steer with evidence held constant?*).
 
-   Ask rsanchez which for task003-nosolution. See `../EXPERIMENTS.md` §3c.
+   Ask rsanchez which for task003-nosolution. See `EXPERIMENTS.md` §3c.
 
 ### Verify before going further
 
@@ -147,8 +147,8 @@ differs, stop** — the assignment was written wrong.
 | pool proves any allocation | **false** | **false** | **false** |
 | pool facts the agents hold | 2 | 2 | **0** |
 
-The builders in `../builders/` compute every value (`build_task003_symmetric.py`,
-`build_task003_nosolution.py`) and read the task files from the repository.
+Each setup folder's `build.py` computes every value and stores it in the
+`properties` block of its `agents.json` and pool files.
 
 ---
 
@@ -253,10 +253,10 @@ calculation, not the post-meeting plan's number (it says start at 50). It double
 
 | what | where |
 |---|---|
-| plain explanation, cell counts | [`../EXPERIMENTS.md`](../EXPERIMENTS.md) |
-| every property of both setups, how they were built | [`README.md`](README.md) |
+| plain explanation, cell counts | [`EXPERIMENTS.md`](EXPERIMENTS.md) |
+| every property of both setups, how they were built | [`../README.md`](../README.md), then each setup folder's `README.md` |
 | the settings, annotated | [`config_template.yaml`](config_template.yaml) |
 | phase 2 / 3 overrides | [`variants.yaml`](variants.yaml) |
-| the fact lists | `task003_symmetric.json`, `task003_nosolution.json`, `task003_archived_reference.json` |
+| the agents and pools | `../task003_symmetric/`, `../task003_nosolution/` (`agents.json`, `controller_pool*.json`) |
 | why each protocol option; what Darius built; rounds and episodes | dated notes, deleted 6 October; see [`../../README.md`](../../README.md#recovering-deleted-material) |
 | what `task_003` is, the 49 facts, the proofs | [`../../task_and_facts/task_003_analysis.md`](../../task_and_facts/task_003_analysis.md) |

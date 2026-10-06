@@ -9,14 +9,13 @@ facts, and reports who can prove the answer.
 | `task_003_analysis.md` | **main report** — the task, the 99-proposition catalog, the 49 true facts, the four classifications, proof enumeration, the full fact table |
 | `task_003_facts.csv` | all 49 facts with ΔP(A0/A1/A2), entropy, maxP, eligibility, decisiveness, allocation |
 | `task_003_proofs.json` | minimal solving sets, per-fact appearance counts, coverage, disjoint packing |
-| `symmetric_pools.json` | the two controller pools of **task003-symmetric**: the A0 pool and the A2 pool, matched pair by pair. Designed in [`../experimental_setup/designs/symmetric_pools_design_2026-10-02.md`](../experimental_setup/designs/symmetric_pools_design_2026-10-02.md) §2 |
 | `generality.json` | the same measures on 12 other random worlds |
 
 ## Scripts
 
 | script | produces |
 |---|---|
-| `engine.py` | the world + exact posterior and proof engine. **Imported by the setup builders and the simulator; do not move it** |
+| `engine.py` | the world + exact posterior and proof engine. **Imported by both setups' `build.py` and the simulator; do not move it** |
 | `build_table.py` | `task_003_facts.csv`, with consistency assertions |
 | `proofs.py` | `task_003_proofs.json` |
 | `generality.py` | `generality.json` |
@@ -25,7 +24,7 @@ facts, and reports who can prove the answer.
 
 The world numbers hold for both frozen setups. The rows from "controller pool"
 to "assemblable" describe the **archived** setup (César's 24-fact pool and the
-archived agents), not the frozen ones; see `../experimental_setup/designs/README.md` §2 for those.
+archived agents), not the frozen ones; see `../experimental_setup/` for those.
 
 | | |
 |---|---:|

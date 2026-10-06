@@ -1,4 +1,4 @@
-# task003_LLMfree — the two control setups and the LLM-free simulator
+# task003_llm_free — the two control setups and the LLM-free simulator
 
 Everything here is about one world, `task_003`: three people, two jobs, three
 candidate allocations. `ALLOCATION_0` (A0) is correct; `ALLOCATION_2` (A2) is the
@@ -11,16 +11,16 @@ a controller posts true facts on a shared board to steer them.
 |---|---|---|
 | can the agents together prove A0? | **yes**: they hold the 6 decisive facts | **no**: none of them |
 | controller pools | **two**: the A0 pool when targeting A0, the A2 pool when targeting A2 | **one**, for both targets |
-| file | [`experimental_setup/designs/task003_symmetric.json`](experimental_setup/designs/task003_symmetric.json) | [`experimental_setup/designs/task003_nosolution.json`](experimental_setup/designs/task003_nosolution.json) |
+| folder | [`experimental_setup/task003_symmetric/`](experimental_setup/task003_symmetric/) | [`experimental_setup/task003_nosolution/`](experimental_setup/task003_nosolution/) |
 
-Full specification: [`experimental_setup/designs/README.md`](experimental_setup/designs/README.md).
+Start at [`experimental_setup/README.md`](experimental_setup/README.md).
 
 ## Folders
 
 | folder | what it holds |
 |---|---|
-| [`task_and_facts/`](task_and_facts/) | the world, its 49 true facts, the exact posterior engine (`engine.py`) and the two symmetric pools. Read [`task_003_analysis.md`](task_and_facts/task_003_analysis.md) for what "eligible", "decisive" and "proof" mean |
-| [`experimental_setup/`](experimental_setup/) | the two frozen setups, the scripts that build them, and the plan for the LLM runs |
+| [`task_and_facts/`](task_and_facts/) | the world: its 49 true facts, the exact posterior engine (`engine.py`), the proofs. Read [`task_003_analysis.md`](task_and_facts/task_003_analysis.md) for what "eligible", "decisive" and "proof" mean |
+| [`experimental_setup/`](experimental_setup/) | one folder per frozen setup (agents, pools, build script, README), plus the plan for the LLM runs |
 | [`simulator/`](simulator/) | the LLM-free simulator: agents are exact Bayesian reasoners. Starts from [`runtime_rules.md`](simulator/runtime_rules.md), the real game's rules to copy and the decisions taken so far |
 | [`coarse_graining/`](coarse_graining/) | the 4-state summary of the swarm (mean belief in A0, binned) and the four tests of whether it is Markovian. The results inside are from the archived LLM study; they will be **rerun on the new simulator's data** |
 
@@ -38,7 +38,7 @@ git checkout ba16739 -- analysis/preanalysis_task003_new_setup_and_coarsegrainin
 
 | removed | old path under that folder |
 |---|---|
-| the controller-redesign README (its design note moved to `experimental_setup/designs/symmetric_pools_design_2026-10-02.md`) | `20_controller_redesign/` |
+| the controller-redesign README (its design note moved to `experimental_setup/task003_symmetric/pool_design_2026-10-02.md`) | `20_controller_redesign/` |
 | path divergence and mutual-information results on the archived study | `40_information_estimates/` |
 | scripts that processed the archived study (the Markov-test and estimator code moved to `coarse_graining/code/`) | `scripts/` |
 | the 8-page report on the archived analysis | `report/`, `preanalysis_task003_report.pdf` |

@@ -1,6 +1,6 @@
 """Build the full per-fact classification table for task_003."""
 import sys, json
-sys.path.insert(0, "/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/task_and_facts")
+sys.path.insert(0, "/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/task_and_facts")
 sys.path.insert(0, "/Users/rsanchez/Projects/MA-CC/src")
 import pandas as pd
 from engine import World
@@ -51,7 +51,7 @@ for i, f in enumerate(w.facts):
                     else "agent only" if in_pkt else "neither"),
         text=f.canonical_text))
 df = pd.DataFrame(rows).sort_values("dP_A0", ascending=False)
-df.to_csv("/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/task_and_facts/task_003_facts.csv", index=False)
+df.to_csv("/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/task_and_facts/task_003_facts.csv", index=False)
 
 # consistency checks
 assert len(df) == 49

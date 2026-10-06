@@ -12,11 +12,11 @@
 #
 # Lines marked  <<VARY>>  are the factor grid.
 # As written this runs on dev/rsanchez UNMERGED. origin/darius-MA-v1 is needed
-# only for phase 4 (episode-scope budget B). See ../EXPERIMENTS.md section 3c.
+# only for phase 4 (episode-scope budget B). See EXPERIMENTS.md section 3c.
 #
 # Rationale for every choice: the protocols note (deleted 6 October; recover it from
 # git, see ../../README.md, 'Recovering deleted material'), sections 2, 3 and 5b.
-# Property tables for the two setups:   ./README.md
+# Property tables for the two setups:   ../README.md
 
 llm_provider:
   type: deepinfra
@@ -143,7 +143,7 @@ control:
                                       # Do NOT use controller_fact_pool_mode: balanced
                                       # with deterministic authoring: it forces
                                       # base_score = 0, which makes the fact choice
-                                      # target-blind. See ../EXPERIMENTS.md section 3c
+                                      # target-blind. See EXPERIMENTS.md section 3c
     controller_report_selection_strategy: target_preserving_v1   # the only value
 
     # --- sensing ---

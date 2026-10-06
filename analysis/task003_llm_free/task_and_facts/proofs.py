@@ -1,6 +1,6 @@
 """Enumerate minimal solving sets for task_003 and study who can assemble one."""
 import sys, json, itertools, collections
-sys.path.insert(0, "/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/task_and_facts")
+sys.path.insert(0, "/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/task_and_facts")
 import pandas as pd
 from engine import World
 
@@ -16,7 +16,7 @@ allmin = [c for k in sorted(mn) for c in mn[k]]
 cnt = collections.Counter(ID[i] for c in allmin for i in c)
 cnt4 = collections.Counter(ID[i] for c in mn[4] for i in c)
 
-df = pd.read_csv("/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/task_and_facts/task_003_facts.csv").set_index("fact")
+df = pd.read_csv("/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/task_and_facts/task_003_facts.csv").set_index("fact")
 pool = set(df[df.allocation.isin(["pool only", "both"])].index)
 pkts = set(df[df.allocation.isin(["agent only", "both"])].index)
 cover = lambda S: sum(1 for c in allmin if all(ID[i] in S for i in c))
@@ -34,6 +34,6 @@ out = dict(
     packing=[[ID[i] for i in c] for c in pack],
     min4=[[ID[i] for i in c] for c in mn[4]],
 )
-json.dump(out, open("/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/task_and_facts/task_003_proofs.json", "w"), indent=1)
+json.dump(out, open("/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/task_and_facts/task_003_proofs.json", "w"), indent=1)
 print("minimal total:", len(allmin), "| packing:", len(pack), "| coverage:", out["coverage"], flush=True)
 print("DONE", flush=True)

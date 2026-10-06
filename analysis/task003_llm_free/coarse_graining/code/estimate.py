@@ -21,7 +21,7 @@ from __future__ import annotations
 import json, sys
 import numpy as np, pandas as pd
 
-SC = "/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/"
+SC = "/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/"
 REC = ("/Users/rsanchez/Projects/agents_control/new_rnd_init_experiment/"
        "simulation_data/records/21-09-2026-full-vs-report-v1_analysis/")
 EDGES = [0.33, 0.50, 0.75]          # 4 states

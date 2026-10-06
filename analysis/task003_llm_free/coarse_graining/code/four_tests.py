@@ -19,7 +19,7 @@ from __future__ import annotations
 import sys, json
 import numpy as np, pandas as pd
 
-SC = "/Users/rsanchez/Projects/MA-CC/analysis/task003_LLMfree/"
+SC = "/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/"
 EDGES = [0.33, 0.50, 0.75]
 NS = 4
 EPS = 1e-12

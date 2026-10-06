@@ -156,13 +156,13 @@ This routing instruction does not authorize automatic uploads.
 
 Two setups, `task003-symmetric` and `task003-nosolution`, are
 specified under
-`analysis/task003_LLMfree/experimental_setup/`.
+`analysis/task003_llm_free/experimental_setup/`.
 
 - **To build or launch them**, read
-  `experimental_setup/designs/AGENT_RUNBOOK.md` in full first. It lists the
+  `experimental_setup/llm_runs/AGENT_RUNBOOK.md` in full first. It lists the
   blockers, the build steps, the configuration traps, and what not to do.
-- **For what the experiments are**, `experimental_setup/EXPERIMENTS.md`.
-- The settings live in `experimental_setup/designs/config_template.yaml`, with
+- **For what the experiments are**, `experimental_setup/llm_runs/EXPERIMENTS.md`.
+- The settings live in `experimental_setup/llm_runs/config_template.yaml`, with
   per-phase overrides in `variants.yaml`.
 
 Two things that are easy to get wrong and are covered there:

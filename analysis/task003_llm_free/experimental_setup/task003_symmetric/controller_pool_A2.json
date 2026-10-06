@@ -1,0 +1,238 @@
+{
+  "setup": "task003-symmetric",
+  "used_when_controller_targets": "ALLOCATION_2",
+  "what_this_is": "The controller's pool when it steers toward ALLOCATION_2. Never used for the other target. Designed by hand on 2 October (pool_design_2026-10-02.md §2) and unchanged since. Entry i is matched in strength with entry i of controller_pool_A0.json.",
+  "status": "FROZEN 2026-10-02",
+  "fact_ids": [
+    "cf_x05_eq_1",
+    "cf_x04_ge_x05",
+    "cf_x01_ge_x05",
+    "cf_x05_le_2",
+    "cf_x04_ge_2",
+    "cf_x01_ge_x02",
+    "cf_x08_le_2",
+    "cf_x02_ge_x05",
+    "cf_x03_le_x04",
+    "cf_x03_eq_x04",
+    "cf_x02_eq_x05",
+    "cf_x08_eq_2"
+  ],
+  "facts": [
+    {
+      "fact_id": "cf_x05_eq_1",
+      "text": "Chandra's skill for conduct stakeholder interviews is limited.",
+      "dP": {
+        "ALLOCATION_0": -0.126,
+        "ALLOCATION_1": -0.126,
+        "ALLOCATION_2": 0.252
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": false,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x00_eq_3",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x04_ge_x05",
+      "text": "Chandra's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": -0.0748,
+        "ALLOCATION_1": -0.0748,
+        "ALLOCATION_2": 0.1495
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": false,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x00_ge_x01",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x01_ge_x05",
+      "text": "Alice's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": -0.1286,
+        "ALLOCATION_1": 0.013,
+        "ALLOCATION_2": 0.1156
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x08_ge_2",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x05_le_2",
+      "text": "Chandra's skill for conduct stakeholder interviews is at most moderate.",
+      "dP": {
+        "ALLOCATION_0": -0.057,
+        "ALLOCATION_1": -0.057,
+        "ALLOCATION_2": 0.114
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x01_le_2",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x04_ge_2",
+      "text": "Chandra's skill for build the data pipeline is at least moderate.",
+      "dP": {
+        "ALLOCATION_0": -0.057,
+        "ALLOCATION_1": -0.057,
+        "ALLOCATION_2": 0.114
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x00_ge_2",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x01_ge_x02",
+      "text": "Alice's skill for conduct stakeholder interviews is at least as strong as Bruno's skill for build the data pipeline.",
+      "dP": {
+        "ALLOCATION_0": -0.0337,
+        "ALLOCATION_1": -0.0337,
+        "ALLOCATION_2": 0.0673
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x02_le_x05",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x08_le_2",
+      "text": "The cooperation of bruno and chandra is at most moderate.",
+      "dP": {
+        "ALLOCATION_0": -0.1266,
+        "ALLOCATION_1": 0.0633,
+        "ALLOCATION_2": 0.0633
+      },
+      "favours": [
+        "ALLOCATION_1",
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x04_le_2",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x02_ge_x05",
+      "text": "Bruno's skill for build the data pipeline is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": -0.0918,
+        "ALLOCATION_1": 0.0459,
+        "ALLOCATION_2": 0.0459
+      },
+      "favours": [
+        "ALLOCATION_1",
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x00_ge_x03",
+      "held_by_agents": 1
+    },
+    {
+      "fact_id": "cf_x03_le_x04",
+      "text": "Bruno's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+      "dP": {
+        "ALLOCATION_0": -0.0918,
+        "ALLOCATION_1": 0.0459,
+        "ALLOCATION_2": 0.0459
+      },
+      "favours": [
+        "ALLOCATION_1",
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x01_le_x02",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x03_eq_x04",
+      "text": "Bruno's skill for conduct stakeholder interviews is at the same level as Chandra's skill for build the data pipeline.",
+      "dP": {
+        "ALLOCATION_0": -0.0473,
+        "ALLOCATION_1": 0.0237,
+        "ALLOCATION_2": 0.0237
+      },
+      "favours": [
+        "ALLOCATION_1",
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x01_eq_x02",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x02_eq_x05",
+      "text": "Bruno's skill for build the data pipeline is at the same level as Chandra's skill for conduct stakeholder interviews.",
+      "dP": {
+        "ALLOCATION_0": -0.0473,
+        "ALLOCATION_1": 0.0237,
+        "ALLOCATION_2": 0.0237
+      },
+      "favours": [
+        "ALLOCATION_1",
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x04_eq_2",
+      "held_by_agents": 0
+    },
+    {
+      "fact_id": "cf_x08_eq_2",
+      "text": "The cooperation of bruno and chandra is adequate.",
+      "dP": {
+        "ALLOCATION_0": -0.0272,
+        "ALLOCATION_1": 0.0136,
+        "ALLOCATION_2": 0.0136
+      },
+      "favours": [
+        "ALLOCATION_1",
+        "ALLOCATION_2"
+      ],
+      "eligible_for_one_agent": true,
+      "decisive": false,
+      "partner_in_other_pool": "cf_x06_le_x07",
+      "held_by_agents": 1
+    }
+  ],
+  "properties": {
+    "size": 12,
+    "sum_dP_toward_target": 1.0284,
+    "joint_posterior_A0_A1_A2": [
+      0.113636,
+      0.0,
+      0.886364
+    ],
+    "proves_any_allocation": false,
+    "contains_decisive_facts": false,
+    "shares_facts_with_other_pool": false,
+    "facts_the_agents_already_hold": [
+      "cf_x02_ge_x05",
+      "cf_x08_eq_2"
+    ],
+    "new_facts_for_the_agents": 10,
+    "sum_dP_toward_target_of_new_facts": 0.9689
+  }
+}

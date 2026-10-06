@@ -11,7 +11,7 @@ below are still preliminary. Nothing launched.
 > "unmerged" describe the branch before that.
 
 This file is the plain explanation. For building the configs, see
-[`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md).
+[`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md).
 
 ---
 
@@ -64,7 +64,7 @@ facts the agents hold.**
   the prior, proving nothing, sharing no fact with the agents. Both targets use
   it, so the controller's menu is identical whichever way it steers.
 
-Full property tables: [`designs/README.md`](designs/README.md).
+Full property tables: [`../task003_symmetric/README.md`](../task003_symmetric/README.md), [`../task003_nosolution/README.md`](../task003_nosolution/README.md).
 
 ---
 
@@ -202,7 +202,7 @@ simply what you get.
 > `controller/balanced_fact_pool.json` *and*
 > `facts/controller_reportable_facts.json` in the new task directories, so even
 > a silent fallback lands on the right pool. See
-> [`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) §2.
+> [`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md) §2.
 
 ### Decision: `b = 3` per round for phases 1–3
 
@@ -247,8 +247,8 @@ needs no new factor beyond the scope flag. Likewise `b = 6` against `B = 180`.
 **Conditions before trusting any path quantity from it:** augment the
 coarse-grained state with a 3-level remaining-budget coordinate, and **re-run
 the four Markov tests on the augmented chain** before reporting anything. The
-machinery is already there — `../coarse_graining/` and
-`../coarse_graining/code/four_tests.py`.
+machinery is already there — `../../coarse_graining/` and
+`../../coarse_graining/code/four_tests.py`.
 
 **If we can only afford one**, run per-round at full precision rather than both
 at half. An uninterpretable episode-scope result is worth nothing, and that is
@@ -461,7 +461,7 @@ Two cheap steps that close the actual hazard without that risk:
 A proper strict-key validator is worth doing as its own piece of work, with the
 MRO walk and per-mechanism key sets, and with the repository's two latent test
 breakages fixed first so the change can be validated. See
-the merge assessment note (deleted 6 October; see [`../README.md`](../README.md#recovering-deleted-material)).
+the merge assessment note (deleted 6 October; see [`../README.md`](../../README.md#recovering-deleted-material)).
 
 ## 4. How many runs is that?
 
@@ -496,7 +496,7 @@ divergence at 168 episodes; 50 extrapolates to about **±33%**, which will not
 separate two control directions. the post-meeting plan permits extending to 100 "if the
 statistical analysis indicates" — it does. But this doubles the bill, so it is
 César's call. The calculation is in
-the 2 October design draft, §3 (deleted 6 October; see [`../README.md`](../README.md#recovering-deleted-material)).
+the 2 October design draft, §3 (deleted 6 October; see [`../README.md`](../../README.md#recovering-deleted-material)).
 
 ### Later factors, deliberately not in the grid above
 
@@ -511,11 +511,11 @@ uninterpretable.
 
 | what | where |
 |---|---|
-| **the settings themselves**, annotated with a reason per line | [`designs/config_template.yaml`](designs/config_template.yaml) |
-| **the phase 2 and 3 overrides**, machine-readable | [`designs/variants.yaml`](designs/variants.yaml) |
-| **step-by-step build instructions for an agent** | [`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) |
-| the two setups' fact lists, every property, and how they were built | [`designs/README.md`](designs/README.md) and the `*.json` beside it |
-| why each protocol option was chosen, what Darius built, the sample-size calculation | dated notes, deleted 6 October; see [`../README.md`](../README.md#recovering-deleted-material) |
+| **the settings themselves**, annotated with a reason per line | [`config_template.yaml`](config_template.yaml) |
+| **the phase 2 and 3 overrides**, machine-readable | [`variants.yaml`](variants.yaml) |
+| **step-by-step build instructions for an agent** | [`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md) |
+| the two setups' fact lists, every property, and how they were built | [`../README.md`](../README.md) and the two setup folders beside it |
+| why each protocol option was chosen, what Darius built, the sample-size calculation | dated notes, deleted 6 October; see [`../README.md`](../../README.md#recovering-deleted-material) |
 
 ---
 
@@ -523,7 +523,7 @@ uninterpretable.
 
 1. **Build the three task directories** (`task003_symmetric_to_a0`,
    `task003_symmetric_to_a2`, `task003_nosolution`); see
-   [`designs/AGENT_RUNBOOK.md`](designs/AGENT_RUNBOOK.md) §2. Use
+   [`AGENT_RUNBOOK.md`](AGENT_RUNBOOK.md) §2. Use
    `controller_report_pool_mode: frozen` with each directory's pool written into
    `facts/controller_reportable_facts.json`. Merge `origin/darius-MA-v1` before
    phase 4 (episode-scope `B`), which needs `controller_budget_scope`.

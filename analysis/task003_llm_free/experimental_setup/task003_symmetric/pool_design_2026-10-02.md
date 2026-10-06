@@ -3,7 +3,7 @@
 > **Status, 5 October 2026.** §2 (the two pools) is frozen as the controller
 > pools of `task003-symmetric`. §1 is superseded: the agents were replaced so
 > that 8 favour each allocation. §3 developed into `task003-nosolution`. See
-> [`README.md`](README.md).
+> [`../README.md`](../README.md).
 
 Design note, 2 October 2026. Companion to
 [`../../task_and_facts/task_003_analysis.md`](../../task_and_facts/task_003_analysis.md),
@@ -97,7 +97,7 @@ Magnitude-matched pair by pair; **10 of 12 gaps are exactly 0.000**.
 | `cf_x04_eq_2` | +0.014 | `cf_x02_eq_x05` | +0.024 | 0.010 |
 | `cf_x06_le_x07` | +0.013 | `cf_x08_eq_2` | +0.014 | 0.001 |
 
-Membership is stored in [`../../task_and_facts/symmetric_pools.json`](../../task_and_facts/symmetric_pools.json). These are the two controller pools of the frozen task003-symmetric setup (5 October 2026).
+Membership is stored in [`controller_pool_A0.json`](controller_pool_A0.json) and [`controller_pool_A2.json`](controller_pool_A2.json). These are the two controller pools of the frozen task003-symmetric setup (5 October 2026).
 
 ### The fourth confound: the activation gate
 

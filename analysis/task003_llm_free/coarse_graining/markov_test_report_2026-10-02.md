@@ -5,7 +5,7 @@
 requests were made.
 
 Companion to
-[`symmetric_controller_and_coarse_graining.md`](../experimental_setup/designs/symmetric_pools_design_2026-10-02.md),
+[`symmetric_controller_and_coarse_graining.md`](../experimental_setup/task003_symmetric/pool_design_2026-10-02.md),
 which proposed the coarse-graining this report tests.
 
 Reproduce with:
