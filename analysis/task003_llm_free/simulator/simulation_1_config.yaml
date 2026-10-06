@@ -9,10 +9,15 @@
 
 study: simulation_1_first_grid
 
+paths:                           # relative to this file
+  world_file: world_task003.json
+  setups_dir: ../experimental_setup
+
 grid:
   setup:  [task003_symmetric, task003_nosolution]
-  arm:    [silent, truth, false]   # silent = no controller; truth targets ALLOCATION_0;
-                                   # false targets ALLOCATION_2
+  arm:    ["silent", "truth", "false"]   # silent = no controller; truth targets ALLOCATION_0;
+                                         # false targets ALLOCATION_2. QUOTED: unquoted,
+                                         # YAML reads false as the boolean False
   q:      [3, 6, 12]               # posts an agent reads per day
   qc:     [12, 24]                 # posts the controller reads per night
   b:      [1, 2, 3]                # facts the controller posts when it acts
