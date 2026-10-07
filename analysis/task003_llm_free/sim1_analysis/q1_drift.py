@@ -70,11 +70,20 @@ def main():
         final.append({"variant": v, "setup": s, "rho": rho, "q": q, "quantity": "episodes_led_by_A2_minus_A0",
                       "day30_mean": (pl == 2).mean() - (pl == 0).mean()})
     traj, final = pd.DataFrame(traj), pd.DataFrame(final)
+    # unanimity: share of episodes where all 24 agents vote the same way on the last day
+    unan = []
+    for (v, s, rho, q), x in data.items():
+        unan.append({"setup": s.split("_")[1], "rho": rho, "q": q, "variant": v,
+                     "all_A0": (x[0][:, -1] == 1).mean(), "all_A2": (x[2][:, -1] == 1).mean(),
+                     "A0_majority": (x[0][:, -1] > .5).mean(), "A2_majority": (x[2][:, -1] > .5).mean()})
+    pd.DataFrame(unan).to_csv(d / "tables" / "q1_unanimity.csv", index=False)
     traj.to_csv(d / "tables" / "q1_trajectories.csv", index=False, float_format="%.5f")
     final.to_csv(d / "tables" / "q1_final.csv", index=False, float_format="%.5f")
 
     entries = [{"question": "Q1", "file": "tables/q1_trajectories.csv",
                 "what": "mean vote shares and A2-A0 margin per day with 95% intervals", "cells": "silent, 4 variants"},
+               {"question": "Q1", "file": "tables/q1_unanimity.csv",
+                "what": "share of episodes unanimous on A0 / A2, and majority, on the last day", "cells": "silent, 4 variants"},
                {"question": "Q1", "file": "tables/q1_final.csv",
                 "what": "day-30 shares and margin with 95% intervals; episodes led by A2 minus by A0", "cells": "silent, 4 variants"}]
 
