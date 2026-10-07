@@ -30,7 +30,8 @@ each pool file shows the partner of every fact.
 |---|---|
 | agents, facts per agent | 24, 1 |
 | distinct facts the agents hold | 18 |
-| agents per allocation A0 / A1 / A2 | 8 / 8 / 8 |
+| agents per allocation A0 / A1 / A2, by fact group | 8 / 8 / 8 |
+| **expected starting votes** A0 / A1 / A2 (argmax, random ties) | **9 / 7 / 8** |
 | decisive facts held | 6 of 6 |
 | agents' joint posterior (all their facts together) | [1, 0, 0]: proves A0 |
 | minimal proofs the agents can assemble (up to 6 facts) | 12 |
@@ -43,6 +44,11 @@ each pool file shows the partner of every fact.
 | strength of those new facts (ΣΔP toward the target) | A0 .957, A2 .969 |
 
 ΔP: how much one fact, read alone, raises an allocation's probability above ⅓.
+
+> **Expected starting votes (added 7 October).** "8 agents per allocation" counts how
+> facts were grouped, not how agents vote. Agents vote by argmax with random ties, and
+> some agents hold facts tied between two allocations, so expected starting votes are
+> **9 / 7 / 8**: eight agents hold tied facts (four A0/A2, two A0/A1, two A1/A2).
 
 ## How the pools were designed (2 October, unchanged since)
 

@@ -1,4 +1,4 @@
-# task003-nosolution — agents cannot prove anything; one unbiased pool
+# task003-nosolution — agents cannot prove anything; one shared pool
 
 **Frozen 6 October 2026.** Rebuilt on 5 October so every agent fact is eligible, and on
 6 October so that no controller can ever complete a proof.
@@ -10,8 +10,9 @@ at **exactly 50/50** between `ALLOCATION_0` (A0, the truth) and `ALLOCATION_2`
 (A2). No proof is available to anyone: not to the agents, and not even if the
 controller posted its whole pool to them. A controller steers toward A0 or toward
 A2 using **one pool for both targets**, holding 4 facts that favour each of A0,
-A1 and A2. The menu is unbiased, so any difference between the two targets comes
-from which facts the controller picks. The question: can a controller tip a
+A1 and A2. The menu is **shared**: both controllers choose from the same facts.
+That controls what each may say; it does not make both directions equally easy
+(see the ceilings below: the truth can reach 0.92, the false target 0.77). The question: can a controller tip a
 swarm that is genuinely undecided?
 
 ## Files
@@ -28,7 +29,8 @@ swarm that is genuinely undecided?
 |---|---|
 | agents, facts per agent | 24, 1 |
 | distinct facts the agents hold | 15 (5 per allocation) |
-| agents per allocation A0 / A1 / A2 | 8 / 8 / 8 |
+| agents per allocation A0 / A1 / A2, by fact group | 8 / 8 / 8 |
+| **expected starting votes** A0 / A1 / A2 (argmax, random ties) | **7 / 6 / 11** |
 | decisive facts held | 0 of 6 |
 | every agent fact eligible (read alone, at most 45% sure of anything) | yes |
 | agents' joint posterior (all their facts together) | [0.5, 0, 0.5]: a coin flip, no proof |
@@ -54,6 +56,14 @@ The truth keeps an edge (0.92 vs 0.77): every fact is true, so the real world
 always survives. That edge cannot be designed away, only reduced.
 
 ΔP: how much one fact, read alone, raises an allocation's probability above ⅓.
+
+> **Expected starting votes (added 7 October).** "8 agents per allocation" counts how
+> facts were grouped, not how agents vote. Agents vote by argmax with random ties, and
+> some agents hold facts tied between two allocations, so expected starting votes are
+> **7 / 6 / 11**: six agents hold facts tied between A1 and A2 (counted as A1) and half of
+> them vote A2; two hold A0/A1 ties. So the coin-flip swarm starts with more A2 voters.
+> This is a candidate cause of the A2 drift in the silent arm (see
+> `../../simulator/simulation_1_spec.md` §10).
 
 ## How it was built
 

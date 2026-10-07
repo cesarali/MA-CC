@@ -1,7 +1,7 @@
 # Simulation 1 — days and nights, per-round controller budget
 
-**Status: agreed, 6 October 2026.** Every rule below was agreed with the author.
-Not implemented yet.
+**Status: agreed 6 October 2026, implemented; extended 7 October 2026** (final night,
+`agent_post_rule`, `silent_when_target_proved: false`, richer recording).
 
 The rules copied from the real game, and where they live in its code, are in
 [`runtime_rules.md`](runtime_rules.md). This file defines Simulation 1 exactly
@@ -59,7 +59,9 @@ board is cleared and **only the controller's new posts remain** for the next
 day. **(decided)**
 
 There is no night before day 1, so on day 1 the board starts empty and the
-first agent reads nothing.
+first agent reads nothing. **There is no controller on the final night**
+(`controller_acts_on_final_night: false`, decided 7 October): after day M no
+agent can read its posts, so they could only add cost.
 
 ---
 
@@ -68,9 +70,10 @@ first agent reads nothing.
 | setting | values in the study | default | meaning |
 |---|---|---|---|
 | `M` | 30 | 30 | rounds per episode |
+| `controller_acts_on_final_night` | False | False | whether the controller posts after the last day |
 | `q` | 3, 6, 12 | — | posts an agent reads per day |
-| `qc` | 12, 24 | — | posts the controller reads per night |
-| `b` | 1, 2, 3 | — | facts the controller posts when it acts |
+| `qc` | 3, 6, 12, 24 | — | posts the controller reads per night |
+| `b` | 1, 2, 3, 6, 9 | — | facts the controller posts when it acts |
 | `rho` | 0.75, 1.0 | — | probability an active fact survives each dawn |
 | `arm` | silent, truth (A0), false (A2) | — | silent = no controller |
 | `episodes` | 1,000 per cell | 1,000 | |
@@ -78,18 +81,37 @@ first agent reads nothing.
 | `board_read_weighting` | uniform, recency | uniform | how posts are drawn from an uncleared board (§4) |
 | `agent_sampling_mode` | argmax, probability_matching, softmax | argmax | how an agent turns its posterior into a vote (§5) |
 | `beta` | — | 4 | sharpness for `softmax` only |
-| `agent_post_always` | True, False | False | post a random active fact when no fact supports the vote (§6) |
+| `agent_post_rule` | supporting, uniform_active | supporting | `supporting`: post a fact supporting the vote (§6); `uniform_active`: post a uniformly random active fact, ignoring the vote (a control) |
+| `agent_post_always` | True, False | False | `supporting` rule only: post a random active fact when no fact supports the vote (§6) |
 | `controller_gate` | votes, facts, always | votes | what decides whether the controller acts (§7) |
 | `theta_vote` | 0.75 (others later) | 0.75 | `votes` gate: stay silent at or above this share |
 | `theta_facts` | — | 0.8 | `facts` gate: stay silent at or above this probability |
+| `silent_when_target_proved` | True, False | True | stay silent when what it read proves the target (§7 step 1) |
 | `controller_memory` | none, accumulate | none | what the controller remembers across nights (later experiments) |
 
-**The first study grid** (defaults for everything else, cleared board only), as
-written in [`simulation_1_config.yaml`](simulation_1_config.yaml):
+**The studies** live in [`configs/`](configs/), one file per study. The
+7 October grid, per voting/posting variant:
 
 - silent: 2 setups × 3 q × 2 ρ = **12 cells** (qc and b mean nothing without a controller)
-- controlled: 2 setups × 3 q × 2 qc × 3 b × 2 ρ × 2 targets = **144 cells**
-- **156 cells × 1,000 episodes = 156,000 episodes.**
+- controlled: 2 setups × 3 q × 4 qc × 5 b × 2 ρ × 2 targets = **480 cells**
+- **492 cells × 1,000 episodes.**
+
+| config | voting | posting |
+|---|---|---|
+| `sim1_base` | argmax | supporting, abstain when nothing supports the vote |
+| `sim1_pm` | probability matching | supporting, abstain |
+| `sim1_pm_post_always` | probability matching | supporting, random active fact when nothing supports the vote |
+| `sim1_uniform_post` | argmax | uniform_active |
+
+Each has a `_no_proof_stop` twin: task003-symmetric truth cells only (120),
+with `silent_when_target_proved: false`.
+
+**The effective vote gate depends on qc.** With `theta_vote` = 0.75 the
+controller stays silent when at least ⌈0.75·qc⌉ of the posts it read vote for
+its target: 3 of 3 (qc = 3), 5 of 6, 9 of 12, 18 of 24. With abstaining agents
+it may read fewer than qc posts, which shifts this again; `n_posts_read` is
+recorded each night. b = 12 is excluded: every pool has 12 facts, so the
+controller would have no choice.
 
 The uncleared board (`is_board_cleared = False`) is a later, separate study.
 
@@ -146,6 +168,11 @@ An agent with no active facts has P = (⅓, ⅓, ⅓) and votes at random.
    is True, in which case post a random active fact. An agent with no active
    facts never posts. **(decided)**
 
+**The `uniform_active` control** (`agent_post_rule`, decided 7 October)
+replaces steps 1–5: post one active fact chosen uniformly at random, whatever
+the vote. It tests whether vote-conditioned posting drives the A2 drift
+(§10).
+
 Never "post the strongest fact": the old simulator showed every agent then
 posts the same fact and knowledge stops spreading.
 
@@ -162,8 +189,9 @@ target. **(decided: skip its own posts; no memory across nights by default)**
 
 **Deciding, in this order:**
 
-1. **Target already proved.** If P(target | R) = 1: post nothing. Only the
-   truth controller can reach this; nothing can prove A2. **(decided)**
+1. **Target already proved.** If P(target | R) = 1 and
+   `silent_when_target_proved` is True: post nothing. Only the truth controller
+   can reach this; nothing can prove A2. **(decided)**
 2. **Gate** (`controller_gate`):
    - `votes` **(default)**: post nothing if *v̂* ≥ `theta_vote`. Votes measure
      the opinion the controller is trying to move.
@@ -174,6 +202,13 @@ target. **(decided: skip its own posts; no memory across nights by default)**
    the one that maximises P(target | R + S). It checks every set (220 for
    b = 3 and a 12-fact pool). Ties go to the alphabetically first set.
    Facts may repeat on later nights, which refreshes fading memories. **(decided)**
+
+   **3b. If P(target | R) = 1 already** (possible only with
+   `silent_when_target_proved: false`), every set scores 1, and the
+   alphabetical tie-break would post the same facts whatever they are. So in
+   this case the controller posts the set that maximises P(target | S) on its
+   own, ties alphabetical. Recorded as decision `posted_proved`. Added
+   7 October; the default runs never reach it.
 4. **Fallback when the target is ruled out.** If every S gives P(target | R + S)
    = 0, post the set S that maximises P(target | S) on its own. **(decided)**
 
@@ -198,14 +233,22 @@ changes what is on the board, the runs diverge naturally.
 
 ## 9. What is recorded
 
-Written to `results/` inside this folder (not in git), one table per cell:
+Each run goes to a new dated folder `results/<date>_<study>/` (not in git);
+the column-by-column list is in [`README.md`](README.md).
 
-- **per agent per day:** position in the order; posts read (fact, author);
-  active facts; posterior; vote; fact posted or none; whether its active facts
-  prove A0 (P(A0) = 1), for the **proof-assembly rate**.
-- **per night:** posts read, *v̂*, P(target | R), which rule decided (proved /
-  gate / posted / fallback), facts posted.
-- **per episode:** settings, seed, final vote shares.
+- **per agent per day:** position in the order; memory after the dawn
+  forgetting and `known` before reading (to separate new facts, reactivations
+  and losses); every post read (author and fact, repeats kept); memory after
+  reading; posterior; vote; fact posted and **why** (in context, fallback,
+  random, uniform, abstained, empty memory); whether its memory proves A0,
+  **measured two ways**: from all its facts, and from its facts that belong to
+  the agents' original evidence only. The difference shows whether a proof came
+  from the controller's facts.
+- **per night:** posts on the board and posts read (author and fact), *v̂*, the
+  **true** share of all agents voting for the target that day, the share among
+  agents who posted, P(target | R), the decision (proved / gate / posted /
+  posted_proved / fallback), facts posted.
+- **per day:** population averages, including the abstention rate.
 
 Enough to rebuild the coarse-grained state (mean P(A0), and mean P(A2)) for
 `../coarse_graining/`.
@@ -223,5 +266,13 @@ Enough to rebuild the coarse-grained state (mean P(A0), and mean P(A2)) for
   fact leaves P(A0) = 1. It can only arise once the truth controller has posted;
   with the agents' facts alone it cannot, because their 12 proofs all overlap.
 - **`recency` weights** for an uncleared board: to define only if used.
-- **Speed:** to be measured on one cell before running the grid. Each memory
-  state's posterior is computed once and cached.
+- **Speed:** a 156-cell grid took 100 s on 12 cores (6 October); b = 6 is the
+  slowest case measured, about 30 ms per episode.
+- **The A2 drift (7 October).** In the silent no-solution arm the swarm drifts
+  to A2. Starting votes are not balanced: expected 7 / 6 / 11 for A0 / A1 / A2,
+  because six agents hold facts tied between A1 and A2. A diagnostic by a
+  reviewing agent points to argmax voting plus vote-conditioned posting as the
+  central mechanism. The four 7 October variants test this.
+- **Known limitation.** The controller maximises P(target | sampled board facts
+  + its posts), a proxy: that union is nobody's actual memory. The
+  `greedy_posterior` oracle of the old simulator is the alternative.
