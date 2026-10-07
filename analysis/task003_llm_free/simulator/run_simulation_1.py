@@ -113,6 +113,18 @@ def _git(*args) -> str:
         return "unknown"
 
 
+def dirty_check_args() -> list[str]:
+    """git status arguments for "has simulator code changed since the commit?". The runner's
+    own bookkeeping (runs_index.csv, run_summaries/) is excluded: it changes after every run."""
+    return ["status", "--porcelain", "--", str(HERE),
+            f":(exclude){INDEX.relative_to(HERE).as_posix()}",
+            f":(exclude){SUMMARIES.relative_to(HERE).as_posix()}"]
+
+
+def simulator_is_dirty() -> bool:
+    return bool(_git(*dirty_check_args()))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", required=True)
@@ -155,7 +167,7 @@ def main():
     world = World(world_file)
     setup_names = sorted({p.setup for p in cells})
     setups = {s: load_setup(s, setups_dir, world) for s in setup_names}
-    commit, dirty = _git("rev-parse", "HEAD"), bool(_git("status", "--porcelain", "--", str(HERE)))
+    commit, dirty = _git("rev-parse", "HEAD"), simulator_is_dirty()
     if dirty and official:
         print("WARNING: uncommitted changes in simulator/; the recorded commit does not fully describe this run")
     manifest = {
@@ -200,11 +212,12 @@ def main():
             w = csv.writer(fh)
             if new:
                 w.writerow(["run", "study", "description", "config", "git_commit", "uncommitted_changes",
-                            "cells", "episodes_per_cell", "started", "finished", "wall_seconds", "results_folder"])
+                            "cells", "episodes_per_cell", "started", "finished", "wall_seconds", "results_folder",
+                            "note"])
             w.writerow([run_name, cfg["study"], cfg.get("description", ""),
                         cfg_path.relative_to(HERE).as_posix(), commit, dirty, len(cells), episodes,
                         manifest["started"], manifest["finished"], manifest["wall_seconds"],
-                        f"results/{run_name}"])
+                        f"results/{run_name}", ""])
         print(f"indexed in {INDEX.name}; summary copied to {SUMMARIES.name}/")
     print(f"done in {manifest['wall_seconds']} s")
 

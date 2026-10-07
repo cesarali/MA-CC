@@ -13,7 +13,7 @@ from llmfree.setups import load_setup  # noqa: E402
 from llmfree.simulation_1 import (ABSTAINED, AGENT_COLUMNS, CONTROLLER_CODE, DAY_COLUMNS,  # noqa: E402
                                   NIGHT_COLUMNS, NO_MEMORY, UNIFORM, Params, decode_post, run_episode)
 from llmfree.world import World, bits  # noqa: E402
-from run_simulation_1 import build_cells, check_record  # noqa: E402
+from run_simulation_1 import build_cells, check_record, dirty_check_args  # noqa: E402
 
 SETUPS = SIM.parent / "experimental_setup"
 WORLD = World(SIM / "world_task003.json")
@@ -216,3 +216,9 @@ def test_unimplemented_options_refuse():
 def test_softmax_runs():
     agents, _, _ = episode(params("task003_nosolution", "false", agent_sampling_mode="softmax"))
     assert {r["vote"] for r in agents} <= {0, 1, 2}
+
+
+def test_dirty_check_ignores_run_bookkeeping():
+    """runs_index.csv and run_summaries/ change after every run; they must not mark the code dirty."""
+    args = dirty_check_args()
+    assert ":(exclude)runs_index.csv" in args and ":(exclude)run_summaries" in args
