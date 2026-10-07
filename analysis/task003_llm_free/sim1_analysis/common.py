@@ -5,7 +5,7 @@ from folder names. Output goes to results/analysis/<date>/ (not in git); curated
 figures and small tables are copied next to this file.
 """
 from __future__ import annotations
-import csv, datetime, json, pathlib, sys
+import csv, datetime, json, pathlib, re, sys
 
 import numpy as np
 import pandas as pd
@@ -62,9 +62,11 @@ def cells_table() -> pd.DataFrame:
         for p in sorted((run_folder(r.run) / "cells").glob("*/params.json")):
             prm = json.loads(p.read_text())
             study = r.study
+            purpose = ("confirmation" if "_confirm_" in study else
+                       "no_proof_stop" if study.endswith("_no_proof_stop") else "main")
             rows.append({
-                "run": r.run, "study": study,
-                "variant": study.replace("_no_proof_stop", ""),
+                "run": r.run, "study": study, "purpose": purpose,
+                "variant": re.sub(r"(_no_proof_stop|_confirm_seed\d+)$", "", study),
                 "stopping_rule": "no_proof_stop" if study.endswith("_no_proof_stop") else "stop_when_proved",
                 "cell": p.parent.name, "path": str(p.parent),
                 **{k: prm[k] for k in ("setup", "arm", "q", "qc", "b", "rho", "M", "agent_sampling_mode",

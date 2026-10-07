@@ -82,7 +82,7 @@ def first_votes(cells: pd.DataFrame, world: World) -> pd.DataFrame:
     Day 1 is identical across arms and cells of a run (same seed, no controller yet,
     nobody has read anything), so one silent cell per variant and setup suffices."""
     rows = []
-    for (variant, setup), g in cells[(cells.arm == "silent") & (cells.stopping_rule == "stop_when_proved")].groupby(
+    for (variant, setup), g in cells[(cells.arm == "silent") & (cells.purpose == "main")].groupby(
             ["variant", "setup"]):
         cell = g.iloc[0]
         s = load_setup(setup, SETUPS_DIR, world)
@@ -128,7 +128,7 @@ REFERENCE = {  # 6 October silent results, final-day mean vote shares (ANALYSIS_
 
 def reference_check(cells: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    base = cells[(cells.variant == "sim1_base") & (cells.arm == "silent")]
+    base = cells[(cells.variant == "sim1_base") & (cells.arm == "silent") & (cells.purpose == "main")]
     for (setup, rho), (a0, a2) in REFERENCE.items():
         for i, q in enumerate((3, 6, 12)):
             c = base[(base.setup == setup) & (base.rho == rho) & (base.q == q)].iloc[0]

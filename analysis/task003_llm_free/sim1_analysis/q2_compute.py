@@ -125,7 +125,7 @@ def group(job):
 def main():
     d = out_dir()
     cells = cells_table()
-    main_runs = cells[cells.stopping_rule == "stop_when_proved"]
+    main_runs = cells[cells.purpose == "main"]
     silent = main_runs[main_runs.arm == "silent"].set_index(["variant", "setup", "q", "rho"]).path
     jobs = []
     for key, g in main_runs[main_runs.arm != "silent"].groupby(GROUP_KEYS):

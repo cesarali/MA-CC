@@ -50,7 +50,7 @@ def plurality(x: dict) -> np.ndarray:
 def main():
     d = out_dir()
     cells = cells_table()
-    silent = cells[(cells.arm == "silent") & (cells.stopping_rule == "stop_when_proved")]
+    silent = cells[(cells.arm == "silent") & (cells.purpose == "main")]
     data = {(r.variant, r.setup, r.rho, r.q): load(r.path) for r in silent.itertuples()}
     days = np.arange(1, 31)
 
