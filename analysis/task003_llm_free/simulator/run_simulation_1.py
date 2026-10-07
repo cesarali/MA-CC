@@ -209,7 +209,7 @@ def main():
         shutil.copy(run_dir / "summary.csv", SUMMARIES / f"{run_name}_summary.csv")
         new = not INDEX.exists()
         with INDEX.open("a", newline="") as fh:
-            w = csv.writer(fh)
+            w = csv.writer(fh, lineterminator="\n")
             if new:
                 w.writerow(["run", "study", "description", "config", "git_commit", "uncommitted_changes",
                             "cells", "episodes_per_cell", "started", "finished", "wall_seconds", "results_folder",
