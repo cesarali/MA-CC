@@ -1,0 +1,9 @@
+variant,setup,episodes,observed_A0,observed_A1,observed_A2,expected_A0,expected_A1,expected_A2,z_A0,z_A1,z_A2,population_expected_votes_A0,population_expected_votes_A1,population_expected_votes_A2
+sim1_base,task003_nosolution,1000,266,235,499,271.0,244.0,485.0,-0.36,-0.66,0.89,7.0,6.0,11.0
+sim1_base,task003_symmetric,1000,348,290,362,352.0,296.0,352.0,-0.26,-0.42,0.66,9.0,7.0,8.0
+sim1_pm,task003_nosolution,1000,358,302,340,341.3,305.5,353.2,1.12,-0.24,-0.87,8.29,7.37,8.34
+sim1_pm,task003_symmetric,1000,372,318,310,363.1,311.1,325.8,0.58,0.47,-1.07,8.81,7.49,7.71
+sim1_pm_post_always,task003_nosolution,1000,358,302,340,341.3,305.5,353.2,1.12,-0.24,-0.87,8.29,7.37,8.34
+sim1_pm_post_always,task003_symmetric,1000,372,318,310,363.1,311.1,325.8,0.58,0.47,-1.07,8.81,7.49,7.71
+sim1_uniform_post,task003_nosolution,1000,266,235,499,271.0,244.0,485.0,-0.36,-0.66,0.89,7.0,6.0,11.0
+sim1_uniform_post,task003_symmetric,1000,348,290,362,352.0,296.0,352.0,-0.26,-0.42,0.66,9.0,7.0,8.0
