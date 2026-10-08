@@ -75,7 +75,7 @@ game:
                                       # episodes end IDENTICALLY (sd(e) = 0.0000, one
                                       # distinct endpoint). With uniform q = 7 there
                                       # are 17. Darius's inherited setting is right.
-                                      # See ../../simulator/runtime_rules.md.
+                                      # See ../../llmfree_core/runtime_rules.md.
       message_lifetime_rounds: 1       # front-page board: last round only, no history
       communication_profile: report_only
                                       # reports are the only channel carrying facts,

@@ -87,7 +87,7 @@ run. Run from the repository root with `.venv/bin/python`.
 ## Open issues
 
 - **No simulation has run the frozen setups yet.** The new LLM-free simulator
-  starts from [`../simulator/runtime_rules.md`](../simulator/runtime_rules.md).
+  starts from [`../llmfree_core/runtime_rules.md`](../llmfree_core/runtime_rules.md).
 - **Nothing logs the proof-assembly rate** (per round, the fraction of agents
   whose active memory holds a complete proof). That is what task003-symmetric
   exists to measure.

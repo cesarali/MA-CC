@@ -4,8 +4,9 @@
 > the new LLM-free simulator's data**, for both frozen setups. The code is in
 > [`code/`](code/): `four_tests.py` (the four tests) and `estimate.py` (chain
 > fitting, exact path KL, mutual information, cluster bootstrap). Both still read
-> the archived study's per-round table from `../results/data/` (deleted; to be
-> regenerated) and need their loaders pointed at the simulator's output.
+> the archived study's per-round table from the old `results/data/` folder (deleted; to be
+> regenerated) and need their loaders pointed at the simulator's output
+> (`../results/simulation_1/`, later `simulation_2/`).
 >
 > **Status, 5 October 2026.** Everything here was measured on the **archived
 > LLM study** (`21-09-2026-full-vs-report-v1`: the archived agents, César's

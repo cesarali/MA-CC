@@ -1,0 +1,79 @@
+# CONFIRMATION RUN (Q3, criterion 4) of the large-b fall. Simulation 1, variant sim1_uniform_post: argmax votes, every agent posts a uniformly random active fact regardless of its vote.
+# Every rule is defined in ../simulation_1_spec.md. Written 7 October 2026.
+#
+# HOW TO READ THIS FILE
+#   grid:   each list is a factor; the study runs every combination of them,
+#           except that the silent arm is not crossed with qc and b (see `cells`).
+#   fixed:  one value each, the same in every cell.
+# Nothing outside these two blocks changes between cells.
+
+study: sim1_uniform_post_confirm_seed2027
+description: "argmax votes, every agent posts a uniformly random active fact regardless of its vote"
+
+paths:                                    # relative to this file
+  world_file: ../../../llmfree_core/world_task003.json
+  setups_dir: ../../../experimental_setup
+  results_dir: ../../../results/simulation_1   # the run goes to results/simulation_1/<date>_<study>/
+
+grid:
+  setup:  [task003_nosolution]          # CONFIRMATION: the large-b fall (Q3)
+  arm:    ["silent", "truth", "false"]    # QUOTED: unquoted, YAML reads false as the boolean False
+  q:      [3, 6, 12]                      # posts an agent reads per day
+  qc:     [3, 12, 24]                     # CONFIRMATION subset
+  b:      [3, 6, 9]                       # CONFIRMATION: brackets the fall (truth 3->6, false 6->9)
+  rho:    [0.75, 1.0]                     # chance an active fact survives each dawn
+
+cells:
+  silent_ignores: [qc, b]                 # no controller, so qc and b mean nothing
+  #   silent:  1 setup x 3 q x 2 rho                          =   6
+  #   truth:   1 setup x 3 q x 3 qc x 3 b x 2 rho             =  54
+  #   false:   1 setup x 3 q x 3 qc x 3 b x 2 rho             =  54
+  #   total                                                   = 114
+  expected_total: 114                     # the runner refuses to start if it counts otherwise
+  episodes_per_cell: 1000
+
+fixed:
+  # --- episode ---
+  M: 30                                   # days per episode
+  controller_acts_on_final_night: false   # NEW: after day 30 nothing can read its posts
+
+  # --- board ---
+  is_board_cleared: true
+  board_read_weighting: uniform           # only used when is_board_cleared is false
+  read_posts_not_facts: true
+
+  # --- agents: voting ---
+  agent_sampling_mode: argmax             # argmax | probability_matching | softmax
+  beta: 4                                 # only used by softmax
+
+  # --- agents: posting ---
+  agent_post_rule: uniform_active         # CHANGED. NEW: supporting | uniform_active
+  agent_post_always: false                # supporting rule only: if no fact supports the
+                                          # vote, post a random active fact instead of abstaining
+  support_rule: in_context
+  support_fallback: read_alone
+  prefer_facts_not_read_today: true
+  supporting_fact_choice: uniform
+
+  # --- controller ---
+  controller_gate: votes                  # votes | facts | always
+  theta_vote: 0.75                        # effective threshold depends on qc: see the spec
+  theta_facts: 0.8
+  silent_when_target_proved: true         # step 2 sets this to false
+  fallback_when_target_ruled_out: strongest_set_alone
+  controller_reads_own_posts: false
+  controller_memory: none
+  posts_all_or_nothing: true
+
+  # --- randomness ---
+  paired_random_streams: true
+  seed: 2027                              # CONFIRMATION: new random draws (plan §7)
+
+record:
+  agent_days: true                        # one row per agent per day
+  posts_read: true                        # NEW: every post each agent read (author, fact)
+  memory_after_dawn: true                 # NEW: memory before reading, to separate new facts,
+                                          # reactivations and losses
+  post_reason: true                       # NEW: in_context | fallback | random | uniform | abstained
+  nights: true                            # incl. NEW: true target vote share next to v_hat
+  proof_two_ways: true                    # NEW: from agents' original evidence only, and from any facts

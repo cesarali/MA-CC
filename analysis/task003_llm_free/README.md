@@ -1,4 +1,4 @@
-# task003_llm_free — the two control setups and the LLM-free simulator
+# task003_llm_free — the two control setups and the LLM-free simulations
 
 Everything here is about one world, `task_003`: three people, two jobs, three
 candidate allocations. `ALLOCATION_0` (A0) is correct; `ALLOCATION_2` (A2) is the
@@ -21,7 +21,11 @@ Start at [`experimental_setup/README.md`](experimental_setup/README.md).
 |---|---|
 | [`task_and_facts/`](task_and_facts/) | the world: its 49 true facts, the exact posterior engine (`engine.py`), the proofs. Read [`task_003_analysis.md`](task_and_facts/task_003_analysis.md) for what "eligible", "decisive" and "proof" mean |
 | [`experimental_setup/`](experimental_setup/) | one folder per frozen setup (agents, pools, build script, README), plus the plan for the LLM runs |
-| [`simulator/`](simulator/) | the LLM-free simulator: agents are exact Bayesian reasoners. [`runtime_rules.md`](simulator/runtime_rules.md): the real game's rules to copy. [`simulation_1_spec.md`](simulator/simulation_1_spec.md): Simulation 1, implemented; studies in [`simulator/configs/`](simulator/configs/), runs listed in [`simulator/runs_index.csv`](simulator/runs_index.csv). Results go to `results/<date>_<study>/` (not in git) |
+| [`llmfree_core/`](llmfree_core/) | code and data shared by every LLM-free simulation: exact posteriors (`world.py`), setup loading (`setups.py`), the exported world, and [`runtime_rules.md`](llmfree_core/runtime_rules.md) (the real game's rules to copy) |
+| [`simulation_1/`](simulation_1/) | **Simulation 1** (days and nights, per-round controller budget). [`simulator/`](simulation_1/simulator/): spec, configs, runner, tests, runs index. [`analysis/`](simulation_1/analysis/): plan, Q0–Q6 reports, two short PDF reports, reviewer guide |
+| `simulation_2/` | **Simulation 2** (asynchronous activation), being specified |
+| `results/` | not in git. `results/simulation_1/<date>_<study>/` holds raw runs; `results/simulation_1/analysis/<date>/` the analysis outputs. Simulation 2 will write to `results/simulation_2/` |
+| [`TODO.md`](TODO.md) | deferred work |
 | [`coarse_graining/`](coarse_graining/) | the 4-state summary of the swarm (mean belief in A0, binned) and the four tests of whether it is Markovian. The results inside are from the archived LLM study; they will be **rerun on the new simulator's data** |
 
 ## Recovering deleted material

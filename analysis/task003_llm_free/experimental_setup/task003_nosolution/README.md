@@ -63,7 +63,7 @@ always survives. That edge cannot be designed away, only reduced.
 > **7 / 6 / 11**: six agents hold facts tied between A1 and A2 (counted as A1) and half of
 > them vote A2; two hold A0/A1 ties. So the coin-flip swarm starts with more A2 voters.
 > This is a candidate cause of the A2 drift in the silent arm (see
-> `../../simulator/simulation_1_spec.md` §10).
+> `../../simulation_1/simulator/simulation_1_spec.md` §10).
 
 ## How it was built
 
