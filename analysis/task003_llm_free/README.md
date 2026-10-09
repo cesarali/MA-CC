@@ -23,7 +23,7 @@ Start at [`experimental_setup/README.md`](experimental_setup/README.md).
 | [`experimental_setup/`](experimental_setup/) | one folder per frozen setup (agents, pools, build script, README), plus the plan for the LLM runs |
 | [`llmfree_core/`](llmfree_core/) | code and data shared by every LLM-free simulation: exact posteriors (`world.py`), setup loading (`setups.py`), the exported world, and [`runtime_rules.md`](llmfree_core/runtime_rules.md) (the real game's rules to copy) |
 | [`simulation_1/`](simulation_1/) | **Simulation 1** (days and nights, per-round controller budget). [`simulator/`](simulation_1/simulator/): spec, configs, runner, tests, runs index. [`analysis/`](simulation_1/analysis/): plan, Q0–Q6 reports, two short PDF reports, reviewer guide |
-| `simulation_2/` | **Simulation 2** (asynchronous activation), being specified |
+| [`simulation_2/`](simulation_2/) | **Simulation 2** (asynchronous activation): implemented; spec in [`simulator/simulation_2_spec.md`](simulation_2/simulator/simulation_2_spec.md) |
 | `results/` | not in git. `results/simulation_1/<date>_<study>/` holds raw runs; `results/simulation_1/analysis/<date>/` the analysis outputs. Simulation 2 will write to `results/simulation_2/` |
 | [`TODO.md`](TODO.md) | deferred work |
 | [`coarse_graining/`](coarse_graining/) | the 4-state summary of the swarm (mean belief in A0, binned) and the four tests of whether it is Markovian. The results inside are from the archived LLM study; they will be **rerun on the new simulator's data** |
