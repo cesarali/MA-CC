@@ -57,6 +57,9 @@ class Params:
     agent_sampling_mode: str = "probability_matching"
     prefer_facts_not_read: bool = True
     seed: int = 20261007
+    # bookkeeping, set by the runner; no effect on the simulation
+    cell: str = ""                            # this cell's id
+    silent_cell: str = ""                     # the silent cell it is paired with (controlled arms)
 
     def check(self) -> list[str]:
         """Reject impossible or unimplemented settings; return warnings."""
@@ -84,7 +87,22 @@ class Params:
         return warnings
 
     def cell_id(self) -> str:
-        return f"{self.step}__{self.setup}__{self.arm}"
+        return self.cell or f"{self.step}__{self.setup}__{self.arm}"
+
+    def proof_stop_can_matter(self) -> bool:
+        """Only the truth controller on task003-symmetric can see its target proved: nothing
+        proves A2, and task003-nosolution has no proof at all (checked at start-up)."""
+        return self.setup == "task003_symmetric" and self.arm == "truth"
+
+    def controlled_key(self) -> tuple:
+        """Settings a controlled cell depends on. Where the proof stop cannot matter, its two
+        values give the same simulation, so the runner may run only one (config option)."""
+        d = asdict(self)
+        for k in ("step", "cell", "silent_cell"):
+            d.pop(k)
+        if not self.proof_stop_can_matter():
+            d["silent_when_target_proved"] = None
+        return tuple(sorted(d.items()))
 
     def silent_key(self) -> tuple:
         """Settings a silent cell depends on. Two silent cells with the same key are the same

@@ -17,7 +17,7 @@ Examples, from the repository root:
       --config analysis/task003_llm_free/simulation_2/simulator/configs/sim2_bridge.yaml --workers 12
 """
 from __future__ import annotations
-import argparse, csv, datetime, json, multiprocessing, pathlib, platform, shutil, subprocess, sys, time
+import argparse, csv, dataclasses, datetime, itertools, json, multiprocessing, pathlib, platform, shutil, subprocess, sys, time
 
 import pandas as pd
 import pyarrow as pa
@@ -83,26 +83,73 @@ def resolve_steps(cfg: dict) -> dict[str, dict]:
     return out
 
 
+GRID_FACTORS = {"q": "q", "qc": "qc", "rho": "rho", "lambda_c": "lc", "controller_gate": "gate",
+                "silent_when_target_proved": "stop"}         # grid factor -> short name in cell ids
+SILENT_IGNORES = {"qc", "lambda_c", "controller_gate", "silent_when_target_proved"}
+LIGHT_TABLES = ["posts", "controller", "snapshots", "episodes"]
+
+
+def _fmt(k: str, v) -> str:
+    if k == "controller_gate":
+        return "on" if v == "votes" else "off"
+    if k == "silent_when_target_proved":
+        return "on" if v else "off"
+    return f"{v:g}" if isinstance(v, float) else str(v)
+
+
 def build_cells(cfg: dict) -> tuple[list[Params], dict[str, str]]:
-    """Returns (cells to run, reused silent cells {skipped cell id: cell id it reuses})."""
+    """Returns (cells to run, reused cells {skipped cell id: cell id that gives the same simulation}).
+
+    Two kinds of config: a bridge (`steps`, each step a set of settings) or a grid (factors in
+    `grid` beyond setup and arm). Cell ids: [step__]setup__arm[__q6__qc12__...], one part per
+    grid factor with several values; silent cells leave out the controller factors."""
     grid, fixed = cfg["grid"], cfg["fixed"]
-    if set(grid) != {"setup", "arm"}:
-        raise ValueError("the grid has exactly two factors: setup and arm")
+    unknown = set(grid) - {"setup", "arm"} - set(GRID_FACTORS)
+    if unknown:
+        raise ValueError(f"unknown grid factors: {sorted(unknown)}")
     if not all(isinstance(x, str) for x in grid["arm"]):
         raise ValueError(f"arm names must be quoted strings in the YAML, got {grid['arm']!r}")
-    cells, reused, silent_seen = [], {}, {}
-    for step, settings in resolve_steps(cfg).items():
+    dedupe_stop = bool(cfg["cells"].get("dedupe_irrelevant_proof_stop", False))
+    steps = resolve_steps(cfg) if "steps" in cfg else {"": {}}
+    factors = [k for k in GRID_FACTORS if k in grid]
+    named = [k for k in factors if len(grid[k]) > 1]
+    cells, reused, seen = [], {}, {}
+    for step, settings in steps.items():
         for setup in grid["setup"]:
             for arm in grid["arm"]:
-                p = Params(setup=setup, arm=arm, step=step, **fixed, **settings)
-                if arm == "silent":
-                    key = p.silent_key()
-                    if key in silent_seen:
-                        reused[p.cell_id()] = silent_seen[key]
+                for values in itertools.product(*(grid[k] for k in factors)):
+                    d = dict(zip(factors, values))
+                    silent = arm == "silent"
+                    parts = ([step] if step else []) + [setup, arm] + [
+                        f"{GRID_FACTORS[k]}{_fmt(k, d[k])}" for k in named if not (silent and k in SILENT_IGNORES)]
+                    silent_parts = ([step] if step else []) + [setup, "silent"] + [
+                        f"{GRID_FACTORS[k]}{_fmt(k, d[k])}" for k in named if k not in SILENT_IGNORES]
+                    p = Params(setup=setup, arm=arm, step=step, **{**fixed, **settings, **d},
+                               cell="__".join(parts), silent_cell="" if silent else "__".join(silent_parts))
+                    if silent:
+                        key = ("silent", p.silent_key())
+                    elif dedupe_stop:
+                        key = ("controlled", p.controlled_key())
+                    else:
+                        key = ("controlled", p.cell)
+                    if p.cell in seen.values() or p.cell in reused:
+                        continue                                        # silent cell already listed
+                    if key in seen:
+                        reused[p.cell] = seen[key]
                         continue
-                    silent_seen[key] = p.cell_id()
-                cells.append(p)
+                    seen[key] = p.cell
+                    cells.append(p)
+    # a controlled cell pairs with the silent cell that was actually run
+    cells = [dataclasses.replace(p, silent_cell=reused.get(p.silent_cell, p.silent_cell)) for p in cells]
     return cells, reused
+
+
+def full_tables(p: Params, cfg: dict) -> bool:
+    """Whether this cell records every table; otherwise only LIGHT_TABLES (config record.full_tables_where)."""
+    where = cfg.get("record", {}).get("full_tables_where")
+    if where is None:
+        return True
+    return all(getattr(p, k) == v for k, v in where.items() if not (p.arm == "silent" and k in SILENT_IGNORES))
 
 
 _WORLD = _SETUPS = None
@@ -120,12 +167,12 @@ def _frame(table: str, rows: list) -> pd.DataFrame:
 
 
 def _run_cell(job):
-    p, episodes, cells_dir, agent_snapshots = job
+    p, episodes, cells_dir, tables = job
     t0 = time.time()
     setup = _SETUPS[p.setup]
     folder = pathlib.Path(cells_dir) / p.cell_id()
     folder.mkdir(parents=True, exist_ok=True)
-    tables = [t for t in COLUMNS if agent_snapshots or t != "agent_snapshots"]
+    agent_snapshots = "agent_snapshots" in tables
     writers: dict[str, pq.ParquetWriter] = {}
     buffer = {t: [] for t in tables}
     for e in range(episodes):
@@ -220,7 +267,7 @@ def main():
         "run": run_name if not args.out else str(run_dir), "study": cfg["study"],
         "description": cfg.get("description", ""), "config": str(cfg_path),
         "cells_in_grid": expected, "cells_run": len(cells), "episodes_per_cell": episodes,
-        "reused_silent_cells": reused, "steps": resolve_steps(cfg),
+        "reused_cells": reused, "steps": resolve_steps(cfg) if "steps" in cfg else None,
         "official_run": official, "world_file_sha256": world.sha256,
         "setup_file_sha256": {s: setups[s].file_hashes for s in setup_names},
         "git_commit": commit, "simulator_has_uncommitted_changes": dirty,
@@ -229,7 +276,12 @@ def main():
     }
     print(f"{len(cells)} cells x {episodes} episodes on {args.workers} worker(s) -> {run_dir}", flush=True)
 
-    jobs = [(p, episodes, str(cells_dir), agent_snapshots) for p in cells]
+    def tables_for(p):
+        if not full_tables(p, cfg):
+            return LIGHT_TABLES
+        return [t for t in COLUMNS if agent_snapshots or t != "agent_snapshots"]
+    jobs = [(p, episodes, str(cells_dir), tables_for(p)) for p in cells]
+    manifest["cells_with_full_tables"] = sum(len(j[3]) > len(LIGHT_TABLES) for j in jobs)
     timings = []
     t0 = time.time()
     if args.workers > 1:

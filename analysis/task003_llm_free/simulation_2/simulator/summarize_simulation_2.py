@@ -24,32 +24,36 @@ def _at(snap: pd.DataFrame, t: float) -> pd.DataFrame:
 def summarize(run: str | pathlib.Path) -> pd.DataFrame:
     run = pathlib.Path(run)
     manifest_file = run / "manifest.json"
-    reused = json.loads(manifest_file.read_text()).get("reused_silent_cells", {}) if manifest_file.exists() else {}
+    manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else {}
+    reused = manifest.get("reused_cells", manifest.get("reused_silent_cells", {}))
     cells = {p.name: p for p in sorted((run / "cells").iterdir()) if p.is_dir()}
     snaps, rows = {}, []
     for name, folder in cells.items():
-        snaps[name] = pd.read_parquet(folder / "snapshots.parquet", columns=SNAP)
+        snaps[name] = pd.read_parquet(folder / "snapshots.parquet", columns=SNAP,
+                                      filters=[("t", "in", [30.0, 40.0])])       # only what is summarised
     for name, folder in cells.items():
         prm = json.loads((folder / "params.json").read_text())
         snap = snaps[name]
         ep = pd.read_parquet(folder / "episodes.parquet")
-        act = pd.read_parquet(folder / "actions.parquet", columns=["post_reason"])
-        row = {k: prm[k] for k in ("step", "setup", "arm", "board", "forgetting", "agent_schedule",
-                                   "controller_schedule", "lambda_c", "controller_gate",
-                                   "silent_when_target_proved")}
+        row = {"cell": name}
+        row.update({k: prm[k] for k in ("step", "setup", "arm", "q", "qc", "rho", "board", "forgetting",
+                                        "agent_schedule", "controller_schedule", "lambda_c", "controller_gate",
+                                        "silent_when_target_proved")})
         row["episodes"] = len(ep)
         for t in (30.0, 40.0):
             s = _at(snap, t)
             for col in ("mean_p_A0", "mean_p_A2", "share_A0", "share_A2", "share_voted", "proof_rate_A0"):
                 row[f"{col}_t{int(t)}"] = s[col].mean()
-        row["abstention_rate"] = (act.post_reason == ABSTAINED).mean()
+        if (folder / "actions.parquet").exists():
+            act = pd.read_parquet(folder / "actions.parquet", columns=["post_reason"])
+            row["abstention_rate"] = (act.post_reason == ABSTAINED).mean()
         row["controller_messages"] = ep.controller_messages.mean()
         row["controller_reads"] = ep.controller_reads.mean()
         row["share_budget_exhausted"] = ep.budget_exhausted_at.notna().mean()
         row["agent_actions"] = ep.agent_actions.mean()
         if prm["arm"] in TARGET:
             k = TARGET[prm["arm"]]
-            silent = f"{prm['step']}__{prm['setup']}__silent"
+            silent = prm.get("silent_cell") or f"{prm['step']}__{prm['setup']}__silent"
             silent = reused.get(silent, silent)
             row["silent_cell"] = silent
             if silent in snaps:

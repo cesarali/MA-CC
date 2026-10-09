@@ -8,7 +8,7 @@ rules changed one at a time) and the controller-rate scan run through one code p
 | file | what it is |
 |---|---|
 | [`simulation_2_spec.md`](simulation_2_spec.md) | every rule, the bridge steps S0–S6, what is measured |
-| [`configs/`](configs/) | one config per study. [`sim2_bridge.yaml`](configs/sim2_bridge.yaml): the bridge |
+| [`configs/`](configs/) | one config per study. [`sim2_grid.yaml`](configs/sim2_grid.yaml): **the main grid** (spec §14, 1,212 cells, about 80 minutes and 29 GB); [`sim2_bridge.yaml`](configs/sim2_bridge.yaml): the first bridge, kept as history and for the S0 check |
 | `run_simulation_2.py` | runs a study |
 | `summarize_simulation_2.py` | one row per cell, with paired gains over its silent cell (the runner calls it) |
 | `sim2/simulation_2.py` | the rules: one episode as a list of timed events |

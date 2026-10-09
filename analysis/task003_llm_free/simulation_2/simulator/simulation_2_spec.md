@@ -8,7 +8,12 @@ changes the researcher decided on 8–9 October, listed in §12. Simulation 1's
 rules are in [`../../simulation_1/simulator/simulation_1_spec.md`](../../simulation_1/simulator/simulation_1_spec.md)
 ("the Simulation 1 spec").
 
-Simulation 2 is built in two studies, run in this order:
+> **Update, 9 October 2026 (decided by the researcher): the main study is the grid of §14.**
+> The step-by-step ladder below (§3) was run once (`2026-10-09_sim2_bridge`) and is kept as
+> history and as the S0 check. Its intermediate steps mix old and new features in ways that
+> describe no real system, so they are not analysed. Read §14 first.
+
+Simulation 2 was first planned as two studies, run in this order:
 
 1. **The bridge** (§3): take Simulation 1 to the asynchronous setting **one
    change at a time**, so that each change in the results can be traced to one
@@ -402,3 +407,46 @@ The source document's §12, adapted to both setups and the bridge settings:
 9. adding measurement times does not change the trajectory;
 10. `cleared_nightly` + `dawn` + `days` + `nights` reproduces Simulation 1's
     rules: S0 check (§9), run on 1,000 episodes once the code passes 1–9.
+
+---
+
+## 14. The main grid (decided 9 October 2026)
+
+**The core of Simulation 2 is one bundle**, turned on together: agents **and** the
+controller act at random times (Poisson clocks), memory fades continuously, and the
+board fades (readers sample the 48 most recent posts). These features are not separated:
+
+- with agents at random times, nightly board clearing would cut an agent's view at
+  arbitrary clock times; the board has to fade by itself;
+- with agents at random times, there are no nights on which the controller could act,
+  so it acts at random times too;
+- with continuous memory but agents acting in days, how much an agent forgets would
+  depend on its place in the day's order.
+
+**Reference point: Simulation 1** itself, through S0 of the bridge (the S0 check passed,
+§9) and Simulation 1's own runs at the same q, qc and ρ (`2026-10-07_sim1_pm`, b = 1).
+
+**The grid** ([`configs/sim2_grid.yaml`](configs/sim2_grid.yaml)), core settings fixed:
+
+| factor | values | note |
+|---|---|---|
+| setup | symmetric, nosolution | |
+| arm | silent, truth, false | |
+| q | 3, 6, 12 | Simulation 1's scan |
+| qc | 3, 6, 12, 24 | Simulation 1's scan |
+| ρ | 0.75, 1 | Simulation 1's scan |
+| λc | 0.5, 1, 2, 4, 8 | **replaces Simulation 1's b**: both are facts per time unit; here one fact per message (b = 1), spread in time |
+| vote gate | on (`votes`), off (`always`) | parallel arms, not steps |
+| proof stop | on, off | parallel arms; run separately only for symmetric truth, the only place it can act |
+
+Budget: 30 messages per episode in every cell. At high rates with the gate off, it runs
+out early (at λc = 8 by about t = 4); the time it runs out is recorded and reported.
+
+Cells: 12 silent (2 setups × 3 q × 2 ρ; silent cells do not depend on the controller
+factors) + 1,200 controlled. 1,000 episodes each. Every table is recorded for the main
+cells (q = 6, qc = 12, ρ = 0.75: 52 cells); elsewhere posts, controller actions,
+measurements and episode summaries only.
+
+Seed 20261007, as in the bridge: the grid's cell at q 6, qc 12, ρ 0.75, λc 1, gate on, stop on
+is identical to the bridge's S4 (tested). Any finding singled out by the analysis is checked
+on a confirmation run with seed 2027.

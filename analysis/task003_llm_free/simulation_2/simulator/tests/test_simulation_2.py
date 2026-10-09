@@ -362,3 +362,44 @@ def test_dirty_check_covers_shared_code_and_ignores_bookkeeping():
     args = dirty_check_args()
     assert ":(exclude)runs_index.csv" in args and ":(exclude)run_summaries" in args
     assert any(a.endswith("llmfree_core") for a in args)
+
+
+# ---------------------------------------------------------------- the main grid
+
+GRID = yaml.safe_load((SIM / "configs" / "sim2_grid.yaml").read_text())
+
+
+def test_grid_cells_unique_and_counted():
+    cells, reused = build_cells(GRID)
+    assert len(cells) == GRID["cells"]["expected_total"] == 1212
+    assert len({p.cell for p in cells}) == len(cells)
+    assert sum(p.arm == "silent" for p in cells) == 12
+    for p in cells:
+        p.check()
+        if p.arm != "silent":
+            assert p.silent_cell in {c.cell for c in cells if c.arm == "silent"}
+
+
+def test_grid_runs_both_proof_stops_only_where_they_can_matter():
+    cells, reused = build_cells(GRID)
+    stops = {(p.setup, p.arm, p.silent_when_target_proved) for p in cells if p.arm != "silent"}
+    assert ("task003_symmetric", "truth", False) in stops
+    assert not any(s is False for (setup, arm, s) in stops if (setup, arm) != ("task003_symmetric", "truth"))
+    for skipped, kept in reused.items():
+        assert "stopoff" in skipped and kept == skipped.replace("stopoff", "stopon")
+
+
+def test_grid_core_cell_equals_bridge_s4():
+    """The grid's cell at q6 qc12 rho0.75 rate 1, gate on, stop on is the bridge's S4."""
+    cells, _ = build_cells(GRID)
+    g = next(p for p in cells if p.cell == "task003_symmetric__truth__q6__qc12__rho0.75__lc1__gateon__stopon")
+    b = params("S4", "task003_symmetric", "truth")
+    _same(tables(dataclasses.replace(g, step="S4", cell="", silent_cell="")), tables(b), which=tuple(COLUMNS))
+
+
+def test_full_tables_only_for_the_main_cells():
+    from run_simulation_2 import full_tables
+    cells, _ = build_cells(GRID)
+    full = [p for p in cells if full_tables(p, GRID)]
+    assert len(full) == 52
+    assert all(p.q == 6 and p.rho == 0.75 and (p.arm == "silent" or p.qc == 12) for p in full)
