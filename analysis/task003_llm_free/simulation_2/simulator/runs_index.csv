@@ -1,0 +1,2 @@
+run,study,description,config,git_commit,uncommitted_changes,cells,episodes_per_cell,started,finished,wall_seconds,results_folder,note
+2026-10-09_sim2_bridge,sim2_bridge,"bridge from Simulation 1 (S0) to the asynchronous setting (S6 = rate scan at lambda_c = 1), one change per step",configs/sim2_bridge.yaml,913c3b382469523e9d35fdd59ac962eb12005c6d,False,36,1000,2026-10-09T10:59:55,2026-10-09T11:03:04,189.2,results/simulation_2/2026-10-09_sim2_bridge,
