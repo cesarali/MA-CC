@@ -27,6 +27,20 @@ pointer when it is finished.
 - [ ] Overlap as a factor (pool facts the agents already hold: 0 / 4 / 8).
 - [ ] Send `simulation_1/analysis/REVIEW_GUIDE.md` to a reviewing agent and act on its report.
 
+## Simulation 2 follow-ups
+
+- [ ] Send `simulation_2/analysis/REVIEW_GUIDE.md` to a reviewing agent and act on its report.
+- [ ] **Sensing bias** (v̂ overestimates the target's share by +0.03 to +0.05): test the
+  explanation (posts come from recently active agents) by splitting votes by time since the
+  agent's last action.
+- [ ] **A controller with memory** that avoids widening what it has said: test against the
+  ρ = 1 rate reversal (distinct pool facts mechanism).
+- [ ] Board fading: window size W, and a time-based fading (posts with random lifetimes).
+- [ ] Budget: an uncapped or larger budget as a second level; exact-dose schedule compression
+  (source document §8).
+- [ ] Why the core weakens control when agents forget: separate the ingredients only if needed
+  (the bridge's S1–S2 exist as exploratory data).
+
 ## Observables and theory
 
 - [ ] Command channel I(Z; V_H), following F_H, information per post.
@@ -37,4 +51,6 @@ pointer when it is finished.
 
 ## Done
 
+- 2026-10-09: Simulation 2: spec, simulator, main grid (1,212 cells), confirmation runs,
+  analysis Q0–Q8 and H1–H6, two short reports, reviewer guide (`simulation_2/`).
 - 2026-10-07: Simulation 1 grid, analysis Q0–Q6, two short reports (`simulation_1/analysis/`).
