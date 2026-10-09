@@ -42,13 +42,10 @@ def check_cell(args) -> dict:
     out["episodes_without_followup_posts"] = int(
         ep.episode.nunique() - posts[(posts.author >= 0) & (posts.t > prm["t_control"])].episode.nunique())
     # controller reads only agent posts
-    authors = posts.set_index(["episode", "post_id"]).author
-    bad = 0
-    for r in ctrl[["episode", "posts_read"]].itertuples():
-        ids = list(r.posts_read)
-        if ids and (authors.loc[[(r.episode, i) for i in ids]] == CONTROLLER).any():
-            bad += 1
-    out["controller_read_own_post"] = bad
+    reads = ctrl[["episode", "posts_read"]].explode("posts_read").dropna()
+    reads = reads.astype({"posts_read": "int64"}).merge(posts[["episode", "post_id", "author"]],
+                                                         left_on=["episode", "posts_read"], right_on=["episode", "post_id"])
+    out["controller_read_own_post"] = int((reads.author == CONTROLLER).sum())
     if (f / "actions.parquet").exists():
         out.update(check_full(f, prm, posts))
     return out
