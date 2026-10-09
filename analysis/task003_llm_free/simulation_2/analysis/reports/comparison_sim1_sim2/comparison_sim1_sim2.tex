@@ -1,0 +1,79 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=1.7cm]{geometry}
+\usepackage{amsmath,booktabs,xcolor,hyperref,enumitem}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\pagestyle{empty}
+\setlist{itemsep=1pt,topsep=2pt,leftmargin=*}
+\begin{document}
+
+\begin{center}
+{\Large\textbf{What changes when the rounds go: Simulation 2 against Simulation 1}}\\[3pt]
+{\small LLM-free simulator, task\_003, runs of 7 and 9 October 2026}
+\end{center}
+
+\noindent\textbf{The two simulations.} 24 exact-Bayesian agents and one controller posting
+true facts on a shared board. \emph{Simulation 1}: days and nights; every agent acts once a
+day; memories fade at dawn (each fact survives with probability $\rho$); the board is cleared
+each night; the controller posts $b$ facts at once each night. \emph{Simulation 2}: no rounds;
+agents and controller act at random times (controller rate $\lambda_c$); each fact has a random
+lifetime (on average a fraction $\rho$ survives one time unit); readers see only the 48 most
+recent posts; one fact per controller message, at most 30. \emph{Gain}: the controller's effect
+on the agents' mean belief in its target at $t = 30$, against the same episode without a
+controller. Compared below: Simulation 1 with $b = 1$, Simulation 2 with $\lambda_c = 1$; posts
+read $q = 6$ (agents), $q_c = 12$ (controller); vote gate and proof stop on.
+
+\begin{center}\small
+\begin{tabular}{llcccc}
+\toprule
+ & & \multicolumn{2}{c}{$\rho = 0.75$ (agents forget)} & \multicolumn{2}{c}{$\rho = 1$ (full memory)} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+setup & quantity & Sim.\ 1 & Sim.\ 2 & Sim.\ 1 & Sim.\ 2 \\
+\midrule
+nosolution & gain, truth controller (target A0) & 0.42 & \textbf{0.29} & 0.38 & 0.38 \\
+nosolution & gain, false controller (target A2) & 0.28 & \textbf{0.19} & 0.15 & 0.14 \\
+symmetric & gain, truth controller & 0.08 & 0.08 & 0 & 0 \\
+symmetric & gain, false controller & 0.22 & \textbf{0.13} & 0 & 0 \\
+symmetric & silent swarm's belief in A0 ($q = 6$ / $12$) & 0.84 / 0.94 & \textbf{0.72 / 0.78} & 1 & 1 \\
+both & controller's overestimate of its support & $\approx 0$ & \textbf{+0.01 to +0.15} & $\approx 0$ & \textbf{+0.01 to +0.15} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+\item \textbf{Asynchrony matters only through forgetting.} With full memory the two
+  simulations agree within 0.01. When agents forget, Simulation 2 gives weaker control and a
+  weaker consensus of the swarm on its own proof (bold entries; confirmed with fresh random
+  draws). A reading, not yet tested: the rounds let agents hold many facts at once (dawn
+  forgetting, then a full day of posts); with random timing, facts expire between actions.
+  \emph{Simulation 1 overstated both the swarm's consensus and the controller's power when
+  agents forget.}
+\item \textbf{The backfire comes back by a different route.} In Simulation 1 more facts per
+  night lowered the gain (the false controller's gain turned negative at $b = 9$) because each
+  all-or-nothing post had to include facts against the target. Simulation 2 posts one fact at a
+  time, yet with full memory a \emph{faster} controller steers \emph{less} (false controller,
+  nosolution: 0.20 at $\lambda_c = 0.5$, 0.05 at $\lambda_c = 8$; confirmed). Common root: every
+  fact is true and the whole pool favours the truth, P(A0, A1, A2) = (0.75, 0, 0.25); here the
+  more different facts get out and stay, the closer beliefs move to that point (an explanation
+  from a correlation, not yet tested directly).
+\item \textbf{Sensing goes from unbiased to biased.} The controller now overestimates its
+  support, from about $+0.014$ at slow rates to $+0.15$ at $\lambda_c = 8$. Likely cause: the
+  posts it reads come from recently active agents, often just after reading its own facts.
+\item \textbf{Timing effects the rounds hid.} Fast controllers overshoot and relax (symmetric,
+  false controller at $\lambda_c = 8$: 0.26 at $t \approx 4.5$, 0.14 at $t = 30$). The effect
+  persists ten time units after the controller stops (change at most 0.016).
+\item \textbf{The gap between truth and falsehood widens.} On symmetric the false controller
+  loses 0.09 while the truth controller is unchanged; on nosolution both lose and the truth
+  controller keeps its lead.
+\item \textbf{What carries over, and is therefore more trustworthy}: help with the truth
+  replaces the agents' own proofs; the truth controller is stronger than the false one; the
+  vote gate saves messages at little or no cost in control; the proof stop changes nothing
+  of size $1/24$ (one agent's worth of belief).
+\end{enumerate}
+
+\noindent\textbf{Caution.} $\lambda_c$ stands in for $b$ but is not the same: $b$ facts arrive
+together each night with no total cap; $\lambda_c$ facts arrive one at a time under a budget of
+30 messages. Point 1 is the cleanest comparison; point 2 is by analogy. One world, 24 agents,
+probability-matching votes, 1{,}000 episodes per setting. Details:
+\url{analysis/task003_llm_free/simulation_2/analysis/2026-10-09_report.md}.
+
+\end{document}
