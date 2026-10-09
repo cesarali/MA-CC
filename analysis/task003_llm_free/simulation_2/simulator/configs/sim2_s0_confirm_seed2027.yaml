@@ -1,0 +1,55 @@
+# Simulation 2, confirmation run: the bridge's S0 (Simulation 1's rules in the new code) with seed 2027.
+# Identical to sim2_bridge.yaml except: only step S0, seed 2027, 6 cells. Every rule is defined in ../simulation_2_spec.md (§3). Written 9 October 2026.
+#
+# HOW TO READ THIS FILE
+#   grid:   each list is a factor; every step runs every combination of them.
+#   fixed:  one value each, the same in every cell.
+#   steps:  steps_mode "cumulative": each step lists ONLY what it changes; it inherits
+#           everything else from the step before. The runner refuses a step that changes
+#           more than one setting (lambda_c goes with controller_schedule: poisson).
+#   A silent cell whose agent settings equal an earlier step's is not rerun: the runner
+#   records which earlier cell it reuses (S4-S6 reuse S3's silent cells).
+
+study: sim2_s0_confirm_seed2027
+description: "confirmation run (analysis plan section 7): the bridge's S0 cells (Simulation 1's rules) with seed 2027"
+
+paths:                                    # relative to this file
+  world_file: ../../../llmfree_core/world_task003.json
+  setups_dir: ../../../experimental_setup
+  results_dir: ../../../results/simulation_2   # the run goes to results/simulation_2/<date>_<study>/
+
+grid:
+  setup:  [task003_symmetric, task003_nosolution]
+  arm:    ["silent", "truth", "false"]    # QUOTED: unquoted, YAML reads false as the boolean False
+
+fixed:
+  lambda_a: 1.0                           # agent actions per time unit (poisson schedule)
+  theta_vote: 0.75                        # vote gate threshold, when the gate is on
+  rho: 0.75                               # survival of a fact over one time unit
+  q: 6                                    # posts an agent reads per action
+  qc: 12                                  # agent posts the controller reads per action
+  W: 48                                   # readers sample from the 48 most recent eligible posts
+  budget: 30                              # controller messages per episode (one fact each)
+  t_control: 30.0                         # the controller may act for t < 30
+  t_end: 40.0                             # follow-up without controller from 30 to 40
+  grid_step: 0.25                         # measurement times 0, 0.25, ..., 40
+  agent_sampling_mode: probability_matching
+  prefer_facts_not_read: true
+  seed: 2027
+
+steps_mode: cumulative
+steps:
+  S0:                                     # Simulation 1's rules (b = 1), in the new code
+    board: cleared_nightly
+    forgetting: dawn
+    agent_schedule: days
+    controller_schedule: nights
+    controller_gate: votes
+    silent_when_target_proved: true
+
+cells:
+  episodes_per_cell: 1000
+  expected_total: 6                       # 2 setups x 3 arms
+
+record:
+  agent_snapshots: true                   # every agent's active facts and last vote at every measurement time
