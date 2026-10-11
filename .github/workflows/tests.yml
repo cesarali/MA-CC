@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, cygnus-main, cygnus-fork-preview]
+
+jobs:
+  mas-cc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MPLBACKEND: Agg
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - name: Install pinned test dependencies (no heavy runtime extras)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-ci.txt
+          python -m pip install --no-deps -e .
+      - name: Run the mas_cc suite
+        # tests/ci-deselect.txt lists tests that depend on study fixtures which
+        # are not tracked in the repository; everything else must pass.
+        run: |
+          mapfile -t DESELECT < <(grep -vE '^\s*(#|$)' tests/ci-deselect.txt | sed 's/^/--deselect=/')
+          python -m pytest -q -p no:cacheprovider tests/mas_cc "${DESELECT[@]}"

@@ -1,0 +1,17 @@
+# Test-time dependencies for the mas_cc suite, pinned to the versions of the
+# Cygnus analysis environment on 2026-09-19 (the environment every
+# byte-identity claim in PRs #9/#10 was measured in). Heavy runtime extras
+# (torch, sentence-transformers, comet, gemma) are not imported by any test
+# and are deliberately absent; the package is installed with --no-deps.
+numpy==2.4.6
+pandas==3.0.5
+pyarrow==25.0.0
+PyYAML==6.0.3
+scikit-learn==1.9.1
+scipy==1.17.1
+matplotlib==3.11.1
+requests==2.34.2
+python-dotenv==1.2.3
+tqdm==4.70.1
+redis==8.1.0
+pytest==9.1.1
