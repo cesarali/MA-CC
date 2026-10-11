@@ -1653,7 +1653,7 @@ class BlackboardStudyReader:
                 "available": False,
                 "status": "missing",
                 "reason": "Analysis has not been aggregated for this study.",
-                "command": f"mas-cc study aggregate --study-dir {self.study_dir}",
+                "command": f"mas-cc study aggregate --study-dir {self.study_dir.name}",
                 "artifacts": [],
             }
         try:
@@ -1665,7 +1665,7 @@ class BlackboardStudyReader:
                 "available": False,
                 "status": "invalid",
                 "reason": str(exc),
-                "command": f"mas-cc study aggregate --study-dir {self.study_dir}",
+                "command": f"mas-cc study aggregate --study-dir {self.study_dir.name}",
                 "artifacts": [],
             }
         allowed = []

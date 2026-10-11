@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import json
+import math
 import mimetypes
+import re
+import sys
+import traceback
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
@@ -42,8 +47,64 @@ def _asset(name: str) -> bytes:
     return files("mas_cc.blackboard_dashboard.assets").joinpath(name).read_bytes()
 
 
+def _encode_default(value: object) -> object:
+    """Encode the non-JSON values a reader can hand back (numpy scalars, paths, sets)."""
+
+    item = getattr(value, "item", None)
+    if callable(item) and getattr(value, "shape", None) == ():
+        return item()
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        return tolist()
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, (set, frozenset)):
+        return sorted(value, key=str)
+    raise TypeError(f"{type(value).__name__} is not JSON serialisable")
+
+
+def _finite(value: object) -> object:
+    """Replace NaN and infinities with null; browsers reject the literals json emits."""
+
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _finite(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_finite(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return [_finite(item) for item in sorted(value, key=str)]
+    if isinstance(value, Path):
+        return value.as_posix()
+    if hasattr(value, "item") or hasattr(value, "tolist"):
+        return _finite(_encode_default(value))
+    return value
+
+
 def _json(value: object) -> bytes:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    try:
+        text = json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+            default=_encode_default,
+        )
+    except ValueError:
+        # A non-finite float is somewhere in the payload: pay for the walk only then.
+        text = json.dumps(
+            _finite(value), ensure_ascii=False, sort_keys=True, allow_nan=False
+        )
+    return text.encode("utf-8")
+
+
+_ABSOLUTE_PATH = re.compile(r"(?<![\w.~-])/(?:[^\s/:'\"]+/)+(?=[^\s/:'\"])")
+
+
+def _public_error(exc: BaseException) -> str:
+    """The message for a 4xx body, with server directory names removed."""
+
+    return _ABSOLUTE_PATH.sub("", str(exc))
 
 
 def make_handler(reader: DashboardReader):
@@ -225,8 +286,28 @@ def make_handler(reader: DashboardReader):
                     )
                     return
                 self._send(404, "application/json", _json({"error": "not found"}))
+            except (BrokenPipeError, ConnectionResetError):
+                return  # the client went away; there is no socket left to answer on
             except (OSError, ValueError) as exc:
-                self._send(400, "application/json", _json({"error": str(exc)}))
+                self._send(
+                    400, "application/json", _json({"error": _public_error(exc)})
+                )
+            except Exception:  # noqa: BLE001 - a reader defect must not drop the connection
+                request_id = uuid.uuid4().hex[:12]
+                print(
+                    f"dashboard request {request_id} {parsed.path} failed\n"
+                    f"{traceback.format_exc()}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                try:
+                    self._send(
+                        500,
+                        "application/json",
+                        _json({"error": "internal error", "request_id": request_id}),
+                    )
+                except OSError:
+                    return
 
         def log_message(self, format: str, *args: object) -> None:
             return
