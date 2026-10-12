@@ -144,6 +144,44 @@ def precision_table(e, ds, sim, setup, out):
     (out / "tab_eff_precision.tex").write_text("\n".join(lines) + "\n")
 
 
+def phase_figure(ph, sim, setup, out):
+    """eta (one agent, beliefs) and eta_JS (swarm) over qc x rate (Simulation 2) or qc x b (Simulation 1)."""
+    ph = ph[(ph.sim == sim) & (ph.setup == f"task003_{setup}")]
+    rhos = [0.75, 1.0] if setup == "nosolution" else [0.75]
+    xs = [0.5, 1.0, 2.0, 4.0, 8.0] if sim == "sim2" else [1, 2, 3, 6, 9]
+    qcs = [3, 6, 12, 24]
+    panels = [("agent_beliefs", "eta", "η, one agent", g) for g in (["on", "off"] if sim == "sim2" else ["on"])]
+    panels += [("swarm_beliefs_k3", "eta_JS", "η$_{JS}$, swarm", g) for g in (["on", "off"] if sim == "sim2" else ["on"])]
+    fig, axes = plt.subplots(len(rhos), len(panels), figsize=(1.85 * len(panels) + 0.7, 1.65 * len(rhos) + 0.35),
+                             squeeze=False)
+    for i, rho in enumerate(rhos):
+        for j, (res, q, lab, gate) in enumerate(panels):
+            ax = axes[i, j]
+            m = np.full((len(qcs), len(xs)), np.nan)
+            for r in ph[(ph.rho == rho) & (ph.resolution == res) & (ph.gate == gate)].itertuples():
+                if q == "eta" and not (np.isfinite(r.C) and r.C >= 0.01):
+                    continue
+                m[qcs.index(r.qc), xs.index(r.x)] = getattr(r, q)
+            im = ax.imshow(m, origin="lower", cmap="viridis", vmin=0, vmax=1, aspect="auto")
+            for a_ in range(len(qcs)):
+                for b_ in range(len(xs)):
+                    txt = "–" if np.isnan(m[a_, b_]) else f"{m[a_, b_]:.2f}"
+                    ax.text(b_, a_, txt, ha="center", va="center", fontsize=5.5,
+                            color="white" if (np.isnan(m[a_, b_]) or m[a_, b_] < 0.55) else "black")
+            ax.set_xticks(range(len(xs)), [f"{x:g}" for x in xs], fontsize=6)
+            ax.set_yticks(range(len(qcs)), qcs, fontsize=6)
+            gl = f", gate {gate}" if sim == "sim2" else ""
+            if i == 0:
+                ax.set_title(f"{lab}{gl}", fontsize=6.5)
+            if i == len(rhos) - 1:
+                ax.set_xlabel("$\\lambda_c$" if sim == "sim2" else "$b$", fontsize=7)
+            if j == 0:
+                ax.set_ylabel(f"$\\rho$ = {rho:g}\n$q_c$", fontsize=7)
+    fig.colorbar(im, ax=axes, shrink=0.85, pad=0.02)
+    fig.savefig(out / "fig_eff_phase.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default="2026-10-12")
@@ -152,12 +190,14 @@ def main():
     e = pd.read_csv(d / "efficiency.csv")
     u = pd.read_csv(d / "uncertainty.csv")
     ds = pd.read_csv(d / "downsample.csv")
+    ph = pd.read_csv(d / "efficiency_phase.csv")
     for (sim, setup), rep in REPORTS.items():
         out = rep / "figures"
         out.mkdir(parents=True, exist_ok=True)
         settings_figure(e, u, sim, setup, out)
         time_figure(e, sim, setup, out)
         precision_table(e, ds, sim, setup, out)
+        phase_figure(ph, sim, setup, out)
         print("written", out)
 
 

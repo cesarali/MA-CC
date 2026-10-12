@@ -11,6 +11,7 @@ arm, the budget of the later LLM runs.
 | `build_states.py` | gathers one row per (simulation, setting, arm, episode, time): mean beliefs m, vote shares x, and the agents' uncertainty H̄, JSD |
 | `efficiency.py` | **the estimators**: `measures()` computes I, C, R, η, η_JS, I₃ from three distributions; `resolutions()` defines X; 1,000-resample paired bootstrap; label-swap null for I |
 | `downsample.py` | precision study: 200 paired subsets of 50 / 100 / 300 episodes; bias, RMSE, how often C is infinite, how often two settings keep their order |
+| `phase.py` | efficiency over the whole control plane (every qc × rate or b), point estimates at t = 30, for the phase diagrams |
 | `make_report_figures.py` | figures and precision tables for the efficiency sections of the extended reports |
 | `extend_reports.py` | builds the extended reports (12 October) from the dated originals: original text unchanged, plus a simulator paragraph and the efficiency section |
 

@@ -1,5 +1,9 @@
 # coarse_graining — is the coarse-graining valid?
 
+> **Next (12 October 2026): [`2026-10-12_plan_simulator_data.md`](2026-10-12_plan_simulator_data.md)** —
+> coarse-graining on the simulator data (both simulations, recorded data only), for a dynamical
+> model of control and path-level efficiency. Plan only; not started.
+
 > **Plan (6 October 2026): rerun the calculation and the four Markov tests on
 > the new LLM-free simulator's data**, for both frozen setups. The code is in
 > [`code/`](code/): `four_tests.py` (the four tests) and `estimate.py` (chain

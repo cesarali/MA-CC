@@ -88,7 +88,10 @@ I = \tfrac12\,\mathrm{KL}(\hat P_+\Vert \hat Q) + \tfrac12\,\mathrm{KL}(\hat P_-
 C = \tfrac12\,\mathrm{KL}(\hat P_+\Vert \hat P_0) + \tfrac12\,\mathrm{KL}(\hat P_-\Vert \hat P_0),
 \end{equation}
 with $\hat Q = \frac12(\hat P_+ + \hat P_-)$ and $\mathrm{KL}(p\Vert q) = \sum_x p(x)\log_2[p(x)/q(x)]$.
-Exactly $C = I + \mathrm{KL}(\hat Q\Vert\hat P_0)$, and $\eta = I/C \in [0,1]$. Two resolutions:
+$I$ is the mutual information $I(Z; X_t)$ between the target $Z$ (A0 or A2, chosen by a fair coin)
+and the state $X_t$; silence does not enter it. The reference $\hat P_0$ in $C$ is the
+distribution of the \emph{silent} arm. Exactly $C = I + \mathrm{KL}(\hat Q\Vert\hat P_0)$, and
+$\eta = I/C \in [0,1]$. Two resolutions:
 \textbf{one agent} ($X$ = the vote of a randomly chosen agent; $y_a(e)$ = that episode's vote shares)
 and the \textbf{swarm} ($X$ = $s = m_{\text{A0}} - m_{\text{A2}}$, the difference of the agents' mean
 beliefs, in three equal bins on $[-1,1]$; $y_a(e)$ marks the episode's bin). At swarm level the
@@ -99,7 +102,14 @@ of the agents' beliefs (0 to 1.58 bits), and the disagreement $\mathrm{JSD} = H(
 \bar H$, each as controlled minus silent in the same episode ($\Delta\bar H$, $\Delta$JSD). All
 quantities are taken at one time, across episodes; they are not divergences between whole
 trajectories (those would be at least as large). Setting: probability matching, $q = 6$,
-$q_c = 12$; 1{,}000 episodes per arm.
+$q_c = 12$ (Figure~\ref{fig:effphase}: every $q_c$); 1{,}000 episodes per arm.
+
+\paragraph{What $\eta$ does and does not say.} $\eta = 1$ when the two controllers move the swarm by
+equal amounts in opposite directions around silence. It falls in two cases: both controllers push
+the swarm the same way (a \emph{common push}), or one moves it much more than the other (a
+\emph{lopsided} response, for example when silence is already close to one target). $\eta$ measures
+how directed the change is, not how large it is ($I$) or what it costs; information per controller
+message ($I$ divided by the messages sent) varies far more across settings.
 """
 
 PRECISION = r"""
@@ -120,16 +130,24 @@ ROWS
 """
 
 FIGS = r"""
-\begin{figure}[H]
-\centering\includegraphics[width=\linewidth]{figures/fig_eff_settings.pdf}
+\begin{figure}[!htb]
+\centering\includegraphics[width=0.82\linewidth]{figures/fig_eff_settings.pdf}
 \caption{Steering $I$ (left), efficiency (middle) and the change in the agents' uncertainty
 (right; circles $\Delta\bar H$, triangles $\Delta$JSD) at $t = 30$ against XLABEL. Bars: 95\%
 intervals.}
 \label{fig:effsettings}
 \end{figure}
 
-\begin{figure}[H]
-\centering\includegraphics[width=\linewidth]{figures/fig_eff_time.pdf}
+\begin{figure}[!htb]
+\centering\includegraphics[width=PHASEW\linewidth]{figures/fig_eff_phase.pdf}
+\caption{Phase diagram of efficiency at $t = 30$ over the controller's reading budget $q_c$ and
+XPHASE ($q = 6$): one-agent $\eta$ (beliefs) and swarm $\eta_{JS}$. Dash: undefined (the
+controller changes almost nothing).}
+\label{fig:effphase}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering\includegraphics[width=0.76\linewidth]{figures/fig_eff_time.pdf}
 \caption{Over time, $\rho = 0.75$, TIMESET. Bands: 95\% intervals.}
 \label{fig:efftime}
 \end{figure}
@@ -140,9 +158,13 @@ FINDINGS = {
 \paragraph{Findings.} (Figures~\ref{fig:effsettings}, \ref{fig:efftime}; probability matching,
 $\rho = 0.75$.)
 \begin{itemize}\itemsep1pt
-\item \textbf{Larger batches steer more but less cleanly.} From $b = 1$ to $b = 9$ the swarm reveals
-  the target better ($I$ from 0.24 to 0.94 bits; one agent 0.10 to 0.39), while the one-agent
-  efficiency falls from 0.73 to 0.56: a growing part of the change happens whatever the target.
+\item \textbf{Larger batches make the response lopsided.} From $b = 1$ to $b = 9$ the target becomes
+  easier to read from the swarm ($I$ from 0.24 to 0.94 bits; one agent 0.10 to 0.39), because the
+  false controller now moves the swarm a lot (A0 votes 85\% $\to$ 27\%) while the truth controller
+  cannot move it further (85\% $\to$ 93\%, close to the ceiling). Averaged over the two targets,
+  control therefore shifts the swarm toward A2, and one-agent $\eta$ falls from 0.73 to 0.56. This
+  is not added noise: it is the asymmetry between what the two controllers can do. Reading more
+  posts ($q_c$) makes it slightly worse (Figure~\ref{fig:effphase}).
 \item \textbf{The false controller confuses rather than convinces.} The truth controller makes agents
   surer ($\Delta\bar H = -0.21$ to $-0.26$ bits) and more alike ($\Delta$JSD $-0.04$ to $-0.06$). The
   false controller makes them less sure ($+0.04$ to $+0.17$) and splits them ($\Delta$JSD $+0.19$ at
@@ -161,8 +183,8 @@ $\rho = 0.75$.)
   ($\rho = 0.75$) and 0.06 ($\rho = 1$), and the steering $I$ collapses with it. The extra facts move
   the swarm, but not in a target-dependent way.
 \item \textbf{With full memory, efficiency falls step by step with $b$} (0.87 at $b = 1$, 0.69 at
-  $b = 6$): the more of the pool goes out, the more both controllers push the swarm toward the same
-  place.
+  $b = 6$; at $q_c = 24$ it stays above 0.9, Figure~\ref{fig:effphase}): the more of the pool goes
+  out, the more both controllers push the swarm toward the same place (a common push toward A0).
 \item \textbf{Controllers make agents surer} ($\Delta\bar H \approx -0.4$ bits at $b \le 3$,
   $\rho = 0.75$); the truth controller also splits them a little ($\Delta$JSD $+0.06$ to $+0.07$). At
   $b = 9$ the gain in certainty shrinks.
@@ -175,9 +197,10 @@ $\rho = 0.75$.)
 ("sim2", "symmetric"): r"""
 \paragraph{Findings.} (Figures~\ref{fig:effsettings}, \ref{fig:efftime}; $\rho = 0.75$.)
 \begin{itemize}\itemsep1pt
-\item \textbf{Control is small but clean.} The swarm reveals the target only weakly ($I$ = 0.22--0.33
-  bits; one agent 0.04--0.12), but almost all of the change is directed ($\eta$ = 0.90--0.95 at one
-  agent, $\eta_{JS}$ = 0.88--0.93): more than in Simulation 1 (0.56--0.73).
+\item \textbf{Control is small but balanced.} The target is only weakly readable from the swarm
+  ($I$ = 0.22--0.33 bits; one agent 0.04--0.12), but the two controllers move it by similar amounts in
+  opposite directions ($\eta$ = 0.89--0.94 over the whole plane, Figure~\ref{fig:effphase}), unlike in
+  Simulation 1, where the false controller dominated (0.50--0.81).
 \item \textbf{Faster controllers and turning the gate off steer more} without losing efficiency.
 \item \textbf{The false controller confuses}: it leaves individual certainty unchanged
   ($|\Delta\bar H| \le 0.02$) but splits the swarm ($\Delta$JSD $+0.10$ to $+0.13$). The truth
@@ -190,14 +213,17 @@ $\rho = 0.75$.)
 ("sim2", "nosolution"): r"""
 \paragraph{Findings.} (Figures~\ref{fig:effsettings}, \ref{fig:efftime}.)
 \begin{itemize}\itemsep1pt
-\item \textbf{When agents forget, control is efficient at every rate.} The swarm reveals the target
-  well ($I \approx 0.8$ bits; one agent $\approx 0.3$) and about 90\% of the change is directed
-  ($\eta$ = 0.85--0.90), almost independent of the rate and of the gate. Fast controllers reach this
-  sooner (Figure~\ref{fig:efftime}).
+\item \textbf{When agents forget, $\eta$ is nearly constant} (0.86--0.95 over the whole plane,
+  Figure~\ref{fig:effphase}): the two controllers move the swarm about equally far in opposite
+  directions whatever the rate, gate or $q_c$. What changes is the price: about 0.12 bits of $I$ per
+  message at $\lambda_c = 0.5$ with the gate on, 0.03 at $\lambda_c = 8$. Fast controllers reach their
+  information sooner (Figure~\ref{fig:efftime}).
 \item \textbf{With full memory, faster control is less efficient}: one-agent $\eta$ falls from 0.93
-  ($\lambda_c = 0.5$, gate on) to 0.67 ($\lambda_c = 8$), and turning the gate off lowers it further at
-  slow rates. This is the mechanism of Section~3 (more different pool facts in circulation pull both
-  targets toward the same point), now measured as undirected change.
+  ($\lambda_c = 0.5$, gate on) to 0.67 ($\lambda_c = 8$), least at $q_c = 3$ and $24$
+  (Figure~\ref{fig:effphase}). This is the mechanism of Section~3 (more different pool facts in
+  circulation pull both targets toward the same point), now measured as a common push. Swarm
+  $\eta_{JS}$ moves the other way here, because swarm-level $I$ is saturated at 1 bit and cannot
+  register the change; the one-agent $\eta$ is the informative one.
 \item \textbf{Controllers make agents surer} ($\Delta\bar H \approx -0.27$ bits at $\rho = 0.75$) but
   split them somewhat ($\Delta$JSD $+0.06$ for target A2, $+0.11$ for target A0).
 \item \textbf{The swarm-level $I$ saturates at 1 bit} with full memory: every episode ends on its
@@ -226,9 +252,19 @@ def build(key):
               else "the controller rate $\\lambda_c$ (solid: gate on; dashed: gate off)")
     timeset = ("one line per $b$, end of each day" if sim == "sim1"
                else "gate on, one line per rate; the controller stops at $t = 30$ (dashed)")
-    section = (DEFINITIONS + FIGS.replace("XLABEL", xlabel).replace("TIMESET", timeset)
-               + FINDINGS[key] + PRECISION.replace("MAINSETTING", main).replace(
-                   "ROWS", (base / new / "figures" / "tab_eff_precision.tex").read_text().strip()) + "\n")
+    xphase = "the controller rate $\\lambda_c$" if sim == "sim2" else "the facts per night $b$"
+    phasew = {("sim1", "symmetric"): "0.42", ("sim1", "nosolution"): "0.45",
+              ("sim2", "symmetric"): "0.72", ("sim2", "nosolution"): "0.78"}[key]
+    figs = FIGS
+    findings = FINDINGS[key]
+    if sim == "sim1":                       # one controller step per night: the time course adds little
+        k = figs.index("\\begin{figure}[!htb]\n\\centering\\includegraphics[width=0.76")
+        figs = figs[:k]
+        findings = findings.replace("Figures~\\ref{fig:effsettings}, \\ref{fig:efftime}", "Figure~\\ref{fig:effsettings}")
+    section = (DEFINITIONS + figs.replace("XLABEL", xlabel).replace("TIMESET", timeset)
+               .replace("XPHASE", xphase).replace("PHASEW", phasew)
+               + PRECISION.replace("MAINSETTING", main).replace(
+                   "ROWS", (base / new / "figures" / "tab_eff_precision.tex").read_text().strip()) + findings + "\n")
     out = head + section + sep + tail
     # the original text, minus the two insertions, must be unchanged
     check = out.replace(SIMULATOR[sim], "").replace(section, "").replace(
