@@ -218,13 +218,13 @@ state $X$: at \emph{one-agent} level its vote shares (the vote of a randomly cho
 beliefs, three equal bins on $[-1,1]$). Then $\hat P_a = \frac1n\sum_e y_a(e)$. Any pair of controllers
 can be written as
 \begin{equation}\label{eq:split}
-\hat P_\pm = \hat P_0 + c \pm \Delta,\qquad c = \tfrac12(\hat P_+ + \hat P_-) - \hat P_0,\quad
-\Delta = \tfrac12(\hat P_+ - \hat P_-),
+\hat P_\pm = \hat P_0 + \mu \pm \delta,\qquad \mu = \tfrac12(\hat P_+ + \hat P_-) - \hat P_0,\quad
+\delta = \tfrac12(\hat P_+ - \hat P_-),
 \end{equation}
-a \emph{common} part $c$ (what control does on average, whatever the target) and a
-\emph{directional} part $\Delta$.
+a \emph{common} part $\mu$ (what control does on average, whatever the target) and a
+\emph{directional} part $\delta$; both are vectors over the values of $X$ (all answers, A1 included).
 
-\noindent\textbf{Readability and the pair efficiency.} With $\hat Q = \hat P_0 + c$ and
+\noindent\textbf{Readability and the pair efficiency.} With $\hat Q = \hat P_0 + \mu$ and
 $\mathrm{KL}(p\Vert q) = \sum_x p(x)\log_2[p(x)/q(x)]$,
 \begin{equation}\label{eq:eta}
 I = \tfrac12\mathrm{KL}(\hat P_+\Vert\hat Q) + \tfrac12\mathrm{KL}(\hat P_-\Vert\hat Q),\quad
@@ -232,19 +232,24 @@ C = \tfrac12\mathrm{KL}(\hat P_+\Vert\hat P_0) + \tfrac12\mathrm{KL}(\hat P_-\Ve
 R = \mathrm{KL}(\hat Q\Vert\hat P_0),\quad \eta = I/C .
 \end{equation}
 $I$ is the mutual information between the target and the state: how readable the command is
-(at most 1 bit). $I$ depends only on $\Delta$, $R$ only on $c$; the reference $\hat P_0$ is the silent
-arm. For small changes, $\mathrm{KL}(p+\epsilon\Vert p) \approx \sum_x \epsilon(x)^2/(2\ln 2\,p(x))$ gives
+(at most 1 bit). $I = \frac12\mathrm{KL}(\hat Q+\delta\Vert\hat Q) + \frac12\mathrm{KL}(\hat Q-\delta\Vert\hat Q)$
+depends on $\delta$ and on where the pair sits ($\hat Q$); $R = \mathrm{KL}(\hat P_0+\mu\Vert\hat P_0)$ depends
+only on $\mu$; $C$ (a number) $= I + R$, so $R = C - I$. The reference $\hat P_0$ is the silent arm. For
+small changes, $\mathrm{KL}(p+\epsilon\Vert p) \approx \sum_x \epsilon(x)^2/(2\ln 2\,p(x))$ gives
 \begin{equation}\label{eq:etasmall}
-\eta \approx \frac{1}{1 + \Vert c\Vert^2/\Vert\Delta\Vert^2},\qquad \Vert v\Vert^2 = \sum_x \frac{v(x)^2}{\hat P_0(x)} .
+I \approx \frac{\Vert\delta\Vert^2}{2\ln 2},\quad R \approx \frac{\Vert\mu\Vert^2}{2\ln 2},\quad
+\eta \approx \frac{1}{1 + \Vert \mu\Vert^2/\Vert\delta\Vert^2},\qquad \Vert v\Vert^2 = \sum_x \frac{v(x)^2}{\hat P_0(x)} .
 \end{equation}
-So $\eta = 1$ exactly when the two controllers' changes are mirror images ($c = 0$), whatever their
+So $\eta = 1$ exactly when the two controllers' changes are mirror images ($\mu = 0$), whatever their
 size, and $\eta$ falls only through the \emph{ratio} of common to directional change: when both push
 the same way (a common push), or one moves the swarm much more than the other (a lopsided pair:
-along one direction with sizes $a$ and $b$, $\Vert c\Vert/\Vert\Delta\Vert = |a-b|/(a+b)$). It is a
+along one direction with sizes $a$ and $b$, $\Vert \mu\Vert/\Vert\delta\Vert = |a-b|/(a+b)$). It is a
 property of the pair, not of either controller, and it stays constant whenever both effects grow
 together. At swarm level $C$ is often infinite (the controlled swarm reaches states silence never
 visits); there we use $\eta_{JS} = I/(I + \mathrm{JS}(\hat Q,\hat P_0))$ with the bounded
-Jensen--Shannon divergence.
+Jensen--Shannon divergence; $\mathrm{JS}(\hat Q,\hat P_0)$ is the information the state carries about
+\emph{whether} a controller is present (controlled or silent, 50/50), so $\eta_{JS}$ compares
+information about the direction with information about the presence of control.
 
 \noindent\textbf{Each controller against its own target} $z$ (one agent, votes):
 \begin{equation}\label{eq:progress}
