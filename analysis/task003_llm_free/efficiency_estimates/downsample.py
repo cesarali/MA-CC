@@ -22,7 +22,7 @@ from efficiency import RES, arm_arrays, measures, resolutions
 
 N_SUB = (50, 100, 300)
 REPS = 200
-QUANTITIES = ("I", "C", "eta", "eta_JS", "I3")
+QUANTITIES = ("I", "C", "eta", "eta_JS", "I3", "progress_plus", "progress_minus", "focus_plus", "focus_minus")
 TIMES = {"sim1": (30.0,), "sim2": (30.0, 40.0)}
 
 
@@ -42,10 +42,13 @@ def main():
             F = {x: arms[x][arms[x].t == t].sort_values("episode") for x in arms}
             for name, level, source, fy in resolutions():
                 Y = {x: fy(F[x]) for x in F}
-                full = measures(*(Y[x].mean(axis=0) for x in ("+", "-", "0")))
+                tg = (0, 2) if level == "agent" else None
+                full = measures(*(Y[x].mean(axis=0) for x in ("+", "-", "0")), targets=tg)
                 for m, idx in subsets.items():
-                    sub = measures(*(Y[x][idx].mean(axis=1) for x in ("+", "-", "0")))
+                    sub = measures(*(Y[x][idx].mean(axis=1) for x in ("+", "-", "0")), targets=tg)
                     for q in QUANTITIES:
+                        if q not in full:
+                            continue
                         v, f = sub[q], float(full[q])
                         ok = np.isfinite(v)
                         rows.append(dict(sim=sim, setup=setup, rho=rho, setting=setting, t=t, resolution=name,

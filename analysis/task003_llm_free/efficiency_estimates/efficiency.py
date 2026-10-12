@@ -49,7 +49,34 @@ def kl(p: np.ndarray, q: np.ndarray) -> np.ndarray:
     return np.where(bad, np.inf, t.sum(axis=-1))
 
 
-def measures(Pp, Pm, P0) -> dict:
+def kl_binary(a, b):
+    """KL(Bern(a) || Bern(b)) in bits; inf where b is 0 or 1 and a differs from it."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t1 = np.where(a > 0, a * np.log2(a / np.where(b > 0, b, 1.0)), 0.0)
+        t0 = np.where(a < 1, (1 - a) * np.log2((1 - a) / np.where(b < 1, 1 - b, 1.0)), 0.0)
+    bad = ((a > 0) & (b <= 0)) | ((a < 1) & (b >= 1))
+    return np.where(bad, np.inf, t1 + t0)
+
+
+def per_controller(Pz, P0, Cz, k) -> dict:
+    """Measures of ONE controller against its own target k (agent level; k = 0 for A0, 2 for A2).
+    S: minimum information any intervention needs to raise the target's probability from
+       P0(k) to Pz(k) (the binary KL; the cheapest change keeps the other answers in proportion).
+    progress = S / log2(1/P0(k)): share of the way from silence to unanimity on the target.
+    focus = S / KL(Pz || P0): share of the controller's actual change needed for its gain.
+    Both are signed: negative when the controller moved the target's probability DOWN (backfire)."""
+    S = kl_binary(Pz[..., k], P0[..., k])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        full = -np.log2(P0[..., k])
+        progress = np.where((full >= 0.01) & np.isfinite(full) & np.isfinite(S), S / full, np.nan)   # < 0.01 bits left: undefined
+        progress = np.where(Pz[..., k] < P0[..., k], -progress, progress)    # signed: moved away from target
+        focus = np.where(np.isfinite(Cz) & (Cz >= 0.005) & np.isfinite(S), S / Cz, np.nan)
+        focus = np.where(Pz[..., k] < P0[..., k], -focus, focus)          # signed like progress
+    return {"S": S, "progress": progress, "focus": focus}
+
+
+def measures(Pp, Pm, P0, targets=None) -> dict:
     Q = (Pp + Pm) / 2
     I = (kl(Pp, Q) + kl(Pm, Q)) / 2
     Cp, Cm = kl(Pp, P0), kl(Pm, P0)
@@ -62,7 +89,12 @@ def measures(Pp, Pm, P0) -> dict:
     with np.errstate(divide="ignore", invalid="ignore"):
         eta = np.where(np.isfinite(C) & (C > 1e-12), I / C, np.nan)
         eta_js = np.where(I + RJS > 1e-12, I / (I + RJS), np.nan)
-    return {"I": I, "C": C, "C_plus": Cp, "C_minus": Cm, "R": R, "eta": eta, "R_JS": RJS, "eta_JS": eta_js, "I3": I3}
+    out = {"I": I, "C": C, "C_plus": Cp, "C_minus": Cm, "R": R, "eta": eta, "R_JS": RJS, "eta_JS": eta_js, "I3": I3}
+    if targets is not None:
+        for sign, Pz, Cz, k in (("plus", Pp, Cp, targets[0]), ("minus", Pm, Cm, targets[1])):
+            for name, v in per_controller(Pz, P0, Cz, k).items():
+                out[f"{name}_{sign}"] = v
+    return out
 
 
 def resample_counts(n: int, name: str, b: int = B) -> np.ndarray:
@@ -114,8 +146,9 @@ def main():
             assert all(len(F[x]) == n for x in F), (key, t)
             for name, level, source, fy in resolutions():
                 Y = {x: fy(F[x]) for x in F}
-                point = measures(*(Y[x].mean(axis=0) for x in ("+", "-", "0")))
-                boot = measures(*((counts @ Y[x]) / n for x in ("+", "-", "0")))
+                tg = (0, 2) if level == "agent" else None
+                point = measures(*(Y[x].mean(axis=0) for x in ("+", "-", "0")), targets=tg)
+                boot = measures(*((counts @ Y[x]) / n for x in ("+", "-", "0")), targets=tg)
                 row = dict(sim=sim, setup=setup, rho=rho, setting=setting, t=t, resolution=name, level=level,
                            source=source, n=n)
                 row.update(summarise(point, boot))

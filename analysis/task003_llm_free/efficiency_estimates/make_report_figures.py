@@ -14,6 +14,7 @@ import argparse, pathlib
 
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.colors  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -117,10 +118,14 @@ def time_figure(e, sim, setup, out):
 
 
 def precision_table(e, ds, sim, setup, out):
-    main = "b1" if sim == "sim1" else "lc1_gateon"
+    main = "b3" if sim == "sim1" else "lc1_gateon"
     rows = [("steering $I$, swarm (3 bins)", SWARM, "I", None), ("steering $I$, one agent (votes)", "agent_votes", "I", None),
             ("efficiency $\\eta$, one agent (votes)", "agent_votes", "eta", None),
             ("efficiency $\\eta_{JS}$, swarm", SWARM, "eta_JS", None),
+            ("progress $\\pi$, target A0 (votes)", "agent_votes", "progress_plus", None),
+            ("progress $\\pi$, target A2 (votes)", "agent_votes", "progress_minus", None),
+            ("focus $\\varphi$, target A0 (votes)", "agent_votes", "focus_plus", None),
+            ("focus $\\varphi$, target A2 (votes)", "agent_votes", "focus_minus", None),
             ("$\\Delta\\bar H$, target A0", "paired_truth", "dHbar", None), ("$\\Delta\\bar H$, target A2", "paired_false", "dHbar", None),
             ("$\\Delta$JSD, target A0", "paired_truth", "dJSD", None), ("$\\Delta$JSD, target A2", "paired_false", "dJSD", None)]
     lines = []
@@ -130,7 +135,7 @@ def precision_table(e, ds, sim, setup, out):
         if d.empty:
             continue
         full = d.full.iloc[0]
-        if q in ("eta",) and not np.isfinite(full):
+        if q in ("eta", "progress_plus", "progress_minus", "focus_plus", "focus_minus") and not np.isfinite(full):
             continue
         err = {int(r.n_sub): r.rmse for r in d.itertuples()}
         inf = {int(r.n_sub): r.share_not_finite for r in d.itertuples()}
@@ -182,6 +187,108 @@ def phase_figure(ph, sim, setup, out):
     plt.close(fig)
 
 
+SPEC = {"sim1": "b3", "sim2": "lc1_gateon"}        # the one setting shown over time (rho 0.75, qc 12)
+
+
+def time2_figure(e, u, sim, setup, out):
+    """At one setting: steering I, progress of each controller, directedness, agents' uncertainty, over time."""
+    st = SPEC[sim]
+    e = e[(e.sim == sim) & (e.setup == f"task003_{setup}") & (e.rho == 0.75) & (e.setting == st)]
+    u = u[(u.sim == sim) & (u.setup == f"task003_{setup}") & (u.rho == 0.75) & (u.setting == st)]
+    fig, axes = plt.subplots(1, 4, figsize=(7.4, 1.95))
+    av = e[e.resolution == "agent_votes"].sort_values("t")
+    sw = e[e.resolution == SWARM].sort_values("t")
+    ax = axes[0]
+    for x, col, lab in ((sw, "k", "swarm"), (av, "0.55", "one agent")):
+        ax.plot(x.t, x.I, color=col, lw=1, label=lab)
+        ax.fill_between(x.t, x.I_lo, x.I_hi, color=col, alpha=.2, lw=0)
+    ax.set_title("steering $I(t)$ (bits)")
+    ax = axes[1]
+    for k, col, lab in (("plus", TCOL["truth"], "target A0"), ("minus", TCOL["false"], "target A2")):
+        ax.plot(av.t, av[f"progress_{k}"], color=col, lw=1, label=lab)
+        ax.fill_between(av.t, av[f"progress_{k}_lo"], av[f"progress_{k}_hi"], color=col, alpha=.2, lw=0)
+    ax.axhline(0, color="0.6", lw=0.6)
+    ax.set_title("progress $\\pi_z(t)$")
+    ax = axes[2]
+    for q, x, col, lab in (("focus_plus", av, TCOL["truth"], "focus, A0"), ("focus_minus", av, TCOL["false"], "focus, A2"),
+                           ("eta", av, "tab:green", "$\\eta$, one agent"), ("eta_JS", sw, "tab:purple", "$\\eta_{JS}$, swarm")):
+        y = x[x.C >= 0.01] if q == "eta" else x
+        ax.plot(y.t, y[q], color=col, lw=1, label=lab)
+    ax.set_ylim(min(0, float(np.nanmin(av[["focus_plus", "focus_minus"]].to_numpy())) - 0.05), 1.03)
+    ax.set_title("directedness")
+    ax = axes[3]
+    for arm, col in (("truth", TCOL["truth"]), ("false", TCOL["false"])):
+        for m, ls in (("Hbar", "-"), ("JSD", "--")):
+            x = u[(u.arm == arm) & (u.measure == m)].sort_values("t")
+            mlab = "$\\Delta\\bar H$" if m == "Hbar" else "$\\Delta$JSD"
+            tlab = "A0" if arm == "truth" else "A2"
+            ax.plot(x.t, x["diff"], color=col, ls=ls, lw=1, label=f"{mlab}, {tlab}")
+    ax.axhline(0, color="0.6", lw=0.6)
+    ax.set_title("agents' uncertainty (bits)")
+    for ax in axes:
+        ax.set_xlabel("day" if sim == "sim1" else "time $t$")
+        if sim == "sim2":
+            ax.axvline(30, color="0.5", ls="--", lw=0.6)
+        ax.legend(fontsize=4.8, loc="best")
+    fig.tight_layout(pad=0.3)
+    fig.savefig(out / "fig_eff_time2.pdf")
+    plt.close(fig)
+
+
+def _tiles(ax, m, xs, qcs, fmt, vmin, vmax, cmap):
+    im = ax.imshow(m, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
+    for a_ in range(len(qcs)):
+        for b_ in range(len(xs)):
+            v = m[a_, b_]
+            txt = "–" if np.isnan(v) else format(v, fmt)
+            dark = (not np.isnan(v)) and (0.299 * plt.get_cmap(cmap)((min(max(v, vmin), vmax) - vmin) / (vmax - vmin))[0]
+                                          + 0.587 * plt.get_cmap(cmap)((min(max(v, vmin), vmax) - vmin) / (vmax - vmin))[1]
+                                          + 0.114 * plt.get_cmap(cmap)((min(max(v, vmin), vmax) - vmin) / (vmax - vmin))[2]) < 0.5
+            ax.text(b_, a_, txt, ha="center", va="center", fontsize=5.0, color="white" if dark else "black")
+    ax.set_xticks(range(len(xs)), [f"{x:g}" for x in xs], fontsize=5.5)
+    ax.set_yticks(range(len(qcs)), qcs, fontsize=5.5)
+    return im
+
+
+def phase_grid(ph, sim, setup, out, name, panels, rows_rho, cmap, vmin, vmax, fmt, clabel):
+    ph = ph[(ph.sim == sim) & (ph.setup == f"task003_{setup}") & (ph.resolution == "agent_votes")]
+    xs = [0.5, 1.0, 2.0, 4.0, 8.0] if sim == "sim2" else [1, 2, 3, 6, 9]
+    qcs = [3, 6, 12, 24]
+    fig, axes = plt.subplots(len(rows_rho), len(panels), figsize=(1.6 * len(panels) + 0.7, 1.45 * len(rows_rho) + 0.35),
+                             squeeze=False)
+    for i, rho in enumerate(rows_rho):
+        for j, (col, lab, gate) in enumerate(panels):
+            m = np.full((len(qcs), len(xs)), np.nan)
+            for r in ph[(ph.rho == rho) & (ph.gate == gate)].itertuples():
+                v = getattr(r, col)
+                if np.isfinite(v):
+                    m[qcs.index(r.qc), xs.index(r.x)] = v
+            im = _tiles(axes[i, j], m, xs, qcs, fmt, vmin, vmax, cmap)
+            if i == 0:
+                axes[i, j].set_title(lab + (f", gate {gate}" if sim == "sim2" else ""), fontsize=6)
+            if i == len(rows_rho) - 1:
+                axes[i, j].set_xlabel("$\\lambda_c$" if sim == "sim2" else "$b$", fontsize=6.5)
+            if j == 0:
+                axes[i, j].set_ylabel(f"$\\rho$ = {rho:g}\n$q_c$", fontsize=6.5)
+    fig.colorbar(im, ax=axes, shrink=0.85, pad=0.02, label=clabel)
+    fig.savefig(out / name, bbox_inches="tight")
+    plt.close(fig)
+
+
+def phase_new(ph, sim, setup, out):
+    rhos = [0.75, 1.0] if setup == "nosolution" else [0.75]
+    gates = ["on", "off"] if sim == "sim2" else ["on"]
+    prog = [(f"progress_{k}", f"$\\pi$, {t}", g) for k, t in (("plus", "target A0"), ("minus", "target A2")) for g in gates]
+    phase_grid(ph, sim, setup, out, "fig_eff_phase_progress.pdf", prog, rhos, "RdBu", -0.5, 0.5, ".2f",
+               "progress $\\pi_z$")
+    fp = [("focus_plus", "$\\varphi$, target A0", "on"), ("focus_minus", "$\\varphi$, target A2", "on")]
+    phase_grid(ph, sim, setup, out, "fig_eff_phase_focus.pdf", fp, rhos, "RdBu", -1, 1, ".2f", "focus $\\varphi_z$")
+    pr = [("S_per_fact_plus", "bits/fact, target A0", "on"), ("S_per_fact_minus", "bits/fact, target A2", "on")]
+    vmax = float(np.nanpercentile(ph[(ph.sim == sim) & (ph.setup == f"task003_{setup}") & (ph.resolution == "agent_votes")]
+                                  [["S_per_fact_plus", "S_per_fact_minus"]].replace(np.inf, np.nan).to_numpy(), 100))
+    phase_grid(ph, sim, setup, out, "fig_eff_phase_price.pdf", pr, rhos, "magma_r", 0, vmax, ".3f", "bits per fact posted")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default="2026-10-12")
@@ -198,6 +305,8 @@ def main():
         time_figure(e, sim, setup, out)
         precision_table(e, ds, sim, setup, out)
         phase_figure(ph, sim, setup, out)
+        time2_figure(e, u, sim, setup, out)
+        phase_new(ph, sim, setup, out)
         print("written", out)
 
 

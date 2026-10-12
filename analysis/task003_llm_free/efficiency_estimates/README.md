@@ -39,10 +39,16 @@ only (not pooled over time). With Q̂ = ½(P̂_+ + P̂_−) and KL in bits:
 | R | KL(Q̂‖P̂_0); C = I + R | undirected change (happens whatever the target) |
 | η | I / C ∈ [0, 1] | **efficiency**: share of the change that is directed |
 | η_JS | I / (I + JS(Q̂, P̂_0)) | bounded efficiency; finite where C is infinite |
+| S_z, π_z, φ_z | per controller, target z (one agent, votes): S_z = KL(Bern(P̂_z(z))‖Bern(P̂_0(z))), the least information any intervention needs for that gain; **progress** π_z = S_z / log₂(1/P̂_0(z)), share of the way from silence to unanimity; **focus** φ_z = S_z / KL(P̂_z‖P̂_0), share of the change that was needed; both signed (negative: target moved down) | **size and directedness of each controller** (added 12 October; η measures only the symmetry of the pair) |
+| price | S_z / facts posted (bits per fact) | cost of control |
 | ΔH̄, ΔJSD | controlled − silent, same episode, of H̄ = mean entropy of agents' beliefs and JSD = H(mean belief) − H̄ | **confusion check**: individual uncertainty, disagreement |
 
 **Adopted (12 October 2026):** I at swarm level (+ one-agent companion); η at agent level, η_JS
-at swarm level; ΔH̄ and ΔJSD. η reported only where C ≥ 0.01 bits.
+at swarm level; ΔH̄ and ΔJSD. η reported only where C ≥ 0.01 bits. **Added the same day:**
+progress π_z, focus φ_z and price per controller, because η depends only on the ratio of the common
+to the directional change (η ≈ 1/(1 + ‖c‖²/‖Δ‖²), with P̂_± = P̂_0 + c ± Δ) and so stays flat whenever
+both controllers' effects grow together. Progress is undefined when silence is within 0.01 bits of
+unanimity; focus when the controller's KL is below 0.005 bits.
 
 **Not path-level.** All distributions are at a single time t, across episodes. Path-level
 divergences would be at least as large (data-processing inequality): C(t) is a lower bound on

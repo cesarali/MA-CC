@@ -56,16 +56,31 @@ def triplets():
     return out
 
 
+def facts_posted(sim, cell) -> float:
+    """Mean facts the controller posted per episode (Simulation 2: messages, one fact each)."""
+    if sim == "sim2":
+        return float(pd.read_parquet(SIM2_GRID / cell / "episodes.parquet", columns=["controller_messages"])
+                     .controller_messages.mean())
+    n = pd.read_parquet(SIM1 / cell / "nights.parquet", columns=["episode", "n_posted"])
+    eps = pd.read_parquet(SIM1 / cell / "days.parquet", columns=["episode"]).episode.nunique()
+    return float(n.n_posted.sum() / eps)
+
+
 def one(tr) -> list[dict]:
     F = {"+": load(dict(sim=tr["sim"], cell=tr["truth"])), "-": load(dict(sim=tr["sim"], cell=tr["false"])),
          "0": load(dict(sim=tr["sim"], cell=tr["silent"]))}
+    facts = {"plus": facts_posted(tr["sim"], tr["truth"]), "minus": facts_posted(tr["sim"], tr["false"])}
     rows = []
     for name, level, source, fy in resolutions():
         if name not in ("agent_votes", "agent_beliefs", "swarm_beliefs_k3", "swarm_votes_k3"):
             continue
-        m = measures(*(fy(F[x]).mean(axis=0) for x in ("+", "-", "0")))
-        rows.append({**{k: tr[k] for k in ("sim", "setup", "rho", "qc", "x", "gate")}, "resolution": name,
-                     **{k: float(v) for k, v in m.items()}})
+        tg = (0, 2) if level == "agent" else None
+        m = {k: float(v) for k, v in measures(*(fy(F[x]).mean(axis=0) for x in ("+", "-", "0")), targets=tg).items()}
+        for sign in ("plus", "minus"):
+            m[f"facts_{sign}"] = facts[sign]
+            if tg is not None:          # price: minimum information injected per fact posted (bits per fact)
+                m[f"S_per_fact_{sign}"] = m[f"S_{sign}"] / facts[sign] if facts[sign] > 0 else np.nan
+        rows.append({**{k: tr[k] for k in ("sim", "setup", "rho", "qc", "x", "gate")}, "resolution": name, **m})
     return rows
 
 

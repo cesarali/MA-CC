@@ -248,9 +248,13 @@ off & 1.50\% & 76.1\% & 29.3\% & 5.67 \\
 \section{How efficiently does the controller steer?}\label{sec:eff}
 
 A controller can change the swarm in two ways: in the direction it is asked to, or in ways that
-happen whatever its target (for example pulling agents out of A1, or splitting them). We call the
-share of the first kind its \emph{efficiency}. The target is chosen by a fair coin, so how much the
-swarm's state reveals about it is a well-defined information.
+happen whatever its target. We measure how readable the command is in the swarm, how far each
+controller gets toward its target, how much of its change is directed, what each fact it posts buys,
+and how unsure the agents become. Throughout, the target is chosen by a fair coin, and all
+quantities are taken at one time $t$, across the 1{,}000 episodes of each arm (not over whole
+trajectories). Setting: probability matching, $q = 6$.
+
+\subsection{Measures}
 
 \begin{center}
 \begin{tikzpicture}[font=\small, dist/.style={draw, circle, minimum size=1.15cm, align=center, inner sep=1pt}]
@@ -270,95 +274,164 @@ its target ($I$, from the mixture $Q$ to each arm) and a part that does not ($R$
 $Q$). Efficiency $\eta = I/C$ is the directed share.}
 \end{center}
 
-\noindent For each arm $a$ (silent $0$, target A0 $+$, target A2 $-$) and a fixed time $t$, each
-episode $e$ contributes a probability vector $y_a(e)$ over the values $x$ of the state $X$, and
-\begin{equation}\label{eq:eff}
-\hat P_a(x) = \frac{1}{n}\sum_{e=1}^{n} y_a(e)(x),\qquad
-I = \tfrac12\,\mathrm{KL}(\hat P_+\Vert \hat Q) + \tfrac12\,\mathrm{KL}(\hat P_-\Vert \hat Q),\qquad
-C = \tfrac12\,\mathrm{KL}(\hat P_+\Vert \hat P_0) + \tfrac12\,\mathrm{KL}(\hat P_-\Vert \hat P_0),
+\noindent\textbf{Distributions.} For each arm $a$ (silent $0$, target A0 $+$, target A2 $-$) and a
+time $t$, each episode $e$ contributes a probability vector $y_a(e)$ over the values $x$ of the
+state $X$: at \emph{one-agent} level its vote shares (the vote of a randomly chosen agent), at
+\emph{swarm} level a mark on the bin of $s = m_{\text{A0}} - m_{\text{A2}}$ (difference of mean
+beliefs, three equal bins on $[-1,1]$). Then $\hat P_a = \frac1n\sum_e y_a(e)$. Any pair of controllers
+can be written as
+\begin{equation}\label{eq:split}
+\hat P_\pm = \hat P_0 + c \pm \Delta,\qquad c = \tfrac12(\hat P_+ + \hat P_-) - \hat P_0,\quad
+\Delta = \tfrac12(\hat P_+ - \hat P_-),
 \end{equation}
-with $\hat Q = \frac12(\hat P_+ + \hat P_-)$ and $\mathrm{KL}(p\Vert q) = \sum_x p(x)\log_2[p(x)/q(x)]$.
-$I$ is the mutual information $I(Z; X_t)$ between the target $Z$ (A0 or A2, chosen by a fair coin)
-and the state $X_t$; silence does not enter it. The reference $\hat P_0$ in $C$ is the
-distribution of the \emph{silent} arm. Exactly $C = I + \mathrm{KL}(\hat Q\Vert\hat P_0)$, and
-$\eta = I/C \in [0,1]$. Two resolutions:
-\textbf{one agent} ($X$ = the vote of a randomly chosen agent; $y_a(e)$ = that episode's vote shares)
-and the \textbf{swarm} ($X$ = $s = m_{\text{A0}} - m_{\text{A2}}$, the difference of the agents' mean
-beliefs, in three equal bins on $[-1,1]$; $y_a(e)$ marks the episode's bin). At swarm level the
-controlled swarm often reaches states the silent swarm never visits, which makes $C$ infinite; there
-we use the bounded version $\eta_{JS} = I/(I + \mathrm{JS}(\hat Q,\hat P_0))$, with JS the
-Jensen--Shannon divergence. We also measure how unsure the agents become: $\bar H$, the mean entropy
-of the agents' beliefs (0 to 1.58 bits), and the disagreement $\mathrm{JSD} = H(\text{mean belief}) -
-\bar H$, each as controlled minus silent in the same episode ($\Delta\bar H$, $\Delta$JSD). All
-quantities are taken at one time, across episodes; they are not divergences between whole
-trajectories (those would be at least as large). Setting: probability matching, $q = 6$,
-$q_c = 12$ (Figure~\ref{fig:effphase}: every $q_c$); 1{,}000 episodes per arm.
+a \emph{common} part $c$ (what control does on average, whatever the target) and a
+\emph{directional} part $\Delta$.
 
-\paragraph{What $\eta$ does and does not say.} $\eta = 1$ when the two controllers move the swarm by
-equal amounts in opposite directions around silence. It falls in two cases: both controllers push
-the swarm the same way (a \emph{common push}), or one moves it much more than the other (a
-\emph{lopsided} response, for example when silence is already close to one target). $\eta$ measures
-how directed the change is, not how large it is ($I$) or what it costs; information per controller
-message ($I$ divided by the messages sent) varies far more across settings.
+\noindent\textbf{Readability and the pair efficiency.} With $\hat Q = \hat P_0 + c$ and
+$\mathrm{KL}(p\Vert q) = \sum_x p(x)\log_2[p(x)/q(x)]$,
+\begin{equation}\label{eq:eta}
+I = \tfrac12\mathrm{KL}(\hat P_+\Vert\hat Q) + \tfrac12\mathrm{KL}(\hat P_-\Vert\hat Q),\quad
+C = \tfrac12\mathrm{KL}(\hat P_+\Vert\hat P_0) + \tfrac12\mathrm{KL}(\hat P_-\Vert\hat P_0) = I + R,\quad
+R = \mathrm{KL}(\hat Q\Vert\hat P_0),\quad \eta = I/C .
+\end{equation}
+$I$ is the mutual information between the target and the state: how readable the command is
+(at most 1 bit). $I$ depends only on $\Delta$, $R$ only on $c$; the reference $\hat P_0$ is the silent
+arm. For small changes, $\mathrm{KL}(p+\epsilon\Vert p) \approx \sum_x \epsilon(x)^2/(2\ln 2\,p(x))$ gives
+\begin{equation}\label{eq:etasmall}
+\eta \approx \frac{1}{1 + \Vert c\Vert^2/\Vert\Delta\Vert^2},\qquad \Vert v\Vert^2 = \sum_x \frac{v(x)^2}{\hat P_0(x)} .
+\end{equation}
+So $\eta = 1$ exactly when the two controllers' changes are mirror images ($c = 0$), whatever their
+size, and $\eta$ falls only through the \emph{ratio} of common to directional change: when both push
+the same way (a common push), or one moves the swarm much more than the other (a lopsided pair:
+along one direction with sizes $a$ and $b$, $\Vert c\Vert/\Vert\Delta\Vert = |a-b|/(a+b)$). It is a
+property of the pair, not of either controller, and it stays constant whenever both effects grow
+together. At swarm level $C$ is often infinite (the controlled swarm reaches states silence never
+visits); there we use $\eta_{JS} = I/(I + \mathrm{JS}(\hat Q,\hat P_0))$ with the bounded
+Jensen--Shannon divergence.
+
+\noindent\textbf{Each controller against its own target} $z$ (one agent, votes):
+\begin{equation}\label{eq:progress}
+S_z = \mathrm{KL}\big(\mathrm{Bern}(\hat P_z(z))\,\Vert\,\mathrm{Bern}(\hat P_0(z))\big),\qquad
+\pi_z = \frac{S_z}{\log_2[1/\hat P_0(z)]},\qquad
+\varphi_z = \frac{S_z}{\mathrm{KL}(\hat P_z\Vert\hat P_0)},\qquad
+\text{price} = \frac{S_z}{\text{facts posted}} .
+\end{equation}
+$S_z$ is the least information any intervention must inject to raise the target's share from its
+silent value to the observed one (raise the target, scale the other answers in proportion).
+\textbf{Progress} $\pi_z$ is the share of the way from silence to unanimity on the target, in bits;
+\textbf{focus} $\varphi_z$ the share of the controller's actual change that was needed for that gain;
+both are negative when the controller moved its target \emph{down}. The \textbf{price} is the
+information injected per fact the controller posted. Finally, the agents' own uncertainty:
+$\Delta\bar H$ (mean entropy of their beliefs) and $\Delta$JSD (disagreement, the entropy of the mean
+belief minus $\bar H$), controlled minus silent, same episode.
+
+\subsection{Over time, at one setting}
 
 \begin{figure}[!htb]
-\centering\includegraphics[width=0.82\linewidth]{figures/fig_eff_settings.pdf}
-\caption{Steering $I$ (left), efficiency (middle) and the change in the agents' uncertainty
-(right; circles $\Delta\bar H$, triangles $\Delta$JSD) at $t = 30$ against facts per night $b$ ($q = 6$, $q_c = 12$). Bars: 95\%
-intervals.}
-\label{fig:effsettings}
+\centering\includegraphics[width=0.92\linewidth]{figures/fig_eff_time2.pdf}
+\caption{At $\rho = 0.75$, $q_c = 12$, $b = 3$ (end of each day): readability $I(t)$, each controller's progress $\pi_z(t)$, directedness
+(focus $\varphi_z$, pair efficiency $\eta$, $\eta_{JS}$), and the agents' uncertainty. Bands: 95\%
+intervals over episodes.}
+\label{fig:efftime2}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{Control is reached within a few days and then stays.} Both controllers get 90\% of
+  their day-30 progress by day 4--5: $\pi_{\text{A0}} = 0.18$, $\pi_{\text{A2}} = 0.15$ at day 30.
+\item \textbf{Both controllers are focused} ($\varphi \ge 0.97$): almost all of what each changes moves
+  its own target. The pair efficiency is nevertheless only 0.65 ($\eta_{JS}$ 0.77): the pair is
+  lopsided (next subsections).
+\item \textbf{The false controller confuses}: it makes agents less sure ($\Delta\bar H = +0.09$ bits)
+  and splits them ($\Delta$JSD $= +0.20$); the truth controller makes them surer ($-0.24$) and more
+  alike ($-0.05$).
+\end{itemize}
+
+\subsection{Across the control plane}
+
+\begin{figure}[!htb]
+\centering\includegraphics[width=0.42\linewidth]{figures/fig_eff_phase_progress.pdf}
+\caption{Progress $\pi_z$ of each controller at $t = 30$ over the reading budget $q_c$ and the facts per night $b$
+(one agent, votes). Red: the controller moved its target down. Dash: undefined (silence already at
+unanimity).}
+\label{fig:effprog}
 \end{figure}
 
 \begin{figure}[!htb]
-\centering\includegraphics[width=0.42\linewidth]{figures/fig_eff_phase.pdf}
-\caption{Phase diagram of efficiency at $t = 30$ over the controller's reading budget $q_c$ and
-the facts per night $b$ ($q = 6$): one-agent $\eta$ (beliefs) and swarm $\eta_{JS}$. Dash: undefined (the
-controller changes almost nothing).}
+\centering
+\includegraphics[width=0.34\linewidth]{figures/fig_eff_phase_focus.pdf}\hfill
+\includegraphics[width=0.34\linewidth]{figures/fig_eff_phase_price.pdf}
+\caption{Left: focus $\varphi_z$ (negative: the change went against the target). Right: price,
+information injected per fact posted (bits). $t = 30$;  Dash: undefined (no change, or the
+controlled swarm considers an answer silence rules out completely).}
+\label{fig:efffocusprice}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering\includegraphics[width=0.32\linewidth]{figures/fig_eff_phase.pdf}
+\caption{Pair efficiency at $t = 30$ over $q_c$ and the facts per night $b$: one-agent $\eta$ (beliefs) and swarm
+$\eta_{JS}$. Dash: undefined.}
 \label{fig:effphase}
 \end{figure}
 
+\begin{itemize}\itemsep1pt
+\item \textbf{The false controller's progress grows with $b$}, from 0.02--0.08 at $b = 1$ to 0.43--0.49
+  at $b = 9$; the truth controller's is set by $q_c$ (0.25--0.42 at $q_c = 3$, 0.03--0.06 at $q_c = 24$):
+  the silent swarm already sits at 85\% A0, so its vote gate (at least 75\% of the posts read) keeps it
+  silent unless it reads few posts.
+\item \textbf{Focus stays at 0.93 or more everywhere}: neither controller wastes its change.
+\item \textbf{Each extra fact buys less}: the price (target A0) falls from up to 0.020 bits per fact at
+  $b = 1$ to 0.002--0.005 at $b = 9$.
+\item \textbf{With full memory} every agent proves A0 and nothing is measurable.
+\end{itemize}
+
+\subsection{Readability, pair efficiency and uncertainty against the facts per night}
+
+\begin{figure}[!htb]
+\centering\includegraphics[width=0.72\linewidth]{figures/fig_eff_settings.pdf}
+\caption{Readability $I$ (left), pair efficiency (middle) and the change in the agents' uncertainty
+(right; circles $\Delta\bar H$, triangles $\Delta$JSD) at $t = 30$ against facts per night $b$ ($q_c = 12$). Bars: 95\% intervals.}
+\label{fig:effsettings}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{$\eta$ falls with $b$ (0.73 to 0.56) because the pair becomes lopsided}, not because
+  either controller wastes effort: the false controller moves the A0 share from 85\% to 27\% at
+  $b = 9$, the truth controller only to 93\% (near the ceiling). On average control then shifts the
+  swarm toward A2; that shift is the same whatever the target, so $\eta$ counts it as undirected.
+\item Readability rises with $b$ (swarm 0.24 to 0.94 bits).
+\end{itemize}
+
+\subsection{Precision at 50, 100 and 300 paths}
 
 \begin{table}[H]
 \centering\small
-\caption{Precision. Value from 1{,}000 paths per arm, and root-mean-square error of the estimate from
-50, 100 or 300 paths (200 random subsets each), at $t = 30$, $b = 1$, $\rho = 0.75$. $^\ast$: share of subsets in
-which the quantity is infinite or undefined.}
+\caption{Value from 1{,}000 paths per arm, and root-mean-square error of the estimate from 50, 100
+or 300 paths (200 random subsets each), at $t = 30$, $b = 3$, $q_c = 12$, $\rho = 0.75$. $^\ast$: share of subsets in which
+the quantity is infinite or undefined.}
 \label{tab:effprec}
 \begin{tabular}{lcccc}
 \toprule
 quantity & 1{,}000 paths & error, 50 & error, 100 & error, 300 \\
 \midrule
-steering $I$, swarm (3 bins) & 0.241 & 0.053 & 0.034 & 0.018 \\
-steering $I$, one agent (votes) & 0.099 & 0.021 & 0.013 & 0.007 \\
-efficiency $\eta$, one agent (votes) & 0.732 & 0.082 & 0.058 & 0.030 \\
-efficiency $\eta_{JS}$, swarm & 0.781 & 0.055 & 0.042 & 0.018 \\
-$\Delta\bar H$, target A0 & -0.211 & 0.032 & 0.020 & 0.010 \\
-$\Delta\bar H$, target A2 & 0.044 & 0.035 & 0.024 & 0.011 \\
-$\Delta$JSD, target A0 & -0.041 & 0.010 & 0.007 & 0.003 \\
-$\Delta$JSD, target A2 & 0.191 & 0.020 & 0.014 & 0.006 \\
+steering $I$, swarm (3 bins) & 0.403 & 0.059 & 0.042 & 0.023 \\
+steering $I$, one agent (votes) & 0.167 & 0.023 & 0.016 & 0.009 \\
+efficiency $\eta$, one agent (votes) & 0.655 & 0.063 & 0.044 & 0.022 \\
+efficiency $\eta_{JS}$, swarm & 0.765 & 0.038 & 0.029 & 0.012 \\
+progress $\pi$, target A0 (votes) & 0.181 & 0.049 & 0.034 & 0.015 \\
+progress $\pi$, target A2 (votes) & 0.148 & 0.028 & 0.021 & 0.011 \\
+focus $\varphi$, target A0 (votes) & 0.981 & 0.057 & 0.039 & 0.016 \\
+focus $\varphi$, target A2 (votes) & 0.986 & 0.016 & 0.010 & 0.005 \\
+$\Delta\bar H$, target A0 & -0.242 & 0.031 & 0.020 & 0.010 \\
+$\Delta\bar H$, target A2 & 0.089 & 0.035 & 0.024 & 0.012 \\
+$\Delta$JSD, target A0 & -0.048 & 0.011 & 0.006 & 0.004 \\
+$\Delta$JSD, target A2 & 0.200 & 0.021 & 0.018 & 0.009 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Findings.} (Figure~\ref{fig:effsettings}; probability matching,
-$\rho = 0.75$.)
-\begin{itemize}\itemsep1pt
-\item \textbf{Larger batches make the response lopsided.} From $b = 1$ to $b = 9$ the target becomes
-  easier to read from the swarm ($I$ from 0.24 to 0.94 bits; one agent 0.10 to 0.39), because the
-  false controller now moves the swarm a lot (A0 votes 85\% $\to$ 27\%) while the truth controller
-  cannot move it further (85\% $\to$ 93\%, close to the ceiling). Averaged over the two targets,
-  control therefore shifts the swarm toward A2, and one-agent $\eta$ falls from 0.73 to 0.56. This
-  is not added noise: it is the asymmetry between what the two controllers can do. Reading more
-  posts ($q_c$) makes it slightly worse (Figure~\ref{fig:effphase}).
-\item \textbf{The false controller confuses rather than convinces.} The truth controller makes agents
-  surer ($\Delta\bar H = -0.21$ to $-0.26$ bits) and more alike ($\Delta$JSD $-0.04$ to $-0.06$). The
-  false controller makes them less sure ($+0.04$ to $+0.17$) and splits them ($\Delta$JSD $+0.19$ at
-  $b \le 3$).
-\item \textbf{With full memory there is nothing to measure}: every agent ends up proving A0, both
-  controllers leave the same state, $I = 0$ and efficiency is undefined.
-\item \textbf{100 paths are enough for differences of about 0.03 or more} (Table~\ref{tab:effprec});
-  efficiency is the least precise quantity here, because the effects on symmetric are small.
-\end{itemize}
+\noindent Across all settings, at 100 paths: readability $\pm0.01$ (one agent) to $\pm0.03$ (swarm),
+progress $\pm0.02$, focus $\pm0.01$--$0.02$, $\eta$ $\pm0.02$--$0.03$, $\Delta\bar H$ $\pm0.02$, $\Delta$JSD
+$\pm0.006$. Two settings that differ by at least 0.02 are ordered correctly in 90--100\% of subsets.
 
 \paragraph{Caveats.} One world (task\_003), 24 agents, exact-Bayesian agents; numbers
 are means over 1,000 episodes per cell. Full analysis, code and every table:
