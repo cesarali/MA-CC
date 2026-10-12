@@ -67,7 +67,7 @@ def tables(d: pathlib.Path) -> dict[str, str]:
                     a = x[(x.setting == s) & (x.resolution == AV)].iloc[0]
                     w = x[(x.setting == s) & (x.resolution == SW)].iloc[0]
                     eta = a.eta if (np.isfinite(a.C) and a.C >= 0.01) else np.nan
-                    eta3 = (2 / 3) * a.I / a.I3 if a.I3 > 1e-6 else np.nan
+                    eta3 = (2 / 3) * a.I / a.I3 if a.I3 >= 0.005 else np.nan          # same floor as eta
                     pq = ph[(ph.sim == sim) & (ph.setup == setup) & (ph.rho == rho) & (ph.qc == 12)
                             & (ph.resolution == AV)]
                     xv = float(s[1:]) if sim == "sim1" else float(s.split("_")[0][2:])
@@ -245,6 +245,12 @@ With KL(p‖q) = Σ_x p(x) log₂[p(x)/q(x)]:
 - **η₃** = ⅔ I / I₃, with I₃ the information about W ∈ {+, −, 0} (uniform). Chain rule:
   I₃ = I(presence; X) + ⅔ I, where the presence information uses the prior 2/3 controlled, 1/3
   silent. η₃ is the share of the three-way information that is about direction. Bounded, always finite.
+  Undefined when I₃ < 0.005 bits.
+- **All three pair measures are the same ratio.** For small changes the presence information with
+  prior w on "controlled" is ≈ w(1 − w)‖μ‖²/(2 ln 2), so with r = ‖μ‖²/‖δ‖²:
+  η ≈ 1/(1 + r), **η_JS ≈ 1/(1 + r/4)**, **η₃ ≈ 1/(1 + r/3)**. They are monotone functions of one
+  another and carry no extra information; η₃ and η_JS are only compressed toward 1 (η = 0.90 gives
+  η₃ ≈ 0.96, η_JS ≈ 0.97). They differ only for large changes (e.g. at swarm level).
 - Rule: η is reported only where C ≥ 0.01 bits.
 
 ### 2.4 Each controller against its own target
