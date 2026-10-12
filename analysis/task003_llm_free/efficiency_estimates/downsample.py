@@ -5,8 +5,8 @@ for every arm and every setting, so comparisons between settings stay paired. Ea
 recomputed on each subset and compared with its value on all 1,000 episodes.
 
 Usage, from the repository root (after build_states.py):
-    .venv/bin/python analysis/task003_llm_free/control_efficiency/downsample.py [--date <date>]
-Outputs in results/control_efficiency/<date>/:
+    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/downsample.py [--date <date>]
+Outputs in results/efficiency_estimates/<date>/:
   downsample.csv  per setting x time x resolution x n_sub x quantity: full value, mean, sd, bias,
                   RMSE, share of subsets where the value is infinite / undefined
   ranking.csv     neighbouring rates and gate on/off: how often a subset orders the two settings
@@ -56,6 +56,22 @@ def main():
                                          rmse=np.sqrt(((v[ok] - f) ** 2).mean()) if ok.any() and np.isfinite(f) else np.nan,
                                          share_not_finite=1 - ok.mean()))
                         reps[(sim, setup, rho, setting, t, name, m, q)] = (f, v)
+    # agents' own uncertainty: paired difference controlled - silent, same subsets
+    for (sim, setup, rho), g in states.groupby(["sim", "setup", "rho"]):
+        for t in TIMES[sim]:
+            gt = g[g.t == t]
+            sil = gt[gt.arm == "silent"].sort_values("episode")
+            for (setting, arm), h in gt[gt.arm != "silent"].groupby(["setting", "arm"]):
+                h = h.sort_values("episode")
+                for col in ("Hbar", "JSD"):
+                    diff = h[col].to_numpy() - sil[col].to_numpy()
+                    for m, idx in subsets.items():
+                        v = diff[idx].mean(axis=1)
+                        rows.append(dict(sim=sim, setup=setup, rho=rho, setting=setting, t=t,
+                                         resolution=f"paired_{arm}", level="episode", source="beliefs", n_sub=m,
+                                         quantity=f"d{col}", full=diff.mean(), mean=v.mean(), sd=v.std(),
+                                         bias=v.mean() - diff.mean(), rmse=np.sqrt(((v - diff.mean()) ** 2).mean()),
+                                         share_not_finite=0.0))
     pd.DataFrame(rows).to_csv(d / "downsample.csv", index=False)
 
     # ranking: neighbouring rates (same gate) and gate on vs off (same rate), Simulation 2

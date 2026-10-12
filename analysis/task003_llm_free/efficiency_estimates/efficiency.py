@@ -9,8 +9,8 @@ average P_a = (1/n) sum_e y_a(e). Then, with Q = (P_+ + P_-)/2:
 Bootstrap: 1,000 resamples of episode numbers, the same for all arms (paired).
 
 Usage, from the repository root (after build_states.py):
-    .venv/bin/python analysis/task003_llm_free/control_efficiency/efficiency.py [--date <date>]
-Outputs in results/control_efficiency/<date>/: efficiency.csv, uncertainty.csv, null_I.csv
+    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/efficiency.py [--date <date>]
+Outputs in results/efficiency_estimates/<date>/: efficiency.csv, uncertainty.csv, null_I.csv
 """
 from __future__ import annotations
 import argparse, datetime, hashlib, pathlib
@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-RES = HERE.parent / "results" / "control_efficiency"
+RES = HERE.parent / "results" / "efficiency_estimates"
 B = 1000
 BINS = (2, 3, 4, 8)
 
@@ -102,7 +102,7 @@ def main():
     d = RES / (a.date or f"{datetime.date.today():%Y-%m-%d}")
     states = pd.read_parquet(d / "states.parquet")
     n = states.episode.nunique()
-    counts = resample_counts(n, "control_efficiency")
+    counts = resample_counts(n, "efficiency_estimates")
     res_rows, unc_rows, null_rows = [], [], []
     rng = np.random.default_rng(20261012)
     for key, arms in arm_arrays(states).items():

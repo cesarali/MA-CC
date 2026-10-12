@@ -73,4 +73,4 @@ sensitivity.
 3. Decision note: the smallest X that keeps most of the directed information and is
    estimable at n = 100; the two measures to carry forward.
 
-Outputs: `results/control_efficiency/<date>/` (not in git); scripts and the decision note here.
+Outputs: `results/efficiency_estimates/<date>/` (not in git); scripts and the decision note here.

@@ -25,6 +25,7 @@ Start at [`experimental_setup/README.md`](experimental_setup/README.md).
 | [`simulation_1/`](simulation_1/) | **Simulation 1** (days and nights, per-round controller budget). [`simulator/`](simulation_1/simulator/): spec, configs, runner, tests, runs index. [`analysis/`](simulation_1/analysis/): plan, Q0–Q6 reports, two short PDF reports, reviewer guide |
 | [`simulation_2/`](simulation_2/) | **Simulation 2** (asynchronous activation): implemented; spec in [`simulator/simulation_2_spec.md`](simulation_2/simulator/simulation_2_spec.md) |
 | `results/` | not in git. `results/simulation_1/<date>_<study>/` holds raw runs; `results/simulation_1/analysis/<date>/` the analysis outputs. Simulation 2 will write to `results/simulation_2/` |
+| [`efficiency_estimates/`](efficiency_estimates/) | how efficiently the controller steers, for both simulations: definitions, estimators, precision at 50 / 100 / 300 paths, the adopted measures |
 | [`TODO.md`](TODO.md) | deferred work |
 | [`coarse_graining/`](coarse_graining/) | the 4-state summary of the swarm (mean belief in A0, binned) and the four tests of whether it is Markovian. The results inside are from the archived LLM study; they will be **rerun on the new simulator's data** |
 

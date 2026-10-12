@@ -10,7 +10,7 @@ pointer when it is finished.
   on expected argmax votes works (a random search found sets). Needs a new builder rule,
   a re-check of the pool rules (no shared facts, no joint proof), and new simulations.
   Deferred 2026-10-08: not expected to change conclusions; probability matching already
-  starts balanced. See `simulation_1/analysis/reports/report2_nosolution/` §3.
+  starts balanced. See `simulation_1/analysis/reports/2026-10-07_report2_nosolution/` §3.
 - [ ] Rank the no-solution builder also by the gap between the two population ceilings
   (P(A0) 0.92 vs P(A2) 0.77).
 - [ ] task003-symmetric without tied facts (strict lean rule) as a comparison for the

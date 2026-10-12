@@ -1,6 +1,6 @@
 # Simulation 2: sim2_grid's q 6, qc 12 cells with full memory (rho 1), rerun with every table recorded
 # (the grid kept only summary tables there). Same seed as sim2_grid, so the simulations are identical.
-# Needed for the agents' own uncertainty (control_efficiency/PLAN.md). Written 12 October 2026.
+# Needed for the agents' own uncertainty (efficiency_estimates/PLAN.md). Written 12 October 2026.
 # Every rule is defined in ../simulation_2_spec.md. Written 9 October 2026.
 #
 # HOW TO READ THIS FILE

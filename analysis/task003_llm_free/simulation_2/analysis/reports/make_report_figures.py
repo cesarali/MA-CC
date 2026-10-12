@@ -1,4 +1,4 @@
-"""Figures for the two short Simulation 2 reports (report1_symmetric, report2_nosolution).
+"""Figures for the two short Simulation 2 reports (2026-10-09_report1_symmetric, 2026-10-09_report2_nosolution).
 
 Reads the analysis tables in results/simulation_2/analysis/2026-10-09/tables/ and the run data,
 writes PDF figures into each report's figures/ folder, and copies two phase diagrams per report.
@@ -23,7 +23,7 @@ A = RESULTS / "analysis" / "2026-10-09"
 T = A / "tables"
 GRID = RESULTS / "2026-10-09_sim2_grid" / "cells"
 SIM1 = SIM1_RESULTS / "2026-10-07_sim1_pm" / "cells"
-OUT = {"symmetric": HERE / "report1_symmetric" / "figures", "nosolution": HERE / "report2_nosolution" / "figures"}
+OUT = {"symmetric": HERE / "2026-10-09_report1_symmetric" / "figures", "nosolution": HERE / "2026-10-09_report2_nosolution" / "figures"}
 RATES = [0.5, 1.0, 2.0, 4.0, 8.0]
 RC = dict(zip(RATES, plt.cm.plasma(np.linspace(0, .85, 5))))
 plt.rcParams.update({"font.size": 8, "axes.titlesize": 8.5, "legend.fontsize": 7, "figure.dpi": 150})

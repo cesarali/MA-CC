@@ -1,4 +1,4 @@
-"""Compact figures for the two short Simulation 1 reports (report1_symmetric, report2_nosolution).
+"""Compact figures for the two short Simulation 1 reports (2026-10-07_report1_symmetric, 2026-10-07_report2_nosolution).
 
 Reads the analysis tables in results/simulation_1/analysis/2026-10-07/tables/ and the run data, and
 writes vector PDFs into each report's figures/ folder. The phase diagrams are copied
@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE.parent))
 from common import RESULTS, VARIANT_COLOR, cells_table  # noqa: E402
 
 A = RESULTS / "analysis" / "2026-10-07"
-R1, R2 = HERE / "report1_symmetric" / "figures", HERE / "report2_nosolution" / "figures"
+R1, R2 = HERE / "2026-10-07_report1_symmetric" / "figures", HERE / "2026-10-07_report2_nosolution" / "figures"
 for d in (R1, R2):
     d.mkdir(parents=True, exist_ok=True)
 plt.rcParams.update({"font.size": 8, "axes.titlesize": 8.5, "legend.fontsize": 7, "figure.dpi": 150})

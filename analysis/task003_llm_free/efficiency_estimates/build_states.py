@@ -7,11 +7,11 @@ One row per (simulation, setting, arm, episode, time) with:
                   beliefs are recorded (Simulation 1: every cell; Simulation 2: full-table cells)
 
 Settings: Simulation 2 grid, q 6, qc 12, rho 0.75 / 1, every rate, gate on/off, stop on, t = 0..40;
-Simulation 1 sim1_pm, q 6, qc 12, b 1 / 3 / 9, rho 0.75 / 1, end of days 1..30.
+Simulation 1 sim1_pm, q 6, qc 12, b 1 / 2 / 3 / 6 / 9, rho 0.75 / 1, end of days 1..30.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/control_efficiency/build_states.py [--date <date>]
-Output: results/control_efficiency/<date>/states.parquet
+    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/build_states.py [--date <date>]
+Output: results/efficiency_estimates/<date>/states.parquet
 """
 from __future__ import annotations
 import argparse, datetime, multiprocessing, pathlib, sys
@@ -72,7 +72,7 @@ def sim1_jobs():
             r = "0.75" if rho == 0.75 else "1.0"
             jobs.append(dict(sim="sim1", setup=setup, rho=rho, setting="silent", arm="silent",
                              cell=f"{setup}__silent__q6__rho{r}"))
-            for b in (1, 3, 9):
+            for b in (1, 2, 3, 6, 9):
                 for arm in ("truth", "false"):
                     jobs.append(dict(sim="sim1", setup=setup, rho=rho, setting=f"b{b}", arm=arm,
                                      cell=f"{setup}__{arm}__q6__qc12__b{b}__rho{r}"))
@@ -135,7 +135,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date")
     a = ap.parse_args()
-    d = RES / "control_efficiency" / (a.date or f"{datetime.date.today():%Y-%m-%d}")
+    d = RES / "efficiency_estimates" / (a.date or f"{datetime.date.today():%Y-%m-%d}")
     d.mkdir(parents=True, exist_ok=True)
     jobs = sim2_jobs() + sim1_jobs()
     with multiprocessing.Pool(12) as pool:

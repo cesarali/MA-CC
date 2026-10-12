@@ -1,10 +1,12 @@
 # Control efficiency — decision note, 12 October 2026
 
+**Adopted by the researcher on 12 October 2026.**
+
 Plan: [`PLAN.md`](PLAN.md). Scripts: `build_states.py`, `efficiency.py`, `downsample.py`.
-Tables (not in git): `results/control_efficiency/2026-10-12/` — `efficiency.csv` (every
+Tables (not in git): `results/efficiency_estimates/2026-10-12/` — `efficiency.csv` (every
 setting, time and resolution, with 95% intervals), `uncertainty.csv`, `null_I.csv`,
 `downsample.csv`, `ranking.csv`. Data: Simulation 2 grid (q 6, qc 12, ρ 0.75 / 1, every rate,
-gate on/off) and Simulation 1 `sim1_pm` (q 6, qc 12, b 1 / 3 / 9, ρ 0.75 / 1), 1,000 episodes
+gate on/off) and Simulation 1 `sim1_pm` (q 6, qc 12, b 1 / 2 / 3 / 6 / 9, ρ 0.75 / 1), 1,000 episodes
 per arm. Numbers below are at t = 30 unless stated.
 
 ## 1. What can be estimated from 100 paths per arm
