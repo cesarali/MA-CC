@@ -16,6 +16,8 @@ arm, the budget of the later LLM runs.
 | `make_report_figures.py` | figures and precision tables for the efficiency sections of the extended reports |
 | [`2026-10-13_plan_action_information.md`](2026-10-13_plan_action_information.md), [`2026-10-13_note_action_information.md`](2026-10-13_note_action_information.md) | pilot of an action-based efficiency (U = intervention or not; agent vote transitions): plan and findings |
 | `action_info.py` | computes it |
+| [`2026-10-13_plan_frontier.md`](2026-10-13_plan_frontier.md), [`2026-10-13_note_frontier.md`](2026-10-13_note_frontier.md) | the handoff's operational efficiency: success (target attainment, task correctness) against facts posted; frontier, η_cost, η_performance, gain per fact; plan and findings |
+| `frontier.py`, `frontier_figures.py`, `tests/test_frontier.py` | compute it, its figures, and the handoff's synthetic tests |
 | `make_md_report.py` | writes `2026-10-12_report.md` (tables read from the result files) |
 | `extend_reports.py` | builds the extended reports (12 October) from the dated originals: original text unchanged, plus a simulator paragraph and the efficiency section |
 
