@@ -14,6 +14,8 @@ arm, the budget of the later LLM runs.
 | `downsample.py` | precision study: 200 paired subsets of 50 / 100 / 300 episodes; bias, RMSE, how often C is infinite, how often two settings keep their order |
 | `phase.py` | efficiency over the whole control plane (every qc × rate or b), point estimates at t = 30, for the phase diagrams |
 | `make_report_figures.py` | figures and precision tables for the efficiency sections of the extended reports |
+| [`2026-10-13_plan_action_information.md`](2026-10-13_plan_action_information.md), [`2026-10-13_note_action_information.md`](2026-10-13_note_action_information.md) | pilot of an action-based efficiency (U = intervention or not; agent vote transitions): plan and findings |
+| `action_info.py` | computes it |
 | `make_md_report.py` | writes `2026-10-12_report.md` (tables read from the result files) |
 | `extend_reports.py` | builds the extended reports (12 October) from the dated originals: original text unchanged, plus a simulator paragraph and the efficiency section |
 
