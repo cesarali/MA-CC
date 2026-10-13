@@ -46,7 +46,7 @@ for (sim, setup, rho, arm), g in x.groupby(["sim", "setup", "rho", "arm"]):
         continue
     e = g.eta_cost
     srows.append(f"{SN[sim]} & {setup[8:]} & {rho:g} & {'A0' if arm == 'truth' else 'A2'} & {g.p_silent.iloc[0]:.2f} & "
-                 f"{g.delta.min():+.2f} to {g.delta.max():+.2f} & {g.facts.min():.0f}--{g.facts.max():.0f} & "
+                 f"{g.delta.min():+.2f} to {g.delta.max():+.2f} & {f(g.room_share.median(), 2)} & {g.facts.min():.0f}--{g.facts.max():.0f} & "
                  f"{int((e > 0.999).sum())}/{len(g)} & {f(e.median(), 2)} & {f(e.min(), 2)} \\\\")
 summ = "\n".join(srows)
 

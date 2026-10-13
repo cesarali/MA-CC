@@ -1,6 +1,6 @@
 """Phase diagrams of the frontier measures (q 6, plurality, proof stop on): over qc x rate
 (Simulation 2, gate on and off) and qc x b (Simulation 1). Tiles: change in P(target wins) (Delta),
-facts posted, gain per fact (Delta / facts) and eta_cost, for each target.
+share of the available room (Delta / (1 - silent success)), facts posted and eta_cost, for each target.
 
 Usage, from the repository root (after frontier.py):
     .venv/bin/python analysis/task003_llm_free/efficiency_estimates/frontier_phase.py --out <folder> [--date 2026-10-13]
@@ -18,8 +18,8 @@ from frontier import RES  # noqa: E402
 
 plt.rcParams.update({"font.size": 6.5, "axes.titlesize": 6.5})
 QCS = [3, 6, 12, 24]
-MEASURES = [("delta", "Δ P(target wins)", "RdBu", None, ".2f"), ("facts", "facts posted", "Greys", None, ".0f"),
-            ("gain_per_fact", "gain per fact", "magma_r", None, ".3f"), ("eta_cost", "η_cost", "viridis", (0, 1), ".2f")]
+MEASURES = [("delta", "Δ P(target wins)", "RdBu", None, ".2f"), ("room_share", "share of room", "RdBu", (-1, 1), ".2f"),
+            ("facts", "facts posted", "Greys", None, ".0f"), ("eta_cost", "η_cost", "viridis", (0, 1), ".2f")]
 
 
 def tiles(ax, m, xs, fmt, cmap, vmin, vmax):

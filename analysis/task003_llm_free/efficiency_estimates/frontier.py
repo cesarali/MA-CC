@@ -1,6 +1,7 @@
 """Success against actual cost: the operational frontier (2026-10-13_plan_frontier.md).
 
-Per run: collective decision = plurality of the agents' last votes at time T (ties count 1/k);
+Room share = Delta / (1 - P(success | silent)): the share of the available room reached, which
+removes the effect of where the silent swarm starts. Per run: collective decision = plurality of the agents' last votes at time T (ties count 1/k);
 target attainment = decision is the assigned target; task correctness = decision is A0. Per
 configuration: Delta = P(success | controlled) - P(success | silent, same episodes), cost = facts
 actually posted up to T (and controller reads). A frontier compares the controller configurations
@@ -226,7 +227,10 @@ def run_group(g):
             for i, c in enumerate(cf):
                 row = dict(sim=g["sim"], setup=g["setup"], rho=g["rho"], q=g["q"], arm=g["arm"], outcome=outcome, rule=rule,
                            T=T, **c, p_controlled=float(Sc[i, ti].mean()), p_silent=float(S0[ti].mean()),
-                           delta=float(delta[i]), delta_lo=float(lo[i]), delta_hi=float(hi[i]), facts=float(cost[i]),
+                           delta=float(delta[i]), delta_lo=float(lo[i]), delta_hi=float(hi[i]),
+                           # share of the available room: gain / (1 - silent success); removes the starting-point effect
+                           room_share=float(delta[i] / (1 - S0[ti].mean())) if S0[ti].mean() < 0.999 else np.nan,
+                           facts=float(cost[i]),
                            reads=float(reads[i, ti].mean()), resolved=bool(resolved[i]),
                            eta_cost_split=float(eta_split[i]))
                 for k, v in eff.items():

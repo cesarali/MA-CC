@@ -1,5 +1,6 @@
 """Figures for the frontier analysis: success gain against facts posted (q 6), each configuration
-with its 95% interval, the tested-point frontier (staircase) and the mixture hull.
+with its 95% interval, the best-achievable curve over tested configurations (solid staircase) and the
+curve reachable by random mixing of configurations per run (dashed: concave hull through (0, 0)).
 
 Usage, from the repository root (after frontier.py):
     .venv/bin/python analysis/task003_llm_free/efficiency_estimates/frontier_figures.py [--date 2026-10-13]
@@ -54,7 +55,7 @@ def main():
                 ax.set_ylabel(f"Δ P({'target' if outcome == 'target' else 'correct'} wins)")
             axes.flat[0].legend(loc="lower right")
             fig.suptitle(f"{'Target attainment' if outcome == 'target' else 'Task correctness'} gain against facts posted, "
-                         f"t = {T}, q = 6. Solid: frontier of tested configurations; dashed: with mixtures.", fontsize=8)
+                         f"t = {T}, q = 6. Solid: best-achievable curve (tested configurations); dashed: with random mixing per run.", fontsize=8)
             fig.tight_layout()
             fig.savefig(d / f"frontier_{outcome}_T{T}.png", dpi=140)
             plt.close(fig)

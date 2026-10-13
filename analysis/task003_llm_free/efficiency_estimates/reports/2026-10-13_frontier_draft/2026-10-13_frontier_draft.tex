@@ -5,7 +5,7 @@
 \hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
 \captionsetup{font=small,labelfont=bf}
 \title{\vspace{-1.2cm}\textbf{Success against cost: an operational efficiency of control}\\[2pt]
-\large DRAFT, for discussion --- Simulations 1 and 2, \texttt{task\_003}}
+\large DRAFT (revised), for discussion --- Simulations 1 and 2, \texttt{task\_003}}
 \author{LLM-free simulator; analysis of 13 October 2026}
 \date{}
 \begin{document}
@@ -20,7 +20,10 @@ many facts it posts to do so. Three results stand out. (i)~\textbf{When no proof
 with very little control}: the cheapest controller reaches the full gain, and most configurations spend
 two to four times more for nothing. (ii)~\textbf{Speed is worth paying for only early}: the efficiency
 depends on when success is scored. (iii)~\textbf{Overturning a proof has increasing returns}: concentrated
-control (random mixtures of strong control and none) beats every tested configuration.
+control (randomly mixing strong control and none across runs) beats every tested configuration. The
+larger gains for target A0 than for target A2 in nosolution come mostly from where the silent swarm
+starts (it already leans to A2); measured as a share of the available room, the two controllers are
+close.
 
 \section{The simulators in brief}
 
@@ -43,13 +46,30 @@ vote by probability matching; $q = 6$ throughout; 1{,}000 paired episodes per ar
 \item \textbf{Benefit} $\Delta_\pi = p_\pi - p_0$: change in the probability of success against the silent
   arm of the same episodes (scored with the same target).
 \item \textbf{Cost} $C_\pi$: facts actually posted up to $T$, mean per run (not the allowed budget).
-\item \textbf{Frontier} among the tested controller settings of one group (simulation, setup, $\rho$,
-  target): $C^*(\delta) = \min\{C_\pi : \Delta_\pi \ge \delta\}$ and $\Delta^*(B) = \max\{\Delta_\pi : C_\pi \le B\}$;
-  with \textbf{mixtures} (one configuration drawn per run) the frontier is the concave hull through $(0,0)$.
+\item \textbf{Share of the room} $\Delta_\pi/(1-p_0)$: the gain as a fraction of the most that was
+  possible, which removes the effect of where the silent swarm starts.
+\item \textbf{Best-achievable curve} (economists call it the \emph{efficient frontier}) among the tested
+  controller settings of one group (simulation, setup, $\rho$, target): for each spending level $B$, the
+  largest gain reached by any configuration spending at most $B$, $\Delta^*(B) = \max\{\Delta_\pi : C_\pi \le B\}$;
+  read the other way, the least spending that reaches a gain $\delta$, $C^*(\delta) = \min\{C_\pi : \Delta_\pi \ge \delta\}$.
+  A configuration below the curve is \emph{dominated}: another reached at least as much for less.
 \item \textbf{Efficiencies}: $\eta_{\text{cost}} = C^*(\Delta_\pi)/C_\pi$ (share of the spending that was
   necessary), $\eta_{\text{perf}} = \Delta_\pi/\Delta^*(C_\pi)$, and \textbf{gain per fact} $\Delta_\pi/C_\pi$.
   Not defined where $\Delta_\pi \le 0$ or its 95\% interval includes 0.
 \end{itemize}
+
+\paragraph{How to read the curves (Diagram 1; Figures 1, 2 and 8).} Each dot is one configuration, at
+(facts posted, gain). The \textbf{solid line} is the best-achievable curve over the tested configurations:
+it starts at $(0,0)$ (no control) and steps up each time a configuration reaches a higher gain than
+anything cheaper; dots on it are efficient ($\eta_{\text{cost}} = 1$), dots below it are dominated, and
+$\eta_{\text{cost}}$ is how far to the left the curve reaches the same gain. The \textbf{dashed line} is
+what becomes reachable if the controller \emph{chooses its configuration at random for each run}: using
+configuration X (7 facts, $+0.32$) in half of the runs and no control in the other half costs 3.5 facts
+and gains $+0.16$ \emph{on average}, so every point on the straight segment between two configurations
+(or between a configuration and $(0,0)$) is reachable on average; the dashed line is the outermost such
+segments (the concave hull through $(0,0)$). It lies above the solid line where mixing beats every single
+configuration. Two cautions: its first segment from $(0,0)$ is arithmetic, not an observation; and it
+describes averages over runs, not what happens in any one run.
 
 \begin{center}
 \begin{tikzpicture}[font=\small, x=0.55cm, y=3cm]
@@ -61,11 +81,12 @@ vote by probability matching; $q = 6$ throughout; 1{,}000 paired episodes per ar
   \draw[thick, dashed, red!70!black] (0,0) -- (2,0.45) -- (4,0.7) -- (6,0.8) -- (9,0.85) -- (11,0.86);
   \draw[densely dotted] (8,0.65) -- (4,0.65);
   \node[font=\scriptsize, align=left] at (8.7,0.56) {$\eta_{\text{cost}} = 4/8$};
-  \node[font=\scriptsize, blue!70!black] at (11,0.97) {tested-point frontier};
-  \node[font=\scriptsize, red!70!black] at (3.2,0.92) {with mixtures};
+  \node[font=\scriptsize, blue!70!black] at (11,0.97) {best-achievable curve};
+  \node[font=\scriptsize, red!70!black] at (3.4,0.92) {with random mixing};
 \end{tikzpicture}
-\par\smallskip{\small\textbf{Diagram 1.} Each point is a configuration. The configuration at cost 8 reaches $\Delta = 0.65$, which a
-configuration costing 4 already reaches: $\eta_{\text{cost}} = 0.5$.}
+\par\smallskip{\small\textbf{Diagram 1.} Each point is a configuration. Solid: best-achievable curve; dashed: reachable on average by random
+mixing per run. The configuration at cost 8 reaches $\Delta = 0.65$, which a configuration costing 4 already
+reaches: $\eta_{\text{cost}} = 0.5$.}
 \end{center}
 
 \section{Success against facts posted}
@@ -74,7 +95,8 @@ configuration costing 4 already reaches: $\eta_{\text{cost}} = 0.5$.}
 \centering\includegraphics[width=\linewidth]{figures/frontier_target_T30.png}
 \caption{Change in the probability that the controller's target wins, $t = 30$, against facts posted
 (log scale), every configuration with its 95\% interval (blue: target A0; red: target A2; Simulation 2:
-circles gate on, squares gate off). Solid: tested-point frontier; dashed: with mixtures.}
+circles gate on, squares gate off). Solid: best-achievable curve; dashed: reachable on average by random
+mixing per run (see How to read the curves).}
 \label{fig:t30}
 \end{figure}
 
@@ -87,21 +109,22 @@ circles gate on, squares gate off). Solid: tested-point frontier; dashed: with m
 \begin{table}[H]
 \centering\small
 \caption{Overview at $t = 30$ (target attainment; groups with a measurable effect). $p_0$: silent
-probability that the target wins; frontier: configurations with $\eta_{\text{cost}} = 1$.}
-\begin{tabular}{llcccccccc}
+probability that the target wins; room: $\Delta/(1-p_0)$; on curve: configurations with $\eta_{\text{cost}} = 1$.}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llccccccccc}
 \toprule
- & setup & $\rho$ & target & $p_0$ & range of $\Delta$ & facts & on frontier & median $\eta_{\text{cost}}$ & min \\
+ & setup & $\rho$ & target & $p_0$ & range of $\Delta$ & room (median) & facts & on curve & median $\eta_{\text{cost}}$ & min \\
 \midrule
-Sim.~1 & nosolution & 0.75 & A2 & 0.63 & -0.25 to +0.35 & 9--221 & 3/20 & 0.30 & 0.09 \\
-Sim.~1 & nosolution & 0.75 & A0 & 0.36 & +0.59 to +0.63 & 10--176 & 6/20 & 0.43 & 0.06 \\
-Sim.~1 & nosolution & 1 & A2 & 0.48 & -0.47 to +0.49 & 10--248 & 1/20 & 0.26 & 0.07 \\
-Sim.~1 & nosolution & 1 & A0 & 0.52 & +0.47 to +0.48 & 4--128 & 1/20 & 0.18 & 0.03 \\
-Sim.~1 & symmetric & 0.75 & A2 & 0.01 & +0.09 to +0.88 & 27--173 & 9/20 & 0.99 & 0.34 \\
-Sim.~2 & nosolution & 0.75 & A2 & 0.64 & +0.28 to +0.33 & 7--30 & 4/40 & 0.26 & 0.23 \\
-Sim.~2 & nosolution & 0.75 & A0 & 0.35 & +0.62 to +0.65 & 7--30 & 8/40 & 0.48 & 0.23 \\
-Sim.~2 & nosolution & 1 & A2 & 0.52 & +0.11 to +0.45 & 8--30 & 1/40 & 0.27 & 0.25 \\
-Sim.~2 & nosolution & 1 & A0 & 0.48 & +0.46 to +0.52 & 4--30 & 1/40 & 0.17 & 0.15 \\
-Sim.~2 & symmetric & 0.75 & A2 & 0.01 & +0.06 to +0.20 & 15--30 & 15/40 & 0.99 & 0.49 \\
+Sim.~1 & nosolution & 0.75 & A2 & 0.63 & -0.25 to +0.35 & 0.90 & 9--221 & 3/20 & 0.30 & 0.09 \\
+Sim.~1 & nosolution & 0.75 & A0 & 0.36 & +0.59 to +0.63 & 0.99 & 10--176 & 6/20 & 0.43 & 0.06 \\
+Sim.~1 & nosolution & 1 & A2 & 0.48 & -0.47 to +0.49 & 0.28 & 10--248 & 1/20 & 0.26 & 0.07 \\
+Sim.~1 & nosolution & 1 & A0 & 0.52 & +0.47 to +0.48 & 1.00 & 4--128 & 1/20 & 0.18 & 0.03 \\
+Sim.~1 & symmetric & 0.75 & A2 & 0.01 & +0.09 to +0.88 & 0.42 & 27--173 & 9/20 & 0.99 & 0.34 \\
+Sim.~2 & nosolution & 0.75 & A2 & 0.64 & +0.28 to +0.33 & 0.84 & 7--30 & 4/40 & 0.26 & 0.23 \\
+Sim.~2 & nosolution & 0.75 & A0 & 0.35 & +0.62 to +0.65 & 0.99 & 7--30 & 8/40 & 0.48 & 0.23 \\
+Sim.~2 & nosolution & 1 & A2 & 0.52 & +0.11 to +0.45 & 0.64 & 8--30 & 1/40 & 0.27 & 0.25 \\
+Sim.~2 & nosolution & 1 & A0 & 0.48 & +0.46 to +0.52 & 0.99 & 4--30 & 1/40 & 0.17 & 0.15 \\
+Sim.~2 & symmetric & 0.75 & A2 & 0.01 & +0.06 to +0.20 & 0.11 & 15--30 & 15/40 & 0.99 & 0.49 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -109,7 +132,7 @@ Sim.~2 & symmetric & 0.75 & A2 & 0.01 & +0.06 to +0.20 & 15--30 & 15/40 & 0.99 &
 \begin{table}[H]
 \centering\small
 \caption{Least facts needed to raise the target's chance of winning by $\delta$ ($t = 30$): tested
-configurations / with mixtures; -- : not reached.}
+configurations / with random mixing; -- : not reached.}
 \begin{tabular}{llcccccc}
 \toprule
  & setup & $\rho$ & target & $\delta = 0.05$ & $0.1$ & $0.2$ & $0.3$ \\
@@ -131,8 +154,8 @@ Sim.~2 & symmetric & 0.75 & A2 & 14.6 / 7.4 & 27.0 / 14.7 & 30.0 / 29.4 & -- / -
 \section{Phase diagrams}
 
 Each panel: tiles over the controller's reading budget $q_c$ (rows) and its rate $\lambda_c$
-(Simulation 2) or facts per night $b$ (Simulation 1); columns: $\Delta$, facts posted, gain per fact and
-$\eta_{\text{cost}}$, for each target; dash: not defined.
+(Simulation 2) or facts per night $b$ (Simulation 1); columns: $\Delta$, share of the room
+$\Delta/(1-p_0)$, facts posted and $\eta_{\text{cost}}$, for each target; dash: not defined.
 
 \begin{figure}[H]
 \centering\includegraphics[width=\linewidth]{figures/phase_sim2_nosolution_T30.pdf}
@@ -169,9 +192,39 @@ $\eta_{\text{cost}}$, for each target; dash: not defined.
 \begin{figure}[H]
 \centering\includegraphics[width=\linewidth]{figures/frontier_task_T30.png}
 \caption{As Figure~\ref{fig:t30}, for task correctness (A0 wins). For the false controller the change is
-negative: what it gains in target attainment is lost in correctness.}
+negative, so for correctness the best choice is no control: its solid line stays at 0. For target A0
+correctness and target attainment are the same event.}
 \label{fig:task}
 \end{figure}
+
+\section{Why target A0 gains more than target A2 in nosolution}
+
+\begin{table}[H]
+\centering\small
+\caption{Simulation 2, nosolution, $\rho = 0.75$, $t = 30$: the two controllers reach about the same end
+point from different starting points (win probabilities: range over all configurations; mean beliefs:
+$q_c = 12$, gate on, every rate).}
+\begin{tabular}{lccc}
+\toprule
+ & silent & with the controller & gain \\
+\midrule
+P(target wins), target A0 & 0.35 & 0.98--1.00 & $+0.62$ to $+0.65$ \\
+P(target wins), target A2 & 0.64 & 0.91--0.96 & $+0.28$ to $+0.33$ \\
+mean belief in the target, target A0 & 0.38 & 0.66--0.68 & $+0.28$ to $+0.30$ \\
+mean belief in the target, target A2 & 0.48 & 0.65--0.68 & $+0.17$ to $+0.20$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent When agents forget, the silent nosolution swarm already leans to A2 (A2-side facts survive
+forgetting better; Simulation 1 report): A2 wins the plurality in 64\% of runs. Both controllers bring the
+mean belief in their target to about 0.65--0.68, but the A2 controller has much less room left (at most
+$+0.36$ against $+0.65$). As a \textbf{share of the room} the two are close but not equal: 0.96--1.00
+(target A0) against 0.76--0.90 (target A2). The asymmetry was already present in the earlier belief gains
+($0.29$ against $0.19$ in Simulation 2); the symmetric-looking pair efficiency $\eta$ hid it. Our earlier
+reading "the truth controller is stronger" is therefore mostly a starting-point effect when agents
+forget; with full memory the silent swarm is nearly balanced (A0 wins 48\% of runs, A2 52\%) and the A2 controller falls short
+for a real reason (share of room 0.22--0.93: the reversal at high rates).
 
 \section{Findings}
 
@@ -179,17 +232,17 @@ negative: what it gains in target attainment is lost in correctness.}
 \item \textbf{Nosolution: success saturates with very little control.} At $t = 30$ every configuration
   reaches about the same gain (Simulation 2, $\rho = 0.75$: $+0.28$ to $+0.33$ for target A2, $+0.62$ to
   $+0.65$ for A0) whatever it spent (7--30 facts). The cheapest tested controller --- slowest rate, gate
-  on --- reaches every threshold up to $+0.3$; most others are dominated (median $\eta_{\text{cost}}$
+  on --- reaches every threshold up to $+0.3$ (it is on the best-achievable curve); most others are dominated (median $\eta_{\text{cost}}$
   0.26 and 0.48). In Simulation 1 large batches waste even more ($\eta_{\text{cost}}$ 0.03--0.09 at
   $b = 6$--9). The waste is posting after the decision is settled.
 \item \textbf{Speed pays only early.} At $t = 5$ faster controllers win more (target A2: $+0.17$ with
   2 facts, $+0.39$ with 18--30; Figure~\ref{fig:t5}, \ref{fig:p2n5}) with diminishing returns; by
   $t = 10$ slow controllers catch up.
 \item \textbf{Overturning a proof has increasing returns} (symmetric, target A2): gains grow faster than
-  facts (Simulation 1 up to $+0.88$ at 173 facts). The frontier is convex, so mixtures of no control and
-  strong control beat every tested configuration (to reach $+0.1$: 27 facts tested, 15 with mixtures, in
-  Simulation 2). Most tested points lie on the frontier ($\eta_{\text{cost}} \approx 1$): the scalar
-  saturates here, the frontier's shape does not.
+  facts (Simulation 1 up to $+0.88$ at 173 facts). The best-achievable curve bends upward, so randomly mixing no control and
+  strong control beats every tested configuration (to reach $+0.1$: 27 facts tested, 15 with mixtures, in
+  Simulation 2). Most tested points lie on the curve ($\eta_{\text{cost}} \approx 1$): the scalar
+  saturates here, the curve's shape does not.
 \item \textbf{Manipulation costs correctness one for one}: for the false controller the fall in task
   correctness equals the gain in target attainment (median ratio 0.96--1.00; Figure~\ref{fig:task}).
 \item \textbf{Ceilings and harm}: symmetric with target A0, silence already wins 99--100\% of runs;
@@ -215,8 +268,8 @@ Sim.~2 & task correctness & 0.022 & 0.017 & 0.016 & 0.012 & 0.008 & 0.006 \\
 \section{Caveats and next steps}
 
 \begin{itemize}\itemsep1pt
-\item The frontier is relative to the tested settings and \textbf{not identified below the cheapest
-  tested cost} (about 7 facts in Simulation 2): the dashed hull assumes mixing with no control. Sample
+\item The best-achievable curve is relative to the tested settings and \textbf{not identified below the
+  cheapest tested cost} (about 7 facts in Simulation 2): the dashed line there assumes mixing with no control. Sample
   smaller budgets (1, 2, 3, 5 messages) and slower rates.
 \item For manipulation against a proof, a \textbf{burst controller} (spending its budget in concentrated
   episodes) is the natural next policy, given the increasing returns.
