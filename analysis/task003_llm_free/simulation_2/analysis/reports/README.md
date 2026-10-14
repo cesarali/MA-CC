@@ -2,6 +2,8 @@
 
 | report | PDF | about |
 |---|---|---|
+| **Report 1 (14 Oct)** | [`2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf`](2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf) | task003-symmetric, rewritten to mirror the Simulation 1 report section by section: vote shares over time, gain phase diagrams, readability $I$(target; vote) phase diagrams, pair efficiency $\eta$, success against facts posted; progress, focus and price removed |
+| **Report 2 (14 Oct)** | [`2026-10-14_report2_nosolution/2026-10-14_report2_nosolution.pdf`](2026-10-14_report2_nosolution/2026-10-14_report2_nosolution.pdf) | the same for task003-nosolution |
 | **Report 1, extended (12 Oct)** | [`2026-10-12_report1_symmetric/2026-10-12_report1_symmetric.pdf`](2026-10-12_report1_symmetric/2026-10-12_report1_symmetric.pdf) | the 2026-10-09 report unchanged, plus a paragraph on how the simulator works and a section on the efficiency of control |
 | **Report 2, extended (12 Oct)** | [`2026-10-12_report2_nosolution/2026-10-12_report2_nosolution.pdf`](2026-10-12_report2_nosolution/2026-10-12_report2_nosolution.pdf) | the same for task003-nosolution |
 | Report 1 | [`2026-10-09_report1_symmetric/2026-10-09_report1_symmetric.pdf`](2026-10-09_report1_symmetric/2026-10-09_report1_symmetric.pdf) | task003-symmetric: without rounds the swarm holds its proof less firmly; the false controller is weaker; fast controllers overshoot; gate; help with the truth replaces own proofs; sensing |
@@ -25,3 +27,7 @@ The figure script reads the analysis tables in `results/simulation_2/analysis/20
 The extended reports are built from the originals by `../../../efficiency_estimates/extend_reports.py`
 (it checks that the original text is unchanged); their efficiency figures come from
 `../../../efficiency_estimates/make_report_figures.py`.
+
+The 14 October reports are self-contained `.tex` files; their new figures come from
+`../../../efficiency_estimates/make_2026-10-14_report_figures.py` (it also copies the figures it reuses
+from the 12 October folders). Rebuild: run that script, then `latexmk -pdf` in each 2026-10-14 folder.
