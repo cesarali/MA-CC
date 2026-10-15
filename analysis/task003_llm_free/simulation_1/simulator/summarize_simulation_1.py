@@ -17,9 +17,11 @@ def summarize(run: str | pathlib.Path) -> pd.DataFrame:
     for cell in sorted(p for p in (run / "cells").iterdir() if p.is_dir()):
         prm = json.loads((cell / "params.json").read_text())
         days = pd.read_parquet(cell / "days.parquet")
-        agents = pd.read_parquet(cell / "agents.parquet", columns=["vote", "post_reason"])
+        agents_file = cell / "agents.parquet"            # absent in a light record (record.agent_days: false)
+        agents = pd.read_parquet(agents_file, columns=["vote", "post_reason"]) if agents_file.exists() else None
         last = days[days.day == prm["M"] - 1]
         row = {k: prm[k] for k in ("setup", "arm", "q", "qc", "b", "rho")}
+        row["controller_gate"] = prm.get("controller_gate")
         row.update({
             "episodes": days.episode.nunique(),
             "final_share_A0": last.share_A0.mean(), "final_share_A1": last.share_A1.mean(),
@@ -29,10 +31,10 @@ def summarize(run: str | pathlib.Path) -> pd.DataFrame:
             "final_proof_rate_A0_own_evidence": last.proof_rate_A0_own_evidence.mean(),
             "episodes_majority_A0": (last.share_A0 > 0.5).mean(),
             "episodes_majority_A2": (last.share_A2 > 0.5).mean(),
-            "abstention_rate": (agents.post_reason == ABSTAINED).mean(),
+            "abstention_rate": (agents.post_reason == ABSTAINED).mean() if agents is not None else None,
         })
         for v in range(3):
-            voted = agents[agents.vote == v]
+            voted = agents[agents.vote == v] if agents is not None else []
             row[f"abstention_rate_when_voting_A{v}"] = (voted.post_reason == ABSTAINED).mean() if len(voted) else None
         nights_file = cell / "nights.parquet"
         if nights_file.exists():
@@ -54,7 +56,7 @@ def summarize(run: str | pathlib.Path) -> pd.DataFrame:
             s[f"{col}_minus_silent"] = s.apply(
                 lambda r: r[col] - silent.loc[(r.setup, r.q, r.rho), col]
                 if (r.setup, r.q, r.rho) in silent.index else None, axis=1)
-    s = s.sort_values(["setup", "arm", "rho", "q", "qc", "b"], na_position="first")
+    s = s.sort_values(["setup", "arm", "rho", "q", "qc", "b", "controller_gate"], na_position="first")
     s.to_csv(run / "summary.csv", index=False, float_format="%.4f")
     return s
 

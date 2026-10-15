@@ -102,7 +102,9 @@ class Params:
     def cell_id(self) -> str:
         if self.arm == "silent":
             return f"{self.setup}__silent__q{self.q}__rho{self.rho}"
-        return f"{self.setup}__{self.arm}__q{self.q}__qc{self.qc}__b{self.b}__rho{self.rho}"
+        # the gate is named only when it is not the default, so gate-on cell ids stay as before
+        gate = "" if self.controller_gate == "votes" else f"__gate{'off' if self.controller_gate == 'always' else self.controller_gate}"
+        return f"{self.setup}__{self.arm}__q{self.q}__qc{self.qc}__b{self.b}__rho{self.rho}{gate}"
 
 
 def _stream(seed: int, episode: int, name: str) -> random.Random:
@@ -160,6 +162,8 @@ def _choose_post(world: World, active: int, vote: int, read_today: int, p: Param
 def _best_set(pool: tuple, b: int, score) -> int:
     """The b-fact subset of the pool with the highest score; ties go to the first set in
     alphabetical order of fact IDs (the pool is sorted by fact ID)."""
+    if b > len(pool):
+        raise ValueError(f"b = {b} facts per night, but the pool has only {len(pool)} facts")
     best_set, best_val = 0, None
     for combo in itertools.combinations(pool, b):
         S = 0

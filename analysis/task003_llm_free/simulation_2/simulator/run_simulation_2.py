@@ -276,7 +276,15 @@ def main():
     }
     print(f"{len(cells)} cells x {episodes} episodes on {args.workers} worker(s) -> {run_dir}", flush=True)
 
+    only = cfg.get("record", {}).get("tables")          # optional: exactly these tables in every cell
+    if only is not None:
+        bad = set(only) - set(COLUMNS)
+        if bad:
+            sys.exit(f"record.tables: unknown tables {sorted(bad)}")
+
     def tables_for(p):
+        if only is not None:
+            return list(only)
         if not full_tables(p, cfg):
             return LIGHT_TABLES
         return [t for t in COLUMNS if agent_snapshots or t != "agent_snapshots"]

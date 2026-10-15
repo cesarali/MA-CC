@@ -30,7 +30,7 @@ from sim1.simulation_1 import (AGENT_COLUMNS, DAY_COLUMNS, NIGHT_COLUMNS, Params
                                params_dict, run_episode)
 from summarize_simulation_1 import summarize  # noqa: E402
 
-GRID_KEYS = ("setup", "arm", "q", "qc", "b", "rho")
+GRID_KEYS = ("setup", "arm", "q", "qc", "b", "rho", "controller_gate")      # controller_gate is optional
 RECORD_KEYS = {"agent_days", "posts_read", "memory_after_dawn", "post_reason", "nights", "proof_two_ways"}
 INDEX = HERE / "runs_index.csv"
 SUMMARIES = HERE / "run_summaries"
@@ -41,15 +41,21 @@ def build_cells(cfg: dict) -> list[Params]:
     unknown = set(grid) - set(GRID_KEYS)
     if unknown:
         raise ValueError(f"unknown grid factors: {sorted(unknown)}")
+    keys = [k for k in GRID_KEYS if k in grid]
+    both = set(keys) & set(fixed)
+    if both:
+        raise ValueError(f"set in both grid and fixed: {sorted(both)}")
     if not all(isinstance(x, str) for x in grid["arm"]):
         raise ValueError(f"arm names must be quoted strings in the YAML, got {grid['arm']!r}")
     ignored = set(cfg["cells"].get("silent_ignores", []))
     cells, seen = [], set()
-    for values in itertools.product(*(grid[k] for k in GRID_KEYS)):
-        d = dict(zip(GRID_KEYS, values))
+    for values in itertools.product(*(grid[k] for k in keys)):
+        d = dict(zip(keys, values))
         if d["arm"] == "silent":
             for k in ignored:
                 d[k] = None
+            if "controller_gate" in d:                  # no controller: any gate is the same cell
+                d["controller_gate"] = "votes"
         p = Params(**d, **fixed)
         if p.cell_id() not in seen:
             seen.add(p.cell_id())
@@ -57,15 +63,16 @@ def build_cells(cfg: dict) -> list[Params]:
     return cells
 
 
-def check_record(cfg: dict) -> bool:
-    """Returns whether to record every post read. The other record items are always on."""
+def check_record(cfg: dict) -> tuple[bool, bool]:
+    """Returns (record every post read, write the per-agent table agents.parquet).
+    agent_days: false keeps only days.parquet and nights.parquet (the light record)."""
     rec = cfg.get("record", {})
     if set(rec) != RECORD_KEYS:
         raise ValueError(f"record block must list exactly {sorted(RECORD_KEYS)}")
-    for k in RECORD_KEYS - {"posts_read"}:
+    for k in RECORD_KEYS - {"posts_read", "agent_days"}:
         if rec[k] is not True:
             raise NotImplementedError(f"record.{k}: false is not implemented; it is always recorded")
-    return bool(rec["posts_read"])
+    return bool(rec["posts_read"]), bool(rec["agent_days"])
 
 
 _WORLD = _SETUPS = None
@@ -78,7 +85,7 @@ def _init_worker(world_file: str, setups_dir: str, setup_names: list[str]):
 
 
 def _run_cell(job):
-    p, episodes, cells_dir, record_posts_read = job
+    p, episodes, cells_dir, (record_posts_read, agent_days) = job
     t0 = time.time()
     setup = _SETUPS[p.setup]
     agents, nights, days = [], [], []
@@ -92,11 +99,12 @@ def _run_cell(job):
     da = pd.DataFrame(agents, columns=AGENT_COLUMNS)
     if not record_posts_read:
         da = da.drop(columns="posts_read")
-    da.astype({"episode": "int32", "day": "int16", "position": "int16", "agent": "int16",
-               "memory_after_dawn": "int64", "known_before_reading": "int64", "active_facts": "int64",
-               "facts_read": "int64", "n_posts_read": "int16", "p_A0": "float32", "p_A1": "float32",
-               "p_A2": "float32", "vote": "int8", "posted_fact": "int8", "post_reason": "int8",
-               "proves_A0": "bool", "proves_A0_own_evidence": "bool"}).to_parquet(folder / "agents.parquet", index=False)
+    if agent_days:
+        da.astype({"episode": "int32", "day": "int16", "position": "int16", "agent": "int16",
+                   "memory_after_dawn": "int64", "known_before_reading": "int64", "active_facts": "int64",
+                   "facts_read": "int64", "n_posts_read": "int16", "p_A0": "float32", "p_A1": "float32",
+                   "p_A2": "float32", "vote": "int8", "posted_fact": "int8", "post_reason": "int8",
+                   "proves_A0": "bool", "proves_A0_own_evidence": "bool"}).to_parquet(folder / "agents.parquet", index=False)
     pd.DataFrame(days, columns=DAY_COLUMNS).to_parquet(folder / "days.parquet", index=False)
     if nights:
         dn = pd.DataFrame(nights, columns=NIGHT_COLUMNS)
@@ -141,7 +149,7 @@ def main():
     base = cfg_path.parent
     world_file = str((base / cfg["paths"]["world_file"]).resolve())
     setups_dir = str((base / cfg["paths"]["setups_dir"]).resolve())
-    record_posts_read = check_record(cfg)
+    record = check_record(cfg)
 
     cells = build_cells(cfg)
     expected = cfg["cells"]["expected_total"]
@@ -184,7 +192,7 @@ def main():
     }
     print(f"{len(cells)} cells x {episodes} episodes on {args.workers} worker(s) -> {run_dir}", flush=True)
 
-    jobs = [(p, episodes, str(cells_dir), record_posts_read) for p in cells]
+    jobs = [(p, episodes, str(cells_dir), record) for p in cells]
     timings = []
     t0 = time.time()
     if args.workers > 1:
