@@ -2,6 +2,7 @@
 
 | report | PDF | about |
 |---|---|---|
+| **Report 1 (15 Oct)** | [`2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf`](2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf) | task003-symmetric on the finer 15 October runs (memory ρ 0.25–1, all strengths, gate on and off); mirrors the Simulation 2 report: votes, paired susceptibility, phase diagrams, marginal susceptibility, gain per fact, proofs, readability and efficiency; appendices: gate off, other states, strong control |
 | **Report 1 (14 Oct)** | [`2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf`](2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf) | task003-symmetric, rewritten to mirror the Simulation 2 report section by section: vote shares over time, gain phase diagrams, readability $I$(target; vote) phase diagrams, pair efficiency $\eta$, success against facts posted; progress, focus and price removed |
 | **Report 2 (14 Oct)** | [`2026-10-14_report2_nosolution/2026-10-14_report2_nosolution.pdf`](2026-10-14_report2_nosolution/2026-10-14_report2_nosolution.pdf) | the same for task003-nosolution |
 | **Report 1, extended (12 Oct)** | [`2026-10-12_report1_symmetric/2026-10-12_report1_symmetric.pdf`](2026-10-12_report1_symmetric/2026-10-12_report1_symmetric.pdf) | the 2026-10-07 report unchanged, plus a paragraph on how the simulator works and a section on the efficiency of control |
@@ -29,3 +30,6 @@ The extended reports are built from the originals by `../../../efficiency_estima
 The 14 October reports are self-contained `.tex` files; their new figures come from
 `../../../efficiency_estimates/make_2026-10-14_report_figures.py` (it also copies the figures it reuses
 from the 12 October folders). Rebuild: run that script, then `latexmk -pdf` in each 2026-10-14 folder.
+
+The 15 October report is built from `../../../symmetric_fine/build_tables.py` (summary table) and
+`../../../symmetric_fine/make_report_figures.py` (figures); plan: `../../../symmetric_fine/2026-10-15_plan_reports.md`.
