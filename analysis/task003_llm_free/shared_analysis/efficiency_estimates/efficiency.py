@@ -9,7 +9,7 @@ average P_a = (1/n) sum_e y_a(e). Then, with Q = (P_+ + P_-)/2:
 Bootstrap: 1,000 resamples of episode numbers, the same for all arms (paired).
 
 Usage, from the repository root (after build_states.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/efficiency.py [--date <date>]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/efficiency.py [--date <date>]
 Outputs in results/efficiency_estimates/<date>/: efficiency.csv, uncertainty.csv, null_I.csv
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-RES = HERE.parent / "results" / "efficiency_estimates"
+RES = HERE.parents[1] / "results" / "efficiency_estimates"
 B = 1000
 BINS = (2, 3, 4, 8)
 

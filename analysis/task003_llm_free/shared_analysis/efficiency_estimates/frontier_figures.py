@@ -3,7 +3,7 @@ with its 95% interval, the best-achievable curve over tested configurations (sol
 curve reachable by random mixing of configurations per run (dashed: concave hull through (0, 0)).
 
 Usage, from the repository root (after frontier.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/frontier_figures.py [--date 2026-10-13]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/frontier_figures.py [--date 2026-10-13]
 """
 from __future__ import annotations
 import argparse, pathlib

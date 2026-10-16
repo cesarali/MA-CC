@@ -5,7 +5,7 @@ for every arm and every setting, so comparisons between settings stay paired. Ea
 recomputed on each subset and compared with its value on all 1,000 episodes.
 
 Usage, from the repository root (after build_states.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/downsample.py [--date <date>]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/downsample.py [--date <date>]
 Outputs in results/efficiency_estimates/<date>/:
   downsample.csv  per setting x time x resolution x n_sub x quantity: full value, mean, sd, bias,
                   RMSE, share of subsets where the value is infinite / undefined

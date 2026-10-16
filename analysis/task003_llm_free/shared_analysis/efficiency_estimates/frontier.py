@@ -11,7 +11,7 @@ with C*(d) = least cost of a tested configuration with Delta >= d, Delta*(B) = b
 and the same with randomised mixtures (concave hull through (0, 0)).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/frontier.py [--date 2026-10-13]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/frontier.py [--date 2026-10-13]
 """
 from __future__ import annotations
 import argparse, datetime, hashlib, multiprocessing, pathlib
@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-RES = HERE.parent / "results"
+RES = HERE.parents[1] / "results"
 SIM2 = RES / "simulation_2" / "2026-10-09_sim2_grid" / "cells"
 SIM1 = RES / "simulation_1" / "2026-10-07_sim1_pm" / "cells"
 TARGET = {"truth": 0, "false": 2}

@@ -1,5 +1,8 @@
 # coarse_graining — is the coarse-graining valid?
 
+> **Status (16 October 2026): paused.** Moved here from `analysis/task003_llm_free/coarse_graining/`.
+
+
 > **Next (12 October 2026): [`2026-10-12_plan_simulator_data.md`](2026-10-12_plan_simulator_data.md)** —
 > coarse-graining on the simulator data (both simulations, recorded data only), for a dynamical
 > model of control and path-level efficiency. Plan only; not started.

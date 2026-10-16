@@ -1,12 +1,12 @@
 """Figures for the two mirrored reports of 15 October 2026 on task003-symmetric (Simulations 1 and 2).
 
-Reads results/symmetric_fine/<date>/cells_time.parquet (build_tables.py) and writes, for each simulation,
+Reads results/gold_standard/<date>/cells_time.parquet (build_tables.py) and writes, for each simulation,
 into simulation_<n>/analysis/reports/<date>_report1_symmetric/figures/ the figures listed in
-symmetric_fine/2026-10-15_plan_reports.md, plus mi_table.csv (readability and efficiency for every
+shared_analysis/gold_standard/2026-10-15_plan_reports.md, plus mi_table.csv (readability and efficiency for every
 setting, state and time) and numbers.json (values quoted in the text).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/symmetric_fine/make_report_figures.py [--date 2026-10-15]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/gold_standard/make_report_figures.py [--date 2026-10-15]
 """
 from __future__ import annotations
 import argparse, json, pathlib
@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-RES = ROOT / "results" / "symmetric_fine"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+RES = ROOT / "results" / "gold_standard"
 REPORT = {"sim1": ROOT / "simulation_1/analysis/reports", "sim2": ROOT / "simulation_2/analysis/reports"}
 XS = {"sim1": [1, 2, 3, 4, 5, 6, 7, 8, 9], "sim2": [0.5, 1, 2, 3, 4, 5, 6, 7, 8]}
 XNAME = {"sim1": "$b$", "sim2": "$\\lambda_c$"}

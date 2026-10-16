@@ -13,7 +13,7 @@ only the presentation changes:
   fig_proofs.pdf             who holds the proof (as on 15 October)
 
 Usage, from the repository root (after build_tables.py and make_report_figures.py):
-    .venv/bin/python analysis/task003_llm_free/symmetric_fine/make_report_figures_2026-10-16.py
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/gold_standard/make_report_figures_2026-10-16.py
 """
 from __future__ import annotations
 import pathlib, sys
@@ -125,7 +125,32 @@ def phase_triple(t, mi, sim, out, name, ys, xs, ylab, xlab, kw, title, gmax):
     M.save(fig, out, name)
 
 
-def fig_strength_time(t, sim, out, gmax, smax):
+def fig_gain_strength(t, sl, sim, out):
+    """Top: G (target A2) against strength, gate on and off. Bottom: slope between neighbouring strengths with paired
+    95% intervals (build_slopes.py)."""
+    fig, axes = plt.subplots(2, 4, figsize=(7.4, 3.8), sharex=True)
+    cols = [(30.0, r) for r in M.RHOS] if sim == "sim1" else [(5.0, 0.5), (30.0, 0.5), (5.0, 0.75), (30.0, 0.75)]
+    xs = np.array(M.XS[sim], float)
+    for j, (tt, rho) in enumerate(cols):
+        for gate, ls, mk in (("on", "-", "o"), ("off", "--", "s")):
+            d = M.sel(t, sim=sim, arm="false", q=M.Q, qc=M.QC, rho=rho, gate=gate, t=tt).set_index("x").reindex(xs)
+            axes[0, j].errorbar(xs, d.G, yerr=1.96 * d.G_se, color="tab:red", ls=ls, marker=mk, ms=2.5, lw=1,
+                                capsize=1.5, label=f"gate {gate}")
+            e = M.sel(sl, sim=sim, arm="false", q=M.Q, qc=M.QC, rho=rho, gate=gate, t=tt).sort_values("x_lo")
+            axes[1, j].errorbar(0.5 * (e.x_lo + e.x_hi), e.slope, yerr=1.96 * e.slope_se, color="tab:red", ls=ls,
+                                marker=mk, ms=2.5, lw=1, capsize=1.5)
+        when = f"day {tt:g}" if sim == "sim1" else f"$t$ {tt:g}"
+        axes[0, j].set_title(f"{when}, $\\rho = {rho:g}$")
+        axes[1, j].axhline(0, color="0.6", lw=0.5)
+        axes[1, j].set_xlabel(M.XNAME[sim])
+    axes[0, 0].set_ylabel("$G$, target A2")
+    axes[1, 0].set_ylabel(f"slope $\\Delta G/\\Delta${M.XNAME[sim]}")
+    axes[0, 0].legend(fontsize=6)
+    fig.tight_layout(pad=0.3)
+    M.save(fig, out, "fig_gain_strength.pdf")
+
+
+def fig_strength_time(t, sl, sim, out, gmax, smax):
     xs = M.XS[sim]
     times = sorted(tt for tt in M.sel(t, sim=sim).t.unique() if tt >= 1 and float(tt).is_integer())
     fig, axes = plt.subplots(2, 2, figsize=(7.4, 3.9), sharex=True)
@@ -140,6 +165,12 @@ def fig_strength_time(t, sim, out, gmax, smax):
         im1 = axes[i, 1].imshow(slope, origin="lower", aspect="auto", cmap="RdBu_r", vmin=-smax, vmax=smax,
                                 extent=[ext[0], ext[1], -0.5, len(xs) - 1.5], interpolation="nearest")
         axes[i, 1].set_yticks(range(len(xs) - 1), [f"{a:g}–{b:g}" for a, b in zip(xs[:-1], xs[1:])], fontsize=5)
+        e = M.sel(sl, sim=sim, arm="false", q=M.Q, qc=M.QC, rho=rho, gate="on")
+        se = e.pivot_table(index="x_lo", columns="t", values="slope_se").reindex(index=[float(x) for x in xs[:-1]],
+                                                                                  columns=times).to_numpy()
+        ns = np.where(np.abs(slope) <= 1.96 * se, 1.0, np.nan)      # 95% interval includes 0: faded
+        axes[i, 1].imshow(ns, origin="lower", aspect="auto", cmap="Greys", vmin=0, vmax=1, alpha=0.55,
+                          extent=[ext[0], ext[1], -0.5, len(xs) - 1.5], interpolation="nearest")
         axes[i, 0].set_ylabel(f"$\\rho = {rho:g}$\n{M.XNAME[sim]}")
         axes[i, 1].set_ylabel(f"{M.XNAME[sim]} step")
         for ax in axes[i]:
@@ -158,6 +189,7 @@ def fig_strength_time(t, sim, out, gmax, smax):
 def main():
     d = M.RES / DATE_DATA
     t = pd.read_parquet(d / "cells_time.parquet")
+    sl = pd.read_parquet(d / "slopes.parquet")
     mi = pd.read_csv(d / "mi_table.csv")
     at30 = t[(t.t == M.T_PHASE) & (t.arm == "false")]
     gmax = float(np.nanmax(np.abs(at30.G)))
@@ -182,8 +214,8 @@ def main():
                      lambda r, x: dict(q=M.Q, qc=M.QC, x=x, rho=r), f"$q = {M.Q}$, $q_c = {M.QC}$, $t = 30$", gmax)
         phase_triple(ts, ms, sim, out, "fig_phase_qc_x.pdf", qcs, xs, "$q_c$", M.XNAME[sim],
                      lambda qc, x: dict(q=M.Q, qc=qc, x=x, rho=M.RHO_REP), f"$\\rho = {M.RHO_REP:g}$, $q = {M.Q}$, $t = 30$", gmax)
-        M.fig_gain_strength(ts, sim, out, "fig_gain_strength.pdf")
-        fig_strength_time(ts, sim, out, gall, smax)
+        fig_gain_strength(ts, sl[sl.sim == sim], sim, out)
+        fig_strength_time(ts, sl[sl.sim == sim], sim, out, gall, smax)
         M.fig_proofs(ts, sim, out, "fig_proofs.pdf", "on", M.MAIN[sim])
         print("figures ->", out)
 

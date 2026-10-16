@@ -1,5 +1,8 @@
 # efficiency_estimates — how efficiently does a controller steer the swarm?
 
+> **Status (16 October 2026): superseded.** The current measures are in [`../gold_standard/`](../gold_standard/); this folder is kept as the record of the 12–14 October work. Some of the runs it reads have been deleted (see `results/simulation_*/2026-10-1*_deletion_list*.txt`).
+
+
 Measures of control efficiency for **both** LLM-free simulations (Simulation 1, days and nights;
 Simulation 2, continuous time), chosen so they can also be estimated from about 100 paths per
 arm, the budget of the later LLM runs.

@@ -7,7 +7,7 @@ For each simulation and setup writes, into the new report's figures/ folder:
   tab_eff_precision.tex values at 1,000 paths and RMSE at 50 / 100 / 300 paths (LaTeX rows)
 
 Usage, from the repository root (after efficiency.py and downsample.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/make_report_figures.py [--date 2026-10-12]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/make_report_figures.py [--date 2026-10-12]
 """
 from __future__ import annotations
 import argparse, pathlib
@@ -20,7 +20,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parent
+ROOT = HERE.parents[1]
 RES = ROOT / "results" / "efficiency_estimates"
 REPORTS = {("sim1", "symmetric"): ROOT / "simulation_1/analysis/reports/2026-10-12_report1_symmetric",
            ("sim1", "nosolution"): ROOT / "simulation_1/analysis/reports/2026-10-12_report2_nosolution",

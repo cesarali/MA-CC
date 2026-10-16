@@ -10,7 +10,7 @@ Settings: Simulation 2 grid, q 6, qc 12, rho 0.75 / 1, every rate, gate on/off, 
 Simulation 1 sim1_pm, q 6, qc 12, b 1 / 2 / 3 / 6 / 9, rho 0.75 / 1, end of days 1..30.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/build_states.py [--date <date>]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/build_states.py [--date <date>]
 Output: results/efficiency_estimates/<date>/states.parquet
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parent                                                  # analysis/task003_llm_free
+ROOT = HERE.parents[1]                                              # analysis/task003_llm_free
 sys.path.insert(0, str(ROOT))
 from llmfree_core.world import World  # noqa: E402
 

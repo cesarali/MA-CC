@@ -4,7 +4,7 @@ Every number in its tables is read from results/efficiency_estimates/<date>/ (ef
 uncertainty.csv, efficiency_phase.csv, downsample.csv, ranking.csv); the prose is fixed below.
 
 Usage, from the repository root (after efficiency.py, downsample.py, phase.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/make_md_report.py [--date 2026-10-12]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/make_md_report.py [--date 2026-10-12]
 """
 from __future__ import annotations
 import argparse, pathlib
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-RES = HERE.parent / "results" / "efficiency_estimates"
+RES = HERE.parents[1] / "results" / "efficiency_estimates"
 SW, AV, AB = "swarm_beliefs_k3", "agent_votes", "agent_beliefs"
 SPEC = {"sim1": "b3", "sim2": "lc1_gateon"}
 
@@ -176,7 +176,7 @@ files; do not edit them by hand.
 (§3–§4, recompute some from `states.parquet`), and whether the findings (§5) follow from the tables.
 Work read-only. Report each problem with file, line or table, and why.
 
-**Files.** Code: `analysis/task003_llm_free/efficiency_estimates/` (README.md lists each script). Data
+**Files.** Code: `analysis/task003_llm_free/shared_analysis/efficiency_estimates/` (README.md lists each script). Data
 (not in git): `analysis/task003_llm_free/results/efficiency_estimates/2026-10-12/` — `states.parquet`
 (one row per simulation, setting, arm, episode, time), `efficiency.csv` (all measures, all times,
 95% bootstrap intervals), `uncertainty.csv`, `efficiency_phase.csv` (whole control plane, t = 30),

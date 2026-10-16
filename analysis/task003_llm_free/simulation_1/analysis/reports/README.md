@@ -24,15 +24,15 @@ The figure script reads the analysis tables in `results/simulation_1/analysis/20
 `results/simulation_1/analysis/2026-10-07/figures/`. The full analysis behind every number is in
 the Q0–Q6 reports one folder up; a reviewing agent should start at `../REVIEW_GUIDE.md`.
 
-The extended reports are built from the originals by `../../../efficiency_estimates/extend_reports.py`
+The extended reports are built from the originals by `../../../shared_analysis/efficiency_estimates/extend_reports.py`
 (it checks that the original text is unchanged); their efficiency figures come from
-`../../../efficiency_estimates/make_report_figures.py`.
+`../../../shared_analysis/efficiency_estimates/make_report_figures.py`.
 
 The 14 October reports are self-contained `.tex` files; their new figures come from
-`../../../efficiency_estimates/make_2026-10-14_report_figures.py` (it also copies the figures it reuses
+`../../../shared_analysis/efficiency_estimates/make_2026-10-14_report_figures.py` (it also copies the figures it reuses
 from the 12 October folders). Rebuild: run that script, then `latexmk -pdf` in each 2026-10-14 folder.
 
-The 15 October report is built from `../../../symmetric_fine/build_tables.py` (summary table) and
-`../../../symmetric_fine/make_report_figures.py` (figures); plan: `../../../symmetric_fine/2026-10-15_plan_reports.md`.
+The 15 October report is built from `../../../shared_analysis/gold_standard/build_tables.py` (summary table) and
+`../../../shared_analysis/gold_standard/make_report_figures.py` (figures); plan: `../../../shared_analysis/gold_standard/2026-10-15_plan_reports.md`.
 
-The 16 October report's figures come from `../../../symmetric_fine/make_report_figures_2026-10-16.py`.
+The 16 October report's figures come from `../../../shared_analysis/gold_standard/make_report_figures_2026-10-16.py`.

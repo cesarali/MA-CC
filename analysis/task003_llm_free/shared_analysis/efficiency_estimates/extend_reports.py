@@ -5,12 +5,12 @@ the simulator works and (b) a section on the efficiency of control before the cl
 The original's text is checked to be contained, unchanged, in the new file.
 
 Usage, from the repository root (after make_report_figures.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/extend_reports.py
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/extend_reports.py
 """
 from __future__ import annotations
 import pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPORTS = {
     ("sim1", "symmetric"): ("simulation_1", "2026-10-07_report1_symmetric", "2026-10-12_report1_symmetric"),
     ("sim1", "nosolution"): ("simulation_1", "2026-10-07_report2_nosolution", "2026-10-12_report2_nosolution"),

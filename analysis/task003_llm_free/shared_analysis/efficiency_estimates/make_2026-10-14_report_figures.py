@@ -16,7 +16,7 @@ target A2 red; controller strength b or rate in one colour scale):
   tab_eff_precision.tex  the 12 October precision rows without progress and focus
 
 Usage, from the repository root (after frontier.py; the efficiency tables of 12 October must exist):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/make_2026-10-14_report_figures.py
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/make_2026-10-14_report_figures.py
 """
 from __future__ import annotations
 import pathlib, shutil
@@ -30,7 +30,7 @@ import pandas as pd  # noqa: E402
 from frontier import hull  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parent
+ROOT = HERE.parents[1]
 RES = ROOT / "results"
 SIM1_CELLS = RES / "simulation_1" / "2026-10-07_sim1_pm" / "cells"
 SIM2_CELLS = RES / "simulation_2" / "2026-10-09_sim2_grid" / "cells"

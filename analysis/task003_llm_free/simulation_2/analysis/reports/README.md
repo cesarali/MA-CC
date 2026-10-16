@@ -2,7 +2,7 @@
 
 | report | PDF | about |
 |---|---|---|
-| **Sham baseline (16 Oct)** | [`2026-10-16_sham_baseline_symmetric/2026-10-16_sham_baseline_symmetric.pdf`](2026-10-16_sham_baseline_symmetric/2026-10-16_sham_baseline_symmetric.pdf) | task003-symmetric, Simulation 2 only: the handoff's informed-vs-sham measures (χ_correct, η_post, η_info, η_goal, with I(Z;X), I(Z;Y), C_X) as time series and phase diagrams; code `../../../symmetric_fine/sham_baseline*.py` |
+| **Sham baseline (16 Oct)** | [`2026-10-16_sham_baseline_symmetric/2026-10-16_sham_baseline_symmetric.pdf`](2026-10-16_sham_baseline_symmetric/2026-10-16_sham_baseline_symmetric.pdf) | task003-symmetric, Simulation 2 only: the handoff's informed-vs-sham measures (χ_correct, η_post, η_info, η_goal, with I(Z;X), I(Z;Y), C_X) as time series and phase diagrams; code `../../../shared_analysis/gold_standard/sham_baseline*.py` |
 | **Report 1 (16 Oct)** | [`2026-10-16_report1_symmetric/2026-10-16_report1_symmetric.pdf`](2026-10-16_report1_symmetric/2026-10-16_report1_symmetric.pdf) | the 15 Oct report reorganised (same data): susceptibility, readability and efficiency side by side as time series and as phase diagrams (ρ×q, ρ×strength, q_c×strength); new time × strength map of the susceptibility and its slope; gain per fact with facts posted; no appendix; mirrors the Simulation 1 report |
 | **Report 1 (15 Oct)** | [`2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf`](2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf) | task003-symmetric on the finer 15 October runs (memory ρ 0.25–1, all strengths, gate on and off); mirrors the Simulation 1 report: votes, paired susceptibility, phase diagrams, marginal susceptibility, gain per fact, proofs, readability and efficiency; appendices: gate off, other states, strong control |
 | **Report 1 (14 Oct)** | [`2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf`](2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf) | task003-symmetric, rewritten to mirror the Simulation 1 report section by section: vote shares over time, gain phase diagrams, readability $I$(target; vote) phase diagrams, pair efficiency $\eta$, success against facts posted; progress, focus and price removed |
@@ -27,15 +27,15 @@ The figure script reads the analysis tables in `results/simulation_2/analysis/20
 `results/simulation_2/analysis/2026-10-09/figures/`. The full analysis behind every number is in
 `../2026-10-09_report.md`; a reviewing agent should start at `../REVIEW_GUIDE.md`.
 
-The extended reports are built from the originals by `../../../efficiency_estimates/extend_reports.py`
+The extended reports are built from the originals by `../../../shared_analysis/efficiency_estimates/extend_reports.py`
 (it checks that the original text is unchanged); their efficiency figures come from
-`../../../efficiency_estimates/make_report_figures.py`.
+`../../../shared_analysis/efficiency_estimates/make_report_figures.py`.
 
 The 14 October reports are self-contained `.tex` files; their new figures come from
-`../../../efficiency_estimates/make_2026-10-14_report_figures.py` (it also copies the figures it reuses
+`../../../shared_analysis/efficiency_estimates/make_2026-10-14_report_figures.py` (it also copies the figures it reuses
 from the 12 October folders). Rebuild: run that script, then `latexmk -pdf` in each 2026-10-14 folder.
 
-The 15 October report is built from `../../../symmetric_fine/build_tables.py` (summary table) and
-`../../../symmetric_fine/make_report_figures.py` (figures); plan: `../../../symmetric_fine/2026-10-15_plan_reports.md`.
+The 15 October report is built from `../../../shared_analysis/gold_standard/build_tables.py` (summary table) and
+`../../../shared_analysis/gold_standard/make_report_figures.py` (figures); plan: `../../../shared_analysis/gold_standard/2026-10-15_plan_reports.md`.
 
-The 16 October report's figures come from `../../../symmetric_fine/make_report_figures_2026-10-16.py`.
+The 16 October report's figures come from `../../../shared_analysis/gold_standard/make_report_figures_2026-10-16.py`.

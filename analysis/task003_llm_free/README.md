@@ -15,19 +15,31 @@ a controller posts true facts on a shared board to steer them.
 
 Start at [`experimental_setup/README.md`](experimental_setup/README.md).
 
-## Folders
+## Where to look for what
 
-| folder | what it holds |
-|---|---|
-| [`task_and_facts/`](task_and_facts/) | the world: its 49 true facts, the exact posterior engine (`engine.py`), the proofs. Read [`task_003_analysis.md`](task_and_facts/task_003_analysis.md) for what "eligible", "decisive" and "proof" mean |
-| [`experimental_setup/`](experimental_setup/) | one folder per frozen setup (agents, pools, build script, README), plus the plan for the LLM runs |
-| [`llmfree_core/`](llmfree_core/) | code and data shared by every LLM-free simulation: exact posteriors (`world.py`), setup loading (`setups.py`), the exported world, and [`runtime_rules.md`](llmfree_core/runtime_rules.md) (the real game's rules to copy) |
-| [`simulation_1/`](simulation_1/) | **Simulation 1** (days and nights, per-round controller budget). [`simulator/`](simulation_1/simulator/): spec, configs, runner, tests, runs index. [`analysis/`](simulation_1/analysis/): plan, Q0–Q6 reports, two short PDF reports, reviewer guide |
-| [`simulation_2/`](simulation_2/) | **Simulation 2** (asynchronous activation): implemented; spec in [`simulator/simulation_2_spec.md`](simulation_2/simulator/simulation_2_spec.md) |
-| `results/` | not in git. `results/simulation_1/<date>_<study>/` holds raw runs; `results/simulation_1/analysis/<date>/` the analysis outputs. Simulation 2 will write to `results/simulation_2/` |
-| [`efficiency_estimates/`](efficiency_estimates/) | how efficiently the controller steers, for both simulations: definitions, estimators, precision at 50 / 100 / 300 paths, the adopted measures |
-| [`TODO.md`](TODO.md) | deferred work |
-| [`coarse_graining/`](coarse_graining/) | the 4-state summary of the swarm (mean belief in A0, binned) and the four tests of whether it is Markovian. The results inside are from the archived LLM study; they will be **rerun on the new simulator's data** |
+**Start here for current results:** the gold-standard report,
+[`simulation_2/analysis/reports/2026-10-16_report1_symmetric/`](simulation_2/analysis/reports/2026-10-16_report1_symmetric/)
+(Simulation 2, symmetric setup), its mirror for Simulation 1 in
+[`simulation_1/analysis/reports/2026-10-16_report1_symmetric/`](simulation_1/analysis/reports/2026-10-16_report1_symmetric/),
+and the reviewer guide next to the gold standard (`REVIEW_GUIDE.md`): every metric, where the data is, how to
+rebuild every number.
+
+| folder | what it holds | look here for |
+|---|---|---|
+| [`task_and_facts/`](task_and_facts/) | the world: its 49 true facts, the exact posterior engine, the proofs; [`task_003_analysis.md`](task_and_facts/task_003_analysis.md) defines "eligible", "decisive", "proof" | what the task is and why A0 is correct |
+| [`experimental_setup/`](experimental_setup/) | one folder per frozen setup (`task003_symmetric/`, `task003_nosolution/`: agents, pools, build script, README), plus the plan for the LLM runs | who holds which fact; the controller pools |
+| [`llmfree_core/`](llmfree_core/) | code shared by both simulators: exact posteriors (`world.py`), setup loading (`setups.py`), the exported world, [`runtime_rules.md`](llmfree_core/runtime_rules.md) | how beliefs are computed from facts |
+| [`simulation_1/`](simulation_1/) | **Simulation 1** (days and nights; the controller posts b facts per night). `simulator/`: spec, configs, runner, tests, runs index, run summaries. `analysis/`: the 7 Oct plan, Q0–Q6 reports, reviewer guide, and `reports/` (dated PDF reports; the 16 Oct one mirrors the gold standard) | Simulation 1 rules and runs; its reports |
+| [`simulation_2/`](simulation_2/) | **Simulation 2** (asynchronous; the controller posts one fact per message at rate λc). Same layout as Simulation 1; `analysis/reports/` holds the gold standard and the sham-baseline report | Simulation 2 rules and runs; the gold standard |
+| [`shared_analysis/`](shared_analysis/) | analysis code used by both simulations: `gold_standard/` (**the pipeline behind the current reports**: tables, measures, figures, sham baseline), `efficiency_estimates/` (12–14 Oct measures, superseded), `coarse_graining/` (Markov studies, paused). See its README | how a number in a report was computed |
+| `results/` | data, not in git. `results/simulation_1/<date>_<study>/` and `results/simulation_2/<date>_<study>/`: raw runs (one folder per cell); `results/simulation_<n>/analysis/<date>/`: tables of the 7/9 Oct analyses; `results/gold_standard/<date>/`: tables of the current reports; `results/efficiency_estimates/`, `results/coarse_graining/`: outputs of those folders | the numbers behind every figure |
+| [`TODO.md`](TODO.md) | deferred work | open items |
+
+**Runs in use (light records, 1,000 episodes per cell):**
+`results/simulation_1/2026-10-15_sim1_pm_symmetric_fine`, `results/simulation_2/2026-10-15_sim2_symmetric_fine`
+(symmetric, ρ 1/0.75/0.5/0.25), with their `*_extra_rho` and `*_nosolution_fine` companions of 16 October
+(ρ 0.875/0.625/0.375/0.125 for symmetric; all 8 ρ for nosolution). Older runs that were deleted are listed in
+`results/simulation_*/2026-10-1*_deletion_list*.txt`.
 
 ## Recovering deleted material
 

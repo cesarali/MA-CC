@@ -116,6 +116,10 @@ budgets,
 \begin{equation}\label{eq:slope}
 \frac{\Delta G}{\Delta b} = \frac{G(b^{(k+1)}) - G(b^{(k)})}{b^{(k+1)} - b^{(k)}} .
 \end{equation}
+Episode $e$ uses the same random draws at every budget, so the slope is estimated from per-episode differences,
+$[x^{(e)}_{\text{target},t}(b^{(k+1)}) - x^{(e)}_{\text{target},t}(b^{(k)})]/(b^{(k+1)} - b^{(k)})$, whose mean is
+Eq.~(\ref{eq:slope}) and whose standard error gives the 95\% intervals (typically $\pm0.006$--$0.02$, about 30\%
+narrower than for two independent means).
 
 \section{Votes over time}
 
@@ -242,7 +246,7 @@ $\rho = 0.5$, $q = 6$.}
 \begin{figure}[H]
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_gain_strength.pdf}
 \caption{Top: $G$ on day 30, target A2, against the budget $b$, one panel per $\rho$; gate on (solid) and off
-(dashed); bars: 95\% intervals. Bottom: the slope between neighbouring budgets, Eq.~(\ref{eq:slope}).}
+(dashed); bars: 95\% intervals. Bottom: the slope between neighbouring budgets, Eq.~(\ref{eq:slope}), with paired 95\% intervals.}
 \label{fig:strength}
 \end{figure}
 
@@ -250,7 +254,7 @@ $\rho = 0.5$, $q = 6$.}
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_strength_time.pdf}
 \caption{$G$, target A2 (left), and its slope between neighbouring budgets (right) over the days ($x$) and the
 budget ($y$), for $\rho = 0.5$ (top) and $0.75$ (bottom); $q = 6$, $q_c = 12$, gate on. Each row of the right panels
-is one step between neighbouring budgets.}
+is one step between neighbouring budgets; faded cells: its paired 95\% interval includes 0.}
 \label{fig:strengthtime}
 \end{figure}
 
@@ -261,8 +265,12 @@ is one step between neighbouring budgets.}
 \item \textbf{At $\rho = 0.5$ the slope fades with time} (Figure~\ref{fig:strengthtime}): the first step falls from
   $0.12$ (day 5) to $0.02$ (day 30) as $b = 1$ catches up; $b = 9$ reaches 90\% of its day-30 value by day 7, $b = 1$
   by day 19.
-\item \textbf{At $\rho = 0.75$ it does not}: the first step stays at $0.08$--$0.12$, and the step from $b = 3$ to 4
-  grows from $0.05$ (day 2) to $0.11$ (day 30). More budget pays more the longer control lasts.
+\item \textbf{At $\rho = 0.75$ it does not}: on day 30 most steps are still significantly positive ($b = 1 \to 2$:
+  $0.10$; $3 \to 4$: $0.11$; $5 \to 9$: $0.02$--$0.05$), and the step from $b = 3$ to 4 grows from $0.05$ (day 2) to
+  $0.11$ (day 30). More budget pays more the longer control lasts.
+\item \textbf{The returns come in uneven steps}: at $\rho = 0.75$ the steps $2 \to 3$ and $4 \to 5$ add nothing
+  measurable while their neighbours add $0.05$--$0.11$. A likely reason, not tested: the best set of $b$ facts from the
+  12-fact pool changes composition only at some values of $b$.
 \item \textbf{Turning the gate off adds susceptibility where the budget matters}: up to $+0.12$ at $\rho = 0.75$.
 \end{itemize}
 
@@ -307,6 +315,6 @@ is one step between neighbouring budgets.}
 posting a fixed batch each night; 1{,}000 episodes per setting (95\% intervals on $G$ about $\pm0.02$). Information
 is plug-in from 1{,}000 episodes per arm. Data:
 \texttt{results/simulation\_1/2026-10-15\_sim1\_pm\_symmetric\_fine}; tables and figures:
-\texttt{analysis/task003\_llm\_free/symmetric\_fine/}.
+\texttt{analysis/task003\_llm\_free/shared\_analysis/gold\_standard/}.
 
 \end{document}

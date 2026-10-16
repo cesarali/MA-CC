@@ -6,7 +6,7 @@ Same estimator as efficiency.py (measures(), resolutions()); no bootstrap (preci
 known from downsample.py). Reads only the recorded snapshot / day tables, present in every cell.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/phase.py [--date <date>]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/phase.py [--date <date>]
 Output: results/efficiency_estimates/<date>/efficiency_phase.csv
 """
 from __future__ import annotations

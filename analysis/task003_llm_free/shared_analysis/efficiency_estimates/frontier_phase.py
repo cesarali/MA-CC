@@ -3,7 +3,7 @@
 share of the available room (Delta / (1 - silent success)), facts posted and eta_cost, for each target.
 
 Usage, from the repository root (after frontier.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/frontier_phase.py --out <folder> [--date 2026-10-13]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/frontier_phase.py --out <folder> [--date 2026-10-13]
 """
 from __future__ import annotations
 import argparse, pathlib

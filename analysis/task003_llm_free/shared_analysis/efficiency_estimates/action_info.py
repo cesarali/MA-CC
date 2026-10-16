@@ -9,7 +9,7 @@ Each episode contributes a count tensor; totals, bootstrap resamples and downsam
 weighted sums of those tensors over episodes (agents of an episode always stay together).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/action_info.py [--date 2026-10-13]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/action_info.py [--date 2026-10-13]
 Outputs: results/efficiency_estimates/<date>/action_info.csv, action_downsample.csv
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parent
+ROOT = HERE.parents[1]
 RES = ROOT / "results"
 SIM2_GRID = RES / "simulation_2" / "2026-10-09_sim2_grid" / "cells"
 SIM2_RHO1 = RES / "simulation_2" / "2026-10-12_sim2_main_rho1_full" / "cells"

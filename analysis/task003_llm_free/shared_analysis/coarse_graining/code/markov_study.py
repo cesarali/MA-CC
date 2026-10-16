@@ -36,7 +36,7 @@ Readability: I(Z; X) at t = 10 and 30, Z = target (fair coin between the two con
 Reference rows: the one-agent vote state used before, and its fact-implied analogue.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/coarse_graining/code/markov_study.py [--date 2026-10-15]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/coarse_graining/code/markov_study.py [--date 2026-10-15]
 """
 from __future__ import annotations
 import argparse, itertools, pathlib, sys, time, zlib
@@ -44,7 +44,7 @@ import argparse, itertools, pathlib, sys, time, zlib
 import numpy as np
 import pandas as pd
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from llmfree_core.world import World, bits  # noqa: E402
 from llmfree_core.setups import load_setup  # noqa: E402

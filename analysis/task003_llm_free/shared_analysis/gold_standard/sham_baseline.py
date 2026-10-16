@@ -7,7 +7,7 @@ A1-target pool in this setup, so the sham draws from the two targets that exist.
 arm is an average over its episodes, the sham's distribution is exactly the average of the A0-target and A2-target
 arms, and every episode was run in all three arms with the same random draws (paired).
 
-For every setting (q, qc, rate, rho, gate) and time t, writes results/symmetric_fine/<date>/sham_table.parquet with:
+For every setting (q, qc, rate, rho, gate) and time t, writes results/gold_standard/<date>/sham_table.parquet with:
   chi, chi_se   paired correctness susceptibility: mean over episodes of x_A0(informed) - x_A0(sham)
                 = 1/2 [x_A0(target A0) - x_A0(target A2)], same episode; standard error over episodes
   F1            facts posted by the informed controller up to t (mean per episode)
@@ -19,7 +19,7 @@ For every setting (q, qc, rate, rho, gate) and time t, writes results/symmetric_
 Every distribution gets the same pseudo-count of 0.5 episodes per value before any KL (as in the 15/16 Oct reports).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/symmetric_fine/sham_baseline.py [--date 2026-10-15] [--workers 12]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/gold_standard/sham_baseline.py [--date 2026-10-15] [--workers 12]
 """
 from __future__ import annotations
 import argparse, json, multiprocessing, pathlib
@@ -27,9 +27,9 @@ import argparse, json, multiprocessing, pathlib
 import numpy as np
 import pandas as pd
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 CELLS = ROOT / "results/simulation_2/2026-10-15_sim2_symmetric_fine/cells"
-RES = ROOT / "results/symmetric_fine"
+RES = ROOT / "results/gold_standard"
 TIMES = [0.25, 0.5, 0.75] + [float(t) for t in range(1, 41)]
 ALPHA, C_MIN = 0.5, 0.01
 

@@ -1,12 +1,12 @@
 """Figures for simulation_2/analysis/reports/2026-10-16_sham_baseline_symmetric (sham-baseline measures).
 
-Reads results/symmetric_fine/<date>/sham_table.parquet (sham_baseline.py). Writes:
+Reads results/gold_standard/<date>/sham_table.parquet (sham_baseline.py). Writes:
   fig_time_rho{1,0.75,0.5,0.25}.pdf   2 x 4 per memory rho: top chi, eta_post, eta_info, eta_goal; bottom I(Z;X),
                                       I(Z;Y), C_X; one curve per rate; q 6, qc 12, gate on
   fig_phase_rho_q.pdf, fig_phase_rho_x.pdf, fig_phase_qc_x.pdf   2 x 4 tiles at t = 30, same seven quantities
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/symmetric_fine/sham_baseline_figures.py
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/gold_standard/sham_baseline_figures.py
 """
 from __future__ import annotations
 import pathlib, sys

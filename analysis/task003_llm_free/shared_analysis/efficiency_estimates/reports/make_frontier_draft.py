@@ -1,6 +1,6 @@
 """Build the draft LaTeX report on the operational frontier (tables from the result files).
 Usage, from the repository root (after frontier.py and frontier_phase.py):
-    .venv/bin/python analysis/task003_llm_free/efficiency_estimates/reports/make_frontier_draft.py
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/efficiency_estimates/reports/make_frontier_draft.py
 """
 import pathlib
 import numpy as np

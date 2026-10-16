@@ -17,7 +17,7 @@ Writes into results/coarse_graining/<date>/:
   prevalence_groups.png summed over each role group, the three arms on one panel per (rho, group)
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/coarse_graining/code/prevalence.py [--date 2026-10-15]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/coarse_graining/code/prevalence.py [--date 2026-10-15]
 """
 from __future__ import annotations
 import argparse, json, pathlib, sys
@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]          # analysis/task003_llm_free
+ROOT = pathlib.Path(__file__).resolve().parents[3]          # analysis/task003_llm_free
 sys.path.insert(0, str(ROOT))
 from llmfree_core.world import World  # noqa: E402
 from llmfree_core.setups import load_setup  # noqa: E402

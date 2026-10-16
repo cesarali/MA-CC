@@ -3,7 +3,7 @@
 Reads the light records:
   results/simulation_1/2026-10-15_sim1_pm_symmetric_fine  (days.parquet: one row per episode and day)
   results/simulation_2/2026-10-15_sim2_symmetric_fine     (snapshots.parquet: one row per episode every 0.25)
-and writes results/symmetric_fine/<date>/cells_time.parquet: one row per (cell, time) with
+and writes results/gold_standard/<date>/cells_time.parquet: one row per (cell, time) with
 
   identity   sim, arm, q, qc, x (b or rate), rho, gate, t
   votes      x0, x1, x2: mean share of votes for A0, A1, A2 among agents who have voted (Simulation 2:
@@ -24,7 +24,7 @@ Times: Simulation 1 days 1..30 (end of each day); Simulation 2 t = 0.25, 0.5, 0.
 has voted; the figures start every vote share and gain at 0 there.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/symmetric_fine/build_tables.py [--date 2026-10-15] [--workers 12]
+    .venv/bin/python analysis/task003_llm_free/shared_analysis/gold_standard/build_tables.py [--date 2026-10-15] [--workers 12]
 """
 from __future__ import annotations
 import argparse, json, multiprocessing, pathlib
@@ -32,7 +32,7 @@ import argparse, json, multiprocessing, pathlib
 import numpy as np
 import pandas as pd
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 RES = ROOT / "results"
 RUNS = {"sim1": RES / "simulation_1/2026-10-15_sim1_pm_symmetric_fine/cells",
         "sim2": RES / "simulation_2/2026-10-15_sim2_symmetric_fine/cells"}
@@ -133,7 +133,7 @@ def main():
     ap.add_argument("--date", default="2026-10-15")
     ap.add_argument("--workers", type=int, default=12)
     a = ap.parse_args()
-    out = RES / "symmetric_fine" / a.date
+    out = RES / "gold_standard" / a.date
     out.mkdir(parents=True, exist_ok=True)
     js = jobs()
     with multiprocessing.Pool(a.workers) as pool:

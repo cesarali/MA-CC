@@ -119,6 +119,10 @@ per fact is $G_t/F_t$, and the marginal susceptibility is the slope between neig
 \begin{equation}\label{eq:slope}
 \frac{\Delta G}{\Delta\lambda_c} = \frac{G(\lambda_c^{(k+1)}) - G(\lambda_c^{(k)})}{\lambda_c^{(k+1)} - \lambda_c^{(k)}} .
 \end{equation}
+Episode $e$ uses the same random draws at every rate, so the slope is estimated from per-episode differences,
+$[x^{(e)}_{\text{target},t}(\lambda_c^{(k+1)}) - x^{(e)}_{\text{target},t}(\lambda_c^{(k)})]/(\lambda_c^{(k+1)} -
+\lambda_c^{(k)})$, whose mean is Eq.~(\ref{eq:slope}) and whose standard error gives the 95\% intervals (typically
+$\pm0.01$--$0.03$, about 30\% narrower than for two independent means).
 
 \section{Votes over time}
 
@@ -247,7 +251,7 @@ $\lambda_c$; $\rho = 0.5$, $q = 6$.}
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_gain_strength.pdf}
 \caption{Top: $G$, target A2, against the controller rate $\lambda_c$, at $t = 5$ and $t = 30$ for $\rho = 0.5$
 and $0.75$; gate on (solid) and off (dashed); bars: 95\% intervals. Bottom: the slope between neighbouring rates,
-Eq.~(\ref{eq:slope}).}
+Eq.~(\ref{eq:slope}), with paired 95\% intervals.}
 \label{fig:strength}
 \end{figure}
 
@@ -255,7 +259,8 @@ Eq.~(\ref{eq:slope}).}
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_strength_time.pdf}
 \caption{$G$, target A2 (left), and its slope between neighbouring rates (right) over time ($x$) and rate ($y$),
 for $\rho = 0.5$ (top) and $0.75$ (bottom); $q = 6$, $q_c = 12$, gate on. Each row of the right panels is one step
-between neighbouring rates. The controller stops at $t = 30$ (dashed).}
+between neighbouring rates; faded cells: its paired 95\% interval includes 0. The controller stops at $t = 30$
+(dashed).}
 \label{fig:strengthtime}
 \end{figure}
 
@@ -264,8 +269,9 @@ between neighbouring rates. The controller stops at $t = 30$ (dashed).}
   $\rho = 0.5$, $G$ rises from $0.08$ ($\lambda_c = 0.5$) to $0.39$ ($\lambda_c = 8$); the slope falls from $0.11$
   to about $0.02$ per unit of rate.
 \item \textbf{The slope moves down the rate axis as time passes} (Figure~\ref{fig:strengthtime}, right): at
-  $\rho = 0.5$, steps above $\lambda_c = 1$ have slopes up to $0.08$ at $t = 5$--10 and at most $0.014$ by $t = 30$;
-  only the first step ($0.5 \to 1$) keeps a slope of $0.12$--$0.14$ throughout.
+  $t = 5$, $\rho = 0.5$, every step is significantly positive ($0.015$--$0.11$); the steps above $\lambda_c = 1$ stop
+  being distinguishable from 0 between $t \approx 7$ and $t \approx 24$ (faded cells), and by $t = 30$ only the first
+  step ($0.5 \to 1$, slope $0.12 \pm 0.03$) is.
 \item \textbf{Fast controllers get there early, slow ones late}: at $\rho = 0.5$, $\lambda_c = 8$ reaches 90\% of its
   $t = 30$ value by $t \approx 3$, $\lambda_c = 0.5$ only by $t \approx 24$ (Figure~\ref{fig:strengthtime}, left).
 \item \textbf{The marginal susceptibility is the efficiency of adding rate}: high early and for the first unit of
@@ -313,6 +319,6 @@ between neighbouring rates. The controller stops at $t = 30$ (dashed).}
 with a 30-message budget; 1{,}000 episodes per setting (95\% intervals on $G$ about $\pm0.02$). Information is
 plug-in from 1{,}000 episodes per arm. Data:
 \texttt{results/simulation\_2/2026-10-15\_sim2\_symmetric\_fine}; tables and figures:
-\texttt{analysis/task003\_llm\_free/symmetric\_fine/}.
+\texttt{analysis/task003\_llm\_free/shared\_analysis/gold\_standard/}.
 
 \end{document}

@@ -1,5 +1,5 @@
 """Synthetic checks for frontier.py (handoff §7, tests 1-5 and 7; tie rule). Run from the repository root:
-    .venv/bin/python -m pytest analysis/task003_llm_free/efficiency_estimates/tests -q
+    .venv/bin/python -m pytest analysis/task003_llm_free/shared_analysis/efficiency_estimates/tests -q
 """
 import pathlib, sys
 
