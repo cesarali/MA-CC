@@ -1,0 +1,293 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,caption,xcolor,float,hyperref,tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\captionsetup{font=small,labelfont=bf}
+\title{\vspace{-1.2cm}\textbf{Steering a swarm that cannot prove anything}\\[2pt]
+\large Simulation 2 (asynchronous activation), setup \texttt{task003-nosolution}}
+\author{LLM-free simulator; report of 17 October 2026; runs of 16 October 2026\\
+\small Same structure as the gold-standard report on \texttt{task003-symmetric}; mirrors the Simulation 1 report of the same date.}
+\date{}
+\begin{document}
+\maketitle
+\vspace{-1cm}
+
+\paragraph{How the simulator works.} The world, \texttt{task\_003}, has three candidate allocations; A0 is the
+correct one. Each of 24 agents is given one true fact and reasons as an exact Bayesian: its \emph{belief} is the
+exact probability of A0, A1 and A2 given the facts it currently remembers. There are no rounds. Each agent acts
+at random times, on average once per time unit: it reads $q$ posts drawn at random from the 48 most recent posts
+on a shared \emph{board} (never its own), adds their facts to its memory, recomputes its belief, \emph{votes} by
+probability matching (a vote drawn from its belief) and posts one remembered fact that supports its vote. Every
+remembered fact is forgotten after a random lifetime (on average a fraction $\rho$ survives one time unit; reading
+it again renews it). A \emph{controller} with a target, A0 (truth) or A2 (false), acts at random times at rate
+$\lambda_c$ until $t = 30$: it reads $q_c$ recent agent posts and, unless the \emph{vote gate} (at least 75\% of
+them from agents voting for its target) silences it, posts the one fact from one shared pool that best supports its
+target, at most 30 messages per episode. Agents continue alone until $t = 40$. Every episode is run three times
+with the same random draws: without a controller (\emph{silent}), with the controller targeting A0 and with the one
+targeting A2.
+
+\paragraph{The facts at the start.} All facts are true, and no set of them proves any allocation: the agents'
+evidence is a coin flip between A0 and A2, and one pool serves both targets (Table~\ref{tab:facts}).
+
+\begin{table}[H]
+\centering\small
+\caption{Facts available at $t = 0$ and what each set implies, $P(\text{A0}, \text{A1}, \text{A2} \mid \text{facts})$.}
+\label{tab:facts}
+\begin{tabular}{lcc}
+\toprule
+set of facts & facts & $P(\text{A0}, \text{A1}, \text{A2})$ \\
+\midrule
+agents' facts, all together (24 agents, one fact each) & 15 distinct & (0.5, 0, 0.5): no proof \\
+shared pool (both targets) & 12, all new to the agents & (0.37, 0.26, 0.37) \\
+agents' facts + pool & 27 distinct & (0.75, 0, 0.25) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The runs.} Posts read by an agent $q \in \{3, 6, 12\}$; posts read by the controller
+$q_c \in \{3, 6, 12, 24\}$; controller rate $\lambda_c \in \{0.5, 1, 2, 3, 4, 5, 6, 7, 8\}$ (one fact per message);
+memory $\rho \in \{1, 0.875, \dots, 0.125\}$ (8 values; this report shows $\rho = 1, 0.75, 0.5, 0.25$ like the
+gold standard, all 8 are in the notebook \texttt{shared\_analysis/gold\_standard/explorer.ipynb}); vote gate on and
+off; 1{,}000 episodes per setting (3{,}480 settings). Unless stated otherwise: $q = 6$, $q_c = 12$, $\lambda_c = 1$,
+gate on. Cells shared with the 9 October grid reproduce it exactly.
+
+\paragraph{Summary.} The 24 agents' evidence is a coin flip between A0 (the truth) and A2, and no set of facts can
+prove either. \textbf{Without a proof to defend, every swarm is steerable}: either controller tips it within about
+ten time units at every memory, full memory included (Figure~\ref{fig:votes}). The truth controller's susceptibility
+is 0.31--0.41 almost regardless of memory and rate; the false controller's grows as memory shortens (0.05--0.31), and
+\textbf{with full memory a faster false controller steers less} (Figure~\ref{fig:timeseries}). The rate buys speed early
+and nothing by $t = 30$; per fact, slow control is the most effective (Figures~\ref{fig:perfact}, \ref{fig:strength},
+\ref{fig:strengthtime}). As in the symmetric setup, susceptibility and readability move together, the efficiency
+$\eta$ stays at 0.82--0.93 except where the controllers become unequal, and reading more posts helps the controller
+when agents forget and hurts it with full memory (Figures~\ref{fig:phaserq}--\ref{fig:phaseqx}).
+
+\section{Quantities}\label{sec:quantities}
+
+\paragraph{Votes.} With $n_{a,t}$ the number of agents whose last vote is answer $a$ at time $t$ and $N_t$ the
+number of agents who have voted,
+\begin{equation}\label{eq:share}
+x_{a,t} = n_{a,t}/N_t .
+\end{equation}
+At $t = 0$ nobody has voted and we set $x_{a,0} = 0$; all agents have voted by $t \approx 5$. (The 9--14 October reports divided by 24, which counted agents who had
+not yet acted as voting against the target; this inflated the apparent rise of the shares and the apparent bias of
+the controller's sensing at early times.)
+
+\paragraph{Paired susceptibility.} Following \texttt{BLACKBOARD\_OBSERVABLES\_AND\_EFFICIENCIES} (\S3), for a
+controller policy $\pi$ and an answer $a$,
+\begin{equation}\label{eq:chi}
+\chi^{(a)}_{\pi,t} \equiv G^{(a)}_t(\pi) = \mathbb E\bigl[x^{\pi}_{a,t} - x^{\rm base}_{a,t}\bigr],
+\end{equation}
+the mean over episodes of the difference between the controlled run and the silent run of the same episode. We
+report it on the controller's own target: $G_t \equiv G^{(0)}_t(\pi^{+})$ for the controller targeting A0 and
+$G_t \equiv G^{(2)}_t(\pi^{-})$ for the one targeting A2.
+
+\paragraph{Target and state.} The target $Z \in \{\text{A0}, \text{A2}\}$ is drawn by a fair coin. The state $X$
+at time $t$ is the vote of a randomly chosen agent, $X \in \{\text{A0},\text{A1},\text{A2}\}$. Each episode $e$ of arm $s$
+(silent 0, target A0 $+$, target A2 $-$) contributes its vote shares $y^{(e)}_s(x) = x_{x,t}$, and
+\begin{equation}\label{eq:P}
+P_s(x) = \frac1E\sum_{e=1}^{E} y^{(e)}_s(x), \qquad E = 1000 .
+\end{equation}
+
+\paragraph{Readability and efficiency.} With $Q = \frac12(P_+ + P_-)$ and $\mathrm{KL}(p\Vert q) = \sum_x p(x)\log_2[p(x)/q(x)]$,
+\begin{equation}\label{eq:I}
+I(Z;X) = \tfrac12\,\mathrm{KL}(P_+\Vert Q) + \tfrac12\,\mathrm{KL}(P_-\Vert Q),
+\end{equation}
+the information the state carries about the target (at most 1 bit). The controllers' total change from silence
+splits exactly into a directed and an undirected part,
+\begin{equation}\label{eq:C}
+C = \tfrac12\,\mathrm{KL}(P_+\Vert P_0) + \tfrac12\,\mathrm{KL}(P_-\Vert P_0) = I(Z;X) + \mathrm{KL}(Q\Vert P_0),
+\end{equation}
+and the efficiency is the directed share,
+\begin{equation}\label{eq:eta}
+\eta = I(Z;X)/C .
+\end{equation}
+Silence sometimes never shows a value of $X$ that a controller reaches, which would make $C$ infinite. Before
+computing any KL, every arm's distribution therefore receives the same pseudo-count of $\alpha = 0.5$ episodes per
+value of $X$ ($K$ values),
+\begin{equation}\label{eq:smooth}
+\tilde P_s(x) = \frac{E\,P_s(x) + \alpha}{E + \alpha K}.
+\end{equation}
+With $\alpha = 1$ instead, $\eta$ changes by at most 0.004; without it, by at most 0.005 where $C$ is finite. $\eta$ is not defined when $C < 0.01$ bits (no measurable change);
+such values are left blank. Equation~(\ref{eq:C}) holds in the data to $4\times10^{-15}$ bits.
+
+\paragraph{Cost.} $F_t$ is the number of facts the controller has posted up to $t$ (mean per episode); the gain
+per fact is $G_t/F_t$, and the marginal susceptibility is the slope between neighbouring rates,
+\begin{equation}\label{eq:slope}
+\frac{\Delta G}{\Delta\lambda_c} = \frac{G(\lambda_c^{(k+1)}) - G(\lambda_c^{(k)})}{\lambda_c^{(k+1)} - \lambda_c^{(k)}} .
+\end{equation}
+Episode $e$ uses the same random draws at every rate, so the slope is estimated from per-episode differences,
+$[x^{(e)}_{\text{target},t}(\lambda_c^{(k+1)}) - x^{(e)}_{\text{target},t}(\lambda_c^{(k)})]/(\lambda_c^{(k+1)} -
+\lambda_c^{(k)})$, whose mean is Eq.~(\ref{eq:slope}) and whose standard error gives the 95\% intervals (typically
+$\pm0.01$--$0.03$, about 30\% narrower than for two independent means).
+
+\section{Votes over time}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.95\linewidth]{figures/fig_votes.pdf}
+\caption{Share of agents voting A0 (top) and A2 (bottom), Eq.~(\ref{eq:share}), without a controller (dotted),
+with the controller targeting A0 (blue) and A2 (red); one column per memory $\rho$. $q = 6$, $q_c = 12$,
+$\lambda_c = 1$, gate on. At $t = 0$ nobody has voted and every share is 0; after that the shares count only agents
+who have voted. The controller stops at $t = 30$ (dashed).}
+\label{fig:votes}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{Without a controller the swarm stays split at every memory}: at $t = 30$, 36--50\% vote A0 and
+  45--51\% A2; when agents forget, it leans slightly to A2.
+\item \textbf{Either controller tips it within about ten time units, at every $\rho$}: the truth controller raises A0
+  to 0.88, 0.80, 0.73, 0.69 and the false controller A2 to 0.65, 0.76, 0.77, 0.75 for $\rho = 1, 0.75, 0.5, 0.25$.
+\item \textbf{Unlike in \texttt{task003-symmetric}, full memory does not protect the swarm}: there is no proof to
+  rebuild, so control works without forgetting. Only the false controller's lead erodes with full memory (A2 at
+  0.75 at $t \approx 11$, 0.62 by $t = 40$), as agents accumulate evidence that favours A0.
+\end{itemize}
+
+\section{Observables as time series}\label{sec:time}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.95\linewidth]{figures/fig_timeseries.pdf}
+\caption{All observables over time, one column per memory $\rho$, one curve per controller rate $\lambda_c$;
+$q = 6$, $q_c = 12$, gate on. Rows: paired susceptibility $G_t$, Eq.~(\ref{eq:chi}), for target A0 and target A2
+(bands: 95\% intervals; $G_0 = 0$); readability $I(Z;X)$, Eq.~(\ref{eq:I}); efficiency $\eta$, Eq.~(\ref{eq:eta})
+(blank: undefined). The controller stops at $t = 30$ (dashed).}
+\label{fig:timeseries}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.95\linewidth]{figures/fig_per_fact.pdf}
+\caption{Gain per fact $G_t/F_t$ (solid, left axis, log scale; shown once at least half a fact has been posted)
+and facts posted $F_t$ (dashed, right axis), target A0 (top) and A2 (bottom), one colour per rate; $q = 6$,
+$q_c = 12$, gate on.}
+\label{fig:perfact}
+\end{figure}
+
+\paragraph{Susceptibility (Figure~\ref{fig:timeseries}, rows 1--2).}
+\begin{itemize}\itemsep1pt
+\item \textbf{The truth controller's susceptibility hardly depends on memory or rate}: at $t = 30$, $G = 0.36$--$0.38$,
+  $0.39$--$0.41$, $0.35$--$0.37$, $0.31$--$0.33$ for $\rho = 1, 0.75, 0.5, 0.25$.
+\item \textbf{The false controller's grows as memory shortens}: $0.05$--$0.20$ ($\rho = 1$), $0.23$--$0.26$, $0.28$--$0.29$,
+  $0.29$--$0.31$.
+\item \textbf{With full memory, a faster false controller steers less}: its gain peaks early ($0.27$ at $t \approx 5$
+  for $\lambda_c = 8$) and falls to $0.05$, while the slowest keeps $0.20$. This is the rate reversal of the 9 October
+  report. Its proposed explanation, not tested directly, is that posting more different pool facts pulls every
+  belief toward the point all facts together imply, (0.75, 0, 0.25).
+\item \textbf{It persists after the controller stops}: from $t = 30$ to 40, $G$ changes by at most $0.03$.
+\end{itemize}
+
+\paragraph{Readability and efficiency (rows 3--4).}
+\begin{itemize}\itemsep1pt
+\item \textbf{Readability is about the same at every $\rho < 1$} ($I = 0.26$--$0.33$ bits at $t = 30$) and lower with full
+  memory ($0.14$--$0.25$), where it falls with the rate as the false controller stalls.
+\item \textbf{Efficiency is flat when agents forget} ($\eta = 0.86$--$0.92$) and \textbf{falls with the rate with full
+  memory} ($0.93 \to 0.66$): the pair turns lopsided, the truth controller keeps its gain and the false one loses it.
+\end{itemize}
+
+\paragraph{Gain per fact and facts posted (Figure~\ref{fig:perfact}).}
+\begin{itemize}\itemsep1pt
+\item \textbf{The slowest controller is the most effective per fact}: at $t = 30$, target A2, $\rho = 0.5$: $0.039$ per
+  fact at $\lambda_c = 0.5$ (7 facts) against $0.010$ at $\lambda_c = 8$ (28 facts); with full memory $0.027$ against
+  $0.002$.
+\item \textbf{Both controllers spend most of their budget}: the swarm stays mixed, so the gate rarely silences either
+  (target A0 posts 5--30 facts by $t = 30$, target A2 7--29).
+\end{itemize}
+
+\section{Phase diagrams}\label{sec:phase}
+
+All panels at $t = 30$, gate on; the susceptibility is for target A2 (grey number: its 95\% interval includes 0);
+readability and efficiency are for the pair of targets.
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_phase_rho_q.pdf}
+\caption{Susceptibility, readability and efficiency over memory $\rho$ and the posts each agent reads $q$;
+$q_c = 12$, $\lambda_c = 1$.}
+\label{fig:phaserq}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{Reading more helps the controller except with full memory}: at $\rho = 0.25$, $G$ rises from $0.16$
+  ($q = 3$) to $0.37$ ($q = 12$) and $I$ from $0.11$ to $0.43$ bits; at $\rho = 1$, $G$ falls from $0.19$ to $0.11$ and
+  $I$ from $0.27$ to $0.20$. The same reversal as in \texttt{task003-symmetric}, at a different memory.
+\item \textbf{$\eta$ stays at 0.79--0.93}, slightly lower at $q = 12$.
+\end{itemize}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_phase_rho_x.pdf}
+\caption{Susceptibility, readability and efficiency over memory $\rho$ and the controller rate $\lambda_c$;
+$q = 6$, $q_c = 12$.}
+\label{fig:phaserx}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{When agents forget, the rate changes nothing}: $G = 0.28$--$0.31$ ($\rho \le 0.5$) and $I = 0.26$--$0.33$
+  bits along every row.
+\item \textbf{With full memory, faster is worse}: $G$ falls from $0.20$ ($\lambda_c = 0.5$) to $0.05$ ($\lambda_c \ge 5$),
+  $I$ from $0.25$ to $0.14$ bits and $\eta$ from $0.93$ to $0.66$.
+\end{itemize}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_phase_qc_x.pdf}
+\caption{Susceptibility, readability and efficiency over the posts the controller reads $q_c$ and its rate
+$\lambda_c$; $\rho = 0.5$, $q = 6$.}
+\label{fig:phaseqx}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{At $\rho = 0.5$ neither the controller's reading nor its rate matters}: $G = 0.28$--$0.31$ (mean $0.30$,
+  $0.28$, $0.29$, $0.30$ for $q_c = 3, 6, 12, 24$), $I = 0.28$--$0.34$ bits, $\eta = 0.90$--$0.93$.
+\end{itemize}
+
+\section{Susceptibility against the rate, and its slope}\label{sec:strength}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.95\linewidth]{figures/fig_gain_strength.pdf}
+\caption{Top: $G$, target A2, against the controller rate $\lambda_c$, at $t = 5$ and $t = 30$ for $\rho = 0.5$
+and $0.75$; gate on (solid) and off (dashed); bars: 95\% intervals. Bottom: the slope between neighbouring rates,
+Eq.~(\ref{eq:slope}), with paired 95\% intervals.}
+\label{fig:strength}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.95\linewidth]{figures/fig_strength_time.pdf}
+\caption{$G$, target A2 (left), and its slope between neighbouring rates (right) over time ($x$) and rate ($y$),
+for $\rho = 0.5$ (top) and $0.75$ (bottom); $q = 6$, $q_c = 12$, gate on. Each row of the right panels is one step
+between neighbouring rates; faded cells: its paired 95\% interval includes 0. The controller stops at $t = 30$
+(dashed).}
+\label{fig:strengthtime}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{Early, speed buys susceptibility}: at $t = 5$ every step up to $\lambda_c \approx 5$ is significantly
+  positive (at $\rho = 0.5$: $0.12$ for $0.5 \to 1$, $0.06$, $0.03$, then about $0.01$).
+\item \textbf{By $t = 30$ the advantage is gone}: at $\rho = 0.5$ only the first step is still positive ($0.02$); at
+  $\rho = 0.75$ the first two are negative ($-0.02$ each), and with full memory they are clearly negative
+  ($-0.12$, $-0.06$, $-0.02$ for the first three steps).
+\item \textbf{The slope map shows the crossover}: positive slopes at small rates and early times give way to faded
+  (zero) or negative slopes after $t \approx 10$--15 (Figure~\ref{fig:strengthtime}).
+\item \textbf{Turning the gate off changes $G$ by at most $\pm0.03$} when agents forget, and lowers it by up to $0.08$
+  with full memory.
+\end{itemize}
+
+\paragraph{No proofs here.} In \texttt{task003-nosolution} no set of facts proves any allocation, so the
+gold standard's ``who holds the proof'' section has no counterpart.
+
+\section{Conclusions}
+
+\begin{enumerate}\itemsep2pt
+\item \textbf{Without a proof to defend, every swarm is steerable.} Either controller tips it at every memory,
+  including full memory; the truth controller gains $0.31$--$0.41$, the false one $0.05$--$0.31$.
+\item \textbf{Memory now works against the false controller only with full memory}: the agents' own evidence then
+  slowly pulls back toward A0, and a faster false controller does worse.
+\item \textbf{The rate buys speed, not a larger end point}, and per fact slow control is the most effective.
+\item \textbf{Susceptibility and readability move together; efficiency moves only where the two controllers become
+  unequal} (full memory, fast rates).
+\item \textbf{Reading more posts helps the controller when agents forget and hurts it with full memory.}
+\item \textbf{Compared with Simulation 1} (same settings, about the same facts posted): the same picture, but Simulation 1's
+  large budgets backfire, which a 30-message budget prevents here.
+\end{enumerate}
+
+\paragraph{Caveats.} One world, 24 exact-Bayesian agents voting by probability matching, one controller policy
+with a 30-message budget; 1{,}000 episodes per setting (95\% intervals on $G$ about $\pm0.02$). Information is
+plug-in from 1{,}000 episodes per arm. Data: \texttt{results/simulation\_2/2026-10-16\_sim2\_nosolution\_fine}; tables:
+\texttt{results/gold\_standard/2026-10-16/}; code: \texttt{analysis/task003\_llm\_free/shared\_analysis/gold\_standard/}.
+
+\end{document}

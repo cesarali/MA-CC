@@ -14,6 +14,8 @@ only the presentation changes:
 
 Usage, from the repository root (after build_tables.py and make_report_figures.py):
     .venv/bin/python analysis/task003_llm_free/shared_analysis/gold_standard/make_report_figures_2026-10-16.py
+  (default: the gold standard, symmetric, 2026-10-15 tables). For the nosolution reports:
+    ... make_report_figures_2026-10-16.py --setup task003_nosolution --data-date 2026-10-16 --report 2026-10-17_report2_nosolution
 """
 from __future__ import annotations
 import pathlib, sys
@@ -187,10 +189,21 @@ def fig_strength_time(t, sl, sim, out, gmax, smax):
 
 
 def main():
-    d = M.RES / DATE_DATA
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--setup", default="task003_symmetric", choices=["task003_symmetric", "task003_nosolution"])
+    ap.add_argument("--data-date", default=DATE_DATA, help="results/gold_standard/<date>/ to read")
+    ap.add_argument("--report", default=f"{DATE_REPORT}_report1_symmetric", help="report folder name in each simulation")
+    a = ap.parse_args()
+    d = M.RES / a.data_date
     t = pd.read_parquet(d / "cells_time.parquet")
     sl = pd.read_parquet(d / "slopes.parquet")
-    mi = pd.read_csv(d / "mi_table.csv")
+    if (d / "info.parquet").exists():                       # 2026-10-16 tables: one-agent vote state only
+        mi = pd.read_parquet(d / "info.parquet").assign(state="vote")
+    else:
+        mi = pd.read_csv(d / "mi_table.csv")
+    if "setup" in t.columns:                                 # 2026-10-16 tables hold both setups
+        t, sl, mi = t[t.setup == a.setup], sl[sl.setup == a.setup], mi[mi.setup == a.setup]
     at30 = t[(t.t == M.T_PHASE) & (t.arm == "false")]
     gmax = float(np.nanmax(np.abs(at30.G)))
     gall = float(np.nanmax(np.abs(t[t.arm == "false"].G)))
@@ -200,7 +213,7 @@ def main():
             p = M.sel(t, sim=sim, arm="false", q=M.Q, qc=M.QC, rho=rho, gate="on").pivot_table(index="x", columns="t", values="G")
             smax = max(smax, float(np.nanmax(np.abs(np.diff(p.to_numpy(), axis=0) / np.diff(p.index.to_numpy(float))[:, None]))))
     for sim in ("sim1", "sim2"):
-        out = M.REPORT[sim] / f"{DATE_REPORT}_report1_symmetric" / "figures"
+        out = M.REPORT[sim] / a.report / "figures"
         out.mkdir(parents=True, exist_ok=True)
         ts, ms = t[t.sim == sim], mi[mi.sim == sim]
         M.fig_votes(ts, sim, out, "fig_votes.pdf", "on", M.MAIN[sim])
@@ -216,7 +229,8 @@ def main():
                      lambda qc, x: dict(q=M.Q, qc=qc, x=x, rho=M.RHO_REP), f"$\\rho = {M.RHO_REP:g}$, $q = {M.Q}$, $t = 30$", gmax)
         fig_gain_strength(ts, sl[sl.sim == sim], sim, out)
         fig_strength_time(ts, sl[sl.sim == sim], sim, out, gall, smax)
-        M.fig_proofs(ts, sim, out, "fig_proofs.pdf", "on", M.MAIN[sim])
+        if a.setup == "task003_symmetric":            # nosolution has no proof by construction
+            M.fig_proofs(ts, sim, out, "fig_proofs.pdf", "on", M.MAIN[sim])
         print("figures ->", out)
 
 

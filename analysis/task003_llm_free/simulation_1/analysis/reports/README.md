@@ -2,6 +2,7 @@
 
 | report | PDF | about |
 |---|---|---|
+| **Report 2 (17 Oct)** | [`2026-10-17_report2_nosolution/2026-10-17_report2_nosolution.pdf`](2026-10-17_report2_nosolution/2026-10-17_report2_nosolution.pdf) | task003-nosolution with the gold-standard structure, on the 16 October runs (8 ρ values, 4 shown); mirrors the Simulation 2 report of the same date |
 | **Report 1 (16 Oct)** | [`2026-10-16_report1_symmetric/2026-10-16_report1_symmetric.pdf`](2026-10-16_report1_symmetric/2026-10-16_report1_symmetric.pdf) | the 15 Oct report reorganised (same data): susceptibility, readability and efficiency side by side as time series and as phase diagrams (ρ×q, ρ×strength, q_c×strength); new time × strength map of the susceptibility and its slope; gain per fact with facts posted; no appendix; mirrors the Simulation 2 report |
 | **Report 1 (15 Oct)** | [`2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf`](2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf) | task003-symmetric on the finer 15 October runs (memory ρ 0.25–1, all strengths, gate on and off); mirrors the Simulation 2 report: votes, paired susceptibility, phase diagrams, marginal susceptibility, gain per fact, proofs, readability and efficiency; appendices: gate off, other states, strong control |
 | **Report 1 (14 Oct)** | [`2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf`](2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf) | task003-symmetric, rewritten to mirror the Simulation 2 report section by section: vote shares over time, gain phase diagrams, readability $I$(target; vote) phase diagrams, pair efficiency $\eta$, success against facts posted; progress, focus and price removed |
@@ -35,4 +36,5 @@ from the 12 October folders). Rebuild: run that script, then `latexmk -pdf` in e
 The 15 October report is built from `../../../shared_analysis/gold_standard/build_tables.py` (summary table) and
 `../../../shared_analysis/gold_standard/make_report_figures.py` (figures); plan: `../../../shared_analysis/gold_standard/2026-10-15_plan_reports.md`.
 
-The 16 October report's figures come from `../../../shared_analysis/gold_standard/make_report_figures_2026-10-16.py`.
+The 16 October report's figures come from `../../../shared_analysis/gold_standard/make_report_figures_2026-10-16.py`;
+the 17 October report's from the same script with `--setup task003_nosolution --data-date 2026-10-16 --report 2026-10-17_report2_nosolution`.

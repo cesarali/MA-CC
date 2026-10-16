@@ -6,6 +6,8 @@ It covers Simulation 2 (asynchronous activation) on the `task003-symmetric` setu
 how each of those numbers was produced and how to check it.
 
 - **Mirror for Simulation 1:** [`../../../../simulation_1/analysis/reports/2026-10-16_report1_symmetric/`](../../../../simulation_1/analysis/reports/2026-10-16_report1_symmetric/). Same sections, figures and equations.
+- **Same structure for task003-nosolution (17 Oct):** [`../2026-10-17_report2_nosolution/`](../2026-10-17_report2_nosolution/) and its Simulation 1 mirror. Data: tables in `gold_standard/2026-10-16/` (filter `setup == "task003_nosolution"`; information in `info.parquet`, one-agent vote only).
+- **Notebook:** `shared_analysis/gold_standard/explorer.ipynb`, every figure with sliders, all 8 ρ values, both setups.
 - **Companion:** [`../2026-10-16_sham_baseline_symmetric/`](../2026-10-16_sham_baseline_symmetric/). The same data, scored against a sham controller instead of no control.
 
 All paths below are relative to `analysis/task003_llm_free/` unless stated. Commands run from the repository root
@@ -60,6 +62,9 @@ Cell folder names look like `task003_symmetric__false__q6__qc12__rho0.5__lc1__ga
 | sham measures (companion report) | `gold_standard/2026-10-15/sham_table.parquet` | `chi chi_se F1 eta_post I_X I_Y C_X R_X eta_info eta_goal` |
 
 The summary tables also hold Simulation 1 (`sim == "sim1"`, run `simulation_1/2026-10-15_sim1_pm_symmetric_fine`).
+The 2026-10-16 tables (`build_tables.py --date 2026-10-16` etc.) add a `setup` column, ρ 0.875/0.625/0.375/0.125 and the
+nosolution runs; on the rows they share with the 2026-10-15 tables they are identical. `check_overlap.py` confirms the new runs
+reproduce the older runs cell by cell where they overlap.
 
 **Rebuild, in order** (the scripts are in `shared_analysis/gold_standard/`, a few minutes in total):
 
