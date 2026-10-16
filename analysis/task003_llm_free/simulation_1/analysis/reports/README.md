@@ -2,6 +2,7 @@
 
 | report | PDF | about |
 |---|---|---|
+| **Report 1 (16 Oct)** | [`2026-10-16_report1_symmetric/2026-10-16_report1_symmetric.pdf`](2026-10-16_report1_symmetric/2026-10-16_report1_symmetric.pdf) | the 15 Oct report reorganised (same data): susceptibility, readability and efficiency side by side as time series and as phase diagrams (ρ×q, ρ×strength, q_c×strength); new time × strength map of the susceptibility and its slope; gain per fact with facts posted; no appendix; mirrors the Simulation 2 report |
 | **Report 1 (15 Oct)** | [`2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf`](2026-10-15_report1_symmetric/2026-10-15_report1_symmetric.pdf) | task003-symmetric on the finer 15 October runs (memory ρ 0.25–1, all strengths, gate on and off); mirrors the Simulation 2 report: votes, paired susceptibility, phase diagrams, marginal susceptibility, gain per fact, proofs, readability and efficiency; appendices: gate off, other states, strong control |
 | **Report 1 (14 Oct)** | [`2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf`](2026-10-14_report1_symmetric/2026-10-14_report1_symmetric.pdf) | task003-symmetric, rewritten to mirror the Simulation 2 report section by section: vote shares over time, gain phase diagrams, readability $I$(target; vote) phase diagrams, pair efficiency $\eta$, success against facts posted; progress, focus and price removed |
 | **Report 2 (14 Oct)** | [`2026-10-14_report2_nosolution/2026-10-14_report2_nosolution.pdf`](2026-10-14_report2_nosolution/2026-10-14_report2_nosolution.pdf) | the same for task003-nosolution |
@@ -33,3 +34,5 @@ from the 12 October folders). Rebuild: run that script, then `latexmk -pdf` in e
 
 The 15 October report is built from `../../../symmetric_fine/build_tables.py` (summary table) and
 `../../../symmetric_fine/make_report_figures.py` (figures); plan: `../../../symmetric_fine/2026-10-15_plan_reports.md`.
+
+The 16 October report's figures come from `../../../symmetric_fine/make_report_figures_2026-10-16.py`.
