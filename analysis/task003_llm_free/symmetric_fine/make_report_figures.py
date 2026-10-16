@@ -35,6 +35,7 @@ SCOL = plt.cm.plasma(np.linspace(0, 0.88, 9))
 STATES = {"vote": ("one agent's vote", 3), "plur": ("plurality of votes", 3), "s1": ("S1: $m_{A0}$, 4 bins", 4),
           "s3": ("S3: $(m_{A0}, m_{A2})$, 3$\\times$3 bins", 9)}
 C_MIN = 0.01
+ALPHA = 0.5          # pseudo-count (episodes) added to every cell of every arm before computing KL (Eq. smoothing)
 plt.rcParams.update({"font.size": 8, "axes.titlesize": 8, "legend.fontsize": 6.5, "figure.dpi": 150})
 
 
@@ -46,7 +47,7 @@ def kl(p, q):
     return float(np.sum(p[nz] * np.log2(p[nz] / q[nz])))
 
 
-def mi_table(t: pd.DataFrame) -> pd.DataFrame:
+def mi_table(t: pd.DataFrame, alpha: float = ALPHA) -> pd.DataFrame:
     """I(Z; X), C, R and eta for every setting, time and state (Z: target A0 or A2, fair coin)."""
     key = ["sim", "q", "qc", "x", "rho", "gate", "t"]
     tr = t[t.arm == "truth"].set_index(key)
@@ -60,6 +61,10 @@ def mi_table(t: pd.DataFrame) -> pd.DataFrame:
             cols = [f"{st}_{i}" for i in range(n)]
             pp, pm, p0 = a[cols].to_numpy(float), b[cols].to_numpy(float), s[cols].to_numpy(float)
             pp, pm, p0 = pp / pp.sum(), pm / pm.sum(), p0 / p0.sum()
+            if alpha > 0:       # the same pseudo-count in every arm: (E P + alpha) / (E + alpha K)
+                pp = (a.episodes * pp + alpha) / (a.episodes + alpha * n)
+                pm = (b.episodes * pm + alpha) / (b.episodes + alpha * n)
+                p0 = (s.episodes * p0 + alpha) / (s.episodes + alpha * n)
             qm = 0.5 * (pp + pm)
             I = 0.5 * kl(pp, qm) + 0.5 * kl(pm, qm)
             C = 0.5 * kl(pp, p0) + 0.5 * kl(pm, p0)
@@ -118,7 +123,7 @@ def fig_votes(t, sim, out, name, gate, x):
         for arm in ("silent", "truth", "false"):
             d = sel(t, sim=sim, arm=arm, q=Q, rho=rho) if arm == "silent" else \
                 sel(t, sim=sim, arm=arm, q=Q, qc=QC, x=x, rho=rho, gate=gate)
-            d = d.sort_values("t")
+            d = pd.concat([pd.DataFrame({"t": [0.0], "x0": [0.0], "x2": [0.0]}), d.sort_values("t")])  # nobody has voted at t = 0
             for i, col in enumerate(("x0", "x2")):
                 axes[i, j].plot(d.t, d[col], color=ARMC[arm], lw=1.2, ls=":" if arm == "silent" else "-",
                                 label=ARML[arm] if (i, j) == (0, 0) else None)
@@ -145,6 +150,7 @@ def fig_gain_time(t, sim, out, name, gate):
             ax = axes[i, j]
             for k, x in enumerate(XS[sim]):
                 d = sel(t, sim=sim, arm=arm, q=Q, qc=QC, x=x, rho=rho, gate=gate).sort_values("t")
+                d = pd.concat([pd.DataFrame({"t": [0.0], "G": [0.0], "G_se": [0.0]}), d])          # all arms identical at t = 0
                 ax.plot(d.t, d.G, color=SCOL[k], lw=1)
                 ax.fill_between(d.t, d.G - 1.96 * d.G_se, d.G + 1.96 * d.G_se, color=SCOL[k], alpha=.15, lw=0)
             ax.axhline(0, color="0.6", lw=0.5)
@@ -292,6 +298,11 @@ def main():
     else:
         mi = mi_table(t)
         mi.to_csv(mi_file, index=False)
+        key = ["sim", "q", "qc", "x", "rho", "gate", "t", "state"]
+        sub = t[t.t == T_PHASE]
+        sens = mi_table(sub, 1.0)[key + ["I", "C", "eta"]].merge(mi_table(sub, 0.0)[key + ["I", "C", "eta"]], on=key,
+                                                                 suffixes=("_a1", "_a0"))
+        sens.merge(mi[mi.t == T_PHASE][key + ["I", "C", "eta"]], on=key).to_csv(RES / a.date / "mi_smoothing_sensitivity.csv", index=False)
     # one colour range per quantity, shared by the two simulations (mirrored figures)
     at30 = t[(t.t == T_PHASE) & (t.arm == "false")]
     gmax = float(np.nanmax(np.abs(at30.G)))

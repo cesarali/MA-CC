@@ -20,7 +20,8 @@ and writes results/symmetric_fine/<date>/cells_time.parquet: one row per (cell, 
              s1_*     S1: m0 in 4 bins at 0.33 / 0.50 / 0.75
              s3_*     S3: (m0, m2), each in 3 equal bins on [0, 1] (9 cells, index 3*bin(m0) + bin(m2))
 
-Times: Simulation 1 days 1..30 (end of each day); Simulation 2 t = 1, 2, ..., 40 (plus 0.5).
+Times: Simulation 1 days 1..30 (end of each day); Simulation 2 t = 0.25, 0.5, 0.75, 1, 2, ..., 40. At t = 0 nobody
+has voted; the figures start every vote share and gain at 0 there.
 
 Usage, from the repository root:
     .venv/bin/python analysis/task003_llm_free/symmetric_fine/build_tables.py [--date 2026-10-15] [--workers 12]
@@ -36,7 +37,7 @@ RES = ROOT / "results"
 RUNS = {"sim1": RES / "simulation_1/2026-10-15_sim1_pm_symmetric_fine/cells",
         "sim2": RES / "simulation_2/2026-10-15_sim2_symmetric_fine/cells"}
 N = 24
-T2 = [0.5] + [float(t) for t in range(1, 41)]
+T2 = [0.25, 0.5, 0.75] + [float(t) for t in range(1, 41)]
 
 
 def load(sim: str, folder: pathlib.Path) -> pd.DataFrame:

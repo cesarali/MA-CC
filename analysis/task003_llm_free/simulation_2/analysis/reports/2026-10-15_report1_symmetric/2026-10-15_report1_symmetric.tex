@@ -38,7 +38,7 @@ agent does, and neither pool can prove its target (Table~\ref{tab:facts}).
 \toprule
 set of facts & facts & $P(\text{A0}, \text{A1}, \text{A2})$ \\
 \midrule
-agents' facts, all together (24 agents, one fact each; 6 facts held by two agents) & 18 distinct & (1, 0, 0): proves A0 \\
+agents' facts, all together (24 agents, one fact each) & 18 distinct & (1, 0, 0): proves A0 \\
 A0 pool (controller with target A0) & 12, of which 10 new to the agents & (0.963, 0.037, 0) \\
 A2 pool (controller with target A2) & 12, of which 10 new to the agents & (0.114, 0, 0.886) \\
 agents' facts + either pool & 28 distinct & (1, 0, 0) \\
@@ -65,7 +65,7 @@ when agents remember, and helps the controller when they forget} (Figure~\ref{fi
 replaces part of the agents' own proofs (Figure~\ref{fig:proofs}). The target is most readable at $\rho = 0.25$
 (0.27--0.37 bits from one vote); the efficiency $\eta$ is 0.79--0.94 almost everywhere
 (Figures~\ref{fig:Itime}--\ref{fig:phaseeta}). The vote gate matters little (Appendix~\ref{app:gateoff}). Swarm-level
-states read up to nine times more than one vote, but their efficiency is often undefined (Appendix~\ref{app:states}).
+states read up to nine times more than one vote, with a lower efficiency (Appendix~\ref{app:states}).
 
 \section{Quantities}\label{sec:quantities}
 
@@ -74,7 +74,7 @@ number of agents who have voted,
 \begin{equation}\label{eq:share}
 x_{a,t} = n_{a,t}/N_t .
 \end{equation}
-All agents have voted by $t \approx 5$. (The 9--14 October reports divided by 24, which counted agents who had
+At $t = 0$ nobody has voted and we set $x_{a,0} = 0$; all agents have voted by $t \approx 5$. (The 9--14 October reports divided by 24, which counted agents who had
 not yet acted as voting against the target; this inflated the apparent rise of the shares and the apparent bias of
 the controller's sensing at early times.)
 
@@ -114,9 +114,15 @@ and the efficiency is the directed share,
 \begin{equation}\label{eq:eta}
 \eta = I(Z;X)/C .
 \end{equation}
-$\eta$ is not defined when $C < 0.01$ bits (no measurable change) or $C$ is infinite (a controller reaches a value
-of $X$ that silence never shows); undefined values are left blank. Equation~(\ref{eq:C}) holds in the data to
-$4\times10^{-15}$ bits.
+Silence sometimes never shows a value of $X$ that a controller reaches, which would make $C$ infinite. Before
+computing any KL, every arm's distribution therefore receives the same pseudo-count of $\alpha = 0.5$ episodes per
+value of $X$ ($K$ values),
+\begin{equation}\label{eq:smooth}
+\tilde P_s(x) = \frac{E\,P_s(x) + \alpha}{E + \alpha K}.
+\end{equation}
+With $\alpha = 1$ instead, $\eta$ changes by at most 0.004 for one agent's vote and 0.06 for the other states; where
+$C$ is finite without smoothing, by at most 0.014. $\eta$ is not defined when $C < 0.01$ bits (no measurable change);
+such values are left blank. Equation~(\ref{eq:C}) holds in the data to $4\times10^{-15}$ bits.
 
 \paragraph{Cost.} $F_t$ is the number of facts the controller has posted up to $t$ (mean per episode); the gain
 per fact is $G_t/F_t$, and the marginal susceptibility is the slope between neighbouring rates,
@@ -130,8 +136,9 @@ per fact is $G_t/F_t$, and the marginal susceptibility is the slope between neig
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_votes.pdf}
 \caption{Share of agents voting A0 (top) and A2 (bottom), Eq.~(\ref{eq:share}), without a controller (dotted),
 with the controller targeting A0 (blue) and A2 (red); one column per memory $\rho$. $q = 6$, $q_c = 12$,
-$\lambda_c = 1$, gate on. The controller stops at $t = 30$ (dashed). 95\% intervals are narrower than the lines
-($\pm 0.01$).}
+$\lambda_c = 1$, gate on. At $t = 0$ nobody has voted and every share is 0; after that the shares count only agents
+who have voted (all have by $t \approx 5$). The controller stops at $t = 30$ (dashed). 95\% intervals are narrower
+than the lines ($\pm 0.01$).}
 \label{fig:votes}
 \end{figure}
 
@@ -149,7 +156,8 @@ $\lambda_c = 1$, gate on. The controller stops at $t = 30$ (dashed). 95\% interv
 \begin{figure}[H]
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_gain_time.pdf}
 \caption{Paired susceptibility $G_t$, Eq.~(\ref{eq:chi}), target A0 (top) and A2 (bottom), one curve per
-controller rate $\lambda_c$; $q = 6$, $q_c = 12$, gate on. Bands: 95\% intervals.}
+controller rate $\lambda_c$; $q = 6$, $q_c = 12$, gate on. $G_0 = 0$: at $t = 0$ the three arms are identical.
+Bands: 95\% intervals.}
 \label{fig:gaintime}
 \end{figure}
 
@@ -270,7 +278,7 @@ $q_c = 12$, gate on.}
 \begin{figure}[H]
 \centering\includegraphics[width=0.95\linewidth]{figures/fig_eta_time.pdf}
 \caption{Efficiency $\eta = I/C$, Eq.~(\ref{eq:eta}), one agent's vote, one curve per rate; $q = 6$, $q_c = 12$,
-gate on. Blank: undefined ($C < 0.01$ bits).}
+gate on. Blank: undefined ($C < 0.01$ bits). Pseudo-count, Eq.~(\ref{eq:smooth}).}
 \label{fig:etatime}
 \end{figure}
 
@@ -422,11 +430,13 @@ as in Figures~\ref{fig:Itime} and \ref{fig:etatime}.}
 
 \begin{itemize}\itemsep1pt
 \item \textbf{Swarm-level states read far more than one agent's vote}: at $\rho = 0.25$, $t = 30$, main setting,
-  $I = 0.34$ (one vote), $0.77$ (plurality), $0.80$ (S1), $0.87$ (S3) bits; at $\rho = 0.5$, $0.21$, $0.37$,
-  $0.73$, $0.72$.
-\item \textbf{But their efficiency is lower or undefined}: plurality $\eta = 0.50$--$0.70$ (one vote 0.82--0.91);
-  S1 and S3 often have an infinite $C$ (a controlled swarm reaches a bin silence never visits), so $\eta$ is defined
-  in only 79\% (S1) and 11\% (S3) of the settings with $\rho < 1$ at $t = 30$.
+  $I = 0.34$ (one vote), $0.76$ (plurality), $0.79$ (S1), $0.86$ (S3) bits; at $\rho = 0.5$, $0.21$, $0.37$,
+  $0.72$, $0.71$.
+\item \textbf{But their efficiency is lower}: at $t = 30$, main setting, $\eta = 0.49$--$0.70$ (plurality),
+  $0.33$--$0.69$ (S1), $0.38$--$0.68$ (S3), against $0.82$--$0.91$ for one vote. Without the pseudo-count of
+  Eq.~(\ref{eq:smooth}), $C$ would be infinite for S1 and S3 in many settings (a controlled swarm reaches a bin silence
+  never visits). The plurality's $\eta$ is noisier than one vote's because silence rarely lets A2 win (1--18\% of runs),
+  so a few episodes set that cell.
 \item \textbf{Belief-based states (S1, S3) read the most}, likely because beliefs move before votes do and
   without the noise of the vote draw. The plurality is the swarm state built from votes alone, and its efficiency
   is defined in every setting.
