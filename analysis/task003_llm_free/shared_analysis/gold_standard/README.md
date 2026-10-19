@@ -13,7 +13,7 @@ The metrics, the data, the rebuild order and the figure-to-code map are in the r
 | `explorer.py`, `explorer.ipynb` | nothing; notebook with sliders over every gold-standard figure, all 8 ρ values, both setups, plus Fig. 8b (fitted derivative of G in the rate, Simulation 2) |
 | `make_report_figures.py` | `mi_table.csv`, `mi_smoothing_sensitivity.csv`; figures of the 15 October reports |
 | `make_report_figures_2026-10-16.py` | figures of the 16 October reports (default) and of the 17 October nosolution reports (`--setup task003_nosolution --data-date 2026-10-16 --report 2026-10-17_report2_nosolution`) |
-| `make_report_figures_2026-10-19.py` | figures of the 19 October variant reports (Simulation 2: B = 100, W = 24, W = 240 against the gold standard, both setups) |
+| `make_report_figures_2026-10-19.py` | figures of the 19 October variant reports (Simulation 2, both setups; part `budget`: gold standard vs B = 100, part `window`: W = 24, gold standard, W = 240) and the added figure of the 19 October gold-standard copy |
 | `sham_baseline.py`, `sham_baseline_figures.py` | `sham_table.parquet`; figures of the sham-baseline report |
 | `2026-10-15_plan_reports.md` | the plan of the 15 October reports |
 

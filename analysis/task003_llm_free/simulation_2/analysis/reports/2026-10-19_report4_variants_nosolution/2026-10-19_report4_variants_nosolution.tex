@@ -85,14 +85,18 @@ case). Unless stated otherwise: $q = 6$, $q_c = 12$, $\lambda_c = 1$, gate on. W
 $B = 100$ run reproduces the gold standard exactly: all silent settings, and every setting in which the
 gold-standard controller never reached 30 messages (63 settings).
 
+\paragraph{How this report is organised.} Part~A (Section~\ref{sec:budget}) compares the gold standard with
+$B = 100$; Part~B (Section~\ref{sec:window}) compares it with $W = 24$ and $W = 240$. Each part has the gold standard's
+sections. Only the false controller (target A2) is shown: the controller targeting A0 changes by at most 0.05 in
+every variant. Readability $I$ and efficiency $\eta$ still use both targets, as defined in Section~\ref{sec:quantities}.
+
 \paragraph{Summary.} The agents' evidence is a coin flip between A0 and A2 and nothing can be proved. \textbf{The
-results of the 17 October report hold in all three variants}: either controller tips the swarm at every memory,
-with full memory a faster controller gains less, and $\eta$ stays flat (Figures~\ref{fig:votes}, \ref{fig:eta},
-\ref{fig:strength}). \textbf{The budget does not matter}: with 100 messages the controllers post two to three times
-as many and gain at most 0.03 more; the A2 share never passes 0.81 (Figures~\ref{fig:perfact}, \ref{fig:messages}).
-\textbf{The board's memory protects a little}: posts readable for 10 time units instead of 2 lower the false
-controller's gain by 0.02--0.06 at $\rho \le 0.5$, posts readable for 1 time unit raise it by up to 0.03
-(Figure~\ref{fig:gainA2}). Both effects are much smaller than in \texttt{task003-symmetric}.
+results of the 17 October report hold in all three variants}: the false controller tips the swarm at every memory,
+and with full memory a faster controller gains less. \textbf{The budget does not matter} (Part~A): with 100 messages
+the controller posts two to three times as many and gains at most 0.03 more. \textbf{The board's memory matters a
+little} (Part~B): posts readable for 10 time units instead of 2 lower the false controller's gain by 0.02--0.06 when
+agents forget, posts readable for 1 time unit raise it by up to 0.03. Both effects are much smaller than in
+\texttt{task003-symmetric}.
 
 \section{Quantities}\label{sec:quantities}
 
@@ -153,181 +157,237 @@ $[x^{(e)}_{\text{target},t}(\lambda_c^{(k+1)}) - x^{(e)}_{\text{target},t}(\lamb
 \lambda_c^{(k)})$, whose mean is Eq.~(\ref{eq:slope}) and whose standard error gives the 95\% intervals (typically
 $\pm0.01$--$0.03$, about 30\% narrower than for two independent means).
 
-\section{Votes over time}
+%=====================================================================================================================
+\section{Part A: a larger budget ($B = 100$)}\label{sec:budget}
+
+The gold standard ($B = 30$) against $B = 100$; the window is $W = 48$ in both.
+
+\subsection{Votes over time}
 
 \begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_votes.pdf}
-\caption{Share of agents voting A0 (blue) and A2 (red), Eq.~(\ref{eq:share}): without a controller (dotted), with the
-controller targeting A0 (blue) or A2 (red) at $\lambda_c = 1$ (solid) and $\lambda_c = 8$ (dashed). Rows: memory
-$\rho$; columns: the four cases. $q = 6$, $q_c = 12$, gate on. At $t = 0$ nobody has voted and every share is 0.}
-\label{fig:votes}
+\centering\includegraphics[width=0.55\linewidth]{figures/fig_votes_budget.pdf}
+\caption{Share of agents voting A0 (blue) and A2 (red), Eq.~(\ref{eq:share}): without a controller (dotted) and with
+the false controller (target A2) at $\lambda_c = 1$ (solid) and $\lambda_c = 8$ (dashed). Rows: memory $\rho$. $q = 6$,
+$q_c = 12$, gate on. At $t = 0$ nobody has voted and every share is 0.}
+\label{fig:votesB}
 \end{figure}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{Without a controller the swarm stays split in every case}: on $t = 30$ the A0 and A2 shares differ
-  from the gold standard's by at most 0.02.
-\item \textbf{Either controller still tips it at every memory, in every case.} The false controller's A2 share on
-  $t = 30$ ($\lambda_c = 1$) is 0.77 (gold standard), 0.81 ($W = 24$) and 0.73 ($W = 240$) at $\rho = 0.5$; at $\rho = 1$
-  it is 0.65, 0.65 and 0.67.
 \item \textbf{The larger budget changes almost nothing}: at $\lambda_c = 8$, A2 on $t = 30$ goes from 0.77 to 0.78
-  ($\rho = 0.5$) and from 0.55 to 0.53 ($\rho = 1$). In no case does the A2 share pass 0.81.
-\item \textbf{The truth controller's A0 share stays within 0.03 of the gold standard} on $t = 30$, except $W = 24$ at
-  $\rho = 0.25$, $\lambda_c = 8$ (0.63 against 0.68). Every result persists after the controller stops (from $t = 30$
-  to 40 the shares change by at most 0.04).
+  ($\rho = 0.5$) and from 0.55 to 0.53 ($\rho = 1$); at $\lambda_c = 1$ the curves equal the gold standard's. In neither
+  case does the A2 share pass 0.78.
 \end{itemize}
 
-\section{Observables as time series}\label{sec:time}
+\subsection{Susceptibility over time, and per message}
 
 \begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_time_A2.pdf}
-\caption{Paired susceptibility $G_t$ for target A2, Eq.~(\ref{eq:chi}), one curve per rate $\lambda_c$ (bands: 95\%
-intervals); rows $\rho$, columns the four cases. $q = 6$, $q_c = 12$, gate on.}
-\label{fig:gainA2}
+\centering\includegraphics[width=0.55\linewidth]{figures/fig_gain_time_budget.pdf}
+\caption{Paired susceptibility $G_t$, target A2, Eq.~(\ref{eq:chi}), one curve per rate $\lambda_c$ (bands: 95\%
+intervals). Rows: $\rho$.}
+\label{fig:gainB}
 \end{figure}
 
 \begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_time_A0.pdf}
-\caption{The same for target A0.}
-\label{fig:gainA0}
-\end{figure}
-
-\paragraph{Susceptibility (Figures~\ref{fig:gainA2}, \ref{fig:gainA0}).}
-\begin{itemize}\itemsep1pt
-\item \textbf{$B = 100$ moves $G$ by at most 0.03}, for either target and every rate and memory, although the
-  controllers post two to three times as many messages (false controller at $\lambda_c = 8$: 65--91 instead of 26--29).
-\item \textbf{The window moves $G$ a little}: $W = 24$ by $-0.01$ to $+0.03$ (target A2); $W = 240$ by $-0.02$ to
-  $-0.06$ at $\rho \le 0.5$ for target A2 and by up to $-0.05$ for target A0 at every memory.
-\item \textbf{At full memory $W = 240$ helps the false controller} ($+0.02$ to $+0.04$), and the rate reversal of the
-  gold standard weakens: $G$ falls from 0.22 ($\lambda_c = 0.5$) to 0.08 ($\lambda_c = 8$), against 0.20 to 0.05.
-\end{itemize}
-
-\begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_info_time.pdf}
-\caption{Readability $I(Z;X)$, Eq.~(\ref{eq:I}), one curve per rate; rows $\rho$, columns the four cases.}
-\label{fig:info}
-\end{figure}
-
-\begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_eta_time.pdf}
-\caption{Efficiency $\eta$, Eq.~(\ref{eq:eta}), one curve per rate (blank: undefined, $C < 0.01$ bits).}
-\label{fig:eta}
-\end{figure}
-
-\paragraph{Readability and efficiency (Figures~\ref{fig:info}, \ref{fig:eta}).}
-\begin{itemize}\itemsep1pt
-\item \textbf{Readability follows the susceptibility}: on $t = 30$, $\rho = 0.5$, $I = 0.29$--$0.33$ bits (gold
-  standard), $0.29$--$0.34$ ($B = 100$), $0.33$--$0.37$ ($W = 24$), $0.21$--$0.26$ ($W = 240$).
-\item \textbf{The efficiency does not move}: $\eta = 0.84$--$0.92$ on $t = 30$ at $\rho < 1$ in every case; at
-  $\rho = 1$ it spreads over the rates (0.60--0.95), as in the gold standard.
-\end{itemize}
-
-\begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_per_fact.pdf}
-\caption{Gain per message $G_t/F_t$ (solid, left axis, log scale; shown once half a message has been posted) and
-messages posted $F_t$ (dashed, right axis), target A2, one colour per rate; rows $\rho$, columns the four cases.}
-\label{fig:perfact}
-\end{figure}
-
-\paragraph{Gain per message (Figure~\ref{fig:perfact}).}
-\begin{itemize}\itemsep1pt
-\item \textbf{The extra messages of $B = 100$ are worth almost nothing}: on $t = 30$, $\lambda_c = 8$, the gain per
-  message falls from 0.0104 to 0.0046 at $\rho = 0.5$ and from 0.0017 to 0.0003 at $\rho = 1$.
-\item \textbf{The window changes the value of each message}: at $\lambda_c = 1$, $\rho = 0.5$: 0.030 ($W = 24$), 0.023
-  (gold standard), 0.015 ($W = 240$).
-\end{itemize}
-
-\section{Phase diagrams}\label{sec:phase}
-
-On $t = 30$, gate on; susceptibility for target A2 (grey number: its 95\% interval includes 0); readability and
-efficiency for the pair of targets. The variants were run at $q_c = 12$ only, so the gold standard's
-$q_c \times \lambda_c$ diagram has no counterpart.
-
-\begin{figure}[H]
-\centering\includegraphics[width=0.92\linewidth]{figures/fig_phase_rho_q.pdf}
-\caption{Susceptibility, readability and efficiency over memory $\rho$ and the posts each agent reads $q$; rows: the
-four cases. $q_c = 12$, $\lambda_c = 1$.}
-\label{fig:phaserq}
+\centering\includegraphics[width=0.55\linewidth]{figures/fig_per_fact_budget.pdf}
+\caption{Gain per message $G_t/F_t$ (solid, left axis, log scale) and messages posted $F_t$ (dashed, right axis),
+target A2, one colour per rate.}
+\label{fig:perfactB}
 \end{figure}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{The reading reversal survives in every case}: with full memory reading more hurts the controller ($G$
-  from $q = 3$ to 12: 0.19 $\to$ 0.11 gold standard, $B = 100$ and $W = 24$; 0.22 $\to$ 0.13 $W = 240$); with heavy
-  forgetting it helps (0.16 $\to$ 0.37 gold standard, 0.17 $\to$ 0.37 $B = 100$, 0.18 $\to$ 0.40 $W = 24$, 0.16 $\to$ 0.32 $W = 240$).
+\item \textbf{$G$ moves by at most 0.03} at every rate and memory (Figure~\ref{fig:gainB}), although the controller posts
+  two to three times as many messages (at $\lambda_c = 8$: 65--91 instead of 26--29). Fast controllers reach their
+  plateau early (at $\rho = 0.5$, $\lambda_c = 8$: $G = 0.28$ by $t = 5$) and the extra messages come after it.
+\item \textbf{The extra messages are worth almost nothing} (Figure~\ref{fig:perfactB}): on $t = 30$, $\lambda_c = 8$, the
+  gain per message falls from 0.0104 to 0.0046 at $\rho = 0.5$ and from 0.0017 to 0.0003 at $\rho = 1$.
+\item \textbf{Readability and efficiency are unchanged} (Figure~\ref{fig:phaserxB}): on $t = 30$, $\rho = 0.5$,
+  $I = 0.29$--$0.34$ bits against 0.29--0.33; $\eta = 0.84$--$0.92$ against 0.86--0.92 at $\rho < 1$.
 \end{itemize}
 
+\subsection{Phase diagrams}
+
 \begin{figure}[H]
-\centering\includegraphics[width=0.92\linewidth]{figures/fig_phase_rho_x.pdf}
-\caption{Susceptibility, readability and efficiency over memory $\rho$ and the rate $\lambda_c$; rows: the four
-cases. $q = 6$, $q_c = 12$.}
-\label{fig:phaserx}
+\centering\includegraphics[width=0.9\linewidth]{figures/fig_phase_rho_q_budget.pdf}
+\caption{Susceptibility (target A2; grey number: 95\% interval includes 0), readability and efficiency on $t = 30$
+over memory $\rho$ and the posts each agent reads $q$. $q_c = 12$, $\lambda_c = 1$, gate on.}
+\label{fig:phaserqB}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.9\linewidth]{figures/fig_phase_rho_x_budget.pdf}
+\caption{The same over memory $\rho$ and the rate $\lambda_c$. $q = 6$, $q_c = 12$.}
+\label{fig:phaserxB}
 \end{figure}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{The rate hardly matters at $\rho < 1$ in any case}: from $\lambda_c = 1$ to 8, $G$ changes by at most
-  0.05; at $\rho = 1$ it falls with the rate in every case.
+\item \textbf{The reading reversal is unchanged} (Figure~\ref{fig:phaserqB}): from $q = 3$ to 12, $G$ falls with full
+  memory (0.19 $\to$ 0.11 in both) and rises with heavy forgetting (0.16 $\to$ 0.37 gold standard, 0.17 $\to$ 0.37 $B = 100$).
+\item \textbf{The rate still hardly matters at $\rho < 1$} (Figure~\ref{fig:phaserxB}): from $\lambda_c = 1$ to 8, $G$
+  changes by at most 0.03 in both.
 \end{itemize}
 
-\section{Susceptibility against the rate, against messages, and its slope}\label{sec:strength}
+\subsection{Susceptibility against the rate, against messages, and its slope}
 
 \begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_rate.pdf}
-\caption{Top: $G$ on $t = 30$, target A2, against the rate $\lambda_c$, one colour per case (bars: 95\% intervals;
-points shifted slightly sideways). Bottom: the slope between neighbouring rates, Eq.~(\ref{eq:slope}), with paired
-95\% intervals. $q = 6$, $q_c = 12$, gate on.}
-\label{fig:strength}
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_rate_budget.pdf}
+\caption{Top: $G$ on $t = 30$, target A2, against the rate (bars: 95\% intervals). Bottom: the slope between
+neighbouring rates, Eq.~(\ref{eq:slope}), with paired 95\% intervals. $q = 6$, $q_c = 12$, gate on.}
+\label{fig:strengthB}
 \end{figure}
 
 \begin{figure}[H]
-\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_messages.pdf}
-\caption{$G$ on $t = 30$ against the messages posted by then, one point per rate (labels: $\lambda_c$ = 0.5, 1, 8),
-target A0 (top) and A2 (bottom), one colour per case; bars: 95\% intervals. Messages can repeat a fact: the pool
-holds 12.}
-\label{fig:messages}
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_messages_budget.pdf}
+\caption{$G$ on $t = 30$, target A2, against the messages posted by then; one point per rate, joined in rate order
+(labels: $\lambda_c$ = 0.5, 1, 8); bars: 95\% intervals. Moving right is more messages, moving up is more gain.}
+\label{fig:messagesB}
 \end{figure}
 
 \begin{figure}[H]
-\centering\includegraphics[width=0.92\linewidth]{figures/fig_strength_time.pdf}
-\caption{$G$, target A2 (left), and its slope between neighbouring rates (right) over time ($x$) and rate ($y$),
-$\rho = 0.5$; rows: the four cases. Faded cells: the paired 95\% interval of the slope includes 0.}
-\label{fig:strengthtime}
+\centering\includegraphics[width=0.9\linewidth]{figures/fig_strength_time_budget.pdf}
+\caption{$G$, target A2 (left), and its slope between neighbouring rates (right) over time and rate, $\rho = 0.5$.
+Faded cells: the paired 95\% interval of the slope includes 0.}
+\label{fig:strengthtimeB}
 \end{figure}
 
 \begin{itemize}\itemsep1pt
-\item \textbf{More messages do not raise the gain} (Figure~\ref{fig:messages}): with $B = 100$ the curves stretch to
-  the right but stay flat; at $\rho = 0.5$ the false controller gains 0.28--0.31 whether it posts 13 or 65 messages.
-\item \textbf{With full memory the rate reversal is there in every case}: the first step of rate costs $-0.12$ per
-  unit (gold standard, $B = 100$, $W = 24$) or $-0.10$ ($W = 240$), the second $-0.06$ in every case. At $\rho < 1$ every
-  significant slope is small ($|{\rm slope}| \le 0.034$).
-\item \textbf{The gate matters little in every case}: gate off minus on, target A2, $t = 30$, is between $-0.08$ and
-  $+0.03$, the largest effects at $\rho = 1$.
+\item \textbf{More messages do not raise the gain} (Figure~\ref{fig:messagesB}): with $B = 100$ the curves stretch to the
+  right but stay flat; at $\rho = 0.5$ the false controller gains 0.28--0.31 whether it posts 13 or 65 messages.
+\item \textbf{The rate reversal at full memory is there in both} (Figure~\ref{fig:strengthB}): the first steps of rate
+  cost $-0.12$ and $-0.06$ per unit; from $\lambda_c = 0.5$ to 8, $G$ falls from 0.20 to 0.05 (gold standard) and to
+  0.02 ($B = 100$).
+\item \textbf{Over time the slopes are the same} (Figure~\ref{fig:strengthtimeB}): at $\rho = 0.5$ more rate helps early
+  (on $t = 5$ the first step is worth $+0.12$ per unit) and that advantage fades to $+0.02$ by $t = 30$, in both.
+\item Gate off minus on: $-0.08$ to $+0.03$ (gold standard), $-0.08$ to $+0.01$ ($B = 100$), the largest at $\rho = 1$.
 \end{itemize}
 
-\paragraph{No proofs here.} In \texttt{task003-nosolution} no set of facts proves any allocation, so the
-gold standard's ``who holds the proof'' section has no counterpart.
+\paragraph{What the budget changes.} Nothing measurable: the controller with 100 messages posts two to three times as
+many and gains at most 0.03 more. A likely reason, not tested: without a proof, an agent's belief is limited by what
+the facts imply, and once agents hold the controller's facts, repeating them adds nothing.
 
+%=====================================================================================================================
+\section{Part B: a board that forgets faster or slower ($W = 24$, $W = 240$)}\label{sec:window}
+
+$W = 24$ (posts readable for about 1 time unit), the gold standard ($W = 48$, about 2) and $W = 240$ (about 10);
+the budget is $B = 30$ in all three.
+
+\subsection{Votes over time}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.78\linewidth]{figures/fig_votes_window.pdf}
+\caption{As Figure~\ref{fig:votesB}, for the three windows.}
+\label{fig:votesW}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{Without a controller the window hardly matters}: the shares on $t = 30$ differ by at most 0.02.
+\item \textbf{The false controller tips the swarm with every window}: A2 on $t = 30$ at $\lambda_c = 1$ is 0.81, 0.77 and
+  0.73 for $W = 24$, 48, 240 at $\rho = 0.5$; at $\rho = 1$, 0.65, 0.65 and 0.67.
+\end{itemize}
+
+\subsection{Susceptibility over time, and per message}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.78\linewidth]{figures/fig_gain_time_window.pdf}
+\caption{Paired susceptibility $G_t$, target A2, one curve per rate (bands: 95\% intervals).}
+\label{fig:gainW}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.78\linewidth]{figures/fig_per_fact_window.pdf}
+\caption{Gain per message $G_t/F_t$ (solid) and messages posted $F_t$ (dashed), target A2, one colour per rate.}
+\label{fig:perfactW}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{The window moves $G$ a little} (Figure~\ref{fig:gainW}): rate by rate, $W = 24$ by $-0.01$ to $+0.03$;
+  $W = 240$ by $-0.02$ to $-0.06$ at $\rho \le 0.5$.
+\item \textbf{At full memory $W = 240$ helps the false controller} ($+0.02$ to $+0.04$) and weakens the rate reversal:
+  $G$ falls from 0.22 ($\lambda_c = 0.5$) to 0.08 ($\lambda_c = 8$), against 0.20 to 0.05.
+\item \textbf{Each message is worth more when the board forgets fast} (Figure~\ref{fig:perfactW}): at $\lambda_c = 1$,
+  $\rho = 0.5$: 0.030, 0.023 and 0.015 per message.
+\item \textbf{Readability follows, efficiency does not move} (Figure~\ref{fig:phaserxW}): on $t = 30$, $\rho = 0.5$,
+  $I = 0.33$--$0.37$, 0.29--0.33, 0.21--0.26 bits; $\eta = 0.85$--$0.92$ at $\rho < 1$ for every window.
+\end{itemize}
+
+\subsection{Phase diagrams}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.9\linewidth]{figures/fig_phase_rho_q_window.pdf}
+\caption{As Figure~\ref{fig:phaserqB}, for the three windows.}
+\label{fig:phaserqW}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.9\linewidth]{figures/fig_phase_rho_x_window.pdf}
+\caption{As Figure~\ref{fig:phaserxB}, for the three windows.}
+\label{fig:phaserxW}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{The reading reversal survives every window} (Figure~\ref{fig:phaserqW}): from $q = 3$ to 12, $G$ falls with
+  full memory (0.19 $\to$ 0.11, 0.19 $\to$ 0.11, 0.22 $\to$ 0.13 for $W = 24$, 48, 240) and rises with heavy forgetting
+  (0.18 $\to$ 0.40, 0.16 $\to$ 0.37, 0.16 $\to$ 0.32).
+\item \textbf{The rate hardly matters at $\rho < 1$ with any window} (Figure~\ref{fig:phaserxW}): from $\lambda_c = 1$ to
+  8, $G$ changes by at most 0.05.
+\end{itemize}
+
+\subsection{Susceptibility against the rate, against messages, and its slope}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_rate_window.pdf}
+\caption{As Figure~\ref{fig:strengthB}, for the three windows.}
+\label{fig:strengthW}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.98\linewidth]{figures/fig_gain_messages_window.pdf}
+\caption{As Figure~\ref{fig:messagesB}, for the three windows.}
+\label{fig:messagesW}
+\end{figure}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.9\linewidth]{figures/fig_strength_time_window.pdf}
+\caption{As Figure~\ref{fig:strengthtimeB}, for the three windows.}
+\label{fig:strengthtimeW}
+\end{figure}
+
+\begin{itemize}\itemsep1pt
+\item \textbf{The rate reversal at full memory is there with every window} (Figure~\ref{fig:strengthW}): the first step
+  of rate costs $-0.12$ ($W = 24$, 48) or $-0.10$ ($W = 240$) per unit, the second $-0.06$. At $\rho < 1$ every
+  significant slope on $t = 30$ is small ($\le 0.034$).
+\item \textbf{With $W = 240$ the early advantage of speed lasts longer} (Figure~\ref{fig:strengthtimeW}): at $\rho = 0.5$
+  the first step is still worth $+0.07$ per unit on $t = 20$, against $+0.04$ for the other windows.
+\item Gate off minus on: between $-0.08$ and $+0.03$ for every window, the largest at $\rho = 1$.
+\end{itemize}
+
+\paragraph{No proofs here.} In \texttt{task003-nosolution} no set of facts proves any allocation, so the gold
+standard's ``who holds the proof'' section has no counterpart in either part.
+
+\paragraph{What the window changes.} A little: a longer window lowers the false controller's gain by 0.02--0.06 when
+agents forget, a shorter one raises it by up to 0.03; with full memory a longer window helps the false controller
+slightly and weakens the rate reversal.
+
+%=====================================================================================================================
 \section{Conclusions}
 
 \begin{enumerate}\itemsep2pt
-\item \textbf{The results of the 17 October nosolution report hold in all three variants}: either controller tips the
-  swarm at every memory, full memory included; with full memory a faster controller gains less; reading more helps
+\item \textbf{The results of the 17 October nosolution report hold in all three variants}: the false controller tips
+  the swarm at every memory, full memory included; with full memory a faster controller gains less; reading more helps
   the controller when agents forget and hurts it when they remember; $\eta$ stays at 0.84--0.92 for $\rho < 1$.
-\item \textbf{The budget does not matter here.} With $B = 100$ the controllers post two to three times as many
-  messages and gain at most 0.03 more; the A2 share never passes 0.81. A likely reason, not tested: without a proof,
-  an agent's belief is limited by what the facts imply, and once agents hold the controller's facts, repeating them
-  adds nothing.
-\item \textbf{The board's memory protects a little}: $W = 240$ lowers the false controller's gain by 0.02--0.06 at
-  $\rho \le 0.5$ and the truth controller's by up to 0.05; $W = 24$ raises the false controller's by up to 0.03.
-  At full memory $W = 240$ instead helps the false controller slightly and weakens the rate reversal.
-\item \textbf{Compared with \texttt{task003-symmetric}}: there, a larger budget raised the false controller's gain by
-  up to 0.13 and the window moved it by up to 0.14; here both effects are at most 0.06. Without a proof to erode,
-  the swarm saturates after a few messages.
+\item \textbf{The budget does not matter here} (Part~A), and \textbf{the window matters a little} (Part~B).
+\item \textbf{Compared with \texttt{task003-symmetric}}: there, a larger budget raised the false controller's gain by up
+  to 0.13 and the window moved it by up to 0.14; here both effects are at most 0.06. Without a proof to erode, the
+  swarm saturates after a few messages.
+\item \textbf{The controller targeting A0} is left out of this report: in every variant its gain on $t = 30$ stays within
+  0.05 of the gold standard's.
 \end{enumerate}
 
 \paragraph{Caveats.} The window changes what the controller reads too: with $W = 240$ its vote gate sees votes up to
 10 time units old, and at $\lambda_c = 1$ it posts 15--18 messages instead of 12--15. The variants were run at
-$q_c = 12$ and four memory values only. One world, 24 exact-Bayesian agents, one controller policy; 1{,}000 episodes
-per setting (95\% intervals on $G$ about $\pm 0.02$). Data: \texttt{results/simulation\_2/2026-10-18\_sim2\_nosolution\_*};
-tables: \texttt{results/gold\_standard/2026-10-18/} (variants) and \texttt{2026-10-16/} (gold standard); code:
+$q_c = 12$ and four memory values only, so the gold standard's $q_c \times \lambda_c$ diagram has no counterpart. One
+world, 24 exact-Bayesian agents, one controller policy; 1{,}000 episodes per setting (95\% intervals on $G$ about
+$\pm 0.02$). Data: \texttt{results/simulation\_2/2026-10-18\_sim2\_nosolution\_*}; tables:
+\texttt{results/gold\_standard/2026-10-18/} (variants) and \texttt{2026-10-16/} (gold standard); code:
 \texttt{shared\_analysis/gold\_standard/make\_report\_figures\_2026-10-19.py}.
 
 \end{document}
