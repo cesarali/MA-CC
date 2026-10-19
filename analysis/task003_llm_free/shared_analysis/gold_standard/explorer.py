@@ -78,6 +78,7 @@ def votes(sim, setup, rho, x, gate="on", q=6, qc=12):
     axes[0].legend()
     fig.suptitle(f"{setup}, $\\rho = {rho:g}$, {XNAME[sim]} = {x:g}, q = {q}, $q_c$ = {qc}, gate {gate}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -102,6 +103,7 @@ def timeseries(sim, setup, rho, gate="on", q=6, qc=12):
     _legend_strength(axes[1], sim)
     fig.suptitle(f"{setup}, $\\rho = {rho:g}$, q = {q}, $q_c$ = {qc}, gate {gate}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -123,6 +125,7 @@ def per_fact(sim, setup, rho, gate="on", q=6, qc=12):
     _legend_strength(axes[0], sim)
     fig.suptitle(f"{setup}, $\\rho = {rho:g}$, q = {q}, $q_c$ = {qc}, gate {gate}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -161,6 +164,7 @@ def _phase(sim, setup, ys, xs, ylab, xlab, kw, title, tt, gate):
         fig.colorbar(im, ax=ax, shrink=0.85)
     fig.suptitle(f"{setup}, {title}, {TNAME[sim]} = {tt:g}, gate {gate}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -198,6 +202,7 @@ def gain_strength(sim, setup, rho, tt, q=6, qc=12):
     axes[0].legend()
     fig.suptitle(f"{setup}, $\\rho = {rho:g}$, {TNAME[sim]} = {tt:g}, q = {q}, $q_c$ = {qc}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -232,6 +237,7 @@ def strength_time(sim, setup, rho, gate="on", q=6, qc=12):
     fig.colorbar(im1, ax=axes[1])
     fig.suptitle(f"{setup}, $\\rho = {rho:g}$, q = {q}, $q_c$ = {qc}, gate {gate}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -292,6 +298,7 @@ def fitted_derivative(setup, rho, tt, gate="on", q=6, qc=12):
     fig.suptitle(f"Simulation 2, {setup}, $\\rho = {rho:g}$, q = {q}, $q_c$ = {qc}, gate {gate}; "
                  "fit $G = G_\\infty(1 - e^{-\\lambda_c/\\lambda_0})$ at each time")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
 
 
@@ -313,4 +320,5 @@ def proofs(sim, setup, rho, x, gate="on", q=6, qc=12):
     axes[0].legend()
     fig.suptitle(f"{setup}, $\\rho = {rho:g}$, {XNAME[sim]} = {x:g}, q = {q}, $q_c$ = {qc}, gate {gate}")
     fig.tight_layout()
+    plt.close(fig)      # shown once, as the return value (interact displays it); an open figure is shown again
     return fig
