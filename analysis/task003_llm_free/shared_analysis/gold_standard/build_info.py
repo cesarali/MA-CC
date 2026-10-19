@@ -34,10 +34,12 @@ def main():
     a = ap.parse_args()
     d = RES / "gold_standard" / a.date
     t = pd.read_parquet(d / "cells_time.parquet")
-    key = ["sim", "setup", "q", "qc", "x", "rho", "gate", "t"]
+    if "case" not in t.columns:                     # tables built before the case column existed
+        t = t.assign(case="standard")
+    key = ["sim", "setup", "case", "q", "qc", "x", "rho", "gate", "t"]
     tr = t[t.arm == "truth"].set_index(key)
     fa = t[t.arm == "false"].set_index(key)
-    si = t[t.arm == "silent"].set_index(["sim", "setup", "q", "rho", "t"])
+    si = t[t.arm == "silent"].set_index(["sim", "setup", "case", "q", "rho", "t"])
 
     def sm(row):
         p = row[V].to_numpy(float)
@@ -47,7 +49,7 @@ def main():
     rows = []
     for k in tr.index.intersection(fa.index):
         a_, b_ = tr.loc[k], fa.loc[k]
-        s_ = si.loc[(k[0], k[1], k[2], k[5], k[7])]
+        s_ = si.loc[(k[0], k[1], k[2], k[3], k[6], k[8])]
         pp, pm, p0 = sm(a_), sm(b_), sm(s_)
         q = 0.5 * (pp + pm)
         I = 0.5 * kl(pp, q) + 0.5 * kl(pm, q)

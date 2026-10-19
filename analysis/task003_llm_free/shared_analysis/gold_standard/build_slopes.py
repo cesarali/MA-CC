@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from build_tables import RES, RUN_SETS, load  # noqa: E402
+from build_tables import RES, RUN_SETS, case_of, load  # noqa: E402
 
 XS = {"sim1": [1, 2, 3, 4, 5, 6, 7, 8, 9], "sim2": [0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}
 
@@ -39,7 +39,7 @@ def job_list(date):
             if prm["arm"] == "silent":
                 continue
             gate = "on" if prm.get("controller_gate", "votes") == "votes" else "off"
-            key = (sim, prm["setup"], prm["arm"], prm["q"], prm["qc"], float(prm["rho"]), gate)
+            key = (sim, prm["setup"], case_of(prm), prm["arm"], prm["q"], prm["qc"], float(prm["rho"]), gate)
             groups.setdefault(key, {})[strength(sim, prm)] = f
     for key, by_x in groups.items():
         xs = XS[key[0]]
@@ -49,7 +49,7 @@ def job_list(date):
 
 
 def run(job):
-    (sim, setup, arm, q, qc, rho, gate), folders = job
+    (sim, setup, case, arm, q, qc, rho, gate), folders = job
     k = 0 if arm == "truth" else 2
     xs = [float(x) for x in XS[sim]]
     frames = [load(sim, f)[["episode", "t", f"x{k}"]].rename(columns={f"x{k}": "y"}) for f in folders]
@@ -60,7 +60,7 @@ def run(job):
         step = xs[i + 1] - xs[i]
         m, sd, n = d.mean(), d.std(), d.count()
         for t in m.index:
-            rows.append((sim, setup, arm, q, qc, rho, gate, xs[i], xs[i + 1], float(t), m[t] / step, sd[t] / np.sqrt(n[t]) / step))
+            rows.append((sim, setup, case, arm, q, qc, rho, gate, xs[i], xs[i + 1], float(t), m[t] / step, sd[t] / np.sqrt(n[t]) / step))
     return rows
 
 
@@ -71,7 +71,7 @@ def main():
     a = ap.parse_args()
     with multiprocessing.Pool(a.workers) as pool:
         parts = pool.map(run, job_list(a.date), chunksize=2)
-    cols = ["sim", "setup", "arm", "q", "qc", "rho", "gate", "x_lo", "x_hi", "t", "slope", "slope_se"]
+    cols = ["sim", "setup", "case", "arm", "q", "qc", "rho", "gate", "x_lo", "x_hi", "t", "slope", "slope_se"]
     out = RES / "gold_standard" / a.date / "slopes.parquet"
     pd.DataFrame([r for p in parts for r in p], columns=cols).to_parquet(out, index=False)
     print("->", out)

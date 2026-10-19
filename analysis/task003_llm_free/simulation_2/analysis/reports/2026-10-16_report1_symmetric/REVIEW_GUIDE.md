@@ -7,6 +7,7 @@ how each of those numbers was produced and how to check it.
 
 - **Mirror for Simulation 1:** [`../../../../simulation_1/analysis/reports/2026-10-16_report1_symmetric/`](../../../../simulation_1/analysis/reports/2026-10-16_report1_symmetric/). Same sections, figures and equations.
 - **Same structure for task003-nosolution (17 Oct):** [`../2026-10-17_report2_nosolution/`](../2026-10-17_report2_nosolution/) and its Simulation 1 mirror. Data: tables in `gold_standard/2026-10-16/` (filter `setup == "task003_nosolution"`; information in `info.parquet`, one-agent vote only).
+- **Variants (19 Oct):** [`../2026-10-19_report3_variants_symmetric/`](../2026-10-19_report3_variants_symmetric/) and [`../2026-10-19_report4_variants_nosolution/`](../2026-10-19_report4_variants_nosolution/): budget B = 100 and board windows W = 24, 240 against the gold standard; tables in `gold_standard/2026-10-18/` (column `case`).
 - **Notebook:** `shared_analysis/gold_standard/explorer.ipynb`, every figure with sliders, all 8 ρ values, both setups.
 - **Companion:** [`../2026-10-16_sham_baseline_symmetric/`](../2026-10-16_sham_baseline_symmetric/). The same data, scored against a sham controller instead of no control.
 

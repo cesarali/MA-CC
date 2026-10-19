@@ -5,7 +5,7 @@ Reads the light records:
   results/simulation_2/2026-10-15_sim2_symmetric_fine     (snapshots.parquet: one row per episode every 0.25)
 and writes results/gold_standard/<date>/cells_time.parquet: one row per (cell, time) with
 
-  identity   sim, setup, arm, q, qc, x (b or rate), rho, gate, t
+  identity   sim, setup, case (standard, budget100, window24, window240), arm, q, qc, x (b or rate), rho, gate, t
   votes      x0, x1, x2: mean share of votes for A0, A1, A2 among agents who have voted (Simulation 2:
              agents who have not acted yet have no vote and are left out; Simulation 1: everyone votes daily)
   beliefs    m0, m2: mean belief in A0 and A2 (each agent's exact posterior given its facts)
@@ -46,9 +46,22 @@ RUN_SETS = {
                   + [("sim2", RES / f"simulation_2/{r}/cells") for r in (
                        "2026-10-15_sim2_symmetric_fine", "2026-10-16_sim2_symmetric_fine_extra_rho",
                        "2026-10-16_sim2_nosolution_fine")],
+    # 2026-10-18: Simulation 2 small-grid variants (qc 12; rho 1, 0.75, 0.5, 0.25), both setups; column `case`
+    "2026-10-18": [("sim2", RES / f"simulation_2/2026-10-18_sim2_{s}_{c}/cells")
+                   for c in ("budget100", "window24", "window240") for s in ("symmetric", "nosolution")],
 }
 N = 24
 T2 = [0.25, 0.5, 0.75] + [float(t) for t in range(1, 41)]
+
+
+def case_of(prm: dict) -> str:
+    """Which variant of the Simulation 2 core a cell belongs to: standard (budget 30, window 48), budget<B> or
+    window<W>. Simulation 1 cells are always standard."""
+    if prm.get("budget", 30) != 30:
+        return f"budget{prm['budget']}"
+    if prm.get("W", 48) != 48:
+        return f"window{prm['W']}"
+    return "standard"
 
 
 def load(sim: str, folder: pathlib.Path) -> pd.DataFrame:
@@ -113,14 +126,15 @@ def summarise(job):
     g = g.reset_index()
     g.insert(0, "sim", sim)
     g.insert(1, "setup", prm["setup"])
-    g.insert(2, "cell", folder.name)
-    g.insert(3, "arm", arm)
-    g.insert(4, "q", prm["q"])
-    g.insert(5, "qc", prm.get("qc"))
-    g.insert(6, "x", prm.get("b") if sim == "sim1" else prm.get("lambda_c"))
-    g.insert(7, "rho", float(prm["rho"]))
+    g.insert(2, "case", case_of(prm))
+    g.insert(3, "cell", folder.name)
+    g.insert(4, "arm", arm)
+    g.insert(5, "q", prm["q"])
+    g.insert(6, "qc", prm.get("qc"))
+    g.insert(7, "x", prm.get("b") if sim == "sim1" else prm.get("lambda_c"))
+    g.insert(8, "rho", float(prm["rho"]))
     gate = prm.get("controller_gate", "votes")
-    g.insert(8, "gate", None if arm == "silent" else ("on" if gate == "votes" else "off"))
+    g.insert(9, "gate", None if arm == "silent" else ("on" if gate == "votes" else "off"))
     return g
 
 
