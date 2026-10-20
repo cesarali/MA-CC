@@ -1,0 +1,9 @@
+setup,rho,arm,identical
+task003_symmetric,0.75,silent,True
+task003_symmetric,0.75,false,True
+task003_nosolution,0.75,silent,True
+task003_nosolution,0.25,false,True
+task003_nosolution,0.25,silent,True
+task003_nosolution,0.75,false,True
+task003_symmetric,0.25,false,True
+task003_symmetric,0.25,silent,True

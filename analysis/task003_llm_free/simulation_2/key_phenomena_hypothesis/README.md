@@ -25,12 +25,17 @@ secondary.
 | [`01_data_audit.md`](01_data_audit.md) | step 0: every Simulation 2 run on disk, what each records, what the code guarantees (pairing, forgetting, horizon), corrections to the handoff, a resolved / open table |
 | [`02_reanalysis_existing_data.md`](02_reanalysis_existing_data.md) | step 1: findings from existing data only (reversal map, dose check, reversal over time, memory and board composition, persistence, backfire), hypothesis status, and the proposal for steps 2 and 3 |
 | [`reports/2026-10-20_step1_findings/`](reports/2026-10-20_step1_findings/) | short LaTeX report of step 1: six figures, each with a few precise statements (figures read from `figures/`) |
+| [`reports/2026-10-20_step2_reading_mechanism/`](reports/2026-10-20_step2_reading_mechanism/) | step 2 (Campaign A): G and D at q = 3, 6, 9, 12 and 8 ρ; memory composition; the belief shift split into a direct and an indirect part |
+| [`reports/2026-10-20_step3_persistence_carrier/`](reports/2026-10-20_step3_persistence_carrier/) | step 3 (Campaign B): four post-stop rules to t = 130; the controller-only facts carry the persistence |
 
 ## Status (20 October 2026)
 
-- Steps 0 and 1: **done**.
-- Step 2 (Campaign A: full-record runs across q) and step 3 (Campaign B: branching after the controller stops):
-  **proposed, not run**, waiting for the researcher. See `02_reanalysis_existing_data.md` §8.
+- Steps 0–3: **done**. Step 2 ran `2026-10-20_sim2_reading_mechanism` (128 settings, 5.7 GB; q = 3, 6, 12 reproduce
+  the fine runs exactly). Step 3 ran `2026-10-20_sim2_persistence_branches` (32 settings, 3.9 GB; the normal
+  rule reproduces the fine runs up to t = 40). Step 3 uses the simulator setting `post_stop_mode` (default `normal`
+  leaves earlier runs unchanged; tests in `../simulator/tests/`).
+- Results: the reading reversal is a balance between a direct push of the controller's facts (spreading) and the
+  agents keeping their own evidence (integration); the persistence is carried by circulating controller-only facts.
 
 ## Terms used here
 
@@ -53,6 +58,9 @@ secondary.
 | [`scripts/s1_mechanism.py`](scripts/s1_mechanism.py) | memory and board composition from the full records (q = 6, ρ 0.75 and 1); board against q (no-proof, ρ = 1) | `mechanism.parquet`, `mechanism_board_q.parquet` |
 | [`scripts/s1_persistence.py`](scripts/s1_persistence.py) | effect after the last post t\*, with censoring | `persistence.parquet`, `persistence_curves.parquet` |
 | [`scripts/s1_backfire.py`](scripts/s1_backfire.py) | no-proof gain against messages and distinct facts delivered | `backfire.parquet` |
+| [`scripts/s2_mechanism.py`](scripts/s2_mechanism.py) | step 2: validation, G and D at four q, memory and board composition, direct/indirect belief split | `s2_validation.csv`, `s2_G.parquet`, `s2_D.parquet`, `s2_composition.parquet` |
+| [`scripts/s3_branches.py`](scripts/s3_branches.py) | step 3: validation, δ(t) per post-stop rule, half-times, composition over time | `s3_validation.csv`, `s3_delta.parquet`, `s3_summary.csv`, `s3_composition.parquet` |
+| [`scripts/s23_figures.py`](scripts/s23_figures.py) | figures `step2_*`, `step3_*` and small tables | [`figures/`](figures/), [`tables/`](tables/) |
 | [`scripts/s1_figures.py`](scripts/s1_figures.py) | figures 1–6 (reversal map, reversal over time, persistence, dose, memory/board composition, backfire) and small tables | [`figures/`](figures/), [`tables/`](tables/) |
 
 Command: `.venv/bin/python analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/scripts/<script>.py`.
