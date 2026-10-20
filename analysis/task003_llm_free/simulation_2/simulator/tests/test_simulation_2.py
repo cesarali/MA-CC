@@ -403,3 +403,58 @@ def test_full_tables_only_for_the_main_cells():
     full = [p for p in cells if full_tables(p, GRID)]
     assert len(full) == 52
     assert all(p.q == 6 and p.rho == 0.75 and (p.arm == "silent" or p.qc == 12) for p in full)
+
+
+# ---------------------------------------------------------------- post-stop modes (key-phenomena study, Campaign B)
+
+MODES = ("no_comm", "frozen_board", "purge_controller_facts")
+
+
+def core(setup, arm, mode="normal", **kw):
+    """The Simulation 2 core (bridge step S6) with a short horizon and a post-stop mode."""
+    return params("S6", setup, arm, rho=0.5, controller_gate="votes", t_control=10.0, t_end=20.0,
+                  post_stop_mode=mode, **kw)
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("arm", ["silent", "false"])
+def test_post_stop_modes_identical_until_t_control(mode, arm):
+    base, other = tables(core("task003_nosolution", arm)), tables(core("task003_nosolution", arm, mode))
+    for k in ("snapshots", "agent_snapshots"):
+        a = base[k][base[k].grid_index <= 40].reset_index(drop=True)      # t <= t_control = 10
+        b = other[k][other[k].grid_index <= 40].reset_index(drop=True)
+        assert a.equals(b), (mode, k)
+    a, b = base["posts"], other["posts"]
+    assert a[a.t < 10].reset_index(drop=True).equals(b[b.t < 10].reset_index(drop=True))
+
+
+@pytest.mark.parametrize("mode", ["no_comm", "frozen_board"])
+def test_no_new_posts_after_stop(mode):
+    t = tables(core("task003_symmetric", "false", mode))
+    assert (t["posts"].t > 10).sum() == 0
+    if mode == "no_comm":
+        assert (t["actions"][t["actions"].t > 10].facts_read == 0).all()
+
+
+@pytest.mark.parametrize("setup", sorted(SETUP))
+def test_purge_removes_controller_only_facts(setup):
+    s = SETUP[setup]
+    own = 0
+    for f in s.agent_facts:
+        own |= 1 << f
+    ctrl = 0
+    for f in s.pools[2]:
+        ctrl |= 1 << f
+    ctrl &= ~own
+    t = tables(core(setup, "false", "purge_controller_facts"))
+    snaps = t["agent_snapshots"]
+    assert (snaps[snaps.grid_index > 40].active.astype("int64") & ctrl == 0).all()
+    acts = t["actions"]
+    assert (acts[acts.t > 10].facts_read.astype("int64") & ctrl == 0).all()
+    before = snaps[snaps.grid_index == 40].active.astype("int64") & ctrl
+    assert (before != 0).any()                       # there was something to purge
+
+
+def test_post_stop_mode_in_silent_key():
+    a, b = core("task003_symmetric", "silent"), core("task003_symmetric", "silent", "no_comm")
+    assert a.silent_key() != b.silent_key()

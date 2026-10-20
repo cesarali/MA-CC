@@ -57,6 +57,12 @@ class Params:
     agent_sampling_mode: str = "probability_matching"
     prefer_facts_not_read: bool = True
     seed: int = 20261007
+    # what agents can do once the controller's time is over (t >= t_control); key-phenomena study, Campaign B.
+    # normal: as before. no_comm: agents keep acting (forgetting, voting) but read nothing and post nothing.
+    # frozen_board: agents read only the board as it was at t_control and post nothing. purge_controller_facts: at
+    # t_control the controller-only facts (pool facts that no agent starts with) are removed from every memory and
+    # from the board; then everything continues as normal. The default leaves every earlier run unchanged.
+    post_stop_mode: str = "normal"
     # bookkeeping, set by the runner; no effect on the simulation
     cell: str = ""                            # this cell's id
     silent_cell: str = ""                     # the silent cell it is paired with (controlled arms)
@@ -66,7 +72,8 @@ class Params:
         allowed = {"arm": ("silent", "truth", "false"), "board": ("cleared_nightly", "persistent"),
                    "forgetting": ("dawn", "continuous"), "agent_schedule": ("days", "poisson"),
                    "controller_schedule": ("nights", "poisson"), "controller_gate": ("votes", "always"),
-                   "agent_sampling_mode": ("probability_matching",)}
+                   "agent_sampling_mode": ("probability_matching",),
+                   "post_stop_mode": ("normal", "no_comm", "frozen_board", "purge_controller_facts")}
         for name, values in allowed.items():
             if getattr(self, name) not in values:
                 raise ValueError(f"{name}={getattr(self, name)!r}; allowed: {values}")
@@ -109,7 +116,7 @@ class Params:
         simulation, so the runner runs only the first (spec §3)."""
         return (self.setup, *(getattr(self, k) for k in AGENT_SETTINGS), self.lambda_a, self.rho, self.q,
                 self.W, self.t_end, self.grid_step, self.agent_sampling_mode, self.prefer_facts_not_read,
-                self.seed)
+                self.seed, self.t_control, self.post_stop_mode)
 
 
 def params_dict(p: Params) -> dict:
@@ -224,6 +231,11 @@ def run_episode(world: World, setup: Setup, p: Params, episode: int, record_agen
     controlled = target is not None
     pool = setup.pools[target] if controlled else ()
     own_evidence = _mask(setup.agent_facts)
+    # controller-only facts: this arm's pool (the false pool for the silent arm) minus the agents' facts
+    ctrl_only = _mask(setup.pools[target if controlled else 2]) & ~own_evidence
+    stop_pending = p.post_stop_mode != "normal"
+    stopped = False
+    frozen: list = []
     gamma = -math.log(p.rho) if p.rho < 1 else 0.0
     continuous = p.forgetting == "continuous" and p.rho < 1
 
@@ -306,12 +318,28 @@ def run_episode(world: World, setup: Setup, p: Params, episode: int, record_agen
     while heap:
         t, _, _, kind, data = heapq.heappop(heap)
 
+        # the post-stop rule starts with the first event after t_control (the snapshot at t_control comes first)
+        if stop_pending and (t > p.t_control or (t == p.t_control and kind != "measure")):
+            stop_pending, stopped = False, True
+            if p.post_stop_mode == "purge_controller_facts":
+                for a in range(n):
+                    active[a] &= ~ctrl_only
+                    known[a] &= ~ctrl_only
+                board = [post for post in board if not (ctrl_only >> post[3]) & 1]
+            elif p.post_stop_mode == "frozen_board":
+                frozen = list(board)
+
         if kind == "act":
             a = data
             idx = n_actions[a]
             n_actions[a] += 1
             active_before, known_before = active[a], known[a]
-            window = read_window(board, a, p.W, agents_only=False)
+            silent_after = stopped and p.post_stop_mode in ("no_comm", "frozen_board")    # no new posts
+            if stopped and p.post_stop_mode == "no_comm":
+                window = []
+            else:
+                window = read_window(frozen if stopped and p.post_stop_mode == "frozen_board" else board,
+                                     a, p.W, agents_only=False)
             read = keyed_rng(seed, episode, "reads", a, idx).sample(window, min(p.q, len(window)))
             read_now = _mask(post[3] for post in read)
             known[a] |= read_now
@@ -323,6 +351,8 @@ def run_episode(world: World, setup: Setup, p: Params, episode: int, record_agen
             v = vote_probability_matching(P, keyed_rng(seed, episode, "vote", a, idx))
             f, reason, cand_ctx, cand_fb, cand_final = choose_post(
                 world, active[a], v, read_now, p.prefer_facts_not_read, keyed_rng(seed, episode, "post", a, idx))
+            if silent_after:
+                f = NO_POST
             post_id = NO_POST
             if f != NO_POST:
                 post_id = next_post_id

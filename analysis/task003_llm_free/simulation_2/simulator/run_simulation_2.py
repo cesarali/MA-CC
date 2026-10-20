@@ -84,7 +84,7 @@ def resolve_steps(cfg: dict) -> dict[str, dict]:
 
 
 GRID_FACTORS = {"q": "q", "qc": "qc", "rho": "rho", "lambda_c": "lc", "controller_gate": "gate",
-                "silent_when_target_proved": "stop"}         # grid factor -> short name in cell ids
+                "silent_when_target_proved": "stop", "post_stop_mode": "after"}   # grid factor -> short name in cell ids
 SILENT_IGNORES = {"qc", "lambda_c", "controller_gate", "silent_when_target_proved"}
 LIGHT_TABLES = ["posts", "controller", "snapshots", "episodes"]
 
