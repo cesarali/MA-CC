@@ -24,6 +24,7 @@ secondary.
 | [`00_handoff_2026-10-20.md`](00_handoff_2026-10-20.md) | the researcher's plan (verbatim): priorities, hypotheses, the two possible campaigns, interpretation rules |
 | [`01_data_audit.md`](01_data_audit.md) | step 0: every Simulation 2 run on disk, what each records, what the code guarantees (pairing, forgetting, horizon), corrections to the handoff, a resolved / open table |
 | [`02_reanalysis_existing_data.md`](02_reanalysis_existing_data.md) | step 1: findings from existing data only (reversal map, dose check, reversal over time, memory and board composition, persistence, backfire), hypothesis status, and the proposal for steps 2 and 3 |
+| [`reports/2026-10-20_step1_findings/`](reports/2026-10-20_step1_findings/) | short LaTeX report of step 1: six figures, each with a few precise statements (figures read from `figures/`) |
 
 ## Status (20 October 2026)
 
@@ -52,7 +53,7 @@ secondary.
 | [`scripts/s1_mechanism.py`](scripts/s1_mechanism.py) | memory and board composition from the full records (q = 6, ρ 0.75 and 1); board against q (no-proof, ρ = 1) | `mechanism.parquet`, `mechanism_board_q.parquet` |
 | [`scripts/s1_persistence.py`](scripts/s1_persistence.py) | effect after the last post t\*, with censoring | `persistence.parquet`, `persistence_curves.parquet` |
 | [`scripts/s1_backfire.py`](scripts/s1_backfire.py) | no-proof gain against messages and distinct facts delivered | `backfire.parquet` |
-| [`scripts/s1_figures.py`](scripts/s1_figures.py) | figures and small tables | [`figures/`](figures/), [`tables/`](tables/) |
+| [`scripts/s1_figures.py`](scripts/s1_figures.py) | figures 1–6 (reversal map, reversal over time, persistence, dose, memory/board composition, backfire) and small tables | [`figures/`](figures/), [`tables/`](tables/) |
 
 Command: `.venv/bin/python analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/scripts/<script>.py`.
 Large outputs go to `analysis/task003_llm_free/results/key_phenomena/`, which is not in git. Figures and small CSV
