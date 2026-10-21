@@ -1,0 +1,11 @@
+total,setup,step,rho_low,rho_high,rho_amplifying,rho_protective,kind,D_direct_amp,D_direct_prot,D_indirect_amp,D_indirect_prot,D_direct_sign_amp,D_direct_sign_prot,D_indirect_sign_prot
+belief,nosolution,3->6,0.75,1.0,0.75,1.0,direct reversal,0.04707,-0.03028,-0.02734,-0.01651,+,-,-
+belief,nosolution,6->9,0.375,0.875,0.375,0.875,indirect override,0.01899,0.01896,-0.00437,-0.03148,+,+,-
+belief,nosolution,9->12,0.125,0.625,0.125,0.625,indirect override,0.00724,0.00677,-0.00186,-0.01495,+,+,-
+belief,symmetric,3->6,0.5,0.625,0.5,0.625,indirect override,0.03915,0.00683,-0.00046,-0.02524,+,+,-
+belief,symmetric,6->9,0.25,0.375,0.25,0.375,mixed/uncertain,0.01358,0.00039,0.00012,-0.01675,+,0,-
+vote,nosolution,3->6,0.75,1.0,0.75,1.0,direct reversal,0.04707,-0.03028,-0.02734,-0.01651,+,-,-
+vote,nosolution,6->9,0.5,0.875,0.5,0.875,indirect override,0.02079,0.01896,-0.01505,-0.03148,+,+,-
+vote,nosolution,9->12,0.25,0.625,0.25,0.625,indirect override,0.00695,0.00677,-0.00433,-0.01495,+,+,-
+vote,symmetric,3->6,0.5,0.625,0.5,0.625,indirect override,0.03915,0.00683,-0.00046,-0.02524,+,+,-
+vote,symmetric,6->9,0.125,0.375,0.125,0.375,mixed/uncertain,0.01566,0.00039,0.00496,-0.01675,+,0,-

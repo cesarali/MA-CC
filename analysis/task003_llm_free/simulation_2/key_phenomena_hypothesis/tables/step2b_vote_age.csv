@@ -1,0 +1,17 @@
+setup,rho,vote_age_ctrl,gamma,expected_fact_loss_since_vote
+nosolution,0.125,0.9912,2.0794,0.6753
+nosolution,0.25,0.9912,1.3863,0.5809
+nosolution,0.375,0.9912,0.9808,0.4952
+nosolution,0.5,0.9912,0.6931,0.4094
+nosolution,0.625,0.9912,0.47,0.3197
+nosolution,0.75,0.9912,0.2877,0.2234
+nosolution,0.875,0.9912,0.1335,0.1178
+nosolution,1.0,0.9912,,0.0
+symmetric,0.125,0.9912,2.0794,0.6753
+symmetric,0.25,0.9912,1.3863,0.5809
+symmetric,0.375,0.9912,0.9808,0.4952
+symmetric,0.5,0.9912,0.6931,0.4094
+symmetric,0.625,0.9912,0.47,0.3197
+symmetric,0.75,0.9912,0.2877,0.2234
+symmetric,0.875,0.9912,0.1335,0.1178
+symmetric,1.0,0.9912,,0.0

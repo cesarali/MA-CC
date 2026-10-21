@@ -1,0 +1,9 @@
+setup,check,value
+symmetric,"corr(D_indirect, change of agent-fact count gap silent-controller)",0.275
+symmetric,"corr(G_vote/G_belief, gamma/(1+gamma))",0.957
+symmetric,cells with D_vote and D_belief both resolved,18.0
+symmetric,of which signs agree,18.0
+nosolution,"corr(D_indirect, change of agent-fact count gap silent-controller)",-0.217
+nosolution,"corr(G_vote/G_belief, gamma/(1+gamma))",0.957
+nosolution,cells with D_vote and D_belief both resolved,14.0
+nosolution,of which signs agree,14.0

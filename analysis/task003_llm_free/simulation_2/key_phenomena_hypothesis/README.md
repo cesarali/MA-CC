@@ -27,6 +27,7 @@ secondary.
 | [`reports/2026-10-20_step1_findings/`](reports/2026-10-20_step1_findings/) | short LaTeX report of step 1: six figures, each with a few precise statements (figures read from `figures/`) |
 | [`reports/2026-10-20_step2_reading_mechanism/`](reports/2026-10-20_step2_reading_mechanism/) | step 2 (Campaign A): G and D at q = 3, 6, 9, 12 and 8 ρ; memory composition; the belief shift split into a direct and an indirect part |
 | [`reports/2026-10-20_step3_persistence_carrier/`](reports/2026-10-20_step3_persistence_carrier/) | step 3 (Campaign B): four post-stop rules to t = 130; the controller-only facts carry the persistence |
+| [`reports/2026-10-21_step2_reading_mechanism/`](reports/2026-10-21_step2_reading_mechanism/) | step 2, further analysis (task copy in the folder): per-episode direct/indirect split of each reading increment with paired bootstrap intervals; 2 × 3 heatmaps; votes vs beliefs; Q1–Q3; audit (no new runs needed) |
 
 ## Status (20 October 2026)
 
@@ -60,6 +61,8 @@ secondary.
 | [`scripts/s1_backfire.py`](scripts/s1_backfire.py) | no-proof gain against messages and distinct facts delivered | `backfire.parquet` |
 | [`scripts/s2_mechanism.py`](scripts/s2_mechanism.py) | step 2: validation, G and D at four q, memory and board composition, direct/indirect belief split | `s2_validation.csv`, `s2_G.parquet`, `s2_D.parquet`, `s2_composition.parquet` |
 | [`scripts/s3_branches.py`](scripts/s3_branches.py) | step 3: validation, δ(t) per post-stop rule, half-times, composition over time | `s3_validation.csv`, `s3_delta.parquet`, `s3_summary.csv`, `s3_composition.parquet` |
+| [`scripts/s2b_decomposition.py`](scripts/s2b_decomposition.py) | step 2b: per-episode direct/indirect/belief/vote at t = 30, identity check, paired bootstrap (2,000), reversal classification | `s2b_episodes.parquet`; `tables/step2b_*.csv` |
+| [`scripts/s2b_figures.py`](scripts/s2b_figures.py) | step 2b figures and checks | `figures/step2b_*`, `tables/step2b_checks.csv`, `step2b_ambiguous_cells.csv` |
 | [`scripts/s23_figures.py`](scripts/s23_figures.py) | figures `step2_*`, `step3_*` and small tables | [`figures/`](figures/), [`tables/`](tables/) |
 | [`scripts/s1_figures.py`](scripts/s1_figures.py) | figures 1–6 (reversal map, reversal over time, persistence, dose, memory/board composition, backfire) and small tables | [`figures/`](figures/), [`tables/`](tables/) |
 
