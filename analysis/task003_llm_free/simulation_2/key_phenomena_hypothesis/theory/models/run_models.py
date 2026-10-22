@@ -7,6 +7,7 @@
         post_stop  both setups, rho {0.25, 0.75}, q 6, four post-stop modes, t <= 130
         check      numerical convergence: symmetric and nosolution, rho 0.5, q 6, replicas 50/100/200, dt 0.05/0.025
   --tag NAME            output name (default: closure)
+  --seeds S, --replicas R   realisations per condition (M3) and population replicas
 Writes results/key_phenomena/theory_runs/<tag>_<set>.parquet: one row per (setup, rho, q, arm, mode, t) with vote
 shares x0..x2 among voters, mean beliefs, controller messages, controller-only share of memory slots and board, and
 per-fact m_f, b_f (columns m_<fact>, b_<fact>).
@@ -28,21 +29,24 @@ RHOS = [0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0]
 MODES = ["normal", "no_comm", "frozen_board", "purge_controller_facts"]
 
 
-def specs(which, closure):
+def specs(which, closure, seeds=1, replicas=None):
     out = []
+    kw = dict(closure=closure, replicas=replicas)
     if which in ("dev", "all"):
         rhos, qs = ([0.25, 0.75, 1.0], [3, 6]) if which == "dev" else (RHOS, [3, 6, 9, 12])
         for s in ("symmetric", "nosolution"):
             for r in rhos:
                 for q in qs:
                     for arm in ("silent", "false"):
-                        out.append(Spec(s, arm, r, q, closure=closure))
+                        for seed in range(1, seeds + 1):
+                            out.append(Spec(s, arm, r, q, seed=seed, **kw))
     elif which == "post_stop":
         for s in ("symmetric", "nosolution"):
             for r in (0.25, 0.75):
                 for mode in MODES:
                     for arm in ("silent", "false"):
-                        out.append(Spec(s, arm, r, 6, closure=closure, t_end=130.0, post_stop_mode=mode))
+                        for seed in range(1, seeds + 1):
+                            out.append(Spec(s, arm, r, 6, t_end=130.0, post_stop_mode=mode, seed=seed, **kw))
     elif which == "check":
         for s in ("symmetric", "nosolution"):
             for arm in ("silent", "false"):
@@ -55,7 +59,7 @@ def run(spec):
     rows = []
     for o in Model(spec).run():
         m, b = o.pop("m"), o.pop("b")
-        row = dict(setup=spec.setup, rho=spec.rho, q=spec.q, arm=spec.arm, mode=spec.post_stop_mode,
+        row = dict(setup=spec.setup, rho=spec.rho, q=spec.q, arm=spec.arm, mode=spec.post_stop_mode, seed=spec.seed,
                    replicas=spec.replicas or 100, dt=spec.dt, **o)
         row.update({f"m_{j}": v for j, v in enumerate(m)})
         row.update({f"b_{j}": v for j, v in enumerate(b)})
@@ -65,16 +69,22 @@ def run(spec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--closure", default="M2", choices=["M1", "M2"])
+    ap.add_argument("--closure", default="M2", choices=["M1", "M2", "M3"])
+    ap.add_argument("--seeds", type=int, default=1, help="realisations per condition (M3 is stochastic)")
+    ap.add_argument("--replicas", type=int, help="population replicas (default 100)")
     ap.add_argument("--set", default="dev", choices=["dev", "all", "post_stop", "check"])
     ap.add_argument("--tag")
     ap.add_argument("--workers", type=int, default=12)
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    sp = specs(a.set, a.closure)
+    sp = specs(a.set, a.closure, a.seeds, a.replicas)
     with multiprocessing.Pool(a.workers) as pool:
         parts = pool.map(run, sp, chunksize=1)
+    keep = None
     df = pd.DataFrame([r for p in parts for r in p])
+    if a.seeds > 1:                     # keep the ensemble small: drop per-fact columns except at t = 30 and 40
+        per_fact = [c for c in df.columns if c[:2] in ("m_", "b_")]
+        df.loc[~df.t.isin([30.0, 40.0, 130.0]), per_fact] = float("nan")
     path = OUT / f"{a.tag or a.closure}_{a.set}.parquet"
     df.to_parquet(path, index=False)
     print(len(sp), "runs ->", path)

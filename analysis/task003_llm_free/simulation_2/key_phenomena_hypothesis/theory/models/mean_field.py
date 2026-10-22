@@ -50,7 +50,8 @@ class Spec:
     arm: str                        # "silent" | "false"
     rho: float
     q: int
-    closure: str = "M2"             # "M2" | "M1"
+    closure: str = "M2"             # "M2" | "M1" | "M3" (M2 + demographic noise and extinction of fact holder counts)
+    n_swarm: int = 24               # M3: size of the swarm whose fact holder counts fluctuate
     qc: int = 12
     lambda_c: float = 1.0
     gate: bool = True
@@ -103,6 +104,13 @@ class Model:
         self.frozen = None
         self.messages = 0.0
         self.target = 2 if s.arm == "false" else None
+        if s.closure == "M3":
+            # integer holders of each circulating fact in a swarm of n_swarm agents (the setup's starting holders)
+            self.n = np.zeros(len(self.U), dtype=int)
+            for f in st.agent_facts:
+                self.n[self.uidx[f]] += 1
+            self.n = (self.n * s.n_swarm) // 24
+            self.dead = np.zeros(len(self.U), dtype=bool)
 
     # ---------------------------------------------------------------- stochastic board (diagnostic)
     def s_window(self, exclude=None, agents_only=False):
@@ -240,12 +248,63 @@ class Model:
     def step(self, t):
         if self.stochastic:
             return self.s_step(t)
+        if self.s.closure == "M3":
+            before = np.array(self.mem, dtype=np.uint64)
+            self._step(t)
+            return self.m3_noise(before, t)
+        return self._step(t)
+
+    def m3_noise(self, before, t):
+        """M3: replace the population's deterministic change in the holders of each fact by an integer change in a
+        swarm of n_swarm agents. Per step, each holder loses the fact and each non-holder gains it with the
+        probabilities measured in the population (binomial draws on the swarm counts); the population is then forced
+        to the new count. A fact with no holder and less than half a copy on the board is extinct for good, unless the
+        controller can still post it (pool fact while the controller is active)."""
+        s, K = self.s, self.K
+        after = np.array(self.mem, dtype=np.uint64)
+        one = np.uint64(1)
+        board = None
+        controller_active = self.target is not None and t < s.t_control and self.messages < s.budget
+        pool = set(self.pool)
+        for j, f in enumerate(self.U):
+            if self.dead[j]:
+                continue
+            bit = np.uint64(f)
+            b0 = ((before >> bit) & one).astype(bool)
+            b1 = ((after >> bit) & one).astype(bool)
+            h0 = int(b0.sum())
+            p_loss = int((b0 & ~b1).sum()) / h0 if h0 else 0.0
+            p_gain = int((~b0 & b1).sum()) / (K - h0) if K > h0 else 0.0
+            n = int(self.n[j])
+            n_new = n - self.npr.binomial(n, min(p_loss, 1.0)) + self.npr.binomial(s.n_swarm - n, min(p_gain, 1.0))
+            self.n[j] = n_new
+            target = int(round(n_new / s.n_swarm * K))
+            idx = np.nonzero(b1)[0] if target < b1.sum() else np.nonzero(~b1)[0]
+            k = abs(target - int(b1.sum()))
+            if k:
+                for a in self.npr.choice(idx, size=min(k, len(idx)), replace=False):
+                    if target < b1.sum():
+                        self.mem[int(a)] &= ~(1 << f)
+                    else:
+                        self.mem[int(a)] |= 1 << f
+            if n_new == 0 and not (controller_active and f in pool):
+                if board is None:
+                    board = self.window()
+                if board[self.cat_fact == f].sum() < 0.5:
+                    self.dead[j] = True
+                    for c in self.hist:
+                        c[self.cat_fact == f] = 0
+
+    def _step(self, t):
         s = self.s
         stopped = t >= s.t_control
         if stopped and s.post_stop_mode == "purge_controller_facts" and self.frozen is None:
             self.mem = [x & ~self.ctrl_mask for x in self.mem]
             for c in self.hist:
                 c[(np.isin(self.cat_fact, list(bits(self.ctrl_mask))))] = 0
+            if s.closure == "M3":
+                for f in bits(self.ctrl_mask):
+                    self.n[self.uidx[f]] = 0
             self.frozen = "done"
         if stopped and s.post_stop_mode == "frozen_board" and self.frozen is None:
             self.frozen = self.window()

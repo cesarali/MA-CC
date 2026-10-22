@@ -59,7 +59,12 @@ roughly threefold. Cell-level tables: `../held_out_validation/scorecard_M1*.csv`
 | nosolution G | 0.288 | 0.245 | 0.219 | 0.194 | ≈ 0.12 |
 | silent A2, symmetric / nosolution | 0.22 / 0.47 | 0.17 / 0.51 | 0.15 / 0.55 | 0.14 / 0.56 | 0.15 / 0.59 |
 
-   Half to two thirds of the effect at N = 24 is a finite-size effect; the silent swarm's state depends on N too.
+   **Correction (researcher's note, 22 October): this scaling multiplies agents but not facts.** Every fact starts with
+   about 1.3 × R holders instead of 1.3, so what falls with "N" may be falling with **copies per fact (redundancy)**,
+   not with swarm size. A proper size scaling needs proportionally more distinct facts (new worlds per scale), which
+   the current task generator cannot produce (it is fixed at 9 hidden numbers and 49 true facts; see
+   `M3_extinction.md`, section on scaling). The correct reading of this table is therefore: *the effect falls when each
+   fact is held by more agents*.
 4. **The reversal itself survives at N = 96** (`models/diag_reversal_N.py`, D(3→6), 300 / 150 paired episodes):
 
 | cell | N = 24 | N = 96 |
@@ -73,8 +78,9 @@ roughly threefold. Cell-level tables: `../held_out_validation/scorecard_M1*.csv`
 
 ## 4. Consequence for the theory
 
-A deterministic large-N theory cannot reproduce the observed system at N = 24, whatever its memory closure: it misses
-most of the effect's size and gets held-out signs at chance. The next version must keep **finite-N stochasticity**.
+A deterministic theory (infinite copies of every fact) cannot reproduce the observed system, whatever its memory
+closure: it misses most of the effect's size and gets held-out signs at chance. Whether a large swarm with
+proportionally more distinct facts behaves like N = 24 is open (see the correction in section 3). The next version must keep **finite-N stochasticity**.
 The leading candidate for the finite-size carrier is the extinction of agent-origin facts (section 5).
 
 ## 5. Extinction test
