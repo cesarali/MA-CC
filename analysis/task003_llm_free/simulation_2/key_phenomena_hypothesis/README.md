@@ -22,6 +22,7 @@ secondary.
 | file | what it holds |
 |---|---|
 | [`00_handoff_2026-10-20.md`](00_handoff_2026-10-20.md) | the researcher's plan (verbatim): priorities, hypotheses, the two possible campaigns, interpretation rules |
+| [`00_theory_plan_2026-10-21.md`](00_theory_plan_2026-10-21.md) | **the current programme** (verbatim): a predictive mechanistic theory of both phenomena, validated on pre-registered held-out data; then a dedup defence, LLM transfer, finite N |
 | [`01_data_audit.md`](01_data_audit.md) | step 0: every Simulation 2 run on disk, what each records, what the code guarantees (pairing, forgetting, horizon), corrections to the handoff, a resolved / open table |
 | [`02_reanalysis_existing_data.md`](02_reanalysis_existing_data.md) | step 1: findings from existing data only (reversal map, dose check, reversal over time, memory and board composition, persistence, backfire), hypothesis status, and the proposal for steps 2 and 3 |
 | [`reports/2026-10-20_step1_findings/`](reports/2026-10-20_step1_findings/) | short LaTeX report of step 1: six figures, each with a few precise statements (figures read from `figures/`) |
@@ -37,6 +38,15 @@ secondary.
   leaves earlier runs unchanged; tests in `../simulator/tests/`).
 - Results: the reading reversal is a balance between a direct push of the controller's facts (spreading) and the
   agents keeping their own evidence (integration); the persistence is carried by circulating controller-only facts.
+
+## Theory programme (from 22 October 2026)
+
+Folders from the plan: [`theory/`](theory/) (exact rules in `00_microscopic_rules.md`; model versions), [`calibration/`](calibration/)
+(development targets, `build_benchmarks.py`, **pre-registered split** `holdout_preregistration.md`),
+[`held_out_validation/`](held_out_validation/) (held-out targets, scorecards), [`defense/`](defense/), [`llm/`](llm/), [`finite_size/`](finite_size/)
+(planned). Decisions and results, one line each: [`progress.md`](progress.md). Phase 1 (rules, data, split) done on
+22 October; phase 2 (models) waits for the researcher's go. The final report will be `theory_and_validation_report.md`
+plus a LaTeX/PDF version in `reports/`.
 
 ## Terms used here
 
