@@ -36,6 +36,10 @@ def cells_of(run, K):
     for c in (run / "cells").iterdir():
         if not (c / "episodes.parquet").exists() or not (c / "params.json").exists():
             continue                                    # cell still running
+        try:
+            pd.read_parquet(c / "snapshots.parquet", columns=["episode"])
+        except Exception:
+            continue                                    # files still being written
         p = json.loads((c / "params.json").read_text())
         if p["arm"] == "false" and (p.get("qc") != 12 or p.get("controller_gate") != "votes"
                                     or float(p.get("lambda_c", 0)) != float(K)):

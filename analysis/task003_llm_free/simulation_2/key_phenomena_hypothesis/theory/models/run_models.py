@@ -1,10 +1,12 @@
 """Run the mean-field models over a set of conditions and store their predictions.
 
   --closure M1|M2       which model (theory/models/mean_field.py)
-  --set dev|all|post_stop|check
+  --set dev|all|post_stop|check|k2|k4|op
         dev        development cells: both setups, rho {0.25, 0.75, 1}, q {3, 6}, t <= 40
         all        every reading-run cell: both setups, 8 rho, q {3, 6, 9, 12}, t <= 40
         post_stop  both setups, rho {0.25, 0.75}, q 6, four post-stop modes, t <= 130
+        k2, k4     K-projects worlds: both setups, rho {1, 0.75, 0.5, 0.25}, q {3, 6} (W, rate, budget x K)
+        op         Object Placements world: both setups, 8 rho, q {3, 6, 9, 12}
         check      numerical convergence: symmetric and nosolution, rho 0.5, q 6, replicas 50/100/200, dt 0.05/0.025
   --tag NAME            output name (default: closure)
   --seeds S, --replicas R   realisations per condition (M3) and population replicas
@@ -47,6 +49,24 @@ def specs(which, closure, seeds=1, replicas=None):
                     for arm in ("silent", "false"):
                         for seed in range(1, seeds + 1):
                             out.append(Spec(s, arm, r, 6, t_end=130.0, post_stop_mode=mode, seed=seed, **kw))
+    elif which in ("k2", "k4"):
+        K = int(which[1])
+        wf = str(HERE.parents[3] / "llmfree_core" / f"world_task003_K{K}.json")
+        for base in ("symmetric", "nosolution"):
+            for r in (1.0, 0.75, 0.5, 0.25):
+                for q in (3, 6):
+                    for arm in ("silent", "false"):
+                        for seed in range(1, seeds + 1):
+                            out.append(Spec(f"task003_{base}_K{K}", arm, r, q, seed=seed, world_file=wf, W=48 * K,
+                                            lambda_c=float(K), budget=30.0 * K, **kw))
+    elif which == "op":
+        wf = str(HERE.parents[3] / "llmfree_core" / "world_op1.json")
+        for base in ("op_symmetric", "op_nosolution"):
+            for r in RHOS:
+                for q in (3, 6, 9, 12):
+                    for arm in ("silent", "false"):
+                        for seed in range(1, seeds + 1):
+                            out.append(Spec(base, arm, r, q, seed=seed, world_file=wf, **kw))
     elif which == "check":
         for s in ("symmetric", "nosolution"):
             for arm in ("silent", "false"):
@@ -59,7 +79,7 @@ def run(spec):
     rows = []
     for o in Model(spec).run():
         m, b = o.pop("m"), o.pop("b")
-        row = dict(setup=spec.setup, rho=spec.rho, q=spec.q, arm=spec.arm, mode=spec.post_stop_mode, seed=spec.seed,
+        row = dict(setup=spec.setup.replace("task003_", "").split("_K")[0], rho=spec.rho, q=spec.q, arm=spec.arm, mode=spec.post_stop_mode, seed=spec.seed,
                    replicas=spec.replicas or 100, dt=spec.dt, **o)
         row.update({f"m_{j}": v for j, v in enumerate(m)})
         row.update({f"b_{j}": v for j, v in enumerate(b)})
@@ -69,10 +89,10 @@ def run(spec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--closure", default="M2", choices=["M1", "M2", "M3"])
+    ap.add_argument("--closure", default="M2", choices=["M1", "M2", "M3", "M4"])
     ap.add_argument("--seeds", type=int, default=1, help="realisations per condition (M3 is stochastic)")
     ap.add_argument("--replicas", type=int, help="population replicas (default 100)")
-    ap.add_argument("--set", default="dev", choices=["dev", "all", "post_stop", "check"])
+    ap.add_argument("--set", default="dev", choices=["dev", "all", "post_stop", "check", "k2", "k4", "op"])
     ap.add_argument("--tag")
     ap.add_argument("--workers", type=int, default=12)
     a = ap.parse_args()

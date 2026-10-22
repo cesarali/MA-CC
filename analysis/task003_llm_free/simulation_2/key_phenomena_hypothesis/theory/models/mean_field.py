@@ -36,22 +36,34 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[3]                                            # analysis/task003_llm_free
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "simulation_2" / "simulator"))
-from llmfree_core.world import World, bits  # noqa: E402
+from llmfree_core.world import World, bits  # noqa: E402,F401
+from llmfree_core.kworld import load_world  # noqa: E402
 from llmfree_core.setups import load_setup  # noqa: E402
 from sim2.simulation_2 import NO_POST, choose_post, vote_probability_matching  # noqa: E402
 
-WORLD = World(ROOT / "llmfree_core" / "world_task003.json")
+TASK003 = ROOT / "llmfree_core" / "world_task003.json"
+_WORLDS: dict = {}
 EPS = 1e-12
+
+
+def get_world(path):
+    path = str(path or TASK003)
+    if path not in _WORLDS:
+        _WORLDS[path] = load_world(path)
+    return _WORLDS[path]
 
 
 @dataclass
 class Spec:
-    setup: str                      # "symmetric" | "nosolution"
+    setup: str                      # "symmetric" | "nosolution" (task003) or a full setup name (e.g. "op_symmetric",
+                                    # "task003_symmetric_K2")
     arm: str                        # "silent" | "false"
     rho: float
     q: int
     closure: str = "M2"             # "M2" | "M1" | "M3" (M2 + demographic noise and extinction of fact holder counts)
-    n_swarm: int = 24               # M3: size of the swarm whose fact holder counts fluctuate
+                                    # | "M4" (M3 + one shared, realised board of W posts)
+    n_swarm: int | None = None      # M3/M4: size of the swarm whose fact holder counts fluctuate (default: its agents)
+    world_file: str = ""            # default: task003
     qc: int = 12
     lambda_c: float = 1.0
     gate: bool = True
@@ -71,7 +83,12 @@ class Spec:
 class Model:
     def __init__(self, s: Spec):
         self.s = s
-        st = load_setup(f"task003_{s.setup}", ROOT / "experimental_setup", WORLD)
+        self.world = get_world(s.world_file)
+        name = s.setup if "_" in s.setup else f"task003_{s.setup}"
+        st = load_setup(name, ROOT / "experimental_setup", self.world)
+        self.n_agents = len(st.agent_facts)
+        if s.n_swarm is None:
+            s.n_swarm = self.n_agents
         self.agent_mask = 0
         for f in st.agent_facts:
             self.agent_mask |= 1 << f
@@ -94,7 +111,7 @@ class Model:
             # finite system of N = 24 R agents; the plan's scaling (section 7): W, controller rate and budget x R
             s.W, s.lambda_c, s.budget = s.W * s.replicas, s.lambda_c * s.replicas, s.budget * s.replicas
             self.posts_list = []        # (category, author), author -1 for the controller
-        self.K = 24 * s.replicas
+        self.K = self.n_agents * s.replicas
         self.mem = [1 << f for f in st.agent_facts] * s.replicas            # exact memories (python ints)
         self.own = np.array([f for f in st.agent_facts] * s.replicas)
         self.vote = np.full(self.K, -1, dtype=np.int8)
@@ -104,13 +121,15 @@ class Model:
         self.frozen = None
         self.messages = 0.0
         self.target = 2 if s.arm == "false" else None
-        if s.closure == "M3":
+        if s.closure in ("M3", "M4"):
             # integer holders of each circulating fact in a swarm of n_swarm agents (the setup's starting holders)
             self.n = np.zeros(len(self.U), dtype=int)
             for f in st.agent_facts:
                 self.n[self.uidx[f]] += 1
-            self.n = (self.n * s.n_swarm) // 24
+            self.n = (self.n * s.n_swarm) // self.n_agents
             self.dead = np.zeros(len(self.U), dtype=bool)
+        if s.closure == "M4":
+            self.shared = []            # the realised board: (category, is_controller), oldest first
 
     # ---------------------------------------------------------------- stochastic board (diagnostic)
     def s_window(self, exclude=None, agents_only=False):
@@ -146,13 +165,13 @@ class Model:
                 return
         best, bv = self.pool[0], None
         for f in self.pool:
-            v = WORLD.posterior(R | (1 << f))[self.target]
+            v = self.world.posterior(R | (1 << f))[self.target]
             if bv is None or v > bv + EPS:
                 best, bv = f, v
         if bv <= EPS:
             best, bv = self.pool[0], None
             for f in self.pool:
-                v = WORLD.posterior(1 << f)[self.target]
+                v = self.world.posterior(1 << f)[self.target]
                 if bv is None or v > bv + EPS:
                     best, bv = f, v
         self.posts_list.append((3 * len(self.U) + self.uidx[best], -1))
@@ -208,13 +227,13 @@ class Model:
                 continue
             best, bv = self.pool[0], None
             for f in self.pool:
-                v = WORLD.posterior(R | (1 << f))[self.target]
+                v = self.world.posterior(R | (1 << f))[self.target]
                 if bv is None or v > bv + EPS:
                     best, bv = f, v
             if bv <= EPS:
                 best, bv = self.pool[0], None
                 for f in self.pool:
-                    v = WORLD.posterior(1 << f)[self.target]
+                    v = self.world.posterior(1 << f)[self.target]
                     if bv is None or v > bv + EPS:
                         best, bv = f, v
             out[self.uidx[best]] += 1
@@ -248,11 +267,59 @@ class Model:
     def step(self, t):
         if self.stochastic:
             return self.s_step(t)
-        if self.s.closure == "M3":
-            before = np.array(self.mem, dtype=np.uint64)
+        if self.s.closure in ("M3", "M4"):
+            before = self.memmat()
             self._step(t)
             return self.m3_noise(before, t)
         return self._step(t)
+
+    def memmat(self):
+        """Boolean matrix agents x circulating facts (works for any number of facts)."""
+        out = np.zeros((self.K, len(self.U)), dtype=bool)
+        for a, x in enumerate(self.mem):
+            for f in bits(x):
+                j = self.uidx.get(f)
+                if j is not None:
+                    out[a, j] = True
+        return out
+
+    # ---------------------------------------------------------------- M4: one shared, realised board
+    def shared_window(self, agents_only=False):
+        out = []
+        for c, is_ctrl in reversed(self.shared):
+            if agents_only and is_ctrl:
+                continue
+            out.append(c)
+            if len(out) == self.s.W:
+                break
+        return out
+
+    def m4_controller(self, t):
+        """One stochastic controller acting on the shared board (the simulator's rule)."""
+        s = self.s
+        if self.target is None or t >= s.t_control or self.messages >= s.budget:
+            return
+        if self.npr.random() >= s.lambda_c * s.dt:
+            return
+        cats = self.s_read(self.shared_window(agents_only=True), s.qc)
+        R = 0
+        for c in cats:
+            R |= 1 << int(self.cat_fact[c])
+        if cats and s.gate and float(np.mean([self.cat_vote[c] == self.target for c in cats])) >= 0.75 - EPS:
+            return
+        best, bv = self.pool[0], None
+        for f in self.pool:
+            v = self.world.posterior(R | (1 << f))[self.target]
+            if bv is None or v > bv + EPS:
+                best, bv = f, v
+        if bv <= EPS:
+            best, bv = self.pool[0], None
+            for f in self.pool:
+                v = self.world.posterior(1 << f)[self.target]
+                if bv is None or v > bv + EPS:
+                    best, bv = f, v
+        self.shared.append((3 * len(self.U) + self.uidx[best], True))
+        self.messages += 1
 
     def m3_noise(self, before, t):
         """M3: replace the population's deterministic change in the holders of each fact by an integer change in a
@@ -261,17 +328,14 @@ class Model:
         to the new count. A fact with no holder and less than half a copy on the board is extinct for good, unless the
         controller can still post it (pool fact while the controller is active)."""
         s, K = self.s, self.K
-        after = np.array(self.mem, dtype=np.uint64)
-        one = np.uint64(1)
+        after = self.memmat()
         board = None
         controller_active = self.target is not None and t < s.t_control and self.messages < s.budget
         pool = set(self.pool)
         for j, f in enumerate(self.U):
             if self.dead[j]:
                 continue
-            bit = np.uint64(f)
-            b0 = ((before >> bit) & one).astype(bool)
-            b1 = ((after >> bit) & one).astype(bool)
+            b0, b1 = before[:, j], after[:, j]
             h0 = int(b0.sum())
             p_loss = int((b0 & ~b1).sum()) / h0 if h0 else 0.0
             p_gain = int((~b0 & b1).sum()) / (K - h0) if K > h0 else 0.0
@@ -288,12 +352,18 @@ class Model:
                     else:
                         self.mem[int(a)] |= 1 << f
             if n_new == 0 and not (controller_active and f in pool):
-                if board is None:
-                    board = self.window()
-                if board[self.cat_fact == f].sum() < 0.5:
+                if s.closure == "M4":
+                    copies = sum(1 for c, _ in self.shared[-s.W:] if int(self.cat_fact[c]) == f)
+                else:
+                    if board is None:
+                        board = self.window()
+                    copies = board[self.cat_fact == f].sum()
+                if copies < 0.5:
                     self.dead[j] = True
                     for c in self.hist:
                         c[self.cat_fact == f] = 0
+                    if s.closure == "M4":
+                        self.shared = [(c, k) for c, k in self.shared if int(self.cat_fact[c]) != f]
 
     def _step(self, t):
         s = self.s
@@ -302,17 +372,20 @@ class Model:
             self.mem = [x & ~self.ctrl_mask for x in self.mem]
             for c in self.hist:
                 c[(np.isin(self.cat_fact, list(bits(self.ctrl_mask))))] = 0
-            if s.closure == "M3":
+            if s.closure in ("M3", "M4"):
                 for f in bits(self.ctrl_mask):
                     self.n[self.uidx[f]] = 0
+            if s.closure == "M4":
+                self.shared = [(c, k) for c, k in self.shared if not (self.ctrl_mask >> int(self.cat_fact[c])) & 1]
             self.frozen = "done"
         if stopped and s.post_stop_mode == "frozen_board" and self.frozen is None:
-            self.frozen = self.window()
+            self.frozen = self.shared_window() if s.closure == "M4" else self.window()
         self.forget()
+        m4 = s.closure == "M4"
         if stopped and s.post_stop_mode == "frozen_board":
             board = self.frozen
         else:
-            board = self.window()
+            board = self.shared_window() if m4 else self.window()
         posts = np.zeros(self.nC)
         acting = np.nonzero(self.npr.random(self.K) < s.dt)[0]
         m = self.marginals() if s.closure == "M1" else None
@@ -328,17 +401,29 @@ class Model:
                 self.mem[a] = x
             read_now = 0
             if not no_read:
-                for c in self.read(board, s.q):
+                for c in (self.s_read(board, s.q) if m4 else self.read(board, s.q)):
                     read_now |= 1 << int(self.cat_fact[c])
             self.mem[a] |= read_now
-            P = WORLD.posterior(self.mem[a])
+            P = self.world.posterior(self.mem[a])
             v = vote_probability_matching(P, self.rnd)
             self.vote[a] = v
             if not no_post:
-                f = choose_post(WORLD, self.mem[a], v, read_now, True, self.rnd)[0]
+                f = choose_post(self.world, self.mem[a], v, read_now, True, self.rnd)[0]
                 if f != NO_POST:
                     posts[3 * self.uidx[f] + v] += 1
-        posts *= 24.0 / self.K                                       # scale to 24 agents' posting
+        if m4:
+            # the realised board receives each population post with probability n_agents / K (the swarm's posting
+            # stream), in random order, and the posts of one stochastic controller
+            new = []
+            for c in np.nonzero(posts)[0]:
+                new += [int(c)] * int(self.npr.binomial(int(posts[c]), self.n_agents / self.K))
+            self.npr.shuffle(new)
+            self.shared += [(c, False) for c in new]
+            self.m4_controller(t)
+            if len(self.shared) > 20 * s.W:
+                self.shared = self.shared[-4 * s.W:]
+            return
+        posts *= self.n_agents / self.K                              # scale to the swarm's posting
         u = self.controller_rate(t)
         posts[3 * len(self.U):] += u
         if not no_post or u.sum() > 0:
@@ -372,11 +457,11 @@ class Model:
                 for c in self.s_read(win, s.q):
                     read_now |= 1 << int(self.cat_fact[c])
             self.mem[a] |= read_now
-            P = WORLD.posterior(self.mem[a])
+            P = self.world.posterior(self.mem[a])
             v = vote_probability_matching(P, self.rnd)
             self.vote[a] = v
             if not no_post:
-                f = choose_post(WORLD, self.mem[a], v, read_now, True, self.rnd)[0]
+                f = choose_post(self.world, self.mem[a], v, read_now, True, self.rnd)[0]
                 if f != NO_POST:
                     self.posts_list.append((3 * self.uidx[f] + v, a))
 
@@ -397,9 +482,12 @@ class Model:
     def snapshot(self, t):
         voted = self.vote >= 0
         x = [float((self.vote[voted] == a).mean()) if voted.any() else 0.0 for a in range(3)]
-        p = np.array([WORLD.posterior(m) for m in self.mem]).mean(axis=0)
+        p = np.array([self.world.posterior(m) for m in self.mem]).mean(axis=0)
         if self.stochastic:
             board = np.bincount(self.s_window(), minlength=self.nC).astype(float)
+        elif self.s.closure == "M4":
+            win = self.frozen if isinstance(self.frozen, list) else self.shared_window()
+            board = np.bincount(win, minlength=self.nC).astype(float)
         else:
             board = self.frozen if isinstance(self.frozen, np.ndarray) else self.window()
         bf = np.zeros(len(self.U))
