@@ -1,0 +1,9 @@
+setup,resolved,correct,pos,pos_correct,neg,neg_correct,G_mae,misses,step,data,model
+op_nosolution,15.0,3.0,13.0,1.0,2.0,2.0,0.212281875,0.125 6->9 data + model -; 0.125 9->12 data + model 0; 0.25 3->6 data + model -; 0.25 6->9 data + model -; 0.25 9->12 data + model -; 0.375 3->6 data + model -; 0.375 6->9 data + model -; 0.375 9->12 data + model -; 0.5 3->6 data + model -; 0.5 6->9 data + model -; 0.5 9->12 data + model 0; 0.625 3->6 data + model -,,,
+op_nosolution,,,,,,,,,3->6,0.625-0.875 (+->-),0.125-0.25 (+->-)
+op_nosolution,,,,,,,,,6->9,0.5-0.75 (+->-),none
+op_nosolution,,,,,,,,,9->12,none,none
+op_symmetric,16.0,5.0,3.0,0.0,13.0,5.0,0.0657115625,0.125 3->6 data + model -; 0.125 6->9 data + model -; 0.25 3->6 data + model -; 0.375 6->9 data - model 0; 0.375 9->12 data - model 0; 0.5 6->9 data - model 0; 0.625 6->9 data - model 0; 0.625 9->12 data - model 0; 0.75 6->9 data - model 0; 0.875 3->6 data - model 0; 0.875 6->9 data - model 0,,,
+op_symmetric,,,,,,,,,3->6,0.25-0.375 (+->-),none
+op_symmetric,,,,,,,,,6->9,0.125-0.375 (+->-),none
+op_symmetric,,,,,,,,,9->12,none,none
