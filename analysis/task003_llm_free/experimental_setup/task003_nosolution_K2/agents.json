@@ -1,0 +1,449 @@
+{
+ "setup": "task003-nosolution-K2",
+ "what_this_is": "2 projects with one split; per project the agents and facts of task003_nosolution.",
+ "task": "task_003",
+ "world": [
+  3,
+  1,
+  1,
+  2,
+  2,
+  1,
+  1,
+  1,
+  2
+ ],
+ "truth": "ALLOCATION_0",
+ "false_target": "ALLOCATION_2",
+ "facts": [
+  {
+   "fact_id": "cf_x00_ge_2",
+   "text": "Alice's skill for build the data pipeline is at least moderate.",
+   "dP": {
+    "ALLOCATION_0": 0.114,
+    "ALLOCATION_1": -0.057,
+    "ALLOCATION_2": -0.057
+   },
+   "favours": [
+    "ALLOCATION_0"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_0",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x00_ge_x02",
+   "text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for build the data pipeline.",
+   "dP": {
+    "ALLOCATION_0": 0.1156,
+    "ALLOCATION_1": -0.1286,
+    "ALLOCATION_2": 0.013
+   },
+   "favours": [
+    "ALLOCATION_0"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_0",
+   "held_by_agents": 1
+  },
+  {
+   "fact_id": "cf_x00_ge_x03",
+   "text": "Alice's skill for build the data pipeline is at least as strong as Bruno's skill for conduct stakeholder interviews.",
+   "dP": {
+    "ALLOCATION_0": 0.0459,
+    "ALLOCATION_1": 0.0459,
+    "ALLOCATION_2": -0.0918
+   },
+   "favours": [
+    "ALLOCATION_0",
+    "ALLOCATION_1"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_0",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x01_le_2",
+   "text": "Alice's skill for conduct stakeholder interviews is at most moderate.",
+   "dP": {
+    "ALLOCATION_0": 0.114,
+    "ALLOCATION_1": -0.057,
+    "ALLOCATION_2": -0.057
+   },
+   "favours": [
+    "ALLOCATION_0"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_0",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x02_le_x05",
+   "text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for conduct stakeholder interviews.",
+   "dP": {
+    "ALLOCATION_0": 0.0673,
+    "ALLOCATION_1": -0.0337,
+    "ALLOCATION_2": -0.0337
+   },
+   "favours": [
+    "ALLOCATION_0"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_0",
+   "held_by_agents": 1
+  },
+  {
+   "fact_id": "cf_x02_eq_x05",
+   "text": "Bruno's skill for build the data pipeline is at the same level as Chandra's skill for conduct stakeholder interviews.",
+   "dP": {
+    "ALLOCATION_0": -0.0473,
+    "ALLOCATION_1": 0.0237,
+    "ALLOCATION_2": 0.0237
+   },
+   "favours": [
+    "ALLOCATION_1",
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_1",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x03_eq_x04",
+   "text": "Bruno's skill for conduct stakeholder interviews is at the same level as Chandra's skill for build the data pipeline.",
+   "dP": {
+    "ALLOCATION_0": -0.0473,
+    "ALLOCATION_1": 0.0237,
+    "ALLOCATION_2": 0.0237
+   },
+   "favours": [
+    "ALLOCATION_1",
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_1",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x03_le_x04",
+   "text": "Bruno's skill for conduct stakeholder interviews is no stronger than Chandra's skill for build the data pipeline.",
+   "dP": {
+    "ALLOCATION_0": -0.0918,
+    "ALLOCATION_1": 0.0459,
+    "ALLOCATION_2": 0.0459
+   },
+   "favours": [
+    "ALLOCATION_1",
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_1",
+   "held_by_agents": 1
+  },
+  {
+   "fact_id": "cf_x06_le_x07",
+   "text": "The cooperation of alice and bruno is no stronger than the cooperation of Alice and Chandra.",
+   "dP": {
+    "ALLOCATION_0": 0.013,
+    "ALLOCATION_1": 0.1156,
+    "ALLOCATION_2": -0.1286
+   },
+   "favours": [
+    "ALLOCATION_1"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_1",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x08_le_2",
+   "text": "The cooperation of bruno and chandra is at most moderate.",
+   "dP": {
+    "ALLOCATION_0": -0.1266,
+    "ALLOCATION_1": 0.0633,
+    "ALLOCATION_2": 0.0633
+   },
+   "favours": [
+    "ALLOCATION_1",
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_1",
+   "held_by_agents": 1
+  },
+  {
+   "fact_id": "cf_x01_ge_x02",
+   "text": "Alice's skill for conduct stakeholder interviews is at least as strong as Bruno's skill for build the data pipeline.",
+   "dP": {
+    "ALLOCATION_0": -0.0337,
+    "ALLOCATION_1": -0.0337,
+    "ALLOCATION_2": 0.0673
+   },
+   "favours": [
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_2",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x02_le_x04",
+   "text": "Bruno's skill for build the data pipeline is no stronger than Chandra's skill for build the data pipeline.",
+   "dP": {
+    "ALLOCATION_0": 0.013,
+    "ALLOCATION_1": -0.1286,
+    "ALLOCATION_2": 0.1156
+   },
+   "favours": [
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_2",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x03_ge_x05",
+   "text": "Bruno's skill for conduct stakeholder interviews is at least as strong as Chandra's skill for conduct stakeholder interviews.",
+   "dP": {
+    "ALLOCATION_0": 0.013,
+    "ALLOCATION_1": -0.1286,
+    "ALLOCATION_2": 0.1156
+   },
+   "favours": [
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_2",
+   "held_by_agents": 2
+  },
+  {
+   "fact_id": "cf_x05_le_2",
+   "text": "Chandra's skill for conduct stakeholder interviews is at most moderate.",
+   "dP": {
+    "ALLOCATION_0": -0.057,
+    "ALLOCATION_1": -0.057,
+    "ALLOCATION_2": 0.114
+   },
+   "favours": [
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_2",
+   "held_by_agents": 1
+  },
+  {
+   "fact_id": "cf_x06_ge_x07",
+   "text": "The cooperation of alice and bruno is at least as strong as the cooperation of Alice and Chandra.",
+   "dP": {
+    "ALLOCATION_0": 0.013,
+    "ALLOCATION_1": -0.1286,
+    "ALLOCATION_2": 0.1156
+   },
+   "favours": [
+    "ALLOCATION_2"
+   ],
+   "eligible_for_one_agent": true,
+   "decisive": false,
+   "agent_group": "ALLOCATION_2",
+   "held_by_agents": 1
+  }
+ ],
+ "properties": {
+  "agents": 24,
+  "distinct_facts": 15,
+  "agents_per_group_A0_A1_A2": [
+   8,
+   8,
+   8
+  ],
+  "distinct_facts_per_group_A0_A1_A2": [
+   5,
+   5,
+   5
+  ],
+  "group_rule": "a fact belongs to the allocation it raises most; a tie goes to the lower-numbered allocation",
+  "all_facts_eligible_for_one_agent": true,
+  "decisive_facts_held": "0 of 6",
+  "joint_posterior_A0_A1_A2": [
+   0.5,
+   0.0,
+   0.5
+  ],
+  "minimal_proofs_assemblable": 0,
+  "mean_individual_belief_A0_A1_A2": [
+   0.3454,
+   0.3071,
+   0.3476
+  ],
+  "starting_gap_A0_vs_A2": 0.0022,
+  "agent_sets_meeting_rule_4": 10438,
+  "search": {
+   "seed": 2026,
+   "samples_per_rival_choice": 400,
+   "total_imbalance": 0.05149
+  }
+ },
+ "status": "BUILT 2026-10-22 from the frozen task003_nosolution",
+ "built_by": "key_phenomena_hypothesis/finite_size/build_k_setups.py",
+ "K": 2,
+ "agent_assignments": {
+  "p0_agent_001": [
+   "k0:cf_x00_ge_2"
+  ],
+  "p0_agent_002": [
+   "k0:cf_x00_ge_x02"
+  ],
+  "p0_agent_003": [
+   "k0:cf_x00_ge_x03"
+  ],
+  "p0_agent_004": [
+   "k0:cf_x01_le_2"
+  ],
+  "p0_agent_005": [
+   "k0:cf_x02_le_x05"
+  ],
+  "p0_agent_006": [
+   "k0:cf_x00_ge_2"
+  ],
+  "p0_agent_007": [
+   "k0:cf_x00_ge_x03"
+  ],
+  "p0_agent_008": [
+   "k0:cf_x01_le_2"
+  ],
+  "p0_agent_009": [
+   "k0:cf_x02_eq_x05"
+  ],
+  "p0_agent_010": [
+   "k0:cf_x03_eq_x04"
+  ],
+  "p0_agent_011": [
+   "k0:cf_x03_le_x04"
+  ],
+  "p0_agent_012": [
+   "k0:cf_x06_le_x07"
+  ],
+  "p0_agent_013": [
+   "k0:cf_x08_le_2"
+  ],
+  "p0_agent_014": [
+   "k0:cf_x02_eq_x05"
+  ],
+  "p0_agent_015": [
+   "k0:cf_x03_eq_x04"
+  ],
+  "p0_agent_016": [
+   "k0:cf_x06_le_x07"
+  ],
+  "p0_agent_017": [
+   "k0:cf_x01_ge_x02"
+  ],
+  "p0_agent_018": [
+   "k0:cf_x02_le_x04"
+  ],
+  "p0_agent_019": [
+   "k0:cf_x03_ge_x05"
+  ],
+  "p0_agent_020": [
+   "k0:cf_x05_le_2"
+  ],
+  "p0_agent_021": [
+   "k0:cf_x06_ge_x07"
+  ],
+  "p0_agent_022": [
+   "k0:cf_x01_ge_x02"
+  ],
+  "p0_agent_023": [
+   "k0:cf_x02_le_x04"
+  ],
+  "p0_agent_024": [
+   "k0:cf_x03_ge_x05"
+  ],
+  "p1_agent_001": [
+   "k1:cf_x00_ge_2"
+  ],
+  "p1_agent_002": [
+   "k1:cf_x00_ge_x02"
+  ],
+  "p1_agent_003": [
+   "k1:cf_x00_ge_x03"
+  ],
+  "p1_agent_004": [
+   "k1:cf_x01_le_2"
+  ],
+  "p1_agent_005": [
+   "k1:cf_x02_le_x05"
+  ],
+  "p1_agent_006": [
+   "k1:cf_x00_ge_2"
+  ],
+  "p1_agent_007": [
+   "k1:cf_x00_ge_x03"
+  ],
+  "p1_agent_008": [
+   "k1:cf_x01_le_2"
+  ],
+  "p1_agent_009": [
+   "k1:cf_x02_eq_x05"
+  ],
+  "p1_agent_010": [
+   "k1:cf_x03_eq_x04"
+  ],
+  "p1_agent_011": [
+   "k1:cf_x03_le_x04"
+  ],
+  "p1_agent_012": [
+   "k1:cf_x06_le_x07"
+  ],
+  "p1_agent_013": [
+   "k1:cf_x08_le_2"
+  ],
+  "p1_agent_014": [
+   "k1:cf_x02_eq_x05"
+  ],
+  "p1_agent_015": [
+   "k1:cf_x03_eq_x04"
+  ],
+  "p1_agent_016": [
+   "k1:cf_x06_le_x07"
+  ],
+  "p1_agent_017": [
+   "k1:cf_x01_ge_x02"
+  ],
+  "p1_agent_018": [
+   "k1:cf_x02_le_x04"
+  ],
+  "p1_agent_019": [
+   "k1:cf_x03_ge_x05"
+  ],
+  "p1_agent_020": [
+   "k1:cf_x05_le_2"
+  ],
+  "p1_agent_021": [
+   "k1:cf_x06_ge_x07"
+  ],
+  "p1_agent_022": [
+   "k1:cf_x01_ge_x02"
+  ],
+  "p1_agent_023": [
+   "k1:cf_x02_le_x04"
+  ],
+  "p1_agent_024": [
+   "k1:cf_x03_ge_x05"
+  ]
+ }
+}

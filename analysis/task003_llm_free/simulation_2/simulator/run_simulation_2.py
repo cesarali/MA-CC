@@ -28,7 +28,8 @@ HERE = pathlib.Path(__file__).resolve().parent              # simulation_2/simul
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))                    # analysis/task003_llm_free, for llmfree_core
 from llmfree_core.setups import load_setup  # noqa: E402
-from llmfree_core.world import World  # noqa: E402
+from llmfree_core.world import World  # noqa: E402,F401
+from llmfree_core.kworld import load_world  # noqa: E402
 from sim2.simulation_2 import (AGENT_SETTINGS, COLUMNS, CONTROLLER_SETTINGS, Params,  # noqa: E402
                                params_dict, run_episode)
 from sim2.checks import check_setup  # noqa: E402
@@ -40,14 +41,14 @@ SUMMARIES = HERE / "run_summaries"
 CHUNK = 100                                                 # episodes held in memory before writing
 
 DTYPES = {
-    "posts": {"episode": "int32", "post_id": "int32", "author": "int16", "fact": "int8", "author_vote": "int8"},
+    "posts": {"episode": "int32", "post_id": "int32", "author": "int16", "fact": "int16", "author_vote": "int8"},
     "actions": {"episode": "int32", "agent": "int16", "action_index": "int16", "active_before": "int64",
                 "known_before": "int64", "facts_read": "int64", "window_size": "int16", "active_after": "int64",
-                "vote": "int8", "posted_fact": "int8", "post_id": "int32", "post_reason": "int8",
+                "vote": "int8", "posted_fact": "int16", "post_id": "int32", "post_reason": "int8",
                 "candidates_in_context": "int64", "candidates_fallback": "int64", "candidates_final": "int64"},
-    "forgetting": {"episode": "int32", "agent": "int16", "fact": "int8"},
+    "forgetting": {"episode": "int32", "agent": "int16", "fact": "int16"},
     "controller": {"episode": "int32", "action_index": "int16", "window_size": "int16", "facts_read": "int64",
-                   "posted_fact": "int8", "post_id": "int32", "budget_before": "int16", "budget_after": "int16",
+                   "posted_fact": "int16", "post_id": "int32", "budget_before": "int16", "budget_after": "int16",
                    "cumulative_reads": "int32"},
     "snapshots": {"episode": "int32", "grid_index": "int16", "board_size": "int32", "agent_posts": "int32",
                   "controller_messages": "int16", "controller_reads": "int32"},
@@ -157,13 +158,21 @@ _WORLD = _SETUPS = None
 
 def _init_worker(world_file: str, setups_dir: str, setup_names: list[str]):
     global _WORLD, _SETUPS
-    _WORLD = World(world_file)
+    _WORLD = load_world(world_file)
     _SETUPS = {s: load_setup(s, setups_dir, _WORLD) for s in setup_names}
 
 
 def _frame(table: str, rows: list) -> pd.DataFrame:
+    """Fact sets are bitmasks. Worlds with more than 63 facts (K-projects worlds) do not fit int64; there, every
+    bitmask column of the table is stored as a hexadecimal string instead (earlier worlds are unaffected)."""
     df = pd.DataFrame(rows, columns=COLUMNS[table])
-    return df.astype(DTYPES.get(table, {}))
+    dtypes = dict(DTYPES.get(table, {}))
+    if _WORLD is not None and _WORLD.n_facts > 63:
+        for col, dt in list(dtypes.items()):
+            if dt == "int64":
+                df[col] = df[col].map(lambda x: format(int(x), "x"))
+                dtypes.pop(col)
+    return df.astype(dtypes)
 
 
 def _run_cell(job):
@@ -245,7 +254,7 @@ def main():
             sys.exit("no cell matches --only")
     episodes = args.episodes or cfg["cells"]["episodes_per_cell"]
 
-    world = World(world_file)
+    world = load_world(world_file)
     setup_names = sorted({p.setup for p in cells})
     setups = {s: load_setup(s, setups_dir, world) for s in setup_names}
     for s in setup_names:

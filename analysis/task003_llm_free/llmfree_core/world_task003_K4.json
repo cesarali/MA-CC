@@ -1,0 +1,6 @@
+{
+ "type": "k_projects",
+ "K": 4,
+ "base": "world_task003.json",
+ "what_this_is": "4 independent task_003-type projects with one split (llmfree_core/kworld.py)"
+}

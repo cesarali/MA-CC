@@ -1,6 +1,6 @@
 """Load a frozen setup: its agents, and the controller pool for a given target."""
 from __future__ import annotations
-import hashlib, json, pathlib
+import hashlib, json, pathlib, re
 from dataclasses import dataclass
 
 from .world import World
@@ -38,9 +38,10 @@ def load_setup(name: str, setups_dir: str | pathlib.Path, world: World) -> Setup
         ids_ = _read(folder / file, hashes)["fact_ids"]
         return tuple(sorted((world.index[f] for f in ids_), key=lambda i: world.fact_ids[i]))
 
-    if name == "task003_symmetric":
+    base = re.sub(r"_K\d+$", "", name)           # K-projects setups (task003_symmetric_K2, ...) follow their base
+    if base == "task003_symmetric":
         pools = {0: pool("controller_pool_A0.json"), 2: pool("controller_pool_A2.json")}
-    elif name == "task003_nosolution":
+    elif base == "task003_nosolution":
         p = pool("controller_pool.json")
         pools = {0: p, 2: p}
     else:

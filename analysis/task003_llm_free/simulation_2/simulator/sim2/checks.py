@@ -1,6 +1,7 @@
 """Start-up checks on the frozen setups (spec §1). Each check uses the exact posterior engine,
 not file names. A failure stops the run: the setup is reported, never rebuilt."""
 from __future__ import annotations
+import re
 
 from llmfree_core.setups import Setup
 from llmfree_core.world import World
@@ -18,6 +19,11 @@ class SetupCheckFailed(RuntimeError):
 def check_setup(world: World, setup: Setup) -> dict:
     """Returns the measured properties; raises SetupCheckFailed listing every failed check."""
     exp = EXPECTED.get(setup.name)
+    k = re.search(r"_K(\d+)$", setup.name)
+    if exp is None and k:                    # K-projects setups: K copies of the base setup, one per project
+        K, base = int(k.group(1)), EXPECTED[setup.name[:k.start()]]
+        exp = {"agents": base["agents"] * K, "distinct_facts": base["distinct_facts"] * K,
+               "pool_size": base["pool_size"] * K, "shared_pool": base["shared_pool"], "K": K}
     if exp is None:
         raise SetupCheckFailed(f"no checks defined for setup {setup.name!r}")
     agents = 0
@@ -40,11 +46,13 @@ def check_setup(world: World, setup: Setup) -> dict:
         failed.append(f"pool sizes {got['pool_size']}, expected {exp['pool_size']} each")
     if got["shared_pool"] != exp["shared_pool"]:
         failed.append(f"one pool for both targets: {got['shared_pool']}, expected {exp['shared_pool']}")
-    if setup.name == "task003_symmetric":
+    if setup.name.startswith("task003_symmetric"):
         if pooled[0] != 1.0:
             failed.append(f"pooled agent facts should prove A0, posterior {pooled}")
     else:
-        if any(abs(x - y) > 1e-12 for x, y in zip(pooled, (0.5, 0.0, 0.5))):
+        # K = 1: the agents' evidence is exactly balanced. K > 1: summing scores over projects breaks that balance
+        # (the pooled posterior leans to A2); only "no proof" is required there.
+        if "K" not in exp and any(abs(x - y) > 1e-12 for x, y in zip(pooled, (0.5, 0.0, 0.5))):
             failed.append(f"pooled agent posterior {pooled}, expected (0.5, 0, 0.5)")
         everything = agents
         for f in setup.pools[0]:
