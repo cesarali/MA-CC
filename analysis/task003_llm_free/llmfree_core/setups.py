@@ -39,9 +39,9 @@ def load_setup(name: str, setups_dir: str | pathlib.Path, world: World) -> Setup
         return tuple(sorted((world.index[f] for f in ids_), key=lambda i: world.fact_ids[i]))
 
     base = re.sub(r"_K\d+$", "", name)           # K-projects setups (task003_symmetric_K2, ...) follow their base
-    if base == "task003_symmetric":
+    if base in ("task003_symmetric", "op_symmetric"):
         pools = {0: pool("controller_pool_A0.json"), 2: pool("controller_pool_A2.json")}
-    elif base == "task003_nosolution":
+    elif base in ("task003_nosolution", "op_nosolution"):
         p = pool("controller_pool.json")
         pools = {0: p, 2: p}
     else:

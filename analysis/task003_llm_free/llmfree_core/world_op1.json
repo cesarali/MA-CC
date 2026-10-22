@@ -1,0 +1,59 @@
+{
+ "type": "object_placements",
+ "start": [
+  1,
+  0
+ ],
+ "moves": [
+  [
+   2,
+   1,
+   2,
+   [
+    0
+   ]
+  ],
+  [
+   0,
+   1,
+   0,
+   [
+    1
+   ]
+  ],
+  [
+   0,
+   0,
+   2,
+   [
+    1
+   ]
+  ]
+ ],
+ "question": [
+  2,
+  1
+ ],
+ "answer_order": [
+  2,
+  1,
+  0
+ ],
+ "names": {
+  "people": [
+   "Alex",
+   "Blair",
+   "Casey"
+  ],
+  "items": [
+   "notebook",
+   "keys"
+  ],
+  "locations": [
+   "desk",
+   "shelf",
+   "drawer"
+  ]
+ },
+ "what_this_is": "MuSR-style Object Placements world (llmfree_core/op_world.py); built by key_phenomena_hypothesis/object_placements/build_op_setups.py"
+}

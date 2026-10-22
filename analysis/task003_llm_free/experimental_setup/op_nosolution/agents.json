@@ -1,0 +1,82 @@
+{
+ "setup": "op-nosolution",
+ "world": "llmfree_core/world_op1.json",
+ "truth": "ALLOCATION_0",
+ "false_target": "ALLOCATION_2",
+ "status": "BUILT 2026-10-22",
+ "built_by": "key_phenomena_hypothesis/object_placements/build_op_setups.py",
+ "agent_assignments": {
+  "agent_001": [
+   "belief:2:0:1:0"
+  ],
+  "agent_002": [
+   "belief:1:0:1:2"
+  ],
+  "agent_003": [
+   "mover:0:2"
+  ],
+  "agent_004": [
+   "belief:1:0:0:1"
+  ],
+  "agent_005": [
+   "belief:2:2:0:1"
+  ],
+  "agent_006": [
+   "belief:3:0:0:2"
+  ],
+  "agent_007": [
+   "belief:1:1:0:1"
+  ],
+  "agent_008": [
+   "belief:2:1:1:0"
+  ],
+  "agent_009": [
+   "belief:1:1:0:1"
+  ],
+  "agent_010": [
+   "belief:1:2:0:1"
+  ],
+  "agent_011": [
+   "belief:3:1:0:2"
+  ],
+  "agent_012": [
+   "belief:1:1:1:0"
+  ],
+  "agent_013": [
+   "belief:2:0:1:0"
+  ],
+  "agent_014": [
+   "belief:3:1:0:2"
+  ],
+  "agent_015": [
+   "belief:2:2:0:1"
+  ],
+  "agent_016": [
+   "belief:2:1:1:0"
+  ],
+  "agent_017": [
+   "item:0:1"
+  ],
+  "agent_018": [
+   "belief:1:1:1:0"
+  ],
+  "agent_019": [
+   "belief:3:0:0:2"
+  ],
+  "agent_020": [
+   "dest:0:2"
+  ],
+  "agent_021": [
+   "item:0:1"
+  ],
+  "agent_022": [
+   "belief:1:0:1:2"
+  ],
+  "agent_023": [
+   "missed:0:1"
+  ],
+  "agent_024": [
+   "mover:2:0"
+  ]
+ }
+}

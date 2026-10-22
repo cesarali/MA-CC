@@ -1,0 +1,22 @@
+{
+ "setup": "op-nosolution",
+ "world": "llmfree_core/world_op1.json",
+ "truth": "ALLOCATION_0",
+ "false_target": "ALLOCATION_2",
+ "status": "BUILT 2026-10-22",
+ "built_by": "key_phenomena_hypothesis/object_placements/build_op_setups.py",
+ "fact_ids": [
+  "belief:1:2:1:2",
+  "dest:1:0",
+  "item:2:0",
+  "saw:1:1",
+  "item:1:1",
+  "mover:1:0",
+  "saw:0:0",
+  "start:1:0",
+  "missed:2:2",
+  "belief:2:1:0:1",
+  "belief:2:0:0:1",
+  "belief:3:2:0:1"
+ ]
+}

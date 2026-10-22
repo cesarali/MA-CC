@@ -227,9 +227,12 @@ class KWorld:
 
 def load_world(path: str | pathlib.Path):
     """world.World for a plain world file; KWorld for a K-projects description {"type": "k_projects", "K": K,
-    "base": <base world file, relative to this description>}."""
+    "base": <base world file, relative to this description>}; op_world.OPWorld for {"type": "object_placements"}."""
     path = pathlib.Path(path)
     d = json.loads(path.read_text())
     if d.get("type") == "k_projects":
         return KWorld(int(d["K"]), (path.parent / d["base"]).resolve())
+    if d.get("type") == "object_placements":
+        from .op_world import load_op_world
+        return load_op_world(path)
     return World(path)

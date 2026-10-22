@@ -94,3 +94,6 @@ analysis/**/report/*.toc
 analysis/**/report/*.log
 analysis/**/report/main.pdf
 analysis/**/*.log
+
+# Object Placements worlds: merged story classes, rebuilt automatically on first load
+analysis/task003_llm_free/llmfree_core/world_op*.classes.npz

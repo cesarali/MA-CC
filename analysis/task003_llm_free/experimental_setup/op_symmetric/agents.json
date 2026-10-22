@@ -1,0 +1,82 @@
+{
+ "setup": "op-symmetric",
+ "world": "llmfree_core/world_op1.json",
+ "truth": "ALLOCATION_0",
+ "false_target": "ALLOCATION_2",
+ "status": "BUILT 2026-10-22",
+ "built_by": "key_phenomena_hypothesis/object_placements/build_op_setups.py",
+ "agent_assignments": {
+  "agent_001": [
+   "belief:2:0:1:0"
+  ],
+  "agent_002": [
+   "missed:2:2"
+  ],
+  "agent_003": [
+   "item:2:0"
+  ],
+  "agent_004": [
+   "saw:0:0"
+  ],
+  "agent_005": [
+   "mover:0:2"
+  ],
+  "agent_006": [
+   "mover:0:2"
+  ],
+  "agent_007": [
+   "belief:2:1:1:0"
+  ],
+  "agent_008": [
+   "belief:1:0:1:2"
+  ],
+  "agent_009": [
+   "belief:2:0:1:0"
+  ],
+  "agent_010": [
+   "belief:1:2:1:2"
+  ],
+  "agent_011": [
+   "dest:2:2"
+  ],
+  "agent_012": [
+   "missed:1:2"
+  ],
+  "agent_013": [
+   "saw:1:1"
+  ],
+  "agent_014": [
+   "belief:1:2:1:2"
+  ],
+  "agent_015": [
+   "belief:3:2:0:1"
+  ],
+  "agent_016": [
+   "dest:2:2"
+  ],
+  "agent_017": [
+   "belief:2:0:0:1"
+  ],
+  "agent_018": [
+   "missed:1:2"
+  ],
+  "agent_019": [
+   "belief:1:0:0:1"
+  ],
+  "agent_020": [
+   "dest:1:0"
+  ],
+  "agent_021": [
+   "missed:0:1"
+  ],
+  "agent_022": [
+   "belief:3:0:0:2"
+  ],
+  "agent_023": [
+   "saw:2:1"
+  ],
+  "agent_024": [
+   "missed:2:2"
+  ]
+ }
+}

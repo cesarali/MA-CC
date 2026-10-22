@@ -9,6 +9,9 @@ from llmfree_core.world import World
 EXPECTED = {
     "task003_symmetric": {"agents": 24, "distinct_facts": 18, "pool_size": 12, "shared_pool": False},
     "task003_nosolution": {"agents": 24, "distinct_facts": 15, "pool_size": 12, "shared_pool": True},
+    # MuSR Object Placements world (llmfree_core/op_world.py), built with the same rules
+    "op_symmetric": {"agents": 24, "distinct_facts": 18, "pool_size": 12, "shared_pool": False},
+    "op_nosolution": {"agents": 24, "distinct_facts": 15, "pool_size": 12, "shared_pool": True},
 }
 
 
@@ -46,7 +49,7 @@ def check_setup(world: World, setup: Setup) -> dict:
         failed.append(f"pool sizes {got['pool_size']}, expected {exp['pool_size']} each")
     if got["shared_pool"] != exp["shared_pool"]:
         failed.append(f"one pool for both targets: {got['shared_pool']}, expected {exp['shared_pool']}")
-    if setup.name.startswith("task003_symmetric"):
+    if setup.name.startswith(("task003_symmetric", "op_symmetric")):
         if pooled[0] != 1.0:
             failed.append(f"pooled agent facts should prove A0, posterior {pooled}")
     else:

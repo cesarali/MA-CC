@@ -1,0 +1,49 @@
+# Written 22 October 2026: the key-phenomena reading-mechanism grid (sim2_reading_mechanism.yaml) on a second task:
+# a MuSR Object Placements world (llmfree_core/world_op1.json, llmfree_core/op_world.py) with setups built by the
+# task003 rules (experimental_setup/op_symmetric, op_nosolution; builder
+# simulation_2/key_phenomena_hypothesis/object_placements/build_op_setups.py). Answers: A0 = where the person would look
+# (correct), A2 = where the item really is (the false controller's target). Memories and posts recorded.
+
+study: sim2_op_main
+description: "Object Placements world: both setups, rho 8 values, q 3/6/9/12, false and silent, rate 1, qc 12, gate on; memories and posts recorded"
+
+paths:
+  world_file: ../../../llmfree_core/world_op1.json
+  setups_dir: ../../../experimental_setup
+  results_dir: ../../../results/simulation_2
+
+grid:
+  setup:    [op_symmetric, op_nosolution]
+  arm:      ["silent", "false"]
+  q:        [3, 6, 9, 12]
+  qc:       [12]
+  rho:      [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125]
+  lambda_c: [1.0]
+  controller_gate: ["votes"]
+  silent_when_target_proved: [true]
+
+fixed:
+  board: persistent
+  forgetting: continuous
+  agent_schedule: poisson
+  controller_schedule: poisson
+  lambda_a: 1.0
+  theta_vote: 0.75
+  W: 48
+  budget: 30
+  t_control: 30.0
+  t_end: 40.0
+  grid_step: 0.25
+  agent_sampling_mode: probability_matching
+  prefer_facts_not_read: true
+  seed: 20261007
+
+cells:
+  episodes_per_cell: 1000
+  dedupe_irrelevant_proof_stop: true
+  # silent: 2 setups x 4 q x 8 rho = 64; false: 64; total 128
+  expected_total: 128
+
+record:
+  agent_snapshots: true
+  tables: [snapshots, controller, episodes, posts, agent_snapshots]
