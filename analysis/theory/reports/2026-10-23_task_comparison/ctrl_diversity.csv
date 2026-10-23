@@ -1,0 +1,33 @@
+task,setup,rho,t,distinct_ctrl_board,distinct_ctrl_memory,n_ctrl_facts
+task003,nosolution,0.25,30.0,3.356,3.401,12
+task003,nosolution,0.25,40.0,2.902,2.912,12
+task003,nosolution,0.25,80.0,2.673,2.674,12
+task003,nosolution,0.25,130.0,2.558,2.56,12
+task003,nosolution,0.75,30.0,3.366,3.779,12
+task003,nosolution,0.75,40.0,3.117,3.416,12
+task003,nosolution,0.75,80.0,2.939,2.997,12
+task003,nosolution,0.75,130.0,2.864,2.885,12
+task003,symmetric,0.25,30.0,4.449,4.481,10
+task003,symmetric,0.25,40.0,3.985,4.006,10
+task003,symmetric,0.25,80.0,3.466,3.474,10
+task003,symmetric,0.25,130.0,3.195,3.196,10
+task003,symmetric,0.75,30.0,3.535,4.31,10
+task003,symmetric,0.75,40.0,3.153,3.764,10
+task003,symmetric,0.75,80.0,2.708,2.892,10
+task003,symmetric,0.75,130.0,2.516,2.623,10
+Object Placements,nosolution,0.25,30.0,5.969,5.989,12
+Object Placements,nosolution,0.25,40.0,5.036,5.094,12
+Object Placements,nosolution,0.25,80.0,3.806,3.808,12
+Object Placements,nosolution,0.25,130.0,3.261,3.264,12
+Object Placements,nosolution,0.75,30.0,5.909,7.169,12
+Object Placements,nosolution,0.75,40.0,5.264,6.366,12
+Object Placements,nosolution,0.75,80.0,4.421,4.762,12
+Object Placements,nosolution,0.75,130.0,3.934,4.12,12
+Object Placements,symmetric,0.25,30.0,4.05,4.116,10
+Object Placements,symmetric,0.25,40.0,3.189,3.219,10
+Object Placements,symmetric,0.25,80.0,2.385,2.389,10
+Object Placements,symmetric,0.25,130.0,2.066,2.066,10
+Object Placements,symmetric,0.75,30.0,1.521,2.182,10
+Object Placements,symmetric,0.75,40.0,0.895,1.581,10
+Object Placements,symmetric,0.75,80.0,0.618,0.68,10
+Object Placements,symmetric,0.75,130.0,0.534,0.563,10

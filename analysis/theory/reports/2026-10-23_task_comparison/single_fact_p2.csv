@@ -1,0 +1,111 @@
+task,setup,kind,fact,p0,p2
+task003,symmetric,agent,cf_x02_le_2,0.3967,0.3967
+task003,symmetric,agent,cf_x03_eq_2,0.3469,0.3469
+task003,symmetric,agent,cf_x03_le_2,0.2763,0.2763
+task003,symmetric,agent,cf_x06_le_2,0.3967,0.2067
+task003,symmetric,agent,cf_x08_eq_2,0.3061,0.3469
+task003,symmetric,agent,cf_x00_ge_x03,0.3792,0.2415
+task003,symmetric,agent,cf_x00_ge_x04,0.449,0.2047
+task003,symmetric,agent,cf_x01_le_x04,0.3792,0.3792
+task003,symmetric,agent,cf_x01_le_x05,0.449,0.2047
+task003,symmetric,agent,cf_x01_eq_x05,0.3069,0.3069
+task003,symmetric,agent,cf_x02_le_x03,0.4232,0.4232
+task003,symmetric,agent,cf_x02_le_x04,0.3463,0.449
+task003,symmetric,agent,cf_x02_ge_x05,0.2415,0.3792
+task003,symmetric,agent,cf_x03_ge_x05,0.3463,0.449
+task003,symmetric,agent,cf_x06_le_x07,0.3463,0.2047
+task003,symmetric,agent,cf_x06_ge_x07,0.3463,0.449
+task003,symmetric,agent,cf_x06_le_x08,0.449,0.2047
+task003,symmetric,agent,cf_x07_le_x08,0.449,0.3463
+task003,symmetric,controller-only,cf_x04_ge_2,0.2763,0.4473
+task003,symmetric,controller-only,cf_x05_eq_1,0.2074,0.5853
+task003,symmetric,controller-only,cf_x05_le_2,0.2763,0.4473
+task003,symmetric,controller-only,cf_x08_le_2,0.2067,0.3967
+task003,symmetric,controller-only,cf_x01_ge_x02,0.2997,0.4006
+task003,symmetric,controller-only,cf_x01_ge_x05,0.2047,0.449
+task003,symmetric,controller-only,cf_x02_eq_x05,0.286,0.357
+task003,symmetric,controller-only,cf_x03_le_x04,0.2415,0.3792
+task003,symmetric,controller-only,cf_x03_eq_x04,0.286,0.357
+task003,symmetric,controller-only,cf_x04_ge_x05,0.2586,0.4828
+task003,nosolution,agent,cf_x00_ge_2,0.4473,0.2763
+task003,nosolution,agent,cf_x01_le_2,0.4473,0.2763
+task003,nosolution,agent,cf_x05_le_2,0.2763,0.4473
+task003,nosolution,agent,cf_x08_le_2,0.2067,0.3967
+task003,nosolution,agent,cf_x00_ge_x02,0.449,0.3463
+task003,nosolution,agent,cf_x00_ge_x03,0.3792,0.2415
+task003,nosolution,agent,cf_x01_ge_x02,0.2997,0.4006
+task003,nosolution,agent,cf_x02_le_x04,0.3463,0.449
+task003,nosolution,agent,cf_x02_le_x05,0.4006,0.2997
+task003,nosolution,agent,cf_x02_eq_x05,0.286,0.357
+task003,nosolution,agent,cf_x03_le_x04,0.2415,0.3792
+task003,nosolution,agent,cf_x03_eq_x04,0.286,0.357
+task003,nosolution,agent,cf_x03_ge_x05,0.3463,0.449
+task003,nosolution,agent,cf_x06_le_x07,0.3463,0.2047
+task003,nosolution,agent,cf_x06_ge_x07,0.3463,0.449
+task003,nosolution,controller-only,cf_x01_eq_1,0.5853,0.2074
+task003,nosolution,controller-only,cf_x03_le_2,0.2763,0.2763
+task003,nosolution,controller-only,cf_x04_ge_2,0.2763,0.4473
+task003,nosolution,controller-only,cf_x04_le_2,0.3967,0.2067
+task003,nosolution,controller-only,cf_x05_eq_1,0.2074,0.5853
+task003,nosolution,controller-only,cf_x08_eq_2,0.3061,0.3469
+task003,nosolution,controller-only,cf_x00_ge_x01,0.4828,0.2586
+task003,nosolution,controller-only,cf_x01_le_x03,0.449,0.3463
+task003,nosolution,controller-only,cf_x01_eq_x05,0.3069,0.3069
+task003,nosolution,controller-only,cf_x01_ge_x05,0.2047,0.449
+task003,nosolution,controller-only,cf_x02_ge_x05,0.2415,0.3792
+task003,nosolution,controller-only,cf_x04_ge_x05,0.2586,0.4828
+Object Placements,symmetric,agent,belief:1:0:0:1,0.3353,0.3353
+Object Placements,symmetric,agent,belief:1:0:1:2,0.4372,0.2814
+Object Placements,symmetric,agent,belief:1:2:1:2,0.5665,0.2167
+Object Placements,symmetric,agent,belief:2:0:0:1,0.3361,0.3361
+Object Placements,symmetric,agent,belief:2:0:1:0,0.2961,0.4079
+Object Placements,symmetric,agent,belief:2:1:1:0,0.2961,0.4079
+Object Placements,symmetric,agent,belief:3:0:0:2,0.3455,0.3273
+Object Placements,symmetric,agent,belief:3:2:0:1,0.2973,0.2973
+Object Placements,symmetric,agent,dest:1:0,0.3034,0.3932
+Object Placements,symmetric,agent,dest:2:2,0.5183,0.2409
+Object Placements,symmetric,agent,item:2:0,0.3333,0.3333
+Object Placements,symmetric,agent,missed:0:1,0.3333,0.3333
+Object Placements,symmetric,agent,missed:1:2,0.3333,0.3333
+Object Placements,symmetric,agent,missed:2:2,0.3333,0.3333
+Object Placements,symmetric,agent,mover:0:2,0.3333,0.3333
+Object Placements,symmetric,agent,saw:0:0,0.3333,0.3333
+Object Placements,symmetric,agent,saw:1:1,0.3333,0.3333
+Object Placements,symmetric,agent,saw:2:1,0.3333,0.3333
+Object Placements,symmetric,controller-only,belief:1:1:1:0,0.2814,0.4372
+Object Placements,symmetric,controller-only,belief:1:2:0:1,0.3404,0.3404
+Object Placements,symmetric,controller-only,belief:2:2:0:1,0.3265,0.3265
+Object Placements,symmetric,controller-only,belief:3:0:1:0,0.2606,0.4787
+Object Placements,symmetric,controller-only,belief:3:1:0:2,0.3455,0.3273
+Object Placements,symmetric,controller-only,dest:0:2,0.3454,0.3273
+Object Placements,symmetric,controller-only,item:1:1,0.3333,0.3333
+Object Placements,symmetric,controller-only,mover:1:0,0.3333,0.3333
+Object Placements,symmetric,controller-only,mover:2:0,0.3333,0.3333
+Object Placements,symmetric,controller-only,start:1:0,0.2564,0.4871
+Object Placements,nosolution,agent,belief:1:0:0:1,0.3353,0.3353
+Object Placements,nosolution,agent,belief:1:0:1:2,0.4372,0.2814
+Object Placements,nosolution,agent,belief:1:1:0:1,0.3353,0.3353
+Object Placements,nosolution,agent,belief:1:1:1:0,0.2814,0.4372
+Object Placements,nosolution,agent,belief:1:2:0:1,0.3404,0.3404
+Object Placements,nosolution,agent,belief:2:0:1:0,0.2961,0.4079
+Object Placements,nosolution,agent,belief:2:1:1:0,0.2961,0.4079
+Object Placements,nosolution,agent,belief:2:2:0:1,0.3265,0.3265
+Object Placements,nosolution,agent,belief:3:0:0:2,0.3455,0.3273
+Object Placements,nosolution,agent,belief:3:1:0:2,0.3455,0.3273
+Object Placements,nosolution,agent,dest:0:2,0.3454,0.3273
+Object Placements,nosolution,agent,item:0:1,0.3333,0.3333
+Object Placements,nosolution,agent,missed:0:1,0.3333,0.3333
+Object Placements,nosolution,agent,mover:0:2,0.3333,0.3333
+Object Placements,nosolution,agent,mover:2:0,0.3333,0.3333
+Object Placements,nosolution,controller-only,belief:1:2:1:2,0.5665,0.2167
+Object Placements,nosolution,controller-only,belief:2:0:0:1,0.3361,0.3361
+Object Placements,nosolution,controller-only,belief:2:1:0:1,0.3361,0.3361
+Object Placements,nosolution,controller-only,belief:3:2:0:1,0.2973,0.2973
+Object Placements,nosolution,controller-only,dest:1:0,0.3034,0.3932
+Object Placements,nosolution,controller-only,item:1:1,0.3333,0.3333
+Object Placements,nosolution,controller-only,item:2:0,0.3333,0.3333
+Object Placements,nosolution,controller-only,missed:2:2,0.3333,0.3333
+Object Placements,nosolution,controller-only,mover:1:0,0.3333,0.3333
+Object Placements,nosolution,controller-only,saw:0:0,0.3333,0.3333
+Object Placements,nosolution,controller-only,saw:1:1,0.3333,0.3333
+Object Placements,nosolution,controller-only,start:1:0,0.2564,0.4871

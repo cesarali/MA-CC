@@ -1,0 +1,177 @@
+task,setup,rho,t,fact,share,single_p2
+task003,nosolution,0.25,30.0,cf_x01_eq_1,0.0,0.2074
+task003,nosolution,0.25,30.0,cf_x03_le_2,0.0196,0.2763
+task003,nosolution,0.25,30.0,cf_x04_ge_2,0.2979,0.4473
+task003,nosolution,0.25,30.0,cf_x04_le_2,0.0,0.2067
+task003,nosolution,0.25,30.0,cf_x05_eq_1,0.3335,0.5853
+task003,nosolution,0.25,30.0,cf_x08_eq_2,0.2446,0.3469
+task003,nosolution,0.25,30.0,cf_x00_ge_x01,0.007,0.2586
+task003,nosolution,0.25,30.0,cf_x01_le_x03,0.0706,0.3463
+task003,nosolution,0.25,30.0,cf_x01_eq_x05,0.0,0.3069
+task003,nosolution,0.25,30.0,cf_x01_ge_x05,0.0269,0.449
+task003,nosolution,0.25,30.0,cf_x02_ge_x05,0.0,0.3792
+task003,nosolution,0.25,30.0,cf_x04_ge_x05,0.0,0.4828
+task003,nosolution,0.25,130.0,cf_x01_eq_1,0.0,0.2074
+task003,nosolution,0.25,130.0,cf_x03_le_2,0.0053,0.2763
+task003,nosolution,0.25,130.0,cf_x04_ge_2,0.2905,0.4473
+task003,nosolution,0.25,130.0,cf_x04_le_2,0.0,0.2067
+task003,nosolution,0.25,130.0,cf_x05_eq_1,0.335,0.5853
+task003,nosolution,0.25,130.0,cf_x08_eq_2,0.2819,0.3469
+task003,nosolution,0.25,130.0,cf_x00_ge_x01,0.0015,0.2586
+task003,nosolution,0.25,130.0,cf_x01_le_x03,0.0857,0.3463
+task003,nosolution,0.25,130.0,cf_x01_eq_x05,0.0,0.3069
+task003,nosolution,0.25,130.0,cf_x01_ge_x05,0.0,0.449
+task003,nosolution,0.25,130.0,cf_x02_ge_x05,0.0,0.3792
+task003,nosolution,0.25,130.0,cf_x04_ge_x05,0.0,0.4828
+task003,nosolution,0.75,30.0,cf_x01_eq_1,0.0,0.2074
+task003,nosolution,0.75,30.0,cf_x03_le_2,0.0607,0.2763
+task003,nosolution,0.75,30.0,cf_x04_ge_2,0.3764,0.4473
+task003,nosolution,0.75,30.0,cf_x04_le_2,0.0,0.2067
+task003,nosolution,0.75,30.0,cf_x05_eq_1,0.3866,0.5853
+task003,nosolution,0.75,30.0,cf_x08_eq_2,0.123,0.3469
+task003,nosolution,0.75,30.0,cf_x00_ge_x01,0.0228,0.2586
+task003,nosolution,0.75,30.0,cf_x01_le_x03,0.0164,0.3463
+task003,nosolution,0.75,30.0,cf_x01_eq_x05,0.0,0.3069
+task003,nosolution,0.75,30.0,cf_x01_ge_x05,0.014,0.449
+task003,nosolution,0.75,30.0,cf_x02_ge_x05,0.0,0.3792
+task003,nosolution,0.75,30.0,cf_x04_ge_x05,0.0,0.4828
+task003,nosolution,0.75,130.0,cf_x01_eq_1,0.0,0.2074
+task003,nosolution,0.75,130.0,cf_x03_le_2,0.0543,0.2763
+task003,nosolution,0.75,130.0,cf_x04_ge_2,0.3706,0.4473
+task003,nosolution,0.75,130.0,cf_x04_le_2,0.0,0.2067
+task003,nosolution,0.75,130.0,cf_x05_eq_1,0.3859,0.5853
+task003,nosolution,0.75,130.0,cf_x08_eq_2,0.1638,0.3469
+task003,nosolution,0.75,130.0,cf_x00_ge_x01,0.0054,0.2586
+task003,nosolution,0.75,130.0,cf_x01_le_x03,0.02,0.3463
+task003,nosolution,0.75,130.0,cf_x01_eq_x05,0.0,0.3069
+task003,nosolution,0.75,130.0,cf_x01_ge_x05,0.0,0.449
+task003,nosolution,0.75,130.0,cf_x02_ge_x05,0.0,0.3792
+task003,nosolution,0.75,130.0,cf_x04_ge_x05,0.0,0.4828
+task003,symmetric,0.25,30.0,cf_x04_ge_2,0.1689,0.4473
+task003,symmetric,0.25,30.0,cf_x05_eq_1,0.2459,0.5853
+task003,symmetric,0.25,30.0,cf_x05_le_2,0.0,0.4473
+task003,symmetric,0.25,30.0,cf_x08_le_2,0.2124,0.3967
+task003,symmetric,0.25,30.0,cf_x01_ge_x02,0.1269,0.4006
+task003,symmetric,0.25,30.0,cf_x01_ge_x05,0.002,0.449
+task003,symmetric,0.25,30.0,cf_x02_eq_x05,0.064,0.357
+task003,symmetric,0.25,30.0,cf_x03_le_x04,0.1072,0.3792
+task003,symmetric,0.25,30.0,cf_x03_eq_x04,0.0725,0.357
+task003,symmetric,0.25,30.0,cf_x04_ge_x05,0.0001,0.4828
+task003,symmetric,0.25,130.0,cf_x04_ge_2,0.1691,0.4473
+task003,symmetric,0.25,130.0,cf_x05_eq_1,0.2371,0.5853
+task003,symmetric,0.25,130.0,cf_x05_le_2,0.0,0.4473
+task003,symmetric,0.25,130.0,cf_x08_le_2,0.2573,0.3967
+task003,symmetric,0.25,130.0,cf_x01_ge_x02,0.0942,0.4006
+task003,symmetric,0.25,130.0,cf_x01_ge_x05,0.0012,0.449
+task003,symmetric,0.25,130.0,cf_x02_eq_x05,0.0879,0.357
+task003,symmetric,0.25,130.0,cf_x03_le_x04,0.0853,0.3792
+task003,symmetric,0.25,130.0,cf_x03_eq_x04,0.0677,0.357
+task003,symmetric,0.25,130.0,cf_x04_ge_x05,0.0,0.4828
+task003,symmetric,0.75,30.0,cf_x04_ge_2,0.1505,0.4473
+task003,symmetric,0.75,30.0,cf_x05_eq_1,0.4628,0.5853
+task003,symmetric,0.75,30.0,cf_x05_le_2,0.0,0.4473
+task003,symmetric,0.75,30.0,cf_x08_le_2,0.1258,0.3967
+task003,symmetric,0.75,30.0,cf_x01_ge_x02,0.1432,0.4006
+task003,symmetric,0.75,30.0,cf_x01_ge_x05,0.001,0.449
+task003,symmetric,0.75,30.0,cf_x02_eq_x05,0.0073,0.357
+task003,symmetric,0.75,30.0,cf_x03_le_x04,0.0955,0.3792
+task003,symmetric,0.75,30.0,cf_x03_eq_x04,0.0131,0.357
+task003,symmetric,0.75,30.0,cf_x04_ge_x05,0.001,0.4828
+task003,symmetric,0.75,130.0,cf_x04_ge_2,0.158,0.4473
+task003,symmetric,0.75,130.0,cf_x05_eq_1,0.5115,0.5853
+task003,symmetric,0.75,130.0,cf_x05_le_2,0.0,0.4473
+task003,symmetric,0.75,130.0,cf_x08_le_2,0.0725,0.3967
+task003,symmetric,0.75,130.0,cf_x01_ge_x02,0.1737,0.4006
+task003,symmetric,0.75,130.0,cf_x01_ge_x05,0.0,0.449
+task003,symmetric,0.75,130.0,cf_x02_eq_x05,0.0075,0.357
+task003,symmetric,0.75,130.0,cf_x03_le_x04,0.0628,0.3792
+task003,symmetric,0.75,130.0,cf_x03_eq_x04,0.014,0.357
+task003,symmetric,0.75,130.0,cf_x04_ge_x05,0.0,0.4828
+Object Placements,nosolution,0.25,30.0,belief:1:2:1:2,0.0252,0.2167
+Object Placements,nosolution,0.25,30.0,belief:2:0:0:1,0.1285,0.3361
+Object Placements,nosolution,0.25,30.0,belief:2:1:0:1,0.046,0.3361
+Object Placements,nosolution,0.25,30.0,belief:3:2:0:1,0.0677,0.2973
+Object Placements,nosolution,0.25,30.0,dest:1:0,0.1335,0.3932
+Object Placements,nosolution,0.25,30.0,item:1:1,0.083,0.3333
+Object Placements,nosolution,0.25,30.0,item:2:0,0.1106,0.3333
+Object Placements,nosolution,0.25,30.0,missed:2:2,0.0794,0.3333
+Object Placements,nosolution,0.25,30.0,mover:1:0,0.0243,0.3333
+Object Placements,nosolution,0.25,30.0,saw:0:0,0.0171,0.3333
+Object Placements,nosolution,0.25,30.0,saw:1:1,0.1376,0.3333
+Object Placements,nosolution,0.25,30.0,start:1:0,0.147,0.4871
+Object Placements,nosolution,0.25,130.0,belief:1:2:1:2,0.0341,0.2167
+Object Placements,nosolution,0.25,130.0,belief:2:0:0:1,0.1385,0.3361
+Object Placements,nosolution,0.25,130.0,belief:2:1:0:1,0.07,0.3361
+Object Placements,nosolution,0.25,130.0,belief:3:2:0:1,0.0594,0.2973
+Object Placements,nosolution,0.25,130.0,dest:1:0,0.0886,0.3932
+Object Placements,nosolution,0.25,130.0,item:1:1,0.0765,0.3333
+Object Placements,nosolution,0.25,130.0,item:2:0,0.1016,0.3333
+Object Placements,nosolution,0.25,130.0,missed:2:2,0.0857,0.3333
+Object Placements,nosolution,0.25,130.0,mover:1:0,0.0296,0.3333
+Object Placements,nosolution,0.25,130.0,saw:0:0,0.0215,0.3333
+Object Placements,nosolution,0.25,130.0,saw:1:1,0.145,0.3333
+Object Placements,nosolution,0.25,130.0,start:1:0,0.1496,0.4871
+Object Placements,nosolution,0.75,30.0,belief:1:2:1:2,0.1506,0.2167
+Object Placements,nosolution,0.75,30.0,belief:2:0:0:1,0.1323,0.3361
+Object Placements,nosolution,0.75,30.0,belief:2:1:0:1,0.0225,0.3361
+Object Placements,nosolution,0.75,30.0,belief:3:2:0:1,0.0856,0.2973
+Object Placements,nosolution,0.75,30.0,dest:1:0,0.0859,0.3932
+Object Placements,nosolution,0.75,30.0,item:1:1,0.0427,0.3333
+Object Placements,nosolution,0.75,30.0,item:2:0,0.0877,0.3333
+Object Placements,nosolution,0.75,30.0,missed:2:2,0.112,0.3333
+Object Placements,nosolution,0.75,30.0,mover:1:0,0.0315,0.3333
+Object Placements,nosolution,0.75,30.0,saw:0:0,0.0427,0.3333
+Object Placements,nosolution,0.75,30.0,saw:1:1,0.0976,0.3333
+Object Placements,nosolution,0.75,30.0,start:1:0,0.1089,0.4871
+Object Placements,nosolution,0.75,130.0,belief:1:2:1:2,0.2245,0.2167
+Object Placements,nosolution,0.75,130.0,belief:2:0:0:1,0.1248,0.3361
+Object Placements,nosolution,0.75,130.0,belief:2:1:0:1,0.0223,0.3361
+Object Placements,nosolution,0.75,130.0,belief:3:2:0:1,0.0618,0.2973
+Object Placements,nosolution,0.75,130.0,dest:1:0,0.0503,0.3932
+Object Placements,nosolution,0.75,130.0,item:1:1,0.0294,0.3333
+Object Placements,nosolution,0.75,130.0,item:2:0,0.0615,0.3333
+Object Placements,nosolution,0.75,130.0,missed:2:2,0.1679,0.3333
+Object Placements,nosolution,0.75,130.0,mover:1:0,0.0383,0.3333
+Object Placements,nosolution,0.75,130.0,saw:0:0,0.0403,0.3333
+Object Placements,nosolution,0.75,130.0,saw:1:1,0.0722,0.3333
+Object Placements,nosolution,0.75,130.0,start:1:0,0.1069,0.4871
+Object Placements,symmetric,0.25,30.0,belief:1:1:1:0,0.1619,0.4372
+Object Placements,symmetric,0.25,30.0,belief:1:2:0:1,0.059,0.3404
+Object Placements,symmetric,0.25,30.0,belief:2:2:0:1,0.0085,0.3265
+Object Placements,symmetric,0.25,30.0,belief:3:0:1:0,0.1456,0.4787
+Object Placements,symmetric,0.25,30.0,belief:3:1:0:2,0.0807,0.3273
+Object Placements,symmetric,0.25,30.0,dest:0:2,0.0742,0.3273
+Object Placements,symmetric,0.25,30.0,item:1:1,0.1474,0.3333
+Object Placements,symmetric,0.25,30.0,mover:1:0,0.0271,0.3333
+Object Placements,symmetric,0.25,30.0,mover:2:0,0.1454,0.3333
+Object Placements,symmetric,0.25,30.0,start:1:0,0.1503,0.4871
+Object Placements,symmetric,0.25,130.0,belief:1:1:1:0,0.1804,0.4372
+Object Placements,symmetric,0.25,130.0,belief:1:2:0:1,0.0727,0.3404
+Object Placements,symmetric,0.25,130.0,belief:2:2:0:1,0.0164,0.3265
+Object Placements,symmetric,0.25,130.0,belief:3:0:1:0,0.1193,0.4787
+Object Placements,symmetric,0.25,130.0,belief:3:1:0:2,0.0667,0.3273
+Object Placements,symmetric,0.25,130.0,dest:0:2,0.0857,0.3273
+Object Placements,symmetric,0.25,130.0,item:1:1,0.1628,0.3333
+Object Placements,symmetric,0.25,130.0,mover:1:0,0.0164,0.3333
+Object Placements,symmetric,0.25,130.0,mover:2:0,0.1387,0.3333
+Object Placements,symmetric,0.25,130.0,start:1:0,0.1409,0.4871
+Object Placements,symmetric,0.75,30.0,belief:1:1:1:0,0.1555,0.4372
+Object Placements,symmetric,0.75,30.0,belief:1:2:0:1,0.0135,0.3404
+Object Placements,symmetric,0.75,30.0,belief:2:2:0:1,0.0023,0.3265
+Object Placements,symmetric,0.75,30.0,belief:3:0:1:0,0.1127,0.4787
+Object Placements,symmetric,0.75,30.0,belief:3:1:0:2,0.0308,0.3273
+Object Placements,symmetric,0.75,30.0,dest:0:2,0.0541,0.3273
+Object Placements,symmetric,0.75,30.0,item:1:1,0.0766,0.3333
+Object Placements,symmetric,0.75,30.0,mover:1:0,0.0391,0.3333
+Object Placements,symmetric,0.75,30.0,mover:2:0,0.1044,0.3333
+Object Placements,symmetric,0.75,30.0,start:1:0,0.411,0.4871
+Object Placements,symmetric,0.75,130.0,belief:1:1:1:0,0.2575,0.4372
+Object Placements,symmetric,0.75,130.0,belief:1:2:0:1,0.0088,0.3404
+Object Placements,symmetric,0.75,130.0,belief:2:2:0:1,0.005,0.3265
+Object Placements,symmetric,0.75,130.0,belief:3:0:1:0,0.142,0.4787
+Object Placements,symmetric,0.75,130.0,belief:3:1:0:2,0.0251,0.3273
+Object Placements,symmetric,0.75,130.0,dest:0:2,0.0779,0.3273
+Object Placements,symmetric,0.75,130.0,item:1:1,0.1394,0.3333
+Object Placements,symmetric,0.75,130.0,mover:1:0,0.0754,0.3333
+Object Placements,symmetric,0.75,130.0,mover:2:0,0.1533,0.3333
+Object Placements,symmetric,0.75,130.0,start:1:0,0.1156,0.4871

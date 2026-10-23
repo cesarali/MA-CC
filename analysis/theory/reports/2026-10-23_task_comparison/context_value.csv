@@ -1,0 +1,33 @@
+task,setup,rho,t,value_in_context,se_in_context,value_alone,reads
+task003,nosolution,0.25,30.0,0.3089,0.0021,0.2734,5863
+task003,nosolution,0.25,40.0,0.3028,0.0022,0.2682,5856
+task003,nosolution,0.25,80.0,0.2993,0.0022,0.2636,5829
+task003,nosolution,0.25,130.0,0.2976,0.0022,0.2614,5778
+task003,nosolution,0.75,30.0,0.2921,0.0022,0.2617,5675
+task003,nosolution,0.75,40.0,0.2904,0.0022,0.2579,5712
+task003,nosolution,0.75,80.0,0.2988,0.0022,0.2638,5683
+task003,nosolution,0.75,130.0,0.3059,0.0022,0.266,5693
+task003,symmetric,0.25,30.0,0.3063,0.002,0.3012,5902
+task003,symmetric,0.25,40.0,0.306,0.002,0.2997,5838
+task003,symmetric,0.25,80.0,0.3046,0.0021,0.2943,5672
+task003,symmetric,0.25,130.0,0.299,0.0021,0.285,5615
+task003,symmetric,0.75,30.0,0.1815,0.002,0.2457,5068
+task003,symmetric,0.75,40.0,0.1834,0.0021,0.251,4898
+task003,symmetric,0.75,80.0,0.1793,0.0021,0.2521,4889
+task003,symmetric,0.75,130.0,0.1826,0.0021,0.2556,4944
+Object Placements,nosolution,0.25,30.0,0.1324,0.0019,0.1167,5950
+Object Placements,nosolution,0.25,40.0,0.1176,0.0019,0.1052,5928
+Object Placements,nosolution,0.25,80.0,0.0946,0.0018,0.084,5900
+Object Placements,nosolution,0.25,130.0,0.0824,0.0018,0.0751,5876
+Object Placements,nosolution,0.75,30.0,0.0212,0.002,0.011,5662
+Object Placements,nosolution,0.75,40.0,0.0195,0.0021,0.0013,5721
+Object Placements,nosolution,0.75,80.0,0.0026,0.0021,-0.0128,5666
+Object Placements,nosolution,0.75,130.0,-0.0134,0.0023,-0.0217,5736
+Object Placements,symmetric,0.25,30.0,0.1625,0.0023,0.1375,4795
+Object Placements,symmetric,0.25,40.0,0.1614,0.0024,0.1263,4343
+Object Placements,symmetric,0.25,80.0,0.145,0.0025,0.112,4323
+Object Placements,symmetric,0.25,130.0,0.1287,0.0024,0.1055,4257
+Object Placements,symmetric,0.75,30.0,0.0658,0.0032,0.1335,1941
+Object Placements,symmetric,0.75,40.0,0.075,0.0046,0.1151,1055
+Object Placements,symmetric,0.75,80.0,0.066,0.0053,0.0969,919
+Object Placements,symmetric,0.75,130.0,0.084,0.0055,0.1055,865

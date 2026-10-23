@@ -1,0 +1,65 @@
+task,setup,rho,arm,t,board_ctrl,mem_ctrl,agent_facts,n_agent_facts,p2_belief,x2,proof_A0
+task003,nosolution,0.25,false,30.0,0.511,0.9935,2.828,15,0.4988,0.7472,0.0
+task003,nosolution,0.25,false,40.0,0.5062,0.9458,2.595,15,0.4974,0.7435,0.0
+task003,nosolution,0.25,false,80.0,0.5063,0.8874,2.293,15,0.4946,0.7397,0.0
+task003,nosolution,0.25,false,130.0,0.5038,0.8637,2.146,15,0.4927,0.7366,0.0
+task003,nosolution,0.75,false,30.0,0.4105,2.0946,7.757,15,0.6686,0.7647,0.0
+task003,nosolution,0.75,false,40.0,0.4124,2.0388,6.934,15,0.6627,0.7558,0.0
+task003,nosolution,0.75,false,80.0,0.4171,1.9541,5.443,15,0.664,0.7626,0.0
+task003,nosolution,0.75,false,130.0,0.4196,1.9222,4.8,15,0.6703,0.769,0.0
+task003,nosolution,0.25,silent,30.0,0.0,0.0,5.201,15,0.3783,0.4465,0.0
+task003,nosolution,0.25,silent,40.0,0.0,0.0,5.01,15,0.3782,0.4494,0.0
+task003,nosolution,0.25,silent,80.0,0.0,0.0,4.531,15,0.3791,0.4484,0.0
+task003,nosolution,0.25,silent,130.0,0.0,0.0,4.213,15,0.3779,0.4449,0.0
+task003,nosolution,0.75,silent,30.0,0.0,0.0,10.426,15,0.4795,0.5128,0.0
+task003,nosolution,0.75,silent,40.0,0.0,0.0,10.208,15,0.4793,0.51,0.0
+task003,nosolution,0.75,silent,80.0,0.0,0.0,9.767,15,0.4801,0.5129,0.0
+task003,nosolution,0.75,silent,130.0,0.0,0.0,9.52,15,0.4765,0.5048,0.0
+task003,symmetric,0.25,false,30.0,0.5961,1.2406,3.034,18,0.4887,0.7085,0.0006
+task003,symmetric,0.25,false,40.0,0.601,1.2062,2.59,18,0.4922,0.7087,0.0005
+task003,symmetric,0.25,false,80.0,0.5986,1.1122,2.082,18,0.4893,0.7083,0.0001
+task003,symmetric,0.25,false,130.0,0.5883,1.0624,1.913,18,0.4876,0.7018,0.0
+task003,symmetric,0.75,false,30.0,0.2855,1.9677,9.357,18,0.3195,0.2284,0.1555
+task003,symmetric,0.75,false,40.0,0.2662,1.8141,8.579,18,0.3076,0.2162,0.1572
+task003,symmetric,0.75,false,80.0,0.2671,1.6197,7.268,18,0.3025,0.2078,0.1509
+task003,symmetric,0.75,false,130.0,0.2667,1.543,6.628,18,0.2961,0.2007,0.1495
+task003,symmetric,0.25,silent,30.0,0.0,0.0,5.399,18,0.3154,0.276,0.0004
+task003,symmetric,0.25,silent,40.0,0.0,0.0,5.191,18,0.3152,0.2802,0.0002
+task003,symmetric,0.25,silent,80.0,0.0,0.0,4.773,18,0.3161,0.2782,0.0002
+task003,symmetric,0.25,silent,130.0,0.0,0.0,4.469,18,0.3188,0.284,0.0001
+task003,symmetric,0.75,silent,30.0,0.0,0.0,11.153,18,0.1919,0.1148,0.1205
+task003,symmetric,0.75,silent,40.0,0.0,0.0,10.78,18,0.1922,0.1203,0.1197
+task003,symmetric,0.75,silent,80.0,0.0,0.0,9.886,18,0.1933,0.1159,0.1192
+task003,symmetric,0.75,silent,130.0,0.0,0.0,9.296,18,0.1935,0.1154,0.1165
+Object Placements,nosolution,0.25,false,30.0,0.6702,1.511,2.735,15,0.4058,0.5516,0.0
+Object Placements,nosolution,0.25,false,40.0,0.6666,1.413,2.245,15,0.3952,0.5249,0.0
+Object Placements,nosolution,0.25,false,80.0,0.662,1.1949,1.738,15,0.38,0.468,0.0
+Object Placements,nosolution,0.25,false,130.0,0.6687,1.0918,1.498,15,0.3714,0.4424,0.0
+Object Placements,nosolution,0.75,false,30.0,0.4353,3.157,8.05,15,0.485,0.5522,0.0
+Object Placements,nosolution,0.75,false,40.0,0.4397,3.014,7.07,15,0.4697,0.5357,0.0
+Object Placements,nosolution,0.75,false,80.0,0.444,2.633,5.551,15,0.4478,0.5118,0.0
+Object Placements,nosolution,0.75,false,130.0,0.4493,2.4418,5.004,15,0.4386,0.4997,0.0
+Object Placements,nosolution,0.25,silent,30.0,0.0,0.0,4.517,15,0.3566,0.3867,0.0
+Object Placements,nosolution,0.25,silent,40.0,0.0,0.0,4.35,15,0.3565,0.3915,0.0
+Object Placements,nosolution,0.25,silent,80.0,0.0,0.0,3.937,15,0.3557,0.3864,0.0
+Object Placements,nosolution,0.25,silent,130.0,0.0,0.0,3.632,15,0.3548,0.3815,0.0
+Object Placements,nosolution,0.75,silent,30.0,0.0,0.0,10.003,15,0.4312,0.4732,0.0
+Object Placements,nosolution,0.75,silent,40.0,0.0,0.0,9.678,15,0.4313,0.4798,0.0
+Object Placements,nosolution,0.75,silent,80.0,0.0,0.0,9.024,15,0.4295,0.4773,0.0
+Object Placements,nosolution,0.75,silent,130.0,0.0,0.0,8.64,15,0.4291,0.4734,0.0
+Object Placements,symmetric,0.25,false,30.0,0.454,1.0336,3.242,18,0.3645,0.3919,0.0402
+Object Placements,symmetric,0.25,false,40.0,0.428,0.8902,2.879,18,0.3508,0.3719,0.0445
+Object Placements,symmetric,0.25,false,80.0,0.4186,0.7544,2.487,18,0.3445,0.3479,0.0417
+Object Placements,symmetric,0.25,false,130.0,0.4158,0.6949,2.322,18,0.3399,0.3399,0.043
+Object Placements,symmetric,0.75,false,30.0,0.092,0.8456,4.92,18,0.1782,0.067,0.4396
+Object Placements,symmetric,0.75,false,40.0,0.0621,0.5229,4.183,18,0.1579,0.0579,0.4419
+Object Placements,symmetric,0.75,false,80.0,0.0578,0.3534,3.59,18,0.1475,0.0533,0.4405
+Object Placements,symmetric,0.75,false,130.0,0.0583,0.3208,3.436,18,0.1455,0.0517,0.4399
+Object Placements,symmetric,0.25,silent,30.0,0.0,0.0,4.056,18,0.3005,0.2419,0.029
+Object Placements,symmetric,0.25,silent,40.0,0.0,0.0,3.947,18,0.301,0.2465,0.031
+Object Placements,symmetric,0.25,silent,80.0,0.0,0.0,3.656,18,0.2996,0.2366,0.0311
+Object Placements,symmetric,0.25,silent,130.0,0.0,0.0,3.475,18,0.2977,0.2394,0.0323
+Object Placements,symmetric,0.75,silent,30.0,0.0,0.0,5.084,18,0.1475,0.0619,0.422
+Object Placements,symmetric,0.75,silent,40.0,0.0,0.0,4.522,18,0.1472,0.0652,0.4205
+Object Placements,symmetric,0.75,silent,80.0,0.0,0.0,4.178,18,0.1462,0.0588,0.418
+Object Placements,symmetric,0.75,silent,130.0,0.0,0.0,4.099,18,0.1441,0.0617,0.4212

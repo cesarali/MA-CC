@@ -1,0 +1,65 @@
+task,setup,rho,arm,t,read_p2
+task003,nosolution,0.25,false,30.0,0.6886
+task003,nosolution,0.25,false,40.0,0.689
+task003,nosolution,0.25,false,80.0,0.6882
+task003,nosolution,0.25,false,130.0,0.6894
+task003,nosolution,0.75,false,30.0,0.6753
+task003,nosolution,0.75,false,40.0,0.6721
+task003,nosolution,0.75,false,80.0,0.675
+task003,nosolution,0.75,false,130.0,0.6799
+task003,nosolution,0.25,silent,30.0,0.428
+task003,nosolution,0.25,silent,40.0,0.4343
+task003,nosolution,0.25,silent,80.0,0.4337
+task003,nosolution,0.25,silent,130.0,0.4299
+task003,nosolution,0.75,silent,30.0,0.4631
+task003,nosolution,0.75,silent,40.0,0.4705
+task003,nosolution,0.75,silent,80.0,0.4739
+task003,nosolution,0.75,silent,130.0,0.4647
+task003,symmetric,0.25,false,30.0,0.6539
+task003,symmetric,0.25,false,40.0,0.6614
+task003,symmetric,0.25,false,80.0,0.6704
+task003,symmetric,0.25,false,130.0,0.6624
+task003,symmetric,0.75,false,30.0,0.3684
+task003,symmetric,0.75,false,40.0,0.3522
+task003,symmetric,0.75,false,80.0,0.3534
+task003,symmetric,0.75,false,130.0,0.3513
+task003,symmetric,0.25,silent,30.0,0.2944
+task003,symmetric,0.25,silent,40.0,0.2962
+task003,symmetric,0.25,silent,80.0,0.295
+task003,symmetric,0.25,silent,130.0,0.3006
+task003,symmetric,0.75,silent,30.0,0.2469
+task003,symmetric,0.75,silent,40.0,0.2509
+task003,symmetric,0.75,silent,80.0,0.2397
+task003,symmetric,0.75,silent,130.0,0.242
+Object Placements,nosolution,0.25,false,30.0,0.483
+Object Placements,nosolution,0.25,false,40.0,0.4624
+Object Placements,nosolution,0.25,false,80.0,0.4378
+Object Placements,nosolution,0.25,false,130.0,0.4253
+Object Placements,nosolution,0.75,false,30.0,0.4122
+Object Placements,nosolution,0.75,false,40.0,0.4073
+Object Placements,nosolution,0.75,false,80.0,0.3894
+Object Placements,nosolution,0.75,false,130.0,0.379
+Object Placements,nosolution,0.25,silent,30.0,0.3826
+Object Placements,nosolution,0.25,silent,40.0,0.3828
+Object Placements,nosolution,0.25,silent,80.0,0.3821
+Object Placements,nosolution,0.25,silent,130.0,0.3801
+Object Placements,nosolution,0.75,silent,30.0,0.4046
+Object Placements,nosolution,0.75,silent,40.0,0.4033
+Object Placements,nosolution,0.75,silent,80.0,0.4023
+Object Placements,nosolution,0.75,silent,130.0,0.403
+Object Placements,symmetric,0.25,false,30.0,0.3632
+Object Placements,symmetric,0.25,false,40.0,0.3437
+Object Placements,symmetric,0.25,false,80.0,0.3329
+Object Placements,symmetric,0.25,false,130.0,0.3204
+Object Placements,symmetric,0.75,false,30.0,0.1137
+Object Placements,symmetric,0.75,false,40.0,0.0988
+Object Placements,symmetric,0.75,false,80.0,0.0934
+Object Placements,symmetric,0.75,false,130.0,0.0927
+Object Placements,symmetric,0.25,silent,30.0,0.2424
+Object Placements,symmetric,0.25,silent,40.0,0.2415
+Object Placements,symmetric,0.25,silent,80.0,0.2361
+Object Placements,symmetric,0.25,silent,130.0,0.2355
+Object Placements,symmetric,0.75,silent,30.0,0.0949
+Object Placements,symmetric,0.75,silent,40.0,0.0943
+Object Placements,symmetric,0.75,silent,80.0,0.0934
+Object Placements,symmetric,0.75,silent,130.0,0.0917
