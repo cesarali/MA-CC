@@ -1,7 +1,7 @@
 # Model version M3: mean field plus finite-swarm fact extinction (partial success)
 
 **Date:** 22 October 2026. **Code:** [`models/mean_field.py`](models/mean_field.py) (`closure="M3"`), runs with
-`run_models.py --closure M3 --seeds 40 --replicas 30`; scorecards `../held_out_validation/scorecard_M3*.csv`.
+`run_models.py --closure M3 --seeds 40 --replicas 30`; scorecards `../task003_llm_free/simulation_2/key_phenomena_hypothesis/held_out_validation/scorecard_M3*.csv`.
 
 ## 1. One change from M2
 
@@ -59,5 +59,5 @@ readers share one realised 48-post board; M3 keeps it deterministic).
 The task generator is fixed at 3 people, 2 jobs and 9 hidden numbers (99 propositions, 49 true). Scaling agents alone
 raises copies per fact. Agreed design: **K independent projects with one split** (the same person works alone in
 every project; the split's score is summed over projects): three answers, 9K hidden numbers, about 49K true facts,
-24K agents. To be built for K = 2 and 4 (`../finite_size/`). The allele picture predicts that with copies per fact
+24K agents. To be built for K = 2 and 4 (`../task003_llm_free/simulation_2/key_phenomena_hypothesis/finite_size/`). The allele picture predicts that with copies per fact
 held constant the effect does **not** vanish as the swarm grows.

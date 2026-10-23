@@ -1,17 +1,17 @@
 """Object Placements: pre-registered model predictions and their score against the simulation.
 
-  predict --tag M4     writes object_placements/preregistered_<tag>.csv from the model run
-                       results/key_phenomena/theory_runs/<tag>_op.parquet: G at t = 30 per (setup, rho, q) and
+  predict --tag M4     writes preregistered_<tag>.csv (this folder) from the model run
+                       analysis/theory/results/theory_runs/<tag>_op.parquet: G at t = 30 per (setup, rho, q) and
                        D(q1 -> q2) for 3->6, 6->9, 9->12. Commit this file BEFORE running `score`.
-  data                 writes object_placements/op_data.csv from the simulation run *_sim2_op_main: G at t = 30 (paired
+  data                 writes op_data.csv from the simulation run *_sim2_op_main: G at t = 30 (paired
                        per episode, x_A2 among agents who have voted) and D for the three steps with paired standard
                        errors (episodes are paired across q: common random streams). 95% interval = +-1.96 se.
   score --tag M4       compares a committed prediction file with op_data.csv: resolved signs (data interval excludes
                        0; model |D| >= 0.01), split by data sign, misses, crossover brackets, mean |G error|.
-Writes object_placements/scorecard_op_<tag>.csv.
+Writes scorecard_op_<tag>.csv and scorecard_op_<tag>_cells.csv (this folder).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/object_placements/op_predictions_and_score.py predict --tag M4
+    .venv/bin/python analysis/object_placements_llm_free/simulation_2/analysis/op_predictions_and_score.py predict --tag M4
 """
 from __future__ import annotations
 import argparse, json, pathlib
@@ -20,8 +20,8 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-RUNS = ROOT / "results" / "key_phenomena" / "theory_runs"
+ROOT = HERE.parents[1]                                            # analysis/object_placements_llm_free
+RUNS = ROOT.parent / "theory" / "results" / "theory_runs"
 SIM = ROOT / "results" / "simulation_2"
 STEPS = [(3, 6), (6, 9), (9, 12)]
 TOL = 0.01

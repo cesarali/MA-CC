@@ -1,6 +1,6 @@
 """Run the mean-field models over a set of conditions and store their predictions.
 
-  --closure M1|M2       which model (theory/models/mean_field.py)
+  --closure M1..M4       which model (theory/models/mean_field.py)
   --set dev|all|post_stop|check|k2|k4|op
         dev        development cells: both setups, rho {0.25, 0.75, 1}, q {3, 6}, t <= 40
         all        every reading-run cell: both setups, 8 rho, q {3, 6, 9, 12}, t <= 40
@@ -10,12 +10,12 @@
         check      numerical convergence: symmetric and nosolution, rho 0.5, q 6, replicas 50/100/200, dt 0.05/0.025
   --tag NAME            output name (default: closure)
   --seeds S, --replicas R   realisations per condition (M3) and population replicas
-Writes results/key_phenomena/theory_runs/<tag>_<set>.parquet: one row per (setup, rho, q, arm, mode, t) with vote
+Writes analysis/theory/results/theory_runs/<tag>_<set>.parquet: one row per (setup, rho, q, arm, mode, t) with vote
 shares x0..x2 among voters, mean beliefs, controller messages, controller-only share of memory slots and board, and
 per-fact m_f, b_f (columns m_<fact>, b_<fact>).
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/theory/models/run_models.py --closure M2 --set dev
+    caffeinate -i .venv/bin/python analysis/theory/models/run_models.py --closure M2 --set dev
 """
 from __future__ import annotations
 import argparse, multiprocessing, pathlib, sys
@@ -26,7 +26,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from mean_field import Model, Spec  # noqa: E402
 
-OUT = HERE.parents[3] / "results" / "key_phenomena" / "theory_runs"
+ANALYSIS = HERE.parents[1]                                        # analysis/
+OUT = HERE.parent / "results" / "theory_runs"
 RHOS = [0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0]
 MODES = ["normal", "no_comm", "frozen_board", "purge_controller_facts"]
 
@@ -51,7 +52,7 @@ def specs(which, closure, seeds=1, replicas=None):
                             out.append(Spec(s, arm, r, 6, t_end=130.0, post_stop_mode=mode, seed=seed, **kw))
     elif which in ("k2", "k4"):
         K = int(which[1])
-        wf = str(HERE.parents[3] / "llmfree_core" / f"world_task003_K{K}.json")
+        wf = str(ANALYSIS / "task003_llm_free" / "llmfree_core" / f"world_task003_K{K}.json")
         for base in ("symmetric", "nosolution"):
             for r in (1.0, 0.75, 0.5, 0.25):
                 for q in (3, 6):
@@ -60,13 +61,15 @@ def specs(which, closure, seeds=1, replicas=None):
                             out.append(Spec(f"task003_{base}_K{K}", arm, r, q, seed=seed, world_file=wf, W=48 * K,
                                             lambda_c=float(K), budget=30.0 * K, **kw))
     elif which == "op":
-        wf = str(HERE.parents[3] / "llmfree_core" / "world_op1.json")
+        op = ANALYSIS / "object_placements_llm_free"
+        wf = str(op / "world" / "world_op1.json")
         for base in ("op_symmetric", "op_nosolution"):
             for r in RHOS:
                 for q in (3, 6, 9, 12):
                     for arm in ("silent", "false"):
                         for seed in range(1, seeds + 1):
-                            out.append(Spec(base, arm, r, q, seed=seed, world_file=wf, **kw))
+                            out.append(Spec(base, arm, r, q, seed=seed, world_file=wf,
+                                            setups_dir=str(op / "experimental_setup"), **kw))
     elif which == "check":
         for s in ("symmetric", "nosolution"):
             for arm in ("silent", "false"):

@@ -1,8 +1,8 @@
 # Microscopic rules of Simulation 2 (extracted from the code)
 
 **Purpose.** The exact transition rules that any reduced theory must use or approximate (theory plan §3.2 step 1).
-Source: [`../../simulator/sim2/simulation_2.py`](../../simulator/sim2/simulation_2.py) (function `run_episode` and
-helpers), `llmfree_core/world.py`, `llmfree_core/setups.py`, spec `../../simulator/simulation_2_spec.md`. Line numbers
+Source: [`../task003_llm_free/simulation_2/simulator/sim2/simulation_2.py`](../task003_llm_free/simulation_2/simulator/sim2/simulation_2.py) (function `run_episode` and
+helpers), `llmfree_core/world.py`, `llmfree_core/setups.py`, spec `../task003_llm_free/simulation_2/simulator/simulation_2_spec.md`. Line numbers
 refer to commit `3083fc9` and later. Nothing here is fitted.
 
 ## 1. World and inference

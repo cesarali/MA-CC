@@ -1,7 +1,7 @@
 # Model versions M1 and M2: deterministic mean-field closures (failed), and what the failure shows
 
 **Date:** 22 October 2026. **Code:** [`models/mean_field.py`](models/mean_field.py), runner
-[`models/run_models.py`](models/run_models.py), scorecard [`../held_out_validation/score.py`](../held_out_validation/score.py).
+[`models/run_models.py`](models/run_models.py), scorecard [`../task003_llm_free/simulation_2/key_phenomena_hypothesis/held_out_validation/score.py`](../task003_llm_free/simulation_2/key_phenomena_hypothesis/held_out_validation/score.py).
 **Status:** both versions **fail** the pre-registered scorecard. The failure is informative: it locates the missing
 ingredient in finite-size stochasticity, not in the joint structure of memory.
 
@@ -39,7 +39,7 @@ Resolved reading increments (data 95% interval excludes 0) whose sign the model 
 
 Crossovers (data against M2): symmetric 3→6 at ρ 0.5–0.625 against 0.125–0.25; nosolution 3→6 at 0.75–1 against
 0.375–0.75; 6→9 nosolution 0.5–0.875 against none. Both models are at chance on held-out signs and underestimate G
-roughly threefold. Cell-level tables: `../held_out_validation/scorecard_M1*.csv`, `scorecard_M2*.csv`.
+roughly threefold. Cell-level tables: `../task003_llm_free/simulation_2/key_phenomena_hypothesis/held_out_validation/scorecard_M1*.csv`, `scorecard_M2*.csv`.
 
 ## 3. Diagnosis: is it a bug, the closure, or the large-N limit?
 

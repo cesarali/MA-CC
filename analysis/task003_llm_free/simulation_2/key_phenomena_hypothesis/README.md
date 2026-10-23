@@ -41,10 +41,12 @@ secondary.
 
 ## Theory programme (from 22 October 2026)
 
-Folders from the plan: [`theory/`](theory/) (exact rules in `00_microscopic_rules.md`; model versions), [`calibration/`](calibration/)
+Folders from the plan: theory (exact rules, models M1–M4, write-ups, reviewer report; moved on 23 October 2026 to
+[`analysis/theory/`](../../../theory/) because it now covers task003 and Object Placements), [`calibration/`](calibration/)
 (development targets, `build_benchmarks.py`, **pre-registered split** `holdout_preregistration.md`),
 [`held_out_validation/`](held_out_validation/) (held-out targets, scorecards), [`defense/`](defense/), [`llm/`](llm/), [`finite_size/`](finite_size/)
-(planned). Decisions and results, one line each: [`progress.md`](progress.md). Phase 1 (rules, data, split) done on
+(K-projects scaling). Object Placements (second task: world, setups, runs, pre-registered scores) moved on 23 October
+2026 to [`analysis/object_placements_llm_free/`](../../../object_placements_llm_free/). Decisions and results, one line each: [`progress.md`](progress.md). Phase 1 (rules, data, split) done on
 22 October; phase 2 (models) waits for the researcher's go. The final report will be `theory_and_validation_report.md`
 plus a LaTeX/PDF version in `reports/`.
 

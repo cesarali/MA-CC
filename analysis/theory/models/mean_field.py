@@ -33,7 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parents[3]                                            # analysis/task003_llm_free
+ROOT = HERE.parents[1] / "task003_llm_free"                       # shared simulator code and the task003 world
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "simulation_2" / "simulator"))
 from llmfree_core.world import World, bits  # noqa: E402,F401
@@ -64,6 +64,7 @@ class Spec:
                                     # | "M4" (M3 + one shared, realised board of W posts)
     n_swarm: int | None = None      # M3/M4: size of the swarm whose fact holder counts fluctuate (default: its agents)
     world_file: str = ""            # default: task003
+    setups_dir: str = ""            # default: task003_llm_free/experimental_setup
     qc: int = 12
     lambda_c: float = 1.0
     gate: bool = True
@@ -85,7 +86,7 @@ class Model:
         self.s = s
         self.world = get_world(s.world_file)
         name = s.setup if "_" in s.setup else f"task003_{s.setup}"
-        st = load_setup(name, ROOT / "experimental_setup", self.world)
+        st = load_setup(name, s.setups_dir or ROOT / "experimental_setup", self.world)
         self.n_agents = len(st.agent_facts)
         if s.n_swarm is None:
             s.n_swarm = self.n_agents

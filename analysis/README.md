@@ -1,12 +1,14 @@
 # `analysis/` — offline analysis projects
 
 Each subdirectory is one self-contained study. Nothing here talks to a model
-provider; `task003_llm_free` runs its own LLM-free simulations, in which agents
-are exact Bayesian reasoners.
+provider; `task003_llm_free` and `object_placements_llm_free` run LLM-free simulations,
+in which agents are exact Bayesian reasoners.
 
 | project | question |
 |---|---|
 | [`task003_llm_free/`](task003_llm_free/) | The two frozen control setups for `task_003` (`task003-symmetric`, `task003-nosolution`), the LLM-free simulator, and the coarse-graining used to estimate information quantities |
+| [`object_placements_llm_free/`](object_placements_llm_free/) | A second task for the same LLM-free simulator (a MuSR Object Placements story): world, setups, runs, and the pre-registered test of the theory |
+| [`theory/`](theory/) | Models of the reading reversal and persistence (M1–M4), tested on both tasks above; the reviewer report |
 | [`bound_estimators/`](bound_estimators/) | Control-efficiency bounds: endpoint and path information, cost, efficiency ratios, estimated with learned critics |
 
 ## Why this is not `results/`

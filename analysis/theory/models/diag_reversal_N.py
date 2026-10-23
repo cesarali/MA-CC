@@ -1,5 +1,5 @@
 import sys, multiprocessing
-sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/theory/models')
+sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/theory/models')
 from mean_field import Model, Spec
 CELLS=[('symmetric',0.25),('symmetric',0.75),('nosolution',0.25),('nosolution',1.0)]
 def one(args):
@@ -12,7 +12,7 @@ if __name__=='__main__':
     with multiprocessing.Pool(12) as p: res=p.map(one,jobs,chunksize=4)
     import pandas as pd, numpy as np
     d=pd.DataFrame(res,columns=['setup','rho','q','arm','R','seed','x2'])
-    d.to_csv('/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/results/key_phenomena/theory_runs/diag_reversal_N.csv',index=False)
+    d.to_csv('/Users/rsanchez/Projects/MA-CC/analysis/theory/results/theory_runs/diag_reversal_N.csv',index=False)
     g=d.pivot_table(index=['setup','rho','R','seed'],columns=['q','arm'],values='x2')
     G3=g[(3,'false')]-g[(3,'silent')]; G6=g[(6,'false')]-g[(6,'silent')]; D=(G6-G3)
     out=pd.DataFrame({'G3':G3,'G6':G6,'D':D}).groupby(level=[0,1,2]).agg(['mean','sem'])

@@ -17,21 +17,23 @@ op_nosolution (mirrors task003_nosolution):
   held by agents, used for both targets; agents + the whole pool still prove nothing.
 
 The search samples candidate stories (seeded) and, per story, random fact subsets; it keeps the first world that
-admits both setups, preferring the closest no-proof balance and the strongest A2 pool. Writes
-  llmfree_core/world_op1.json                      {"type": "object_placements", story, question, answer_order, names}
+admits both setups, preferring the closest no-proof balance and the strongest A2 pool. Writes (paths relative to analysis/object_placements_llm_free/)
+  world/world_op1.json                             {"type": "object_placements", story, question, answer_order, names}
   experimental_setup/op_symmetric/                 agents.json, controller_pool_A0.json, controller_pool_A2.json
   experimental_setup/op_nosolution/                agents.json, controller_pool.json
-and prints the measured properties.
+and prints the measured properties. The text written inside these files ("world", "built_by", "what_this_is") still
+names the locations at build time (22 Oct 2026, under task003_llm_free/); it is kept so that a rebuild gives the same
+bytes, and so the same file hashes as recorded in the run manifest.
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/object_placements/build_op_setups.py
+    caffeinate -i .venv/bin/python analysis/object_placements_llm_free/simulation_2/analysis/build_op_setups.py
 """
 from __future__ import annotations
 import itertools, json, pathlib, random, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT))
+OP = HERE.parents[1]                                              # analysis/object_placements_llm_free
+sys.path.insert(0, str(OP.parent / "task003_llm_free"))          # shared llmfree_core
 from llmfree_core import op_world as op  # noqa: E402
 
 SEED, N_STORIES, N_SUBSETS = 20261022, 400, 3000
@@ -174,9 +176,9 @@ def write(world, sym, nos, st, mv, q, order):
             "question": list(q), "answer_order": order, "names": NAMES,
             "what_this_is": "MuSR-style Object Placements world (llmfree_core/op_world.py); built by "
                             "key_phenomena_hypothesis/object_placements/build_op_setups.py"}
-    (ROOT / "llmfree_core" / "world_op1.json").write_text(json.dumps(desc, indent=1) + "\n")
+    (OP / "world" / "world_op1.json").write_text(json.dumps(desc, indent=1) + "\n")
     _, F, a2, a0 = sym
-    out = ROOT / "experimental_setup" / "op_symmetric"
+    out = OP / "experimental_setup" / "op_symmetric"
     out.mkdir(exist_ok=True)
     common = {"world": "llmfree_core/world_op1.json", "truth": "ALLOCATION_0", "false_target": "ALLOCATION_2",
               "status": "BUILT 2026-10-22", "built_by": "key_phenomena_hypothesis/object_placements/build_op_setups.py"}
@@ -185,7 +187,7 @@ def write(world, sym, nos, st, mv, q, order):
     (out / "controller_pool_A2.json").write_text(json.dumps({"setup": "op-symmetric", **common, "fact_ids": a2}, indent=1))
     (out / "controller_pool_A0.json").write_text(json.dumps({"setup": "op-symmetric", **common, "fact_ids": a0}, indent=1))
     _, Fn, pool = nos
-    out = ROOT / "experimental_setup" / "op_nosolution"
+    out = OP / "experimental_setup" / "op_nosolution"
     out.mkdir(exist_ok=True)
     (out / "agents.json").write_text(json.dumps({"setup": "op-nosolution", **common,
                                                  "agent_assignments": agents_with_duplicates(Fn, 24, rng)}, indent=1))

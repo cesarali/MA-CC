@@ -1,9 +1,9 @@
 """Scorecard of a model version against the pre-registered targets (calibration/holdout_preregistration.md).
 
-Input: a predictions file results/key_phenomena/theory_runs/<tag>_all.parquet (run_models.py --set all), with vote
+Input: a predictions file analysis/theory/results/theory_runs/<tag>_all.parquet (run_models.py --set all), with vote
 shares among voters x2 per (setup, rho, q, arm, t). Model G = x2(false) - x2(silent) at t = 30; model
 D(q1 -> q2) = G(q2) - G(q1). A model increment is called positive / negative when |D| >= TOL, else zero (TOL covers
-the model's own sampling noise; 0.01 for the mean-field models, see theory/M1_M2_mean_field.md).
+the model's own sampling noise; 0.01 for the mean-field models, see analysis/theory/M1_M2_mean_field.md).
 
 Per split (development / held_out) and world:
   - resolved data increments (95% interval excludes 0): how many the model gets right in sign, separately for positive
@@ -23,7 +23,7 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-RUNS = ROOT / "results" / "key_phenomena" / "theory_runs"
+RUNS = ROOT.parent / "theory" / "results" / "theory_runs"     # analysis/theory
 BENCH = ROOT / "results" / "key_phenomena" / "theory_benchmarks" / "G_D.parquet"
 STEPS = ["3->6", "6->9", "9->12"]
 

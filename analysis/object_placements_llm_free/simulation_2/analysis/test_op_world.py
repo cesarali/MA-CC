@@ -1,4 +1,4 @@
-"""Checks of llmfree_core/op_world.py against MuSR's own generator.
+"""Checks of task003_llm_free/llmfree_core/op_world.py against MuSR's own generator.
 
 MuSR's `ObjectPlacementsDataset.create_sequence_v2` (github.com/Zayne-Sprague/MuSR, src/dataset_types/
 object_placements_dataset.py, MIT licence) is extracted from a local clone (path in MUSR below; clone with
@@ -6,15 +6,15 @@ object_placements_dataset.py, MIT licence) is extracted from a local clone (path
 The empirical frequencies of stories must match op_world's exact probabilities.
 
 Run from the repository root:
-    .venv/bin/python -m pytest analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/object_placements/test_op_world.py -q
+    .venv/bin/python -m pytest analysis/object_placements_llm_free/simulation_2/analysis/test_op_world.py -q
 """
 import ast, collections, os, pathlib, random, sys, textwrap
 from copy import deepcopy
 
 import pytest
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))
+OP = pathlib.Path(__file__).resolve().parents[2]                # analysis/object_placements_llm_free
+sys.path.insert(0, str(OP.parent / "task003_llm_free"))        # shared llmfree_core
 from llmfree_core import op_world as op  # noqa: E402
 
 MUSR = pathlib.Path(os.environ.get("MUSR_CLONE", "/private/tmp/claude-501/-Users-rsanchez-Projects/"
@@ -104,7 +104,7 @@ def test_fast_table_equals_slow_classes():
 def test_cached_world_equals_fresh():
     import json
     from llmfree_core.op_world import OPWorld, load_op_world
-    path = ROOT / "llmfree_core" / "world_op1.json"
+    path = OP / "world" / "world_op1.json"
     d = json.loads(path.read_text())
     fresh = OPWorld(d["start"], d["moves"], d["question"], d["answer_order"], d.get("names"))
     cached = load_op_world(path)

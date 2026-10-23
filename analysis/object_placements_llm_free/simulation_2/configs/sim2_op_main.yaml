@@ -1,16 +1,17 @@
-# Written 22 October 2026: the key-phenomena reading-mechanism grid (sim2_reading_mechanism.yaml) on a second task:
-# a MuSR Object Placements world (llmfree_core/world_op1.json, llmfree_core/op_world.py) with setups built by the
-# task003 rules (experimental_setup/op_symmetric, op_nosolution; builder
-# simulation_2/key_phenomena_hypothesis/object_placements/build_op_setups.py). Answers: A0 = where the person would look
+# Written 22 October 2026: the key-phenomena reading-mechanism grid (task003_llm_free/.../sim2_reading_mechanism.yaml)
+# on a second task: a MuSR Object Placements world (../../world/world_op1.json; engine
+# task003_llm_free/llmfree_core/op_world.py) with setups built by the task003 rules (../../experimental_setup/op_symmetric,
+# op_nosolution; builder ../analysis/build_op_setups.py). Moved here from task003_llm_free/simulation_2/simulator/configs/
+# on 23 October 2026 (paths updated; settings unchanged). Run with task003_llm_free/simulation_2/simulator/run_simulation_2.py. Answers: A0 = where the person would look
 # (correct), A2 = where the item really is (the false controller's target). Memories and posts recorded.
 
 study: sim2_op_main
 description: "Object Placements world: both setups, rho 8 values, q 3/6/9/12, false and silent, rate 1, qc 12, gate on; memories and posts recorded"
 
 paths:
-  world_file: ../../../llmfree_core/world_op1.json
-  setups_dir: ../../../experimental_setup
-  results_dir: ../../../results/simulation_2
+  world_file: ../../world/world_op1.json
+  setups_dir: ../../experimental_setup
+  results_dir: ../../results/simulation_2
 
 grid:
   setup:    [op_symmetric, op_nosolution]

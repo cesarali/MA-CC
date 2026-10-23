@@ -1,6 +1,6 @@
 import sys, multiprocessing
 import numpy as np
-sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/task003_llm_free/simulation_2/key_phenomena_hypothesis/theory/models')
+sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/theory/models')
 from mean_field import Model, Spec
 def one(args):
     setup, arm, seed = args

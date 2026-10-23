@@ -2,8 +2,8 @@
 
 **For:** a reviewer agent who will check every claim and propose other candidate models.
 **Date:** 22 October 2026. **Branch:** `dev/rsanchez` (commits up to the one that adds this file).
-**Scope:** Simulation 2 (continuous time) only. Plan followed: [`../../00_theory_plan_2026-10-21.md`](../../00_theory_plan_2026-10-21.md).
-Decision log: [`../../progress.md`](../../progress.md).
+**Scope:** Simulation 2 (continuous time) only. Plan followed: [`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/00_theory_plan_2026-10-21.md`](../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/00_theory_plan_2026-10-21.md).
+Decision log: [`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/progress.md`](../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/progress.md).
 
 ## Summary
 
@@ -27,7 +27,7 @@ Decision log: [`../../progress.md`](../../progress.md).
 
 ## 0. Setting, definitions, protocol
 
-- **Simulator rules** (exact, from the code): [`../../theory/00_microscopic_rules.md`](../../theory/00_microscopic_rules.md).
+- **Simulator rules** (exact, from the code): [`../../00_microscopic_rules.md`](../../00_microscopic_rules.md).
   Agents act at rate 1; read q posts without replacement from the W = 48 newest (own posts excluded); remember facts
   with exponential lifetimes (rate γ = −ln ρ, renewed on rereading; own fact forgettable); vote by probability matching
   from the exact posterior; post one fact that supports the vote in the context of their memory, preferring facts not
@@ -36,13 +36,13 @@ Decision log: [`../../progress.md`](../../progress.md).
 - **Observables.** G = mean over episodes of [A2 vote share with the controller − same episode without it] at t = 30
   (shares among agents who have voted). D(q₁→q₂) = G(q₂) − G(q₁), paired per episode. δ(t) = the same difference after
   the controller stops. "Resolved" = 95% interval excludes 0. A model increment counts as ± when |D| ≥ 0.01.
-- **Hold-out protocol** ([`../../calibration/holdout_preregistration.md`](../../calibration/holdout_preregistration.md),
+- **Hold-out protocol** ([`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/calibration/holdout_preregistration.md`](../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/calibration/holdout_preregistration.md),
   committed before any model): model choices may use only development data (task003, ρ ∈ {0.25, 0.75, 1}, q ∈ {3, 6},
   t ≤ 30); everything else is held out and evaluated once per model version. Caveat stated there: the held-out data had
   been seen in earlier reports; the split constrains model choice, not prior exposure. The Object Placements data were
   **not** seen before the M3/M4 predictions were committed (commits `c0d22bc`, `c9d66c2`).
-- **Models** share one code base: [`../../theory/models/mean_field.py`](../../theory/models/mean_field.py), runner
-  `run_models.py`, scorecards `../../held_out_validation/score.py`, `score_post_stop.py`. All models use the simulator's
+- **Models** share one code base: [`../../models/mean_field.py`](../../models/mean_field.py), runner
+  `run_models.py`, scorecards `../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/held_out_validation/score.py`, `score_post_stop.py`. All models use the simulator's
   own posterior, vote and posting functions (imported), so rules cannot drift.
 
 ## Section 1. task003 (team allocation)
@@ -51,13 +51,13 @@ Decision log: [`../../progress.md`](../../progress.md).
 
 Reading reversal (step 2 run `2026-10-20_sim2_reading_mechanism`, 1,000 paired episodes): the crossover of D in (ρ, q)
 descends with q; symmetric 3→6 between ρ 0.5 and 0.625, no-proof between 0.75 and 0.875–1 (tables in
-`../../tables/step2b_D.csv`). Persistence (`2026-10-20_sim2_persistence_branches`, to t = 130): flat under normal and
+`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/tables/step2b_D.csv`). Persistence (`2026-10-20_sim2_persistence_branches`, to t = 130): flat under normal and
 frozen-board continuation, gone within 1–5 time units without communication, collapses to a small residual when
 controller-only facts are removed.
 
 ### 1.2 M1 and M2: deterministic mean field (failed)
 
-[`../../theory/M1_M2_mean_field.md`](../../theory/M1_M2_mean_field.md). Population of 24 × 100 agents with exact rules,
+[`../../M1_M2_mean_field.md`](../../M1_M2_mean_field.md). Population of 24 × 100 agents with exact rules,
 interacting only through a deterministic board (expected composition of the 48 newest posts). M2 keeps each agent's
 exact memory; M1 redraws memory fact by fact from population shares before each action (the only difference).
 
@@ -66,7 +66,7 @@ exact memory; M1 redraws memory fact by fact from population shares before each 
 | M1 | 9/17 | 6/16 | 0.145 / 0.181 |
 | M2 | 8/17 | 8/16 | 0.151 / 0.179 |
 
-**Why they fail** (diagnostics, `../../theory/models/diag_*.py`):
+**Why they fail** (diagnostics, `../../models/diag_*.py`):
 1. *Not a bug:* the same code with a real 24-agent board reproduces the simulator (G 0.322 vs 0.33 symmetric, 0.288 vs
    0.29 no-proof at ρ 0.5, q 6).
 2. *Not the memory closure:* M1 and M2 fail alike.
@@ -84,7 +84,7 @@ is a cheap alternative but is a crude version of M3 and was not run.
 
 ### 1.3 M3: mean field + finite-swarm extinction (partial success)
 
-[`../../theory/M3_extinction.md`](../../theory/M3_extinction.md). One change from M2: each fact's holders in a swarm of
+[`../../M3_extinction.md`](../../M3_extinction.md). One change from M2: each fact's holders in a swarm of
 24 are an integer that changes by binomial draws with the gain/loss probabilities of the population; a fact with no
 holder and no board copy is extinct for good. 40 realisations, 720-agent population.
 
@@ -110,7 +110,7 @@ as in M3. Chosen on development data only (G error 0.017 vs M3 0.069; D(3→6) s
 | post-stop branch ordering (t = 40, 130) | 3/8 | **7/8** |
 
 M4 misses (held-out): symmetric 0.625 3→6, 0.875 6→9, 0.5 9→12, 0.875 9→12; no-proof 0.375 6→9, 0.875 6→9, 1 6→9 —
-all at or next to crossovers (`../../held_out_validation/scorecard_M4.csv`).
+all at or next to crossovers (`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/held_out_validation/scorecard_M4.csv`).
 
 Post-stop, M4 against data (δ at t = 30 → 130):
 
@@ -141,8 +141,8 @@ not yet a closed-form theory.
 
 World: K independent task_003 projects with one split (same person alone in every project, scores summed; three
 answers). Exact engine `llmfree_core/kworld.py` (K = 1 reproduces the original exactly; tests
-`../../finite_size/test_kworld.py`); setups K copies of the base setups; W, controller rate and budget × K. Runs
-`2026-10-22_sim2_kprojects_K2` (1,000 episodes), `_K4` (500). Data (`../../tables/scaling_K.csv`), q = 6, t = 30:
+`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/finite_size/test_kworld.py`); setups K copies of the base setups; W, controller rate and budget × K. Runs
+`2026-10-22_sim2_kprojects_K2` (1,000 episodes), `_K4` (500). Data (`../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/tables/scaling_K.csv`), q = 6, t = 30:
 
 | | G at K = 1 / 2 / 4 | D(3→6) at K = 1 / 2 / 4 |
 |---|---|---|
@@ -162,7 +162,7 @@ answers). Exact engine `llmfree_core/kworld.py` (K = 1 reproduces the original e
   informative and the evidence stays "just sufficient"; every scaling changes copies per fact, informativeness or total
   evidence. These should be treated as separate parameters.
 
-Models against K (post-hoc; `../../finite_size/score_models_K.py`, `../../tables/scaling_K_models.csv`):
+Models against K (post-hoc; `../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/finite_size/score_models_K.py`, `../../../task003_llm_free/simulation_2/key_phenomena_hypothesis/tables/scaling_K_models.csv`):
 
 | | M3: D(3→6) signs | M3: G error | M4: D(3→6) signs | M4: G error |
 |---|---|---|---|---|
@@ -181,23 +181,23 @@ averaged board is a better stand-in for the realised one, which is the one thing
 ### 2.1 World and setups
 
 MuSR (Sprague et al., arXiv 2310.16049; MIT) generates Object Placements stories from a symbolic skeleton
-(`create_sequence_v2`). [`llmfree_core/op_world.py`](../../../../llmfree_core/op_world.py) reproduces it exactly: 3
+(`create_sequence_v2`). [`llmfree_core/op_world.py`](../../../task003_llm_free/llmfree_core/op_world.py) reproduces it exactly: 3
 people, 2 items, 3 locations (MuSR's most common number of answer options), 3 moves, each non-mover sees a move with
 probability 1/3 (MuSR 0.33), at most 2 arrivals per item and location; all 617,472 stories enumerated with their
 probabilities. Checked against MuSR's own generator (frequencies of the 40 most probable stories, aggregates) and
-against a direct story-by-story computation (`../../object_placements/test_op_world.py`). Facts are abstract
+against a direct story-by-story computation (`../../../object_placements_llm_free/simulation_2/analysis/test_op_world.py`). Facts are abstract
 propositions (start positions, mover/item/destination per move, who saw or missed each move, beliefs after each move
 except the answer). Question: "where would Casey look for the keys?"; A0 = drawer (Casey's belief), A2 = desk (where the
 keys are), A1 = shelf. 34 true facts.
 
-Setups built with task003's rules (`experimental_setup/op_symmetric`, `op_nosolution`, README there): symmetric —
+Setups built with task003's rules ([`object_placements_llm_free/experimental_setup/`](../../../object_placements_llm_free/experimental_setup/), README in each): symmetric —
 18 distinct agent facts proving A0 jointly, no single fact or pair proves it, A2 pool alone P(A2) = 0.98 (task003 0.89),
 A0 pool reuses 6 agent facts (only 34 true facts); no-proof — 15 facts at exactly (0.5, 0, 0.5), each ≤ 45% alone,
 pool alone (0.67, 0, 0.33) (task003's was 0.37/0.26/0.37), agents + pool (0.67, 0, 0.33), no proof.
 
 ### 2.2 Data (run `2026-10-22_sim2_op_main`, 1,000 paired episodes, 8 ρ, q 3/6/9/12)
 
-The reading reversal exists here too (`../../object_placements/op_data.csv`): D(3→6) changes sign between ρ 0.25 and
+The reading reversal exists here too (`../../../object_placements_llm_free/simulation_2/analysis/op_data.csv`): D(3→6) changes sign between ρ 0.25 and
 0.375 (symmetric) and 0.625–0.875 (no-proof). G at q 6 is smaller than in task003 (symmetric 0.18 at ρ 0.125 falling to
 0 at ρ 1; no-proof 0.18 → 0).
 
@@ -237,11 +237,18 @@ data +0.17 to 0).
 
 ## 4. File index
 
-- Rules: `theory/00_microscopic_rules.md`. Models: `theory/models/mean_field.py`, `run_models.py`, `diag_*.py`.
-  Write-ups: `theory/M1_M2_mean_field.md`, `theory/M3_extinction.md`.
-- Targets and split: `calibration/build_benchmarks.py`, `calibration/holdout_preregistration.md`,
-  `held_out_validation/benchmark_*_held_out.csv`. Scorecards: `held_out_validation/scorecard_M{1,2,3,4}*.csv`.
-- Scaling: `finite_size/` (engine tests, `build_k_setups.py`, `compare_K.py`, `score_models_K.py`); `llmfree_core/kworld.py`.
-- Object Placements: `llmfree_core/op_world.py`, `object_placements/` (tests, builder, `preregistered_M{3,4}.csv`,
-  `op_data.csv`, `scorecard_op_M{3,4}*.csv`).
-- Model outputs (not in git): `results/key_phenomena/theory_runs/`.
+Paths relative to `analysis/`. Folder guide: [`../../README.md`](../../README.md).
+
+- **Theory (both tasks)**, `theory/`: rules `00_microscopic_rules.md`; models `models/mean_field.py` (M1–M4),
+  runner `models/run_models.py`, diagnostics `models/diag_*.py`; write-ups `M1_M2_mean_field.md`, `M3_extinction.md`;
+  this report `reports/2026-10-22_theory_review/`; model outputs `results/theory_runs/` (not in git).
+- **task003**, `task003_llm_free/simulation_2/key_phenomena_hypothesis/`: plan and decision log
+  (`00_theory_plan_2026-10-21.md`, `progress.md`); targets and split (`calibration/build_benchmarks.py`,
+  `calibration/holdout_preregistration.md`); scorecards (`held_out_validation/score.py`, `score_post_stop.py`,
+  `scorecard_M{1,2,3,4}*.csv`); scaling (`finite_size/`: engine tests, `build_k_setups.py`, `compare_K.py`,
+  `score_models_K.py`; tables `tables/scaling_K*.csv`). Engines: `task003_llm_free/llmfree_core/` (`world.py`,
+  `kworld.py`, `op_world.py`). Simulator: `task003_llm_free/simulation_2/simulator/`.
+- **Object Placements**, `object_placements_llm_free/`: world `world/world_op1.json`; setups `experimental_setup/`;
+  run config `simulation_2/configs/sim2_op_main.yaml`; analysis `simulation_2/analysis/` (engine tests, setup builder,
+  `preregistered_M{3,4}.csv`, `op_data.csv`, `scorecard_op_M{3,4}*.csv`); simulation run `results/simulation_2/`
+  (not in git).

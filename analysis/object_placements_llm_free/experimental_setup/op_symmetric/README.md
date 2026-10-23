@@ -1,12 +1,12 @@
 # op_symmetric: agents can prove the answer; two controller pools
 
-**Built 22 October 2026** by `simulation_2/key_phenomena_hypothesis/object_placements/build_op_setups.py` (seeded;
+**Built 22 October 2026** by [`../../simulation_2/analysis/build_op_setups.py`](../../simulation_2/analysis/build_op_setups.py) (seeded;
 rebuild rather than edit). Same design rules as `task003_symmetric`, on a MuSR Object Placements world.
 
-## The world (MuSR Object Placements, `llmfree_core/world_op1.json`)
+## The world (MuSR Object Placements, [`../../world/world_op1.json`](../../world/world_op1.json))
 
 Three people (Alex, Blair, Casey), two items (notebook, keys), three locations (desk, shelf, drawer), three moves; each person
-other than the mover sees a move with chance 1/3 (MuSR's generator, reproduced exactly in `llmfree_core/op_world.py`).
+other than the mover sees a move with chance 1/3 (MuSR's generator, reproduced exactly in `task003_llm_free/llmfree_core/op_world.py`).
 
 - The notebook starts on the shelf.
 - The keys start on the desk.
@@ -16,7 +16,7 @@ other than the mover sees a move with chance 1/3 (MuSR's generator, reproduced e
 
 **Question:** where would Casey look for the keys? **A0 = drawer** (Casey's belief: correct),
 A1 = shelf, **A2 = desk** (where the keys really are: the false controller's target).
-The world has 34 true facts (catalog in `op_world.py`); beliefs are exact over the generator's 617,472
+The world has 34 true facts (catalog in `task003_llm_free/llmfree_core/op_world.py`); beliefs are exact over the generator's 617,472
 possible stories weighted by their probability.
 
 ## Properties

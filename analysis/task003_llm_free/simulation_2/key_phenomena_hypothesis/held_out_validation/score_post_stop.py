@@ -2,7 +2,7 @@
 archived branches (normal, no_comm, frozen_board, purge_controller_facts), rho 0.25 and 0.75, both worlds, q = 6.
 
 Model delta(t) = mean x2(false) - mean x2(silent) over the model's realisations, per (setup, rho, mode, t), from
-results/key_phenomena/theory_runs/<tag>_post_stop.parquet. Data: theory_benchmarks/post_stop.parquet.
+analysis/theory/results/theory_runs/<tag>_post_stop.parquet. Data: theory_benchmarks/post_stop.parquet.
 Reports delta at t = 30, 31, 40, 80, 130 (model and data), the time to half the t = 30 value (censored at 130),
 and whether the ordering of the four branches at t = 40 and 130 matches.
 Writes held_out_validation/scorecard_<tag>_post_stop.csv and prints a summary.
@@ -18,6 +18,7 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 KP = HERE.parents[2] / "results" / "key_phenomena"
+RUNS = HERE.parents[3] / "theory" / "results" / "theory_runs"     # analysis/theory
 TIMES = [30.0, 31.0, 40.0, 80.0, 130.0]
 
 
@@ -33,7 +34,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tag", required=True)
     a = ap.parse_args()
-    m = pd.read_parquet(KP / "theory_runs" / f"{a.tag}_post_stop.parquet")
+    m = pd.read_parquet(RUNS / f"{a.tag}_post_stop.parquet")
     m = m.pivot_table(index=["setup", "rho", "mode", "t"], columns="arm", values="x2")
     m = (m["false"] - m["silent"]).rename("delta").reset_index()
     d = pd.read_parquet(KP / "theory_benchmarks" / "post_stop.parquet")[["setup", "rho", "mode", "t", "delta"]]
