@@ -103,7 +103,7 @@ def run(spec):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--closure", default="M2", choices=["M1", "M2", "M3", "M4"])
+    ap.add_argument("--closure", default="M2", choices=["M1", "M2", "M3", "M3s", "M4"])
     ap.add_argument("--seeds", type=int, default=1, help="realisations per condition (M3 is stochastic)")
     ap.add_argument("--replicas", type=int, help="population replicas (default 100)")
     ap.add_argument("--set", default="dev", choices=["dev", "all", "post_stop", "check", "k2", "k4", "op", "op_post_stop"])

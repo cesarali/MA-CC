@@ -61,6 +61,8 @@ class Spec:
     rho: float
     q: int
     closure: str = "M2"             # "M2" | "M1" | "M3" (M2 + demographic noise and extinction of fact holder counts)
+                                    # | "M3s" (M3 with one stochastic controller instead of the expected one;
+                                    #   Phase B attribution of the M3 -> M4 gain)
                                     # | "M4" (M3 + one shared, realised board of W posts)
     n_swarm: int | None = None      # M3/M4: size of the swarm whose fact holder counts fluctuate (default: its agents)
     world_file: str = ""            # default: task003
@@ -122,7 +124,7 @@ class Model:
         self.frozen = None
         self.messages = 0.0
         self.target = 2 if s.arm == "false" else None
-        if s.closure in ("M3", "M4"):
+        if s.closure in ("M3", "M3s", "M4"):
             # integer holders of each circulating fact in a swarm of n_swarm agents (the setup's starting holders)
             self.n = np.zeros(len(self.U), dtype=int)
             for f in st.agent_facts:
@@ -245,6 +247,38 @@ class Model:
         self.messages += rate.sum()
         return rate
 
+    def controller_one(self, t):
+        """M3s: one stochastic controller on the deterministic board. With probability lambda_c dt it reads q_c agent
+        posts from one realisation of the expected agent-only window and posts one whole fact by the simulator's rule
+        (gate, best pool fact). Returns posts per fact (over U indices) entering the board in this step."""
+        s = self.s
+        out = np.zeros(len(self.U))
+        if self.target is None or t >= s.t_control or self.messages >= s.budget:
+            return out
+        if self.npr.random() >= s.lambda_c * s.dt:
+            return out
+        board = self.window(agents_only=True)
+        cats = self.read(board, s.qc) if board.sum() >= 0.5 else np.zeros(0, dtype=int)
+        R = 0
+        for c in cats:
+            R |= 1 << int(self.cat_fact[c])
+        if len(cats) and s.gate and (self.cat_vote[cats] == self.target).mean() >= 0.75 - EPS:
+            return out
+        best, bv = self.pool[0], None
+        for f in self.pool:
+            v = self.world.posterior(R | (1 << f))[self.target]
+            if bv is None or v > bv + EPS:
+                best, bv = f, v
+        if bv <= EPS:
+            best, bv = self.pool[0], None
+            for f in self.pool:
+                v = self.world.posterior(1 << f)[self.target]
+                if bv is None or v > bv + EPS:
+                    best, bv = f, v
+        out[self.uidx[best]] = 1.0
+        self.messages += 1
+        return out
+
     # ---------------------------------------------------------------- one step
     def forget(self):
         if self.s.rho >= 1:
@@ -268,7 +302,7 @@ class Model:
     def step(self, t):
         if self.stochastic:
             return self.s_step(t)
-        if self.s.closure in ("M3", "M4"):
+        if self.s.closure in ("M3", "M3s", "M4"):
             before = self.memmat()
             self._step(t)
             return self.m3_noise(before, t)
@@ -373,7 +407,7 @@ class Model:
             self.mem = [x & ~self.ctrl_mask for x in self.mem]
             for c in self.hist:
                 c[(np.isin(self.cat_fact, list(bits(self.ctrl_mask))))] = 0
-            if s.closure in ("M3", "M4"):
+            if s.closure in ("M3", "M3s", "M4"):
                 for f in bits(self.ctrl_mask):
                     self.n[self.uidx[f]] = 0
             if s.closure == "M4":
@@ -425,7 +459,7 @@ class Model:
                 self.shared = self.shared[-4 * s.W:]
             return
         posts *= self.n_agents / self.K                              # scale to the swarm's posting
-        u = self.controller_rate(t)
+        u = self.controller_one(t) if s.closure == "M3s" else self.controller_rate(t)
         posts[3 * len(self.U):] += u
         if not no_post or u.sum() > 0:
             self.hist.append(posts)
