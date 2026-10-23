@@ -84,4 +84,6 @@ Scripts and tables in `analysis/theory/phaseA/`. Results in `analysis/theory/pha
 the computations, with every expectation above marked met or not met.
 
 ## Change log
-(none yet)
+- 23 Oct, before any memory data were read: for the capped bins of A2 (c = 4 means 4 or more; a = 6 means 6 or more),
+  the exact count of each draw is drawn uniformly in the capped range (c from 4 to the number of controller-only facts;
+  a from 6 to the number of agent facts). The file left this unspecified.

@@ -1,0 +1,175 @@
+task,setup,z,c,a,phi_hat,n_draws,share_z_in_ca
+Object Placements,op_nosolution,0,0,0,0.33333,20000,1.0
+Object Placements,op_nosolution,0,0,1,0.34567,20000,1.0
+Object Placements,op_nosolution,0,0,2,0.35735,20000,1.0
+Object Placements,op_nosolution,0,0,3,0.36636,20000,1.0
+Object Placements,op_nosolution,0,0,4,0.3727,20000,1.0
+Object Placements,op_nosolution,0,0,5,0.37987,20000,1.0
+Object Placements,op_nosolution,0,0,6,0.4386,20000,1.0
+Object Placements,op_nosolution,0,1,0,0.33854,20000,1.0
+Object Placements,op_nosolution,0,1,1,0.35188,20000,1.0
+Object Placements,op_nosolution,0,1,2,0.36192,20000,1.0
+Object Placements,op_nosolution,0,1,3,0.36867,20000,1.0
+Object Placements,op_nosolution,0,1,4,0.37705,20000,1.0
+Object Placements,op_nosolution,0,1,5,0.38223,20000,1.0
+Object Placements,op_nosolution,0,1,6,0.44314,20000,1.0
+Object Placements,op_nosolution,0,2,0,0.34512,20000,1.0
+Object Placements,op_nosolution,0,2,1,0.35711,20000,1.0
+Object Placements,op_nosolution,0,2,2,0.36748,20000,1.0
+Object Placements,op_nosolution,0,2,3,0.37622,20000,1.0
+Object Placements,op_nosolution,0,2,4,0.3838,20000,1.0
+Object Placements,op_nosolution,0,2,5,0.39158,20000,1.0
+Object Placements,op_nosolution,0,2,6,0.4486,20000,1.0
+Object Placements,op_nosolution,0,3,0,0.35751,20000,1.0
+Object Placements,op_nosolution,0,3,1,0.3675,20000,1.0
+Object Placements,op_nosolution,0,3,2,0.37805,20000,1.0
+Object Placements,op_nosolution,0,3,3,0.38842,20000,1.0
+Object Placements,op_nosolution,0,3,4,0.39799,20000,1.0
+Object Placements,op_nosolution,0,3,5,0.40875,20000,1.0
+Object Placements,op_nosolution,0,3,6,0.45596,20000,1.0
+Object Placements,op_nosolution,0,4,0,0.39279,20000,1.0
+Object Placements,op_nosolution,0,4,1,0.39501,20000,1.0
+Object Placements,op_nosolution,0,4,2,0.40239,20000,1.0
+Object Placements,op_nosolution,0,4,3,0.40244,20000,1.0
+Object Placements,op_nosolution,0,4,4,0.40518,20000,1.0
+Object Placements,op_nosolution,0,4,5,0.40843,20000,1.0
+Object Placements,op_nosolution,0,4,6,0.40509,20000,1.0
+Object Placements,op_symmetric,0,0,0,0.33333,20000,1.0
+Object Placements,op_symmetric,0,0,1,0.32801,20000,1.0
+Object Placements,op_symmetric,0,0,2,0.32563,20000,1.0
+Object Placements,op_symmetric,0,0,3,0.32407,19952,0.9976
+Object Placements,op_symmetric,1,0,3,0.0,48,0.0024
+Object Placements,op_symmetric,0,0,4,0.3277,19805,0.99025
+Object Placements,op_symmetric,1,0,4,0.0,195,0.00975
+Object Placements,op_symmetric,0,0,5,0.33206,19481,0.97405
+Object Placements,op_symmetric,1,0,5,0.0,519,0.02595
+Object Placements,op_symmetric,0,0,6,0.38248,9283,0.46415
+Object Placements,op_symmetric,1,0,6,0.0,10717,0.53585
+Object Placements,op_symmetric,0,1,0,0.3723,20000,1.0
+Object Placements,op_symmetric,0,1,1,0.36583,20000,1.0
+Object Placements,op_symmetric,0,1,2,0.35783,20000,1.0
+Object Placements,op_symmetric,0,1,3,0.35516,19950,0.9975
+Object Placements,op_symmetric,1,1,3,0.0,50,0.0025
+Object Placements,op_symmetric,0,1,4,0.35031,19805,0.99025
+Object Placements,op_symmetric,1,1,4,0.0,195,0.00975
+Object Placements,op_symmetric,0,1,5,0.35045,19476,0.9738
+Object Placements,op_symmetric,1,1,5,0.0,524,0.0262
+Object Placements,op_symmetric,0,1,6,0.39542,9132,0.4566
+Object Placements,op_symmetric,1,1,6,0.0,10868,0.5434
+Object Placements,op_symmetric,0,2,0,0.41024,20000,1.0
+Object Placements,op_symmetric,0,2,1,0.39994,20000,1.0
+Object Placements,op_symmetric,0,2,2,0.3907,20000,1.0
+Object Placements,op_symmetric,0,2,3,0.38193,19945,0.99725
+Object Placements,op_symmetric,1,2,3,0.0,55,0.00275
+Object Placements,op_symmetric,0,2,4,0.37473,19759,0.98795
+Object Placements,op_symmetric,1,2,4,0.0,241,0.01205
+Object Placements,op_symmetric,0,2,5,0.37325,19329,0.96645
+Object Placements,op_symmetric,1,2,5,0.0,671,0.03355
+Object Placements,op_symmetric,0,2,6,0.39787,9021,0.45105
+Object Placements,op_symmetric,1,2,6,0.0,10979,0.54895
+Object Placements,op_symmetric,0,3,0,0.45111,20000,1.0
+Object Placements,op_symmetric,0,3,1,0.43523,20000,1.0
+Object Placements,op_symmetric,0,3,2,0.42446,20000,1.0
+Object Placements,op_symmetric,0,3,3,0.41258,19920,0.996
+Object Placements,op_symmetric,1,3,3,0.0,80,0.004
+Object Placements,op_symmetric,0,3,4,0.40321,19713,0.98565
+Object Placements,op_symmetric,1,3,4,0.0,287,0.01435
+Object Placements,op_symmetric,0,3,5,0.39652,19173,0.95865
+Object Placements,op_symmetric,1,3,5,0.0,827,0.04135
+Object Placements,op_symmetric,0,3,6,0.40764,8675,0.43375
+Object Placements,op_symmetric,1,3,6,0.0,11325,0.56625
+Object Placements,op_symmetric,0,4,0,0.66502,20000,1.0
+Object Placements,op_symmetric,0,4,1,0.61088,20000,1.0
+Object Placements,op_symmetric,0,4,2,0.55751,19878,0.9939
+Object Placements,op_symmetric,1,4,2,0.0,122,0.0061
+Object Placements,op_symmetric,0,4,3,0.51351,19541,0.97705
+Object Placements,op_symmetric,1,4,3,0.0,459,0.02295
+Object Placements,op_symmetric,0,4,4,0.47836,18907,0.94535
+Object Placements,op_symmetric,1,4,4,0.0,1093,0.05465
+Object Placements,op_symmetric,0,4,5,0.45535,17944,0.8972
+Object Placements,op_symmetric,1,4,5,0.0,2056,0.1028
+Object Placements,op_symmetric,0,4,6,0.40245,7886,0.3943
+Object Placements,op_symmetric,1,4,6,0.0,12114,0.6057
+task003,task003_nosolution,0,0,0,0.33333,20000,1.0
+task003,task003_nosolution,0,0,1,0.35501,20000,1.0
+task003,task003_nosolution,0,0,2,0.37929,20000,1.0
+task003,task003_nosolution,0,0,3,0.40763,20000,1.0
+task003,task003_nosolution,0,0,4,0.43745,20000,1.0
+task003,task003_nosolution,0,0,5,0.46133,20000,1.0
+task003,task003_nosolution,0,0,6,0.52047,20000,1.0
+task003,task003_nosolution,0,1,0,0.357,20000,1.0
+task003,task003_nosolution,0,1,1,0.37976,20000,1.0
+task003,task003_nosolution,0,1,2,0.40125,20000,1.0
+task003,task003_nosolution,0,1,3,0.42499,20000,1.0
+task003,task003_nosolution,0,1,4,0.44803,20000,1.0
+task003,task003_nosolution,0,1,5,0.46787,20000,1.0
+task003,task003_nosolution,0,1,6,0.49581,20000,1.0
+task003,task003_nosolution,0,2,0,0.37641,20000,1.0
+task003,task003_nosolution,0,2,1,0.39723,20000,1.0
+task003,task003_nosolution,0,2,2,0.41721,20000,1.0
+task003,task003_nosolution,0,2,3,0.43653,20000,1.0
+task003,task003_nosolution,0,2,4,0.45334,20000,1.0
+task003,task003_nosolution,0,2,5,0.46846,20000,1.0
+task003,task003_nosolution,0,2,6,0.46545,20000,1.0
+task003,task003_nosolution,0,3,0,0.3948,20000,1.0
+task003,task003_nosolution,0,3,1,0.4097,20000,1.0
+task003,task003_nosolution,0,3,2,0.42706,20000,1.0
+task003,task003_nosolution,0,3,3,0.44136,20000,1.0
+task003,task003_nosolution,0,3,4,0.45242,20000,1.0
+task003,task003_nosolution,0,3,5,0.45872,20000,1.0
+task003,task003_nosolution,0,3,6,0.43939,20000,1.0
+task003,task003_nosolution,0,4,0,0.39216,20000,1.0
+task003,task003_nosolution,0,4,1,0.40463,20000,1.0
+task003,task003_nosolution,0,4,2,0.40874,20000,1.0
+task003,task003_nosolution,0,4,3,0.41153,20000,1.0
+task003,task003_nosolution,0,4,4,0.40833,20000,1.0
+task003,task003_nosolution,0,4,5,0.40289,20000,1.0
+task003,task003_nosolution,0,4,6,0.34443,20000,1.0
+task003,task003_symmetric,0,0,0,0.33333,20000,1.0
+task003,task003_symmetric,0,0,1,0.32213,20000,1.0
+task003,task003_symmetric,0,0,2,0.31243,20000,1.0
+task003,task003_symmetric,0,0,3,0.30333,20000,1.0
+task003,task003_symmetric,0,0,4,0.29305,20000,1.0
+task003,task003_symmetric,0,0,5,0.2798,20000,1.0
+task003,task003_symmetric,0,0,6,0.20516,11292,0.5646
+task003,task003_symmetric,1,0,6,0.0,8708,0.4354
+task003,task003_symmetric,0,1,0,0.43074,20000,1.0
+task003,task003_symmetric,0,1,1,0.4159,20000,1.0
+task003,task003_symmetric,0,1,2,0.40017,20000,1.0
+task003,task003_symmetric,0,1,3,0.38384,20000,1.0
+task003,task003_symmetric,0,1,4,0.36233,20000,1.0
+task003,task003_symmetric,0,1,5,0.33911,19995,0.99975
+task003,task003_symmetric,1,1,5,0.0,5,0.00025
+task003,task003_symmetric,0,1,6,0.2399,10900,0.545
+task003,task003_symmetric,1,1,6,0.0,9100,0.455
+task003,task003_symmetric,0,2,0,0.51997,20000,1.0
+task003,task003_symmetric,0,2,1,0.50207,20000,1.0
+task003,task003_symmetric,0,2,2,0.47781,20000,1.0
+task003,task003_symmetric,0,2,3,0.45271,20000,1.0
+task003,task003_symmetric,0,2,4,0.42175,19999,0.99995
+task003,task003_symmetric,1,2,4,0.0,1,5e-05
+task003,task003_symmetric,0,2,5,0.3896,19975,0.99875
+task003,task003_symmetric,1,2,5,0.0,25,0.00125
+task003,task003_symmetric,0,2,6,0.26838,10305,0.51525
+task003,task003_symmetric,1,2,6,0.0,9695,0.48475
+task003,task003_symmetric,0,3,0,0.59905,20000,1.0
+task003,task003_symmetric,0,3,1,0.57276,20000,1.0
+task003,task003_symmetric,0,3,2,0.54466,20000,1.0
+task003,task003_symmetric,0,3,3,0.51181,20000,1.0
+task003,task003_symmetric,0,3,4,0.47199,19994,0.9997
+task003,task003_symmetric,1,3,4,0.0,6,0.0003
+task003,task003_symmetric,0,3,5,0.43305,19947,0.99735
+task003,task003_symmetric,1,3,5,0.0,53,0.00265
+task003,task003_symmetric,0,3,6,0.29556,9907,0.49535
+task003,task003_symmetric,1,3,6,0.0,10093,0.50465
+task003,task003_symmetric,0,4,0,0.81488,20000,1.0
+task003,task003_symmetric,0,4,1,0.77739,20000,1.0
+task003,task003_symmetric,0,4,2,0.73068,20000,1.0
+task003,task003_symmetric,0,4,3,0.67432,19961,0.99805
+task003,task003_symmetric,1,4,3,0.0,39,0.00195
+task003,task003_symmetric,0,4,4,0.61453,19800,0.99
+task003,task003_symmetric,1,4,4,0.0,200,0.01
+task003,task003_symmetric,0,4,5,0.54786,19421,0.97105
+task003,task003_symmetric,1,4,5,0.0,579,0.02895
+task003,task003_symmetric,0,4,6,0.37337,8152,0.4076
+task003,task003_symmetric,1,4,6,0.0,11848,0.5924
