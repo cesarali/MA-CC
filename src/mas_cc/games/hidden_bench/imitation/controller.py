@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 from mas_cc.config import ControlConfig
 from mas_cc.control import Control, InteractionControlSignal
+from mas_cc.control.options import ReadTrackingOptions
 from mas_cc.core import AgentId, Seed
 from mas_cc.games.protocols import GameState
 from mas_cc.llm_runtime.exceptions import ConfigurationError
@@ -399,6 +400,7 @@ class ThresholdTargetControl(Control):
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> "ThresholdTargetControl":
+        options = ReadTrackingOptions(options)
         target = options.get("target", "correct")
         sample_size = options.get("sensor_sample_size", 1)
         threshold = options.get("threshold", 0.5)
@@ -448,6 +450,7 @@ class ThresholdTargetControl(Control):
                 )
             )
         extra = cls._extra_from_options(options, issues)
+        issues.extend(options.unread_issues())
         if issues:
             raise ConfigurationError(issues, context="control creation")
         return cls(
