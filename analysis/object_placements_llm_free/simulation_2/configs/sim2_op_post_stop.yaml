@@ -1,0 +1,51 @@
+# Written 23 October 2026: persistence on Object Placements. Mirrors task003_llm_free/simulation_2/simulator/configs/
+# sim2_persistence_branches.yaml (step 3 of the key-phenomena study) on the Object Placements world: four post-stop
+# modes (simulator setting post_stop_mode), each with its own silent arm, rho 0.25 and 0.75, q 6, to t = 130.
+# Every mode is identical to normal up to t = 30 (keyed random streams). The M3 and M4 predictions for these cells
+# were committed before this run (analysis/preregistered_post_stop_M{3,4}.csv). Run with
+# task003_llm_free/simulation_2/simulator/run_simulation_2.py.
+
+study: sim2_op_post_stop
+description: "Object Placements persistence branches: both setups, rho 0.25/0.75, q 6, rate 1, qc 12, gate on; post-stop modes normal/no_comm/frozen_board/purge; t_end 130"
+
+paths:
+  world_file: ../../world/world_op1.json
+  setups_dir: ../../experimental_setup
+  results_dir: ../../results/simulation_2
+
+grid:
+  setup:    [op_symmetric, op_nosolution]
+  arm:      ["silent", "false"]
+  q:        [6]
+  qc:       [12]
+  rho:      [0.75, 0.25]
+  lambda_c: [1.0]
+  controller_gate: ["votes"]
+  silent_when_target_proved: [true]
+  post_stop_mode: ["normal", "no_comm", "frozen_board", "purge_controller_facts"]
+
+fixed:
+  board: persistent
+  forgetting: continuous
+  agent_schedule: poisson
+  controller_schedule: poisson
+  lambda_a: 1.0
+  theta_vote: 0.75
+  W: 48
+  budget: 30
+  t_control: 30.0
+  t_end: 130.0
+  grid_step: 0.25
+  agent_sampling_mode: probability_matching
+  prefer_facts_not_read: true
+  seed: 20261007
+
+cells:
+  episodes_per_cell: 1000
+  dedupe_irrelevant_proof_stop: true
+  # 2 setups x 2 rho x 4 modes x 2 arms = 32
+  expected_total: 32
+
+record:
+  agent_snapshots: true
+  tables: [snapshots, controller, episodes, posts, agent_snapshots]

@@ -1,12 +1,13 @@
 """Run the mean-field models over a set of conditions and store their predictions.
 
   --closure M1..M4       which model (theory/models/mean_field.py)
-  --set dev|all|post_stop|check|k2|k4|op
+  --set dev|all|post_stop|check|k2|k4|op|op_post_stop
         dev        development cells: both setups, rho {0.25, 0.75, 1}, q {3, 6}, t <= 40
         all        every reading-run cell: both setups, 8 rho, q {3, 6, 9, 12}, t <= 40
         post_stop  both setups, rho {0.25, 0.75}, q 6, four post-stop modes, t <= 130
         k2, k4     K-projects worlds: both setups, rho {1, 0.75, 0.5, 0.25}, q {3, 6} (W, rate, budget x K)
         op         Object Placements world: both setups, 8 rho, q {3, 6, 9, 12}
+        op_post_stop  Object Placements world: both setups, rho {0.25, 0.75}, q 6, four post-stop modes, t <= 130
         check      numerical convergence: symmetric and nosolution, rho 0.5, q 6, replicas 50/100/200, dt 0.05/0.025
   --tag NAME            output name (default: closure)
   --seeds S, --replicas R   realisations per condition (M3) and population replicas
@@ -70,6 +71,16 @@ def specs(which, closure, seeds=1, replicas=None):
                         for seed in range(1, seeds + 1):
                             out.append(Spec(base, arm, r, q, seed=seed, world_file=wf,
                                             setups_dir=str(op / "experimental_setup"), **kw))
+    elif which == "op_post_stop":
+        op = ANALYSIS / "object_placements_llm_free"
+        wf, sd = str(op / "world" / "world_op1.json"), str(op / "experimental_setup")
+        for base in ("op_symmetric", "op_nosolution"):
+            for r in (0.25, 0.75):
+                for mode in MODES:
+                    for arm in ("silent", "false"):
+                        for seed in range(1, seeds + 1):
+                            out.append(Spec(base, arm, r, 6, t_end=130.0, post_stop_mode=mode, seed=seed,
+                                            world_file=wf, setups_dir=sd, **kw))
     elif which == "check":
         for s in ("symmetric", "nosolution"):
             for arm in ("silent", "false"):
@@ -95,7 +106,7 @@ def main():
     ap.add_argument("--closure", default="M2", choices=["M1", "M2", "M3", "M4"])
     ap.add_argument("--seeds", type=int, default=1, help="realisations per condition (M3 is stochastic)")
     ap.add_argument("--replicas", type=int, help="population replicas (default 100)")
-    ap.add_argument("--set", default="dev", choices=["dev", "all", "post_stop", "check", "k2", "k4", "op"])
+    ap.add_argument("--set", default="dev", choices=["dev", "all", "post_stop", "check", "k2", "k4", "op", "op_post_stop"])
     ap.add_argument("--tag")
     ap.add_argument("--workers", type=int, default=12)
     a = ap.parse_args()
