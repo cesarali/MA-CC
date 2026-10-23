@@ -17,7 +17,7 @@ Examples, from the repository root:
       --config analysis/task003_llm_free/simulation_2/simulator/configs/sim2_bridge.yaml --workers 12
 """
 from __future__ import annotations
-import argparse, csv, dataclasses, datetime, itertools, json, multiprocessing, pathlib, platform, shutil, subprocess, sys, time
+import argparse, csv, dataclasses, datetime, itertools, json, multiprocessing, os, pathlib, platform, shutil, subprocess, sys, time
 
 import pandas as pd
 import pyarrow as pa
@@ -330,9 +330,9 @@ def main():
                             "cells", "episodes_per_cell", "started", "finished", "wall_seconds", "results_folder",
                             "note"])
             w.writerow([run_name, cfg["study"], cfg.get("description", ""),
-                        cfg_path.relative_to(HERE).as_posix(), commit, dirty, len(cells), episodes,
+                        os.path.relpath(cfg_path, HERE), commit, dirty, len(cells), episodes,
                         manifest["started"], manifest["finished"], manifest["wall_seconds"],
-                        f"results/simulation_2/{run_name}", ""])
+                        os.path.relpath(run_dir, HERE.parents[1]), ""])     # relative to task003_llm_free
         print(f"indexed in {INDEX.name}; summary copied to {SUMMARIES.name}/")
     print(f"done in {manifest['wall_seconds']} s")
 
