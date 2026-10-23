@@ -16,6 +16,9 @@ This folder holds the theory: small models that try to explain two effects seen 
 **Start here:** [`reports/2026-10-22_theory_review/theory_review_report.md`](reports/2026-10-22_theory_review/theory_review_report.md),
 all findings in one place, written for a reviewer: why M1/M2 fail, M3 and M4 on task003 (K = 1, 2, 4) and on Object
 Placements.
+The same findings as a paper, with numbered equations for M1–M4 and nine figures:
+[`reports/2026-10-23_theory_report/theory_report.pdf`](reports/2026-10-23_theory_report/theory_report.pdf)
+(source `theory_report.tex`; figures rebuilt by `make_figures.py`).
 
 ## The models
 

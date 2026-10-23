@@ -197,9 +197,28 @@ pool alone (0.67, 0, 0.33) (task003's was 0.37/0.26/0.37), agents + pool (0.67, 
 
 ### 2.2 Data (run `2026-10-22_sim2_op_main`, 1,000 paired episodes, 8 ρ, q 3/6/9/12)
 
-The reading reversal exists here too (`../../../object_placements_llm_free/simulation_2/analysis/op_data.csv`): D(3→6) changes sign between ρ 0.25 and
-0.375 (symmetric) and 0.625–0.875 (no-proof). G at q 6 is smaller than in task003 (symmetric 0.18 at ρ 0.125 falling to
-0 at ρ 1; no-proof 0.18 → 0).
+The reading reversal exists here too, in both setups (`../../../object_placements_llm_free/simulation_2/analysis/op_data.csv`).
+D(3→6) by ρ (sign in brackets when the 95% interval excludes 0):
+
+| ρ | 0.125 | 0.25 | 0.375 | 0.5 | 0.625 | 0.75 | 0.875 | 1 |
+|---|---|---|---|---|---|---|---|---|
+| symmetric | +0.044 (+) | +0.018 (+) | −0.025 (−) | −0.058 (−) | −0.064 (−) | −0.044 (−) | −0.015 (−) | 0 |
+| no-proof | +0.097 (+) | +0.083 (+) | +0.077 (+) | +0.056 (+) | +0.025 (+) | −0.009 | −0.028 (−) | 0 |
+
+Where the resolved sign changes (ρ bracket), against task003:
+
+| | step | Object Placements | task003 |
+|---|---|---|---|
+| symmetric | 3→6 | 0.25–0.375 | 0.5–0.625 |
+| symmetric | 6→9 | 0.125–0.375 | 0.125–0.375 |
+| no-proof | 3→6 | 0.625–0.875 | 0.75–1 |
+| no-proof | 6→9 | 0.5–0.75 | 0.5–0.875 |
+| no-proof | 9→12 | none (all resolved +) | 0.25–0.625 |
+
+Same as task003: the reversal exists in both setups, no-proof reverses at higher memory than symmetric, and the
+crossover descends with q. Different: the symmetric 3→6 crossover sits at lower memory, and increments are about half
+the size. G at q 6 is smaller than in task003 (symmetric 0.18 at ρ 0.125 falling to 0 at ρ 1; no-proof 0.18 → 0).
+Only the reading grid (t ≤ 40) was run on this task; persistence was not (see §3).
 
 ### 2.3 Pre-registered predictions against data
 
@@ -230,7 +249,8 @@ data +0.17 to 0).
    model noise. More realisations would sharpen the scorecards.
 4. **Scaling confound.** K-project scaling changes informativeness; a family that varies copies per fact,
    informativeness and total evidence independently is still missing.
-5. **Not tested:** the plan's deduplicated-reading defence; the LLM transfer (16 conditions, later); finite-N with
+5. **Not tested:** persistence on Object Placements (the four post-stop branches to t = 130 were run only on
+   task003); the plan's deduplicated-reading defence; the LLM transfer (16 conditions, later); finite-N with
    matched worlds beyond K = 4.
 6. **Known approximations in all models:** own posts not excluded from a reader's window (about 1/24 of the board);
    time step dt = 0.05; the controller's budget in M1–M3 is spent deterministically.
