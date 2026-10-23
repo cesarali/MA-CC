@@ -97,3 +97,6 @@ analysis/**/*.log
 
 # Object Placements worlds: merged story classes, rebuilt automatically on first load
 analysis/**/world_op*.classes.npz
+
+# Phase A per-episode tables (regenerable)
+analysis/theory/phaseA/*.parquet
