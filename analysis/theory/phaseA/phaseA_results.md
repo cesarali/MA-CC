@@ -11,7 +11,7 @@ simulations. Every expectation of the pre-registration is marked **met** or **no
   reversal's sign; vote timing is not needed for the sign. It does change the size: the belief-based effect is
   30–100% of the vote-based one, because a vote is cast right after reading and includes the facts just read.
 - **A2/A3.** The compact evidence map (z, c, a) — "proves A0 / how many controller facts / how many agent facts" — is
-  **not enough**. Its error against the exact belief is 0.04–0.20 per agent, and as a predictor of the sign of D it does
+  **not enough**. Its error against the exact belief is 0.04–0.20 per agent (ρ < 1), and as a predictor of the sign of D it does
   worse than the marginal predictor in task003 (4/7 against 5/7). The marginal predictor fails on Object Placements as
   expected (1/5). The missing information is **which** facts sit together in a memory.
 - **A4.** The no-communication and frozen-board branches are reproduced from the t = 30 state with no free parameter.
@@ -49,8 +49,9 @@ what was just read.
 
 ## A2 — compact evidence map (`evidence_map.py`, `evidence_map.csv`)
 
-Mean |Φ̂(s(M)) − P(A2 | M)| over the stored memories, by (task, setup): 0.044–0.112 in Object Placements, 0.080–0.202
-in task003 (largest in task003 no-proof at ρ 0.75). The map averages over which facts are held; real memories are far
+Mean |Φ̂(s(M)) − P(A2 | M)| over the stored memories, per point (ρ = 1 symmetric excluded: there every memory proves A0
+and the error is 0): Object Placements symmetric 0.052–0.080, no-proof 0.044–0.112; task003 symmetric 0.080–0.144,
+no-proof 0.094–0.202 (largest at ρ 0.75). The map averages over which facts are held; real memories are far
 from uniform subsets, so its responses are biased.
 
 ## A3 — predictors of the sign of D(3→6)
