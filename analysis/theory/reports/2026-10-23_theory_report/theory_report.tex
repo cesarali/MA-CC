@@ -718,6 +718,28 @@ to its \nolinkurl{analysis/} folder:
 \item figures of this report: \nolinkurl{theory/reports/2026-10-23_theory_report/make_figures.py}.
 \end{itemize}
 
+
+\section*{Addendum, 23 October 2026}
+\addcontentsline{toc}{section}{Addendum}
+Added after an external review of this report. Nothing above was rewritten.
+\begin{enumerate}
+\item \textbf{The M3$\to$M4 improvement is not attributed yet.} M4 changed two things at once: one shared realised
+  board \emph{and} one stochastic controller (M1--M3 use the expected controller of Eq.~\eqref{eq:u}).
+  Section~\ref{sec:m4} credits the gain to the shared board. A matched comparison is needed before that claim: M4 with
+  a separate board sample per reader and the same stochastic controller.
+\item \textbf{M4 does not improve the held-out sign counts over M3} on task003 (both 13/17 and 13/16;
+  Table~\ref{tab:heldout}). Its gain is in effect sizes ($G$ error 0.027 against 0.12) and in which cells are missed.
+\item \textbf{The pinned-fact diagnostic} (Fig.~\ref{fig:diag}b) does not isolate extinction. Never forgetting one's own
+  fact also changes how much evidence each agent holds.
+\item \textbf{Persistence on Object Placements} has now been tested, with M3/M4 predictions committed before the
+  simulation. As M4 predicted, the effect \emph{fades} under normal continuation on this task (no-proof, $\rho=0.25$:
+  simulation $0.165\to0.061$, M4 $0.158\to0.069$), while a frozen board keeps it flat. M4 gets the branch ordering right
+  in 7 of 8 cases, the no-communication half-times exactly, and the removal residual sign wherever it is resolved. It
+  misses a small negative effect at symmetric $\rho=0.75$ and fades too slowly at no-proof $\rho=0.75$. M3 fails (1 of 8
+  orderings). The limitation ``persistence was tested only on task003'' no longer applies. The explanation of the fading
+  and a side-by-side comparison of both tasks are in the report of the same date, \texttt{2026-10-23\_task\_comparison}.
+\end{enumerate}
+
 \begin{thebibliography}{9}\small
 \bibitem{sprague2024musr} Z.~Sprague, X.~Ye, K.~Bostrom, S.~Chaudhuri, G.~Durrett. MuSR: Testing the limits of
 chain-of-thought with multistep soft reasoning. In \emph{International Conference on Learning Representations

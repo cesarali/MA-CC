@@ -272,3 +272,24 @@ Paths relative to `analysis/`. Folder guide: [`../../README.md`](../../README.md
   run config `simulation_2/configs/sim2_op_main.yaml`; analysis `simulation_2/analysis/` (engine tests, setup builder,
   `preregistered_M{3,4}.csv`, `op_data.csv`, `scorecard_op_M{3,4}*.csv`); simulation run `results/simulation_2/`
   (not in git).
+
+## Addendum, 23 October 2026 (after an external review; nothing above was rewritten)
+
+1. **The M3 → M4 improvement is not attributed yet.** M4 changed two things at once: one shared realised board *and* one
+   stochastic controller (M1–M3 use an expected controller). The report credits the gain to the shared board; a matched
+   comparison (M4 with a separate board sample per reader, same stochastic controller) is needed before that claim.
+2. **M4 does not improve the held-out sign counts over M3** on task003: both get 13/17 (symmetric) and 13/16 (no-proof).
+   M4's gain is in sizes (G error 0.027 against 0.12) and in which cells are missed (M4 gets all four positive symmetric
+   increments; M3 gets 1/4), not in the total count.
+3. **The pinned-fact diagnostic (§1.2, point 4) does not isolate extinction:** never forgetting one's own fact also changes
+   how much evidence each agent holds. It shows that the agents' own facts protect the swarm, not that extinction alone
+   carries the effect.
+4. **Object Placements persistence, pre-registered and scored** (predictions `09208a7`, run
+   `2026-10-23_sim2_op_post_stop`): M4 predicted, and the simulation shows, that under normal continuation the effect
+   fades on this task (no-proof ρ 0.25: data 0.165 → 0.061, M4 0.158 → 0.069) while a frozen board keeps it flat; branch
+   ordering 7/8, no-communication half-times exact, removal residual sign right where resolved. M4 misses: a small
+   negative effect at symmetric ρ 0.75 and too slow fading at no-proof ρ 0.75 (half-time 75 against 27). M3 fails (1/8).
+   Scorecards: `object_placements_llm_free/simulation_2/analysis/scorecard_op_post_stop_M{3,4}*.csv`. Item 5 of §3 ("not
+   tested") no longer applies to persistence on Object Placements.
+5. Why the fading happens, and a side-by-side comparison of both tasks:
+   [`../2026-10-23_task_comparison/task_comparison.pdf`](../2026-10-23_task_comparison/task_comparison.pdf).
