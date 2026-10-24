@@ -1,0 +1,33 @@
+task,setup,rho,t,kappa_ctrl,eligible_ctrl,kappa_agent,eligible_agent,ctrl_per_memory
+task003,nosolution,0.25,30.0,0.3417,0.776,0.353,0.7556,1.3753
+task003,nosolution,0.25,40.0,0.3531,0.7997,0.3677,0.7775,1.3236
+task003,nosolution,0.25,80.0,0.3727,0.8142,0.3849,0.8012,1.2696
+task003,nosolution,0.25,130.0,0.3763,0.8179,0.4007,0.8176,1.2328
+task003,nosolution,0.75,30.0,0.1884,0.6949,0.1568,0.5627,2.1056
+task003,nosolution,0.75,40.0,0.1941,0.7106,0.165,0.584,2.0515
+task003,nosolution,0.75,80.0,0.2057,0.75,0.1834,0.6383,1.9689
+task003,nosolution,0.75,130.0,0.2099,0.7645,0.1951,0.6746,1.9367
+task003,symmetric,0.25,30.0,0.3187,0.7855,0.3408,0.7543,1.6736
+task003,symmetric,0.25,40.0,0.3292,0.8003,0.3614,0.7892,1.6487
+task003,symmetric,0.25,80.0,0.3527,0.8264,0.397,0.8334,1.557
+task003,symmetric,0.25,130.0,0.3579,0.8213,0.4176,0.8544,1.492
+task003,symmetric,0.75,30.0,0.1145,0.4799,0.1622,0.6481,1.9732
+task003,symmetric,0.75,40.0,0.1192,0.4989,0.1689,0.6678,1.822
+task003,symmetric,0.75,80.0,0.1316,0.5511,0.1832,0.7138,1.6289
+task003,symmetric,0.75,130.0,0.1363,0.5707,0.1918,0.7424,1.551
+Object Placements,nosolution,0.25,30.0,0.2452,0.5633,0.2596,0.5423,2.0153
+Object Placements,nosolution,0.25,40.0,0.2531,0.5481,0.2739,0.5434,1.9252
+Object Placements,nosolution,0.25,80.0,0.2716,0.5365,0.2872,0.5277,1.6855
+Object Placements,nosolution,0.25,130.0,0.2886,0.5311,0.3055,0.5219,1.5717
+Object Placements,nosolution,0.75,30.0,0.1319,0.4415,0.1476,0.4821,3.165
+Object Placements,nosolution,0.75,40.0,0.1408,0.466,0.1547,0.5057,3.0249
+Object Placements,nosolution,0.75,80.0,0.1592,0.5152,0.1688,0.5452,2.6474
+Object Placements,nosolution,0.75,130.0,0.1732,0.5459,0.1754,0.5625,2.4576
+Object Placements,symmetric,0.25,30.0,0.2387,0.5393,0.282,0.617,1.4271
+Object Placements,symmetric,0.25,40.0,0.2516,0.5492,0.2975,0.6359,1.2522
+Object Placements,symmetric,0.25,80.0,0.2702,0.5553,0.3111,0.6412,1.0948
+Object Placements,symmetric,0.25,130.0,0.2754,0.5454,0.3215,0.6534,1.0165
+Object Placements,symmetric,0.75,30.0,0.0813,0.2653,0.2879,0.7647,0.8632
+Object Placements,symmetric,0.75,40.0,0.1104,0.3705,0.3011,0.8017,0.5392
+Object Placements,symmetric,0.75,80.0,0.142,0.4874,0.3135,0.8352,0.3654
+Object Placements,symmetric,0.75,130.0,0.1532,0.51,0.3184,0.8468,0.3323

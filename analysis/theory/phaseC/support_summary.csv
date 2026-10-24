@@ -1,0 +1,9 @@
+task,setup,rho,data_30,model_31,data_130,model_130,data_retained,model_retained,scored,distinct_data_80,distinct_model_80,distinct_data_130,distinct_model_130,variety_ok,persistence_ok
+Object Placements,nosolution,0.25,0.165,0.1649,0.061,0.069,0.3695,0.4185,True,3.806,3.767,3.261,3.259,True,True
+Object Placements,nosolution,0.75,0.079,0.0746,0.0263,0.0239,0.3328,0.3022,True,4.421,4.386,3.934,3.972,True,True
+Object Placements,symmetric,0.25,0.15,0.1491,0.1005,0.0953,0.6699,0.6357,True,2.385,2.422,2.066,2.102,True,True
+Object Placements,symmetric,0.75,0.0051,-0.0016,-0.01,-0.0095,-1.9672,-1.877,False,0.618,0.607,0.534,0.533,True,True
+task003,nosolution,0.25,0.3007,0.2958,0.2917,0.307,0.9703,1.0212,True,2.673,2.686,2.558,2.554,True,True
+task003,nosolution,0.75,0.2519,0.25,0.2642,0.2508,1.0488,0.9955,True,2.939,2.936,2.864,2.874,True,True
+task003,symmetric,0.25,0.4325,0.4344,0.4178,0.4246,0.9661,0.9818,True,3.466,3.455,3.195,3.194,True,True
+task003,symmetric,0.75,0.1136,0.1144,0.0853,0.0925,0.7509,0.814,True,2.708,2.733,2.516,2.522,True,True
