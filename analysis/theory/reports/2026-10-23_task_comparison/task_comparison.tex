@@ -298,4 +298,28 @@ planned theory (analyses A1--A4) must make explicit.
 \end{itemize}
 Simulation data sources are listed in Section~1.
 
+
+\section*{Addendum, 24 October 2026}
+Added after Phase C of the theory work (\nolinkurl{analysis/theory/phaseC/phaseC_results.md}). Nothing above was
+rewritten.
+\begin{enumerate}
+\item \textbf{Hypothesis 4 is rejected.} Each episode was continued from its stored state at $t=30$ under three posting
+  rules:
+  \begin{itemize}
+  \item new posts copy a random board post (neutral);
+  \item new posts are a random fact of the poster's memory (neutral, two reservoirs);
+  \item the simulator's own rule: post a fact that supports one's vote in context.
+  \end{itemize}
+  Only the real rule reproduces both task003's persistence and Object Placements' fading. It passes the pre-registered
+  checks in 7 of 7 cells; the two neutral rules pass 0/7 and 2/7. Neutral posting from memories keeps the effect
+  \emph{from} fading in Object Placements (retained 0.73 against 0.37 at no-proof $\rho=0.25$). So the fading is caused
+  by the \emph{selection} of the posting rule, not by drift. The loss of variety in Fig.~\ref{fig:mech}(c) is a
+  consequence of that selection.
+\item \textbf{Revised explanation.} A held controller fact is reposted only if it supports its holder's current vote in
+  context. That happens 0.78--0.82 of the time in task003 and 0.53--0.56 in Object Placements ($\rho=0.25$). In Object
+  Placements single facts support a vote only in particular combinations, so the controller's facts drain once nothing
+  replenishes them. The task-structure contrast of Section~\ref{sec:diff} is the right variable; the mechanism is
+  selection.
+\end{enumerate}
+
 \end{document}

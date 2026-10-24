@@ -7,7 +7,7 @@
 Writes attribution.csv and prints the comparison of M3, M3s and M4.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/phaseB/score_attribution.py
+    .venv/bin/python analysis/theory/phaseB/score_attribution.py [TAG ...]   (default M3 M3s M4)
 """
 from __future__ import annotations
 import pathlib, subprocess, sys
@@ -82,10 +82,13 @@ def task003_post_stop_order(tag):
 
 
 def main():
-    for script in ("score.py", "score_post_stop.py"):
-        subprocess.run([PY, str(KP / "held_out_validation" / script), "--tag", "M3s"], check=True, capture_output=True)
+    tags = sys.argv[1:] or ["M3", "M3s", "M4"]
+    for tag in tags:
+        if tag in ("M3s", "M4b"):           # models added after the original scorecards
+            for script in ("score.py", "score_post_stop.py"):
+                subprocess.run([PY, str(KP / "held_out_validation" / script), "--tag", tag], check=True, capture_output=True)
     rows = []
-    for tag in ("M3", "M3s", "M4"):
+    for tag in tags:
         s = pd.read_csv(KP / "held_out_validation" / f"scorecard_{tag}_summary.csv")
         h = s[s.split == "held_out"].set_index("setup")
         cr = s[(s.split == "crossover") & (s.step == "3->6")].set_index("setup")
@@ -101,8 +104,13 @@ def main():
                          op_cross36_sym=opr["op_symmetric"]["cross36"], op_post_order=ops_["order"],
                          op_no_comm_half=ops_["no_comm_half_exact"]))
     r = pd.DataFrame(rows).set_index("model")
+    out = HERE / ("attribution.csv" if tags == ["M3", "M3s", "M4"] else "comparison_" + "_".join(tags) + ".csv")
+    r.to_csv(out)
+    if not {"M3", "M3s", "M4"} <= set(tags):
+        pd.set_option("display.width", 250, "display.max_columns", 30)
+        print(r.T.to_string())
+        return
     f = {k: (r.loc["M3", k] - r.loc["M3s", k]) / (r.loc["M3", k] - r.loc["M4", k]) for k in ("t3_G_err", "op_G_err")}
-    r.to_csv(HERE / "attribution.csv")
     pd.set_option("display.width", 250, "display.max_columns", 30)
     print(r.T.to_string())
     print("f_controller (share of the M3 -> M4 G-error gain already achieved by M3s):", {k: round(v, 2) for k, v in f.items()})
