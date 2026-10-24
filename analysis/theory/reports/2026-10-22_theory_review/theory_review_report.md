@@ -293,3 +293,14 @@ Paths relative to `analysis/`. Folder guide: [`../../README.md`](../../README.md
    tested") no longer applies to persistence on Object Placements.
 5. Why the fading happens, and a side-by-side comparison of both tasks:
    [`../2026-10-23_task_comparison/task_comparison.pdf`](../2026-10-23_task_comparison/task_comparison.pdf).
+
+## Addendum, 24 October 2026 (Phase B; nothing above was rewritten)
+
+1. **Attribution of the M3 → M4 gain** (`analysis/theory/phaseB/phaseB_results.md`). A model with M3's averaged board but
+   M4's single stochastic controller (M3s) gives 41% (task003) and 52% (Object Placements) of the reduction in G error.
+   The shared realised board gives the rest. Only the board brings the Object Placements crossover and the post-stop
+   ordering (M3s 5/8 and 1/8; M4 7/8 and 7/8). The statement in §1.4 that M4's gain is a correlation from the shared
+   board is half right: both finite ingredients matter.
+2. **Correction to the 23 October addendum, item 4.** M4's Object Placements no-communication half-times are exact in
+   2 of 4 cells (1.0 and 2.0; 1.25 against 1.0 at symmetric ρ 0.25; no effect to halve at symmetric ρ 0.75), not
+   "exact".
