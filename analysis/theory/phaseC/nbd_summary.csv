@@ -1,0 +1,9 @@
+task,setup,rho,data_30,model_31,data_130,model_130,data_retained,model_retained,nu,scored,distinct_data_80,distinct_model_80,distinct_data_130,distinct_model_130,variety_ok,persistence_ok
+Object Placements,nosolution,0.25,0.165,0.1583,0.061,0.0038,0.3695,0.0227,23.054,True,3.806,0.909,3.261,0.706,False,False
+Object Placements,nosolution,0.75,0.079,0.0712,0.0263,-0.0082,0.3328,-0.1039,23.9472,True,4.421,0.589,3.934,0.473,False,False
+Object Placements,symmetric,0.25,0.15,0.1503,0.1005,0.039,0.6699,0.2604,22.9192,True,2.385,0.623,2.066,0.48,False,False
+Object Placements,symmetric,0.75,0.0051,0.0055,-0.01,0.0064,-1.9672,1.2623,23.7791,False,0.618,0.125,0.534,0.094,False,False
+task003,nosolution,0.25,0.3007,0.3028,0.2917,0.0519,0.9703,0.1727,23.7968,True,2.673,0.68,2.558,0.537,False,False
+task003,nosolution,0.75,0.2519,0.248,0.2642,0.0508,1.0488,0.2018,24.0103,True,2.939,0.541,2.864,0.419,False,False
+task003,symmetric,0.25,0.4325,0.4264,0.4178,0.0786,0.9661,0.1817,23.9422,True,3.466,0.772,3.195,0.639,False,False
+task003,symmetric,0.75,0.1136,0.1166,0.0853,0.0297,0.7509,0.2612,24.014,True,2.708,0.381,2.516,0.279,False,False

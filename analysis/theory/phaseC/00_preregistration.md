@@ -52,4 +52,15 @@ posting rule matters. The planned next step would then be one revision adding th
 from the exact single-agent posting probabilities.
 
 ## Change log
-(none yet)
+- 24 Oct, after C2 (NBD) failed both checks in all 7 scored cells (`nbd_summary.csv`). Copying directly from the board
+  drifts far too fast: the model keeps 0.5–0.9 distinct controller facts per board at t = 80, against 2.4–4.4 in the
+  data, and it loses nearly all of the effect in both tasks, including task003, which in fact persists. The fallback
+  above ("add selection") assumed expectation 1 held; it did not. **Revision 1 (one change): posts come from agents'
+  memories instead of the board.** Model N2R (neutral, two reservoirs) is the simulator's own rules after t = 30 (24
+  agents, exact reading, forgetting and voting, own posts excluded, posts feed the shared 48-post board), except that a
+  post is a fact drawn uniformly from the agent's memory, preferring facts not just read (the simulator's rule), rather
+  than from the facts that support its vote. It removes evidence-driven selection and keeps everything else. It starts
+  from the stored t = 30 state (memories, last votes, board with authors). Same outputs and same two expectations as
+  NBD. Reading: if N2R passes both, persistence and its fading are explained by neutral drift in two reservoirs plus how
+  evidence is spread over facts; if it fails, the selection of the posting rule is needed (revision 2: restore the
+  support rule, i.e. the simulator itself, as a check of the code path).
