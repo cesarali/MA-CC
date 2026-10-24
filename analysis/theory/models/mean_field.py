@@ -63,6 +63,8 @@ class Spec:
     closure: str = "M2"             # "M2" | "M1" | "M3" (M2 + demographic noise and extinction of fact holder counts)
                                     # | "M3s" (M3 with one stochastic controller instead of the expected one;
                                     #   Phase B attribution of the M3 -> M4 gain)
+                                    # | "M4b" (M4 without integer holder counts: an unlimited population of exact
+                                    #   agents reading one shared finite board; Phase C1)
                                     # | "M4" (M3 + one shared, realised board of W posts)
     n_swarm: int | None = None      # M3/M4: size of the swarm whose fact holder counts fluctuate (default: its agents)
     world_file: str = ""            # default: task003
@@ -131,7 +133,7 @@ class Model:
                 self.n[self.uidx[f]] += 1
             self.n = (self.n * s.n_swarm) // self.n_agents
             self.dead = np.zeros(len(self.U), dtype=bool)
-        if s.closure == "M4":
+        if s.closure in ("M4", "M4b"):
             self.shared = []            # the realised board: (category, is_controller), oldest first
 
     # ---------------------------------------------------------------- stochastic board (diagnostic)
@@ -410,13 +412,13 @@ class Model:
             if s.closure in ("M3", "M3s", "M4"):
                 for f in bits(self.ctrl_mask):
                     self.n[self.uidx[f]] = 0
-            if s.closure == "M4":
+            if s.closure in ("M4", "M4b"):
                 self.shared = [(c, k) for c, k in self.shared if not (self.ctrl_mask >> int(self.cat_fact[c])) & 1]
             self.frozen = "done"
         if stopped and s.post_stop_mode == "frozen_board" and self.frozen is None:
-            self.frozen = self.shared_window() if s.closure == "M4" else self.window()
+            self.frozen = self.shared_window() if s.closure in ("M4", "M4b") else self.window()
         self.forget()
-        m4 = s.closure == "M4"
+        m4 = s.closure in ("M4", "M4b")
         if stopped and s.post_stop_mode == "frozen_board":
             board = self.frozen
         else:
@@ -520,7 +522,7 @@ class Model:
         p = np.array([self.world.posterior(m) for m in self.mem]).mean(axis=0)
         if self.stochastic:
             board = np.bincount(self.s_window(), minlength=self.nC).astype(float)
-        elif self.s.closure == "M4":
+        elif self.s.closure in ("M4", "M4b"):
             win = self.frozen if isinstance(self.frozen, list) else self.shared_window()
             board = np.bincount(win, minlength=self.nC).astype(float)
         else:
