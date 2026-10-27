@@ -342,3 +342,70 @@ Qualitative check only; no tuning towards the simulator. Finite model F at P0, n
   fractions are 0.33–0.67. ε = 1 is near-flat, task003-like.
 - The decline comes from controller lineages going extinct one at a time once their reposting depends on belief in A2.
   It is a finite-size selection effect, not the mean field's quick plateau.
+
+## 2026-10-28 — Step 3 (revised plan): analytic number of surviving facts, two-type branching (written before running)
+
+Agreed split with the ChatGPT agent (`../../theory_blackboard/2026-10-27_chatgpt_12.md`): it does the single-lineage
+illustration; I do the two-type holder/board version tied to the fact-flow rates.
+
+**Model.** One agent fact = a branching population of holder copies (H) and board copies (B), independent of other
+facts. Rates per copy:
+- H forgotten at rate γ;
+- H posts the fact at rate π(t) = κ_A / (κ_A (1 + M_A(t)) + κ₀) (the holder's fact competes with its other agent facts
+  and the background weight);
+- B displaced at rate ν = N/W;
+- B creates a new holder at rate r(t) = (N q / W)(1 − m_A(t)) (a reader who lacks the fact reads it).
+
+**Background** (answering ChatGPT's request): m_A(t), M_A(t) follow the **silent-arm mean-field trajectory** of the
+fact-flow ODE (P0, ε = 1). They are not frozen at one instant, but they are deterministic and shared by all facts:
+independent lineages, with no competition between facts beyond that background.
+
+**Extinction by T.** With u_X(s) = P(lineage started by one X-copy at time s is extinct at T), integrate backwards from
+u(T) = 0:
+- −du_H/ds = γ(1 − u_H) + π(s)(u_H u_B − u_H);
+- −du_B/ds = ν(1 − u_B) + r(s)(u_B u_H − u_B).
+
+Prediction: F_eff(T) = Σ_f [1 − u_H(0)^{n_f}], with 8 facts starting with 2 holders and 8 with 1.
+
+**Distinguished:**
+- early invasion: with frozen rates, the mean matrix [[−γ, π], [r, −ν]] grows iff π q (1 − m)/γ > 1, the earlier
+  "allele" R_f;
+- finite-time diversity: F_eff(T) above.
+
+**Comparison:** with the finite model's silent-arm distinct agent facts at T (`findings/step3_reversal.csv`),
+model-against-model, not against the simulator.
+
+**Expectation:** the formula reproduces the collapse trend (F_eff rising from about 3 at ρ 0.1 to about 12 at ρ 0.9)
+within 30% for ρ ≤ 0.7. It may over-predict survival near saturation (ρ ≥ 0.8), where lineages compete for memory and
+board space.
+
+**Step 3 result, attempt 1: expectation not met.** The independent two-type branching formula predicts far too much
+extinction: F_eff = 0.12 / 1.9 / 9.4 against the finite model's 3.0 / 5.6 / 12.0 at ρ 0.1 / 0.5 / 0.9 (ratio
+0.04–0.79). R_f at T ≈ 0.77–1.08: every fact is near critical.
+
+Diagnosis (the ChatGPT agent's caution): the background was frozen at the mean field, in which all 16 facts circulate.
+Each lineage therefore competes with 15 others for its holders' posts. Once most facts are gone, the survivors share the
+posting capacity and the board among few competitors. **The total copy number is roughly conserved while identities
+drift**: this is neutral resampling, not independent lineages.
+
+**Revision 1 of step 3 (one change, logged before running):** replace independent lineages by neutral drift at a
+conserved total. Diffusion result for the expected number of surviving types, from F equal types:
+- F_eff(t) ≈ F[1 − exp(−2 N_e / (F μ t))];
+- N_e = W b_A + N M_A, the total copies of agent facts (board copies + memory copies), from the silent-arm mean field
+  at T;
+- μ = (W b_A · N/W + N M_A · γ)/N_e, the copy-weighted turnover rate per copy.
+
+This is a heuristic mapping (Kimura's diffusion for a type at frequency 1/F); no parameter is fitted.
+**Expectation:** within 30% of the finite model's silent-arm F_eff for ρ ≤ 0.7, with the right trend everywhere.
+
+**Step 3, revision 1 result: expectation not met** (within 30% only at ρ 0.1; ratio 1.2–1.9). Neutral drift at a
+conserved total **over**-predicts survival: F_eff = 3.6 / 10.5 / 16.0 against 3.0 / 5.6 / 12.0.
+
+**What step 3 does establish:** the two analytic approximations **bracket** the finite model at every ρ.
+- **Lower bound:** independent lineages, each competing with the full mean-field background.
+- **Upper bound:** neutral drift with all copies conserved.
+- Both are written only in mean-field quantities, and both give the collapse at short memory.
+- R_f ≈ 1 at all ρ: agent facts are near-critical, so their diversity is set by drift, copies per fact and turnover.
+
+**Stopping here on purpose.** A third formula tuned to fall between the bounds would be fitting the finite model, not
+understanding it.
