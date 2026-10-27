@@ -1,4 +1,4 @@
-"""Revision 3: softened vote gating eps x beta_C/beta_A (kappa_C = kappa_A = 1, P0 otherwise). Writes results/rev3_grid.csv."""
+"""Revision 3: softened vote gating eps x beta_C/beta_A (kappa_C = kappa_A = 1, P0 otherwise). Writes findings/rev3_grid.csv."""
 import pathlib
 from dataclasses import replace
 import numpy as np, pandas as pd
@@ -26,6 +26,6 @@ for eps in (0.0, 0.25, 0.5, 0.75, 1.0):
         row["both"] = row["reversal"] and row["persist"]
         rows.append(row)
 r = pd.DataFrame(rows)
-r.to_csv(HERE / "results" / "rev3_grid.csv", index=False)
+r.to_csv(HERE / "findings" / "rev3_grid.csv", index=False)
 pd.set_option("display.width", 250)
 print(r.round(3).to_string(index=False))

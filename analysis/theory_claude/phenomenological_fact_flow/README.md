@@ -9,7 +9,7 @@ through a sigmoid and repost by an eligibility rule. No Bayesian engine, no task
 
 **Current best version:** revision 3 (softened vote gating ε). Both phenomena hold for ε ≳ 0.75 at P0.
 
-Run, from this folder (each script writes to `results/`, takes seconds):
+Run, from this folder (each script writes to `findings/`, takes seconds):
 
 ```
 ../../../.venv/bin/python stageA_scan.py         # reversal at P0 and robustness to each parameter

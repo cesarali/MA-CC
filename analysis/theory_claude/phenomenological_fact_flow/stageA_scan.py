@@ -3,7 +3,7 @@ mechanism stated in advance (F_C << F_A), and how robust is it to each parameter
 
 Reversal (for one reading step q1 -> q2) = D > +tol at the smallest rho and D < -tol at some larger rho, with
 tol = 1e-4 (and also reported relative to max |G|). Crossover = first rho where D changes sign from + to -.
-Writes results/stageA_scan.csv and prints a table.
+Writes findings/stageA_scan.csv and prints a table.
 
 Usage, from analysis/theory_claude/phenomenological_fact_flow:
     ../../../.venv/bin/python stageA_scan.py
@@ -49,8 +49,8 @@ def main():
     for h in (np.log(0.25), np.log(1.0)):
         rows.append(summarize(replace(p0, h0=float(h)), f"h0 = ln {np.exp(h):g}"))
     r = pd.DataFrame(rows)
-    (HERE / "results").mkdir(exist_ok=True)
-    r.to_csv(HERE / "results" / "stageA_scan.csv", index=False)
+    (HERE / "findings").mkdir(exist_ok=True)
+    r.to_csv(HERE / "findings" / "stageA_scan.csv", index=False)
     pd.set_option("display.width", 220)
     print(r.round(4).to_string(index=False))
 

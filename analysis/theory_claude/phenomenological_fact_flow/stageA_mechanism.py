@@ -4,7 +4,7 @@ G = sigma(x_ctrl) - sigma(x_silent), a finite step q1 -> q2 gives (exactly, with
     - s_c * beta_A * dM_A^ctrl             (agent evidence gained, controlled arm)
     + s_s * beta_A * dM_A^silent           (agent evidence gained, silent arm)
 s_c, s_s: secant slopes of sigma between the q1 and q2 states in each arm. Prints the terms by rho for P0 and two
-variants. Writes results/stageA_mechanism.csv.
+variants. Writes findings/stageA_mechanism.csv.
 """
 import pathlib
 from dataclasses import replace
@@ -38,8 +38,8 @@ for label, p in (("P0", P()), ("F_C = F_A = 16", replace(P(), F_C=16.0)), ("neut
     for r in RHOS:
         rows.append(dict(model=label, **split(p, r)))
 d = pd.DataFrame(rows)
-(HERE / "results").mkdir(exist_ok=True)
-d.to_csv(HERE / "results" / "stageA_mechanism.csv", index=False)
+(HERE / "findings").mkdir(exist_ok=True)
+d.to_csv(HERE / "findings" / "stageA_mechanism.csv", index=False)
 pd.set_option("display.width", 250)
 print(d.round(4).to_string(index=False))
 
@@ -65,5 +65,5 @@ for label, p in (("P0", P()), ("neutral", replace(P(), selective=False)), ("beta
     for r in RHOS:
         rows.append(dict(model=label, **approx(p, r)))
 a = pd.DataFrame(rows)
-a.to_csv(HERE / "results" / "stageA_approx.csv", index=False)
+a.to_csv(HERE / "findings" / "stageA_approx.csv", index=False)
 print(a.round(4).to_string(index=False))

@@ -52,7 +52,7 @@ effect, G ≈ σ′(x_s) β_C M_C, and
 
 Reading raises the controller's dose (ΔM_C > 0). It also adds agent evidence to both arms; when Φ_s < 1/2, this moves
 the population away from the tipping point and lowers its sensitivity σ′. Long memory makes ΔM_A large, and the second
-term wins. The approximation gets the sign right except where D ≈ 0 (`results/stageA_approx.csv`).
+term wins. The approximation gets the sign right except where D ≈ 0 (`findings/stageA_approx.csv`).
 
 **Stage D (persistence) at P0: E3 met, E2 failed.** The frozen board keeps δ exactly; no communication and removal
 send it to 0. Under normal continuation, *selective* reposting loses everything within about 10 time units, while
@@ -72,7 +72,7 @@ P(A2) up to 0.59, against about 0.35 for agent facts). Check both phenomena at t
 
 ## 2026-10-27 — revision 2 result; revision 3 (written before running it)
 
-**Revision 2 result** (`results/rev2_grid.csv`; κ_C/κ_A × β_C/β_A).
+**Revision 2 result** (`findings/rev2_grid.csv`; κ_C/κ_A × β_C/β_A).
 - At κ_C/κ_A = 1–2: the reversal holds (in 6 of 8 points), but there is no persistence anywhere (controller facts die
   out, R_eff < 1).
 - At κ_C/κ_A ≥ 4: at ρ 0.25 the controlled population switches into a **controller-dominated state** after the
@@ -100,7 +100,7 @@ controller fact is eligible about 0.8 of the time in task003 and 0.55 in OP, so 
 
 ## 2026-10-27 — revision 3 result; stop for this round
 
-**Revision 3 result** (`results/rev3_grid.csv`).
+**Revision 3 result** (`findings/rev3_grid.csv`).
 - The reversal holds at every ε, as predicted.
 - Retention rises with ε, as predicted: ρ 0.25 / 0.75 = 0/0 (ε = 0), 0/0 (0.25), 0/0.29 (0.5), 0.32/0.63 (0.75),
   0.65/0.75 (1).

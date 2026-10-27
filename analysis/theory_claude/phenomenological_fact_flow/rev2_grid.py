@@ -1,4 +1,4 @@
-"""Revision 2: joint map over kappa_C/kappa_A x beta_C/beta_A (P0 otherwise, closure (5)). Writes results/rev2_grid.csv."""
+"""Revision 2: joint map over kappa_C/kappa_A x beta_C/beta_A (P0 otherwise, closure (5)). Writes findings/rev2_grid.csv."""
 import pathlib
 from dataclasses import replace
 import numpy as np, pandas as pd
@@ -24,6 +24,6 @@ for kr in (1.0, 2.0, 4.0, 8.0):
         row["both"] = row["reversal"] and row["persist"]
         rows.append(row)
 r = pd.DataFrame(rows)
-r.to_csv(HERE / "results" / "rev2_grid.csv", index=False)
+r.to_csv(HERE / "findings" / "rev2_grid.csv", index=False)
 pd.set_option("display.width", 250)
 print(r.round(3).to_string(index=False))

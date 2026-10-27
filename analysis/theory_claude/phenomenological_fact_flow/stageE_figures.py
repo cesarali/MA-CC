@@ -5,7 +5,7 @@ P0 otherwise: eps = 1.0 ("high eligibility") and eps = 0.75 ("lower eligibility"
   fig3  m_A, m_C, b_A, b_C trajectories (controlled arm, normal continuation), rho 0.25, both settings
   fig4  retained fraction delta(130)/delta(30) against R_eff (all revision-3 grid points), with the threshold R = 1
   fig5  dose-against-sensitivity split of D(3->6) at eps = 1: full D, its small-effect approximation and the two terms
-Writes results/fig*.pdf.
+Writes findings/fig*.pdf.
 """
 import pathlib
 from dataclasses import replace
@@ -20,7 +20,7 @@ from fact_flow import P, G_at_T, run, phi2, sigma
 from stageD_persistence import delta_path
 
 HERE = pathlib.Path(__file__).resolve().parent
-OUT = HERE / "results"
+OUT = HERE / "findings"
 plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False, "pdf.fonttype": 42,
                      "legend.fontsize": 7})
 SETS = {"high eligibility (ε = 1)": replace(P(), eps=1.0), "lower eligibility (ε = 0.75)": replace(P(), eps=0.75)}

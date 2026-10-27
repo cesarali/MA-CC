@@ -3,7 +3,7 @@
 **Author:** Claude. **Plan followed:** the researcher's `phenomenological_fact_flow_theory_plan.md` (27 Oct).
 **Equations and derivations:** [`model.md`](model.md). **Every decision, including failures:**
 [`decision_log.md`](decision_log.md). **Code:** `fact_flow.py` (model), `stage*.py` and `rev*_*.py` (runs); figures in
-`results/`.
+`findings/`.
 
 ## 1. The answer in brief
 
@@ -50,7 +50,7 @@ board density. Agents vote through a sigmoid and repost one fact.
    0.32–0.63, 0.65–0.75 for ε = 0, 0.25, 0.5, 0.75, 1. It is ≈ 0 when R_C < 1. **Both phenomena hold for ε ≳ 0.75**, at
    β_C/β_A = 1 and 2.
 
-Figures (in `results/`):
+Figures (in `findings/`):
 - `fig1_reversal.pdf`: D for three reading steps, two eligibilities;
 - `fig2_continuations.pdf`: the four continuations;
 - `fig3_trajectories.pdf`: m and b over time;

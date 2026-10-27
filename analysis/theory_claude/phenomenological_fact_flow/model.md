@@ -78,7 +78,7 @@ With short memory ΔM_A is small, and the dose term wins (D > 0). With long memo
 confident.
 
 The formula gets the sign of the full model's D except where D ≈ 0, and its size within a factor of about 2
-(`results/stageA_approx.csv`, Fig. 5).
+(`findings/stageA_approx.csv`, Fig. 5).
 
 **What the reversal does not need:**
 - a proof variable (z = 0 throughout);
@@ -103,7 +103,7 @@ modelled here).
 
 **The role of selection.** With full vote gating (ε = 0), g_C = Φ₂ is small unless the controller has already convinced
 many agents. Then R_C < 1 and controller facts die out. With strong reposting advantage (κ_C/κ_A ≥ 4), the model can
-instead switch into a controller-dominated state (bistability, `results/rev2_grid.csv`). Vote-independent eligibility
+instead switch into a controller-dominated state (bistability, `findings/rev2_grid.csv`). Vote-independent eligibility
 (ε near 1) gives **moderate, stable persistence**, which is the simulator's pattern. Lowering ε lowers R_C and the
 retained fraction: high eligibility gives task003-like persistence, lower eligibility Object-Placements-like partial
 fading.

@@ -1,6 +1,6 @@
 """Stage D: the four continuations after T for model V1, same parameters as the reversal (P0; no retuning), with
 selective and neutral reposting. delta(t) = Phi2(controlled) - Phi2(silent), each arm under the same continuation.
-Prints delta at T, T+1, T+10, T+50, T+100 and the retained fraction; writes results/stageD_persistence.csv.
+Prints delta at T, T+1, T+10, T+50, T+100 and the retained fraction; writes findings/stageD_persistence.csv.
 """
 import pathlib
 from dataclasses import replace
@@ -36,8 +36,8 @@ def main():
                 bC = {f"bC{int(x)}": float(np.interp(x, t, yc[3])) for x in (30.0, 130.0)}
                 rows.append(dict(reposting=label, rho=rho, mode=mode, **vals, retained=vals["d130"] / vals["d30"], **bC))
     r = pd.DataFrame(rows)
-    (HERE / "results").mkdir(exist_ok=True)
-    r.to_csv(HERE / "results" / "stageD_persistence.csv", index=False)
+    (HERE / "findings").mkdir(exist_ok=True)
+    r.to_csv(HERE / "findings" / "stageD_persistence.csv", index=False)
     pd.set_option("display.width", 250)
     print(r.round(4).to_string(index=False))
 

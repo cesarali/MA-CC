@@ -1,7 +1,7 @@
 """Revision 1: beta_C / beta_A in {1, 2, 3, 4} (P0 otherwise). For each: reversal for 3->6 (D at rho 0.05 and min over
 rho >= 0.3), G(q 6) range, normal-continuation retention delta(130)/delta(30) at rho 0.25 / 0.75 for selective
 reposting, and the reproduction numbers R_lin (controller-free background, plan Eq. 8) and R_eff at the state at T.
-Writes results/rev1_scan.csv."""
+Writes findings/rev1_scan.csv."""
 import pathlib
 from dataclasses import replace
 import numpy as np, pandas as pd
@@ -43,7 +43,7 @@ def main():
             row[f"R_lin_{rho}"], row[f"R_eff_{rho}"], row[f"PhiT_{rho}"] = Rl, Re, PhiT
         rows.append(row)
     r = pd.DataFrame(rows)
-    r.to_csv(HERE / "results" / "rev1_scan.csv", index=False)
+    r.to_csv(HERE / "findings" / "rev1_scan.csv", index=False)
     pd.set_option("display.width", 250)
     print(r.round(3).to_string(index=False))
 
