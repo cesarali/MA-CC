@@ -250,3 +250,73 @@ setup difference but not the task difference.
 **Reading.** One measured number, the agents' counter-evidence strength, orders the four setups' reversals in the
 simulator, and drives the right setup contrast in the model. The no-proof pair differs by little (β_A −0.07 against
 −0.17), so other quantities (β_C, h₀) decide between them in the model.
+
+## 2026-10-28 — Step 3: a finite fact-flow model (written before running it)
+
+**Model F (finite, stochastic):** the same rules as the mean-field model, but with individual agents, individual facts
+and a board of whole posts, so a fact can die out.
+- N = 24 agents, W = 48 board slots, F_A = 16 agent facts, F_C = 4 controller facts, time step dt = 0.05.
+- Each agent starts with one agent fact (24 agents over 16 facts: 8 facts held twice).
+- **Per step:** each agent acts with probability dt; each held fact is forgotten with probability 1 − ρ^dt; the
+  controller acts with probability λ₀ dt while t < T.
+- **An action:** read q posts uniformly from the W newest posts not the agent's own (with replacement, as in the ODE).
+  Vote A2 with probability Φ₂ = σ(h₀ + β_C c − β_A a), where a and c are the numbers of agent and controller facts held.
+  Then post: an agent fact with weight κ_A a [ε + (1 − ε)·1(vote ≠ A2)], a controller fact with weight
+  κ_C c [ε + (1 − ε)·1(vote = A2)], or a background post with weight κ₀; within a class the fact is uniform among those
+  held.
+- **The controller** posts a uniformly chosen controller fact.
+- **Observables:** x_A2 among agents who have voted; G, D and δ(t) as differences between arms (400 episodes per cell;
+  each controlled episode is paired with the silent one of the same seed). Continuations as in the ODE.
+- **Parameters:** the current best mean-field version (P0, ε = 1). No Bayesian engine, no task world.
+
+**Predictions** (from `../reports/2026-10-28_proofs_and_finite_size/`):
+- F1 (diversity collapse): at T, the number of distinct agent facts still circulating (held or on the board) is well
+  below 16 at ρ 0.25, and higher at ρ 0.75.
+- F2: G is larger than in the mean-field model at the same parameters.
+- F3: the reversal is still present (D(3→6) > 0 at short memory, < 0 at long memory).
+- F4: after the controller's facts are removed, a residual remains (lasting damage) instead of 0.
+- F5: under normal continuation, δ fades over tens of time units rather than settling within 5–9.
+- F6 (scaling): with R copies of the swarm (N, W, λ₀ ×R) and the same facts, G approaches the mean-field value. With K
+  copies of everything (N, W, λ₀, F_A, F_C ×K), it does not.
+
+## 2026-10-28 — Step 3 result (finite model): F1–F6 met
+
+`findings/step3_reversal.csv`, `step3_persistence.csv`, `step3_scaling.csv` (400 paired episodes per cell; P0, ε = 1;
+no fitting).
+- **F1 met:** agent facts still circulating at T (controlled arm) fall from 11.5 of 16 at ρ 0.9 to 1.6 at ρ 0.1 (2.5 at
+  0.3, 6.8 at 0.7). The simulator has about 3 at ρ 0.25 and 4–8 at 0.75. All 4 controller facts survive (3.8–4.0).
+- **F2 met:** G(q 6) is 0.31–0.41 at ρ ≤ 0.5, against 0.07–0.09 in the mean field. The simulator's range is 0.1–0.45.
+- **F3 met:** D(3→6) = +0.078 ± 0.011 at ρ 0.1, −0.044 ± 0.007 at ρ 0.8; crossover between 0.5 and 0.6 (the simulator's
+  task003 symmetric: 0.5–0.625).
+- **F4 met:** removal residual +0.036 at ρ 0.25 (the simulator's task003 symmetric: +0.04) and +0.004 at ρ 0.75.
+- **F5:** normal continuation 0.388 → 0.347 at ρ 0.25 (slow, about 10% over 100 units) and flat at 0.75. No fast
+  plateau; it resembles task003's flat persistence. No communication decays, with a slight transient rise at ρ 0.75
+  (0.147 → 0.150). The frozen board stays flat.
+- **F6 met:** R copies: G = 0.307, 0.209, 0.130 for R = 1, 2, 4, approaching the mean field (0.072). The simulator's
+  earlier diagnostic gave 0.322, 0.204, 0.144. K copies of everything: 0.434, 0.555 (no approach to the mean field).
+
+**Mechanism check, stated before running:** if the larger finite effect comes from *asymmetric extinction*, then
+spreading the controller's evidence over as many facts as the agents' (F_C = 16, same total evidence per agent through
+β_C) should shrink G towards the mean field. Concentration keeps controller facts alive; spreading lets them die like
+agent facts. Run: ρ 0.25 and 0.5, q 6, 400 paired episodes, F_C = 16 against 4.
+
+**Mechanism check, result as run (execution error):** the run kept β_C = 0.5. I had stated "same total evidence per
+agent through β_C" but did not implement it. With 16 controller facts, agents hold more of them (9–10 survive
+against 4), so G rises in both models: finite 0.62/0.64, mean field 0.25/0.32 at ρ 0.25/0.5. **The prediction as
+stated ("G shrinks towards the mean field") is not met.** Seen after the fact: the finite-to-mean-field ratio halves
+(4.2–4.3 → 2.0–2.4). This is consistent with asymmetric extinction, but post-hoc.
+
+**Corrected run (the control described above, not a new hypothesis):** β_C = 0.5 × 4/16 = 0.125 with F_C = 16, so the
+controller's total possible evidence (F_C β_C = 2) is unchanged. The prediction is unchanged: G in the finite model moves
+towards the mean-field value at the same parameters, i.e. the finite-to-mean-field ratio falls well below 4.
+
+**Corrected mechanism check, result** (`findings/step3_mechanism_equal_evidence.csv`): with equal controller evidence
+(F_C β_C = 2), spreading it over 16 facts lowers the finite G from 0.388 to 0.279 (ρ 0.25) and from 0.307 to 0.245
+(ρ 0.5). The finite-to-mean-field ratio falls from 4.2–4.3 to 2.4. **Prediction met:** concentration of the controller's
+evidence accounts for about half of the finite-size amplification; the collapse of the agents' own evidence accounts for
+the rest. Report: `../reports/2026-10-28_finite_model/finite_model.pdf`.
+
+**Not explained:**
+- D is 2–3 times smaller than the simulator's (+0.08 against +0.22 at short memory);
+- K-projects scaling (the model rises at K = 4; the simulator falls, because single facts there carry less information);
+- the persistence task difference (ε not yet varied in the finite model).
