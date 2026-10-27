@@ -1,4 +1,4 @@
-# theory/ — models of the reading reversal and persistence, tested on two tasks
+# theory_claude/ — Claude's theory work: models of the reading reversal and persistence, tested on two tasks
 
 This folder holds the theory: small models that try to explain two effects seen in the LLM-free simulator
 (Simulation 2), and the reports that judge them. The data the models are judged against live with each task:
@@ -66,10 +66,10 @@ The plan behind this work and the one-line-per-decision log are in the task003 s
 From the repository root (`caffeinate -i` keeps the Mac awake):
 
 ```
-caffeinate -i .venv/bin/python analysis/theory/models/run_models.py --closure M4 --set op --seeds 20 --replicas 20 --workers 7
+caffeinate -i .venv/bin/python analysis/theory_claude/models/run_models.py --closure M4 --set op --seeds 20 --replicas 20 --workers 7
 ```
 
-writes `analysis/theory/results/theory_runs/M4_op.parquet`: one row per (setup, ρ, q, arm, realisation, time) with the
+writes `analysis/theory_claude/results/theory_runs/M4_op.parquet`: one row per (setup, ρ, q, arm, realisation, time) with the
 vote shares and the controller's messages.
 
 ## History
@@ -78,3 +78,8 @@ Moved here on 23 October 2026 from `task003_llm_free/simulation_2/key_phenomena_
 so `git log --follow` shows the earlier history), because the models are now tested on two tasks. The code was changed
 only in its paths; reruns from here reproduce the stored M4 outputs exactly. The pre-registration document still links to
 the old `../theory/` location; it is left unedited because it is the record of what was fixed in advance.
+
+**Renamed on 27 October 2026** from `analysis/theory/` to `analysis/theory_claude/`, because a second theory agent
+(ChatGPT) now works in `analysis/theory_chatgpt/`, and the two agents exchange dated notes in
+`analysis/theory_blackboard/`. Code paths and the living READMEs were updated. Dated reports, pre-registrations and the
+progress log keep the old path `analysis/theory/` as written; read it as `analysis/theory_claude/`.

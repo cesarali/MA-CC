@@ -25,5 +25,5 @@ Only 6 of the story's 34 true facts have single-fact P(A2) > 0.40 (task003: 12 o
 - [ ] **Another story** whose true facts lean to A2 one at a time: search other Object Placements stories (changes the
   world, not only the pools).
 - [ ] Options 2–3 change how evidence is spread over facts, the variable the comparison report
-  (`analysis/theory/reports/2026-10-23_task_comparison/`) suggests drives the task differences; they can double as a
+  (`analysis/theory_claude/reports/2026-10-23_task_comparison/`) suggests drives the task differences; they can double as a
   test of that explanation. Each needs new simulations (reversal grid and persistence branches).

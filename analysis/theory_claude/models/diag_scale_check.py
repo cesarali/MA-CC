@@ -1,5 +1,5 @@
 import sys, multiprocessing
-sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/theory/models')
+sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/theory_claude/models')
 from mean_field import Model, Spec
 def one(args):
     setup, arm, R, seed = args
@@ -11,7 +11,7 @@ if __name__=='__main__':
     with multiprocessing.Pool(12) as p: r=p.map(one,jobs,chunksize=4)
     import pandas as pd
     d=pd.DataFrame(r,columns=['setup','arm','R','seed','x2','msgs_per_R','ctrl_b'])
-    d.to_csv('/Users/rsanchez/Projects/MA-CC/analysis/theory/results/theory_runs/diag_scale_check.csv',index=False)
+    d.to_csv('/Users/rsanchez/Projects/MA-CC/analysis/theory_claude/results/theory_runs/diag_scale_check.csv',index=False)
     g=d.pivot_table(index=['setup','R','seed'],columns='arm',values='x2'); g['G']=g.false-g.silent
     print(g.groupby(['setup','R']).G.agg(['mean','sem']).round(3))
     print(d.groupby(['setup','R','arm'])[['x2','msgs_per_R','ctrl_b']].mean().round(3))

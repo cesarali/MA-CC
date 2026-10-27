@@ -7,7 +7,7 @@ now (ignoring the prefer-not-just-read tie-break). Same for agent facts. Average
 Writes repost_propensity.csv.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/phaseC/repost_propensity.py
+    .venv/bin/python analysis/theory_claude/phaseC/repost_propensity.py
 """
 from __future__ import annotations
 import json, pathlib, sys
@@ -17,7 +17,7 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 A = HERE.parents[1]
-sys.path.insert(0, str(A / "theory/phaseA"))
+sys.path.insert(0, str(A / "theory_claude/phaseA"))
 sys.path.insert(0, str(A / "task003_llm_free/simulation_2/simulator"))
 from evidence_map import facts  # noqa: E402
 from solvable_branches import RUNS, bits  # noqa: E402

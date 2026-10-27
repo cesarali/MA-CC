@@ -9,7 +9,7 @@ Writes evidence_map.csv: task, setup, z, c, a, phi_hat, n_draws (draws that land
 per (c, a).
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/theory/phaseA/evidence_map.py --workers 7
+    caffeinate -i .venv/bin/python analysis/theory_claude/phaseA/evidence_map.py --workers 7
 """
 from __future__ import annotations
 import argparse, multiprocessing, pathlib, sys

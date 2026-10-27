@@ -3,7 +3,7 @@ Writes figures/fig*.pdf. Run carrier_after_stop.py, board_persuasion.py, context
 task_structure.py first (their CSVs are inputs here).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_task_comparison/make_figures.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_task_comparison/make_figures.py
 """
 from __future__ import annotations
 import pathlib

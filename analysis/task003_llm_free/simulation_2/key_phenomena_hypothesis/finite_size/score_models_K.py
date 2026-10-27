@@ -1,7 +1,7 @@
 """Models M3 and M4 against the K-projects simulations (post-hoc: these data were seen before the models were run).
 
 Data: tables/scaling_K.csv (compare_K.py; G at t = 30 for q = 3, 6 and D(3 -> 6) with paired standard errors, K = 1,
-2, 4). Models: analysis/theory/results/theory_runs/<tag>_k2.parquet, <tag>_k4.parquet (run_models.py --set k2/k4) and
+2, 4). Models: analysis/theory_claude/results/theory_runs/<tag>_k2.parquet, <tag>_k4.parquet (run_models.py --set k2/k4) and
 <tag>_all.parquet for K = 1. A model increment counts as positive / negative when |D| >= 0.01.
 Writes tables/scaling_K_models.csv and prints a summary per model and K.
 
@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-RUNS = HERE.parents[3] / "theory" / "results" / "theory_runs"     # analysis/theory
+RUNS = HERE.parents[3] / "theory_claude" / "results" / "theory_runs"     # analysis/theory_claude
 TAB = HERE.parent / "tables"
 
 

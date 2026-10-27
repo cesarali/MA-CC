@@ -42,7 +42,7 @@ secondary.
 ## Theory programme (from 22 October 2026)
 
 Folders from the plan: theory (exact rules, models M1–M4, write-ups, reviewer report; moved on 23 October 2026 to
-[`analysis/theory/`](../../../theory/) because it now covers task003 and Object Placements), [`calibration/`](calibration/)
+[`analysis/theory_claude/`](../../../theory_claude/) (renamed from `analysis/theory/` on 27 Oct) because it now covers task003 and Object Placements), [`calibration/`](calibration/)
 (development targets, `build_benchmarks.py`, **pre-registered split** `holdout_preregistration.md`),
 [`held_out_validation/`](held_out_validation/) (held-out targets, scorecards), [`defense/`](defense/), [`llm/`](llm/), [`finite_size/`](finite_size/)
 (K-projects scaling). Object Placements (second task: world, setups, runs, pre-registered scores) moved on 23 October

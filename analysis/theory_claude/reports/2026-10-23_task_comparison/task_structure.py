@@ -7,7 +7,7 @@
 Writes task_structure.csv (summary) and single_fact_p2.csv (per fact).
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_task_comparison/task_structure.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_task_comparison/task_structure.py
 """
 from __future__ import annotations
 import itertools, pathlib, sys

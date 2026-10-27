@@ -7,7 +7,7 @@
 Writes attribution.csv and prints the comparison of M3, M3s and M4.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/phaseB/score_attribution.py [TAG ...]   (default M3 M3s M4)
+    .venv/bin/python analysis/theory_claude/phaseB/score_attribution.py [TAG ...]   (default M3 M3s M4)
 """
 from __future__ import annotations
 import pathlib, subprocess, sys
@@ -20,7 +20,7 @@ A = HERE.parents[1]
 REPO = A.parent
 KP = A / "task003_llm_free/simulation_2/key_phenomena_hypothesis"
 OPA = A / "object_placements_llm_free/simulation_2/analysis"
-RUNS = A / "theory/results/theory_runs"
+RUNS = A / "theory_claude/results/theory_runs"
 PY = str(REPO / ".venv/bin/python")
 sys.path.insert(0, str(OPA))
 import op_post_stop as ops  # noqa: E402

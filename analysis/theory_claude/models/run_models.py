@@ -1,6 +1,6 @@
 """Run the mean-field models over a set of conditions and store their predictions.
 
-  --closure M1..M4       which model (theory/models/mean_field.py)
+  --closure M1..M4       which model (theory_claude/models/mean_field.py)
   --set dev|all|post_stop|check|k2|k4|op|op_post_stop
         dev        development cells: both setups, rho {0.25, 0.75, 1}, q {3, 6}, t <= 40
         all        every reading-run cell: both setups, 8 rho, q {3, 6, 9, 12}, t <= 40
@@ -11,12 +11,12 @@
         check      numerical convergence: symmetric and nosolution, rho 0.5, q 6, replicas 50/100/200, dt 0.05/0.025
   --tag NAME            output name (default: closure)
   --seeds S, --replicas R   realisations per condition (M3) and population replicas
-Writes analysis/theory/results/theory_runs/<tag>_<set>.parquet: one row per (setup, rho, q, arm, mode, t) with vote
+Writes analysis/theory_claude/results/theory_runs/<tag>_<set>.parquet: one row per (setup, rho, q, arm, mode, t) with vote
 shares x0..x2 among voters, mean beliefs, controller messages, controller-only share of memory slots and board, and
 per-fact m_f, b_f (columns m_<fact>, b_<fact>).
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/theory/models/run_models.py --closure M2 --set dev
+    caffeinate -i .venv/bin/python analysis/theory_claude/models/run_models.py --closure M2 --set dev
 """
 from __future__ import annotations
 import argparse, multiprocessing, pathlib, sys

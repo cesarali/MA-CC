@@ -99,4 +99,4 @@ analysis/**/*.log
 analysis/**/world_op*.classes.npz
 
 # Phase A per-episode tables (regenerable)
-analysis/theory/phaseA/*.parquet
+analysis/theory_claude/phaseA/*.parquet

@@ -5,7 +5,7 @@ task: a MuSR **Object Placements** story. MuSR (Sprague et al., arXiv 2310.16049
 reasoning puzzles; "Object Placements" asks where a person would look for an item after some moves they may or may not
 have seen. Here the agents are exact Bayesian reasoners, as in task003, so no LLM is involved.
 
-Purpose: an **out-of-sample test of the theory** in [`../theory/`](../theory/). The M3 and M4 predictions for this
+Purpose: an **out-of-sample test of the theory** in [`../theory_claude/`](../theory_claude/). The M3 and M4 predictions for this
 task were committed (commits `c0d22bc`, `c9d66c2`) before the simulation data were opened.
 
 ## The task in one example
@@ -28,7 +28,7 @@ made by Casey". The story has 34 true facts. An agent's belief is the exact prob
 
 The reading reversal appears here too. M4's pre-registered predictions get 11/16 (symmetric) and 12/15 (no-proof)
 resolved increment signs right and G within 0.02–0.03; M3 fails (5/16, 3/15). Details: the theory report,
-[§2](../theory/reports/2026-10-22_theory_review/theory_review_report.md#section-2-musr-object-placements-second-task-pre-registered).
+[§2](../theory_claude/reports/2026-10-22_theory_review/theory_review_report.md#section-2-musr-object-placements-second-task-pre-registered).
 
 ## What is here
 
@@ -48,7 +48,7 @@ resolved increment signs right and G within 0.02–0.03; M3 fails (5/16, 3/15). 
   summaries (`runs_index.csv`, `run_summaries/2026-10-22_sim2_op_main_summary.csv`) stay with the simulator.
 - **Story engine:** [`../task003_llm_free/llmfree_core/op_world.py`](../task003_llm_free/llmfree_core/op_world.py)
   lists all stories and computes the exact beliefs.
-- **Theory models:** [`../theory/`](../theory/).
+- **Theory models:** [`../theory_claude/`](../theory_claude/).
 
 ## How to rerun
 

@@ -4,7 +4,7 @@ t = 30, 40, 80, 130. Tests whether drift removes the complementary controller fa
 average shares across episodes stay constant. Writes ctrl_diversity.csv.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_task_comparison/ctrl_diversity.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_task_comparison/ctrl_diversity.py
 """
 from __future__ import annotations
 import json, pathlib, sys

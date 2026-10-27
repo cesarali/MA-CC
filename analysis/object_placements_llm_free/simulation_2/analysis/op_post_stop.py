@@ -7,7 +7,7 @@ have voted. Four continuations from t_c = 30: normal, no_comm, frozen_board, pur
 rho 0.25 and 0.75, q 6, to t = 130.
 
   predict --tag M4   writes preregistered_post_stop_<tag>.csv (delta(t) on the 0.25 grid) from the model run
-                     analysis/theory/results/theory_runs/<tag>_op_post_stop.parquet (run_models.py --set op_post_stop).
+                     analysis/theory_claude/results/theory_runs/<tag>_op_post_stop.parquet (run_models.py --set op_post_stop).
                      Commit this file BEFORE running the simulation `sim2_op_post_stop`.
   data               writes op_post_stop_data.csv (delta(t), its standard error, episodes) from the newest run
                      results/simulation_2/*_sim2_op_post_stop.
@@ -27,7 +27,7 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]                                            # analysis/object_placements_llm_free
-RUNS = ROOT.parent / "theory" / "results" / "theory_runs"
+RUNS = ROOT.parent / "theory_claude" / "results" / "theory_runs"
 SIM = ROOT / "results" / "simulation_2"
 TIMES = [30.0, 31.0, 40.0, 80.0, 130.0]
 MODES = ["normal", "no_comm", "frozen_board", "purge_controller_facts"]

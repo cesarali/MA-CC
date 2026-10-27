@@ -8,7 +8,9 @@ in which agents are exact Bayesian reasoners.
 |---|---|
 | [`task003_llm_free/`](task003_llm_free/) | The two frozen control setups for `task_003` (`task003-symmetric`, `task003-nosolution`), the LLM-free simulator, and the coarse-graining used to estimate information quantities |
 | [`object_placements_llm_free/`](object_placements_llm_free/) | A second task for the same LLM-free simulator (a MuSR Object Placements story): world, setups, runs, and the pre-registered test of the theory |
-| [`theory/`](theory/) | Models of the reading reversal and persistence (M1–M4), tested on both tasks above; the reviewer report |
+| [`theory_claude/`](theory_claude/) | Claude's theory work: models of the reading reversal and persistence (M1–M4, Phases A–C), tested on both tasks above |
+| [`theory_chatgpt/`](theory_chatgpt/) | The ChatGPT agent's theory work (only that agent writes here) |
+| [`theory_blackboard/`](theory_blackboard/) | Shared space: dated notes between the two theory agents |
 | [`bound_estimators/`](bound_estimators/) | Control-efficiency bounds: endpoint and path information, cost, efficiency ratios, estimated with learned critics |
 
 ## Why this is not `results/`

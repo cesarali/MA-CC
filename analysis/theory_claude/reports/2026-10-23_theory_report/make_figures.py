@@ -2,14 +2,14 @@
 
 Inputs (none are recomputed here):
   task003 data      task003_llm_free/results/key_phenomena/theory_benchmarks/{G_D,post_stop}.parquet (calibration/build_benchmarks.py)
-  model outputs     theory/results/theory_runs/<model>_{all,post_stop}.parquet (theory/models/run_models.py)
+  model outputs     theory/results/theory_runs/<model>_{all,post_stop}.parquet (theory_claude/models/run_models.py)
   diagnostics       theory/results/theory_runs/diag_scale_check.csv; pinned-fact numbers from theory/M1_M2_mean_field.md §5
   K scaling         key_phenomena_hypothesis/tables/scaling_K_models.csv (finite_size/score_models_K.py)
   Object Placements object_placements_llm_free/simulation_2/analysis/{op_data,preregistered_M3,preregistered_M4}.csv
   scorecards        held_out_validation/scorecard_M*_summary.csv, scorecard_op_M*.csv
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_theory_report/make_figures.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_theory_report/make_figures.py
 """
 from __future__ import annotations
 import pathlib
@@ -24,7 +24,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 A = HERE.parents[2]                                                   # analysis/
 KP = A / "task003_llm_free" / "simulation_2" / "key_phenomena_hypothesis"
 BENCH = A / "task003_llm_free" / "results" / "key_phenomena" / "theory_benchmarks"
-RUNS = A / "theory" / "results" / "theory_runs"
+RUNS = A / "theory_claude" / "results" / "theory_runs"
 OPA = A / "object_placements_llm_free" / "simulation_2" / "analysis"
 OUT = HERE / "figures"
 

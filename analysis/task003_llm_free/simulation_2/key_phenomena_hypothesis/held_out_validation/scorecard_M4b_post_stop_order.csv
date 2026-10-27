@@ -1,0 +1,9 @@
+setup,rho,t,data_order,model_order,same
+nosolution,0.25,40,purge_controller_facts < no_comm < frozen_board < normal,purge_controller_facts < no_comm < frozen_board < normal,True
+nosolution,0.25,130,purge_controller_facts < no_comm < normal < frozen_board,purge_controller_facts < no_comm < frozen_board < normal,False
+nosolution,0.75,40,purge_controller_facts < no_comm < normal < frozen_board,purge_controller_facts < no_comm < normal < frozen_board,True
+nosolution,0.75,130,purge_controller_facts < no_comm < frozen_board < normal,purge_controller_facts < no_comm < normal < frozen_board,False
+symmetric,0.25,40,no_comm < purge_controller_facts < frozen_board < normal,no_comm < purge_controller_facts < frozen_board < normal,True
+symmetric,0.25,130,no_comm < purge_controller_facts < normal < frozen_board,no_comm < purge_controller_facts < normal < frozen_board,True
+symmetric,0.75,40,purge_controller_facts < no_comm < normal < frozen_board,purge_controller_facts < no_comm < normal < frozen_board,True
+symmetric,0.75,130,purge_controller_facts < no_comm < normal < frozen_board,purge_controller_facts < no_comm < normal < frozen_board,True

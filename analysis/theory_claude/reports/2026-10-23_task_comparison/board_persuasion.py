@@ -6,7 +6,7 @@
 Both tasks, both setups, rho 0.25 / 0.75. Writes board_persuasion.csv and ctrl_fact_mix.csv.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_task_comparison/board_persuasion.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_task_comparison/board_persuasion.py
 """
 from __future__ import annotations
 import json, pathlib, sys

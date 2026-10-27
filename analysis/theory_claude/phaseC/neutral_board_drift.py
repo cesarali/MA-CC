@@ -12,7 +12,7 @@ board at t = 40, 80, 130, model), nbd_summary.csv (retained fraction delta(130)/
 ../reports/2026-10-23_task_comparison/ctrl_diversity.csv, and the pre-registered checks).
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/theory/phaseC/neutral_board_drift.py --workers 2
+    caffeinate -i .venv/bin/python analysis/theory_claude/phaseC/neutral_board_drift.py --workers 2
 """
 from __future__ import annotations
 import argparse, bisect, json, math, multiprocessing, pathlib, sys
@@ -22,11 +22,11 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 A = HERE.parents[1]
-sys.path.insert(0, str(A / "theory/phaseA"))
+sys.path.insert(0, str(A / "theory_claude/phaseA"))
 from evidence_map import facts  # noqa: E402
 from solvable_branches import RUNS, TIMES, W, data_delta, bits  # noqa: E402
 
-DIV = A / "theory/reports/2026-10-23_task_comparison/ctrl_diversity.csv"
+DIV = A / "theory_claude/reports/2026-10-23_task_comparison/ctrl_diversity.csv"
 CHECK_T = (40.0, 80.0, 130.0)
 
 

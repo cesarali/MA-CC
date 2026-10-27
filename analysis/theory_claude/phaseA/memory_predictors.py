@@ -12,7 +12,7 @@ Each quantity's G = false - silent, and D = G(q 6) - G(q 3), per episode (episod
 memory_predictors.csv (16 points, with signs and the scoring of 00_preregistration.md).
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/theory/phaseA/memory_predictors.py --workers 7
+    caffeinate -i .venv/bin/python analysis/theory_claude/phaseA/memory_predictors.py --workers 7
 """
 from __future__ import annotations
 import argparse, json, multiprocessing, pathlib, sys

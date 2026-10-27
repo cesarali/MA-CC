@@ -10,7 +10,7 @@ falls with t in Object Placements but not in task003, while value_alone stays fl
 Writes context_value.csv.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_task_comparison/context_value.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_task_comparison/context_value.py
 """
 from __future__ import annotations
 import json, pathlib, sys

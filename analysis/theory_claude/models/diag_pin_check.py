@@ -1,5 +1,5 @@
 import sys, multiprocessing
-sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/theory/models')
+sys.path.insert(0,'/Users/rsanchez/Projects/MA-CC/analysis/theory_claude/models')
 from mean_field import Model, Spec
 def one(args):
     setup, rho, arm, pin, seed = args

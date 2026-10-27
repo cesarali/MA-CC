@@ -10,7 +10,7 @@ read) is used instead: a check of this code path, which should reproduce the dat
 Outputs (tag n2r or support): <tag>_delta.csv, <tag>_summary.csv (same checks as neutral_board_drift.py).
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/theory/phaseC/two_reservoir_drift.py --workers 2 [--support]
+    caffeinate -i .venv/bin/python analysis/theory_claude/phaseC/two_reservoir_drift.py --workers 2 [--support]
 """
 from __future__ import annotations
 import argparse, heapq, json, math, multiprocessing, pathlib, random, sys
@@ -20,13 +20,13 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 A = HERE.parents[1]
-sys.path.insert(0, str(A / "theory/phaseA"))
+sys.path.insert(0, str(A / "theory_claude/phaseA"))
 sys.path.insert(0, str(A / "task003_llm_free/simulation_2/simulator"))
 from evidence_map import facts  # noqa: E402
 from solvable_branches import RUNS, TIMES, W, data_delta, bits  # noqa: E402
 from sim2.simulation_2 import choose_post, NO_POST  # noqa: E402
 
-DIV = A / "theory/reports/2026-10-23_task_comparison/ctrl_diversity.csv"
+DIV = A / "theory_claude/reports/2026-10-23_task_comparison/ctrl_diversity.csv"
 CHECK_T = (40.0, 80.0, 130.0)
 
 

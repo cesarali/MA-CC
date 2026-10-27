@@ -1,7 +1,7 @@
 """Object Placements: pre-registered model predictions and their score against the simulation.
 
   predict --tag M4     writes preregistered_<tag>.csv (this folder) from the model run
-                       analysis/theory/results/theory_runs/<tag>_op.parquet: G at t = 30 per (setup, rho, q) and
+                       analysis/theory_claude/results/theory_runs/<tag>_op.parquet: G at t = 30 per (setup, rho, q) and
                        D(q1 -> q2) for 3->6, 6->9, 9->12. Commit this file BEFORE running `score`.
   data                 writes op_data.csv from the simulation run *_sim2_op_main: G at t = 30 (paired
                        per episode, x_A2 among agents who have voted) and D for the three steps with paired standard
@@ -21,7 +21,7 @@ import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]                                            # analysis/object_placements_llm_free
-RUNS = ROOT.parent / "theory" / "results" / "theory_runs"
+RUNS = ROOT.parent / "theory_claude" / "results" / "theory_runs"
 SIM = ROOT / "results" / "simulation_2"
 STEPS = [(3, 6), (6, 9), (9, 12)]
 TOL = 0.01

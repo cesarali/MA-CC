@@ -1,0 +1,11 @@
+split,setup,resolved,correct,pos_data,pos_correct,neg_data,neg_correct,G_mae,misses,step,data,model
+development,nosolution,3.0,3.0,2.0,2.0,1.0,1.0,0.0222297685185185,,,,
+development,symmetric,2.0,2.0,1.0,1.0,1.0,1.0,0.027579305555555544,,,,
+held_out,nosolution,16.0,13.0,10.0,10.0,6.0,3.0,0.027491752136752128,0.625 9->12 data - model 0; 0.75 9->12 data - model 0; 1 9->12 data - model 0,,,
+held_out,symmetric,17.0,14.0,4.0,4.0,13.0,10.0,0.039830523504273505,0.875 6->9 data - model 0; 0.625 9->12 data - model 0; 0.875 9->12 data - model 0,,,
+crossover,symmetric,,,,,,,,,3->6,0.5-0.625 (+->-),0.5-0.625 (+->-)
+crossover,symmetric,,,,,,,,,6->9,0.125-0.375 (+->-),0.125-0.25 (+->-)
+crossover,symmetric,,,,,,,,,9->12,none,none
+crossover,nosolution,,,,,,,,,3->6,0.75-1 (+->-),0.75-1 (+->-)
+crossover,nosolution,,,,,,,,,6->9,0.5-0.875 (+->-),0.75-0.875 (+->-)
+crossover,nosolution,,,,,,,,,9->12,0.25-0.625 (+->-),0.25-0.375 (+->-); 0.375-0.5 (-->+); 0.5-0.875 (+->-)

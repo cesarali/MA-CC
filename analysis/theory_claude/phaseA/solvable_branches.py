@@ -14,7 +14,7 @@ Output: delta(t) = mean x_A2(false) - mean x_A2(silent) at t = 30.25 ... 130 for
 solvable_branches.csv; summary at t = 31, 40, 80, 130 and the no-communication half-time printed.
 
 Usage, from the repository root:
-    caffeinate -i .venv/bin/python analysis/theory/phaseA/solvable_branches.py --workers 7
+    caffeinate -i .venv/bin/python analysis/theory_claude/phaseA/solvable_branches.py --workers 7
 """
 from __future__ import annotations
 import argparse, itertools, json, math, multiprocessing, pathlib, sys

@@ -10,7 +10,7 @@ Per (task, setup, rho, arm) and t in {30, 40, 80, 130}, averaged over episodes:
 Writes carrier_after_stop.csv next to this script.
 
 Usage, from the repository root:
-    .venv/bin/python analysis/theory/reports/2026-10-23_task_comparison/carrier_after_stop.py
+    .venv/bin/python analysis/theory_claude/reports/2026-10-23_task_comparison/carrier_after_stop.py
 """
 from __future__ import annotations
 import json, pathlib, sys
