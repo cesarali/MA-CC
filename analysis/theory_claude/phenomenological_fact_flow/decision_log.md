@@ -152,3 +152,54 @@ task_structure.csv`). Everything else at the current best version (revision 3, �
 The missing mechanism is therefore the correlated co-retention of proof facts, since facts are acquired together in one
 read. No further revision in this round (three used). Proposed next: replace the independence approximation in Z by a
 co-retention moment.
+
+## 2026-10-28 — Step 1: proofs with co-retention (written before running it)
+
+Researcher: "go ahead" with step 1.
+
+**Change (one):** replace the independence product m_A^ℓ in z by the exact co-retention moment of an ℓ-fact proof,
+treating the proof's facts as interchangeable, each with board share p = b_A/F_A (equal copies):
+- dh_k/dt = −kγh_k + Σ_{j=1..k} C(k,j) p_k(j) (h_{k−j} − h_k), with h₀ = 1, k = 1..ℓ;
+- p_k(j) = Σ_{i=0..j} (−1)^i C(j,i) (1 − (k − j + i) p)^q, the chance that one read (q posts, with replacement) brings
+  exactly a given j of the k facts;
+- z = 1 − (1 − h_ℓ)^P.
+
+This is the ChatGPT agent's triangular recurrence (`../../theory_blackboard/2026-10-27_02_exact_frozen_board_
+combinations.md`) specialised to equal copies, applied on the model's changing board. Check: for k = 1 it is Eq. (1).
+
+**Expectations stated in advance:**
+- C5 (mathematical): h_ℓ ≥ m_A^ℓ at all times, because facts acquired in the same read are positively correlated.
+- C6: the 3→6 crossover moves to *lower* ρ with proofs, more for ℓ = 3 (OP-like) than for ℓ = 6 (task003-like).
+- My honest prior on C6 is weak. Co-retention gains a factor of about 2 in the simulator, while z at ρ 0.25 was about
+  10⁻³ under independence; a factor of 2 may not be enough. If C6 fails, the next suspect is the per-fact memory level
+  m_A itself (16 facts competing for reading). That will be checked against the simulator's per-fact holding shares in
+  the symmetric setups (stored memories), not tuned.
+
+## 2026-10-28 — Step 1 result; finite-size measurements
+
+**Step 1** (`findings/step1_coretention.csv`):
+- **C5 met:** co-retention raises proof holding strongly. h_ℓ/m_A^ℓ is 26 (ℓ = 6) and 2.7 (ℓ = 3) at ρ 0.25, and 6.2 and
+  1.7 at ρ 0.5. The ℓ = 3 values are close to the ChatGPT agent's simulator values (1.8–2.6). The check h₁ = m_A holds
+  exactly.
+- **C6 not met:** the crossover still does not move (0.25–0.3).
+
+**Pre-announced check against the simulator** (`findings/step1_simulator_check.csv`, symmetric setups, t = 30, q 6):
+- The simulator's per-fact holding share of agent facts is 0.08–0.35, so the model's m_A ≈ 0.15 is realistic: the
+  suspect is cleared.
+- The model's proof shares with co-retention are now close to the simulator's (OP-like 0.03/0.10/0.32 against OP
+  0.03/0.14/0.42 at ρ 0.25/0.5/0.75).
+- **But in the simulator, too, almost nobody holds a complete proof near the crossover:** 1% at task003's crossover
+  (ρ 0.5–0.625), 3% at OP's (0.25–0.375).
+- So completed proofs cannot be what moves the simulator's symmetric crossover. The Stage C expectation C2/C3 rested on
+  a wrong premise.
+
+**New candidate** (from the model, not yet tested): the crossover is set by β_A, how strongly agents' own evidence argues
+*against* the wrong answer; a larger β_A gives a lower crossover (stage A scan). In the no-proof setups the agents'
+evidence is neutral between A0 and A2 (jointly 0.5/0/0.5), so β_A is small; in the symmetric setups it argues strongly
+against A2. To be tested by measuring an effective β_A in each setup from stored memories (logit of exact P(A2 | M)
+against the number of agent facts held), before comparing with the crossovers.
+
+**Finite sizes** (`findings/finite_size_numbers.csv`, false arm, q 6, t = 30): at ρ 0.25 only about 3 of 15–18 agent
+facts survive per episode (held or on the board), with 7–9 board copies and about 7 holders each. At ρ 0.75, 6–9 survive
+with 4–5 copies. The controller keeps 3–6 distinct facts with 4–8 copies each. The ODE assumes all 16 agent facts
+circulate with 2–4 copies: its effective fact number is wrong at short memory.

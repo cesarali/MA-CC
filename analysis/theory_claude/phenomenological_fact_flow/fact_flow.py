@@ -35,6 +35,7 @@ class P:
     eps: float = 0.0
     proof_l: int = 0          # Stage C: proof size l (0 = no proof variable)
     proof_P: float = 0.0      # Stage C: effective number of alternative proofs P
+    coretention: bool = False  # Step 1: z from the co-retention moment h_l instead of m_A^l
 
 
 def sigma(x):
@@ -48,12 +49,33 @@ def zproof(p: P, mA):
     return 1 - (1 - np.clip(mA, 0, 1) ** p.proof_l) ** p.proof_P
 
 
-def phi2(p: P, mA, mC):
-    return (1 - zproof(p, mA)) * sigma(p.h0 + p.beta_C * p.F_C * mC - p.beta_A * p.F_A * mA)
+def phi2(p: P, mA, mC, hl=None):
+    z = (1 - (1 - np.clip(hl, 0, 1)) ** p.proof_P) if (hl is not None and p.coretention) else zproof(p, mA)
+    return (1 - z) * sigma(p.h0 + p.beta_C * p.F_C * mC - p.beta_A * p.F_A * mA)
+
+
+def p_exact(k, j, pf, q):
+    """Chance that one read of q posts (with replacement) brings exactly a given j of k interchangeable facts, each on a
+    share pf of the board."""
+    from math import comb
+    return sum((-1) ** i * comb(j, i) * max(1 - (k - j + i) * pf, 0.0) ** q for i in range(j + 1)) * comb(k, j)
+
+
+def dh(h, pf, q, gamma):
+    """Co-retention moments h_1..h_l (h_0 = 1): dh_k = -k gamma h_k + sum_j C(k,j) p_k(j) (h_{k-j} - h_k)."""
+    hh = np.concatenate([[1.0], h])
+    out = np.zeros(len(h))
+    for k in range(1, len(h) + 1):
+        acc = -k * gamma * hh[k]
+        for j in range(1, k + 1):
+            acc += p_exact(k, j, pf, q) * (hh[k - j] - hh[k])
+        out[k - 1] = acc
+    return out
 
 
 def rhs(t, y, p: P, q, gamma, controlled, mode="normal", frozen_b=None):
-    mA, mC, bA, bC = y
+    mA, mC, bA, bC = y[:4]
+    hl = y[3 + p.proof_l] if (p.coretention and p.proof_l > 0) else None
     after = t >= p.T
     if mode == "frozen" and after:
         bA, bC = frozen_b
@@ -62,7 +84,7 @@ def rhs(t, y, p: P, q, gamma, controlled, mode="normal", frozen_b=None):
     rC = 1 - (1 - min(max(bC, 0.0), 1.0) / p.F_C) ** q if read else 0.0
     dmA = (1 - mA) * rA - gamma * mA
     dmC = (1 - mC) * rC - gamma * mC
-    ph = phi2(p, mA, mC)
+    ph = phi2(p, mA, mC, hl)
     if p.selective:            # revision 3: eps = vote-independent eligibility (eps = 0: plan's closure (5))
         wA = p.kA * p.F_A * mA * (p.eps + (1 - p.eps) * (1 - ph))
         wC = p.kC * p.F_C * mC * (p.eps + (1 - p.eps) * ph)
@@ -80,11 +102,18 @@ def rhs(t, y, p: P, q, gamma, controlled, mode="normal", frozen_b=None):
         dbC = nw * (SC - bC) + lam / p.W * (1.0 - bC)
     if not controlled:
         dmC, dbC = 0.0, 0.0
-    return [dmA, dmC, dbA, dbC]
+    out = [dmA, dmC, dbA, dbC]
+    if p.coretention and p.proof_l > 0:
+        pf = min(max(bA, 0.0), 1.0) / p.F_A if read else 0.0
+        out += list(dh(np.asarray(y[4:4 + p.proof_l]), pf, q, gamma))
+    return out
 
 
 def y0(p: P):
-    return [1.0 / p.F_A, 0.0, 0.0, 0.0]
+    base = [1.0 / p.F_A, 0.0, 0.0, 0.0]
+    if p.coretention and p.proof_l > 0:
+        base += [1.0 / p.F_A] + [0.0] * (p.proof_l - 1)     # each agent starts with one own fact
+    return base
 
 
 def run(p: P, q, rho, controlled, t_end=None, mode="normal", t_eval=None):
@@ -107,10 +136,14 @@ def run(p: P, q, rho, controlled, t_end=None, mode="normal", t_eval=None):
     return first, second
 
 
+def _hl(p, y):
+    return y[3 + p.proof_l] if (p.coretention and p.proof_l > 0) else None
+
+
 def G_at_T(p: P, q, rho):
     c = run(p, q, rho, True).y[:, -1]
     s = run(p, q, rho, False).y[:, -1]
-    return phi2(p, c[0], c[1]) - phi2(p, s[0], s[1]), c, s
+    return phi2(p, c[0], c[1], _hl(p, c)) - phi2(p, s[0], s[1], _hl(p, s)), c, s
 
 
 def D_curve(p: P, rhos, q1, q2):

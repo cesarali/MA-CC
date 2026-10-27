@@ -1,0 +1,17 @@
+task,setup,rho,kind,n_facts,distinct_on_board,copies_per_board_fact,board_share,distinct_held,holders_per_held_fact
+task003,nosolution,0.25,agent,15,2.789,8.996,0.489,2.817,7.733
+task003,nosolution,0.25,ctrl,12,3.356,7.603,0.511,3.401,7.171
+task003,nosolution,0.75,agent,15,6.415,4.564,0.59,7.755,11.84
+task003,nosolution,0.75,ctrl,12,3.366,6.36,0.41,3.779,13.962
+task003,symmetric,0.25,agent,18,2.959,6.747,0.404,3.012,6.827
+task003,symmetric,0.25,ctrl,10,4.449,6.517,0.596,4.481,6.694
+task003,symmetric,0.75,agent,18,8.008,4.36,0.714,9.356,12.19
+task003,symmetric,0.75,ctrl,10,3.535,4.004,0.286,4.31,11.036
+Object Placements,nosolution,0.25,agent,15,2.652,6.203,0.33,2.712,6.531
+Object Placements,nosolution,0.25,ctrl,12,5.969,5.627,0.67,5.989,6.133
+Object Placements,nosolution,0.75,agent,15,6.502,4.266,0.565,8.044,11.395
+Object Placements,nosolution,0.75,ctrl,12,5.909,3.627,0.435,7.169,10.734
+Object Placements,symmetric,0.25,agent,18,3.193,8.561,0.546,3.225,7.228
+Object Placements,symmetric,0.25,ctrl,10,4.05,5.218,0.454,4.116,5.557
+Object Placements,symmetric,0.75,agent,18,3.958,12.641,0.908,4.917,14.574
+Object Placements,symmetric,0.75,ctrl,10,1.521,2.039,0.092,2.182,9.354
