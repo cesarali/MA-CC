@@ -33,14 +33,23 @@ class P:
     T: float = 30.0
     selective: bool = True
     eps: float = 0.0
+    proof_l: int = 0          # Stage C: proof size l (0 = no proof variable)
+    proof_P: float = 0.0      # Stage C: effective number of alternative proofs P
 
 
 def sigma(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
+def zproof(p: P, mA):
+    """Stage C (plan Eq. 4): chance that an agent holds a complete proof of the correct answer."""
+    if p.proof_l <= 0:
+        return 0.0 * mA
+    return 1 - (1 - np.clip(mA, 0, 1) ** p.proof_l) ** p.proof_P
+
+
 def phi2(p: P, mA, mC):
-    return sigma(p.h0 + p.beta_C * p.F_C * mC - p.beta_A * p.F_A * mA)
+    return (1 - zproof(p, mA)) * sigma(p.h0 + p.beta_C * p.F_C * mC - p.beta_A * p.F_A * mA)
 
 
 def rhs(t, y, p: P, q, gamma, controlled, mode="normal", frozen_b=None):

@@ -113,3 +113,42 @@ The model now shows both phenomena qualitatively, with derived explanations (dos
 R_C). Known mismatches: the persistence time course (the plateau is reached in 5–9 units, while the simulator is flat or
 declines slowly); no residual after removal; no proof variable yet. Written up in `phenomenological_theory_report.md`.
 Next proposed step: Stage C (complementarity z), then the finite-copy refinement.
+
+## 2026-10-27 — Stage C: one complementarity variable (written before running it)
+
+The researcher asked whether the model covers the symmetric setups and Object Placements. The model has no task. z = 0
+means no proof can form, as in the no-proof setups. **Stage C adds the plan's single complementarity variable**:
+- z = Z(m_A) = 1 − (1 − m_A^ℓ)^P (plan Eq. 4), the chance that an agent holds at least one complete proof (independence
+  approximation);
+- Φ₂ = (1 − z) σ(x): a complete proof sets the belief in A2 to 0, as in the simulator;
+- applied in both arms, and in the reposting weights through Φ₂.
+
+ℓ and P are taken from the worlds, not fitted. They are the size and number of the smallest agent-fact proofs of A0 in
+the symmetric setups: **task003 ℓ = 6, P = 12; Object Placements ℓ = 3, P = 2** (`../reports/2026-10-23_task_comparison/
+task_structure.csv`). Everything else at the current best version (revision 3, ε = 1, P0).
+
+**Expectations stated in advance:**
+- C1: the reversal survives with z.
+- C2: proofs make reading protective at shorter memory, so the 3→6 crossover moves to *lower* ρ than with z = 0, as in
+  the simulator, where the symmetric crossover is lower than the no-proof one in both tasks.
+- C3: the shift is larger for ℓ = 3 (OP-like) than for ℓ = 6 (task003-like), because a 3-fact proof forms at much lower
+  memory. In the simulator, OP's symmetric crossover (0.25–0.375) is lower than task003's (0.5–0.625).
+- C4: at long memory proofs push G towards 0 (the simulator's symmetric G → 0 at ρ = 1).
+
+## 2026-10-27 — Stage C result
+
+`findings/stageC_proof.csv`:
+- **C1 met:** the reversal survives with z (both proof shapes).
+- **C4 met:** proofs send G to 0 at long memory (G at ρ 0.99: 0.0014 with no proof, 0 with either proof).
+- **C2 and C3 not met:** the 3→6 crossover does not move (0.25–0.3 in all three variants).
+
+**Diagnosis:** in the model, proofs form only at very long memory. The share of agents holding a proof at ρ 0.5 / 0.9 is
+0.01 / 0.91 (ℓ = 6) and 0.06 / 0.67 (ℓ = 3), so proofs appear after the crossover and cannot move it. Two causes:
+- The per-fact memory m_A is low, because 16 agent facts compete for reading.
+- Z treats a proof's facts as held independently. The ChatGPT agent's frozen-board calculation shows independent
+  products **under-estimate** proof co-retention by factors of 1.8–2.6 on stored data
+  (`../../theory_blackboard/2026-10-27_02_exact_frozen_board_combinations.md`).
+
+The missing mechanism is therefore the correlated co-retention of proof facts, since facts are acquired together in one
+read. No further revision in this round (three used). Proposed next: replace the independence approximation in Z by a
+co-retention moment.

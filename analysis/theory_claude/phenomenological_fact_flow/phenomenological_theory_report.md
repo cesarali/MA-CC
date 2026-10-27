@@ -99,3 +99,16 @@ Figures (in `findings/`):
 4. **Qualitative checks against stored simulator data** of the two new mechanisms:
    - sensitivity: does a single controller fact move fewer votes in agents who hold more of their own evidence?
    - eligibility: does reposting of controller facts by non-A2 voters differ between task003 and OP?
+
+## Addendum, 27 October 2026 (later): Stage C, proofs
+
+The plan's single proof variable z = 1 − (1 − m_A^ℓ)^P was added, with proof sizes taken from the worlds (task003 ℓ = 6,
+P = 12; Object Placements ℓ = 3, P = 2) and Φ₂ = (1 − z)σ(x). Expectations were written in the decision log before the
+run. Results (`findings/stageC_proof.csv`):
+- the reversal survives: **met**;
+- G → 0 at long memory: **met**;
+- the crossover moves to shorter memory, more for 3-fact proofs: **not met** (it stays at 0.25–0.3).
+
+Proofs form only at very long memory in the model (share holding a proof at ρ 0.5: 0.01 and 0.06). The likely cause is
+that z treats a proof's facts as held independently; the ChatGPT agent showed that this under-estimates co-retention by
+factors of 1.8–2.6. The PDF report is `../reports/2026-10-27_fact_flow_model/fact_flow_report.pdf`.
