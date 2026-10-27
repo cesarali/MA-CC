@@ -100,3 +100,6 @@ analysis/**/world_op*.classes.npz
 
 # Phase A per-episode tables (regenerable)
 analysis/theory_claude/phaseA/*.parquet
+
+# fact-flow model raw episode tables (regenerable)
+analysis/theory_claude/phenomenological_fact_flow/findings/*.parquet
