@@ -320,3 +320,25 @@ the rest. Report: `../reports/2026-10-28_finite_model/finite_model.pdf`.
 - D is 2–3 times smaller than the simulator's (+0.08 against +0.22 at short memory);
 - K-projects scaling (the model rises at K = 4; the simulator falls, because single facts there carry less information);
 - the persistence task difference (ε not yet varied in the finite model).
+
+## 2026-10-28 — Step 2 (revised plan): vote gating and persistence in the finite model (written before running)
+
+Qualitative check only; no tuning towards the simulator. Finite model F at P0, normal continuation to t = 130,
+ε ∈ {1, 0.75, 0.5}, ρ 0.25 and 0.75, q 6, 300 paired episodes.
+
+**Expectation:** lower ε (reposting of controller facts more tied to believing A2) gives a **lower and still-declining**
+δ(t) after the stop, i.e. fading over tens of time units like OP, while ε = 1 stays near flat (task003-like). Reported:
+δ at 30, 50, 80, 130; retention; distinct controller facts circulating at 130.
+
+**Step 2 result** (`findings/step2_gating_finite.csv`): **expectation met.**
+
+| ε | ρ 0.25 retained | ρ 0.75 retained | controller facts left at 130 (ρ 0.25 / 0.75) |
+|---|---|---|---|
+| 1 | 0.91 | 0.99 | 2.5 / 3.4 |
+| 0.75 | 0.82 | 0.65 | 2.1 / 2.4 |
+| 0.5 | 0.55 | 0.30 | 1.1 / 0.9 |
+
+- Lower ε gives a steady decline over the whole 100 time units, still falling at 130. That is OP-like; OP's retained
+  fractions are 0.33–0.67. ε = 1 is near-flat, task003-like.
+- The decline comes from controller lineages going extinct one at a time once their reposting depends on belief in A2.
+  It is a finite-size selection effect, not the mean field's quick plateau.
