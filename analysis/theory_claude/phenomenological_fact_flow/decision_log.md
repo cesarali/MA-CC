@@ -203,3 +203,50 @@ against the number of agent facts held), before comparing with the crossovers.
 facts survive per episode (held or on the board), with 7–9 board copies and about 7 holders each. At ρ 0.75, 6–9 survive
 with 4–5 copies. The controller keeps 3–6 distinct facts with 4–8 copies each. The ODE assumes all 16 agent facts
 circulate with 2–4 copies: its effective fact number is wrong at short memory.
+
+## 2026-10-28 — Step 2: does the agents' counter-evidence strength set the crossover? (written before measuring)
+
+**Measurement** (stored simulator memories; read-only; no votes, G or D used).
+- In each of the four setups (task003 / OP × symmetric / no-proof), take every agent memory at t = 30 in the **false**
+  arm, q = 6, ρ ∈ {0.25, 0.5, 0.75} pooled.
+- Compute the exact logit of P(A2 | M), with P clipped to [10⁻³, 1 − 10⁻³] (a proof gives P(A2) = 0).
+- Fit by least squares: logit P(A2 | M) = h₀ + β_C·c(M) − β_A·a(M), where a = number of agent facts held and c = number
+  of controller-only facts held.
+- The fitted β_A is the "effective counter-evidence strength"; β_C and h₀ are measured the same way.
+- Secondary measure, reported but not used for the decision: the mean drop in logit P(A2) when one more agent fact is
+  added to a memory.
+
+**Predictions fixed now:**
+- B1: β_A is larger in the symmetric setup than in the no-proof setup of the same task.
+- B2: the four β_A values are ordered as the reverse of the four simulator crossovers for 3→6: OP symmetric (0.25–0.375)
+  > task003 symmetric (0.5–0.625) > OP no-proof (0.625–0.875) > task003 no-proof (0.75–1).
+- B3: putting the measured (h₀, β_A, β_C) of each setup into the model (revision 3, ε = 1, everything else P0;
+  nothing fitted to D) gives crossovers in the same order as the simulator's.
+
+If B1 fails, the counter-evidence explanation is rejected. If B1 holds but B2/B3 fail, the explanation covers the
+setup difference but not the task difference.
+
+## 2026-10-28 — Step 2 result
+
+`findings/step2_strengths.csv`, `findings/step2_model_crossovers.csv`. 72,000 memories per setup.
+
+| setup | β_A | β_C | h₀ | mean logit drop per added agent fact | simulator crossover 3→6 | model crossover with measured values |
+|---|---|---|---|---|---|---|
+| OP symmetric | 1.141 | 0.863 | −0.720 | 0.181 | 0.25–0.375 | below 0.05 (negative everywhere) |
+| task003 symmetric | 0.671 | 0.633 | −0.127 | 0.236 | 0.5–0.625 | 0.2–0.25 |
+| OP no-proof | −0.074 | 0.140 | −0.707 | −0.037 | 0.625–0.875 | none (positive everywhere, D ≤ 0.003) |
+| task003 no-proof | −0.172 | 0.383 | −0.461 | −0.048 | 0.75–1 | 0.85–0.9 |
+
+- **B1 met.** β_A is much larger in the symmetric setups. In the no-proof setups agents' facts do not argue against A2:
+  they push slightly towards it, because together they point to (0.5, 0, 0.5).
+- **B2 met:** the order of β_A is exactly the reverse of the simulator's crossovers. The secondary measure (mean drop)
+  orders the two symmetric setups the other way (0.18 against 0.24); the decision used the primary measure.
+- **B3 partly met.**
+  - Within each task, symmetric comes below no-proof: met (2 of 2).
+  - Among the symmetric setups, OP comes below task003: met.
+  - Among the no-proof setups: swapped. OP has no crossover in the model, and its curve is nearly flat.
+  - The model's crossovers also sit at lower memory than the simulator's, but positions were not a target.
+
+**Reading.** One measured number, the agents' counter-evidence strength, orders the four setups' reversals in the
+simulator, and drives the right setup contrast in the model. The no-proof pair differs by little (β_A −0.07 against
+−0.17), so other quantities (β_C, h₀) decide between them in the model.
