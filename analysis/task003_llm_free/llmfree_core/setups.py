@@ -25,6 +25,11 @@ def _read(path: pathlib.Path, hashes: dict) -> dict:
 
 def load_setup(name: str, setups_dir: str | pathlib.Path, world: World) -> Setup:
     folder = pathlib.Path(setups_dir) / name
+    registry = pathlib.Path(setups_dir) / "setups.json"     # added 29 Oct 2026: name -> folder (15_agent_simulation)
+    if not folder.is_dir() and registry.exists():
+        mapped = json.loads(registry.read_text()).get(name)
+        if mapped is not None:
+            folder = pathlib.Path(setups_dir) / mapped
     hashes: dict = {}
     agents = _read(folder / "agents.json", hashes)
     ids = tuple(sorted(agents["agent_assignments"]))
@@ -42,6 +47,12 @@ def load_setup(name: str, setups_dir: str | pathlib.Path, world: World) -> Setup
     if base in ("task003_symmetric", "op_symmetric"):
         pools = {0: pool("controller_pool_A0.json"), 2: pool("controller_pool_A2.json")}
     elif base in ("task003_nosolution", "op_nosolution"):
+        p = pool("controller_pool.json")
+        pools = {0: p, 2: p}
+    elif (folder / "controller_pool_A0.json").exists() and (folder / "controller_pool_A2.json").exists():
+        # setups added after 28 Oct 2026 (15_agent_simulation): the pool layout follows the files present
+        pools = {0: pool("controller_pool_A0.json"), 2: pool("controller_pool_A2.json")}
+    elif (folder / "controller_pool.json").exists():
         p = pool("controller_pool.json")
         pools = {0: p, 2: p}
     else:

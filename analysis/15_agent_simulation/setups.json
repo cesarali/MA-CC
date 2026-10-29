@@ -1,0 +1,6 @@
+{
+  "task003_symmetric_15": "task003/symmetric",
+  "task003_nosolution_uniform_15": "task003/no_solution",
+  "op_symmetric_15": "object_placement/symmetric",
+  "op_nosolution_uniform_15": "object_placement/no_solution"
+}

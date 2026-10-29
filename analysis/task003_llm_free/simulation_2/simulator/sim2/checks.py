@@ -12,6 +12,13 @@ EXPECTED = {
     # MuSR Object Placements world (llmfree_core/op_world.py), built with the same rules
     "op_symmetric": {"agents": 24, "distinct_facts": 18, "pool_size": 12, "shared_pool": False},
     "op_nosolution": {"agents": 24, "distinct_facts": 15, "pool_size": 12, "shared_pool": True},
+    # 15-agent campaign (analysis/15_agent_simulation, 29 Oct 2026): no-solution agents are uniform, not (0.5, 0, 0.5)
+    "task003_symmetric_15": {"agents": 15, "distinct_facts": 15, "pool_size": 12, "shared_pool": False},
+    "task003_nosolution_uniform_15": {"agents": 15, "distinct_facts": 15, "pool_size": 12, "shared_pool": True,
+                                      "uniform_tolerance": 0.02},
+    "op_symmetric_15": {"agents": 15, "distinct_facts": 15, "pool_size": 12, "shared_pool": False},
+    "op_nosolution_uniform_15": {"agents": 15, "distinct_facts": 15, "pool_size": 12, "shared_pool": True,
+                                 "uniform_tolerance": 0.02},
 }
 
 
@@ -55,7 +62,10 @@ def check_setup(world: World, setup: Setup) -> dict:
     else:
         # K = 1: the agents' evidence is exactly balanced. K > 1: summing scores over projects breaks that balance
         # (the pooled posterior leans to A2); only "no proof" is required there.
-        if "K" not in exp and any(abs(x - y) > 1e-12 for x, y in zip(pooled, (0.5, 0.0, 0.5))):
+        if "uniform_tolerance" in exp:
+            if max(abs(x - 1 / 3) for x in pooled) > exp["uniform_tolerance"]:
+                failed.append(f"pooled agent posterior {pooled}, expected uniform within {exp['uniform_tolerance']}")
+        elif "K" not in exp and any(abs(x - y) > 1e-12 for x, y in zip(pooled, (0.5, 0.0, 0.5))):
             failed.append(f"pooled agent posterior {pooled}, expected (0.5, 0, 0.5)")
         everything = agents
         for f in setup.pools[0]:

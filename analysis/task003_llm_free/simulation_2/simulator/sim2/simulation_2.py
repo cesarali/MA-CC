@@ -56,6 +56,10 @@ class Params:
     grid_step: float = 0.25
     agent_sampling_mode: str = "probability_matching"
     prefer_facts_not_read: bool = True
+    # how an agent reads (added 29 Oct 2026; deduplicated-reading defence, theory_claude/dedup_defence/).
+    # posts: q posts drawn from the window (every earlier run). distinct_facts: q distinct facts drawn uniformly among
+    # the distinct facts in the window, each read through its newest copy there.
+    read_mode: str = "posts"
     seed: int = 20261007
     # what agents can do once the controller's time is over (t >= t_control); key-phenomena study, Campaign B.
     # normal: as before. no_comm: agents keep acting (forgetting, voting) but read nothing and post nothing.
@@ -72,7 +76,7 @@ class Params:
         allowed = {"arm": ("silent", "truth", "false"), "board": ("cleared_nightly", "persistent"),
                    "forgetting": ("dawn", "continuous"), "agent_schedule": ("days", "poisson"),
                    "controller_schedule": ("nights", "poisson"), "controller_gate": ("votes", "always"),
-                   "agent_sampling_mode": ("probability_matching",),
+                   "agent_sampling_mode": ("probability_matching",), "read_mode": ("posts", "distinct_facts"),
                    "post_stop_mode": ("normal", "no_comm", "frozen_board", "purge_controller_facts")}
         for name, values in allowed.items():
             if getattr(self, name) not in values:
@@ -116,7 +120,7 @@ class Params:
         simulation, so the runner runs only the first (spec §3)."""
         return (self.setup, *(getattr(self, k) for k in AGENT_SETTINGS), self.lambda_a, self.rho, self.q,
                 self.W, self.t_end, self.grid_step, self.agent_sampling_mode, self.prefer_facts_not_read,
-                self.seed, self.t_control, self.post_stop_mode)
+                self.seed, self.t_control, self.post_stop_mode, self.read_mode)
 
 
 def params_dict(p: Params) -> dict:
@@ -340,7 +344,14 @@ def run_episode(world: World, setup: Setup, p: Params, episode: int, record_agen
             else:
                 window = read_window(frozen if stopped and p.post_stop_mode == "frozen_board" else board,
                                      a, p.W, agents_only=False)
-            read = keyed_rng(seed, episode, "reads", a, idx).sample(window, min(p.q, len(window)))
+            if p.read_mode == "distinct_facts":
+                newest = {}
+                for post in window:                    # the window is newest first
+                    newest.setdefault(post[3], post)
+                choices = list(newest.values())
+            else:
+                choices = window
+            read = keyed_rng(seed, episode, "reads", a, idx).sample(choices, min(p.q, len(choices)))
             read_now = _mask(post[3] for post in read)
             known[a] |= read_now
             active[a] |= read_now

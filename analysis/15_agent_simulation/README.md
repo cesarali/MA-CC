@@ -41,18 +41,32 @@ Each setup's `README.md` lists its exact properties. The symmetric agents are a 
 18 distinct agent facts. The no-solution sets are new: the old 24-agent no-proof setups combined to (0.5, 0, 0.5), not
 uniform.
 
-## Planned campaign (decided 29 October 2026; to be pre-registered before running)
+## The campaign (decided 29 October 2026; pre-registered in `00_preregistration.md`)
 
-- W = 30 (keeps board turnover N/W = 0.5, as with 24 agents and W = 48).
-- q ∈ {3, 6, 9, 12}; ρ ∈ {0.125, 0.25, 0.5, 0.625, 0.75, 0.875, 1}.
-- Continuation to t = 130 after the controller stops at t = 30; 1,000 paths per cell.
-- Deduplicated reading as an extra factor: stage 2 of `../theory_claude/dedup_defence/`.
-- The LLM's 100-path runs on a subset of cells.
+- **Arms:** false controller (target A2) and its paired silent arm; no truth arm.
+- **Agents:** 15, W = 30 (keeps board turnover N/W = 0.5, as with 24 agents and W = 48).
+- **q:** 1, 2, 3, 4, 6, 8, 12, 16 (log scale).
+- **ρ:** 0.018, 0.135, 0.37, 0.61, 0.78, 0.88, 0.94, 1. These are spaced evenly in mean memory lifetime
+  τ = −1/ln ρ ≈ 0.25, 0.5, 1, 2, 4, 8, 16, ∞, because the crossover moves to short memory at large q and sits at long
+  memory in the no-proof setups.
+- **Reading:** standard (`posts`) and deduplicated (`distinct_facts`; stage 2 of `../theory_claude/dedup_defence/`).
+- **Controller:** rate λ_c = 1, q_c = 8, budget 30, vote gate 0.75, proof stop; it stops at t = 30.
+- **Run length and size:** to t = 130; 1,000 paths per cell; 512 cells per task, 1,024 in all.
 
-**Code note.** The existing loader (`task003_llm_free/llmfree_core/setups.py`) recognises setups by their old folder
-names (`task003_symmetric`, `op_nosolution`, ...), and Simulation 2 uses the setup name for its proof-stop shortcut.
-The campaign runner must therefore map these folders to the right pool layout, with a small backward-compatible loader
-extension, before any run. Older setups must keep loading exactly as before.
+**How to run** (from the repository root; about 5–8 hours on 12 workers, task003 first):
+`bash analysis/15_agent_simulation/run_overnight.sh`. Outputs go to `results/<date>_sim2_15agents_<task>/`
+(gitignored, about 25 GB per task). Logs go to `logs/`. Reports go to `reports/YYYY-MM-DD_<topic>/`.
+
+**Files:**
+- `configs/`: the two study configs (one per world).
+- `setups.json`: maps setup names (`task003_symmetric_15`, `task003_nosolution_uniform_15`, `op_symmetric_15`,
+  `op_nosolution_uniform_15`) to the folders here.
+
+**Code added for this campaign (29 Oct 2026; backward-compatible; all 77 simulator tests pass):**
+- `llmfree_core/setups.py` reads `setups.json` and takes the pool layout from the files present;
+- `sim2/checks.py` checks the four new setups, with uniform no-solution agents;
+- `sim2/simulation_2.py` has the `read_mode` option;
+- the runner has `read_mode` as a grid factor and `record.agent_snapshot_times`.
 
 ## Older simulations stay where they are
 

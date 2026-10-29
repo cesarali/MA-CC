@@ -85,7 +85,8 @@ def resolve_steps(cfg: dict) -> dict[str, dict]:
 
 
 GRID_FACTORS = {"q": "q", "qc": "qc", "rho": "rho", "lambda_c": "lc", "controller_gate": "gate",
-                "silent_when_target_proved": "stop", "post_stop_mode": "after"}   # grid factor -> short name in cell ids
+                "silent_when_target_proved": "stop", "post_stop_mode": "after",
+                "read_mode": "read"}                                 # grid factor -> short name in cell ids
 SILENT_IGNORES = {"qc", "lambda_c", "controller_gate", "silent_when_target_proved"}
 LIGHT_TABLES = ["posts", "controller", "snapshots", "episodes"]
 
@@ -176,7 +177,7 @@ def _frame(table: str, rows: list) -> pd.DataFrame:
 
 
 def _run_cell(job):
-    p, episodes, cells_dir, tables = job
+    p, episodes, cells_dir, tables, snapshot_indices = job
     t0 = time.time()
     setup = _SETUPS[p.setup]
     folder = pathlib.Path(cells_dir) / p.cell_id()
@@ -186,6 +187,8 @@ def _run_cell(job):
     buffer = {t: [] for t in tables}
     for e in range(episodes):
         rows = run_episode(_WORLD, setup, p, e, agent_snapshots)
+        if snapshot_indices is not None and agent_snapshots:      # record.agent_snapshot_times: keep only these times
+            rows["agent_snapshots"] = [r for r in rows["agent_snapshots"] if r[1] in snapshot_indices]
         for t in tables:
             buffer[t] += rows[t]
         if (e + 1) % CHUNK == 0 or e == episodes - 1:
@@ -297,7 +300,14 @@ def main():
         if not full_tables(p, cfg):
             return LIGHT_TABLES
         return [t for t in COLUMNS if agent_snapshots or t != "agent_snapshots"]
-    jobs = [(p, episodes, str(cells_dir), tables_for(p)) for p in cells]
+    snap_times = cfg.get("record", {}).get("agent_snapshot_times")      # optional; default: every grid time
+    snapshot_indices = None
+    if snap_times is not None:
+        step = cfg["fixed"]["grid_step"]
+        snapshot_indices = frozenset(int(round(t / step)) for t in snap_times)
+        if any(abs(t / step - round(t / step)) > 1e-9 for t in snap_times):
+            sys.exit("record.agent_snapshot_times must be multiples of grid_step")
+    jobs = [(p, episodes, str(cells_dir), tables_for(p), snapshot_indices) for p in cells]
     manifest["cells_with_full_tables"] = sum(len(j[3]) > len(LIGHT_TABLES) for j in jobs)
     timings = []
     t0 = time.time()
