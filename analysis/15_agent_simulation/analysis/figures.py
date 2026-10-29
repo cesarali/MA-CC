@@ -9,7 +9,10 @@ task003 and Object Placements runs and theory_grid.csv; writes PDFs into <out>/f
   fig06_theory_maps      the mean-field theory's G(30) and D on the same grid
   fig07_dedup_map        relative change of G(30) under deduplicated reading
   fig08_retention_map    phase diagram: retained G(130)/G(30) (blank where G(30) < 2 se)
-  fig09_gain_after_stop  G(t) after the stop for q 6, all rho; theory retention for comparison
+  fig09_gain_after_stop  G(t)/G(30) after the stop for q 6, all rho
+  fig10_dedup_controlled_A2  change of the controlled arm's A2 share under deduplicated reading
+  fig11_dedup_silent     change of silent accuracy (symmetric: A0 share; no-solution: A2 share) under deduplication
+  fig12_theory_retention the theory's retained fraction on the same grid
 Usage, from the repository root:
     .venv/bin/python analysis/15_agent_simulation/analysis/figures.py --task003 <run> --op <run> --out <report folder>
 """
@@ -172,7 +175,9 @@ def main():
                 w = Ds[i] / (Ds[i] - Ds[i + 1])
                 return float(np.exp(np.log(tau[i]) + w * (np.log(tau[i + 1]) - np.log(tau[i]))))
         return np.nan
-    fig, ax = plt.subplots(figsize=(4.2, 3.0))
+    fig, axs = plt.subplots(1, 2, figsize=(7.2, 3.0))
+    ax, ax2 = axs
+    qmid = np.sqrt(np.array(Q[:-1]) * np.array(Q[1:]))      # geometric mean of each reading step
     rows = []
     for s, label in SETUPS:
         if s not in have:
@@ -181,10 +186,19 @@ def main():
         xs = [crossing(m[:, j]) for j in range(len(Q) - 1)]
         rows += [dict(setup=s, pair=f"{Q[j]}->{Q[j + 1]}", tau_cross=x) for j, x in enumerate(xs)]
         ax.plot(range(len(Q) - 1), xs, "-o", ms=3, label=label)
+        ax2.plot(range(len(Q) - 1), np.array(xs) * qmid, "-o", ms=3, label=label)
     tm = theory.pivot(index="rho", columns="q", values="D_next").reindex(RHO)[Q[:-1]].to_numpy()
     xs = [crossing(tm[:, j]) for j in range(len(Q) - 1)]
     rows += [dict(setup="theory", pair=f"{Q[j]}->{Q[j + 1]}", tau_cross=x) for j, x in enumerate(xs)]
     ax.plot(range(len(Q) - 1), xs, "k--", lw=1, label="mean-field theory (P0)")
+    ax2.plot(range(len(Q) - 1), np.array(xs) * qmid, "k--", lw=1, label="mean-field theory (P0)")
+    ax2.set_xticks(range(len(Q) - 1))
+    ax2.set_xticklabels([f"{a}→{b}" for a, b in zip(Q[:-1], Q[1:])])
+    ax2.set_xlabel("reading step")
+    ax2.set_ylabel("τ* × q̄ (posts read per memory lifetime)")
+    ax2.set_ylim(0, 30)                                     # a noisy crossing (|D| < 2 se on both sides) can lie far above
+    ax.set_title("(a) crossover memory", fontsize=8)
+    ax2.set_title("(b) crossover in reads per memory lifetime", fontsize=8)
     ax.set_yscale("log")
     ax.set_xticks(range(len(Q) - 1))
     ax.set_xticklabels([f"{a}→{b}" for a, b in zip(Q[:-1], Q[1:])])
@@ -235,6 +249,39 @@ def main():
         ax.set_ylim(-0.2, 1.6)
         ax.set_title(f"{l} (q 6): G(t)/G(30)", fontsize=8)
     four("fig09_gain_after_stop", f9, F, xlabel="time")
+    # fig10: absolute outcomes under the two reading modes (a smaller gap alone is not a defence)
+    c30 = cells[np.isclose(cells.t, 30)]
+
+    def f10(ax, s, l):
+        if s not in have:
+            return skip(ax, l)
+        d = c30[c30.setup == s]
+        ctrl = lambda rm: grid(d[(d.arm == "false")], "vote_A2", rm)
+        heat(ax, ctrl("distinct_facts") - ctrl("posts"), l + ": Δ controlled A2 share (dedup − standard)",
+             diverging=True, vmax=0.3, fmt="{:+.2f}")
+    four("fig10_dedup_controlled_A2", f10, F)
+
+    def f11(ax, s, l):
+        if s not in have:
+            return skip(ax, l)
+        d = c30[(c30.setup == s) & (c30.arm == "silent")]
+        col = "vote_A0" if "symmetric" in s else "vote_A2"
+        what = "silent A0 share (accuracy)" if "symmetric" in s else "silent A2 share"
+        heat(ax, grid(d, col, "distinct_facts") - grid(d, col), l + f": Δ {what}", diverging=True, vmax=0.3,
+             fmt="{:+.2f}")
+    four("fig11_dedup_silent", f11, F)
+
+    # fig12: retention, theory against data (task003 symmetric shown with theory for scale)
+    fig, ax = plt.subplots(1, 1, figsize=(3.8, 3.0))
+    heat(ax, grid(theory.assign(read_mode="posts"), "retained"), "theory: g(130)/g(30)", cmap="magma", vmax=1.2)
+    ax.set_xlabel("q")
+    fig.tight_layout()
+    fig.savefig(F / "fig12_theory_retention.pdf")
+    plt.close(fig)
+    abs_rows = c30.pivot_table(index=["setup", "q", "rho", "read_mode"], columns="arm",
+                               values=["vote_A0", "vote_A2"]).reset_index()
+    abs_rows.columns = ["_".join(str(x) for x in c if x) for c in abs_rows.columns]
+    abs_rows.to_csv(out / "table_absolute_t30.csv", index=False)
     print("figures ->", F)
 
 
