@@ -27,6 +27,7 @@ class FP:
     lam0: float = 1.0
     T: float = 30.0
     dt: float = 0.05
+    read_mode: str = "posts"      # "posts": q posts drawn with replacement; "dedup": q distinct items (dedup_defence/)
 
 
 def episode(p: FP, q: int, rho: float, controlled: bool, seed: int, t_end: float = 30.0, mode: str = "normal",
@@ -77,7 +78,14 @@ def episode(p: FP, q: int, rho: float, controlled: bool, seed: int, t_end: float
         for i in acting:
             if not no_read and bf:
                 win = [f for f, a in zip(bf[::-1], ba[::-1]) if a != i][: p.W]
-                if win:
+                if win and p.read_mode == "dedup":
+                    # q distinct items without replacement; each background post is its own item
+                    distinct = sorted({f for f in win if f >= 0})
+                    n_items = len(distinct) + sum(1 for f in win if f < 0)
+                    for j in rng.choice(n_items, size=min(q, n_items), replace=False):
+                        if j < len(distinct):
+                            mem[i, distinct[j]] = True
+                elif win:
                     for j in rng.integers(len(win), size=q):
                         f = win[j]
                         if f >= 0:
