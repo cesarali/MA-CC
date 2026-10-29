@@ -1,0 +1,261 @@
+{
+  "setup": "object_placement_no_solution_15",
+  "status": "BUILT 2026-10-29 by 15_agent_simulation/build_setups.py",
+  "world": "object_placements_llm_free/world/world_op1.json",
+  "truth": "ALLOCATION_0",
+  "false_target": "ALLOCATION_2",
+  "agent_assignments": {
+    "agent_001": [
+      "belief:1:1:0:1"
+    ],
+    "agent_002": [
+      "belief:2:0:0:1"
+    ],
+    "agent_003": [
+      "belief:2:0:1:0"
+    ],
+    "agent_004": [
+      "belief:2:1:0:1"
+    ],
+    "agent_005": [
+      "belief:2:1:1:0"
+    ],
+    "agent_006": [
+      "belief:3:0:0:2"
+    ],
+    "agent_007": [
+      "belief:3:0:1:0"
+    ],
+    "agent_008": [
+      "belief:3:1:0:2"
+    ],
+    "agent_009": [
+      "belief:3:1:1:0"
+    ],
+    "agent_010": [
+      "dest:1:0"
+    ],
+    "agent_011": [
+      "dest:2:2"
+    ],
+    "agent_012": [
+      "missed:0:1"
+    ],
+    "agent_013": [
+      "mover:1:0"
+    ],
+    "agent_014": [
+      "mover:2:0"
+    ],
+    "agent_015": [
+      "saw:0:0"
+    ]
+  },
+  "facts": [
+    {
+      "fact_id": "belief:1:1:0:1",
+      "text": "After move 1, Blair thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.002,
+        "ALLOCATION_1": -0.004,
+        "ALLOCATION_2": 0.002
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:0:0:1",
+      "text": "After move 2, Alex thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.0028,
+        "ALLOCATION_1": -0.0056,
+        "ALLOCATION_2": 0.0028
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:0:1:0",
+      "text": "After move 2, Alex thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0373,
+        "ALLOCATION_1": -0.0373,
+        "ALLOCATION_2": 0.0746
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:1:0:1",
+      "text": "After move 2, Blair thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.0028,
+        "ALLOCATION_1": -0.0056,
+        "ALLOCATION_2": 0.0028
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:1:1:0",
+      "text": "After move 2, Blair thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0373,
+        "ALLOCATION_1": -0.0373,
+        "ALLOCATION_2": 0.0746
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:3:0:0:2",
+      "text": "After move 3, Alex thinks the notebook is on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.0121,
+        "ALLOCATION_1": -0.0061,
+        "ALLOCATION_2": -0.0061
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:3:0:1:0",
+      "text": "After move 3, Alex thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0727,
+        "ALLOCATION_1": -0.0727,
+        "ALLOCATION_2": 0.1454
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:3:1:0:2",
+      "text": "After move 3, Blair thinks the notebook is on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.0121,
+        "ALLOCATION_1": -0.0061,
+        "ALLOCATION_2": -0.0061
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:3:1:1:0",
+      "text": "After move 3, Blair thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0727,
+        "ALLOCATION_1": -0.0727,
+        "ALLOCATION_2": 0.1454
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "dest:1:0",
+      "text": "Move 2 puts the item on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.03,
+        "ALLOCATION_1": -0.03,
+        "ALLOCATION_2": 0.0599
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "dest:2:2",
+      "text": "Move 3 puts the item on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.1849,
+        "ALLOCATION_1": -0.0925,
+        "ALLOCATION_2": -0.0925
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "missed:0:1",
+      "text": "Blair did not see move 1.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "mover:1:0",
+      "text": "Move 2 is made by Alex.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "mover:2:0",
+      "text": "Move 3 is made by Alex.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "saw:0:0",
+      "text": "Alex saw move 1.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    }
+  ],
+  "properties": {
+    "agents": 15,
+    "facts_per_agent": 1,
+    "distinct_facts": 15,
+    "joint_posterior_A0_A1_A2": [
+      0.3333,
+      0.3333,
+      0.3333
+    ],
+    "proves": null,
+    "max_deviation_from_uniform": 0.0,
+    "single_fact_leanings_A0_A1_A2": [
+      3,
+      0,
+      5
+    ],
+    "neutral_single_facts": 7,
+    "mean_individual_belief_A0_A1_A2": [
+      0.3311,
+      0.3087,
+      0.3602
+    ],
+    "facts_also_in_a_controller_pool": []
+  }
+}

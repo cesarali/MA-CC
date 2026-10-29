@@ -1,0 +1,189 @@
+{
+  "setup": "object_placement_symmetric_15",
+  "used_when_controller_targets": [
+    "ALLOCATION_0"
+  ],
+  "status": "BUILT 2026-10-29 by 15_agent_simulation/build_setups.py",
+  "fact_ids": [
+    "belief:1:0:0:1",
+    "belief:1:1:0:1",
+    "belief:2:1:0:1",
+    "belief:2:1:1:0",
+    "belief:2:2:1:2",
+    "belief:3:1:1:0",
+    "item:0:1",
+    "item:2:0",
+    "missed:0:1",
+    "mover:0:2",
+    "saw:2:1",
+    "start:0:1"
+  ],
+  "facts": [
+    {
+      "fact_id": "belief:1:0:0:1",
+      "text": "After move 1, Alex thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.002,
+        "ALLOCATION_1": -0.004,
+        "ALLOCATION_2": 0.002
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:1:1:0:1",
+      "text": "After move 1, Blair thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.002,
+        "ALLOCATION_1": -0.004,
+        "ALLOCATION_2": 0.002
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:1:0:1",
+      "text": "After move 2, Blair thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.0028,
+        "ALLOCATION_1": -0.0056,
+        "ALLOCATION_2": 0.0028
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:1:1:0",
+      "text": "After move 2, Blair thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0373,
+        "ALLOCATION_1": -0.0373,
+        "ALLOCATION_2": 0.0746
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:2:1:2",
+      "text": "After move 2, Casey thinks the keys are on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.3814,
+        "ALLOCATION_1": -0.1907,
+        "ALLOCATION_2": -0.1907
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:3:1:1:0",
+      "text": "After move 3, Blair thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0727,
+        "ALLOCATION_1": -0.0727,
+        "ALLOCATION_2": 0.1454
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "item:0:1",
+      "text": "Move 1 moves the keys.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "item:2:0",
+      "text": "Move 3 moves the notebook.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "missed:0:1",
+      "text": "Blair did not see move 1.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "mover:0:2",
+      "text": "Move 1 is made by Casey.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "saw:2:1",
+      "text": "Blair saw move 3.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "start:0:1",
+      "text": "The notebook starts on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.003,
+        "ALLOCATION_1": -0.0059,
+        "ALLOCATION_2": 0.003
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    }
+  ],
+  "properties": {
+    "size": 12,
+    "joint_posterior_A0_A1_A2": [
+      0.9773,
+      0.0,
+      0.0227
+    ],
+    "proves_any_allocation": false,
+    "max_deviation_from_uniform": 0.6439,
+    "single_fact_leanings_A0_A1_A2": [
+      1,
+      0,
+      2
+    ],
+    "neutral_single_facts": 9,
+    "facts_the_agents_already_hold": [
+      "belief:1:0:0:1",
+      "belief:2:1:1:0",
+      "item:2:0"
+    ],
+    "new_facts_for_the_agents": 9,
+    "agents_plus_whole_pool_posterior_A0_A1_A2": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "agents_plus_whole_pool_proves": "ALLOCATION_0"
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "setup": "object_placement_symmetric_15",
+  "status": "BUILT 2026-10-29 by 15_agent_simulation/build_setups.py",
+  "world": "object_placements_llm_free/world/world_op1.json",
+  "truth": "ALLOCATION_0",
+  "false_target": "ALLOCATION_2",
+  "agent_assignments": {
+    "agent_001": [
+      "belief:1:0:0:1"
+    ],
+    "agent_002": [
+      "belief:1:0:1:2"
+    ],
+    "agent_003": [
+      "belief:1:2:1:2"
+    ],
+    "agent_004": [
+      "belief:2:0:0:1"
+    ],
+    "agent_005": [
+      "belief:2:0:1:0"
+    ],
+    "agent_006": [
+      "belief:2:1:1:0"
+    ],
+    "agent_007": [
+      "belief:3:0:0:2"
+    ],
+    "agent_008": [
+      "belief:3:2:0:1"
+    ],
+    "agent_009": [
+      "dest:1:0"
+    ],
+    "agent_010": [
+      "dest:2:2"
+    ],
+    "agent_011": [
+      "item:2:0"
+    ],
+    "agent_012": [
+      "missed:1:2"
+    ],
+    "agent_013": [
+      "missed:2:2"
+    ],
+    "agent_014": [
+      "saw:0:0"
+    ],
+    "agent_015": [
+      "saw:1:1"
+    ]
+  },
+  "facts": [
+    {
+      "fact_id": "belief:1:0:0:1",
+      "text": "After move 1, Alex thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.002,
+        "ALLOCATION_1": -0.004,
+        "ALLOCATION_2": 0.002
+      },
+      "favours": [],
+      "also_in_controller_pool": "controller_pool_A0.json"
+    },
+    {
+      "fact_id": "belief:1:0:1:2",
+      "text": "After move 1, Alex thinks the keys are on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.1038,
+        "ALLOCATION_1": -0.0519,
+        "ALLOCATION_2": -0.0519
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:1:2:1:2",
+      "text": "After move 1, Casey thinks the keys are on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.2332,
+        "ALLOCATION_1": -0.1166,
+        "ALLOCATION_2": -0.1166
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:0:0:1",
+      "text": "After move 2, Alex thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": 0.0028,
+        "ALLOCATION_1": -0.0056,
+        "ALLOCATION_2": 0.0028
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:0:1:0",
+      "text": "After move 2, Alex thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0373,
+        "ALLOCATION_1": -0.0373,
+        "ALLOCATION_2": 0.0746
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:2:1:1:0",
+      "text": "After move 2, Blair thinks the keys are on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.0373,
+        "ALLOCATION_1": -0.0373,
+        "ALLOCATION_2": 0.0746
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": "controller_pool_A0.json"
+    },
+    {
+      "fact_id": "belief:3:0:0:2",
+      "text": "After move 3, Alex thinks the notebook is on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.0121,
+        "ALLOCATION_1": -0.0061,
+        "ALLOCATION_2": -0.0061
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "belief:3:2:0:1",
+      "text": "After move 3, Casey thinks the notebook is on the shelf.",
+      "dP": {
+        "ALLOCATION_0": -0.036,
+        "ALLOCATION_1": 0.072,
+        "ALLOCATION_2": -0.036
+      },
+      "favours": [
+        "ALLOCATION_1"
+      ],
+      "also_in_controller_pool": "controller_pool_A2.json"
+    },
+    {
+      "fact_id": "dest:1:0",
+      "text": "Move 2 puts the item on the desk.",
+      "dP": {
+        "ALLOCATION_0": -0.03,
+        "ALLOCATION_1": -0.03,
+        "ALLOCATION_2": 0.0599
+      },
+      "favours": [
+        "ALLOCATION_2"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "dest:2:2",
+      "text": "Move 3 puts the item on the drawer.",
+      "dP": {
+        "ALLOCATION_0": 0.1849,
+        "ALLOCATION_1": -0.0925,
+        "ALLOCATION_2": -0.0925
+      },
+      "favours": [
+        "ALLOCATION_0"
+      ],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "item:2:0",
+      "text": "Move 3 moves the notebook.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": "controller_pool_A0.json"
+    },
+    {
+      "fact_id": "missed:1:2",
+      "text": "Casey did not see move 2.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": "controller_pool_A2.json"
+    },
+    {
+      "fact_id": "missed:2:2",
+      "text": "Casey did not see move 3.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "saw:0:0",
+      "text": "Alex saw move 1.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    },
+    {
+      "fact_id": "saw:1:1",
+      "text": "Blair saw move 2.",
+      "dP": {
+        "ALLOCATION_0": 0.0,
+        "ALLOCATION_1": 0.0,
+        "ALLOCATION_2": -0.0
+      },
+      "favours": [],
+      "also_in_controller_pool": null
+    }
+  ],
+  "properties": {
+    "agents": 15,
+    "facts_per_agent": 1,
+    "distinct_facts": 15,
+    "joint_posterior_A0_A1_A2": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "proves": "ALLOCATION_0",
+    "max_deviation_from_uniform": 0.6667,
+    "single_fact_leanings_A0_A1_A2": [
+      4,
+      1,
+      3
+    ],
+    "neutral_single_facts": 7,
+    "mean_individual_belief_A0_A1_A2": [
+      0.3599,
+      0.3127,
+      0.3274
+    ],
+    "facts_also_in_a_controller_pool": [
+      "belief:1:0:0:1",
+      "belief:2:1:1:0",
+      "belief:3:2:0:1",
+      "item:2:0",
+      "missed:1:2"
+    ]
+  }
+}

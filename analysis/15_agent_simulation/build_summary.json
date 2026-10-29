@@ -1,0 +1,106 @@
+{
+  "task003/symmetric": {
+    "agents": 15,
+    "facts_per_agent": 1,
+    "distinct_facts": 15,
+    "joint_posterior_A0_A1_A2": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "proves": "ALLOCATION_0",
+    "max_deviation_from_uniform": 0.6667,
+    "single_fact_leanings_A0_A1_A2": [
+      9,
+      3,
+      3
+    ],
+    "neutral_single_facts": 0,
+    "mean_individual_belief_A0_A1_A2": [
+      0.3778,
+      0.2895,
+      0.3327
+    ],
+    "facts_also_in_a_controller_pool": [
+      "cf_x08_eq_2"
+    ]
+  },
+  "task003/no_solution": {
+    "agents": 15,
+    "facts_per_agent": 1,
+    "distinct_facts": 15,
+    "joint_posterior_A0_A1_A2": [
+      0.325,
+      0.35,
+      0.325
+    ],
+    "proves": null,
+    "max_deviation_from_uniform": 0.0167,
+    "single_fact_leanings_A0_A1_A2": [
+      5,
+      5,
+      5
+    ],
+    "neutral_single_facts": 0,
+    "mean_individual_belief_A0_A1_A2": [
+      0.3129,
+      0.332,
+      0.3551
+    ],
+    "facts_also_in_a_controller_pool": []
+  },
+  "object_placement/symmetric": {
+    "agents": 15,
+    "facts_per_agent": 1,
+    "distinct_facts": 15,
+    "joint_posterior_A0_A1_A2": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "proves": "ALLOCATION_0",
+    "max_deviation_from_uniform": 0.6667,
+    "single_fact_leanings_A0_A1_A2": [
+      4,
+      1,
+      3
+    ],
+    "neutral_single_facts": 7,
+    "mean_individual_belief_A0_A1_A2": [
+      0.3599,
+      0.3127,
+      0.3274
+    ],
+    "facts_also_in_a_controller_pool": [
+      "belief:1:0:0:1",
+      "belief:2:1:1:0",
+      "belief:3:2:0:1",
+      "item:2:0",
+      "missed:1:2"
+    ]
+  },
+  "object_placement/no_solution": {
+    "agents": 15,
+    "facts_per_agent": 1,
+    "distinct_facts": 15,
+    "joint_posterior_A0_A1_A2": [
+      0.3333,
+      0.3333,
+      0.3333
+    ],
+    "proves": null,
+    "max_deviation_from_uniform": 0.0,
+    "single_fact_leanings_A0_A1_A2": [
+      3,
+      0,
+      5
+    ],
+    "neutral_single_facts": 7,
+    "mean_individual_belief_A0_A1_A2": [
+      0.3311,
+      0.3087,
+      0.3602
+    ],
+    "facts_also_in_a_controller_pool": []
+  }
+}
