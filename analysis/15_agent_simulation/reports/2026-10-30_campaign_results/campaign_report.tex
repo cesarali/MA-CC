@@ -113,7 +113,13 @@ D(q_i\!\to\!q_{i+1})&=G(30;q_{i+1})-G(30;q_i),\label{eq:D}\\
 \text{retention}&=G(130)/G(30)\quad(\text{reported where }G(30)>2\,\mathrm{se}).\label{eq:ret}
 \end{align}
 The \emph{crossover} $\tau^*$ for a reading step is the memory lifetime at which $D$ changes sign from positive to
-negative, interpolated linearly in $\ln\tau$. Standard errors use the 1,000 episode pairs.
+negative, interpolated linearly in $\ln\tau$.
+
+\textbf{Standard error (se).} The precision of an average over the $n=1{,}000$ episode pairs:
+$\mathrm{se}(G)=s/\sqrt n$, where $s$ is the standard deviation of the per-pair differences
+$v^{\rm c}_e-v^{\rm s}_e$. A value more than $2\,\mathrm{se}$ from zero is distinguishable from zero at about 95\%
+confidence. Retention, Eq.~\eqref{eq:ret}, is reported only where $G(30)>2\,\mathrm{se}$. Below that, the ratio divides
+by a number that is mostly noise. For $D$, $\mathrm{se}(D)=\sqrt{\mathrm{se}(G_{q_i})^2+\mathrm{se}(G_{q_{i+1}})^2}$.
 
 \paragraph{The theory on the same grid.} The mean-field fact-flow model of the closed theory work, at its P0 parameters
 fixed on 27 October with $W=30$ and neutral reposting. Nothing is fitted to these runs. It gives the next-vote gap
