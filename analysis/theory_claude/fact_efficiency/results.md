@@ -59,3 +59,27 @@ Spread evidence loses individual facts without losing much of the effect.
 
 The real controller picks facts by evidence, not by a fixed F_C, and it concentrates more at short memory and spreads
 more at long memory. That is the same direction as the finite optimum. This last point is post-hoc and qualitative.
+
+## Correction after the ChatGPT agent's review (8 November 2026; `2026-11-08_chatgpt_02_efficiency_review.md`)
+
+1. **E2 stays failed.** Scan B (fixed total evidence) is an exploratory result chosen after E2 failed, not a rescue
+   of E2.
+2. **My mechanism for the scan-B pattern was wrong.** At fixed total strength B = F_C β_C and fixed board share, the
+   mean held controller evidence is B m_F, which *decreases* with F_C. So "spreading lets agents accumulate more" does
+   not hold at fixed total evidence; it holds only at fixed strength per fact. The long-memory preference for spreading
+   must come from something else. Candidates:
+   - the sigmoid's curvature acting on the variance of held evidence (concentration makes it more all-or-nothing);
+   - endogenous changes of the controller's board share;
+   - memory correlations.
+
+   These have not yet been separated. "Finite-model effect" does not mean "caused by fact extinction".
+3. **The optimum is a broad preference region, not a sharp F_C\*.** ChatGPT's simultaneous bootstrap resolves a unique
+   best F_C in only 2 of 15 cells. The robust statement:
+   - concentration (1–2 facts) wins at short memory and little reading, where differences are large and resolved
+     (e.g. q = 4, ρ = 0.135: G = 0.48 at F_C = 1 against 0.23 at F_C = 16);
+   - at long memory several F_C values are statistically tied, with the observed best at 4–8.
+
+   The rank association with q τ (0.72–0.75) is descriptive.
+4. **Persistence wording:** concentration preserves the *fraction* of the controller's facts that survive (0.87
+   against 0.30). The *number* of distinct controller facts still alive is higher with spreading (2.0 against 0.87 at
+   q = 4, ρ = 0.135). Verified in `finite.csv`.
