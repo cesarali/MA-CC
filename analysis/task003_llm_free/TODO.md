@@ -1,5 +1,14 @@
 # TODO — task003_llm_free
 
+**Moved on 10 November 2026.** The open items of this list were reviewed (keep / park / dismiss) and moved to the single
+list [`../TODO.md`](../TODO.md). Do not add items here. The previous content is kept below, unchanged, for the record.
+
+---
+
+<details><summary>Previous content (before 10 November 2026)</summary>
+
+# TODO — task003_llm_free
+
 Deferred work, newest decisions first. Move an item to "Done" with a date and a
 pointer when it is finished.
 
@@ -54,3 +63,5 @@ pointer when it is finished.
 - 2026-10-09: Simulation 2: spec, simulator, main grid (1,212 cells), confirmation runs,
   analysis Q0–Q8 and H1–H6, two short reports, reviewer guide (`simulation_2/`).
 - 2026-10-07: Simulation 1 grid, analysis Q0–Q6, two short reports (`simulation_1/analysis/`).
+
+</details>

@@ -1,5 +1,14 @@
 # TODO — object_placements_llm_free
 
+**Moved on 10 November 2026.** The open items of this list were reviewed (keep / park / dismiss) and moved to the single
+list [`../TODO.md`](../TODO.md). Do not add items here. The previous content is kept below, unchanged, for the record.
+
+---
+
+<details><summary>Previous content (before 10 November 2026)</summary>
+
+# TODO — object_placements_llm_free
+
 Deferred work, newest decisions first. Move an item to "Done" with a date and a pointer when it is finished.
 Every rebuilt setup is a **new** setup folder next to the existing ones (`op_symmetric`, `op_nosolution` are used in
 runs and stay as they are).
@@ -27,3 +36,5 @@ Only 6 of the story's 34 true facts have single-fact P(A2) > 0.40 (task003: 12 o
 - [ ] Options 2–3 change how evidence is spread over facts, the variable the comparison report
   (`analysis/theory_claude/reports/2026-10-23_task_comparison/`) suggests drives the task differences; they can double as a
   test of that explanation. Each needs new simulations (reversal grid and persistence branches).
+
+</details>

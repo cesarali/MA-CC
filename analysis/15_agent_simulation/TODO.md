@@ -1,5 +1,14 @@
 # TODO — 15_agent_simulation
 
+**Moved on 10 November 2026.** The open items of this list were reviewed (keep / park / dismiss) and moved to the single
+list [`../TODO.md`](../TODO.md). Do not add items here. The previous content is kept below, unchanged, for the record.
+
+---
+
+<details><summary>Previous content (before 10 November 2026)</summary>
+
+# TODO — 15_agent_simulation
+
 Deferred work for the 15-agent campaign, newest first. Move an item to "Done" with a date and a pointer when it is
 finished. New runs get new configs and dated result folders; the runs of 29–30 Oct 2026 are never overwritten.
 
@@ -45,3 +54,5 @@ Proposed settings (not yet decided):
 - 2026-10-30: campaign runs (task003, OP; symmetric and uniform no-solution; 1,024 cells) and report
   `reports/2026-10-30_campaign_results/`.
 - 2026-11-03: metastability and tipping analysis, `reports/2026-11-03_metastability/`.
+
+</details>
