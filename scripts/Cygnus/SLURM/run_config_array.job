@@ -12,9 +12,20 @@ if [[ $# -ne 1 ]]; then
   echo "usage: run_config_array.job SUBMISSION_MANIFEST" >&2
   exit 2
 fi
+# Default to the checkout the job was submitted from (sbatch starts the job in the
+# directory `mas-cc study submit` ran in); fall back to Cesar's tree only when that
+# is not a checkout, and say so.
+if [[ -z "${MA_CC_REPOSITORY_ROOT:-}" && -d "$PWD/src/mas_cc" ]]; then
+  MA_CC_REPOSITORY_ROOT="$PWD"
+fi
+[[ -n "${MA_CC_REPOSITORY_ROOT:-}" ]] || echo "WARN: not submitted from a checkout and MA_CC_REPOSITORY_ROOT unset; running Cesar's tree" >&2
 readonly REPOSITORY_ROOT="${MA_CC_REPOSITORY_ROOT:-/shared/home/cesar/LanguageGames/MA-CC}"
 readonly MA_CC_PYTHON="${MA_CC_PYTHON:-/shared/home/cesar/.local/share/mamba/envs/MA-CC/bin/python}"
 cd "$REPOSITORY_ROOT"
+# The shared env has mas_cc installed editable from Cesar's tree; without this the
+# job would import that code no matter which checkout it was submitted from.
+export PYTHONPATH="$REPOSITORY_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+"$MA_CC_PYTHON" -c 'import mas_cc; print("mas_cc imported from", mas_cc.__file__)' >&2
 
 # LLM gateway (LiteLLM on the cluster). The batch pool is reserved for the
 # experiment namespaces; the shared pool is llm.llm.svc.cluster.local:4000.

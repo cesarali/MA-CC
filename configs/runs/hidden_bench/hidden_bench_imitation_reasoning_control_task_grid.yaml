@@ -171,6 +171,9 @@ control:
     # still tracking the population. A first-experiment value, not a tuned one.
     # The threshold_target cells ignore this field.
     beta: 4.0
+    # threshold_target cells read no beta: declared here so the unread-option
+    # check (mas_cc/control/options.py) accepts this block for both mechanisms.
+    ignored_options: [beta]
     # v2 (4 of 4), doc section 2.  1 announces "the external controller"; 2
     # speaks as an ordinary peer, arguing from the shared facts only, drawn
     # from a four-paraphrase bank whose ID is logged per event.
