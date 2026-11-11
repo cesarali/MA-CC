@@ -24,7 +24,7 @@ Rules:
    experiments ourselves. The LLM runs use only LLM reasoning and are not meant to reproduce the Bayesian runs; the
    Bayesian results help interpret them (no Bayesian surrogates or controls). Each change, e.g. a scoring hint, is
    tested with and without it. Draft prompts: `swarm-control`, branch `dev/rsanchez`,
-   `experimental_harness/src/board_harness/live_agent/r_prompting/*-sim2.txt`.
+   `experimental_harness/src/board_harness/live_agent/r_prompting/*-llm-bonn.txt` (no hint) and `*-llm-bonn-hint.txt` (with the scoring hint).
    - Absorbs **E1**, the 16-condition LLM transfer test: the no-solution half is still not covered by any LLM run.
    - Absorbs **A8** (choose cells for the LLM runs) and **F2** (our `llm-sim2` prompt drafts).
 2. **A2. Controller timing at equal budget.** Keep budget = 30 and scan the controller rate λ_c, so the same 30 posts
