@@ -20,8 +20,11 @@ Rules:
 ## Keep
 
 1. **F1. Proposals for the LLM experiment** (collaborator's Design R in swarm-control). The LLM run misses the
-   short-memory half of the reading reversal. We propose changes to the LLM experiment; we run no LLM experiments
-   ourselves. Proposal: `swarm-control` branch `dev/rsanchez`, `designs/design-r-llm-sim2-prompts-v1.md`.
+   short-memory half of the reading reversal. We propose prompt changes to the LLM experiment; we run no LLM
+   experiments ourselves. The LLM runs use only LLM reasoning and are not meant to reproduce the Bayesian runs; the
+   Bayesian results help interpret them (no Bayesian surrogates or controls). Each change, e.g. a scoring hint, is
+   tested with and without it. Draft prompts: `swarm-control`, branch `dev/rsanchez`,
+   `experimental_harness/src/board_harness/live_agent/r_prompting/*-sim2.txt`.
    - Absorbs **E1**, the 16-condition LLM transfer test: the no-solution half is still not covered by any LLM run.
    - Absorbs **A8** (choose cells for the LLM runs) and **F2** (our `llm-sim2` prompt drafts).
 2. **A2. Controller timing at equal budget.** Keep budget = 30 and scan the controller rate λ_c, so the same 30 posts
